@@ -5,19 +5,29 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-d
 import Login from "./pages/LoginPage";
 import Signup from "./pages/SignUp";
 import EmployeeDashboardPage from "./pages/EmployeeDashboard";
-import MyProfile from "./pages/MyProfile"; // Employee Profile Page
-import Tasks from "./pages/Tasks"; // ✅ New Tasks Page
+import MyProfile from "./pages/MyProfile";
+import Tasks from "./pages/Tasks";
+import AdminTaskPage from "./pages/AdminTaskPage";
 
 const App = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [loading, setLoading] = useState(true); // ✅ Prevent premature redirects
 
-  // Check if token exists on first load
   useEffect(() => {
     const token = localStorage.getItem("token");
-    setIsAuthenticated(!!token);
+
+    // OPTIONAL: Validate token with backend here before setting auth
+    if (token && token.trim() !== "") {
+      setIsAuthenticated(true);
+    } else {
+      setIsAuthenticated(false);
+    }
+
+    setLoading(false); // ✅ Allow routing after check
   }, []);
 
   const handleLoginSuccess = () => {
+    localStorage.setItem("token", "dummy-token"); // You’ll replace with real token
     setIsAuthenticated(true);
   };
 
@@ -26,6 +36,10 @@ const App = () => {
     setIsAuthenticated(false);
   };
 
+  if (loading) {
+    return <div className="flex justify-center items-center h-screen">Loading...</div>;
+  }
+
   return (
     <Router>
       <Routes>
@@ -33,10 +47,10 @@ const App = () => {
         <Route
           path="/login"
           element={
-            isAuthenticated ? (
-              <Navigate to="/dashboard" replace />
-            ) : (
+            !isAuthenticated ? (
               <Login onLoginSuccess={handleLoginSuccess} />
+            ) : (
+              <Navigate to="/dashboard" replace />
             )
           }
         />
@@ -45,10 +59,10 @@ const App = () => {
         <Route
           path="/signup"
           element={
-            isAuthenticated ? (
-              <Navigate to="/dashboard" replace />
-            ) : (
+            !isAuthenticated ? (
               <Signup onSignupSuccess={handleLoginSuccess} />
+            ) : (
+              <Navigate to="/dashboard" replace />
             )
           }
         />
@@ -77,7 +91,7 @@ const App = () => {
           }
         />
 
-        {/* ✅ Tasks Page */}
+        {/* Employee Tasks Page */}
         <Route
           path="/tasks"
           element={
@@ -89,8 +103,20 @@ const App = () => {
           }
         />
 
+        {/* Admin Task Management Page */}
+        <Route
+          path="/admin/tasks"
+          element={
+            isAuthenticated ? (
+              <AdminTaskPage onLogout={handleLogout} />
+            ) : (
+              <Navigate to="/login" replace />
+            )
+          }
+        />
+
         {/* Catch-All Redirect */}
-        <Route path="*" element={<Navigate to="/login" replace />} />
+        <Route path="*" element={<Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />} />
       </Routes>
     </Router>
   );
