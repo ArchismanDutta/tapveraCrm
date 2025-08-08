@@ -4,6 +4,7 @@ exports.createTask = async (req, res) => {
   try {
     const { title, description, assignedTo, dueDate } = req.body;
     const assignedBy = req.user._id; // from auth middleware
+    console.log("req.user in createTask:", req.user);
 
     if (!title || !assignedTo) {
       return res
