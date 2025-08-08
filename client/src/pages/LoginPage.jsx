@@ -56,7 +56,7 @@ const Login = ({ onLoginSuccess }) => {
       {/* Logo */}
       <img src={tapveraLogo} alt="Tapvera Logo" className="h-24 w-auto mb-6" />
 
-      <div className="bg-surface rounded-xl shadow-lg shadow-[0_0_15px_rgba(255,153,0,0.4)] p-8 w-full max-w-md border border-border">
+      <div className="bg-surface rounded-xl shadow-lg p-8 w-full max-w-md border border-border">
         <h2 className="text-2xl font-bold text-textMain mb-6 text-center">
           Log in to your account
         </h2>
