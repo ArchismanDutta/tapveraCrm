@@ -12,13 +12,23 @@ const userSchema = new mongoose.Schema(
     },
     contact: { type: String, required: true, trim: true },
     dob: { type: Date, required: true },
-    // prefer not to say in not added yet in the backend
     gender: { type: String, enum: ["male", "female", "other"], required: true },
     password: { type: String, required: true },
     role: {
       type: String,
       enum: ["super-admin", "admin", "employee"],
       default: "employee",
+    },
+
+    // New fields
+    department: {
+      type: String,
+      enum: ["executives", "development", "marketingAndSales", "humanResource"],
+      required: false,
+    },
+    designation: {
+      type: String,
+      trim: true,
     },
   },
   {
