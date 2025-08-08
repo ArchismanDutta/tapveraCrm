@@ -1,3 +1,4 @@
+
 const User = require("../models/User");
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
@@ -64,8 +65,10 @@ exports.login = async (req, res) => {
     const user = await User.findOne({ email });
     if (!user) return res.status(401).json({ message: "Invalid credentials." });
 
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch)
+    // Direct password check for plain text storage
+    // const isMatch = await bcrypt.compare(password, user.password);
+    // if (!isMatch) return res.status(401).json({ message: "Invalid credentials." });
+    if (password !== user.password)
       return res.status(401).json({ message: "Invalid credentials." });
 
     const token = generateToken(user);
