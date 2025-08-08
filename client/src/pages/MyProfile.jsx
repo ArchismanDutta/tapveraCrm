@@ -19,7 +19,7 @@ import {
 } from "react-icons/fa";
 import { MdWork, MdAdminPanelSettings } from "react-icons/md";
 
-const MyProfile = ({ userType = "Employee", onLogout }) => {
+const MyProfile = ({ userType = "employee", onLogout }) => {
   const [profileData, setProfileData] = useState(null);
   const [collapsed, setCollapsed] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -43,6 +43,7 @@ const MyProfile = ({ userType = "Employee", onLogout }) => {
       });
 
       const user = res.data;
+      console.log(user);
 
       setProfileData({
         avatar: user.avatar || "https://i.pravatar.cc/150?img=32",
