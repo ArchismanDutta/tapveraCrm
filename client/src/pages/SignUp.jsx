@@ -1,63 +1,69 @@
-import React, { useState } from 'react';
-import PropTypes from 'prop-types';
-import AuthInput from '../components/AuthInput';
-import tapveraLogo from '../assets/tapvera.png';
-import { FaUser, FaEnvelope, FaPhone, FaLock } from 'react-icons/fa';
+// src/pages/Signup.jsx
+import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import AuthInput from "../components/AuthInput";
+import tapveraLogo from "../assets/tapvera.png";
+import { FaUser, FaEnvelope, FaPhone, FaLock } from "react-icons/fa";
 
-const Signup = ({ onSignupSuccess }) => {
+const Signup = () => {
+  const navigate = useNavigate();
+
   const [form, setForm] = useState({
-    name: '',
-    email: '',
-    contact: '',
-    dob: '',
-    gender: '',
-    password: '',
-  });
+  name: "",
+  email: "",
+  contact: "",
+  dob: "",
+  gender: "",
+  department: "",
+  designation: "",
+  location: "India",  
+  password: "",
+});
 
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // Handle form changes
   const handleChange = (e) => {
     const { name, value } = e.target;
     setForm((prev) => ({ ...prev, [name]: value }));
   };
 
-  // Handle form submission
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
-    setError('');
+    setError("");
 
-    // Frontend validation
-    const isIncomplete = Object.values(form).some((value) => !value.trim());
+    const requiredFields = ["name", "email", "contact", "dob", "gender", "password"];
+    const isIncomplete = requiredFields.some((field) => !form[field].trim());
     if (isIncomplete) {
-      setError('Please fill in all fields.');
+      setError("Please fill in all required fields.");
       setLoading(false);
       return;
     }
 
     try {
-      const res = await fetch('http://localhost:5000/api/auth/signup', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const res = await fetch("http://localhost:5000/api/auth/signup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(form),
       });
 
       const data = await res.json();
 
       if (!res.ok) {
-        setError(data.message || 'Something went wrong.');
+        setError(data.message || "Something went wrong.");
         setLoading(false);
         return;
       }
 
-      // Store token & call parent success
-      localStorage.setItem('token', data.token);
-      onSignupSuccess(data.user); // This will trigger App.jsx to mark authenticated
+      // Save JWT token for future requests
+      localStorage.setItem("token", data.token);
+
+      // Redirect to profile page
+      navigate("/profile");
     } catch (err) {
-      console.error('Signup Error:', err);
-      setError('Failed to connect to the server. Please try again.');
+      console.error("Signup Error:", err);
+      setError("Failed to connect to the server. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -68,9 +74,7 @@ const Signup = ({ onSignupSuccess }) => {
       <img src={tapveraLogo} alt="Tapvera Logo" className="h-20 w-auto mb-6" />
 
       <div className="bg-surface rounded-xl shadow-lg shadow-[0_0_15px_rgba(255,153,0,0.4)] border border-border p-6 w-full max-w-lg">
-        <h2 className="text-2xl font-bold text-textMain mb-5 text-center">
-          Create an account
-        </h2>
+        <h2 className="text-2xl font-bold text-textMain mb-5 text-center">Create an account</h2>
 
         <form onSubmit={handleSubmit} className="space-y-4" noValidate>
           <AuthInput
@@ -81,7 +85,7 @@ const Signup = ({ onSignupSuccess }) => {
             onChange={handleChange}
             placeholder="Enter your full name"
             required
-            error={error && !form.name ? 'Full Name is required.' : ''}
+            error={error && !form.name ? "Full Name is required." : ""}
             icon={FaUser}
           />
 
@@ -94,7 +98,7 @@ const Signup = ({ onSignupSuccess }) => {
             placeholder="Enter your email"
             autoComplete="email"
             required
-            error={error && !form.email ? 'Email is required.' : ''}
+            error={error && !form.email ? "Email is required." : ""}
             icon={FaEnvelope}
           />
 
@@ -107,7 +111,7 @@ const Signup = ({ onSignupSuccess }) => {
             placeholder="Enter your contact number"
             autoComplete="tel"
             required
-            error={error && !form.contact ? 'Contact number is required.' : ''}
+            error={error && !form.contact ? "Contact number is required." : ""}
             icon={FaPhone}
           />
 
@@ -123,14 +127,12 @@ const Signup = ({ onSignupSuccess }) => {
               value={form.dob}
               onChange={handleChange}
               required
-              max={new Date().toISOString().split('T')[0]}
+              max={new Date().toISOString().split("T")[0]}
               className={`w-full px-4 py-2 rounded-md bg-background border ${
-                error && !form.dob ? 'border-red-500' : 'border-border'
+                error && !form.dob ? "border-red-500" : "border-border"
               } text-textMain placeholder:text-textMuted focus:outline-none focus:border-primary transition`}
             />
-            {error && !form.dob && (
-              <p className="mt-1 text-xs text-red-500">Date of Birth is required.</p>
-            )}
+            {error && !form.dob && <p className="mt-1 text-xs text-red-500">Date of Birth is required.</p>}
           </div>
 
           {/* Gender */}
@@ -144,9 +146,16 @@ const Signup = ({ onSignupSuccess }) => {
               value={form.gender}
               onChange={handleChange}
               required
-              className={`w-full px-4 py-2 rounded-md bg-background border ${
-                error && !form.gender ? 'border-red-500' : 'border-border'
-              } text-textMain placeholder:text-textMuted focus:outline-none focus:border-primary transition`}
+              className={`w-full px-4 py-2 pr-10 rounded-md bg-background border ${
+                error && !form.gender ? "border-red-500" : "border-border"
+              } text-textMain focus:outline-none focus:border-primary appearance-none transition`}
+              style={{
+                backgroundImage:
+                  "url(\"data:image/svg+xml;utf8,<svg fill='%23000' height='24' viewBox='0 0 24 24' width='24' xmlns='http://www.w3.org/2000/svg'><path d='M7 10l5 5 5-5z'/></svg>\")",
+                backgroundRepeat: "no-repeat",
+                backgroundPosition: "right 0.75rem center",
+                backgroundSize: "1.2em",
+              }}
             >
               <option value="" disabled>
                 Select your gender
@@ -156,9 +165,66 @@ const Signup = ({ onSignupSuccess }) => {
               <option value="other">Other</option>
               <option value="preferNotToSay">Prefer not to say</option>
             </select>
-            {error && !form.gender && (
-              <p className="mt-1 text-xs text-red-500">Please select your gender.</p>
-            )}
+            {error && !form.gender && <p className="mt-1 text-xs text-red-500">Please select your gender.</p>}
+          </div>
+
+          {/* Department */}
+          <div>
+            <label htmlFor="department" className="block text-sm text-textMuted mb-1">
+              Department
+            </label>
+            <select
+              id="department"
+              name="department"
+              value={form.department}
+              onChange={handleChange}
+              className="w-full px-4 py-2 pr-10 rounded-md bg-background border border-border text-textMain focus:outline-none focus:border-primary appearance-none transition"
+              style={{
+                backgroundImage:
+                  "url(\"data:image/svg+xml;utf8,<svg fill='%23000' height='24' viewBox='0 0 24 24' width='24' xmlns='http://www.w3.org/2000/svg'><path d='M7 10l5 5 5-5z'/></svg>\")",
+                backgroundRepeat: "no-repeat",
+                backgroundPosition: "right 0.75rem center",
+                backgroundSize: "1.2em",
+              }}
+            >
+              <option value="">Select a department</option>
+              <option value="executives">Executives</option>
+              <option value="development">Development</option>
+              <option value="marketingAndSales">Marketing & Sales</option>
+              <option value="humanResource">Human Resource</option>
+            </select>
+          </div>
+
+          {/* Designation */}
+          <div>
+            <label htmlFor="designation" className="block text-sm text-textMuted mb-1">
+              Designation
+            </label>
+            <input
+              type="text"
+              id="designation"
+              name="designation"
+              value={form.designation}
+              onChange={handleChange}
+              placeholder="Enter your designation"
+              className="w-full px-4 py-2 rounded-md bg-background border border-border text-textMain placeholder:text-textMuted focus:outline-none focus:border-primary transition"
+            />
+          </div>
+
+          {/* Location (NEW FIELD) */}
+          <div>
+            <label htmlFor="location" className="block text-sm text-textMuted mb-1">
+              Location
+            </label>
+            <input
+              type="text"
+              id="location"
+              name="location"
+              value={form.location}
+              onChange={handleChange}
+              placeholder="Enter your location"
+              className="w-full px-4 py-2 rounded-md bg-background border border-border text-textMain placeholder:text-textMuted focus:outline-none focus:border-primary transition"
+            />
           </div>
 
           <AuthInput
@@ -170,26 +236,24 @@ const Signup = ({ onSignupSuccess }) => {
             placeholder="Create a password"
             autoComplete="new-password"
             required
-            error={error && !form.password ? 'Password is required.' : ''}
+            error={error && !form.password ? "Password is required." : ""}
             showTogglePassword={true}
             icon={FaLock}
           />
 
-          {error && (
-            <div className="text-sm text-red-500 text-center">{error}</div>
-          )}
+          {error && <div className="text-sm text-red-500 text-center">{error}</div>}
 
           <button
             type="submit"
             disabled={loading}
             className="w-full py-2 rounded-md bg-yellow-300 hover:bg-orange-500 hover:text-white transition text-background font-semibold shadow focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:outline-none disabled:opacity-50"
           >
-            {loading ? 'Creating Account...' : 'Sign Up'}
+            {loading ? "Creating Account..." : "Sign Up"}
           </button>
         </form>
 
         <p className="mt-4 text-center text-textMuted text-sm">
-          Already have an account?{' '}
+          Already have an account?{" "}
           <a href="/login" className="text-primary hover:text-orangeDark">
             Log in
           </a>
@@ -197,10 +261,6 @@ const Signup = ({ onSignupSuccess }) => {
       </div>
     </div>
   );
-};
-
-Signup.propTypes = {
-  onSignupSuccess: PropTypes.func.isRequired,
 };
 
 export default Signup;
