@@ -30,7 +30,6 @@ exports.createTask = async (req, res) => {
 
 exports.getTasks = async (req, res) => {
   try {
-    // Return tasks related to the user: assignedTo or assignedBy
     const userId = req.user._id;
     const tasks = await Task.find({
       $or: [{ assignedTo: userId }, { assignedBy: userId }],
@@ -45,4 +44,4 @@ exports.getTasks = async (req, res) => {
   }
 };
 
-// Add more functions for updateTask, deleteTask, etc. as needed
+

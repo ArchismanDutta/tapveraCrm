@@ -5,6 +5,7 @@ import InfoCard from "../components/profile/InfoCard";
 import StatCard from "../components/profile/StatCard";
 import ProfileHeader from "../components/profile/ProfileHeader";
 import ActivityList from "../components/profile/ActivityList";
+import axios from "axios";
 
 // Icons
 import {
@@ -25,56 +26,61 @@ const MyProfile = ({ userType = "Employee", onLogout }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editData, setEditData] = useState(null);
 
+  // Fetch profile from backend
   const fetchProfile = async () => {
-    setLoading(true);
-    setTimeout(() => {
-      setProfileData({
-        avatar: "https://i.pravatar.cc/150?img=32",
-        name: "John Doe",
-        role: userType,
-        team: "HR & Recruitment",
-        contact: {
-          email: "john.doe@example.com",
-          phone: "+91 98765 43210",
-          location: "Mumbai, India",
+    try {
+      setLoading(true);
+      const token = localStorage.getItem("token");
+      if (!token) {
+        alert("You must be logged in to view this page.");
+        return;
+      }
+
+      const res = await axios.get("/api/users/me", {
+        headers: {
+          Authorization: `Bearer ${token}`,
         },
-        dob: "14 May 1990",
-        department: "Human Resources",
+      });
+
+      const user = res.data;
+
+      setProfileData({
+        avatar: user.avatar || "https://i.pravatar.cc/150?img=32",
+        name: user.name,
+        role: userType,
+        team: user.team || "Not Assigned",
+        contact: {
+          email: user.email,
+          phone: user.contact || "N/A",      // Changed to contact
+          location: user.location || "N/A",  // Location optional
+        },
+        dob: user.dob || "N/A",
+        department: user.department || "N/A",
+        designation: user.designation || "N/A",
         stats: {
-          tasksCompleted: 128,
-          ongoingProjects: 5,
-          attendancePercent: 96,
+          tasksCompleted: user.tasksCompleted || 0,
+          ongoingProjects: user.ongoingProjects || 0,
+          attendancePercent: user.attendancePercent || 0,
         },
         personalInfo: [
-          { label: "Email", value: "john.doe@example.com", icon: <FaEnvelope /> },
-          { label: "Phone", value: "+91 98765 43210", icon: <FaPhone /> },
-          { label: "Location", value: "Mumbai, India", icon: <FaMapMarkerAlt /> },
-          { label: "DOB", value: "14 May 1990", icon: <FaBirthdayCake /> },
+          { label: "Email", value: user.email, icon: <FaEnvelope /> },
+          { label: "Phone", value: user.contact || "N/A", icon: <FaPhone /> },
+          { label: "Location", value: user.location || "N/A", icon: <FaMapMarkerAlt /> },
+          { label: "DOB", value: user.dob || "N/A", icon: <FaBirthdayCake /> },
         ],
         workInfo: [
-          { label: "Department", value: "Human Resources", icon: <MdWork /> },
+          { label: "Department", value: user.department || "N/A", icon: <MdWork /> },
           { label: "Role", value: userType, icon: <MdAdminPanelSettings /> },
+          { label: "Designation", value: user.designation || "N/A", icon: <MdWork /> },
         ],
-        activities: [
-          {
-            title: "Closed Ticket #423",
-            subtitle: "Resolved payroll discrepancy for client X",
-            time: "Aug 07, 2025",
-          },
-          {
-            title: "Deployed Quarterly HR Report",
-            subtitle: "Shared with leadership",
-            time: "Aug 04, 2025",
-          },
-          {
-            title: "Started Project: Onboarding Automation",
-            subtitle: "Initial scoping and tech meeting",
-            time: "July 28, 2025",
-          },
-        ],
+        activities: user.activities || [],
       });
+    } catch (err) {
+      console.error("Error fetching profile:", err);
+      alert("Failed to load profile. Please try again.");
+    } finally {
       setLoading(false);
-    }, 500);
+    }
   };
 
   useEffect(() => {
@@ -88,6 +94,7 @@ const MyProfile = ({ userType = "Employee", onLogout }) => {
       email: profileData.contact.email,
       phone: profileData.contact.phone,
       location: profileData.contact.location,
+      designation: profileData.designation,
     });
     setIsEditing(true);
   };
@@ -114,25 +121,32 @@ const MyProfile = ({ userType = "Employee", onLogout }) => {
     }
   };
 
-  const handleSave = () => {
-    setProfileData((prev) => ({
-      ...prev,
-      avatar: editData.avatar,
-      name: editData.name,
-      contact: {
-        ...prev.contact,
-        email: editData.email,
-        phone: editData.phone,
-        location: editData.location,
-      },
-      personalInfo: prev.personalInfo.map((info) => {
-        if (info.label === "Email") return { ...info, value: editData.email };
-        if (info.label === "Phone") return { ...info, value: editData.phone };
-        if (info.label === "Location") return { ...info, value: editData.location };
-        return info;
-      }),
-    }));
-    setIsEditing(false);
+  const handleSave = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      await axios.put(
+        "/api/users/me",
+        {
+          avatar: editData.avatar,
+          name: editData.name,
+          email: editData.email,
+          contact: editData.phone,      // sending as contact field to backend
+          location: editData.location,  // added location here as well
+          designation: editData.designation,
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      await fetchProfile();
+      setIsEditing(false);
+    } catch (err) {
+      console.error("Error updating profile:", err);
+      alert("Failed to update profile.");
+    }
   };
 
   const handleCancel = () => {
@@ -181,7 +195,7 @@ const MyProfile = ({ userType = "Employee", onLogout }) => {
                 <input type="file" accept="image/*" onChange={handleAvatarChange} className="w-full" />
               </div>
 
-              {["name", "email", "phone", "location"].map((field) => (
+              {["name", "email", "phone", "location", "designation"].map((field) => (
                 <div key={field} className="mb-4">
                   <label className="block mb-1 font-medium" htmlFor={field}>
                     {field.charAt(0).toUpperCase() + field.slice(1)}
@@ -193,13 +207,17 @@ const MyProfile = ({ userType = "Employee", onLogout }) => {
                     value={editData[field]}
                     onChange={handleInputChange}
                     className="w-full border border-gray-300 rounded px-3 py-2"
-                    required
+                    required={field !== "location"} // location can be optional
                   />
                 </div>
               ))}
 
               <div className="flex justify-end gap-3">
-                <button type="button" onClick={handleCancel} className="px-4 py-2 border rounded text-gray-700 hover:bg-gray-100">
+                <button
+                  type="button"
+                  onClick={handleCancel}
+                  className="px-4 py-2 border rounded text-gray-700 hover:bg-gray-100"
+                >
                   Cancel
                 </button>
                 <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
@@ -211,9 +229,21 @@ const MyProfile = ({ userType = "Employee", onLogout }) => {
         ) : (
           <>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mt-6">
-              <StatCard value={profileData.stats.tasksCompleted} label="Tasks Completed" icon={<FaCheckCircle size={20} />} />
-              <StatCard value={profileData.stats.ongoingProjects} label="Ongoing Projects" icon={<FaProjectDiagram size={20} />} />
-              <StatCard value={`${profileData.stats.attendancePercent}%`} label="Attendance" icon={<FaCalendarAlt size={18} />} />
+              <StatCard
+                value={profileData.stats.tasksCompleted}
+                label="Tasks Completed"
+                icon={<FaCheckCircle size={20} />}
+              />
+              <StatCard
+                value={profileData.stats.ongoingProjects}
+                label="Ongoing Projects"
+                icon={<FaProjectDiagram size={20} />}
+              />
+              <StatCard
+                value={`${profileData.stats.attendancePercent}%`}
+                label="Attendance"
+                icon={<FaCalendarAlt size={18} />}
+              />
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
@@ -225,10 +255,13 @@ const MyProfile = ({ userType = "Employee", onLogout }) => {
 
             <div className="mt-6 flex items-center justify-between">
               <div className="text-sm text-gray-500">
-                Last updated: <span className="font-medium">Aug 07, 2025</span>
+                Last updated: <span className="font-medium">{new Date().toLocaleDateString()}</span>
               </div>
               <div className="flex items-center gap-3">
-                <button onClick={fetchProfile} className="px-4 py-2 bg-white border rounded-lg text-sm hover:shadow">
+                <button
+                  onClick={fetchProfile}
+                  className="px-4 py-2 bg-white border rounded-lg text-sm hover:shadow"
+                >
                   Refresh
                 </button>
                 <button
