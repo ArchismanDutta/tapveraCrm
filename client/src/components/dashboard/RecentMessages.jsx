@@ -1,40 +1,109 @@
-// src/components/dashboard/RecentMessages.jsx
 import React from "react";
-import PropTypes from "prop-types";
+import { MessageCircle, Reply, MoreHorizontal } from "lucide-react";
+
+// Define accent colors (muted pink and soft border)
+const colors = {
+  accent: "#C07A7A",            // Muted, friendly "pink"
+  accentLight: "#f9ecec",       // Gentle background highlight
+  avatarBorder: "#e3bdbd",      // Softer border for avatar
+  border: "#ebe7e3",            // Card border
+  title: "#885353",             // Heading (not ultra black)
+  messageBg: "#fff",
+  msgName: "#423037",
+  msgText: "#88807b",
+  msgTime: "#b9b1ab",
+};
 
 const RecentMessages = ({ messages }) => (
-  <div className="bg-white rounded-xl border p-6 shadow">
-    <h2 className="text-lg font-semibold mb-4">Recent Messages</h2>
-    <ul className="space-y-4 max-h-64 overflow-y-auto">
-      {messages.map(({ id, avatar, sender, message, time }) => (
-        <li key={id} className="flex items-start gap-3">
-          <img
-            src={avatar}
-            alt={`${sender} avatar`}
-            className="h-10 w-10 rounded-full border object-cover"
-            loading="lazy"
-          />
-          <div>
-            <p className="font-semibold">{sender}</p>
-            <p className="text-sm text-gray-500">{message}</p>
-            <span className="text-xs text-gray-400">{time}</span>
-          </div>
-        </li>
-      ))}
-    </ul>
+  <div
+    className="rounded-xl shadow-sm px-6 py-5"
+    style={{
+      background: colors.messageBg,
+      border: `1px solid ${colors.border}`,
+      maxWidth: 440,
+      margin: "0 auto",
+    }}
+  >
+    <h2
+      className="text-base font-semibold mb-4 flex items-center gap-2 tracking-tight"
+      style={{ color: colors.title }}
+    >
+      <MessageCircle className="w-5 h-5" style={{ color: colors.accent }} />
+      Recent Messages
+    </h2>
+
+    {messages.map((msg, idx) => (
+      <div
+        key={idx}
+        className="flex items-center mb-3 px-2 py-2 rounded-lg transition-colors group cursor-pointer"
+        style={{
+          background: "none",
+          minHeight: 52,
+        }}
+        onMouseOver={e => (e.currentTarget.style.background = colors.accentLight)}
+        onMouseOut={e => (e.currentTarget.style.background = "none")}
+      >
+        {/* Avatar */}
+        <img
+          src={msg.img}
+          alt={msg.name}
+          className="w-10 h-10 rounded-full object-cover"
+          style={{
+            border: `2px solid ${colors.avatarBorder}`,
+            background: "#fff",
+          }}
+        />
+
+        {/* Message Content */}
+        <div className="flex-1 min-w-0 ml-3">
+          <p
+            className="text-sm font-medium truncate"
+            style={{ color: colors.msgName }}
+            title={msg.name}
+          >
+            {msg.name}
+          </p>
+          <p
+            className="text-xs truncate"
+            title={msg.msg}
+            style={{ color: colors.msgText, marginTop: ".15rem" }}
+          >
+            {msg.msg}
+          </p>
+        </div>
+
+        {/* Time */}
+        <span
+          className="text-xs ml-2"
+          style={{ color: colors.msgTime, minWidth: 38, textAlign: "right" }}
+        >
+          {msg.time}
+        </span>
+
+        {/* Actions: shown on hover */}
+        <div
+          className="flex items-center gap-1.5 ml-2 opacity-0 group-hover:opacity-100 transition-opacity duration-150"
+        >
+          <button
+            className="p-1 rounded-full hover:bg-[#f4dedf] outline-none focus:ring-2 focus:ring-[#ead6d3] transition"
+            tabIndex={0}
+            style={{ border: "none" }}
+            aria-label="Reply"
+          >
+            <Reply className="w-4 h-4" style={{ color: colors.accent }} />
+          </button>
+          <button
+            className="p-1 rounded-full hover:bg-[#f0e9e9] outline-none focus:ring-2 focus:ring-[#e8dedd] transition"
+            tabIndex={0}
+            style={{ border: "none" }}
+            aria-label="More"
+          >
+            <MoreHorizontal className="w-4 h-4" style={{ color: "#a09b98" }} />
+          </button>
+        </div>
+      </div>
+    ))}
   </div>
 );
-
-RecentMessages.propTypes = {
-  messages: PropTypes.arrayOf(
-    PropTypes.shape({
-      id: PropTypes.oneOfType([PropTypes.number, PropTypes.string]).isRequired,
-      avatar: PropTypes.string.isRequired,
-      sender: PropTypes.string.isRequired,
-      message: PropTypes.string.isRequired,
-      time: PropTypes.string.isRequired,
-    })
-  ).isRequired,
-};
 
 export default RecentMessages;

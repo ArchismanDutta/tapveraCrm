@@ -6,10 +6,13 @@ import Signup from './pages/SignUp';
 import EmployeeDashboardPage from './pages/EmployeeDashboard';
 
 const App = () => {
-  // Toggle this for development/demo purposes
-  const [isAuthenticated, setIsAuthenticated] = useState(true);
+  // Start as false unless token is stored
+  const [isAuthenticated, setIsAuthenticated] = useState(() => {
+    return !!localStorage.getItem('token');
+  });
 
   const handleLogout = () => {
+    localStorage.removeItem('token');
     setIsAuthenticated(false);
   };
 
