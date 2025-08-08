@@ -2,8 +2,6 @@ import React, { useState } from 'react';
 import PropTypes from 'prop-types';
 import AuthInput from '../components/AuthInput';
 import tapveraLogo from '../assets/tapvera.png';
-
-// Import icons
 import { FaUser, FaEnvelope, FaPhone, FaLock } from 'react-icons/fa';
 
 const Signup = ({ onSignupSuccess }) => {
@@ -19,26 +17,50 @@ const Signup = ({ onSignupSuccess }) => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
+  // Handle form changes
   const handleChange = (e) => {
     const { name, value } = e.target;
     setForm((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleSubmit = (e) => {
+  // Handle form submission
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError('');
 
-    setTimeout(() => {
+    // Frontend validation
+    const isIncomplete = Object.values(form).some((value) => !value.trim());
+    if (isIncomplete) {
+      setError('Please fill in all fields.');
       setLoading(false);
-      const isIncomplete = Object.values(form).some((value) => !value);
-      if (isIncomplete) {
-        setError('Please fill in all fields.');
+      return;
+    }
+
+    try {
+      const res = await fetch('http://localhost:5000/api/auth/signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(form),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.message || 'Something went wrong.');
+        setLoading(false);
         return;
       }
 
-      onSignupSuccess();
-    }, 1500);
+      // Store token & call parent success
+      localStorage.setItem('token', data.token);
+      onSignupSuccess(data.user); // This will trigger App.jsx to mark authenticated
+    } catch (err) {
+      console.error('Signup Error:', err);
+      setError('Failed to connect to the server. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -154,9 +176,7 @@ const Signup = ({ onSignupSuccess }) => {
           />
 
           {error && (
-            <div className="text-sm text-red-500">
-              {error}
-            </div>
+            <div className="text-sm text-red-500 text-center">{error}</div>
           )}
 
           <button

@@ -2,8 +2,6 @@ import React, { useState } from 'react';
 import PropTypes from 'prop-types';
 import AuthInput from '../components/AuthInput';
 import tapveraLogo from '../assets/tapvera.png';
-
-// Icons
 import { FaEnvelope, FaLock } from 'react-icons/fa';
 
 const Login = ({ onLoginSuccess }) => {
@@ -14,19 +12,43 @@ const Login = ({ onLoginSuccess }) => {
   const handleChange = (e) =>
     setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError('');
 
-    setTimeout(() => {
+    if (!form.email || !form.password) {
+      setError('Please enter both email and password.');
       setLoading(false);
-      if (form.email !== 'admin@company.com' || form.password !== 'password') {
-        setError('Invalid email or password.');
-      } else {
-        onLoginSuccess();
+      return;
+    }
+
+    try {
+      const res = await fetch('http://localhost:5000/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(form),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.message || 'Invalid email or password.');
+        setLoading(false);
+        return;
       }
-    }, 1000);
+
+      // Save token to localStorage
+      localStorage.setItem('token', data.token);
+
+      // Tell App.jsx login succeeded
+      onLoginSuccess(data.user);
+    } catch (err) {
+      console.error('Login Error:', err);
+      setError('Failed to connect to the server. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -67,7 +89,7 @@ const Login = ({ onLoginSuccess }) => {
             icon={FaLock}
           />
 
-          {error && form.email && form.password && (
+          {error && (
             <div className="text-sm text-red-500 bg-background border border-red-700 p-2 rounded">
               {error}
             </div>
