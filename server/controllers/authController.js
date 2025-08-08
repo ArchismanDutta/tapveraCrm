@@ -1,44 +1,62 @@
-
+// Employee Signup
 const User = require("../models/User");
 const jwt = require("jsonwebtoken");
-const bcrypt = require("bcryptjs");
 
+// Token generation helper
 const generateToken = (user) => {
   return jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, {
     expiresIn: "1d",
   });
 };
 
-// Employee Signup
 exports.signup = async (req, res) => {
   try {
-    const { name, email, contact, dob, gender, password } = req.body;
+    // Destructure including the new fields
+    const {
+      name,
+      email,
+      contact,
+      dob,
+      gender,
+      password,
+      department,
+      designation,
+    } = req.body;
 
-    // Simple validation
+    // Since we use express-validator, simple validation here is no longer necessary.
+    // But if you want to keep a quick check, uncomment below:
+
+    /*
     if (!name || !email || !contact || !dob || !gender || !password) {
-      return res
-        .status(400)
-        .json({ message: "Please fill all required fields." });
+      return res.status(400).json({ message: "Please fill all required fields." });
     }
+    */
 
+    // Check if user with this email already exists
     const existingUser = await User.findOne({ email });
     if (existingUser)
       return res.status(400).json({ message: "Email already in use." });
 
+    // Create a new user with all fields
     const user = new User({
       name,
       email,
       contact,
       dob,
       gender,
-      password, // hashed automatically by pre-save hook
+      password, // hashed automatically by pre-save hook unless disabled
       role: "employee", // only employee via signup
+      department, // optional field with enum validation done earlier
+      designation, // optional string free text
     });
 
+    // Save the user to database
     await user.save();
 
+    // Generate JWT token for the user
     const token = generateToken(user);
 
+    // Respond with token and user info (without password)
     res.status(201).json({
       token,
       user: {
@@ -46,6 +64,8 @@ exports.signup = async (req, res) => {
         name: user.name,
         email: user.email,
         role: user.role,
+        department: user.department,
+        designation: user.designation,
       },
     });
   } catch (err) {
@@ -53,6 +73,7 @@ exports.signup = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+
 
 // Login for all users
 exports.login = async (req, res) => {

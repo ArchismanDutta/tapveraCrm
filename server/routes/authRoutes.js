@@ -24,10 +24,28 @@ const signupValidation = [
   body("gender")
     .isIn(["male", "female", "other"])
     .withMessage("Gender must be male, female, or other"),
+
+  // Optional department validation: if present, must be from enum list (case sensitive)
+  body("department")
+    .optional()
+    .isIn(["executives", "development", "marketingAndSales", "humanResource"])
+    .withMessage(
+      "Department must be one of executives, development, marketingAndSales, humanResource"
+    ),
+
+  // Optional designation validation: if present, must be string & max length
+  body("designation")
+    .optional()
+    .isString()
+    .trim()
+    .isLength({ max: 100 })
+    .withMessage("Designation should be at most 100 characters"),
+
   body("password")
     .isLength({ min: 6 })
     .withMessage("Password must be at least 6 characters long"),
 ];
+
 
 // Validation rules for login
 const loginValidation = [
