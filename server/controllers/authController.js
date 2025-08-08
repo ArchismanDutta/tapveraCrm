@@ -9,9 +9,9 @@ const generateToken = (user) => {
   });
 };
 
+// Employee Signup
 exports.signup = async (req, res) => {
   try {
-    // Destructure including the new fields
     const {
       name,
       email,
@@ -23,46 +23,35 @@ exports.signup = async (req, res) => {
       designation,
     } = req.body;
 
-    // Since we use express-validator, simple validation here is no longer necessary.
-    // But if you want to keep a quick check, uncomment below:
-
-    /*
-    if (!name || !email || !contact || !dob || !gender || !password) {
-      return res.status(400).json({ message: "Please fill all required fields." });
-    }
-    */
-
-    // Check if user with this email already exists
     const existingUser = await User.findOne({ email });
     if (existingUser)
       return res.status(400).json({ message: "Email already in use." });
 
-    // Create a new user with all fields
     const user = new User({
       name,
       email,
       contact,
       dob,
       gender,
-      password, // hashed automatically by pre-save hook unless disabled
-      role: "employee", // only employee via signup
-      department, // optional field with enum validation done earlier
-      designation, // optional string free text
+      password, // plain text now, hash later
+      role: "employee",
+      department,
+      designation,
     });
 
-    // Save the user to database
     await user.save();
 
-    // Generate JWT token for the user
     const token = generateToken(user);
 
-    // Respond with token and user info (without password)
     res.status(201).json({
       token,
       user: {
         id: user._id,
         name: user.name,
         email: user.email,
+        contact: user.contact,
+        dob: user.dob,
+        gender: user.gender,
         role: user.role,
         department: user.department,
         designation: user.designation,
@@ -73,7 +62,6 @@ exports.signup = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
-
 
 // Login for all users
 exports.login = async (req, res) => {
@@ -86,9 +74,7 @@ exports.login = async (req, res) => {
     const user = await User.findOne({ email });
     if (!user) return res.status(401).json({ message: "Invalid credentials." });
 
-    // Direct password check for plain text storage
-    // const isMatch = await bcrypt.compare(password, user.password);
-    // if (!isMatch) return res.status(401).json({ message: "Invalid credentials." });
+    // Plain text password check (for now)
     if (password !== user.password)
       return res.status(401).json({ message: "Invalid credentials." });
 
@@ -100,7 +86,12 @@ exports.login = async (req, res) => {
         id: user._id,
         name: user.name,
         email: user.email,
+        contact: user.contact,
+        dob: user.dob,
+        gender: user.gender,
         role: user.role,
+        department: user.department,
+        designation: user.designation,
       },
     });
   } catch (err) {
@@ -108,3 +99,4 @@ exports.login = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+
