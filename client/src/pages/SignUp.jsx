@@ -163,7 +163,7 @@ const Signup = () => {
               <option value="male">Male</option>
               <option value="female">Female</option>
               <option value="other">Other</option>
-              <option value="preferNotToSay">Prefer not to say</option>
+      
             </select>
             {error && !form.gender && <p className="mt-1 text-xs text-red-500">Please select your gender.</p>}
           </div>
@@ -188,7 +188,7 @@ const Signup = () => {
               }}
             >
               <option value="">Select a department</option>
-              <option value="executives">Executives</option>
+              
               <option value="development">Development</option>
               <option value="marketingAndSales">Marketing & Sales</option>
               <option value="humanResource">Human Resource</option>
