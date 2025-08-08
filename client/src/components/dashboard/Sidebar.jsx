@@ -1,3 +1,4 @@
+// src/components/dashboard/Sidebar.jsx
 import React from "react";
 import tapveraLogo from "../../assets/tapvera.png";
 import {
@@ -10,6 +11,7 @@ import {
   HelpCircle
 } from "lucide-react";
 import { FaChevronCircleRight } from "react-icons/fa"; // Import new icon
+import { NavLink } from "react-router-dom"; // Import NavLink for routing
 
 const Sidebar = ({ onLogout, collapsed, setCollapsed }) => {
   return (
@@ -34,6 +36,7 @@ const Sidebar = ({ onLogout, collapsed, setCollapsed }) => {
           className={`p-1 rounded-full transition-transform transform ${
             collapsed ? "rotate-180" : "rotate-0"
           } hover:scale-110`}
+          aria-label={collapsed ? "Expand Sidebar" : "Collapse Sidebar"}
         >
           <FaChevronCircleRight size={22} className="text-gray-600" />
         </button>
@@ -42,37 +45,43 @@ const Sidebar = ({ onLogout, collapsed, setCollapsed }) => {
       {/* Nav */}
       <nav className="space-y-1 p-4 flex-1">
         <SidebarLink
+          to="/dashboard"
           icon={<LayoutDashboard size={18} />}
           label="Dashboard"
-          active
           collapsed={collapsed}
         />
         <SidebarLink
+          to="/profile"
           icon={<User size={18} />}
           label="My Profile"
           collapsed={collapsed}
         />
         <SidebarLink
+          to="/tasks"
           icon={<ClipboardList size={18} />}
           label="Tasks"
           collapsed={collapsed}
         />
         <SidebarLink
+          to="/messages"
           icon={<MessageCircle size={18} />}
           label="Messages"
           collapsed={collapsed}
         />
         <SidebarLink
+          to="/reports"
           icon={<FileText size={18} />}
           label="Reports"
           collapsed={collapsed}
         />
         <SidebarLink
+          to="/requirements"
           icon={<Flag size={18} />}
           label="Requirements"
           collapsed={collapsed}
         />
         <SidebarLink
+          to="/help"
           icon={<HelpCircle size={18} />}
           label="Help Center"
           collapsed={collapsed}
@@ -84,6 +93,7 @@ const Sidebar = ({ onLogout, collapsed, setCollapsed }) => {
         <button
           onClick={onLogout}
           className="w-full p-2 rounded focus:outline-none focus:ring-2 focus:ring-yellow-400 transition-colors bg-gradient-to-r from-yellow-300 via-yellow-400 to-orange-400 text-white hover:bg-red-600 text-sm"
+          aria-label="Logout"
         >
           {collapsed ? "⏻" : "Logout"}
         </button>
@@ -92,17 +102,21 @@ const Sidebar = ({ onLogout, collapsed, setCollapsed }) => {
   );
 };
 
-const SidebarLink = ({ icon, label, active, collapsed }) => (
-  <div
-    className={`flex items-center space-x-3 cursor-pointer p-2 rounded transition-colors ${
-      active
-        ? "bg-blue-50 text-blue-600 font-semibold"
-        : "hover:bg-gray-100 text-gray-700"
-    }`}
+const SidebarLink = ({ to, icon, label, collapsed }) => (
+  <NavLink
+    to={to}
+    className={({ isActive }) =>
+      `flex items-center space-x-3 cursor-pointer p-2 rounded transition-colors ${
+        isActive
+          ? "bg-blue-50 text-blue-600 font-semibold"
+          : "hover:bg-gray-100 text-gray-700"
+      }`
+    }
+    end
   >
     {icon}
     {!collapsed && <span>{label}</span>}
-  </div>
+  </NavLink>
 );
 
 export default Sidebar;

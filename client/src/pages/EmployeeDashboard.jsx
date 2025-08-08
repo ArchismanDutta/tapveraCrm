@@ -6,7 +6,6 @@ import TodayTasks from "../components/dashboard/TodayTasks";
 import QuickActions from "../components/dashboard/QuickActions";
 import RecentReports from "../components/dashboard/RecentReports";
 import RecentMessages from "../components/dashboard/RecentMessages";
-import ProfileDetails from "../components/dashboard/ProfileDetails";
 import Sidebar from "../components/dashboard/Sidebar";
 
 const EmployeeDashboard = ({ onLogout }) => {
@@ -45,15 +44,6 @@ const EmployeeDashboard = ({ onLogout }) => {
     { name: "Emily Davis", msg: "New requirements document", time: "5h ago", img: "https://i.pravatar.cc/40?img=4" },
   ];
 
-  const profileDetails = [
-    { label: "Employee ID", value: "EMP001" },
-    { label: "Department", value: "Engineering" },
-    { label: "Position", value: "Senior Developer" },
-    { label: "Email", value: "john.smith@workflow.com" },
-    { label: "Phone", value: "+1 (555) 123-4567" },
-    { label: "Working Hours", value: "9:00 AM - 6:00 PM" },
-  ];
-
   return (
     <div className="flex bg-gray-50 font-sans text-gray-800">
       {/* Sidebar */}
@@ -85,12 +75,10 @@ const EmployeeDashboard = ({ onLogout }) => {
           <QuickActions actions={quickActions} />
         </div>
 
-        <div className="grid grid-cols-3 gap-6 mb-8">
+        <div className="grid grid-cols-3 gap-6">
           <RecentReports reports={reports} className="col-span-2" />
           <RecentMessages messages={messages} />
         </div>
-
-        <ProfileDetails details={profileDetails} />
       </main>
     </div>
   );
