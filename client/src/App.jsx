@@ -6,6 +6,7 @@ import Login from "./pages/LoginPage";
 import Signup from "./pages/SignUp";
 import EmployeeDashboardPage from "./pages/EmployeeDashboard";
 import MyProfile from "./pages/MyProfile"; // Employee Profile Page
+import Tasks from "./pages/Tasks"; // ✅ New Tasks Page
 
 const App = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -70,6 +71,18 @@ const App = () => {
           element={
             isAuthenticated ? (
               <MyProfile onLogout={handleLogout} userType="Employee" />
+            ) : (
+              <Navigate to="/login" replace />
+            )
+          }
+        />
+
+        {/* ✅ Tasks Page */}
+        <Route
+          path="/tasks"
+          element={
+            isAuthenticated ? (
+              <Tasks onLogout={handleLogout} />
             ) : (
               <Navigate to="/login" replace />
             )
