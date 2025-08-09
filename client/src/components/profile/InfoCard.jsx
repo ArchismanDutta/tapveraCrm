@@ -3,7 +3,7 @@ import React from "react";
 
 const InfoCard = ({ title, data }) => {
   return (
-    <div className="bg-white p-6 rounded-lg shadow">
+    <div className="bg-white p-6 rounded-lg shadow border border-black-500">
       <h2 className="text-lg font-semibold mb-4">{title}</h2>
       <ul className="space-y-3">
         {data.map((item, idx) => (
