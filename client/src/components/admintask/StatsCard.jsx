@@ -1,44 +1,46 @@
 import React from "react";
 import { motion } from "framer-motion";
 
-const StatCard = ({ title, value, icon: Icon }) => {
+const StatsCard = ({ title, value, colorScheme = "orange" }) => {
+  // Define color schemes for different cards
+  const colorSchemes = {
+    blue: "bg-gradient-to-br from-blue-50 via-blue-100 to-blue-200 border-blue-200",
+    green: "bg-gradient-to-br from-green-50 via-green-100 to-green-200 border-green-200",
+    purple: "bg-gradient-to-br from-purple-50 via-purple-100 to-purple-200 border-purple-200",
+    pink: "bg-gradient-to-br from-pink-50 via-pink-100 to-pink-200 border-pink-200",
+    yellow: "bg-gradient-to-br from-yellow-50 via-yellow-100 to-yellow-200 border-yellow-200",
+    orange: "bg-gradient-to-br from-orange-50 via-orange-100 to-orange-200 border-orange-200",
+  };
+
   return (
     <motion.div
       whileHover={{
-        scale: 1.05,
-        boxShadow: "0 20px 35px rgba(255,165,0,0.35)",
+        scale: 1.02,
+        boxShadow: "0 8px 20px rgba(255, 165, 0, 0.15)",
       }}
       transition={{ type: "spring", stiffness: 300, damping: 20 }}
-      className="relative rounded-2xl p-6 shadow-lg overflow-hidden cursor-pointer select-none 
-                 bg-gradient-to-br from-yellow-300 via-yellow-400 to-orange-400 text-black border border-yellow-200"
+      className={`
+        relative
+        rounded-3xl
+        p-6
+        shadow-md
+        cursor-pointer
+        select-none
+        ${colorSchemes[colorScheme] || colorSchemes.orange}
+        min-h-[140px]
+        flex flex-col justify-between
+      `}
     >
-      {/* Decorative light gradient overlay */}
-      <div className="absolute inset-0 opacity-10 pointer-events-none bg-[radial-gradient(circle_at_top_left,white,transparent)]"></div>
-      
-      {/* Glow Effect */}
-      <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-white/20 to-transparent opacity-30 pointer-events-none"></div>
-
-      {/* Icon Section */}
-      {Icon && (
-        <div className="w-14 h-14 flex items-center justify-center bg-white/25 backdrop-blur-sm rounded-xl mb-4 shadow-md">
-          <Icon className="text-black text-3xl drop-shadow-sm" />
-        </div>
-      )}
-
-      {/* Title */}
-      <span className="block text-sm font-semibold opacity-90 tracking-wide">
-        {title}
-      </span>
-
-      {/* Value */}
-      <span className="block text-5xl font-extrabold mt-2 drop-shadow-md">
-        {value}
-      </span>
-
-      {/* Bottom highlight bar */}
-      <div className="absolute bottom-0 left-0 w-full h-1 bg-gradient-to-r from-yellow-300 via-orange-400 to-yellow-300 opacity-50"></div>
+      {/* Large number at top-left */}
+      <div className="flex justify-start">
+        <span className="text-4xl font-bold text-black-500">{value}</span>
+      </div>
+      {/* Text at bottom-left */}
+      <div className="flex justify-start">
+        <span className="text-sm font-medium text-black-500 leading-tight">{title}</span>
+      </div>
     </motion.div>
   );
 };
 
-export default StatCard;
+export default StatsCard;
