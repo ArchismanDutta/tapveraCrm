@@ -10,7 +10,7 @@ const QuickActions = ({ actions }) => {
           <button
             key={idx}
             onClick={action.onClick}
-            className={`p-3 rounded text-sm text-left transition-all duration-200 ease-in-out cursor-pointer 
+            className={`p-3 rounded-lg text-sm text-left transition-all duration-200 ease-in-out cursor-pointer hover:scale-105
               ${action.colorClass} hover:opacity-90 active:scale-95`}
           >
             {action.label}
