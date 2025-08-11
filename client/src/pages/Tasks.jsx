@@ -14,26 +14,37 @@ const Tasks = () => {
     { sender: "me", text: "Going well! Will share the update soon." },
   ]);
 
-  // Fetch tasks from backend
   useEffect(() => {
     const fetchTasks = async () => {
       try {
-        const token = localStorage.getItem("token"); // JWT stored in localStorage
+        const storedToken = localStorage.getItem("token");
+        if (!storedToken) {
+          console.error("No token found in localStorage");
+          return;
+        }
 
-        const res = await axios.get("/api/tasks", {
+        const token =
+          storedToken.startsWith("{") && storedToken.endsWith("}")
+            ? JSON.parse(storedToken).token
+            : storedToken;
+
+        const config = {
           headers: {
             Authorization: `Bearer ${token}`,
           },
-        });
+        };
 
-        // Map backend response to match TaskList structure
-        const formatted = res.data.map((task) => ({
+        const res = await axios.get("/api/tasks", config);
+
+        const formattedTasks = res.data.map((task) => ({
           id: task._id,
           title: task.title,
-          time: new Date(task.dueDate).toLocaleTimeString([], {
-            hour: "2-digit",
-            minute: "2-digit",
-          }),
+          time: task.dueDate
+            ? new Date(task.dueDate).toLocaleTimeString([], {
+                hour: "2-digit",
+                minute: "2-digit",
+              })
+            : "",
           description: task.description,
           priority: task.priority,
           status: task.status,
@@ -41,16 +52,18 @@ const Tasks = () => {
           assignedBy: task.assignedBy?.name || "",
         }));
 
-        setTasks(formatted);
+        setTasks(formattedTasks);
       } catch (err) {
-        console.error("Error fetching tasks:", err);
+        console.error(
+          "Error fetching tasks:",
+          err.response?.data || err.message
+        );
       }
     };
 
     fetchTasks();
   }, []);
 
-  // Update task status locally (can be extended to send PATCH request)
   const handleStatusChange = (taskId, newStatus) => {
     setTasks((prev) =>
       prev.map((t) => (t.id === taskId ? { ...t, status: newStatus } : t))
@@ -59,7 +72,6 @@ const Tasks = () => {
 
   const handleSubmitRequirement = (requirementData) => {
     console.log("Requirement submitted:", requirementData);
-    // Add API call here if you want to send this to the backend
   };
 
   const handleSendMessage = (messageText) => {
@@ -83,23 +95,6 @@ const Tasks = () => {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Left Side - Tasks */}
           <div className="lg:col-span-2">
-            <h2 className="text-xl font-semibold text-gray-800">
-              Good Morning, Archishman
-            </h2>
-            <p className="text-sm text-gray-500 mb-6">
-              {new Date().toLocaleDateString("en-US", {
-                weekday: "long",
-                month: "long",
-                day: "numeric",
-                year: "numeric",
-              })}{" "}
-              •{" "}
-              {new Date().toLocaleTimeString([], {
-                hour: "2-digit",
-                minute: "2-digit",
-              })}
-            </p>
-
             <TaskStats totalTasks={tasks.length} />
             <TaskList tasks={tasks} onStatusChange={handleStatusChange} />
           </div>
