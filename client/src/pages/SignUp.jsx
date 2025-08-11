@@ -58,6 +58,7 @@ const Signup = () => {
 
       // Save JWT token for future requests
       localStorage.setItem("token", data.token);
+      localStorage.setItem("user", JSON.stringify(data.user)); // store user separately
 
       // Redirect to profile page
       navigate("/profile");

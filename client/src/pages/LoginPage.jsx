@@ -24,13 +24,15 @@ const Login = ({ onLoginSuccess }) => {
     }
 
     try {
-      const res = await fetch('http://localhost:5000/api/auth/login', {
+      const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form),
       });
 
       const data = await res.json();
+      console.log("Login response data:", data);
+
 
       if (!res.ok) {
         setError(data.message || 'Invalid email or password.');
@@ -38,11 +40,16 @@ const Login = ({ onLoginSuccess }) => {
         return;
       }
 
-      // Save token to localStorage
-      localStorage.setItem('token', data.token);
+      // ✅ Save token from parsed JSON, not res.data
+     localStorage.setItem("token", data.token.token); // store only token
+localStorage.setItem("user", JSON.stringify(data.user)); // store user separately
 
-      // Tell App.jsx login succeeded
-      onLoginSuccess(data.user);
+    
+
+ 
+
+      // Notify App.jsx login succeeded
+      onLoginSuccess(data.token);
     } catch (err) {
       console.error('Login Error:', err);
       setError('Failed to connect to the server. Please try again.');
@@ -105,17 +112,16 @@ const Login = ({ onLoginSuccess }) => {
         </form>
 
         <div className="mt-6 text-center">
-  <span className="text-textMuted text-sm">
-    Forgot your password?
-    <a
-      href="/forgot-password"
-      className="ml-2 text-secondary hover:underline"
-    >
-      Click here
-    </a>
-  </span>
-</div>
-
+          <span className="text-textMuted text-sm">
+            Forgot your password?
+            <a
+              href="/forgot-password"
+              className="ml-2 text-secondary hover:underline"
+            >
+              Click here
+            </a>
+          </span>
+        </div>
 
         <p className="mt-4 text-center text-textMuted text-sm">
           Don&apos;t have an account?{' '}
