@@ -6,6 +6,8 @@ import StatCard from "../components/profile/StatCard";
 import ProfileHeader from "../components/profile/ProfileHeader";
 import ActivityList from "../components/profile/ActivityList";
 import axios from "axios";
+
+// Icons
 import {
   FaCheckCircle,
   FaProjectDiagram,
@@ -22,9 +24,9 @@ const MyProfile = ({ userType = "employee", onLogout }) => {
   const [collapsed, setCollapsed] = useState(false);
   const [loading, setLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
-  const [editData, setEditData] = useState({});
+  const [editData, setEditData] = useState(null);
 
-  // Fetch profile
+  // Fetch profile from backend
   const fetchProfile = async () => {
     try {
       setLoading(true);
@@ -34,21 +36,24 @@ const MyProfile = ({ userType = "employee", onLogout }) => {
         return;
       }
 
-      const res = await axios.get("/api/users/profile", {
-        headers: { Authorization: `Bearer ${token}` },
+      const res = await axios.get("/api/users/me", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
       });
 
       const user = res.data;
+      console.log(user);
 
       setProfileData({
         avatar: user.avatar || "https://i.pravatar.cc/150?img=32",
-        name: user.name || "N/A",
+        name: user.name,
         role: userType,
         team: user.team || "Not Assigned",
         contact: {
-          email: user.email || "N/A",
-          phone: user.contact || "N/A",
-          location: user.location || "N/A",
+          email: user.email,
+          phone: user.contact || "N/A",      // Changed to contact
+          location: user.location || "N/A",  // Location optional
         },
         dob: user.dob || "N/A",
         department: user.department || "N/A",
@@ -58,9 +63,8 @@ const MyProfile = ({ userType = "employee", onLogout }) => {
           ongoingProjects: user.ongoingProjects || 0,
           attendancePercent: user.attendancePercent || 0,
         },
-        activities: user.activities || [],
         personalInfo: [
-          { label: "Email", value: user.email || "N/A", icon: <FaEnvelope /> },
+          { label: "Email", value: user.email, icon: <FaEnvelope /> },
           { label: "Phone", value: user.contact || "N/A", icon: <FaPhone /> },
           { label: "Location", value: user.location || "N/A", icon: <FaMapMarkerAlt /> },
           { label: "DOB", value: user.dob || "N/A", icon: <FaBirthdayCake /> },
@@ -70,11 +74,11 @@ const MyProfile = ({ userType = "employee", onLogout }) => {
           { label: "Role", value: userType, icon: <MdAdminPanelSettings /> },
           { label: "Designation", value: user.designation || "N/A", icon: <MdWork /> },
         ],
-        gender: user.gender || "N/A",
+        activities: user.activities || [],
       });
     } catch (err) {
       console.error("Error fetching profile:", err);
-      alert("Failed to load profile.");
+      alert("Failed to load profile. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -84,45 +88,70 @@ const MyProfile = ({ userType = "employee", onLogout }) => {
     fetchProfile();
   }, [userType]);
 
-  // Edit
   const handleEditClick = () => {
     setEditData({
+      avatar: profileData.avatar,
       name: profileData.name,
+      email: profileData.contact.email,
       phone: profileData.contact.phone,
+      location: profileData.contact.location,
       designation: profileData.designation,
-      department: profileData.department,
-      dob: profileData.dob,
-      gender: profileData.gender,
     });
     setIsEditing(true);
   };
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setEditData((prev) => ({ ...prev, [name]: value }));
+    setEditData((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+  };
+
+  const handleAvatarChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setEditData((prev) => ({
+          ...prev,
+          avatar: reader.result,
+        }));
+      };
+      reader.readAsDataURL(file);
+    }
   };
 
   const handleSave = async () => {
     try {
       const token = localStorage.getItem("token");
       await axios.put(
-        "/api/users/profile",
+        "/api/users/me",
         {
+          avatar: editData.avatar,
           name: editData.name,
-          contact: editData.phone,
-          dob: editData.dob,
-          gender: editData.gender,
-          department: editData.department,
+          email: editData.email,
+          contact: editData.phone,      // sending as contact field to backend
+          location: editData.location,  // added location here as well
           designation: editData.designation,
         },
-        { headers: { Authorization: `Bearer ${token}` } }
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
       );
+
       await fetchProfile();
       setIsEditing(false);
     } catch (err) {
       console.error("Error updating profile:", err);
       alert("Failed to update profile.");
     }
+  };
+
+  const handleCancel = () => {
+    setIsEditing(false);
   };
 
   if (loading || !profileData) {
@@ -155,7 +184,19 @@ const MyProfile = ({ userType = "employee", onLogout }) => {
                 handleSave();
               }}
             >
-              {["name", "phone", "dob", "gender", "department", "designation"].map((field) => (
+              <div className="mb-4">
+                <label className="block mb-1 font-medium">Avatar</label>
+                <div className="mb-2">
+                  <img
+                    src={editData.avatar}
+                    alt="Avatar Preview"
+                    className="w-24 h-24 rounded-full object-cover border border-gray-300"
+                  />
+                </div>
+                <input type="file" accept="image/*" onChange={handleAvatarChange} className="w-full" />
+              </div>
+
+              {["name", "email", "phone", "location", "designation"].map((field) => (
                 <div key={field} className="mb-4">
                   <label className="block mb-1 font-medium" htmlFor={field}>
                     {field.charAt(0).toUpperCase() + field.slice(1)}
@@ -163,18 +204,19 @@ const MyProfile = ({ userType = "employee", onLogout }) => {
                   <input
                     id={field}
                     name={field}
-                    type="text"
-                    value={editData[field] || ""}
+                    type={field === "email" ? "email" : field === "phone" ? "tel" : "text"}
+                    value={editData[field]}
                     onChange={handleInputChange}
                     className="w-full border border-gray-300 rounded px-3 py-2"
-                    required={field !== "gender"}
+                    required={field !== "location"} // location can be optional
                   />
                 </div>
               ))}
+
               <div className="flex justify-end gap-3">
                 <button
                   type="button"
-                  onClick={() => setIsEditing(false)}
+                  onClick={handleCancel}
                   className="px-4 py-2 border rounded text-gray-700 hover:bg-gray-100"
                 >
                   Cancel
@@ -188,15 +230,49 @@ const MyProfile = ({ userType = "employee", onLogout }) => {
         ) : (
           <>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mt-6">
-              <StatCard value={profileData.stats.tasksCompleted} label="Tasks Completed" icon={<FaCheckCircle size={20} />} />
-              <StatCard value={profileData.stats.ongoingProjects} label="Ongoing Projects" icon={<FaProjectDiagram size={20} />} />
-              <StatCard value={`${profileData.stats.attendancePercent}%`} label="Attendance" icon={<FaCalendarAlt size={18} />} />
+              <StatCard
+                value={profileData.stats.tasksCompleted}
+                label="Tasks Completed"
+                icon={<FaCheckCircle size={20} />}
+              />
+              <StatCard
+                value={profileData.stats.ongoingProjects}
+                label="Ongoing Projects"
+                icon={<FaProjectDiagram size={20} />}
+              />
+              <StatCard
+                value={`${profileData.stats.attendancePercent}%`}
+                label="Attendance"
+                icon={<FaCalendarAlt size={18} />}
+              />
             </div>
+
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
               <InfoCard title="Personal Information" data={profileData.personalInfo} />
               <InfoCard title="Work Information" data={profileData.workInfo} />
             </div>
+
             <ActivityList activities={profileData.activities} />
+
+            <div className="mt-6 flex items-center justify-between">
+              <div className="text-sm text-gray-500">
+                Last updated: <span className="font-medium">{new Date().toLocaleDateString()}</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={fetchProfile}
+                  className="px-4 py-2 bg-white border rounded-lg text-sm hover:shadow"
+                >
+                  Refresh
+                </button>
+                <button
+                  onClick={() => alert("Open Edit Stats modal (implement API)")}
+                  className="px-4 py-2 bg-pinkAccent text-white rounded-lg text-sm hover:opacity-90"
+                >
+                  Edit Stats
+                </button>
+              </div>
+            </div>
           </>
         )}
       </main>
