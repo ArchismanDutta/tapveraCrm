@@ -1,30 +1,33 @@
 import React, { useState } from "react";
 import TaskRow from "./TaskRow";
 
-const TaskTable = ({ tasks, onViewTask, onDeleteTask }) => {
+const TaskTable = ({ tasks, onViewTask, onEditTask, onDeleteTask }) => {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("All Status");
 
-  const filteredTasks = tasks.filter(
-    (t) =>
-      t.title.toLowerCase().includes(search.toLowerCase()) &&
-      (filter === "All Status" || t.status === filter)
-  );
+  // Ensure tasks is always an array
+  const safeTasks = Array.isArray(tasks) ? tasks : [];
+
+  const filteredTasks = safeTasks.filter((t) => {
+    const titleMatch =
+      t?.title?.toLowerCase().includes(search.toLowerCase()) ?? false;
+    const statusMatch =
+      filter === "All Status" || t?.status === filter;
+    return titleMatch && statusMatch;
+  });
 
   return (
     <div className="bg-white rounded-lg shadow-sm p-5 border">
-      {/* Search and filter controls */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-4 gap-3 md:gap-0">
+      {/* Search and Filter Controls */}
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-4 gap-3">
         <input
           type="text"
           placeholder="Search tasks..."
-          aria-label="Search tasks"
-          className="border border-yellow-200 focus:border-orange-400 focus:ring-1 focus:ring-orange-300 p-2 rounded-lg w-full md:w-1/3 text-sm transition"
+          className="border border-black-200 focus:border-orange-400 focus:ring-1 focus:ring-orange-300 p-2 rounded-lg w-full md:w-1/3 text-sm"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
         <select
-          aria-label="Filter tasks by status"
           className="border border-yellow-200 focus:border-orange-400 focus:ring-1 focus:ring-orange-300 p-2 rounded-lg text-sm w-full md:w-auto"
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
@@ -50,12 +53,20 @@ const TaskTable = ({ tasks, onViewTask, onDeleteTask }) => {
         </thead>
         <tbody>
           {filteredTasks.length > 0 ? (
-            filteredTasks.map((task) => (
+            filteredTasks.map((task, index) => (
               <TaskRow
-                key={task.id}
-                task={task}
-                onView={onViewTask}
-                onDelete={onDeleteTask}
+                key={task._id || task.id || index} // ✅ unique key
+                task={{
+                  ...task,
+                  // Safely handle assignedTo so it never crashes
+                  assignedTo:
+                    task?.assignedTo && typeof task.assignedTo === "object"
+                      ? task.assignedTo.name || "Unassigned"
+                      : task?.assignedTo || "Unassigned",
+                }}
+                onView={() => onViewTask(task)}
+                onEdit={() => onEditTask(task)}
+                onDelete={() => onDeleteTask(task._id || task.id)}
               />
             ))
           ) : (
