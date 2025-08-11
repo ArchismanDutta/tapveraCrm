@@ -8,26 +8,29 @@ import EmployeeDashboardPage from "./pages/EmployeeDashboard";
 import MyProfile from "./pages/MyProfile";
 import Tasks from "./pages/Tasks";
 import AdminTaskPage from "./pages/AdminTaskPage";
+import ForgotPassword from "./pages/ForgotPassword";
+import ResetPassword from "./pages/ResetPassword";
 
 const App = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [loading, setLoading] = useState(true); // ✅ Prevent premature redirects
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const token = localStorage.getItem("token");
 
-    // OPTIONAL: Validate token with backend here before setting auth
+    // ✅ Optional: Verify token with backend before setting authenticated state
     if (token && token.trim() !== "") {
       setIsAuthenticated(true);
     } else {
       setIsAuthenticated(false);
     }
 
-    setLoading(false); // ✅ Allow routing after check
+    setLoading(false);
   }, []);
 
-  const handleLoginSuccess = () => {
-    localStorage.setItem("token", "dummy-token"); // You’ll replace with real token
+  const handleLoginSuccess = (token) => {
+    // ✅ Save real token from backend instead of dummy token
+    localStorage.setItem("token", token);
     setIsAuthenticated(true);
   };
 
@@ -37,13 +40,17 @@ const App = () => {
   };
 
   if (loading) {
-    return <div className="flex justify-center items-center h-screen">Loading...</div>;
+    return (
+      <div className="flex justify-center items-center h-screen">
+        Loading...
+      </div>
+    );
   }
 
   return (
     <Router>
       <Routes>
-        {/* Login Page */}
+        {/* Login */}
         <Route
           path="/login"
           element={
@@ -55,7 +62,7 @@ const App = () => {
           }
         />
 
-        {/* Signup Page */}
+        {/* Signup */}
         <Route
           path="/signup"
           element={
@@ -67,7 +74,11 @@ const App = () => {
           }
         />
 
-        {/* Employee Dashboard */}
+        {/* Public Routes */}
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password/:token" element={<ResetPassword />} />
+
+        {/* Protected Routes */}
         <Route
           path="/dashboard"
           element={
@@ -79,7 +90,6 @@ const App = () => {
           }
         />
 
-        {/* Employee Profile Page */}
         <Route
           path="/profile"
           element={
@@ -91,7 +101,6 @@ const App = () => {
           }
         />
 
-        {/* Employee Tasks Page */}
         <Route
           path="/tasks"
           element={
@@ -103,7 +112,6 @@ const App = () => {
           }
         />
 
-        {/* Admin Task Management Page */}
         <Route
           path="/admin/tasks"
           element={
@@ -115,8 +123,16 @@ const App = () => {
           }
         />
 
-        {/* Catch-All Redirect */}
-        <Route path="*" element={<Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />} />
+        {/* Catch-all Redirect */}
+        <Route
+          path="*"
+          element={
+            <Navigate
+              to={isAuthenticated ? "/dashboard" : "/login"}
+              replace
+            />
+          }
+        />
       </Routes>
     </Router>
   );
