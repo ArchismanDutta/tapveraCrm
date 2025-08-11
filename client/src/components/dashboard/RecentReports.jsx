@@ -1,6 +1,7 @@
 import React from "react";
 import { FileText, Plus, Eye } from "lucide-react";
 
+// Colors from your design system
 const colors = {
   background: "#fff",
   border: "#ddd",
@@ -36,13 +37,13 @@ const RecentReports = ({
 
   return (
     <div
-      className={`${className || ""} rounded-lg shadow-sm p-5`}
+      className={`${className || ""} rounded-xl shadow-sm p-5`}
       style={{
         backgroundColor: colors.background,
         border: `1px solid ${colors.border}`,
-        width: "100%", // FULL WIDTH
-        margin: 0,     // Remove margin for edge to edge styling in its parent
-        minWidth: 0,   // Allow content to shrink on smaller screens
+        width: "100%",
+        margin: 0,
+        minWidth: 0,
         fontFamily: '"Segoe UI", Tahoma, Geneva, Verdana, sans-serif',
         boxSizing: "border-box",
       }}
@@ -81,13 +82,15 @@ const RecentReports = ({
           <div
             key={idx}
             onClick={() => handleView(report)}
-            className="flex justify-between items-center p-3 rounded cursor-pointer transition hover:bg-gray-50 focus:bg-gray-100 focus:outline-none"
+            className="flex justify-between items-center min-h-[46px] p-3 rounded-lg cursor-pointer transition hover:bg-gray-50 focus:bg-gray-100 focus:outline-none"
             tabIndex={0}
             onKeyDown={(e) => {
               if (e.key === "Enter") handleView(report);
             }}
             style={{
-              borderBottom: idx !== reports.length - 1 ? `1px solid ${colors.border}` : "none",
+              borderBottom:
+                idx !== reports.length - 1 ? `1px solid ${colors.border}` : "none",
+              userSelect: "none",
             }}
           >
             {/* Report Info */}
@@ -108,18 +111,24 @@ const RecentReports = ({
               </p>
             </div>
 
-            {/* Status & Actions */}
-            <div className="flex items-center gap-3" style={{ minWidth: 110 }}>
+            {/* Status & Actions (fixed vertical alignment) */}
+            <div
+              className="flex items-center gap-3 min-w-[110px]"
+              style={{ height: "28px" }} // keeps row height consistent
+            >
               <span
                 style={{
                   backgroundColor: colors.statusBg,
                   color: colors.statusText,
                   fontSize: 12,
                   fontWeight: 600,
-                  padding: "2px 10px",
+                  padding: "2px 11px",
                   borderRadius: 9999,
                   userSelect: "none",
                   whiteSpace: "nowrap",
+                  height: "100%",
+                  display: "flex",
+                  alignItems: "center",
                 }}
               >
                 {report.status}
@@ -130,13 +139,30 @@ const RecentReports = ({
                   handleView(report);
                 }}
                 aria-label="View Report"
-                className="p-1 rounded focus:outline-none focus:ring-2 focus:ring-yellow-400 transition-colors"
-                style={{ color: colors.actionIcon, backgroundColor: "transparent" }}
-                onMouseEnter={(e) => (e.currentTarget.style.color = colors.actionIconHover)}
-                onMouseLeave={(e) => (e.currentTarget.style.color = colors.actionIcon)}
+                className="rounded focus:outline-none focus:ring-2 focus:ring-yellow-400 transition-colors"
+                style={{
+                  color: colors.actionIcon,
+                  backgroundColor: "transparent",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  width: "28px",
+                  height: "28px", // matches status pill height
+                }}
+                onMouseEnter={(e) =>
+                  (e.currentTarget.style.color = colors.actionIconHover)
+                }
+                onMouseLeave={(e) =>
+                  (e.currentTarget.style.color = colors.actionIcon)
+                }
                 type="button"
               >
-                <Eye size={18} />
+                <Eye
+                  size={18}
+                  style={{
+                    display: "block",
+                  }}
+                />
               </button>
             </div>
           </div>
