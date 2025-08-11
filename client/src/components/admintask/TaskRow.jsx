@@ -1,7 +1,6 @@
 import React from "react";
-import { Eye, Trash2 } from "lucide-react";
+import { Eye, Trash2, Edit3 } from "lucide-react";
 
-// Theme badge colors
 const priorityColors = {
   High: "bg-red-100 text-red-700 border border-red-200",
   Medium: "bg-yellow-100 text-yellow-700 border border-yellow-200",
@@ -14,13 +13,11 @@ const statusColors = {
   Overdue: "bg-red-100 text-red-700 border border-red-200",
 };
 
-const TaskRow = ({ task, onView, onDelete }) => {
+const TaskRow = ({ task, onView, onEdit, onDelete }) => {
   return (
     <tr className="border-b text-sm hover:bg-yellow-50 transition-colors duration-200">
-      {/* Title */}
       <td className="p-3 font-medium text-gray-800">{task.title}</td>
 
-      {/* Assigned to */}
       <td className="p-3 flex items-center gap-2">
         <img
           src={task.assignedAvatar}
@@ -30,10 +27,8 @@ const TaskRow = ({ task, onView, onDelete }) => {
         <span className="text-gray-700">{task.assignedTo}</span>
       </td>
 
-      {/* Due date */}
       <td className="p-3 text-gray-600">{task.dueDate}</td>
 
-      {/* Priority badge */}
       <td className="p-3">
         <span
           className={`px-2 py-0.5 rounded-full text-xs font-semibold ${priorityColors[task.priority]}`}
@@ -42,7 +37,6 @@ const TaskRow = ({ task, onView, onDelete }) => {
         </span>
       </td>
 
-      {/* Status badge */}
       <td className="p-3">
         <span
           className={`px-2 py-0.5 rounded-full text-xs font-semibold ${statusColors[task.status]}`}
@@ -51,18 +45,24 @@ const TaskRow = ({ task, onView, onDelete }) => {
         </span>
       </td>
 
-      {/* Action buttons */}
       <td className="p-3 flex gap-2">
         <button
-          onClick={() => onView && onView(task)}
-          className="p-1.5 rounded-lg text-blue-600 hover:bg-blue-50 transition-colors duration-200"
+          onClick={onView}
+          className="p-1.5 rounded-lg text-blue-600 hover:bg-blue-50"
           title="View Task"
         >
           <Eye size={16} />
         </button>
         <button
-          onClick={() => onDelete && onDelete(task)}
-          className="p-1.5 rounded-lg text-red-600 hover:bg-red-50 transition-colors duration-200"
+          onClick={onEdit}
+          className="p-1.5 rounded-lg text-green-600 hover:bg-green-50"
+          title="Edit Task"
+        >
+          <Edit3 size={16} />
+        </button>
+        <button
+          onClick={onDelete}
+          className="p-1.5 rounded-lg text-red-600 hover:bg-red-50"
           title="Delete Task"
         >
           <Trash2 size={16} />

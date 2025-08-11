@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import API from "../../api"; // adjust import path to where your api.js lives
 
 const TaskForm = ({ onCreate }) => {
   const [task, setTask] = useState({
@@ -10,6 +11,23 @@ const TaskForm = ({ onCreate }) => {
     status: "Pending",
     description: "",
   });
+
+  const [users, setUsers] = useState([]);
+
+  // Fetch all users for the "Assign To" dropdown
+  useEffect(() => {
+    const fetchUsers = async () => {
+      try {
+        const res = await API.get("/users"); // your getUsers API
+        if (Array.isArray(res.data)) {
+          setUsers(res.data);
+        }
+      } catch (err) {
+        console.error("Failed to fetch users", err);
+      }
+    };
+    fetchUsers();
+  }, []);
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -47,6 +65,7 @@ const TaskForm = ({ onCreate }) => {
             className="border border-yellow-200 focus:border-orange-400 focus:ring-1 focus:ring-orange-300 p-2 rounded-lg w-full text-sm"
             value={task.title}
             onChange={(e) => setTask({ ...task, title: e.target.value })}
+            required
           />
         </div>
 
@@ -58,18 +77,24 @@ const TaskForm = ({ onCreate }) => {
           <select
             className="border border-yellow-200 focus:border-orange-400 focus:ring-1 focus:ring-orange-300 p-2 rounded-lg w-full text-sm bg-white"
             value={task.assignedTo}
-            onChange={(e) =>
+            onChange={(e) => {
+              const selectedUser = users.find((u) => u._id === e.target.value);
               setTask({
                 ...task,
-                assignedTo: e.target.value,
-                assignedAvatar: `https://i.pravatar.cc/40?u=${e.target.value}`,
-              })
-            }
+                assignedTo: e.target.value, // user ID
+                assignedAvatar: selectedUser
+                  ? `https://i.pravatar.cc/40?u=${selectedUser.name}`
+                  : "",
+              });
+            }}
+            required
           >
             <option value="">Select employee</option>
-            <option>Sarah Johnson</option>
-            <option>Mike Wilson</option>
-            <option>Emily Davis</option>
+            {users.map((user) => (
+              <option key={user._id} value={user._id}>
+                {user.name}
+              </option>
+            ))}
           </select>
         </div>
 
@@ -83,6 +108,7 @@ const TaskForm = ({ onCreate }) => {
             className="border border-yellow-200 focus:border-orange-400 focus:ring-1 focus:ring-orange-300 p-2 rounded-lg w-full text-sm"
             value={task.dueDate}
             onChange={(e) => setTask({ ...task, dueDate: e.target.value })}
+            required
           />
         </div>
 
@@ -95,6 +121,7 @@ const TaskForm = ({ onCreate }) => {
             className="border border-yellow-200 focus:border-orange-400 focus:ring-1 focus:ring-orange-300 p-2 rounded-lg w-full text-sm bg-white"
             value={task.priority}
             onChange={(e) => setTask({ ...task, priority: e.target.value })}
+            required
           >
             <option value="">Select priority</option>
             <option>Low</option>

@@ -1,76 +1,351 @@
+// src/pages/AdminTaskPage.jsx
 import React, { useState, useEffect } from "react";
-import StatsCard from "../components/admintask/StatsCard"; // ✅ Ensure filename matches
+import StatsCard from "../components/admintask/StatsCard";
 import TaskForm from "../components/admintask/TaskForm";
 import TaskTable from "../components/admintask/TaskTable";
+import tapveraLogo from "../assets/tapvera.png";
+import API from "../api"; // must handle auth headers
 
-const AdminTaskPage = () => {
-  const [tasks, setTasks] = useState([]);
+/**
+ * EditTaskModal - controlled modal for editing a task
+ * Now uses dynamic `users` list from backend for "Assign To".
+ */
+const EditTaskModal = ({ task, onSave, onCancel, users }) => {
+  const [editedTask, setEditedTask] = useState(task || {});
 
-  // Load initial mock tasks
+  // Sync local state when prop changes
   useEffect(() => {
-    setTasks([
-      {
-        id: 1,
-        title: "Client Meeting - Project Alpha",
-        assignedTo: "Sarah Johnson",
-        assignedAvatar: "https://i.pravatar.cc/40?img=1",
-        dueDate: "2025-08-08",
-        priority: "High",
-        status: "Pending",
-      },
-      {
-        id: 2,
-        title: "Report Submission - Q3 Review",
-        assignedTo: "Mike Wilson",
-        assignedAvatar: "https://i.pravatar.cc/40?img=2",
-        dueDate: "2025-08-08",
-        priority: "Medium",
-        status: "Completed",
-      },
-      {
-        id: 3,
-        title: "Team Sync",
-        assignedTo: "Emily Davis",
-        assignedAvatar: "https://i.pravatar.cc/40?img=3",
-        dueDate: "2025-08-08",
-        priority: "Low",
-        status: "Overdue",
-      },
-    ]);
-  }, []);
+    setEditedTask(task ? { ...task } : {});
+  }, [task]);
 
-  // Add new task
-  const handleCreateTask = (newTask) => {
-    setTasks((prev) => [...prev, { ...newTask, id: Date.now() }]);
+  const handleChange = (field, value) => {
+    setEditedTask((prev) => ({
+      ...prev,
+      [field]: value,
+      ...(field === "assignedTo"
+        ? { assignedAvatar: `https://i.pravatar.cc/40?u=${value}` }
+        : {}),
+    }));
   };
 
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (!editedTask || !editedTask.title?.trim() || !editedTask.assignedTo)
+      return;
+    onSave(editedTask);
+  };
+
+  // Format dueDate for input
+  const dueDateValue =
+    editedTask?.dueDate && typeof editedTask.dueDate === "string"
+      ? editedTask.dueDate.slice(0, 10)
+      : editedTask?.dueDate || "";
+
   return (
-    <div className="p-6 space-y-6">
-      {/* Top Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatsCard title="Total Tasks" value={tasks.length} color="text-gray-900" />
-        <StatsCard
-          title="Pending Tasks"
-          value={tasks.filter((t) => t.status === "Pending").length}
-          color="text-yellow-500"
+    <div className="fixed inset-0 flex items-center justify-center z-50 bg-black/30">
+      <form
+        onSubmit={handleSubmit}
+        className="bg-gradient-to-br from-yellow-50 via-orange-50 to-yellow-100 rounded-2xl shadow-2xl border border-yellow-200 p-6 w-full max-w-md space-y-5"
+      >
+        <h2 className="text-lg font-bold text-orange-600">✏️ Edit Task</h2>
+
+        {/* Form fields */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Title */}
+          <div>
+            <label className="block text-sm font-semibold text-orange-600 mb-1">
+              Task Title
+            </label>
+            <input
+              type="text"
+              className="border border-yellow-200 rounded-lg p-2 w-full text-sm"
+              value={editedTask.title || ""}
+              onChange={(e) => handleChange("title", e.target.value)}
+              required
+            />
+          </div>
+
+          {/* Assign To */}
+          <div>
+            <label className="block text-sm font-semibold text-orange-600 mb-1">
+              Assign To
+            </label>
+            <select
+              className="border border-yellow-200 rounded-lg p-2 w-full text-sm bg-white"
+              value={editedTask.assignedTo || ""}
+              onChange={(e) => handleChange("assignedTo", e.target.value)}
+              required
+            >
+              <option value="">Select employee</option>
+              {users.map((user) => (
+                <option key={user._id} value={user._id}>
+                  {user.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Due Date */}
+          <div>
+            <label className="block text-sm font-semibold text-orange-600 mb-1">
+              Due Date
+            </label>
+            <input
+              type="date"
+              className="border border-yellow-200 rounded-lg p-2 w-full text-sm"
+              value={dueDateValue}
+              onChange={(e) => handleChange("dueDate", e.target.value)}
+              required
+            />
+          </div>
+
+          {/* Priority */}
+          <div>
+            <label className="block text-sm font-semibold text-orange-600 mb-1">
+              Priority
+            </label>
+            <select
+              className="border border-yellow-200 rounded-lg p-2 w-full text-sm bg-white"
+              value={editedTask.priority || ""}
+              onChange={(e) => handleChange("priority", e.target.value)}
+              required
+            >
+              <option value="">Select priority</option>
+              <option value="Low">Low</option>
+              <option value="Medium">Medium</option>
+              <option value="High">High</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Description */}
+        <div>
+          <label className="block text-sm font-semibold text-orange-600 mb-1">
+            Description
+          </label>
+          <textarea
+            className="border border-yellow-200 rounded-lg p-2 w-full text-sm"
+            rows={3}
+            value={editedTask.description || ""}
+            onChange={(e) => handleChange("description", e.target.value)}
+          />
+        </div>
+
+        {/* Status */}
+        <div>
+          <label className="block text-sm font-semibold text-orange-600 mb-1">
+            Status
+          </label>
+          <select
+            className="border border-yellow-200 rounded-lg p-2 w-full text-sm bg-white"
+            value={editedTask.status || "Pending"}
+            onChange={(e) => handleChange("status", e.target.value)}
+            required
+          >
+            <option value="Pending">Pending</option>
+            <option value="Completed">Completed</option>
+            <option value="Overdue">Overdue</option>
+          </select>
+        </div>
+
+        {/* Buttons */}
+        <div className="flex justify-end gap-2 pt-2">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="px-4 py-2 bg-gray-300 hover:bg-gray-400 rounded"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            className="px-4 py-2 bg-orange-500 text-white rounded hover:bg-orange-600"
+          >
+            Save
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+};
+
+/** Main Admin Task Page */
+const AdminTaskPage = () => {
+  const [tasks, setTasks] = useState([]);
+  const [users, setUsers] = useState([]); // added users state
+  const [popupMessage, setPopupMessage] = useState("");
+  const [selectedTask, setSelectedTask] = useState(null);
+  const [editingTask, setEditingTask] = useState(null);
+
+  const showPopup = (message) => {
+    setPopupMessage(message);
+    setTimeout(() => setPopupMessage(""), 3000);
+  };
+
+  // Fetch tasks
+  const fetchTasks = async () => {
+    try {
+      const res = await API.get("/tasks");
+      const payload = res?.data?.data ?? res?.data;
+      setTasks(Array.isArray(payload) ? payload : []);
+    } catch (err) {
+      console.error("fetchTasks error:", err);
+      showPopup("❌ Failed to fetch tasks");
+    }
+  };
+
+  // Fetch all users for dropdown
+  const fetchUsers = async () => {
+    try {
+      const res = await API.get("/users"); // admin API
+      if (Array.isArray(res.data)) setUsers(res.data);
+    } catch (err) {
+      console.error("fetchUsers error:", err);
+      showPopup("❌ Failed to fetch users");
+    }
+  };
+
+  useEffect(() => {
+    fetchTasks();
+    fetchUsers();
+  }, []);
+
+  // CREATE
+  const handleCreateTask = async (newTask) => {
+    try {
+      const res = await API.post("/tasks", newTask);
+      setTasks((prev) => [res.data, ...prev]);
+      showPopup("✅ Task created successfully!");
+    } catch (err) {
+      console.error("createTask error:", err);
+      showPopup("❌ Failed to create task");
+    }
+  };
+
+  // UPDATE
+  const handleUpdateTask = async (updatedTask) => {
+    try {
+      const id = updatedTask._id || updatedTask.id;
+      const res = await API.put(`/tasks/${id}`, updatedTask);
+      setTasks((prev) =>
+        prev.map((t) => ((t._id || t.id) === id ? res.data : t))
+      );
+      setEditingTask(null);
+      showPopup("✅ Task updated successfully!");
+    } catch (err) {
+      console.error("updateTask error:", err);
+      showPopup("❌ Failed to update task");
+    }
+  };
+
+  // DELETE
+  const handleDeleteTask = async (id) => {
+    try {
+      await API.delete(`/tasks/${id}`);
+      setTasks((prev) => prev.filter((task) => (task._id || task.id) !== id));
+      showPopup("🗑 Task deleted successfully!");
+    } catch (err) {
+      console.error("deleteTask error:", err);
+      showPopup("❌ Failed to delete task");
+    }
+  };
+
+  // Modal handlers
+  const handleViewTask = (task) => setSelectedTask(task);
+  const handleEditTask = (task) => setEditingTask(task);
+  const closeModal = () => setSelectedTask(null);
+  const closeEditModal = () => setEditingTask(null);
+
+  // Stats helper
+  const countByStatus = (status) => tasks.filter((t) => t.status === status).length;
+
+  return (
+    <div className="min-h-screen bg-gray-50 p-6 space-y-6">
+      {popupMessage && (
+        <div className="fixed top-6 right-6 bg-green-500 text-white px-4 py-2 rounded shadow-lg z-50">
+          {popupMessage}
+        </div>
+      )}
+
+      {/* View Task Modal */}
+      {selectedTask && (
+        <div className="fixed inset-0 flex items-center justify-center z-50">
+          <div className="relative max-w-md w-full bg-gradient-to-br from-yellow-50 via-orange-100 to-yellow-100 bg-opacity-60 backdrop-blur-xl border border-yellow-200 border-opacity-50 rounded-3xl shadow-2xl flex flex-col items-center pt-9 pb-7 px-8 text-gray-900">
+            <div className="absolute -top-7 left-1/2 -translate-x-1/2 bg-white/70 border border-yellow-300 shadow rounded-full p-1.5">
+              <img src={tapveraLogo} alt="Tapvera Logo" className="h-12 w-12 object-contain" />
+            </div>
+            <h2 className="font-bold text-xl md:text-2xl text-orange-600 mb-2 mt-2 text-center">
+              {selectedTask.title}
+            </h2>
+            <p className="mb-4 text-base md:text-lg text-gray-700 text-center whitespace-pre-line font-medium">
+              {selectedTask.description}
+            </p>
+            <div className="grid grid-cols-2 gap-4 text-sm mb-5 w-full">
+              <div>
+                <span className="font-semibold text-orange-700">Assigned to:</span>
+                <span className="block">
+                  {selectedTask.assignedTo && typeof selectedTask.assignedTo === "object"
+                    ? selectedTask.assignedTo.name
+                    : selectedTask.assignedTo}
+                </span>
+              </div>
+              <div>
+                <span className="font-semibold text-orange-700">Due Date:</span>
+                <span className="block">
+                  {selectedTask.dueDate?.slice ? selectedTask.dueDate.slice(0, 10) : selectedTask.dueDate}
+                </span>
+              </div>
+              <div>
+                <span className="font-semibold text-orange-700">Priority:</span>
+                <span className="block">{selectedTask.priority}</span>
+              </div>
+              <div>
+                <span className="font-semibold text-orange-700">Status:</span>
+                <span className="block">{selectedTask.status}</span>
+              </div>
+            </div>
+            <button
+              onClick={closeModal}
+              className="mt-2 px-5 py-2 rounded-lg font-semibold bg-white bg-opacity-90 text-orange-500 hover:bg-yellow-100 border border-yellow-100 shadow"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Modal */}
+      {editingTask && (
+        <EditTaskModal
+          task={editingTask}
+          onSave={handleUpdateTask}
+          onCancel={closeEditModal}
+          users={users}
         />
-        <StatsCard
-          title="Completed Tasks"
-          value={tasks.filter((t) => t.status === "Completed").length}
-          color="text-green-500"
-        />
-        <StatsCard
-          title="Overdue Tasks"
-          value={tasks.filter((t) => t.status === "Overdue").length}
-          color="text-red-500"
-        />
+      )}
+
+      {/* Logo */}
+      <div className="flex flex-col items-center mb-4">
+        <img src={tapveraLogo} alt="Tapvera Logo" className="h-16 w-auto mb-2 drop-shadow-md" />
       </div>
 
-      {/* Create New Task */}
-      <TaskForm onCreate={handleCreateTask} />
+      {/* Stats */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        <StatsCard title="Total Tasks" value={tasks.length} colorScheme="blue" />
+        <StatsCard title="Pending Tasks" value={countByStatus("Pending")} colorScheme="yellow" />
+        <StatsCard title="Completed Tasks" value={countByStatus("Completed")} colorScheme="green" />
+        <StatsCard title="Overdue Tasks" value={countByStatus("Overdue")} colorScheme="pink" />
+      </div>
 
-      {/* Task List */}
-      <TaskTable tasks={tasks} />
+      {/* Task Form with user list */}
+      <TaskForm onCreate={handleCreateTask} users={users} />
+
+      <TaskTable
+        tasks={tasks}
+        onViewTask={handleViewTask}
+        onEditTask={handleEditTask}
+        onDeleteTask={handleDeleteTask}
+      />
     </div>
   );
 };
