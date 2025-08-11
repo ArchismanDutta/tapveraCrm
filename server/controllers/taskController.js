@@ -1,15 +1,22 @@
 const Task = require("../models/Task");
 
+// Create Task (admin/super-admin)
 exports.createTask = async (req, res) => {
   try {
-    const { title, description, assignedTo, dueDate } = req.body;
-    const assignedBy = req.user._id; // from auth middleware
-    console.log("req.user in createTask:", req.user);
+    const { title, description, assignedTo, dueDate, priority } = req.body;
+    const assignedBy = req.user._id;
 
     if (!title || !assignedTo) {
       return res
         .status(400)
         .json({ message: "Title and assignedTo are required." });
+    }
+
+    // Optional: Validate priority
+    const allowedPriorities = ["High", "Medium", "Low"];
+    let validatedPriority = "Medium"; // Default
+    if (priority && allowedPriorities.includes(priority)) {
+      validatedPriority = priority;
     }
 
     const task = new Task({
@@ -18,6 +25,7 @@ exports.createTask = async (req, res) => {
       assignedTo,
       assignedBy,
       dueDate,
+      priority: validatedPriority,
     });
 
     await task.save();
@@ -28,23 +36,49 @@ exports.createTask = async (req, res) => {
   }
 };
 
-exports.getTasks = async (req, res) => {
+// Edit task (admin/super-admin who assigned)
+exports.editTask = async (req, res) => {
   try {
-    const userId = req.user._id;
-    const tasks = await Task.find({
-      $or: [{ assignedTo: userId }, { assignedBy: userId }],
-    })
-      .populate("assignedTo", "name email")
-      .populate("assignedBy", "name email");
+    const { taskId } = req.params;
+    const { title, description, assignedTo, dueDate, status, priority } =
+      req.body;
 
-    res.json(tasks);
+    const task = await Task.findById(taskId);
+    if (!task) {
+      return res.status(404).json({ message: "Task not found." });
+    }
+
+    // Must be admin/super-admin and assignedBy
+    if (
+      !["admin", "super-admin"].includes(req.user.role) ||
+      task.assignedBy.toString() !== req.user._id.toString()
+    ) {
+      return res
+        .status(403)
+        .json({ message: "Not authorized to edit this task." });
+    }
+
+    // Update fields if provided
+    if (title) task.title = title;
+    if (description) task.description = description;
+    if (assignedTo) task.assignedTo = assignedTo;
+    if (dueDate) task.dueDate = dueDate;
+    if (status && ["pending", "in-progress", "completed"].includes(status)) {
+      task.status = status;
+    }
+    if (priority && ["High", "Medium", "Low"].includes(priority)) {
+      task.priority = priority;
+    }
+
+    await task.save();
+    res.json(task);
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Server error" });
   }
 };
 
-// Update task status
+// Update task status (assignedBy or assignedTo)
 exports.updateTaskStatus = async (req, res) => {
   try {
     const { taskId } = req.params;
@@ -80,56 +114,14 @@ exports.updateTaskStatus = async (req, res) => {
   }
 };
 
-// Edit task - only admin / super-admin who assigned it
-exports.editTask = async (req, res) => {
-  try {
-    const { taskId } = req.params;
-    const { title, description, assignedTo, dueDate, status } = req.body;
-
-    const task = await Task.findById(taskId);
-
-    if (!task) {
-      return res.status(404).json({ message: "Task not found." });
-    }
-
-    // Check if current user is admin or super-admin and assignedBy the task
-    if (
-      !["admin", "super-admin"].includes(req.user.role) ||
-      task.assignedBy.toString() !== req.user._id.toString()
-    ) {
-      return res
-        .status(403)
-        .json({ message: "Not authorized to edit this task." });
-    }
-
-    // Update allowed fields if provided
-    if (title) task.title = title;
-    if (description) task.description = description;
-    if (assignedTo) task.assignedTo = assignedTo;
-    if (dueDate) task.dueDate = dueDate;
-    if (status && ["pending", "in-progress", "completed"].includes(status)) {
-      task.status = status;
-    }
-
-    await task.save();
-
-    res.json(task);
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Server error." });
-  }
-};
-
-// Delete task - only admin / super-admin who assigned it
+// Delete Task (admin/super-admin who assigned)
 exports.deleteTask = async (req, res) => {
   try {
     const { taskId } = req.params;
-
     const task = await Task.findById(taskId);
     if (!task) {
       return res.status(404).json({ message: "Task not found." });
     }
-
     if (
       !["admin", "super-admin"].includes(req.user.role) ||
       task.assignedBy.toString() !== req.user._id.toString()
@@ -139,7 +131,7 @@ exports.deleteTask = async (req, res) => {
         .json({ message: "Not authorized to delete this task." });
     }
 
-    await task.remove();
+    await task.deleteOne();
     res.json({ message: "Task deleted successfully." });
   } catch (error) {
     console.error(error);
@@ -147,7 +139,7 @@ exports.deleteTask = async (req, res) => {
   }
 };
 
-// Get task details by ID - authenticated user if assignedBy or assignedTo
+// Get Task by ID (authorized user)
 exports.getTaskById = async (req, res) => {
   try {
     const { taskId } = req.params;
@@ -173,5 +165,23 @@ exports.getTaskById = async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Server error." });
+  }
+};
+
+// Get all tasks for logged-in user
+exports.getTasks = async (req, res) => {
+  try {
+    const userId = req.user._id;
+
+    const tasks = await Task.find({
+      $or: [{ assignedTo: userId }, { assignedBy: userId }],
+    })
+      .populate("assignedTo", "name email")
+      .populate("assignedBy", "name email");
+
+    res.json(tasks);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Server error" });
   }
 };
