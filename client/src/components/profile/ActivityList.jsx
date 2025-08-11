@@ -3,7 +3,7 @@ import React from "react";
 
 const ActivityList = ({ activities }) => {
   return (
-    <div className="bg-white rounded-xl shadow-sm p-6 mt-6">
+    <div className="bg-white rounded-xl shadow-sm p-6 mt-6 border border-black-500">
       <h2 className="text-lg font-semibold mb-4">Recent Activity</h2>
       <ul className="space-y-4">
         {activities.map((activity, i) => (

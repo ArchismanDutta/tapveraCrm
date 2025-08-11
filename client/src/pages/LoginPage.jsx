@@ -105,13 +105,17 @@ const Login = ({ onLoginSuccess }) => {
         </form>
 
         <div className="mt-6 text-center">
-          <span className="text-textMuted text-sm">
-            Forgot your password?
-            <a href="/reset-password" className="ml-2 text-secondary hover:underline">
-              Reset
-            </a>
-          </span>
-        </div>
+  <span className="text-textMuted text-sm">
+    Forgot your password?
+    <a
+      href="/forgot-password"
+      className="ml-2 text-secondary hover:underline"
+    >
+      Click here
+    </a>
+  </span>
+</div>
+
 
         <p className="mt-4 text-center text-textMuted text-sm">
           Don&apos;t have an account?{' '}
