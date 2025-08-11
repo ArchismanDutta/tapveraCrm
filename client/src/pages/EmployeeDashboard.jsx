@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { Bell } from "lucide-react";
+import { Link } from "react-router-dom";
 
 import SummaryCards from "../components/dashboard/SummaryCards";
 import TodayTasks from "../components/dashboard/TodayTasks";
-import QuickActions from "../components/dashboard/QuickActions";
 import RecentReports from "../components/dashboard/RecentReports";
 import RecentMessages from "../components/dashboard/RecentMessages";
 import Sidebar from "../components/dashboard/Sidebar";
@@ -13,11 +13,9 @@ const EmployeeDashboard = ({ onLogout }) => {
   const [collapsed, setCollapsed] = useState(false);
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(false);
-
   const [currentTime, setCurrentTime] = useState(new Date());
   const [userName, setUserName] = useState("");
 
-  // Static summary cards for now
   const summaryData = [
     { label: "Tasks Due Today", count: 5, bg: "bg-blue-50" },
     { label: "Pending Reports", count: 2, bg: "bg-green-50" },
@@ -25,71 +23,18 @@ const EmployeeDashboard = ({ onLogout }) => {
     { label: "Open Issues", count: 1, bg: "bg-red-50" },
   ];
 
-  // Quick actions static
-  const quickActions = [
-    {
-      label: "Report an Issue",
-      colorClass: "text-red-600 border border-red-200",
-    },
-    {
-      label: "Submit Requirement",
-      colorClass: "text-blue-600 border border-blue-200",
-    },
-    {
-      label: "Start Chat",
-      colorClass: "text-purple-600 border border-purple-200",
-    },
-    {
-      label: "Send Report",
-      colorClass: "text-green-600 border border-green-200",
-    },
-  ];
-
-  // Mock reports
   const reports = [
-    {
-      label: "Weekly Progress Report",
-      date: "Oct 15, 2023",
-      status: "Submitted",
-      color: "blue",
-    },
-    {
-      label: "Project Status Update",
-      date: "Oct 14, 2023",
-      status: "Pending",
-      color: "yellow",
-    },
-    {
-      label: "Sprint Review Report",
-      date: "Oct 13, 2023",
-      status: "Approved",
-      color: "green",
-    },
+    { label: "Weekly Progress Report", date: "Oct 15, 2023", status: "Submitted" },
+    { label: "Project Status Update", date: "Oct 14, 2023", status: "Pending" },
+    { label: "Sprint Review Report", date: "Oct 13, 2023", status: "Approved" },
   ];
 
-  // Mock messages
   const messages = [
-    {
-      name: "Sarah Johnson",
-      msg: "Updated the project timeline",
-      time: "2h ago",
-      img: "https://i.pravatar.cc/40?img=1",
-    },
-    {
-      name: "Mike Wilson",
-      msg: "Meeting rescheduled to 3 PM",
-      time: "4h ago",
-      img: "https://i.pravatar.cc/40?img=2",
-    },
-    {
-      name: "Emily Davis",
-      msg: "New requirements document",
-      time: "5h ago",
-      img: "https://i.pravatar.cc/40?img=4",
-    },
+    { name: "Sarah Johnson", msg: "Updated the project timeline", time: "2h ago", img: "https://i.pravatar.cc/40?img=1" },
+    { name: "Mike Wilson", msg: "Meeting rescheduled to 3 PM", time: "4h ago", img: "https://i.pravatar.cc/40?img=2" },
+    { name: "Emily Davis", msg: "New requirements document", time: "5h ago", img: "https://i.pravatar.cc/40?img=4" },
   ];
 
-  // Fetch tasks from backend
   useEffect(() => {
     const fetchTasks = async () => {
       try {
@@ -125,10 +70,7 @@ const EmployeeDashboard = ({ onLogout }) => {
 
         setTasks(formattedTasks);
       } catch (err) {
-        console.error(
-          "Error fetching tasks:",
-          err.response?.data || err.message
-        );
+        console.error("Error fetching tasks", err.response?.data || err.message);
       } finally {
         setLoading(false);
       }
@@ -137,14 +79,13 @@ const EmployeeDashboard = ({ onLogout }) => {
     fetchTasks();
   }, []);
 
-  // Fetch logged-in user name
   useEffect(() => {
     const fetchUser = async () => {
       try {
         const token = localStorage.getItem("token");
         if (!token) return;
         const config = { headers: { Authorization: `Bearer ${token}` } };
-        const res = await axios.get("http://localhost:5000/api/users/me", config); // Adjust API endpoint as needed
+        const res = await axios.get("http://localhost:5000/api/users/me", config);
         setUserName(res.data?.name || "User");
       } catch (err) {
         console.error("Error fetching user:", err.message);
@@ -153,24 +94,19 @@ const EmployeeDashboard = ({ onLogout }) => {
     fetchUser();
   }, []);
 
-  // Update time every second
   useEffect(() => {
-    const interval = setInterval(() => {
-      setCurrentTime(new Date());
-    }, 1000);
+    const interval = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(interval);
   }, []);
 
+  const handleSubmitReport = () => {
+    alert("Report submitted successfully!");
+  };
+
   return (
     <div className="flex bg-gray-50 font-sans text-gray-800">
-      {/* Sidebar */}
-      <Sidebar
-        onLogout={onLogout}
-        collapsed={collapsed}
-        setCollapsed={setCollapsed}
-      />
+      <Sidebar onLogout={onLogout} collapsed={collapsed} setCollapsed={setCollapsed} />
 
-      {/* Main Content */}
       <main
         className={`flex-1 p-8 overflow-y-auto transition-all duration-300 ${
           collapsed ? "ml-20" : "ml-64"
@@ -178,6 +114,7 @@ const EmployeeDashboard = ({ onLogout }) => {
       >
         {/* Header */}
         <div className="flex justify-between items-center mb-8">
+          {/* Left: Greeting, Date/Time */}
           <div>
             <h1 className="text-2xl font-semibold">
               Good{" "}
@@ -203,27 +140,32 @@ const EmployeeDashboard = ({ onLogout }) => {
               })}
             </p>
           </div>
-          <div className="flex items-center space-x-4">
-            <Bell className="text-gray-500" />
-            <img
-              src="https://i.pravatar.cc/40?img=3"
-              alt="Avatar"
-              className="w-9 h-9 rounded-full"
-            />
-            {/* <span className="text-sm font-medium">{userName}</span> */}
+          {/* Right: Bell and Profile Avatar (vertical alignment fixed) */}
+          <div className="flex items-center gap-4">
+            {/* Bell is always perfectly centered and sized to match avatar */}
+            <Bell className="text-gray-500 w-9 h-9 flex-shrink-0" />
+            <Link to="/profile">
+              <img
+                src="https://i.pravatar.cc/40?img=3"
+                alt="Profile Avatar"
+                className="w-9 h-9 rounded-full cursor-pointer"
+              />
+            </Link>
           </div>
         </div>
 
+        {/* Summary Cards */}
         <SummaryCards data={summaryData} />
 
-        <div className="grid grid-cols-3 gap-6 mb-8">
-          <TodayTasks data={tasks} loading={loading} className="col-span-2" />
-          <QuickActions actions={quickActions} />
-        </div>
-
-        <div className="grid grid-cols-3 gap-6">
-          <RecentReports reports={reports} className="col-span-2" />
-          <RecentMessages messages={messages} />
+        {/* Main layout (tasks, messages, reports) */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-8">
+          <div className="lg:col-span-2">
+            <TodayTasks data={tasks} loading={loading} />
+          </div>
+          <div className="flex flex-col gap-6">
+            <RecentMessages messages={messages} />
+            <RecentReports reports={reports} onSubmit={handleSubmitReport} />
+          </div>
         </div>
       </main>
     </div>
