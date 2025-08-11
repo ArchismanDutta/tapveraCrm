@@ -1,11 +1,12 @@
 import React, { useState } from "react";
+import PropTypes from "prop-types";
 import Sidebar from "../components/dashboard/Sidebar";
 import TaskStats from "../components/task/TaskStats";
 import TaskList from "../components/task/TaskList";
 import SubmitRequirement from "../components/task/SubmitRequirement";
 import MessagesPanel from "../components/task/MessagePanel";
 
-const Tasks = () => {
+const Tasks = ({ onLogout }) => {
   const [collapsed, setCollapsed] = useState(false);
 
   const [tasks, setTasks] = useState([
@@ -13,7 +14,8 @@ const Tasks = () => {
       id: 1,
       title: "Client Meeting - Project Alpha",
       time: "10:00 AM",
-      description: "Review project progress and discuss next steps with the client team.",
+      description:
+        "Review project progress and discuss next steps with the client team.",
       priority: "High",
       status: "Assigned",
     },
@@ -21,7 +23,8 @@ const Tasks = () => {
       id: 2,
       title: "Report Submission - Q3 Review",
       time: "2:00 PM",
-      description: "Complete and submit quarterly performance review report.",
+      description:
+        "Complete and submit quarterly performance review report.",
       priority: "Medium",
       status: "Assigned",
     },
@@ -29,7 +32,8 @@ const Tasks = () => {
       id: 3,
       title: "Team Sync",
       time: "4:00 PM",
-      description: "Weekly team sync to discuss ongoing projects and blockers.",
+      description:
+        "Weekly team sync to discuss ongoing projects and blockers.",
       priority: "Low",
       status: "Assigned",
     },
@@ -60,7 +64,7 @@ const Tasks = () => {
       <Sidebar
         collapsed={collapsed}
         setCollapsed={setCollapsed}
-        onLogout={() => console.log("Logout clicked")}
+        onLogout={onLogout} // ✅ Uses the real logout function from App.jsx
       />
 
       <div
@@ -83,12 +87,19 @@ const Tasks = () => {
 
           <div className="space-y-6 self-start sticky top-6">
             <SubmitRequirement onSubmit={handleSubmitRequirement} />
-            <MessagesPanel messages={messages} onSendMessage={handleSendMessage} />
+            <MessagesPanel
+              messages={messages}
+              onSendMessage={handleSendMessage}
+            />
           </div>
         </div>
       </div>
     </div>
   );
+};
+
+Tasks.propTypes = {
+  onLogout: PropTypes.func.isRequired,
 };
 
 export default Tasks;
