@@ -4,7 +4,7 @@ import TaskItem from "./TaskItem";
 const TaskList = ({ tasks: initialTasks }) => {
   const [tasks, setTasks] = useState(initialTasks);
 
-  // Ensure tasks update when parent sends new data
+  // Update when parent sends new data
   useEffect(() => {
     setTasks(initialTasks);
   }, [initialTasks]);
@@ -13,10 +13,10 @@ const TaskList = ({ tasks: initialTasks }) => {
     <div className="bg-white rounded-lg shadow p-4">
       <h3 className="font-semibold mb-4">Today's Tasks</h3>
       <div className="flex flex-col gap-4">
-        {tasks.length > 0 ? (
-          tasks.map((task) => (
+        {tasks && tasks.length > 0 ? (
+          tasks.map((task, index) => (
             <TaskItem
-              key={task._id}
+              key={task._id || `task-${index}`} // ✅ Fallback key
               task={task}
               onStatusUpdated={(updatedTask) => {
                 setTasks((prev) =>
