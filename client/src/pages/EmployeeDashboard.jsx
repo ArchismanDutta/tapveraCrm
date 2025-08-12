@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
-import { Bell } from "lucide-react";
 import { Link } from "react-router-dom";
 import dayjs from "dayjs";
 
@@ -8,6 +7,7 @@ import SummaryCards from "../components/dashboard/SummaryCards";
 import TodayTasks from "../components/dashboard/TodayTasks";
 import RecentMessages from "../components/dashboard/RecentMessages";
 import Sidebar from "../components/dashboard/Sidebar";
+import NotificationBell from "../components/dashboard/NotificationBell"; // ✅ Import
 
 const EmployeeDashboard = ({ onLogout }) => {
   const [collapsed, setCollapsed] = useState(false);
@@ -17,7 +17,7 @@ const EmployeeDashboard = ({ onLogout }) => {
   const [userName, setUserName] = useState("");
   const [summaryData, setSummaryData] = useState([]);
   const [pendingCount, setPendingCount] = useState(0);
-  const [isRinging, setIsRinging] = useState(false);
+  const [notifications, setNotifications] = useState([]);
 
   const messages = [
     { name: "Sarah Johnson", msg: "Updated the project timeline", time: "2h ago", img: "https://i.pravatar.cc/40?img=1" },
@@ -78,13 +78,15 @@ const EmployeeDashboard = ({ onLogout }) => {
         { label: "Overdue Tasks", count: overdueTasksCount, bg: "bg-red-50" },
       ]);
 
-      // Pending task count for bell
-      const newPendingCount = res.data.filter((t) => t.status !== "completed").length;
-      if (newPendingCount > pendingCount) {
-        setIsRinging(true);
-        setTimeout(() => setIsRinging(false), 1500);
+      // Notifications: pending tasks
+      const newPendingTasks = res.data.filter((t) => t.status !== "completed");
+      if (newPendingTasks.length > pendingCount) {
+        const newOnes = newPendingTasks
+          .slice(pendingCount)
+          .map((t) => `New Task: ${t.title}`);
+        setNotifications((prev) => [...newOnes, ...prev]);
       }
-      setPendingCount(newPendingCount);
+      setPendingCount(newPendingTasks.length);
 
     } catch (err) {
       console.error("Error fetching tasks", err.response?.data || err.message);
@@ -151,19 +153,8 @@ const EmployeeDashboard = ({ onLogout }) => {
             </p>
           </div>
           <div className="flex items-center gap-4 relative">
-            {/* Bell Icon with Notification Count */}
-            <div className="relative">
-              <Bell
-                className={`w-9 h-9 text-gray-500 cursor-pointer transition-transform duration-300 ${
-                  isRinging ? "animate-bell-ring" : ""
-                }`}
-              />
-              {pendingCount > 0 && (
-                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs px-1.5 py-0.5 rounded-full">
-                  {pendingCount}
-                </span>
-              )}
-            </div>
+            {/* ✅ Notification Bell Component */}
+            <NotificationBell notifications={notifications} />
             <Link to="/profile">
               <img
                 src="https://i.pravatar.cc/40?img=3"

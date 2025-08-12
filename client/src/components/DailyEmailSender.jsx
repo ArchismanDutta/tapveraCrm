@@ -37,7 +37,7 @@ const DailyEmailSender = ({ onClose }) => {
   };
 
   return (
-    <div className="bg-gradient-to-br from-white/20 via-black/50 to-black/80 backdrop-blur-xl border border-white/20 rounded-2xl shadow-2xl p-6 w-full max-w-lg relative text-white">
+    <div className="bg-linear-gradient(90deg,rgba(255, 255, 255, 1) 0%, rgba(13, 5, 5, 1) 50%, rgba(64, 64, 64, 1) 100%);, backdrop-blur-xl border border-white/20 rounded-2xl shadow-2xl p-6 w-full max-w-lg relative text-white">
       {/* Close Button */}
       <button
         onClick={onClose}
