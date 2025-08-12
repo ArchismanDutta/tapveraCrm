@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { Bell } from "lucide-react";
 import { Link } from "react-router-dom";
+import dayjs from "dayjs";
 
 import SummaryCards from "../components/dashboard/SummaryCards";
 import TodayTasks from "../components/dashboard/TodayTasks";
@@ -15,24 +16,37 @@ const EmployeeDashboard = ({ onLogout }) => {
   const [loading, setLoading] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [userName, setUserName] = useState("");
-
-  const summaryData = [
-    { label: "Tasks Due Today", count: 5, bg: "bg-blue-50" },
-    { label: "Pending Reports", count: 2, bg: "bg-green-50" },
-    { label: "Unread Messages", count: 3, bg: "bg-indigo-50" },
-    { label: "Open Issues", count: 1, bg: "bg-red-50" },
-  ];
+  const [summaryData, setSummaryData] = useState([]);
 
   const reports = [
-    { label: "Weekly Progress Report", date: "Oct 15, 2023", status: "Submitted" },
+    {
+      label: "Weekly Progress Report",
+      date: "Oct 15, 2023",
+      status: "Submitted",
+    },
     { label: "Project Status Update", date: "Oct 14, 2023", status: "Pending" },
     { label: "Sprint Review Report", date: "Oct 13, 2023", status: "Approved" },
   ];
 
   const messages = [
-    { name: "Sarah Johnson", msg: "Updated the project timeline", time: "2h ago", img: "https://i.pravatar.cc/40?img=1" },
-    { name: "Mike Wilson", msg: "Meeting rescheduled to 3 PM", time: "4h ago", img: "https://i.pravatar.cc/40?img=2" },
-    { name: "Emily Davis", msg: "New requirements document", time: "5h ago", img: "https://i.pravatar.cc/40?img=4" },
+    {
+      name: "Sarah Johnson",
+      msg: "Updated the project timeline",
+      time: "2h ago",
+      img: "https://i.pravatar.cc/40?img=1",
+    },
+    {
+      name: "Mike Wilson",
+      msg: "Meeting rescheduled to 3 PM",
+      time: "4h ago",
+      img: "https://i.pravatar.cc/40?img=2",
+    },
+    {
+      name: "Emily Davis",
+      msg: "New requirements document",
+      time: "5h ago",
+      img: "https://i.pravatar.cc/40?img=4",
+    },
   ];
 
   useEffect(() => {
@@ -45,6 +59,7 @@ const EmployeeDashboard = ({ onLogout }) => {
         const config = { headers: { Authorization: `Bearer ${token}` } };
         const res = await axios.get("http://localhost:5000/api/tasks", config);
 
+        // Save tasks for the TodayTasks component
         const formattedTasks = res.data.map((task) => ({
           id: task._id,
           label: task.title || "Untitled Task",
@@ -66,11 +81,38 @@ const EmployeeDashboard = ({ onLogout }) => {
               : "green",
           assignedBy: task.assignedBy?.name || "Unknown",
           assignedTo: task.assignedTo?.name || "Unknown",
+          dueDate: task.dueDate,
+          status: task.status,
         }));
-
         setTasks(formattedTasks);
+
+        // Calculate summary data from backend response
+        const today = dayjs().startOf("day");
+
+        const allTasksCount = res.data.length;
+        const tasksDueTodayCount = res.data.filter((task) =>
+          dayjs(task.dueDate).isSame(today, "day")
+        ).length;
+        const overdueTasksCount = res.data.filter(
+          (task) =>
+            dayjs(task.dueDate).isBefore(today, "day") &&
+            task.status !== "completed"
+        ).length;
+
+        setSummaryData([
+          { label: "All Tasks", count: allTasksCount, bg: "bg-blue-50" },
+          {
+            label: "Tasks Due Today",
+            count: tasksDueTodayCount,
+            bg: "bg-green-50",
+          },
+          { label: "Overdue Tasks", count: overdueTasksCount, bg: "bg-red-50" },
+        ]);
       } catch (err) {
-        console.error("Error fetching tasks", err.response?.data || err.message);
+        console.error(
+          "Error fetching tasks",
+          err.response?.data || err.message
+        );
       } finally {
         setLoading(false);
       }
@@ -85,7 +127,10 @@ const EmployeeDashboard = ({ onLogout }) => {
         const token = localStorage.getItem("token");
         if (!token) return;
         const config = { headers: { Authorization: `Bearer ${token}` } };
-        const res = await axios.get("http://localhost:5000/api/users/me", config);
+        const res = await axios.get(
+          "http://localhost:5000/api/users/me",
+          config
+        );
         setUserName(res.data?.name || "User");
       } catch (err) {
         console.error("Error fetching user:", err.message);
@@ -105,7 +150,11 @@ const EmployeeDashboard = ({ onLogout }) => {
 
   return (
     <div className="flex bg-gray-50 font-sans text-gray-800">
-      <Sidebar onLogout={onLogout} collapsed={collapsed} setCollapsed={setCollapsed} />
+      <Sidebar
+        onLogout={onLogout}
+        collapsed={collapsed}
+        setCollapsed={setCollapsed}
+      />
 
       <main
         className={`flex-1 p-8 overflow-y-auto transition-all duration-300 ${
@@ -114,7 +163,6 @@ const EmployeeDashboard = ({ onLogout }) => {
       >
         {/* Header */}
         <div className="flex justify-between items-center mb-8">
-          {/* Left: Greeting, Date/Time */}
           <div>
             <h1 className="text-2xl font-semibold">
               Good{" "}
@@ -140,9 +188,7 @@ const EmployeeDashboard = ({ onLogout }) => {
               })}
             </p>
           </div>
-          {/* Right: Bell and Profile Avatar (vertical alignment fixed) */}
           <div className="flex items-center gap-4">
-            {/* Bell is always perfectly centered and sized to match avatar */}
             <Bell className="text-gray-500 w-9 h-9 flex-shrink-0" />
             <Link to="/profile">
               <img
@@ -157,7 +203,7 @@ const EmployeeDashboard = ({ onLogout }) => {
         {/* Summary Cards */}
         <SummaryCards data={summaryData} />
 
-        {/* Main layout (tasks, messages, reports) */}
+        {/* Main layout */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-8">
           <div className="lg:col-span-2">
             <TodayTasks data={tasks} loading={loading} />
