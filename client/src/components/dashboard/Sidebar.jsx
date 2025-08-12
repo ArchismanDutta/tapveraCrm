@@ -8,9 +8,10 @@ import {
   FileText,
   Flag,
   HelpCircle,
+  Send,
 } from "lucide-react";
 import { FaChevronCircleRight } from "react-icons/fa";
-import { NavLink } from "react-router-dom";
+import { NavLink, useNavigate } from "react-router-dom";
 
 const navItems = [
   { to: "/dashboard", icon: <LayoutDashboard size={18} />, label: "Dashboard" },
@@ -23,6 +24,8 @@ const navItems = [
 ];
 
 const Sidebar = ({ onLogout, collapsed, setCollapsed }) => {
+  const navigate = useNavigate();
+
   return (
     <aside
       className={`${
@@ -63,6 +66,19 @@ const Sidebar = ({ onLogout, collapsed, setCollapsed }) => {
           />
         ))}
       </nav>
+
+      {/* Send Daily Updates Button */}
+      <div className="p-4">
+        <div
+          onClick={() => navigate("/daily-updates")}
+          className={`flex items-center space-x-3 cursor-pointer p-2 rounded transition-colors bg-yellow-50 hover:bg-yellow-100 text-gray-700`}
+        >
+          <Send size={18} />
+          {!collapsed && (
+            <span className="font-semibold">Send Daily Updates</span>
+          )}
+        </div>
+      </div>
 
       {/* Logout */}
       <div className="p-4 shadow-inner">
