@@ -105,7 +105,7 @@ const DailyEmailSender = () => {
           }}
         >
           <img
-            src={tapveraLogo} // ✅ fixed to use imported image
+            src="/tapvera-logo.png" // <-- Change this path to your actual logo
             alt="Tapvera Logo"
             style={{
               height: "50px",
