@@ -10,7 +10,7 @@ import Tasks from "./pages/Tasks";
 import AdminTaskPage from "./pages/AdminTaskPage";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
-// ❌ Removed ChatPage import
+import DailyEmailSender from "./pages/DailyEmailSender"; // ✅ New email sender page
 
 const App = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -122,7 +122,17 @@ const App = () => {
           }
         />
 
-        {/* ❌ Removed Chat Route */}
+        {/* ✅ Daily Email Sender */}
+        <Route
+          path="/daily-email"
+          element={
+            isAuthenticated ? (
+              <DailyEmailSender onLogout={handleLogout} />
+            ) : (
+              <Navigate to="/login" replace />
+            )
+          }
+        />
 
         {/* Catch-all Redirect */}
         <Route
