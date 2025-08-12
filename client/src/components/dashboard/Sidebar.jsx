@@ -1,4 +1,6 @@
-import React from "react";
+import React, { useState } from "react";
+import Modal from "../modal"; // reusable modal component
+import DailyEmailSender from "../DailyEmailSender";
 import tapveraLogo from "../../assets/tapvera.png";
 import {
   LayoutDashboard,
@@ -11,7 +13,7 @@ import {
   Send,
 } from "lucide-react";
 import { FaChevronCircleRight } from "react-icons/fa";
-import { NavLink, useNavigate } from "react-router-dom";
+import { NavLink } from "react-router-dom";
 
 const navItems = [
   { to: "/dashboard", icon: <LayoutDashboard size={18} />, label: "Dashboard" },
@@ -24,73 +26,77 @@ const navItems = [
 ];
 
 const Sidebar = ({ onLogout, collapsed, setCollapsed }) => {
-  const navigate = useNavigate();
+  const [showEmailModal, setShowEmailModal] = useState(false);
 
   return (
-    <aside
-      className={`${
-        collapsed ? "w-20" : "w-64"
-      } bg-white shadow-md flex flex-col h-screen fixed left-0 top-0 transition-all duration-300 z-20`}
-    >
-      {/* Logo & Collapse Button */}
-      <div
-        className={`p-4 flex items-center ${
-          collapsed ? "justify-center" : "justify-between"
-        }`}
+    <>
+      <aside
+        className={`${
+          collapsed ? "w-20" : "w-64"
+        } bg-white shadow-md flex flex-col h-screen fixed left-0 top-0 transition-all duration-300 z-20`}
       >
-        <img
-          src={tapveraLogo}
-          alt="Tapvera Logo"
-          className="h-10 w-auto transition-all duration-300"
-        />
-        <button
-          onClick={() => setCollapsed(!collapsed)}
-          className={`p-1 rounded-full transition-transform transform ${
-            collapsed ? "rotate-180" : "rotate-0"
-          } hover:scale-110`}
-          aria-label={collapsed ? "Expand Sidebar" : "Collapse Sidebar"}
-        >
-          <FaChevronCircleRight size={22} className="text-gray-600" />
-        </button>
-      </div>
-
-      {/* Navigation */}
-      <nav className="space-y-1 p-4 flex-1">
-        {navItems.map((item) => (
-          <SidebarLink
-            key={item.to}
-            to={item.to}
-            icon={item.icon}
-            label={item.label}
-            collapsed={collapsed}
-          />
-        ))}
-      </nav>
-
-      {/* Send Daily Updates Button */}
-      <div className="p-4">
+        {/* Logo & Collapse */}
         <div
-          onClick={() => navigate("/daily-updates")}
-          className={`flex items-center space-x-3 cursor-pointer p-2 rounded transition-colors bg-yellow-50 hover:bg-yellow-100 text-gray-700`}
+          className={`p-4 flex items-center ${
+            collapsed ? "justify-center" : "justify-between"
+          }`}
         >
-          <Send size={18} />
-          {!collapsed && (
-            <span className="font-semibold">Send Daily Updates</span>
-          )}
+          <img src={tapveraLogo} alt="Tapvera Logo" className="h-10 w-auto" />
+          <button
+            onClick={() => setCollapsed(!collapsed)}
+            className={`p-1 rounded-full transition-transform ${
+              collapsed ? "rotate-180" : "rotate-0"
+            }`}
+          >
+            <FaChevronCircleRight size={22} className="text-gray-600" />
+          </button>
         </div>
-      </div>
 
-      {/* Logout */}
-      <div className="p-4 shadow-inner">
-        <button
-          onClick={onLogout}
-          className="w-full p-2 rounded focus:outline-none focus:ring-2 focus:ring-yellow-400 transition-colors bg-gradient-to-r from-yellow-300 via-yellow-400 to-orange-400 text-black hover:bg-red-600 text-sm"
-          aria-label="Logout"
-        >
-          {collapsed ? "⏻" : "Logout"}
-        </button>
-      </div>
-    </aside>
+        {/* Nav Links */}
+        <nav className="space-y-1 p-4 flex-1">
+          {navItems.map((item) => (
+            <SidebarLink
+              key={item.to}
+              to={item.to}
+              icon={item.icon}
+              label={item.label}
+              collapsed={collapsed}
+            />
+          ))}
+        </nav>
+
+        {/* Send Daily Updates */}
+        <div className="p-4">
+          <div
+            onClick={() => setShowEmailModal(true)}
+            className="flex items-center space-x-3 cursor-pointer p-2 rounded bg-yellow-50 hover:bg-yellow-100 text-gray-700"
+          >
+            <Send size={18} />
+            {!collapsed && (
+              <span className="font-semibold">Send Daily Updates</span>
+            )}
+          </div>
+        </div>
+
+        {/* Logout */}
+        <div className="p-4 shadow-inner">
+          <button
+            onClick={onLogout}
+            className="w-full p-2 rounded bg-gradient-to-r from-yellow-300 via-yellow-400 to-orange-400 text-black text-sm"
+          >
+            {collapsed ? "⏻" : "Logout"}
+          </button>
+        </div>
+      </aside>
+
+      {/* Modal for Daily Email Sender */}
+      <Modal
+        isOpen={showEmailModal}
+        onClose={() => setShowEmailModal(false)}
+      >
+        <DailyEmailSender onClose={() => setShowEmailModal(false)} />
+      </Modal>
+    </>
   );
 };
 
