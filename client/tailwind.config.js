@@ -1,13 +1,14 @@
 // tailwind.config.js
 module.exports = {
- content: [
-  './src/**/*.{js,jsx,ts,tsx}',
-  './public/index.html',
-],
+  content: [
+    './src/**/*.{js,jsx,ts,tsx}',
+    './public/index.html',
+  ],
 
   theme: {
     extend: {
       colors: {
+        // Dark Theme
         background: '#0F0F0F',
         surface: '#1A1A1A',
         border: '#2E2E2E',
@@ -17,8 +18,19 @@ module.exports = {
         secondary: '#FFC300',
         orangeDark: '#CC7A00',
         yellowSoft: '#FFD966',
+
+        // Your pink theme
+        babyPink: '#ffe6f0',
+        pinkAccent: '#ffb6c1',
+
+        // Gradients for other pages
+        gradientPink: '#f19ad2',
+        gradientViolet: '#ab4ee1',
+        gradientDeepViolet: '#9743c8',
       },
     },
   },
-  plugins: [require('@tailwindcss/forms')],
+  plugins: [
+    require('@tailwindcss/forms'),
+  ],
 };

@@ -1,4 +1,4 @@
-// Employee Signup
+// controllers/authController.js
 const User = require("../models/User");
 const jwt = require("jsonwebtoken");
 
@@ -21,12 +21,15 @@ exports.signup = async (req, res) => {
       password,
       department,
       designation,
+      outlookAppPassword, // NEW FIELD
     } = req.body;
 
+    // Check if email already exists
     const existingUser = await User.findOne({ email });
     if (existingUser)
       return res.status(400).json({ message: "Email already in use." });
 
+    // Create user
     const user = new User({
       name,
       email,
@@ -37,6 +40,7 @@ exports.signup = async (req, res) => {
       role: "employee",
       department,
       designation,
+      outlookAppPassword, // store Outlook app password
     });
 
     await user.save();
@@ -55,6 +59,7 @@ exports.signup = async (req, res) => {
         role: user.role,
         department: user.department,
         designation: user.designation,
+        outlookAppPassword: user.outlookAppPassword,
       },
     });
   } catch (err) {
@@ -92,6 +97,7 @@ exports.login = async (req, res) => {
         role: user.role,
         department: user.department,
         designation: user.designation,
+        outlookAppPassword: user.outlookAppPassword, // send to frontend if needed
       },
     });
   } catch (err) {
@@ -99,4 +105,3 @@ exports.login = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
-
