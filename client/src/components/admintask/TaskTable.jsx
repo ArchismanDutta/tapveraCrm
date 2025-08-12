@@ -8,17 +8,29 @@ const TaskTable = ({ tasks, onViewTask, onEditTask, onDeleteTask }) => {
   // Ensure tasks is always an array
   const safeTasks = Array.isArray(tasks) ? tasks : [];
 
+  // Filter tasks by title + status
   const filteredTasks = safeTasks.filter((t) => {
     const titleMatch =
       t?.title?.toLowerCase().includes(search.toLowerCase()) ?? false;
-    const statusMatch =
-      filter === "All Status" || t?.status === filter;
+    const statusMatch = filter === "All Status" || t?.status === filter;
     return titleMatch && statusMatch;
   });
 
+  // Format Due Date with time
+  const formatDueDateTime = (dateValue) => {
+    if (!dateValue) return "No due date";
+    const dateObj = new Date(dateValue);
+    const dateStr = dateObj.toLocaleDateString();
+    const timeStr = dateObj.toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+    return `${dateStr} ${timeStr}`;
+  };
+
   return (
     <div className="bg-white rounded-lg shadow-sm p-5 border">
-      {/* Search and Filter Controls */}
+      {/* Search + Filter Controls */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-4 gap-3">
         <input
           type="text"
@@ -39,13 +51,13 @@ const TaskTable = ({ tasks, onViewTask, onEditTask, onDeleteTask }) => {
         </select>
       </div>
 
-      {/* Table */}
+      {/* Task Table */}
       <table className="w-full border-collapse text-gray-700">
         <thead className="bg-yellow-100 sticky top-0 z-10">
           <tr className="border-b text-left text-sm uppercase tracking-wide text-orange-700">
             <th className="p-3">Task Title</th>
             <th className="p-3">Assigned To</th>
-            <th className="p-3">Due Date</th>
+            <th className="p-3">Due Date & Time</th>
             <th className="p-3">Priority</th>
             <th className="p-3">Status</th>
             <th className="p-3">Actions</th>
@@ -55,14 +67,14 @@ const TaskTable = ({ tasks, onViewTask, onEditTask, onDeleteTask }) => {
           {filteredTasks.length > 0 ? (
             filteredTasks.map((task, index) => (
               <TaskRow
-                key={task._id || task.id || index} // ✅ unique key
+                key={task._id || task.id || index}
                 task={{
                   ...task,
-                  // Safely handle assignedTo so it never crashes
                   assignedTo:
                     task?.assignedTo && typeof task.assignedTo === "object"
                       ? task.assignedTo.name || "Unassigned"
                       : task?.assignedTo || "Unassigned",
+                  dueDate: formatDueDateTime(task?.dueDate),
                 }}
                 onView={() => onViewTask(task)}
                 onEdit={() => onEditTask(task)}

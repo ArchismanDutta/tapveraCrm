@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import API from "../../api"; // adjust import path to where your api.js lives
+import API from "../../api"; // adjust import path
 
 const TaskForm = ({ onCreate }) => {
   const [task, setTask] = useState({
@@ -7,6 +7,7 @@ const TaskForm = ({ onCreate }) => {
     assignedTo: "",
     assignedAvatar: "",
     dueDate: "",
+    dueTime: "",
     priority: "",
     status: "Pending",
     description: "",
@@ -14,11 +15,11 @@ const TaskForm = ({ onCreate }) => {
 
   const [users, setUsers] = useState([]);
 
-  // Fetch all users for the "Assign To" dropdown
+  // Fetch all users for "Assign To" dropdown
   useEffect(() => {
     const fetchUsers = async () => {
       try {
-        const res = await API.get("/users"); // your getUsers API
+        const res = await API.get("/users");
         if (Array.isArray(res.data)) {
           setUsers(res.data);
         }
@@ -31,13 +32,32 @@ const TaskForm = ({ onCreate }) => {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!task.title || !task.assignedTo) return;
-    onCreate(task);
+    if (!task.title || !task.assignedTo || !task.dueDate) return;
+
+    // Combine date + time into a single datetime for backend
+    let combinedDueDate;
+    if (task.dueDate && task.dueTime) {
+      combinedDueDate = new Date(`${task.dueDate}T${task.dueTime}:00`);
+    } else if (task.dueDate && !task.dueTime) {
+      combinedDueDate = new Date(`${task.dueDate}T00:00:00`);
+    }
+
+    const formattedTask = {
+      ...task,
+      dueDate: combinedDueDate,
+    };
+
+    delete formattedTask.dueTime; // no need to send separately
+
+    onCreate(formattedTask);
+
+    // Reset form
     setTask({
       title: "",
       assignedTo: "",
       assignedAvatar: "",
       dueDate: "",
+      dueTime: "",
       priority: "",
       status: "Pending",
       description: "",
@@ -81,7 +101,7 @@ const TaskForm = ({ onCreate }) => {
               const selectedUser = users.find((u) => u._id === e.target.value);
               setTask({
                 ...task,
-                assignedTo: e.target.value, // user ID
+                assignedTo: e.target.value,
                 assignedAvatar: selectedUser
                   ? `https://i.pravatar.cc/40?u=${selectedUser.name}`
                   : "",
@@ -109,6 +129,19 @@ const TaskForm = ({ onCreate }) => {
             value={task.dueDate}
             onChange={(e) => setTask({ ...task, dueDate: e.target.value })}
             required
+          />
+        </div>
+
+        {/* Due Time */}
+        <div>
+          <label className="block text-sm font-semibold text-orange-600 mb-1">
+            Due Time
+          </label>
+          <input
+            type="time"
+            className="border border-yellow-200 focus:border-orange-400 focus:ring-1 focus:ring-orange-300 p-2 rounded-lg w-full text-sm"
+            value={task.dueTime}
+            onChange={(e) => setTask({ ...task, dueTime: e.target.value })}
           />
         </div>
 
