@@ -10,6 +10,7 @@ import Tasks from "./pages/Tasks";
 import AdminTaskPage from "./pages/AdminTaskPage";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
+import ChatPage from "./pages/ChatPage"; // ✅ Import Chat Page
 
 const App = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -117,6 +118,18 @@ const App = () => {
           element={
             isAuthenticated ? (
               <AdminTaskPage onLogout={handleLogout} />
+            ) : (
+              <Navigate to="/login" replace />
+            )
+          }
+        />
+
+        {/* ✅ New Chats Page */}
+        <Route
+          path="/chats"
+          element={
+            isAuthenticated ? (
+              <ChatPage onLogout={handleLogout} />
             ) : (
               <Navigate to="/login" replace />
             )
