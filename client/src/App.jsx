@@ -10,7 +10,7 @@ import Tasks from "./pages/Tasks";
 import AdminTaskPage from "./pages/AdminTaskPage";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
-import DailyEmailSender from "./pages/DailyEmailSender"; // ✅ New email sender page
+
 
 const App = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -116,18 +116,6 @@ const App = () => {
           element={
             isAuthenticated ? (
               <AdminTaskPage onLogout={handleLogout} />
-            ) : (
-              <Navigate to="/login" replace />
-            )
-          }
-        />
-
-        {/* ✅ Daily Email Sender */}
-        <Route
-          path="/daily-email"
-          element={
-            isAuthenticated ? (
-              <DailyEmailSender onLogout={handleLogout} />
             ) : (
               <Navigate to="/login" replace />
             )

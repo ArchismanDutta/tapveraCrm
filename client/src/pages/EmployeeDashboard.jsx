@@ -6,7 +6,6 @@ import dayjs from "dayjs";
 
 import SummaryCards from "../components/dashboard/SummaryCards";
 import TodayTasks from "../components/dashboard/TodayTasks";
-import RecentReports from "../components/dashboard/RecentReports";
 import RecentMessages from "../components/dashboard/RecentMessages";
 import Sidebar from "../components/dashboard/Sidebar";
 
@@ -17,16 +16,6 @@ const EmployeeDashboard = ({ onLogout }) => {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [userName, setUserName] = useState("");
   const [summaryData, setSummaryData] = useState([]);
-
-  const reports = [
-    {
-      label: "Weekly Progress Report",
-      date: "Oct 15, 2023",
-      status: "Submitted",
-    },
-    { label: "Project Status Update", date: "Oct 14, 2023", status: "Pending" },
-    { label: "Sprint Review Report", date: "Oct 13, 2023", status: "Approved" },
-  ];
 
   const messages = [
     {
@@ -59,7 +48,6 @@ const EmployeeDashboard = ({ onLogout }) => {
         const config = { headers: { Authorization: `Bearer ${token}` } };
         const res = await axios.get("http://localhost:5000/api/tasks", config);
 
-        // Save tasks for the TodayTasks component
         const formattedTasks = res.data.map((task) => ({
           id: task._id,
           label: task.title || "Untitled Task",
@@ -86,7 +74,6 @@ const EmployeeDashboard = ({ onLogout }) => {
         }));
         setTasks(formattedTasks);
 
-        // Calculate summary data from backend response
         const today = dayjs().startOf("day");
 
         const allTasksCount = res.data.length;
@@ -144,10 +131,6 @@ const EmployeeDashboard = ({ onLogout }) => {
     return () => clearInterval(interval);
   }, []);
 
-  const handleSubmitReport = () => {
-    alert("Report submitted successfully!");
-  };
-
   return (
     <div className="flex bg-gray-50 font-sans text-gray-800">
       <Sidebar
@@ -192,6 +175,7 @@ const EmployeeDashboard = ({ onLogout }) => {
             <Bell className="text-gray-500 w-9 h-9 flex-shrink-0" />
             <Link to="/profile">
               <img
+              
                 src="https://i.pravatar.cc/40?img=3"
                 alt="Profile Avatar"
                 className="w-9 h-9 rounded-full cursor-pointer"
@@ -209,8 +193,7 @@ const EmployeeDashboard = ({ onLogout }) => {
             <TodayTasks data={tasks} loading={loading} />
           </div>
           <div className="flex flex-col gap-6">
-            <RecentMessages messages={messages} />
-            <RecentReports reports={reports} onSubmit={handleSubmitReport} />
+            <RecentMessages messages={messages} className="flex-1" />
           </div>
         </div>
       </main>
