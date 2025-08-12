@@ -10,7 +10,7 @@ import Tasks from "./pages/Tasks";
 import AdminTaskPage from "./pages/AdminTaskPage";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
-import ChatPage from "./pages/ChatPage"; // ✅ Import Chat Page
+// ❌ Removed ChatPage import
 
 const App = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -19,7 +19,6 @@ const App = () => {
   useEffect(() => {
     const token = localStorage.getItem("token");
 
-    // ✅ Optional: Verify token with backend before setting authenticated state
     if (token && token.trim() !== "") {
       setIsAuthenticated(true);
     } else {
@@ -30,7 +29,6 @@ const App = () => {
   }, []);
 
   const handleLoginSuccess = (token) => {
-    // ✅ Save real token from backend instead of dummy token
     localStorage.setItem("token", token);
     setIsAuthenticated(true);
   };
@@ -124,17 +122,7 @@ const App = () => {
           }
         />
 
-        {/* ✅ New Chats Page */}
-        <Route
-          path="/chats"
-          element={
-            isAuthenticated ? (
-              <ChatPage onLogout={handleLogout} />
-            ) : (
-              <Navigate to="/login" replace />
-            )
-          }
-        />
+        {/* ❌ Removed Chat Route */}
 
         {/* Catch-all Redirect */}
         <Route
