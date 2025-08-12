@@ -1,7 +1,14 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import TaskItem from "./TaskItem";
 
-const TaskList = ({ tasks, onStatusChange }) => {
+const TaskList = ({ tasks: initialTasks }) => {
+  const [tasks, setTasks] = useState(initialTasks);
+
+  // Ensure tasks update when parent sends new data
+  useEffect(() => {
+    setTasks(initialTasks);
+  }, [initialTasks]);
+
   return (
     <div className="bg-white rounded-lg shadow p-4">
       <h3 className="font-semibold mb-4">Today's Tasks</h3>
@@ -9,9 +16,13 @@ const TaskList = ({ tasks, onStatusChange }) => {
         {tasks.length > 0 ? (
           tasks.map((task) => (
             <TaskItem
-              key={task.id}
+              key={task._id}
               task={task}
-              onStatusChange={onStatusChange}
+              onStatusUpdated={(updatedTask) => {
+                setTasks((prev) =>
+                  prev.map((t) => (t._id === updatedTask._id ? updatedTask : t))
+                );
+              }}
             />
           ))
         ) : (
