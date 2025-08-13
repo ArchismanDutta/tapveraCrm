@@ -1,6 +1,6 @@
 import React from "react";
 
-const TodayTasks = ({ data, className }) => {
+const TodayTasks = ({ data = [], className }) => {
   const colorMap = {
     red: "bg-red-100 text-red-700",
     yellow: "bg-yellow-100 text-yellow-700",
@@ -24,33 +24,41 @@ const TodayTasks = ({ data, className }) => {
       {data.length > 0 ? (
         data.map((task, index) => (
           <div
-            key={index}
-            className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white p-5 rounded-xl shadow-sm border border-gray-100 hover:shadow-md hover:border-gray-200 transition duration-200"
+
+            key={task.id || index}
+            className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white p-4 rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition-shadow"
           >
             {/* Left Section: Task Details */}
-            <div className="space-y-1">
-              <p className="font-semibold text-lg text-gray-800">
+            <div className="space-y-2">
+              {/* Task title */}
+              <p className="font-medium text-base text-gray-800">
                 {task.label}
               </p>
 
-              <p className="text-sm text-gray-500">
-                <span className="font-medium text-gray-600">Due:</span>{" "}
-                <span className="text-gray-800">
-                  {formatDateTime(task.dueDateTime)}
+              {/* Due date */}
+              <p className="text-xs text-gray-500">
+                Due:{" "}
+                <span className="font-semibold text-gray-800">
+                  {task.dueDateTime || "No due date"}
                 </span>
               </p>
 
-              <p className="text-sm text-gray-500">
-                <span className="font-medium text-gray-600">Assigned By:</span>{" "}
-                <span className="text-yellow-600 font-medium">
-                  {task.assignedBy}
+              {/* Assigned By */}
+              <p className="text-xs text-gray-500">
+                Assigned By:{" "}
+                <span className="font-semibold text-yellow-500">
+                  {task.assignedBy || "Unknown"}
                 </span>
               </p>
 
-              <p className="text-sm text-gray-500">
-                <span className="font-medium text-gray-600">Assigned To:</span>{" "}
-                <span className="text-orange-500 font-medium">
-                  {task.assignedTo}
+              {/* Assigned To */}
+              <p className="text-xs text-gray-500">
+                Assigned To:{" "}
+                <span className="font-semibold text-orange-400">
+                  {Array.isArray(task.assignedTo)
+                    ? task.assignedTo.join(", ")
+                    : task.assignedTo || "Unknown"}
+
                 </span>
               </p>
             </div>
@@ -61,7 +69,7 @@ const TodayTasks = ({ data, className }) => {
                 colorMap[task.color] || ""
               }`}
             >
-              {task.level}
+              {task.level || "Normal"}
             </span>
           </div>
         ))
