@@ -56,10 +56,10 @@ exports.editTask = async (req, res) => {
     const task = await Task.findById(taskId);
     if (!task) return res.status(404).json({ message: "Task not found." });
 
-    if (
-      !["admin", "super-admin"].includes(req.user.role) ||
-      task.assignedBy.toString() !== req.user._id.toString()
-    ) {
+    // ALLOW if admin/super-admin OR creator
+    const isAdmin = ["admin", "super-admin"].includes(req.user.role);
+    const isCreator = task.assignedBy.toString() === req.user._id.toString();
+    if (!isAdmin && !isCreator) {
       return res.status(403).json({ message: "Not authorized" });
     }
 
@@ -103,10 +103,10 @@ exports.updateTaskStatus = async (req, res) => {
     const task = await Task.findById(taskId);
     if (!task) return res.status(404).json({ message: "Task not found." });
 
-    if (
-      task.assignedBy.toString() !== req.user._id.toString() &&
-      !task.assignedTo.some((id) => id.toString() === req.user._id.toString())
-    ) {
+    // Allow creator or any assignee to update status
+    const isCreator = task.assignedBy.toString() === req.user._id.toString();
+    const isAssignee = task.assignedTo.some((id) => id.toString() === req.user._id.toString());
+    if (!isCreator && !isAssignee) {
       return res.status(403).json({ message: "Unauthorized" });
     }
 
@@ -130,15 +130,16 @@ exports.updateTaskStatus = async (req, res) => {
 // ========================
 exports.getTaskById = async (req, res) => {
   try {
-    const task = await populateTask(Task.findById(req.params.taskId));
+    const task = await populateTask(Task.findById(req.params.taskId)).lean();
 
     if (!task) return res.status(404).json({ message: "Task not found." });
 
-    if (
-      task.assignedBy._id.toString() !== req.user._id.toString() &&
-      !task.assignedTo.some((u) => u._id.toString() === req.user._id.toString()) &&
-      !["admin", "super-admin"].includes(req.user.role)
-    ) {
+    const isCreator = task.assignedBy?._id?.toString() === req.user._id.toString();
+    const isAssignee = Array.isArray(task.assignedTo) &&
+      task.assignedTo.some((u) => u?._id?.toString() === req.user._id.toString());
+    const isAdmin = ["admin", "super-admin"].includes(req.user.role);
+
+    if (!isCreator && !isAssignee && !isAdmin) {
       return res.status(403).json({ message: "Not authorized" });
     }
 
@@ -174,10 +175,10 @@ exports.deleteTask = async (req, res) => {
     const task = await Task.findById(req.params.taskId);
     if (!task) return res.status(404).json({ message: "Task not found." });
 
-    if (
-      !["admin", "super-admin"].includes(req.user.role) ||
-      task.assignedBy.toString() !== req.user._id.toString()
-    ) {
+    // ALLOW if admin/super-admin OR creator
+    const isAdmin = ["admin", "super-admin"].includes(req.user.role);
+    const isCreator = task.assignedBy.toString() === req.user._id.toString();
+    if (!isAdmin && !isCreator) {
       return res.status(403).json({ message: "Unauthorized" });
     }
 

@@ -7,24 +7,11 @@ const TodayTasks = ({ data = [], className }) => {
     green: "bg-green-100 text-green-700",
   };
 
-  const formatDateTime = (dateTime) => {
-    if (!dateTime) return "N/A";
-    const date = new Date(dateTime);
-    return date.toLocaleString("en-GB", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  };
-
   return (
     <div className={`space-y-4 ${className || ""}`}>
       {data.length > 0 ? (
         data.map((task, index) => (
           <div
-
             key={task.id || index}
             className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white p-4 rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition-shadow"
           >
@@ -58,7 +45,6 @@ const TodayTasks = ({ data = [], className }) => {
                   {Array.isArray(task.assignedTo)
                     ? task.assignedTo.join(", ")
                     : task.assignedTo || "Unknown"}
-
                 </span>
               </p>
             </div>

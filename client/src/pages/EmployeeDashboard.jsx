@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import axios from "axios";
 import { Link } from "react-router-dom";
 import dayjs from "dayjs";
@@ -10,7 +10,7 @@ import RecentMessages from "../components/dashboard/RecentMessages";
 import Sidebar from "../components/dashboard/Sidebar";
 import NotificationBell from "../components/dashboard/NotificationBell";
 
-const socket = io("http://localhost:5000"); // Update if your backend URL differs
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 const EmployeeDashboard = ({ onLogout }) => {
   const [collapsed, setCollapsed] = useState(false);
@@ -21,6 +21,7 @@ const EmployeeDashboard = ({ onLogout }) => {
   const [summaryData, setSummaryData] = useState([]);
   const [pendingCount, setPendingCount] = useState(0);
   const [notifications, setNotifications] = useState([]);
+  const socketRef = useRef(null);
 
   const messages = [
     { name: "Sarah Johnson", msg: "Updated the project timeline", time: "2h ago", img: "https://i.pravatar.cc/40?img=1" },
@@ -39,7 +40,7 @@ const EmployeeDashboard = ({ onLogout }) => {
       }
 
       const config = { headers: { Authorization: `Bearer ${token}` } };
-      const res = await axios.get("http://localhost:5000/api/tasks", config);
+      const res = await axios.get(`${API_BASE}/api/tasks`, config);
 
       const formattedTasks = res.data.map((task) => ({
         id: task._id,
@@ -79,10 +80,11 @@ const EmployeeDashboard = ({ onLogout }) => {
       const today = dayjs().startOf("day");
       const allTasksCount = res.data.length;
       const tasksDueTodayCount = res.data.filter((task) =>
-        dayjs(task.dueDate).isSame(today, "day")
+        task.dueDate ? dayjs(task.dueDate).isSame(today, "day") : false
       ).length;
       const overdueTasksCount = res.data.filter(
         (task) =>
+          task.dueDate &&
           dayjs(task.dueDate).isBefore(today, "day") &&
           task.status !== "completed"
       ).length;
@@ -110,9 +112,18 @@ const EmployeeDashboard = ({ onLogout }) => {
     }
   };
 
-  // Setup socket event listeners and fetch initial data once
+  // Setup socket (connect once)
   useEffect(() => {
-    fetchTasks();
+    const socket = io(API_BASE, {
+      transports: ["websocket"], // more reliable in dev behind proxies
+      withCredentials: true,
+    });
+    socketRef.current = socket;
+
+    // Optional: confirm connection
+    socket.on("connected", () => {
+      // console.log("Socket connected", data);
+    });
 
     socket.on("taskCreated", (task) => {
       const formattedTask = {
@@ -136,14 +147,11 @@ const EmployeeDashboard = ({ onLogout }) => {
             : "green",
         assignedBy: task.assignedBy?.name || "Unknown",
         assignedTo: Array.isArray(task.assignedTo)
-          ? task.assignedTo
-              .map((user) => (typeof user === "string" ? "Unknown" : user?.name || "Unknown"))
-              .join(", ")
+          ? task.assignedTo.map((user) => (typeof user === "string" ? "Unknown" : user?.name || "Unknown")).join(", ")
           : "Unknown",
         dueDate: task.dueDate,
         status: task.status,
       };
-
       setTasks((prev) => [formattedTask, ...prev]);
     });
 
@@ -169,17 +177,12 @@ const EmployeeDashboard = ({ onLogout }) => {
             : "green",
         assignedBy: task.assignedBy?.name || "Unknown",
         assignedTo: Array.isArray(task.assignedTo)
-          ? task.assignedTo
-              .map((user) => (typeof user === "string" ? "Unknown" : user?.name || "Unknown"))
-              .join(", ")
+          ? task.assignedTo.map((user) => (typeof user === "string" ? "Unknown" : user?.name || "Unknown")).join(", ")
           : "Unknown",
         dueDate: task.dueDate,
         status: task.status,
       };
-
-      setTasks((prev) =>
-        prev.map((t) => (t.id === task._id ? formattedTask : t))
-      );
+      setTasks((prev) => prev.map((t) => (t.id === task._id ? formattedTask : t)));
     });
 
     socket.on("taskDeleted", (taskId) => {
@@ -190,7 +193,13 @@ const EmployeeDashboard = ({ onLogout }) => {
       socket.off("taskCreated");
       socket.off("taskUpdated");
       socket.off("taskDeleted");
+      socket.disconnect();
     };
+  }, []);
+
+  // Initial data fetch
+  useEffect(() => {
+    fetchTasks();
   }, []);
 
   // Fetch user info once
@@ -200,7 +209,7 @@ const EmployeeDashboard = ({ onLogout }) => {
         const token = localStorage.getItem("token");
         if (!token) return;
         const config = { headers: { Authorization: `Bearer ${token}` } };
-        const res = await axios.get("http://localhost:5000/api/users/me", config);
+        const res = await axios.get(`${API_BASE}/api/users/me`, config);
         setUserName(res.data?.name || "User");
       } catch (err) {
         console.error("Error fetching user:", err.message);
