@@ -2,7 +2,7 @@ import React from "react";
 
 const StatCard = ({ value, label, icon }) => {
   return (
-    <div className="rounded-xl p-6 text-white shadow-lg bg-gradient-to-br from-[#fb994a] via-[#ff9625] to-[#c8d11f] w-full max-w-xs">
+    <div className="rounded-xl p-6 text-white shadow-lg bg-gradient-to-br from-[#fb994a] via-[#ff9625] to-[#c8d11f] w-full">
       {/* Icon Circle */}
       <div className="w-14 h-14 flex items-center justify-center rounded-full bg-white/20 shadow-md mb-4">
         <div className="text-white text-2xl">{icon}</div>
@@ -15,6 +15,6 @@ const StatCard = ({ value, label, icon }) => {
       <p className="text-white/80 text-sm mt-1">{label}</p>
     </div>
   );
-};
+};  
 
 export default StatCard;
