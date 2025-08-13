@@ -16,11 +16,11 @@ const colors = {
 
 const RecentMessages = ({ messages }) => (
   <div
-    className="rounded-xl shadow-sm px-6 py-5"
+    className="rounded-xl shadow-sm px-6 py-5 w-full"
     style={{
       background: colors.messageBg,
       border: `1px solid ${colors.border}`,
-      maxWidth: 440,
+      // maxWidth: 440,
       margin: "0 auto",
     }}
   >
@@ -40,8 +40,10 @@ const RecentMessages = ({ messages }) => (
           background: "none",
           minHeight: 52,
         }}
-        onMouseOver={e => (e.currentTarget.style.background = colors.accentLight)}
-        onMouseOut={e => (e.currentTarget.style.background = "none")}
+        onMouseOver={(e) =>
+          (e.currentTarget.style.background = colors.accentLight)
+        }
+        onMouseOut={(e) => (e.currentTarget.style.background = "none")}
       >
         {/* Avatar */}
         <img
@@ -81,9 +83,7 @@ const RecentMessages = ({ messages }) => (
         </span>
 
         {/* Actions: shown on hover */}
-        <div
-          className="flex items-center gap-1.5 ml-2 opacity-0 group-hover:opacity-100 transition-opacity duration-150"
-        >
+        <div className="flex items-center gap-1.5 ml-2 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
           <button
             className="p-1 rounded-full hover:bg-[#f4dedf] outline-none focus:ring-2 focus:ring-[#ead6d3] transition"
             tabIndex={0}
