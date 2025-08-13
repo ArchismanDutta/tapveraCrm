@@ -2,12 +2,15 @@ import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { Link } from "react-router-dom";
 import dayjs from "dayjs";
+import { io } from "socket.io-client";
 
 import SummaryCards from "../components/dashboard/SummaryCards";
 import TodayTasks from "../components/dashboard/TodayTasks";
 import RecentMessages from "../components/dashboard/RecentMessages";
 import Sidebar from "../components/dashboard/Sidebar";
-import NotificationBell from "../components/dashboard/NotificationBell"; // ✅ Import
+import NotificationBell from "../components/dashboard/NotificationBell";
+
+const socket = io("http://localhost:5000"); // Update if your backend URL differs
 
 const EmployeeDashboard = ({ onLogout }) => {
   const [collapsed, setCollapsed] = useState(false);
@@ -25,11 +28,15 @@ const EmployeeDashboard = ({ onLogout }) => {
     { name: "Emily Davis", msg: "New requirements document", time: "5h ago", img: "https://i.pravatar.cc/40?img=4" },
   ];
 
+  // Fetch tasks from backend and format them for display
   const fetchTasks = async () => {
     try {
       setLoading(true);
       const token = localStorage.getItem("token");
-      if (!token) return console.error("No token found");
+      if (!token) {
+        console.error("No token found");
+        return;
+      }
 
       const config = { headers: { Authorization: `Bearer ${token}` } };
       const res = await axios.get("http://localhost:5000/api/tasks", config);
@@ -54,13 +61,21 @@ const EmployeeDashboard = ({ onLogout }) => {
             ? "yellow"
             : "green",
         assignedBy: task.assignedBy?.name || "Unknown",
-        assignedTo: task.assignedTo?.name || "Unknown",
+        assignedTo: Array.isArray(task.assignedTo)
+          ? task.assignedTo
+              .map((user) => {
+                if (typeof user === "string") return "Unknown";
+                return user?.name || "Unknown";
+              })
+              .join(", ")
+          : "Unknown",
         dueDate: task.dueDate,
         status: task.status,
       }));
+
       setTasks(formattedTasks);
 
-      // Summary counts
+      // Summary counts calculation
       const today = dayjs().startOf("day");
       const allTasksCount = res.data.length;
       const tasksDueTodayCount = res.data.filter((task) =>
@@ -78,7 +93,7 @@ const EmployeeDashboard = ({ onLogout }) => {
         { label: "Overdue Tasks", count: overdueTasksCount, bg: "bg-red-50" },
       ]);
 
-      // Notifications: pending tasks
+      // Notifications for pending tasks
       const newPendingTasks = res.data.filter((t) => t.status !== "completed");
       if (newPendingTasks.length > pendingCount) {
         const newOnes = newPendingTasks
@@ -95,12 +110,90 @@ const EmployeeDashboard = ({ onLogout }) => {
     }
   };
 
+  // Setup socket event listeners and fetch initial data once
   useEffect(() => {
     fetchTasks();
-    const interval = setInterval(fetchTasks, 10000);
-    return () => clearInterval(interval);
+
+    socket.on("taskCreated", (task) => {
+      const formattedTask = {
+        id: task._id,
+        label: task.title || "Untitled Task",
+        dueDateTime: task.dueDate
+          ? new Date(task.dueDate).toLocaleString([], {
+              year: "numeric",
+              month: "short",
+              day: "numeric",
+              hour: "2-digit",
+              minute: "2-digit",
+            })
+          : "",
+        level: task.priority || "Normal",
+        color:
+          task.priority === "High"
+            ? "red"
+            : task.priority === "Medium"
+            ? "yellow"
+            : "green",
+        assignedBy: task.assignedBy?.name || "Unknown",
+        assignedTo: Array.isArray(task.assignedTo)
+          ? task.assignedTo
+              .map((user) => (typeof user === "string" ? "Unknown" : user?.name || "Unknown"))
+              .join(", ")
+          : "Unknown",
+        dueDate: task.dueDate,
+        status: task.status,
+      };
+
+      setTasks((prev) => [formattedTask, ...prev]);
+    });
+
+    socket.on("taskUpdated", (task) => {
+      const formattedTask = {
+        id: task._id,
+        label: task.title || "Untitled Task",
+        dueDateTime: task.dueDate
+          ? new Date(task.dueDate).toLocaleString([], {
+              year: "numeric",
+              month: "short",
+              day: "numeric",
+              hour: "2-digit",
+              minute: "2-digit",
+            })
+          : "",
+        level: task.priority || "Normal",
+        color:
+          task.priority === "High"
+            ? "red"
+            : task.priority === "Medium"
+            ? "yellow"
+            : "green",
+        assignedBy: task.assignedBy?.name || "Unknown",
+        assignedTo: Array.isArray(task.assignedTo)
+          ? task.assignedTo
+              .map((user) => (typeof user === "string" ? "Unknown" : user?.name || "Unknown"))
+              .join(", ")
+          : "Unknown",
+        dueDate: task.dueDate,
+        status: task.status,
+      };
+
+      setTasks((prev) =>
+        prev.map((t) => (t.id === task._id ? formattedTask : t))
+      );
+    });
+
+    socket.on("taskDeleted", (taskId) => {
+      setTasks((prev) => prev.filter((t) => t.id !== taskId));
+    });
+
+    return () => {
+      socket.off("taskCreated");
+      socket.off("taskUpdated");
+      socket.off("taskDeleted");
+    };
   }, []);
 
+  // Fetch user info once
   useEffect(() => {
     const fetchUser = async () => {
       try {
@@ -116,6 +209,7 @@ const EmployeeDashboard = ({ onLogout }) => {
     fetchUser();
   }, []);
 
+  // Update current time every second
   useEffect(() => {
     const interval = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(interval);
@@ -124,8 +218,11 @@ const EmployeeDashboard = ({ onLogout }) => {
   return (
     <div className="flex bg-gray-50 font-sans text-gray-800">
       <Sidebar onLogout={onLogout} collapsed={collapsed} setCollapsed={setCollapsed} />
-
-      <main className={`flex-1 p-8 overflow-y-auto transition-all duration-300 ${collapsed ? "ml-20" : "ml-64"}`}>
+      <main
+        className={`flex-1 p-8 overflow-y-auto transition-all duration-300 ${
+          collapsed ? "ml-20" : "ml-64"
+        }`}
+      >
         {/* Header */}
         <div className="flex justify-between items-center mb-8">
           <div>
@@ -135,7 +232,8 @@ const EmployeeDashboard = ({ onLogout }) => {
                 ? "Morning"
                 : currentTime.getHours() < 18
                 ? "Afternoon"
-                : "Evening"}, {userName}
+                : "Evening"}
+              , {userName}
             </h1>
             <p className="text-sm text-gray-500">
               {currentTime.toLocaleDateString("en-US", {
@@ -153,7 +251,6 @@ const EmployeeDashboard = ({ onLogout }) => {
             </p>
           </div>
           <div className="flex items-center gap-4 relative">
-            {/* ✅ Notification Bell Component */}
             <NotificationBell notifications={notifications} />
             <Link to="/profile">
               <img
@@ -168,7 +265,7 @@ const EmployeeDashboard = ({ onLogout }) => {
         {/* Summary Cards */}
         <SummaryCards data={summaryData} />
 
-        {/* Main layout */}
+        {/* Main Section */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-8">
           <div className="lg:col-span-2">
             <TodayTasks data={tasks} loading={loading} />
