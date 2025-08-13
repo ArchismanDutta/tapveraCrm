@@ -71,7 +71,7 @@ const TaskItem = ({ task, onStatusUpdated }) => {
           value={status}
           onChange={(e) => handleStatusChange(e.target.value)}
           disabled={loading}
-          className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-pinkAccent focus:border-pinkAccent transition"
+          className="rounded-lg px-3 py-1.5 text-sm bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-pinkAccent focus:border-pinkAccent transition"
         >
           <option value="pending">Pending</option>
           <option value="in-progress">In Progress</option>
