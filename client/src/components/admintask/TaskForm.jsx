@@ -1,21 +1,21 @@
-import React, { useState, useEffect } from "react";
-import API from "../../api"; // adjust import path
+import React, { useState, useEffect, useRef } from "react";
+import API from "../../api";
 
 const TaskForm = ({ onCreate }) => {
   const [task, setTask] = useState({
     title: "",
-    assignedTo: "",
-    assignedAvatar: "",
+    assignedTo: [],
     dueDate: "",
     dueTime: "",
     priority: "",
-    status: "Pending",
+    status: "pending",
     description: "",
   });
 
   const [users, setUsers] = useState([]);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const dropdownRef = useRef(null);
 
-  // Fetch all users for "Assign To" dropdown
   useEffect(() => {
     const fetchUsers = async () => {
       try {
@@ -30,36 +30,51 @@ const TaskForm = ({ onCreate }) => {
     fetchUsers();
   }, []);
 
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+        setDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const toggleUserSelection = (userId) => {
+    setTask((prev) => {
+      const alreadySelected = prev.assignedTo.includes(userId);
+      return {
+        ...prev,
+        assignedTo: alreadySelected
+          ? prev.assignedTo.filter((id) => id !== userId)
+          : [...prev.assignedTo, userId],
+      };
+    });
+  };
+
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!task.title || !task.assignedTo || !task.dueDate) return;
+    if (!task.title || task.assignedTo.length === 0 || !task.dueDate) return;
 
-    // Combine date + time into a single datetime for backend
-    let combinedDueDate;
-    if (task.dueDate && task.dueTime) {
-      combinedDueDate = new Date(`${task.dueDate}T${task.dueTime}:00`);
-    } else if (task.dueDate && !task.dueTime) {
-      combinedDueDate = new Date(`${task.dueDate}T00:00:00`);
-    }
+    let combinedDueDate = task.dueDate && task.dueTime
+      ? new Date(`${task.dueDate}T${task.dueTime}:00`)
+      : new Date(`${task.dueDate}T00:00:00`);
 
     const formattedTask = {
       ...task,
       dueDate: combinedDueDate,
     };
 
-    delete formattedTask.dueTime; // no need to send separately
-
     onCreate(formattedTask);
 
-    // Reset form
     setTask({
       title: "",
-      assignedTo: "",
-      assignedAvatar: "",
+      assignedTo: [],
       dueDate: "",
       dueTime: "",
       priority: "",
-      status: "Pending",
+      status: "pending",
       description: "",
     });
   };
@@ -74,7 +89,7 @@ const TaskForm = ({ onCreate }) => {
       </h3>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-        {/* Task Title */}
+        {/* Title */}
         <div>
           <label className="block text-sm font-semibold text-orange-600 mb-1">
             Task Title
@@ -82,40 +97,45 @@ const TaskForm = ({ onCreate }) => {
           <input
             type="text"
             placeholder="Enter task title"
-            className="border border-yellow-200 focus:border-orange-400 focus:ring-1 focus:ring-orange-300 p-2 rounded-lg w-full text-sm"
+            className="border border-yellow-200 p-2 rounded-lg w-full text-sm"
             value={task.title}
             onChange={(e) => setTask({ ...task, title: e.target.value })}
             required
           />
         </div>
 
-        {/* Assign To */}
-        <div>
+        {/* Multi-select Dropdown */}
+        <div ref={dropdownRef}>
           <label className="block text-sm font-semibold text-orange-600 mb-1">
-            Assign To
+            Assign To (Multiple)
           </label>
-          <select
-            className="border border-yellow-200 focus:border-orange-400 focus:ring-1 focus:ring-orange-300 p-2 rounded-lg w-full text-sm bg-white"
-            value={task.assignedTo}
-            onChange={(e) => {
-              const selectedUser = users.find((u) => u._id === e.target.value);
-              setTask({
-                ...task,
-                assignedTo: e.target.value,
-                assignedAvatar: selectedUser
-                  ? `https://i.pravatar.cc/40?u=${selectedUser.name}`
-                  : "",
-              });
-            }}
-            required
+          <div
+            className="border border-yellow-200 p-2 rounded-lg bg-white text-sm cursor-pointer"
+            onClick={() => setDropdownOpen((prev) => !prev)}
           >
-            <option value="">Select employee</option>
-            {users.map((user) => (
-              <option key={user._id} value={user._id}>
-                {user.name}
-              </option>
-            ))}
-          </select>
+            {task.assignedTo.length > 0
+              ? `${task.assignedTo.length} user(s) selected`
+              : "Select users..."}
+          </div>
+
+          {dropdownOpen && (
+            <div className="border border-yellow-200 bg-white rounded-lg mt-1 shadow-lg max-h-40 overflow-y-auto absolute z-10 w-[calc(50%-0.5rem)]">
+              {users.map((user) => (
+                <label
+                  key={user._id}
+                  className="flex items-center px-3 py-2 hover:bg-yellow-50 cursor-pointer"
+                >
+                  <input
+                    type="checkbox"
+                    checked={task.assignedTo.includes(user._id)}
+                    onChange={() => toggleUserSelection(user._id)}
+                    className="mr-2"
+                  />
+                  {user.name}
+                </label>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Due Date */}
@@ -125,7 +145,7 @@ const TaskForm = ({ onCreate }) => {
           </label>
           <input
             type="date"
-            className="border border-yellow-200 focus:border-orange-400 focus:ring-1 focus:ring-orange-300 p-2 rounded-lg w-full text-sm"
+            className="border border-yellow-200 p-2 rounded-lg w-full text-sm"
             value={task.dueDate}
             onChange={(e) => setTask({ ...task, dueDate: e.target.value })}
             required
@@ -139,7 +159,7 @@ const TaskForm = ({ onCreate }) => {
           </label>
           <input
             type="time"
-            className="border border-yellow-200 focus:border-orange-400 focus:ring-1 focus:ring-orange-300 p-2 rounded-lg w-full text-sm"
+            className="border border-yellow-200 p-2 rounded-lg w-full text-sm"
             value={task.dueTime}
             onChange={(e) => setTask({ ...task, dueTime: e.target.value })}
           />
@@ -151,7 +171,7 @@ const TaskForm = ({ onCreate }) => {
             Priority
           </label>
           <select
-            className="border border-yellow-200 focus:border-orange-400 focus:ring-1 focus:ring-orange-300 p-2 rounded-lg w-full text-sm bg-white"
+            className="border border-yellow-200 p-2 rounded-lg w-full text-sm bg-white"
             value={task.priority}
             onChange={(e) => setTask({ ...task, priority: e.target.value })}
             required
@@ -171,17 +191,17 @@ const TaskForm = ({ onCreate }) => {
         </label>
         <textarea
           placeholder="Enter task description"
-          className="border border-yellow-200 focus:border-orange-400 focus:ring-1 focus:ring-orange-300 p-2 rounded-lg w-full text-sm"
+          className="border border-yellow-200 p-2 rounded-lg w-full text-sm"
           rows={3}
           value={task.description}
           onChange={(e) => setTask({ ...task, description: e.target.value })}
         />
       </div>
 
-      {/* Submit Button */}
+      {/* Submit */}
       <button
         type="submit"
-        className="w-full p-3 rounded-lg font-semibold shadow-md focus:outline-none focus:ring-2 focus:ring-orange-400 transition-all duration-200 bg-gradient-to-r from-yellow-300 via-orange-300 to-orange-400 text-black hover:from-orange-400 hover:to-yellow-300 transform active:scale-95"
+        className="w-full p-3 rounded-lg font-semibold bg-gradient-to-r from-yellow-300 to-orange-400"
       >
         Create Task
       </button>
