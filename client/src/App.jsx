@@ -1,5 +1,10 @@
 import React, { useState, useEffect } from "react";
-import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
+import {
+  BrowserRouter as Router,
+  Routes,
+  Route,
+  Navigate,
+} from "react-router-dom";
 
 // Pages
 import Login from "./pages/LoginPage";
@@ -11,31 +16,37 @@ import AdminTaskPage from "./pages/AdminTaskPage";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 
-
 const App = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [role, setRole] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const token = localStorage.getItem("token");
+    const storedRole = localStorage.getItem("role");
 
     if (token && token.trim() !== "") {
       setIsAuthenticated(true);
+      setRole(storedRole);
     } else {
       setIsAuthenticated(false);
+      setRole(null);
     }
 
     setLoading(false);
   }, []);
 
-  const handleLoginSuccess = (token) => {
-    localStorage.setItem("token", token);
+  const handleLoginSuccess = () => {
     setIsAuthenticated(true);
+    setRole(localStorage.getItem("role")); // stored in Login.jsx
   };
 
   const handleLogout = () => {
     localStorage.removeItem("token");
+    localStorage.removeItem("role");
+    localStorage.removeItem("user");
     setIsAuthenticated(false);
+    setRole(null);
   };
 
   if (loading) {
@@ -55,6 +66,8 @@ const App = () => {
           element={
             !isAuthenticated ? (
               <Login onLoginSuccess={handleLoginSuccess} />
+            ) : role === "admin" || role === "super-admin" ? (
+              <Navigate to="/admin/tasks" replace />
             ) : (
               <Navigate to="/dashboard" replace />
             )
@@ -67,6 +80,8 @@ const App = () => {
           element={
             !isAuthenticated ? (
               <Signup onSignupSuccess={handleLoginSuccess} />
+            ) : role === "admin" || role === "super-admin" ? (
+              <Navigate to="/admin/tasks" replace />
             ) : (
               <Navigate to="/dashboard" replace />
             )
@@ -77,14 +92,17 @@ const App = () => {
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password/:token" element={<ResetPassword />} />
 
-        {/* Protected Routes */}
+        {/* Employee Routes */}
         <Route
           path="/dashboard"
           element={
-            isAuthenticated ? (
+            isAuthenticated && role !== "admin" && role !== "super-admin" ? (
               <EmployeeDashboardPage onLogout={handleLogout} />
             ) : (
-              <Navigate to="/login" replace />
+              <Navigate
+                to={isAuthenticated ? "/admin/tasks" : "/login"}
+                replace
+              />
             )
           }
         />
@@ -93,7 +111,10 @@ const App = () => {
           path="/profile"
           element={
             isAuthenticated ? (
-              <MyProfile onLogout={handleLogout} userType="Employee" />
+              <MyProfile
+                onLogout={handleLogout}
+                userType={role || "Employee"}
+              />
             ) : (
               <Navigate to="/login" replace />
             )
@@ -103,31 +124,44 @@ const App = () => {
         <Route
           path="/tasks"
           element={
-            isAuthenticated ? (
+            isAuthenticated && role !== "admin" && role !== "super-admin" ? (
               <Tasks onLogout={handleLogout} />
             ) : (
-              <Navigate to="/login" replace />
+              <Navigate
+                to={isAuthenticated ? "/admin/tasks" : "/login"}
+                replace
+              />
             )
           }
         />
 
+        {/* Admin Routes */}
         <Route
           path="/admin/tasks"
           element={
-            isAuthenticated ? (
+            isAuthenticated && (role === "admin" || role === "super-admin") ? (
               <AdminTaskPage onLogout={handleLogout} />
             ) : (
-              <Navigate to="/login" replace />
+              <Navigate
+                to={isAuthenticated ? "/dashboard" : "/login"}
+                replace
+              />
             )
           }
         />
 
-        {/* Catch-all Redirect */}
+        {/* Catch-all */}
         <Route
           path="*"
           element={
             <Navigate
-              to={isAuthenticated ? "/dashboard" : "/login"}
+              to={
+                isAuthenticated
+                  ? role === "admin" || role === "super-admin"
+                    ? "/admin/tasks"
+                    : "/dashboard"
+                  : "/login"
+              }
               replace
             />
           }
