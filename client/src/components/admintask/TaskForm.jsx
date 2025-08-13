@@ -57,9 +57,10 @@ const TaskForm = ({ onCreate }) => {
     e.preventDefault();
     if (!task.title || task.assignedTo.length === 0 || !task.dueDate) return;
 
-    let combinedDueDate = task.dueDate && task.dueTime
-      ? new Date(`${task.dueDate}T${task.dueTime}:00`)
-      : new Date(`${task.dueDate}T00:00:00`);
+    let combinedDueDate =
+      task.dueDate && task.dueTime
+        ? new Date(`${task.dueDate}T${task.dueTime}:00`)
+        : new Date(`${task.dueDate}T00:00:00`);
 
     const formattedTask = {
       ...task,
@@ -82,22 +83,19 @@ const TaskForm = ({ onCreate }) => {
   return (
     <form
       onSubmit={handleSubmit}
-      className="bg-gradient-to-br from-yellow-50 via-orange-50 to-yellow-100 rounded-xl shadow-lg p-6 border border-yellow-200 space-y-5"
+      className=" p-6  space-y-5"
     >
-      <h3 className="text-xl font-bold text-orange-500 flex items-center gap-2">
-        📝 Create New Task
-      </h3>
-
+      
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
         {/* Title */}
         <div>
-          <label className="block text-sm font-semibold text-orange-600 mb-1">
+          <label className="block text-sm font-medium text-gray-700 mb-1">
             Task Title
           </label>
           <input
             type="text"
             placeholder="Enter task title"
-            className="border border-yellow-200 p-2 rounded-lg w-full text-sm"
+            className="border border-gray-300 p-2 rounded-lg w-full text-sm focus:ring-2 focus:ring-blue-400 focus:border-blue-400 outline-none"
             value={task.title}
             onChange={(e) => setTask({ ...task, title: e.target.value })}
             required
@@ -105,12 +103,12 @@ const TaskForm = ({ onCreate }) => {
         </div>
 
         {/* Multi-select Dropdown */}
-        <div ref={dropdownRef}>
-          <label className="block text-sm font-semibold text-orange-600 mb-1">
+        <div ref={dropdownRef} className="relative">
+          <label className="block text-sm font-medium text-gray-700 mb-1">
             Assign To (Multiple)
           </label>
           <div
-            className="border border-yellow-200 p-2 rounded-lg bg-white text-sm cursor-pointer"
+            className="border border-gray-300 p-2 rounded-lg bg-white text-sm cursor-pointer focus:ring-2 focus:ring-blue-400 outline-none"
             onClick={() => setDropdownOpen((prev) => !prev)}
           >
             {task.assignedTo.length > 0
@@ -119,11 +117,11 @@ const TaskForm = ({ onCreate }) => {
           </div>
 
           {dropdownOpen && (
-            <div className="border border-yellow-200 bg-white rounded-lg mt-1 shadow-lg max-h-40 overflow-y-auto absolute z-10 w-[calc(50%-0.5rem)]">
+            <div className="absolute left-0 top-full mt-1 border border-gray-200 bg-white rounded-lg shadow-lg max-h-40 overflow-y-auto w-full z-10">
               {users.map((user) => (
                 <label
                   key={user._id}
-                  className="flex items-center px-3 py-2 hover:bg-yellow-50 cursor-pointer"
+                  className="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer"
                 >
                   <input
                     type="checkbox"
@@ -140,12 +138,12 @@ const TaskForm = ({ onCreate }) => {
 
         {/* Due Date */}
         <div>
-          <label className="block text-sm font-semibold text-orange-600 mb-1">
+          <label className="block text-sm font-medium text-gray-700 mb-1">
             Due Date
           </label>
           <input
             type="date"
-            className="border border-yellow-200 p-2 rounded-lg w-full text-sm"
+            className="border border-gray-300 p-2 rounded-lg w-full text-sm focus:ring-2 focus:ring-blue-400 focus:border-blue-400 outline-none cursor-pointer"
             value={task.dueDate}
             onChange={(e) => setTask({ ...task, dueDate: e.target.value })}
             required
@@ -154,12 +152,12 @@ const TaskForm = ({ onCreate }) => {
 
         {/* Due Time */}
         <div>
-          <label className="block text-sm font-semibold text-orange-600 mb-1">
+          <label className="block text-sm font-medium text-gray-700 mb-1">
             Due Time
           </label>
           <input
             type="time"
-            className="border border-yellow-200 p-2 rounded-lg w-full text-sm"
+            className="border border-gray-300 p-2 rounded-lg w-full text-sm focus:ring-2 focus:ring-blue-400 focus:border-blue-400 outline-none cursor-pointer"
             value={task.dueTime}
             onChange={(e) => setTask({ ...task, dueTime: e.target.value })}
           />
@@ -167,11 +165,11 @@ const TaskForm = ({ onCreate }) => {
 
         {/* Priority */}
         <div>
-          <label className="block text-sm font-semibold text-orange-600 mb-1">
+          <label className="block text-sm font-medium text-gray-700 mb-1">
             Priority
           </label>
           <select
-            className="border border-yellow-200 p-2 rounded-lg w-full text-sm bg-white"
+            className="border border-gray-300 p-2 rounded-lg w-full text-sm bg-white focus:ring-2 focus:ring-blue-400 focus:border-blue-400 outline-none"
             value={task.priority}
             onChange={(e) => setTask({ ...task, priority: e.target.value })}
             required
@@ -186,12 +184,12 @@ const TaskForm = ({ onCreate }) => {
 
       {/* Description */}
       <div>
-        <label className="block text-sm font-semibold text-orange-600 mb-1">
+        <label className="block text-sm font-medium text-gray-700 mb-1">
           Description
         </label>
         <textarea
           placeholder="Enter task description"
-          className="border border-yellow-200 p-2 rounded-lg w-full text-sm"
+          className="border border-gray-300 p-2 rounded-lg w-full text-sm focus:ring-2 focus:ring-blue-400 focus:border-blue-400 outline-none"
           rows={3}
           value={task.description}
           onChange={(e) => setTask({ ...task, description: e.target.value })}
@@ -201,7 +199,7 @@ const TaskForm = ({ onCreate }) => {
       {/* Submit */}
       <button
         type="submit"
-        className="w-full p-3 rounded-lg font-semibold bg-gradient-to-r from-yellow-300 to-orange-400"
+        className="w-full p-3 rounded-lg font-semibold bg-gradient-to-r from-blue-500 to-indigo-500 text-white hover:opacity-90 transition"
       >
         Create Task
       </button>
