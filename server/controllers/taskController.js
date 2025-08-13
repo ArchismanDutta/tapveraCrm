@@ -1,22 +1,19 @@
 const Task = require("../models/Task");
-const { getIO } = require("../socket"); // <-- Import from socket.js
+const { getIO } = require("../socket");
 
-// Helper to populate assignedTo & assignedBy
 const populateTask = (query) =>
   query.populate("assignedTo", "name email").populate("assignedBy", "name email");
 
-// ========================
 // Create Task
-// ========================
 exports.createTask = async (req, res) => {
   try {
     const { title, description, assignedTo, dueDate, priority } = req.body;
     const assignedBy = req.user._id;
 
     if (!title || !Array.isArray(assignedTo) || assignedTo.length === 0) {
-      return res
-        .status(400)
-        .json({ message: "Title and at least one assigned user are required." });
+      return res.status(400).json({ 
+        message: "Title and at least one assigned user are required." 
+      });
     }
 
     const allowedPriorities = ["High", "Medium", "Low"];
@@ -32,11 +29,11 @@ exports.createTask = async (req, res) => {
     });
 
     await task.save();
-
     const populated = await populateTask(Task.findById(task._id)).lean();
 
-    // Emit socket event
+    // Emit to ALL connected clients
     getIO().emit("taskCreated", populated);
+    console.log("✅ Task created and broadcasted:", populated.title);
 
     res.status(201).json(populated);
   } catch (err) {
@@ -45,9 +42,7 @@ exports.createTask = async (req, res) => {
   }
 };
 
-// ========================
-// Edit Task
-// ========================
+// Edit Task - FIXED AUTHORIZATION BUG
 exports.editTask = async (req, res) => {
   try {
     const { taskId } = req.params;
@@ -56,10 +51,11 @@ exports.editTask = async (req, res) => {
     const task = await Task.findById(taskId);
     if (!task) return res.status(404).json({ message: "Task not found." });
 
-    // ALLOW if admin/super-admin OR creator
-    const isAdmin = ["admin", "super-admin"].includes(req.user.role);
-    const isCreator = task.assignedBy.toString() === req.user._id.toString();
-    if (!isAdmin && !isCreator) {
+    // FIXED: Only check admin role OR if user is the task creator
+    if (
+      !["admin", "super-admin"].includes(req.user.role) &&
+      task.assignedBy.toString() !== req.user._id.toString()
+    ) {
       return res.status(403).json({ message: "Not authorized" });
     }
 
@@ -75,11 +71,11 @@ exports.editTask = async (req, res) => {
     }
 
     await task.save();
-
     const populated = await populateTask(Task.findById(taskId)).lean();
 
-    // Emit socket event
+    // Emit to ALL connected clients
     getIO().emit("taskUpdated", populated);
+    console.log("✅ Task updated and broadcasted:", populated.title);
 
     res.json(populated);
   } catch (err) {
@@ -88,9 +84,7 @@ exports.editTask = async (req, res) => {
   }
 };
 
-// ========================
 // Update Task Status
-// ========================
 exports.updateTaskStatus = async (req, res) => {
   try {
     const { taskId } = req.params;
@@ -103,20 +97,20 @@ exports.updateTaskStatus = async (req, res) => {
     const task = await Task.findById(taskId);
     if (!task) return res.status(404).json({ message: "Task not found." });
 
-    // Allow creator or any assignee to update status
-    const isCreator = task.assignedBy.toString() === req.user._id.toString();
-    const isAssignee = task.assignedTo.some((id) => id.toString() === req.user._id.toString());
-    if (!isCreator && !isAssignee) {
+    if (
+      task.assignedBy.toString() !== req.user._id.toString() &&
+      !task.assignedTo.some((id) => id.toString() === req.user._id.toString())
+    ) {
       return res.status(403).json({ message: "Unauthorized" });
     }
 
     task.status = status;
     await task.save();
-
     const populated = await populateTask(Task.findById(taskId)).lean();
 
-    // Emit socket event
+    // Emit to ALL connected clients
     getIO().emit("taskUpdated", populated);
+    console.log("✅ Task status updated and broadcasted:", populated.title);
 
     res.json(populated);
   } catch (err) {
@@ -125,21 +119,17 @@ exports.updateTaskStatus = async (req, res) => {
   }
 };
 
-// ========================
 // Get Task by ID
-// ========================
 exports.getTaskById = async (req, res) => {
   try {
-    const task = await populateTask(Task.findById(req.params.taskId)).lean();
-
+    const task = await populateTask(Task.findById(req.params.taskId));
     if (!task) return res.status(404).json({ message: "Task not found." });
 
-    const isCreator = task.assignedBy?._id?.toString() === req.user._id.toString();
-    const isAssignee = Array.isArray(task.assignedTo) &&
-      task.assignedTo.some((u) => u?._id?.toString() === req.user._id.toString());
-    const isAdmin = ["admin", "super-admin"].includes(req.user.role);
-
-    if (!isCreator && !isAssignee && !isAdmin) {
+    if (
+      task.assignedBy._id.toString() !== req.user._id.toString() &&
+      !task.assignedTo.some((u) => u._id.toString() === req.user._id.toString()) &&
+      !["admin", "super-admin"].includes(req.user.role)
+    ) {
       return res.status(403).json({ message: "Not authorized" });
     }
 
@@ -150,9 +140,7 @@ exports.getTaskById = async (req, res) => {
   }
 };
 
-// ========================
 // Get all Tasks
-// ========================
 exports.getTasks = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -167,25 +155,24 @@ exports.getTasks = async (req, res) => {
   }
 };
 
-// ========================
 // Delete Task
-// ========================
 exports.deleteTask = async (req, res) => {
   try {
     const task = await Task.findById(req.params.taskId);
     if (!task) return res.status(404).json({ message: "Task not found." });
 
-    // ALLOW if admin/super-admin OR creator
-    const isAdmin = ["admin", "super-admin"].includes(req.user.role);
-    const isCreator = task.assignedBy.toString() === req.user._id.toString();
-    if (!isAdmin && !isCreator) {
+    if (
+      !["admin", "super-admin"].includes(req.user.role) &&
+      task.assignedBy.toString() !== req.user._id.toString()
+    ) {
       return res.status(403).json({ message: "Unauthorized" });
     }
 
     await task.deleteOne();
 
-    // Emit socket event
+    // Emit to ALL connected clients
     getIO().emit("taskDeleted", req.params.taskId);
+    console.log("✅ Task deleted and broadcasted:", req.params.taskId);
 
     res.json({ message: "Deleted" });
   } catch (err) {
