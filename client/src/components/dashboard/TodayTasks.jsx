@@ -1,6 +1,6 @@
 import React from "react";
 
-const TodayTasks = ({ data, className }) => {
+const TodayTasks = ({ data = [], className }) => {
   const colorMap = {
     red: "bg-red-100 text-red-600",
     yellow: "bg-yellow-100 text-yellow-600",
@@ -12,31 +12,39 @@ const TodayTasks = ({ data, className }) => {
       {data.length > 0 ? (
         data.map((task, index) => (
           <div
-            key={index}
-            className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white p-4 rounded-lg shadow-sm border border-gray-200"
+            key={task.id || index}
+            className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white p-4 rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition-shadow"
           >
             {/* Left Section: Task Details */}
             <div className="space-y-2">
-              <p className="font-medium text-base">{task.label}</p>
+              {/* Task title */}
+              <p className="font-medium text-base text-gray-800">
+                {task.label}
+              </p>
 
+              {/* Due date */}
               <p className="text-xs text-gray-500">
                 Due:{" "}
                 <span className="font-semibold text-gray-800">
-                  {task.dueDateTime}
+                  {task.dueDateTime || "No due date"}
                 </span>
               </p>
 
+              {/* Assigned By */}
               <p className="text-xs text-gray-500">
                 Assigned By:{" "}
                 <span className="font-semibold text-yellow-500">
-                  {task.assignedBy}
+                  {task.assignedBy || "Unknown"}
                 </span>
               </p>
 
+              {/* Assigned To */}
               <p className="text-xs text-gray-500">
                 Assigned To:{" "}
                 <span className="font-semibold text-orange-400">
-                  {task.assignedTo}
+                  {Array.isArray(task.assignedTo)
+                    ? task.assignedTo.join(", ")
+                    : task.assignedTo || "Unknown"}
                 </span>
               </p>
             </div>
@@ -47,7 +55,7 @@ const TodayTasks = ({ data, className }) => {
                 colorMap[task.color] || ""
               }`}
             >
-              {task.level}
+              {task.level || "Normal"}
             </span>
           </div>
         ))
