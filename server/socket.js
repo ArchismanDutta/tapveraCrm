@@ -7,16 +7,22 @@ function initSocket(server) {
     cors: {
       origin: [
         process.env.FRONTEND_ORIGIN || "http://localhost:3000",
-        "http://localhost:5173"
+        "http://localhost:5173",
       ],
       methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
-    }
+      credentials: true,
+    },
+    pingInterval: 25000,
+    pingTimeout: 60000,
   });
 
   io.on("connection", (socket) => {
     console.log("Client connected:", socket.id);
-    socket.on("disconnect", () => {
-      console.log("Client disconnected:", socket.id);
+
+    socket.emit("connected", { id: socket.id });
+
+    socket.on("disconnect", (reason) => {
+      console.log(`Client disconnected: ${socket.id} (${reason})`);
     });
   });
 

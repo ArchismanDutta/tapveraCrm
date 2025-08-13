@@ -20,7 +20,7 @@ const server = http.createServer(app);
 // ========================
 // Initialize Socket.IO
 // ========================
-const io = initSocket(server); // Now io is fully initialized before controllers need it
+initSocket(server); // ensure initialized before controllers use getIO()
 
 // ========================
 // Middleware
