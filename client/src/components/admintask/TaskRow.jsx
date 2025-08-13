@@ -8,9 +8,9 @@ const priorityColors = {
 };
 
 const statusColors = {
-  Pending: "bg-blue-100 text-blue-700 border border-blue-200",
-  Completed: "bg-green-100 text-green-700 border border-green-200",
-  Overdue: "bg-red-100 text-red-700 border border-red-200",
+  pending: "bg-blue-100 text-blue-700 border border-blue-200",
+  "in-progress": "bg-purple-100 text-purple-700 border border-purple-200",
+  completed: "bg-green-100 text-green-700 border border-green-200",
 };
 
 const TaskRow = ({ task, onView, onEdit, onDelete }) => {
@@ -18,13 +18,22 @@ const TaskRow = ({ task, onView, onEdit, onDelete }) => {
     <tr className="border-b text-sm hover:bg-yellow-50 transition-colors duration-200">
       <td className="p-3 font-medium text-gray-800">{task.title}</td>
 
-      <td className="p-3 flex items-center gap-2">
-        <img
-          src={task.assignedAvatar}
-          alt={task.assignedTo}
-          className="w-7 h-7 rounded-full border-2 border-yellow-300"
-        />
-        <span className="text-gray-700">{task.assignedTo}</span>
+      <td className="p-3 flex flex-wrap items-center gap-2">
+        {Array.isArray(task.assignedTo) && task.assignedTo.length > 0 ? (
+          task.assignedTo.map((user, idx) => (
+            <div key={idx} className="flex items-center gap-1">
+              <img
+                src={`https://i.pravatar.cc/40?u=${user._id || user}`}
+                alt={user.name || "User"}
+                className="w-7 h-7 rounded-full border-2 border-yellow-300"
+                onError={e => { e.target.onerror = null; e.target.src = "https://i.pravatar.cc/40"; }}
+              />
+              <span className="text-gray-700">{user.name || user.email || "Unknown"}</span>
+            </div>
+          ))
+        ) : (
+          <span className="text-gray-400">Unassigned</span>
+        )}
       </td>
 
       <td className="p-3 text-gray-600">{task.dueDate}</td>
@@ -49,21 +58,18 @@ const TaskRow = ({ task, onView, onEdit, onDelete }) => {
         <button
           onClick={onView}
           className="p-1.5 rounded-lg text-blue-600 hover:bg-blue-50"
-          title="View Task"
         >
           <Eye size={16} />
         </button>
         <button
           onClick={onEdit}
           className="p-1.5 rounded-lg text-green-600 hover:bg-green-50"
-          title="Edit Task"
         >
           <Edit3 size={16} />
         </button>
         <button
           onClick={onDelete}
           className="p-1.5 rounded-lg text-red-600 hover:bg-red-50"
-          title="Delete Task"
         >
           <Trash2 size={16} />
         </button>
