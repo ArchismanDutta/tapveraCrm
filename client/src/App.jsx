@@ -23,7 +23,9 @@ const App = () => {
 
   useEffect(() => {
     const token = localStorage.getItem("token");
-    const storedRole = localStorage.getItem("role");
+    const storedRole =
+      JSON.parse(localStorage.getItem("user"))?.role ||
+      localStorage.getItem("role");
 
     if (token && token.trim() !== "") {
       setIsAuthenticated(true);
@@ -97,7 +99,7 @@ const App = () => {
           path="/dashboard"
           element={
             isAuthenticated && role !== "admin" && role !== "super-admin" ? (
-              <EmployeeDashboardPage onLogout={handleLogout} />
+              <EmployeeDashboardPage onLogout={handleLogout} role={role} />
             ) : (
               <Navigate
                 to={isAuthenticated ? "/admin/tasks" : "/login"}
