@@ -1,12 +1,14 @@
-import React, { useState } from 'react';
-import PropTypes from 'prop-types';
-import AuthInput from '../components/AuthInput';
-import tapveraLogo from '../assets/tapvera.png';
-import { FaEnvelope, FaLock } from 'react-icons/fa';
+import React, { useState } from "react";
+import PropTypes from "prop-types";
+import { useNavigate } from "react-router-dom";
+import AuthInput from "../components/AuthInput";
+import tapveraLogo from "../assets/tapvera.png";
+import { FaEnvelope, FaLock } from "react-icons/fa";
 
 const Login = ({ onLoginSuccess }) => {
-  const [form, setForm] = useState({ email: '', password: '' });
-  const [error, setError] = useState('');
+  const navigate = useNavigate();
+  const [form, setForm] = useState({ email: "", password: "" });
+  const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
   const handleChange = (e) =>
@@ -15,44 +17,49 @@ const Login = ({ onLoginSuccess }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
-    setError('');
+    setError("");
 
     if (!form.email || !form.password) {
-      setError('Please enter both email and password.');
+      setError("Please enter both email and password.");
       setLoading(false);
       return;
     }
 
     try {
-      const res = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(form),
       });
 
       const data = await res.json();
       console.log("Login response data:", data);
 
-
       if (!res.ok) {
-        setError(data.message || 'Invalid email or password.');
+        setError(data.message || "Invalid email or password.");
         setLoading(false);
         return;
       }
 
-      // ✅ Save token from parsed JSON, not res.data
-     localStorage.setItem("token", data.token.token); // store only token
-localStorage.setItem("user", JSON.stringify(data.user)); // store user separately
+      // Save token & user info
+      // Save token and user info in localStorage
+localStorage.setItem("token", data.token);
+localStorage.setItem("user", JSON.stringify(data.user));
+localStorage.setItem("role", data.user.role); // optional for quick access
 
-    
 
- 
+      // Role-based navigation
+      const role = data.user.role?.toLowerCase();
+      if (role === "admin" || role === "super-admin") {
+        navigate("/admin/tasks");
+      } else {
+        navigate("/dashboard");
+      }
 
-      // Notify App.jsx login succeeded
       onLoginSuccess(data.token);
     } catch (err) {
-      console.error('Login Error:', err);
-      setError('Failed to connect to the server. Please try again.');
+      console.error("Login Error:", err);
+      setError("Failed to connect to the server. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -78,7 +85,7 @@ localStorage.setItem("user", JSON.stringify(data.user)); // store user separatel
             placeholder="Enter your email"
             autoComplete="username"
             required
-            error={error && !form.email ? 'Email is required.' : ''}
+            error={error && !form.email ? "Email is required." : ""}
             icon={FaEnvelope}
           />
 
@@ -91,7 +98,7 @@ localStorage.setItem("user", JSON.stringify(data.user)); // store user separatel
             placeholder="Enter your password"
             autoComplete="current-password"
             required
-            error={error && !form.password ? 'Password is required.' : ''}
+            error={error && !form.password ? "Password is required." : ""}
             showTogglePassword={true}
             icon={FaLock}
           />
@@ -107,7 +114,7 @@ localStorage.setItem("user", JSON.stringify(data.user)); // store user separatel
             disabled={loading}
             className="w-full py-2 rounded-md bg-yellow-300 hover:bg-orange-500 transition text-background font-semibold shadow focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:outline-none disabled:opacity-50"
           >
-            {loading ? 'Logging in...' : 'Log In'}
+            {loading ? "Logging in..." : "Log In"}
           </button>
         </form>
 
@@ -124,7 +131,7 @@ localStorage.setItem("user", JSON.stringify(data.user)); // store user separatel
         </div>
 
         <p className="mt-4 text-center text-textMuted text-sm">
-          Don&apos;t have an account?{' '}
+          Don&apos;t have an account?{" "}
           <a href="/signup" className="text-primary hover:text-orangeDark">
             Sign up
           </a>
