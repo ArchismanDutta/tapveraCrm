@@ -1,19 +1,14 @@
-// src/pages/AdminTaskPage.jsx
 import React, { useState, useEffect } from "react";
+import Sidebar from "../components/dashboard/Sidebar"; // our dynamic sidebar
 import StatsCard from "../components/admintask/StatsCard";
 import TaskForm from "../components/admintask/TaskForm";
 import TaskTable from "../components/admintask/TaskTable";
 import tapveraLogo from "../assets/tapvera.png";
-import API from "../api"; // must handle auth headers
+import API from "../api";
 
-/**
- * EditTaskModal - controlled modal for editing a task
- * Now uses dynamic `users` list from backend for "Assign To".
- */
 const EditTaskModal = ({ task, onSave, onCancel, users }) => {
   const [editedTask, setEditedTask] = useState(task || {});
 
-  // Sync local state when prop changes
   useEffect(() => {
     setEditedTask(task ? { ...task } : {});
   }, [task]);
@@ -35,7 +30,6 @@ const EditTaskModal = ({ task, onSave, onCancel, users }) => {
     onSave(editedTask);
   };
 
-  // Format dueDate for input
   const dueDateValue =
     editedTask?.dueDate && typeof editedTask.dueDate === "string"
       ? editedTask.dueDate.slice(0, 10)
@@ -49,7 +43,6 @@ const EditTaskModal = ({ task, onSave, onCancel, users }) => {
       >
         <h2 className="text-lg font-bold text-orange-600">✏️ Edit Task</h2>
 
-        {/* Form fields */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* Title */}
           <div>
@@ -169,20 +162,19 @@ const EditTaskModal = ({ task, onSave, onCancel, users }) => {
   );
 };
 
-/** Main Admin Task Page */
 const AdminTaskPage = () => {
   const [tasks, setTasks] = useState([]);
-  const [users, setUsers] = useState([]); // added users state
+  const [users, setUsers] = useState([]);
   const [popupMessage, setPopupMessage] = useState("");
   const [selectedTask, setSelectedTask] = useState(null);
   const [editingTask, setEditingTask] = useState(null);
+  const [collapsed, setCollapsed] = useState(false);
 
   const showPopup = (message) => {
     setPopupMessage(message);
     setTimeout(() => setPopupMessage(""), 3000);
   };
 
-  // Fetch tasks
   const fetchTasks = async () => {
     try {
       const res = await API.get("/tasks");
@@ -194,10 +186,9 @@ const AdminTaskPage = () => {
     }
   };
 
-  // Fetch all users for dropdown
   const fetchUsers = async () => {
     try {
-      const res = await API.get("/users"); // admin API
+      const res = await API.get("/users");
       if (Array.isArray(res.data)) setUsers(res.data);
     } catch (err) {
       console.error("fetchUsers error:", err);
@@ -210,7 +201,6 @@ const AdminTaskPage = () => {
     fetchUsers();
   }, []);
 
-  // CREATE
   const handleCreateTask = async (newTask) => {
     try {
       const res = await API.post("/tasks", newTask);
@@ -222,7 +212,6 @@ const AdminTaskPage = () => {
     }
   };
 
-  // UPDATE
   const handleUpdateTask = async (updatedTask) => {
     try {
       const id = updatedTask._id || updatedTask.id;
@@ -238,7 +227,6 @@ const AdminTaskPage = () => {
     }
   };
 
-  // DELETE
   const handleDeleteTask = async (id) => {
     try {
       await API.delete(`/tasks/${id}`);
@@ -250,102 +238,110 @@ const AdminTaskPage = () => {
     }
   };
 
-  // Modal handlers
   const handleViewTask = (task) => setSelectedTask(task);
   const handleEditTask = (task) => setEditingTask(task);
   const closeModal = () => setSelectedTask(null);
   const closeEditModal = () => setEditingTask(null);
-
-  // Stats helper
   const countByStatus = (status) => tasks.filter((t) => t.status === status).length;
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6 space-y-6">
-      {popupMessage && (
-        <div className="fixed top-6 right-6 bg-green-500 text-white px-4 py-2 rounded shadow-lg z-50">
-          {popupMessage}
-        </div>
-      )}
-
-      {/* View Task Modal */}
-      {selectedTask && (
-        <div className="fixed inset-0 flex items-center justify-center z-50">
-          <div className="relative max-w-md w-full bg-gradient-to-br from-yellow-50 via-orange-100 to-yellow-100 bg-opacity-60 backdrop-blur-xl border border-yellow-200 border-opacity-50 rounded-3xl shadow-2xl flex flex-col items-center pt-9 pb-7 px-8 text-gray-900">
-            <div className="absolute -top-7 left-1/2 -translate-x-1/2 bg-white/70 border border-yellow-300 shadow rounded-full p-1.5">
-              <img src={tapveraLogo} alt="Tapvera Logo" className="h-12 w-12 object-contain" />
-            </div>
-            <h2 className="font-bold text-xl md:text-2xl text-orange-600 mb-2 mt-2 text-center">
-              {selectedTask.title}
-            </h2>
-            <p className="mb-4 text-base md:text-lg text-gray-700 text-center whitespace-pre-line font-medium">
-              {selectedTask.description}
-            </p>
-            <div className="grid grid-cols-2 gap-4 text-sm mb-5 w-full">
-              <div>
-                <span className="font-semibold text-orange-700">Assigned to:</span>
-                <span className="block">
-                  {selectedTask.assignedTo && typeof selectedTask.assignedTo === "object"
-                    ? selectedTask.assignedTo.name
-                    : selectedTask.assignedTo}
-                </span>
-              </div>
-              <div>
-                <span className="font-semibold text-orange-700">Due Date:</span>
-                <span className="block">
-                  {selectedTask.dueDate?.slice ? selectedTask.dueDate.slice(0, 10) : selectedTask.dueDate}
-                </span>
-              </div>
-              <div>
-                <span className="font-semibold text-orange-700">Priority:</span>
-                <span className="block">{selectedTask.priority}</span>
-              </div>
-              <div>
-                <span className="font-semibold text-orange-700">Status:</span>
-                <span className="block">{selectedTask.status}</span>
-              </div>
-            </div>
-            <button
-              onClick={closeModal}
-              className="mt-2 px-5 py-2 rounded-lg font-semibold bg-white bg-opacity-90 text-orange-500 hover:bg-yellow-100 border border-yellow-100 shadow"
-            >
-              Close
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Edit Modal */}
-      {editingTask && (
-        <EditTaskModal
-          task={editingTask}
-          onSave={handleUpdateTask}
-          onCancel={closeEditModal}
-          users={users}
-        />
-      )}
-
-      {/* Logo */}
-      <div className="flex flex-col items-center mb-4">
-        <img src={tapveraLogo} alt="Tapvera Logo" className="h-16 w-auto mb-2 drop-shadow-md" />
-      </div>
-
-      {/* Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <StatsCard title="Total Tasks" value={tasks.length} colorScheme="blue" />
-        <StatsCard title="Pending Tasks" value={countByStatus("Pending")} colorScheme="yellow" />
-        <StatsCard title="Completed Tasks" value={countByStatus("Completed")} colorScheme="green" />
-        <StatsCard title="Overdue Tasks" value={countByStatus("Overdue")} colorScheme="pink" />
-      </div>
-
-      {/* Task Form with user list */}
-      <TaskForm onCreate={handleCreateTask} users={users} />
-
-      <TaskTable
-        tasks={tasks}
-        onViewTask={handleViewTask}
-        onEditTask={handleEditTask}
-        onDeleteTask={handleDeleteTask}
+    <div className="flex">
+      {/* Sidebar for admin role */}
+      <Sidebar
+        userRole="admin"
+        onLogout={() => console.log("Logging out...")}
+        collapsed={collapsed}
+        setCollapsed={setCollapsed}
       />
+
+      <div className={`flex-1 min-h-screen bg-gray-50 p-6 space-y-6 ${collapsed ? "ml-20" : "ml-64"} transition-all`}>
+        {popupMessage && (
+          <div className="fixed top-6 right-6 bg-green-500 text-white px-4 py-2 rounded shadow-lg z-50">
+            {popupMessage}
+          </div>
+        )}
+
+        {/* View Task Modal */}
+        {selectedTask && (
+          <div className="fixed inset-0 flex items-center justify-center z-50">
+            <div className="relative max-w-md w-full bg-gradient-to-br from-yellow-50 via-orange-100 to-yellow-100 bg-opacity-60 backdrop-blur-xl border border-yellow-200 border-opacity-50 rounded-3xl shadow-2xl flex flex-col items-center pt-9 pb-7 px-8 text-gray-900">
+              <div className="absolute -top-7 left-1/2 -translate-x-1/2 bg-white/70 border border-yellow-300 shadow rounded-full p-1.5">
+                <img src={tapveraLogo} alt="Tapvera Logo" className="h-12 w-12 object-contain" />
+              </div>
+              <h2 className="font-bold text-xl md:text-2xl text-orange-600 mb-2 mt-2 text-center">
+                {selectedTask.title}
+              </h2>
+              <p className="mb-4 text-base md:text-lg text-gray-700 text-center whitespace-pre-line font-medium">
+                {selectedTask.description}
+              </p>
+              <div className="grid grid-cols-2 gap-4 text-sm mb-5 w-full">
+                <div>
+                  <span className="font-semibold text-orange-700">Assigned to:</span>
+                  <span className="block">
+                    {selectedTask.assignedTo && typeof selectedTask.assignedTo === "object"
+                      ? selectedTask.assignedTo.name
+                      : selectedTask.assignedTo}
+                  </span>
+                </div>
+                <div>
+                  <span className="font-semibold text-orange-700">Due Date:</span>
+                  <span className="block">
+                    {selectedTask.dueDate?.slice ? selectedTask.dueDate.slice(0, 10) : selectedTask.dueDate}
+                  </span>
+                </div>
+                <div>
+                  <span className="font-semibold text-orange-700">Priority:</span>
+                  <span className="block">{selectedTask.priority}</span>
+                </div>
+                <div>
+                  <span className="font-semibold text-orange-700">Status:</span>
+                  <span className="block">{selectedTask.status}</span>
+                </div>
+              </div>
+              <button
+                onClick={closeModal}
+                className="mt-2 px-5 py-2 rounded-lg font-semibold bg-white bg-opacity-90 text-orange-500 hover:bg-yellow-100 border border-yellow-100 shadow"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Edit Modal */}
+        {editingTask && (
+          <EditTaskModal
+            task={editingTask}
+            onSave={handleUpdateTask}
+            onCancel={closeEditModal}
+            users={users}
+          />
+        )}
+
+        {/* Logo */}
+        <div className="flex flex-col items-center mb-4">
+          <img src={tapveraLogo} alt="Tapvera Logo" className="h-16 w-auto mb-2 drop-shadow-md" />
+        </div>
+
+        {/* Stats */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+          <StatsCard title="Total Tasks" value={tasks.length} colorScheme="blue" />
+          <StatsCard title="Pending Tasks" value={countByStatus("Pending")} colorScheme="yellow" />
+          <StatsCard title="Completed Tasks" value={countByStatus("Completed")} colorScheme="green" />
+          <StatsCard title="Overdue Tasks" value={countByStatus("Overdue")} colorScheme="pink" />
+        </div>
+
+        {/* Task Form */}
+        <TaskForm onCreate={handleCreateTask} users={users} />
+
+        {/* Task Table */}
+        <TaskTable
+          tasks={tasks}
+          onViewTask={handleViewTask}
+          onEditTask={handleEditTask}
+          onDeleteTask={handleDeleteTask}
+        />
+      </div>
     </div>
   );
 };
