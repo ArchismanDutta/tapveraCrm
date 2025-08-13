@@ -24,17 +24,18 @@ const TaskTable = ({ tasks, onViewTask, onEditTask, onDeleteTask }) => {
   };
 
   return (
-    <div className="bg-white rounded-lg shadow-sm p-5 border">
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-4 gap-3">
+    <div className="rounded-2xl p-6">
+      {/* Filters */}
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-5 gap-3">
         <input
           type="text"
-          placeholder="Search tasks..."
-          className="border p-2 rounded-lg w-full md:w-1/3 text-sm"
+          placeholder="🔍 Search tasks..."
+          className="border border-gray-200 focus:border-orange-400 focus:ring focus:ring-orange-100 rounded-xl px-4 py-2 w-full md:w-1/3 text-sm transition-all duration-200"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
         <select
-          className="border p-2 rounded-lg text-sm w-full md:w-auto"
+          className="border border-gray-200 focus:border-orange-400 focus:ring focus:ring-orange-100 rounded-xl px-4 py-2 text-sm w-full md:w-auto transition-all duration-200 bg-white"
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
         >
@@ -45,43 +46,49 @@ const TaskTable = ({ tasks, onViewTask, onEditTask, onDeleteTask }) => {
         </select>
       </div>
 
-      <table className="w-full border-collapse text-gray-700">
-        <thead className="bg-yellow-100 sticky top-0 z-10">
-          <tr className="border-b text-left text-sm uppercase tracking-wide text-orange-700">
-            <th className="p-3">Task Title</th>
-            <th className="p-3">Assigned To</th>
-            <th className="p-3">Due Date & Time</th>
-            <th className="p-3">Priority</th>
-            <th className="p-3">Status</th>
-            <th className="p-3">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {filteredTasks.length > 0 ? (
-            filteredTasks.map((task, index) => (
-              <TaskRow
-                key={task._id || index}
-                task={{
-                  ...task,
-                  assignedTo: Array.isArray(task.assignedTo)
-                    ? task.assignedTo
-                    : [],
-                  dueDate: formatDueDateTime(task?.dueDate),
-                }}
-                onView={() => onViewTask(task)}
-                onEdit={() => onEditTask(task)}
-                onDelete={() => onDeleteTask(task._id)}
-              />
-            ))
-          ) : (
-            <tr>
-              <td colSpan={6} className="p-5 text-center text-gray-400">
-                No tasks found.
-              </td>
+      {/* Table */}
+      <div className="overflow-x-auto rounded-xl border border-gray-100">
+        <table className="w-full border-collapse text-gray-700">
+          <thead className="bg-gradient-to-r from-orange-50 to-yellow-50 sticky top-0 z-10">
+            <tr className="border-b border-gray-200 text-left text-xs uppercase tracking-wider text-orange-600">
+              <th className="p-4">Task Title</th>
+              <th className="p-4">Assigned To</th>
+              <th className="p-4">Due Date & Time</th>
+              <th className="p-4">Priority</th>
+              <th className="p-4">Status</th>
+              <th className="p-4 text-center">Actions</th>
             </tr>
-          )}
-        </tbody>
-      </table>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {filteredTasks.length > 0 ? (
+              filteredTasks.map((task, index) => (
+                <TaskRow
+                  key={task._id || index}
+                  task={{
+                    ...task,
+                    assignedTo: Array.isArray(task.assignedTo)
+                      ? task.assignedTo
+                      : [],
+                    dueDate: formatDueDateTime(task?.dueDate),
+                  }}
+                  onView={() => onViewTask(task)}
+                  onEdit={() => onEditTask(task)}
+                  onDelete={() => onDeleteTask(task._id)}
+                />
+              ))
+            ) : (
+              <tr>
+                <td
+                  colSpan={6}
+                  className="p-6 text-center text-gray-400 italic"
+                >
+                  No tasks found.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 };

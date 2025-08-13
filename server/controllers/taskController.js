@@ -143,17 +143,23 @@ exports.getTaskById = async (req, res) => {
 // Get all Tasks
 exports.getTasks = async (req, res) => {
   try {
-    const userId = req.user._id;
-    const tasks = await populateTask(
-      Task.find({ $or: [{ assignedTo: userId }, { assignedBy: userId }] })
-    ).lean();
+    let query = {};
 
+    // Show all tasks if user is admin/super-admin, else only related tasks
+    if (!["admin", "super-admin"].includes(req.user.role)) {
+      query = {
+        $or: [{ assignedTo: req.user._id }, { assignedBy: req.user._id }],
+      };
+    }
+
+    const tasks = await populateTask(Task.find(query)).lean();
     res.json(tasks);
   } catch (err) {
     console.error("Error fetching tasks:", err);
     res.status(500).json({ message: "Server error" });
   }
 };
+
 
 // Delete Task
 exports.deleteTask = async (req, res) => {

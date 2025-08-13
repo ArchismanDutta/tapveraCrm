@@ -6,6 +6,7 @@ import TaskTable from "../components/admintask/TaskTable";
 import tapveraLogo from "../assets/tapvera.png";
 import Sidebar from "../components/dashboard/Sidebar";
 import API from "../api";
+import dayjs from "dayjs"; // <-- for date comparisons
 
 const EditTaskModal = ({ task, onSave, onCancel, users }) => {
   const [editedTask, setEditedTask] = useState(task || {});
@@ -36,29 +37,37 @@ const EditTaskModal = ({ task, onSave, onCancel, users }) => {
       : editedTask?.dueDate || "";
 
   return (
-    <div className="fixed inset-0 flex items-center justify-center z-50 bg-black/30">
+    <div className="fixed inset-0 flex items-center justify-center z-50 bg-black/40 backdrop-blur-sm">
       <form
         onSubmit={handleSubmit}
-        className="bg-gradient-to-br from-yellow-50 via-orange-50 to-yellow-100 rounded-2xl shadow-2xl border border-yellow-200 p-6 w-full max-w-md space-y-5"
+        className="bg-white rounded-2xl shadow-2xl border border-gray-200 p-6 w-full max-w-md space-y-5 animate-fadeIn"
       >
-        <h2 className="text-lg font-bold text-orange-600">✏️ Edit Task</h2>
+        <h2 className="text-lg font-bold text-orange-600 flex items-center gap-2">
+          ✏️ Edit Task
+        </h2>
 
         {/* Fields */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Title */}
           <div>
-            <label className="block text-sm font-semibold text-orange-600 mb-1">Task Title</label>
+            <label className="block text-sm font-semibold text-gray-700 mb-1">
+              Task Title
+            </label>
             <input
               type="text"
-              className="border border-yellow-200 rounded-lg p-2 w-full text-sm"
+              className="border border-gray-300 rounded-lg p-2 w-full text-sm focus:ring-2 focus:ring-orange-400"
               value={editedTask.title || ""}
               onChange={(e) => handleChange("title", e.target.value)}
               required
             />
           </div>
+          {/* Assign To */}
           <div>
-            <label className="block text-sm font-semibold text-orange-600 mb-1">Assign To</label>
+            <label className="block text-sm font-semibold text-gray-700 mb-1">
+              Assign To
+            </label>
             <select
-              className="border border-yellow-200 rounded-lg p-2 w-full text-sm bg-white"
+              className="border border-gray-300 rounded-lg p-2 w-full text-sm bg-white focus:ring-2 focus:ring-orange-400"
               value={editedTask.assignedTo || ""}
               onChange={(e) => handleChange("assignedTo", e.target.value)}
               required
@@ -71,20 +80,26 @@ const EditTaskModal = ({ task, onSave, onCancel, users }) => {
               ))}
             </select>
           </div>
+          {/* Due Date */}
           <div>
-            <label className="block text-sm font-semibold text-orange-600 mb-1">Due Date</label>
+            <label className="block text-sm font-semibold text-gray-700 mb-1">
+              Due Date
+            </label>
             <input
               type="date"
-              className="border border-yellow-200 rounded-lg p-2 w-full text-sm"
+              className="border border-gray-300 rounded-lg p-2 w-full text-sm focus:ring-2 focus:ring-orange-400"
               value={dueDateValue}
               onChange={(e) => handleChange("dueDate", e.target.value)}
               required
             />
           </div>
+          {/* Priority */}
           <div>
-            <label className="block text-sm font-semibold text-orange-600 mb-1">Priority</label>
+            <label className="block text-sm font-semibold text-gray-700 mb-1">
+              Priority
+            </label>
             <select
-              className="border border-yellow-200 rounded-lg p-2 w-full text-sm bg-white"
+              className="border border-gray-300 rounded-lg p-2 w-full text-sm bg-white focus:ring-2 focus:ring-orange-400"
               value={editedTask.priority || ""}
               onChange={(e) => handleChange("priority", e.target.value)}
               required
@@ -97,19 +112,25 @@ const EditTaskModal = ({ task, onSave, onCancel, users }) => {
           </div>
         </div>
 
+        {/* Description */}
         <div>
-          <label className="block text-sm font-semibold text-orange-600 mb-1">Description</label>
+          <label className="block text-sm font-semibold text-gray-700 mb-1">
+            Description
+          </label>
           <textarea
-            className="border border-yellow-200 rounded-lg p-2 w-full text-sm"
+            className="border border-gray-300 rounded-lg p-2 w-full text-sm focus:ring-2 focus:ring-orange-400"
             rows={3}
             value={editedTask.description || ""}
             onChange={(e) => handleChange("description", e.target.value)}
           />
         </div>
+        {/* Status */}
         <div>
-          <label className="block text-sm font-semibold text-orange-600 mb-1">Status</label>
+          <label className="block text-sm font-semibold text-gray-700 mb-1">
+            Status
+          </label>
           <select
-            className="border border-yellow-200 rounded-lg p-2 w-full text-sm bg-white"
+            className="border border-gray-300 rounded-lg p-2 w-full text-sm bg-white focus:ring-2 focus:ring-orange-400"
             value={editedTask.status || "Pending"}
             onChange={(e) => handleChange("status", e.target.value)}
             required
@@ -119,11 +140,19 @@ const EditTaskModal = ({ task, onSave, onCancel, users }) => {
             <option value="Overdue">Overdue</option>
           </select>
         </div>
+        {/* Buttons */}
         <div className="flex justify-end gap-2 pt-2">
-          <button type="button" onClick={onCancel} className="px-4 py-2 bg-gray-300 hover:bg-gray-400 rounded">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg text-gray-700"
+          >
             Cancel
           </button>
-          <button type="submit" className="px-4 py-2 bg-orange-500 text-white rounded hover:bg-orange-600">
+          <button
+            type="submit"
+            className="px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600"
+          >
             Save
           </button>
         </div>
@@ -132,8 +161,8 @@ const EditTaskModal = ({ task, onSave, onCancel, users }) => {
   );
 };
 
-export default function AdminTaskPage() {
-  const [collapsed, setCollapsed] = useState(false); // For sidebar
+export default function AdminTaskPage({ onLogout }) {
+  const [collapsed, setCollapsed] = useState(false);
   const [tasks, setTasks] = useState([]);
   const [users, setUsers] = useState([]);
   const [popupMessage, setPopupMessage] = useState("");
@@ -186,7 +215,9 @@ export default function AdminTaskPage() {
     try {
       const id = updatedTask._id || updatedTask.id;
       const res = await API.put(`/tasks/${id}`, updatedTask);
-      setTasks((prev) => prev.map((t) => ((t._id || t.id) === id ? res.data : t)));
+      setTasks((prev) =>
+        prev.map((t) => ((t._id || t.id) === id ? res.data : t))
+      );
       setEditingTask(null);
       showPopup("✅ Task updated successfully!");
     } catch (err) {
@@ -206,26 +237,64 @@ export default function AdminTaskPage() {
     }
   };
 
+  // --------------------------
+  // 📊 COMPUTE STATS
+  // --------------------------
+  const today = dayjs().startOf("day");
+  const currentUserId = JSON.parse(localStorage.getItem("user"))?.id;
+
+  const totalTasks = tasks.length;
+  const assignedByMe = tasks.filter(
+    (t) => t.assignedBy?._id === currentUserId
+  ).length;
+
+  console.log("Current user id:",currentUserId);
+  console.log("Assigned by me:",assignedByMe);
+
+  const tasksDueToday = tasks.filter(
+    (t) => t.dueDate && dayjs(t.dueDate).isSame(today, "day")
+  ).length;
+  const overdueTasks = tasks.filter(
+    (t) =>
+      t.dueDate &&
+      dayjs(t.dueDate).isBefore(today, "day") &&
+      t.status?.toLowerCase() !== "completed"
+  ).length;
+
   return (
     <div className="flex">
-      {/* Sidebar */}
-      <Sidebar collapsed={collapsed} setCollapsed={setCollapsed} userRole="admin" />
+      <Sidebar
+        collapsed={collapsed}
+        setCollapsed={setCollapsed}
+        userRole="admin"
+        onLogout={onLogout}
+      />
 
-      {/* Main content */}
-      <main className={`flex-1 transition-all duration-300 ${collapsed ? "ml-20" : "ml-64"} p-6 bg-gray-50`}>
+      <main
+        className={`flex-1 transition-all duration-300 ${
+          collapsed ? "ml-20" : "ml-64"
+        } p-8 bg-gradient-to-br from-gray-50 to-gray-100 min-h-screen`}
+      >
         {popupMessage && (
-          <div className="fixed top-6 right-6 bg-green-500 text-white px-4 py-2 rounded shadow-lg z-50">
+          <div className="fixed top-6 right-6 bg-gray-900 text-white px-4 py-2 rounded-lg shadow-lg z-50 animate-slideIn">
             {popupMessage}
           </div>
         )}
 
         {selectedTask && (
-          <div className="fixed inset-0 flex items-center justify-center z-50">
-            <div className="relative max-w-md w-full bg-gradient-to-br from-yellow-50 via-orange-100 to-yellow-100 rounded-3xl shadow-2xl flex flex-col items-center pt-9 pb-7 px-8 text-gray-900">
+          <div className="fixed inset-0 flex items-center justify-center z-50 bg-black/40 backdrop-blur-sm">
+            <div className="relative max-w-md w-full bg-white rounded-3xl shadow-2xl flex flex-col items-center pt-9 pb-7 px-8 text-gray-900">
               <img src={tapveraLogo} alt="Tapvera" className="h-12 w-12 mb-4" />
-              <h2 className="font-bold text-xl text-orange-600 mb-2">{selectedTask.title}</h2>
-              <p className="mb-4">{selectedTask.description}</p>
-              <button onClick={() => setSelectedTask(null)} className="mt-2 px-5 py-2 rounded-lg bg-white text-orange-500 border">
+              <h2 className="font-bold text-xl text-orange-600 mb-2">
+                {selectedTask.title}
+              </h2>
+              <p className="mb-4 text-center text-gray-600">
+                {selectedTask.description}
+              </p>
+              <button
+                onClick={() => setSelectedTask(null)}
+                className="mt-2 px-5 py-2 rounded-lg bg-orange-500 text-white hover:bg-orange-600"
+              >
                 Close
               </button>
             </div>
@@ -233,20 +302,62 @@ export default function AdminTaskPage() {
         )}
 
         {editingTask && (
-          <EditTaskModal task={editingTask} onSave={handleUpdateTask} onCancel={() => setEditingTask(null)} users={users} />
+          <EditTaskModal
+            task={editingTask}
+            onSave={handleUpdateTask}
+            onCancel={() => setEditingTask(null)}
+            users={users}
+          />
         )}
 
-        {/* Stats */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-          <StatsCard title="Total Tasks" value={tasks.length} colorScheme="blue" />
-          <StatsCard title="Pending Tasks" value={tasks.filter((t) => t.status === "Pending").length} colorScheme="yellow" />
-          <StatsCard title="Completed Tasks" value={tasks.filter((t) => t.status === "Completed").length} colorScheme="green" />
-          <StatsCard title="Overdue Tasks" value={tasks.filter((t) => t.status === "Overdue").length} colorScheme="pink" />
+        <h1 className="text-2xl font-bold text-gray-800 mb-6">
+          Admin Dashboard
+        </h1>
+
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          <StatsCard
+            title="Total Tasks"
+            value={totalTasks}
+            colorScheme="blue"
+          />
+          <StatsCard
+            title="Assigned by Me"
+            value={assignedByMe}
+            colorScheme="yellow"
+          />
+          <StatsCard
+            title="Tasks Due Today"
+            value={tasksDueToday}
+            colorScheme="green"
+          />
+          <StatsCard
+            title="Overdue Tasks"
+            value={overdueTasks}
+            colorScheme="pink"
+          />
         </div>
 
-        <TaskForm onCreate={handleCreateTask} users={users} />
+        {/* Task Form */}
+        <section className="bg-white rounded-xl shadow-md p-6 mb-8">
+          <h2 className="text-lg font-semibold text-gray-700 mb-4">
+            Create New Task
+          </h2>
+          <TaskForm onCreate={handleCreateTask} users={users} />
+        </section>
 
-        <TaskTable tasks={tasks} onViewTask={setSelectedTask} onEditTask={setEditingTask} onDeleteTask={handleDeleteTask} />
+        {/* Task Table */}
+        <section className="bg-white rounded-xl shadow-md p-6">
+          <h2 className="text-lg font-semibold text-gray-700 mb-4">
+            📋 Task List
+          </h2>
+          <TaskTable
+            tasks={tasks}
+            onViewTask={setSelectedTask}
+            onEditTask={setEditingTask}
+            onDeleteTask={handleDeleteTask}
+          />
+        </section>
       </main>
     </div>
   );
