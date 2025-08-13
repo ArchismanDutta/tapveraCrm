@@ -11,6 +11,11 @@ export default defineConfig({
         changeOrigin: true,
         secure: false,
       },
+      "/socket.io": {
+        target: "ws://localhost:5000", // backend with socket.io
+        ws: true, // important: enable websocket proxying
+        changeOrigin: true,
+      },
     },
   },
 });
