@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import Modal from "../modal"; // reusable modal component
+import Modal from "../modal";
 import DailyEmailSender from "../DailyEmailSender";
 import tapveraLogo from "../../assets/tapvera.png";
 import {
@@ -11,22 +11,41 @@ import {
   Flag,
   HelpCircle,
   Send,
+  Users,
 } from "lucide-react";
 import { FaChevronCircleRight } from "react-icons/fa";
 import { NavLink } from "react-router-dom";
 
-const navItems = [
-  { to: "/dashboard", icon: <LayoutDashboard size={18} />, label: "Dashboard" },
-  { to: "/profile", icon: <User size={18} />, label: "My Profile" },
-  { to: "/tasks", icon: <ClipboardList size={18} />, label: "Tasks" },
-  { to: "/messages", icon: <MessageCircle size={18} />, label: "Messages" },
-  { to: "/reports", icon: <FileText size={18} />, label: "Reports" },
-  { to: "/requirements", icon: <Flag size={18} />, label: "Requirements" },
-  { to: "/help", icon: <HelpCircle size={18} />, label: "Help Center" },
-];
+// Menu configs for each role
+const menuConfig = {
+  employee: [
+    { to: "/dashboard", icon: <LayoutDashboard size={18} />, label: "Dashboard" },
+    { to: "/profile", icon: <User size={18} />, label: "My Profile" },
+    { to: "/tasks", icon: <ClipboardList size={18} />, label: "Tasks" },
+    { to: "/messages", icon: <MessageCircle size={18} />, label: "Messages" },
+    { to: "/reports", icon: <FileText size={18} />, label: "Reports" },
+    { to: "/requirements", icon: <Flag size={18} />, label: "Requirements" },
+    { to: "/help", icon: <HelpCircle size={18} />, label: "Help Center" },
+  ],
+  admin: [
+    { to: "/dashboard", icon: <LayoutDashboard size={18} />, label: "Dashboard" },
+    { to: "/employees", icon: <Users size={18} />, label: "Employee Details" },
+    { to: "/messages", icon: <MessageCircle size={18} />, label: "Messages" },
+    { to: "/help", icon: <HelpCircle size={18} />, label: "Help Center" },
+  ],
+  superadmin: [
+    { to: "/dashboard", icon: <LayoutDashboard size={18} />, label: "Dashboard" },
+    { to: "/employees", icon: <Users size={18} />, label: "Manage Employees" },
+    { to: "/messages", icon: <MessageCircle size={18} />, label: "Messages" },
+    { to: "/reports", icon: <FileText size={18} />, label: "Reports" },
+    { to: "/help", icon: <HelpCircle size={18} />, label: "Help Center" },
+  ],
+};
 
-const Sidebar = ({ onLogout, collapsed, setCollapsed }) => {
+const Sidebar = ({ onLogout, collapsed, setCollapsed, userRole = "employee" }) => {
   const [showEmailModal, setShowEmailModal] = useState(false);
+
+  const navItems = menuConfig[userRole] || [];
 
   return (
     <>
@@ -65,18 +84,20 @@ const Sidebar = ({ onLogout, collapsed, setCollapsed }) => {
           ))}
         </nav>
 
-        {/* Send Daily Updates */}
-        <div className="p-4">
-          <div
-            onClick={() => setShowEmailModal(true)}
-            className="flex items-center space-x-3 cursor-pointer p-2 rounded bg-yellow-50 hover:bg-yellow-100 text-gray-700"
-          >
-            <Send size={18} />
-            {!collapsed && (
-              <span className="font-semibold">Send Daily Updates</span>
-            )}
+        {/* Show Send Daily Updates only for employees */}
+        {userRole === "employee" && (
+          <div className="p-4">
+            <div
+              onClick={() => setShowEmailModal(true)}
+              className="flex items-center space-x-3 cursor-pointer p-2 rounded bg-yellow-50 hover:bg-yellow-100 text-gray-700"
+            >
+              <Send size={18} />
+              {!collapsed && (
+                <span className="font-semibold">Send Daily Updates</span>
+              )}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Logout */}
         <div className="p-4 shadow-inner">
