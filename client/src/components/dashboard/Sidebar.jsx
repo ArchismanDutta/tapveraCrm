@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useNavigate } from "react-router-dom"; // <-- import navigate
 import Modal from "../modal";
 import DailyEmailSender from "../DailyEmailSender";
 import tapveraLogo from "../../assets/tapvera.png";
@@ -16,7 +17,6 @@ import {
 import { FaChevronCircleRight } from "react-icons/fa";
 import { NavLink } from "react-router-dom";
 
-// Menu configs for each role
 const menuConfig = {
   employee: [
     { to: "/dashboard", icon: <LayoutDashboard size={18} />, label: "Dashboard" },
@@ -42,10 +42,20 @@ const menuConfig = {
   ],
 };
 
-const Sidebar = ({ onLogout, collapsed, setCollapsed, userRole = "employee" }) => {
+const Sidebar = ({ collapsed, setCollapsed, userRole = "employee" }) => {
   const [showEmailModal, setShowEmailModal] = useState(false);
+  const navigate = useNavigate(); // hook to navigate
 
   const navItems = menuConfig[userRole] || [];
+
+  const handleLogout = () => {
+    // Clear stored login data
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
+
+    // Redirect to login
+    navigate("/login");
+  };
 
   return (
     <>
@@ -102,7 +112,7 @@ const Sidebar = ({ onLogout, collapsed, setCollapsed, userRole = "employee" }) =
         {/* Logout */}
         <div className="p-4 shadow-inner">
           <button
-            onClick={onLogout}
+            onClick={handleLogout}
             className="w-full p-2 rounded bg-gradient-to-r from-yellow-300 via-yellow-400 to-orange-400 text-black text-sm"
           >
             {collapsed ? "⏻" : "Logout"}
@@ -111,10 +121,7 @@ const Sidebar = ({ onLogout, collapsed, setCollapsed, userRole = "employee" }) =
       </aside>
 
       {/* Modal for Daily Email Sender */}
-      <Modal
-        isOpen={showEmailModal}
-        onClose={() => setShowEmailModal(false)}
-      >
+      <Modal isOpen={showEmailModal} onClose={() => setShowEmailModal(false)}>
         <DailyEmailSender onClose={() => setShowEmailModal(false)} />
       </Modal>
     </>
