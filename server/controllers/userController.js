@@ -1,6 +1,6 @@
 const User = require("../models/User");
 
-// Get logged in user's profile
+// Get logged-in user's profile
 exports.getProfile = async (req, res) => {
   try {
     const user = await User.findById(req.user._id).select("-password -__v");
@@ -9,17 +9,17 @@ exports.getProfile = async (req, res) => {
     }
     res.json(user);
   } catch (err) {
-    console.error(err);
+    console.error("Error fetching profile:", err);
     res.status(500).json({ message: "Server error" });
   }
 };
 
-// Update employee own profile
+// Update employee's own profile
 exports.updateProfile = async (req, res) => {
   try {
     const updateFields = {};
 
-    // Only allow some fields to update
+    // Only allow specific fields
     const allowedFields = [
       "name",
       "contact",
@@ -30,8 +30,11 @@ exports.updateProfile = async (req, res) => {
     ];
 
     allowedFields.forEach((field) => {
-      if (req.body[field]) {
-        updateFields[field] = req.body[field];
+      if (req.body[field] && req.body[field].toString().trim() !== "") {
+        updateFields[field] =
+          typeof req.body[field] === "string"
+            ? req.body[field].trim()
+            : req.body[field];
       }
     });
 
@@ -41,9 +44,13 @@ exports.updateProfile = async (req, res) => {
       { new: true, runValidators: true, context: "query" }
     ).select("-password -__v");
 
+    if (!updatedUser) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
     res.json(updatedUser);
   } catch (err) {
-    console.error(err);
+    console.error("Error updating profile:", err);
     res.status(500).json({ message: "Server error" });
   }
 };
@@ -51,10 +58,13 @@ exports.updateProfile = async (req, res) => {
 // Admin & Super Admin: Get list of all users
 exports.getUsers = async (req, res) => {
   try {
-    const users = await User.find().select("-password -__v");
+    const users = await User.find()
+      .select("-password -__v")
+      .sort({ name: 1 }); // Sort alphabetically
+
     res.json(users);
   } catch (err) {
-    console.error(err);
+    console.error("Error fetching users:", err);
     res.status(500).json({ message: "Server error" });
   }
 };
