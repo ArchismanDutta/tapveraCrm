@@ -3,10 +3,41 @@ import tapveraLogo from "../assets/tapvera.png"; // Adjust path if needed
 
 export default function ForgetPassword() {
   const [email, setEmail] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    console.log("Password reset link sent to:", email);
+    setMessage("");
+    setError("");
+
+    if (!email) {
+      setError("Please enter your email address");
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const res = await fetch("/api/auth/forgot-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.message || "Something went wrong");
+      } else {
+        setMessage("Password reset link sent to your email if it exists in our system.");
+        setEmail("");
+      }
+    } catch (err) {
+      console.error("Forgot password error:", err);
+      setError("Server error, please try again later.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -27,6 +58,10 @@ export default function ForgetPassword() {
           <p className="text-black-600 text-center mb-6">
             Enter your email to receive a password reset link.
           </p>
+
+          {error && <p className="text-red-600 text-sm mb-4">{error}</p>}
+          {message && <p className="text-green-700 text-sm mb-4">{message}</p>}
+
           <form onSubmit={handleSubmit}>
             <input
               type="email"
@@ -38,9 +73,10 @@ export default function ForgetPassword() {
             />
             <button
               type="submit"
+              disabled={loading}
               className="w-full py-2 rounded-md bg-yellow-200 hover:bg-white-500 transition text-background font-semibold shadow focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:outline-none disabled:opacity-50"
             >
-              Send Reset Link
+              {loading ? "Sending..." : "Send Reset Link"}
             </button>
           </form>
         </div>
