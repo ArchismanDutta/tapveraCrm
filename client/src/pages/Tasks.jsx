@@ -5,7 +5,7 @@ import Sidebar from "../components/dashboard/Sidebar";
 import TaskStats from "../components/task/TaskStats";
 import TaskList from "../components/task/TaskList";
 import SubmitRequirement from "../components/task/SubmitRequirement";
-import MessagesPanel from "../components/task/MessagePanel";
+// import MessagesPanel from "../components/task/MessagePanel";
 
 // ✅ Use Vite env syntax
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
@@ -13,10 +13,10 @@ const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 const Tasks = ({ onLogout }) => { // ✅ accept onLogout from App.jsx
   const [collapsed, setCollapsed] = useState(false);
   const [tasks, setTasks] = useState([]);
-  const [messages, setMessages] = useState([
-    { sender: "other", text: "Hi! How's the project going?" },
-    { sender: "me", text: "Going well! Will share the update soon." },
-  ]);
+  // const [messages, setMessages] = useState([
+  //   { sender: "other", text: "Hi! How's the project going?" },
+  //   { sender: "me", text: "Going well! Will share the update soon." },
+  // ]);
  
   const socketRef = useRef(null);
 
@@ -158,10 +158,10 @@ const Tasks = ({ onLogout }) => { // ✅ accept onLogout from App.jsx
     console.log("Requirement submitted:", requirementData);
   };
 
-  const handleSendMessage = (messageText) => {
-    if (!messageText.trim()) return;
-    setMessages((prev) => [...prev, { sender: "me", text: messageText }]);
-  };
+  // const handleSendMessage = (messageText) => {
+  //   if (!messageText.trim()) return;
+  //   setMessages((prev) => [...prev, { sender: "me", text: messageText }]);
+  // };
 
   return (
     <div className="flex bg-gray-50 min-h-screen">
