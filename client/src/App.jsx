@@ -15,6 +15,7 @@ import Tasks from "./pages/Tasks";
 import AdminTaskPage from "./pages/AdminTaskPage";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
+import EmployeeManagementPage from "./pages/EmployeeManagement"; // ✅ New Import
 
 const App = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -143,6 +144,21 @@ const App = () => {
           element={
             isAuthenticated && (role === "admin" || role === "super-admin") ? (
               <AdminTaskPage onLogout={handleLogout} />
+            ) : (
+              <Navigate
+                to={isAuthenticated ? "/dashboard" : "/login"}
+                replace
+              />
+            )
+          }
+        />
+
+        {/* ✅ Employee Management Route */}
+        <Route
+          path="/admin/employees"
+          element={
+            isAuthenticated && (role === "admin" || role === "super-admin") ? (
+              <EmployeeManagementPage onLogout={handleLogout} />
             ) : (
               <Navigate
                 to={isAuthenticated ? "/dashboard" : "/login"}
