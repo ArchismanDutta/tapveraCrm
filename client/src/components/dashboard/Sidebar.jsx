@@ -1,5 +1,4 @@
 import React, { useState } from "react";
-import { useNavigate } from "react-router-dom"; // <-- import navigate
 import Modal from "../modal";
 import DailyEmailSender from "../DailyEmailSender";
 import tapveraLogo from "../../assets/tapvera.png";
@@ -42,20 +41,9 @@ const menuConfig = {
   ],
 };
 
-const Sidebar = ({ collapsed, setCollapsed, userRole = "employee" }) => {
+const Sidebar = ({ collapsed, setCollapsed, userRole = "employee", onLogout }) => {
   const [showEmailModal, setShowEmailModal] = useState(false);
-  const navigate = useNavigate(); // hook to navigate
-
   const navItems = menuConfig[userRole] || [];
-
-  const handleLogout = () => {
-    // Clear stored login data
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
-
-    // Redirect to login
-    navigate("/login");
-  };
 
   return (
     <>
@@ -102,9 +90,7 @@ const Sidebar = ({ collapsed, setCollapsed, userRole = "employee" }) => {
               className="flex items-center space-x-3 cursor-pointer p-2 rounded bg-yellow-50 hover:bg-yellow-100 text-gray-700"
             >
               <Send size={18} />
-              {!collapsed && (
-                <span className="font-semibold">Send Daily Updates</span>
-              )}
+              {!collapsed && <span className="font-semibold">Send Daily Updates</span>}
             </div>
           </div>
         )}
@@ -112,7 +98,7 @@ const Sidebar = ({ collapsed, setCollapsed, userRole = "employee" }) => {
         {/* Logout */}
         <div className="p-4 shadow-inner">
           <button
-            onClick={handleLogout}
+            onClick={onLogout}
             className="w-full p-2 rounded bg-gradient-to-r from-yellow-300 via-yellow-400 to-orange-400 text-black text-sm"
           >
             {collapsed ? "⏻" : "Logout"}

@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import axios from "axios";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import dayjs from "dayjs";
 import { io } from "socket.io-client";
 
@@ -23,6 +23,7 @@ const EmployeeDashboard = ({ onLogout }) => {
   const [pendingCount, setPendingCount] = useState(0);
   const [notifications, setNotifications] = useState([]);
   const socketRef = useRef(null);
+  const navigate = useNavigate();
 
   const messages = [
     { name: "Sarah Johnson", msg: "Updated project timeline", time: "2h ago", img: "https://i.pravatar.cc/40?img=1" },
@@ -35,13 +36,21 @@ const EmployeeDashboard = ({ onLogout }) => {
     id: task._id,
     label: task.title || "Untitled Task",
     dueDateTime: task.dueDate
-      ? new Date(task.dueDate).toLocaleString([], { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })
+      ? new Date(task.dueDate).toLocaleString([], {
+          year: "numeric",
+          month: "short",
+          day: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        })
       : "",
     level: task.priority || "Normal",
     color: task.priority === "High" ? "red" : task.priority === "Medium" ? "yellow" : "green",
     assignedBy: task.assignedBy?.name || "Unknown",
     assignedTo: Array.isArray(task.assignedTo)
-      ? task.assignedTo.map(u => (typeof u === "string" ? "Unknown" : u?.name || "Unknown")).join(", ")
+      ? task.assignedTo
+          .map((u) => (typeof u === "string" ? "Unknown" : u?.name || "Unknown"))
+          .join(", ")
       : "Unknown",
     dueDate: task.dueDate,
     status: task.status,
@@ -51,8 +60,13 @@ const EmployeeDashboard = ({ onLogout }) => {
   const updateSummaryAndNotifications = (list) => {
     const today = dayjs().startOf("day");
     const allTasksCount = list.length;
-    const tasksDueTodayCount = list.filter(t => t.dueDate && dayjs(t.dueDate).isSame(today, "day")).length;
-    const overdueTasksCount = list.filter(t => t.dueDate && dayjs(t.dueDate).isBefore(today, "day") && t.status !== "completed").length;
+    const tasksDueTodayCount = list.filter((t) => t.dueDate && dayjs(t.dueDate).isSame(today, "day")).length;
+    const overdueTasksCount = list.filter(
+      (t) =>
+        t.dueDate &&
+        dayjs(t.dueDate).isBefore(today, "day") &&
+        t.status?.toLowerCase() !== "completed"
+    ).length;
 
     setSummaryData([
       { label: "All Tasks", count: allTasksCount, bg: "bg-blue-50" },
@@ -60,10 +74,10 @@ const EmployeeDashboard = ({ onLogout }) => {
       { label: "Overdue Tasks", count: overdueTasksCount, bg: "bg-red-50" },
     ]);
 
-    const newPendingTasks = list.filter(t => t.status !== "completed");
+    const newPendingTasks = list.filter((t) => t.status?.toLowerCase() !== "completed");
     if (newPendingTasks.length > pendingCount) {
-      setNotifications(prev => [
-        ...newPendingTasks.slice(pendingCount).map(t => `New Task: ${t.label}`),
+      setNotifications((prev) => [
+        ...newPendingTasks.slice(pendingCount).map((t) => `New Task: ${t.label}`),
         ...prev,
       ]);
     }
@@ -72,11 +86,13 @@ const EmployeeDashboard = ({ onLogout }) => {
 
   // Initial fetch
   const fetchTasks = async () => {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      navigate("/login", { replace: true });
+      return;
+    }
     try {
       setLoading(true);
-      const token = localStorage.getItem("token");
-      if (!token) return;
-
       const res = await axios.get(`${API_BASE}/api/tasks`, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -92,6 +108,9 @@ const EmployeeDashboard = ({ onLogout }) => {
 
   // Socket.IO connection
   useEffect(() => {
+    const token = localStorage.getItem("token");
+    if (!token) return; // don't connect if not authenticated
+
     const socket = io(API_BASE, {
       transports: ["websocket"],
       withCredentials: true,
@@ -107,8 +126,7 @@ const EmployeeDashboard = ({ onLogout }) => {
     });
 
     socket.on("taskCreated", (task) => {
-      console.log("📢 taskCreated event:", task);
-      setTasks(prev => {
+      setTasks((prev) => {
         const updated = [formatTask(task), ...prev];
         updateSummaryAndNotifications(updated);
         return updated;
@@ -116,18 +134,16 @@ const EmployeeDashboard = ({ onLogout }) => {
     });
 
     socket.on("taskUpdated", (task) => {
-      console.log("📢 taskUpdated event:", task);
-      setTasks(prev => {
-        const updated = prev.map(t => (t.id === task._id ? formatTask(task) : t));
+      setTasks((prev) => {
+        const updated = prev.map((t) => (t.id === task._id ? formatTask(task) : t));
         updateSummaryAndNotifications(updated);
         return updated;
       });
     });
 
     socket.on("taskDeleted", (taskId) => {
-      console.log("📢 taskDeleted event:", taskId);
-      setTasks(prev => {
-        const updated = prev.filter(t => t.id !== taskId);
+      setTasks((prev) => {
+        const updated = prev.filter((t) => t.id !== taskId);
         updateSummaryAndNotifications(updated);
         return updated;
       });
@@ -142,7 +158,7 @@ const EmployeeDashboard = ({ onLogout }) => {
         socketRef.current = null;
       }
     };
-  }, []); // Only run once
+  }, []);
 
   // Initial API calls
   useEffect(() => {
@@ -151,11 +167,14 @@ const EmployeeDashboard = ({ onLogout }) => {
 
   useEffect(() => {
     const fetchUser = async () => {
+      const token = localStorage.getItem("token");
+      if (!token) {
+        navigate("/login", { replace: true });
+        return;
+      }
       try {
-        const token = localStorage.getItem("token");
-        if (!token) return;
         const res = await axios.get(`${API_BASE}/api/users/me`, {
-          headers: { Authorization: `Bearer ${token}` }
+          headers: { Authorization: `Bearer ${token}` },
         });
         setUserName(res.data?.name || "User");
       } catch (err) {
@@ -173,8 +192,16 @@ const EmployeeDashboard = ({ onLogout }) => {
 
   return (
     <div className="flex bg-gray-50 font-sans text-gray-800">
-      <Sidebar onLogout={onLogout} collapsed={collapsed} setCollapsed={setCollapsed} />
-      <main className={`flex-1 p-8 overflow-y-auto transition-all duration-300 ${collapsed ? "ml-20" : "ml-64"}`}>
+      <Sidebar
+        onLogout={onLogout}
+        collapsed={collapsed}
+        setCollapsed={setCollapsed}
+      />
+      <main
+        className={`flex-1 p-8 overflow-y-auto transition-all duration-300 ${
+          collapsed ? "ml-20" : "ml-64"
+        }`}
+      >
         <div className="flex justify-between items-center mb-8">
           <div>
             <h1 className="text-2xl font-semibold">
