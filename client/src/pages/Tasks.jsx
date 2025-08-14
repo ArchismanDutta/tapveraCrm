@@ -10,7 +10,7 @@ import MessagesPanel from "../components/task/MessagePanel";
 // ✅ Use Vite env syntax
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
-const Tasks = () => {
+const Tasks = ({ onLogout }) => { // ✅ accept onLogout from App.jsx
   const [collapsed, setCollapsed] = useState(false);
   const [tasks, setTasks] = useState([]);
   const [messages, setMessages] = useState([
@@ -70,6 +70,9 @@ const Tasks = () => {
 
   // Connect Socket.IO once
   useEffect(() => {
+    const storedToken = localStorage.getItem("token");
+    if (!storedToken) return; // ✅ Don't connect if logged out
+
     const socket = io(API_BASE, {
       transports: ["websocket"],
       withCredentials: true,
@@ -166,11 +169,13 @@ const Tasks = () => {
 
   return (
     <div className="flex bg-gray-50 min-h-screen">
-      <Sidebar
-        collapsed={collapsed}
-        setCollapsed={setCollapsed}
-        onLogout={() => console.log("Logout clicked")}
-      />
+      {/* ✅ Use real logout from App.jsx */}
+<Sidebar
+  collapsed={collapsed}
+  setCollapsed={setCollapsed}
+  onLogout={onLogout}
+/>
+
 
       <div
         className={`flex-1 transition-all duration-300 ${
