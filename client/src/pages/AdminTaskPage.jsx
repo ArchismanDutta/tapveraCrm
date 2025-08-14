@@ -6,7 +6,8 @@ import TaskTable from "../components/admintask/TaskTable";
 import tapveraLogo from "../assets/tapvera.png";
 import Sidebar from "../components/dashboard/Sidebar";
 import API from "../api";
-import dayjs from "dayjs"; // <-- for date comparisons
+import dayjs from "dayjs"; // for date comparisons
+import { useNavigate } from "react-router-dom";
 
 const EditTaskModal = ({ task, onSave, onCancel, users }) => {
   const [editedTask, setEditedTask] = useState(task || {});
@@ -124,6 +125,7 @@ const EditTaskModal = ({ task, onSave, onCancel, users }) => {
             onChange={(e) => handleChange("description", e.target.value)}
           />
         </div>
+
         {/* Status */}
         <div>
           <label className="block text-sm font-semibold text-gray-700 mb-1">
@@ -140,6 +142,7 @@ const EditTaskModal = ({ task, onSave, onCancel, users }) => {
             <option value="Overdue">Overdue</option>
           </select>
         </div>
+
         {/* Buttons */}
         <div className="flex justify-end gap-2 pt-2">
           <button
@@ -168,6 +171,7 @@ export default function AdminTaskPage({ onLogout }) {
   const [popupMessage, setPopupMessage] = useState("");
   const [selectedTask, setSelectedTask] = useState(null);
   const [editingTask, setEditingTask] = useState(null);
+  const navigate = useNavigate();
 
   const showPopup = (message) => {
     setPopupMessage(message);
@@ -175,6 +179,11 @@ export default function AdminTaskPage({ onLogout }) {
   };
 
   const fetchTasks = async () => {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      navigate("/login", { replace: true });
+      return;
+    }
     try {
       const res = await API.get("/tasks");
       const payload = res?.data?.data ?? res?.data;
@@ -186,6 +195,8 @@ export default function AdminTaskPage({ onLogout }) {
   };
 
   const fetchUsers = async () => {
+    const token = localStorage.getItem("token");
+    if (!token) return;
     try {
       const res = await API.get("/users");
       if (Array.isArray(res.data)) setUsers(res.data);
@@ -237,19 +248,16 @@ export default function AdminTaskPage({ onLogout }) {
     }
   };
 
-  // --------------------------
-  // 📊 COMPUTE STATS
-  // --------------------------
+  // STATS
   const today = dayjs().startOf("day");
   const currentUserId = JSON.parse(localStorage.getItem("user"))?.id;
-
   const totalTasks = tasks.length;
   const assignedByMe = tasks.filter(
     (t) => t.assignedBy?._id === currentUserId
   ).length;
 
-  console.log("Current user id:",currentUserId);
-  console.log("Assigned by me:",assignedByMe);
+  console.log("Current user id:", currentUserId);
+  console.log("Assigned by me:", assignedByMe);
 
   const tasksDueToday = tasks.filter(
     (t) => t.dueDate && dayjs(t.dueDate).isSame(today, "day")
@@ -269,7 +277,6 @@ export default function AdminTaskPage({ onLogout }) {
         userRole="admin"
         onLogout={onLogout}
       />
-
       <main
         className={`flex-1 transition-all duration-300 ${
           collapsed ? "ml-20" : "ml-64"
@@ -316,41 +323,21 @@ export default function AdminTaskPage({ onLogout }) {
 
         {/* Stats Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <StatsCard
-            title="Total Tasks"
-            value={totalTasks}
-            colorScheme="blue"
-          />
-          <StatsCard
-            title="Assigned by Me"
-            value={assignedByMe}
-            colorScheme="yellow"
-          />
-          <StatsCard
-            title="Tasks Due Today"
-            value={tasksDueToday}
-            colorScheme="green"
-          />
-          <StatsCard
-            title="Overdue Tasks"
-            value={overdueTasks}
-            colorScheme="pink"
-          />
+          <StatsCard title="Total Tasks" value={totalTasks} colorScheme="blue" />
+          <StatsCard title="Assigned by Me" value={assignedByMe} colorScheme="yellow" />
+          <StatsCard title="Tasks Due Today" value={tasksDueToday} colorScheme="green" />
+          <StatsCard title="Overdue Tasks" value={overdueTasks} colorScheme="pink" />
         </div>
 
         {/* Task Form */}
         <section className="bg-white rounded-xl shadow-md p-6 mb-8">
-          <h2 className="text-lg font-semibold text-gray-700 mb-4">
-            Create New Task
-          </h2>
+          <h2 className="text-lg font-semibold text-gray-700 mb-4">Create New Task</h2>
           <TaskForm onCreate={handleCreateTask} users={users} />
         </section>
 
         {/* Task Table */}
         <section className="bg-white rounded-xl shadow-md p-6">
-          <h2 className="text-lg font-semibold text-gray-700 mb-4">
-            📋 Task List
-          </h2>
+          <h2 className="text-lg font-semibold text-gray-700 mb-4">📋 Task List</h2>
           <TaskTable
             tasks={tasks}
             onViewTask={setSelectedTask}
