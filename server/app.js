@@ -1,5 +1,8 @@
-// app.js
+// =====================
+// Load environment variables FIRST
+// =====================
 require("dotenv").config();
+
 const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
@@ -13,6 +16,7 @@ const { initSocket } = require("./socket");
 const userRoutes = require("./routes/userRoutes");
 const taskRoutes = require("./routes/taskRoutes");
 const authRoutes = require("./routes/authRoutes");
+const passwordRoutes = require("./routes/passwordRoutes"); // ✅ Forgot/Reset Password
 const testRoutes = require("./routes/testRoutes");
 
 const app = express();
@@ -27,7 +31,7 @@ app.use(express.json());
 app.use(
   cors({
     origin: [
-      process.env.FRONTEND_ORIGIN || "http://localhost:5173", // Vite dev
+      process.env.FRONTEND_ORIGIN || process.env.FRONTEND_URL || "http://localhost:5173", // ✅ Use from .env
       "http://localhost:3000", // CRA dev
     ],
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
@@ -48,6 +52,7 @@ initSocket(server);
 // =====================
 app.use("/api/tasks", taskRoutes);
 app.use("/api/auth", authRoutes);
+app.use("/api/auth", passwordRoutes); // ✅ Forgot/Reset Password
 app.use("/api/test", testRoutes);
 app.use("/api/users", userRoutes);
 
@@ -62,7 +67,7 @@ if (process.env.NODE_ENV === "production") {
 }
 
 // =====================
-// DB & Server Start
+// Database & Server Start
 // =====================
 const PORT = process.env.PORT || 5000;
 
@@ -73,6 +78,7 @@ mongoose
     server.listen(PORT, () =>
       console.log(`🚀 Server running on http://localhost:${PORT}`)
     );
+    console.log("🌐 FRONTEND_URL for emails:", process.env.FRONTEND_URL);
   })
   .catch((err) => {
     console.error("❌ MongoDB connection error:", err);

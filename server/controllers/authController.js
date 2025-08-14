@@ -1,15 +1,20 @@
 // controllers/authController.js
 const User = require("../models/User");
 const jwt = require("jsonwebtoken");
+const bcrypt = require("bcrypt");
 
 // Token generation helper
 const generateToken = (user) => {
-  return jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, {
-    expiresIn: "1d",
-  });
+  return jwt.sign(
+    { id: user._id, role: user.role },
+    process.env.JWT_SECRET,
+    { expiresIn: "1d" }
+  );
 };
 
+// ======================
 // Employee Signup
+// ======================
 exports.signup = async (req, res) => {
   try {
     const {
@@ -21,26 +26,30 @@ exports.signup = async (req, res) => {
       password,
       department,
       designation,
-      outlookAppPassword, // NEW FIELD
+      outlookAppPassword // NEW FIELD
     } = req.body;
 
     // Check if email already exists
-    const existingUser = await User.findOne({ email });
-    if (existingUser)
+    const existingUser = await User.findOne({ email: email.trim() });
+    if (existingUser) {
       return res.status(400).json({ message: "Email already in use." });
+    }
+
+    // Hash the password before saving
+    const hashedPassword = await bcrypt.hash(password.trim(), 10);
 
     // Create user
     const user = new User({
       name,
-      email,
+      email: email.trim(),
       contact,
       dob,
       gender,
-      password, // plain text now, hash later
+      password: hashedPassword,
       role: "employee",
       department,
       designation,
-      outlookAppPassword, // store Outlook app password
+      outlookAppPassword // store Outlook app password
     });
 
     await user.save();
@@ -63,25 +72,33 @@ exports.signup = async (req, res) => {
       },
     });
   } catch (err) {
-    console.error(err);
+    console.error("Signup Error:", err);
     res.status(500).json({ message: "Server error" });
   }
 };
 
+// ======================
 // Login for all users
+// ======================
 exports.login = async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    if (!email || !password)
+    // Basic validation
+    if (!email || !password) {
       return res.status(400).json({ message: "Email and password required." });
+    }
 
-    const user = await User.findOne({ email });
-    if (!user) return res.status(401).json({ message: "Invalid credentials." });
-
-    // Plain text password check (for now)
-    if (password !== user.password)
+    const user = await User.findOne({ email: email.trim() });
+    if (!user) {
       return res.status(401).json({ message: "Invalid credentials." });
+    }
+
+    // Compare hashed password
+    const isMatch = await bcrypt.compare(password.trim(), user.password);
+    if (!isMatch) {
+      return res.status(401).json({ message: "Invalid credentials." });
+    }
 
     const token = generateToken(user);
 
@@ -101,7 +118,7 @@ exports.login = async (req, res) => {
       },
     });
   } catch (err) {
-    console.error(err);
+    console.error("Login Error:", err);
     res.status(500).json({ message: "Server error" });
   }
 };
