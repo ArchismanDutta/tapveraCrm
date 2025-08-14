@@ -17,7 +17,7 @@ const Tasks = ({ onLogout }) => { // ✅ accept onLogout from App.jsx
     { sender: "other", text: "Hi! How's the project going?" },
     { sender: "me", text: "Going well! Will share the update soon." },
   ]);
-
+ 
   const socketRef = useRef(null);
 
   // Fetch tasks from API
@@ -44,20 +44,16 @@ const Tasks = ({ onLogout }) => { // ✅ accept onLogout from App.jsx
       const res = await axios.get(`${API_BASE}/api/tasks`, config);
 
       const formattedTasks = res.data.map((task) => ({
-        id: task._id,
+        _id: task._id, // keep original
         title: task.title,
-        time: task.dueDate
-          ? new Date(task.dueDate).toLocaleTimeString([], {
-              hour: "2-digit",
-              minute: "2-digit",
-            })
-          : "",
+        dueDate: task.dueDate,
         description: task.description,
         priority: task.priority,
         status: task.status,
-        assignedTo: task.assignedTo?.name || "",
-        assignedBy: task.assignedBy?.name || "",
+        assignedTo: task.assignedTo,
+        assignedBy: task.assignedBy,
       }));
+
 
       setTasks(formattedTasks);
     } catch (err) {
@@ -192,10 +188,10 @@ const Tasks = ({ onLogout }) => { // ✅ accept onLogout from App.jsx
           {/* Right Side - Requirement Form & Messages */}
           <div className="space-y-6 self-start sticky top-6">
             <SubmitRequirement onSubmit={handleSubmitRequirement} />
-            <MessagesPanel
+            {/* <MessagesPanel
               messages={messages}
               onSendMessage={handleSendMessage}
-            />
+            /> */}
           </div>
         </div>
       </div>
