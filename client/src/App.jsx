@@ -9,7 +9,7 @@ import {
 
 // Pages
 import Login from "./pages/LoginPage";
-import Signup from "./pages/SignUp";
+import Signup from "./pages/SignUp"; // ← fixed
 import EmployeeDashboardPage from "./pages/EmployeeDashboard";
 import MyProfile from "./pages/MyProfile";
 import Tasks from "./pages/Tasks";
@@ -67,7 +67,6 @@ const AppWrapper = () => {
 
   return (
     <Routes>
-      {/* Login */}
       <Route
         path="/login"
         element={
@@ -81,12 +80,11 @@ const AppWrapper = () => {
         }
       />
 
-      {/* Signup */}
       <Route
         path="/signup"
         element={
           !isAuthenticated ? (
-            <Signup onSignupSuccess={handleLoginSuccess} />
+            <Signup onLoginSuccess={handleLoginSuccess} />
           ) : role === "admin" || role === "super-admin" ? (
             <Navigate to="/admin/tasks" replace />
           ) : (
@@ -95,11 +93,9 @@ const AppWrapper = () => {
         }
       />
 
-      {/* Public Routes */}
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/reset-password/:token" element={<ResetPassword />} />
 
-      {/* Employee Routes */}
       <Route
         path="/dashboard"
         element={
@@ -117,10 +113,7 @@ const AppWrapper = () => {
         path="/profile"
         element={
           isAuthenticated ? (
-            <MyProfile
-              onLogout={handleLogout}
-              userType={role || "Employee"}
-            />
+            <MyProfile onLogout={handleLogout} userType={role || "employee"} />
           ) : (
             <Navigate to="/login" replace />
           )
@@ -140,7 +133,6 @@ const AppWrapper = () => {
         }
       />
 
-      {/* Admin Routes */}
       <Route
         path="/admin/tasks"
         element={
@@ -168,7 +160,6 @@ const AppWrapper = () => {
         }
       />
 
-      {/* Catch-all */}
       <Route
         path="*"
         element={

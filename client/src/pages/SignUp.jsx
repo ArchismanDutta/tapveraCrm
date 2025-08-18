@@ -9,16 +9,19 @@ const Signup = () => {
   const navigate = useNavigate();
 
   const [form, setForm] = useState({
-  name: "",
-  email: "",
-  contact: "",
-  dob: "",
-  gender: "",
-  department: "",
-  designation: "",
-  location: "India",  
-  password: "",
-});
+    name: "",
+    email: "",
+    contact: "",
+    dob: "",
+    gender: "",
+    department: "",
+    designation: "",
+    location: "India",
+    password: "",
+    // NEW FIELDS
+    outlookEmail: "",
+    outlookAppPassword: "",
+  });
 
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -34,7 +37,8 @@ const Signup = () => {
     setError("");
 
     const requiredFields = ["name", "email", "contact", "dob", "gender", "password"];
-    const isIncomplete = requiredFields.some((field) => !form[field].trim());
+    const isIncomplete = requiredFields.some((field) => !String(form[field] || "").trim());
+
     if (isIncomplete) {
       setError("Please fill in all required fields.");
       setLoading(false);
@@ -56,11 +60,10 @@ const Signup = () => {
         return;
       }
 
-      // Save JWT token for future requests
       localStorage.setItem("token", data.token);
-      localStorage.setItem("user", JSON.stringify(data.user)); // store user separately
+      localStorage.setItem("user", JSON.stringify(data.user));
+      localStorage.setItem("role", data.user.role); // Recommended to store role explicitly
 
-      // Redirect to profile page
       navigate("/profile");
     } catch (err) {
       console.error("Signup Error:", err);
@@ -116,7 +119,6 @@ const Signup = () => {
             icon={FaPhone}
           />
 
-          {/* Date of Birth */}
           <div>
             <label htmlFor="dob" className="block text-sm text-textMuted mb-1">
               Date of Birth *
@@ -133,10 +135,11 @@ const Signup = () => {
                 error && !form.dob ? "border-red-500" : "border-border"
               } text-textMain placeholder:text-textMuted focus:outline-none focus:border-primary transition`}
             />
-            {error && !form.dob && <p className="mt-1 text-xs text-red-500">Date of Birth is required.</p>}
+            {error && !form.dob && (
+              <p className="mt-1 text-xs text-red-500">Date of Birth is required.</p>
+            )}
           </div>
 
-          {/* Gender */}
           <div>
             <label htmlFor="gender" className="block text-sm text-textMuted mb-1">
               Gender *
@@ -164,12 +167,12 @@ const Signup = () => {
               <option value="male">Male</option>
               <option value="female">Female</option>
               <option value="other">Other</option>
-      
             </select>
-            {error && !form.gender && <p className="mt-1 text-xs text-red-500">Please select your gender.</p>}
+            {error && !form.gender && (
+              <p className="mt-1 text-xs text-red-500">Please select your gender.</p>
+            )}
           </div>
 
-          {/* Department */}
           <div>
             <label htmlFor="department" className="block text-sm text-textMuted mb-1">
               Department
@@ -182,21 +185,19 @@ const Signup = () => {
               className="w-full px-4 py-2 pr-10 rounded-md bg-background border border-border text-textMain focus:outline-none focus:border-primary appearance-none transition"
               style={{
                 backgroundImage:
-                  "url(\"data:image/svg+xml;utf8,<svg fill='%23000' height='24' viewBox='0 0 24 24' width='24' xmlns='http://www.w3.org/2000/svg'><path d='M7 10l5 5 5-5z'/></svg>\")",
+                  "url(\"data:image/svg+xml;utf8,<svg fill='%23000' height='24' viewBox='0_0_24_24' width='24' xmlns='http://www.w3.org/2000/svg'><path d='M7 10l5 5 5-5z'/></svg>\")",
                 backgroundRepeat: "no-repeat",
                 backgroundPosition: "right 0.75rem center",
                 backgroundSize: "1.2em",
               }}
             >
               <option value="">Select a department</option>
-              
               <option value="development">Development</option>
               <option value="marketingAndSales">Marketing & Sales</option>
               <option value="humanResource">Human Resource</option>
             </select>
           </div>
 
-          {/* Designation */}
           <div>
             <label htmlFor="designation" className="block text-sm text-textMuted mb-1">
               Designation
@@ -212,7 +213,6 @@ const Signup = () => {
             />
           </div>
 
-          {/* Location (NEW FIELD) */}
           <div>
             <label htmlFor="location" className="block text-sm text-textMuted mb-1">
               Location
@@ -241,6 +241,42 @@ const Signup = () => {
             showTogglePassword={true}
             icon={FaLock}
           />
+
+          {/* Optional per-user credentials */}
+          <div className="mt-6 pt-4 border-t border-border">
+            <h3 className="text-lg font-semibold text-textMain mb-2">
+              Optional: Email Sending Setup
+            </h3>
+            <p className="text-sm text-textMuted mb-3">
+              Add your work email and app password to send emails from your own account (encrypted and stored securely).
+            </p>
+
+            <AuthInput
+              label="Work Email (Outlook/Gmail)"
+              type="email"
+              name="outlookEmail"
+              value={form.outlookEmail}
+              onChange={handleChange}
+              placeholder="Enter your work email"
+              icon={FaEnvelope}
+            />
+
+            <AuthInput
+              label="Email App Password"
+              type="password"
+              name="outlookAppPassword"
+              value={form.outlookAppPassword}
+              onChange={handleChange}
+              placeholder="Enter your email app password"
+              showTogglePassword={true}
+              icon={FaLock}
+            />
+
+            <p className="text-xs text-textMuted mt-2">
+              We recommend creating an <span className="font-semibold">App Password</span> from your email provider’s security settings.
+              This will be encrypted before storage.
+            </p>
+          </div>
 
           {error && <div className="text-sm text-red-500 text-center">{error}</div>}
 
