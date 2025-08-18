@@ -18,9 +18,13 @@ const DailyEmailSender = ({ onClose }) => {
     }
 
     try {
-      const res = await fetch("http://localhost:5001/send", {
+      const token = localStorage.getItem("token");
+      const res = await fetch("http://localhost:5000/api/email/send", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: token ? `Bearer ${token}` : "",
+        },
         body: JSON.stringify({ template, task }),
       });
 
@@ -29,7 +33,7 @@ const DailyEmailSender = ({ onClose }) => {
         setStatus("✅ Email sent successfully!");
         setTask("");
       } else {
-        setStatus("❌ Error: " + data.error);
+        setStatus("❌ Error: " + (data.error || data.message || "Failed"));
       }
     } catch (err) {
       setStatus("❌ Request failed: " + err.message);
@@ -37,23 +41,21 @@ const DailyEmailSender = ({ onClose }) => {
   };
 
   return (
-    <div className="bg-linear-gradient(90deg,rgba(255, 255, 255, 1) 0%, rgba(13, 5, 5, 1) 50%, rgba(64, 64, 64, 1) 100%);, backdrop-blur-xl border border-white/20 rounded-2xl shadow-2xl p-6 w-full max-w-lg relative text-white">
-      {/* Close Button */}
+    <div className="bg-linear-gradient(90deg,rgba(255,255,255,1) 0%, rgba(13,5,5,1) 50%, rgba(64,64,64,1) 100%), backdrop-blur-xl border border-white/20 rounded-2xl shadow-2xl p-6 w-full max-w-lg relative text-white">
       <button
         onClick={onClose}
         className="absolute top-3 right-3 text-gray-300 hover:text-white transition"
+        aria-label="Close email sender"
       >
         ✖
       </button>
 
-      {/* Logo */}
       <div className="flex justify-center mb-4">
         <img src={tapveraLogo} alt="Tapvera Logo" className="h-10 drop-shadow-lg" />
       </div>
 
       <h2 className="text-xl font-bold mb-4">Daily Task Update Email Sender</h2>
 
-      {/* Template Switch */}
       <div className="grid grid-cols-2 bg-white/10 border border-white/20 rounded-lg overflow-hidden mb-4">
         {[
           { type: "start", label: "Start of Day", icon: <Sunrise size={18} /> },
@@ -62,6 +64,7 @@ const DailyEmailSender = ({ onClose }) => {
           <button
             key={type}
             onClick={() => setTemplate(type)}
+            type="button"
             className={`flex items-center justify-center gap-2 py-2 font-semibold transition ${
               template === type
                 ? type === "start"
@@ -69,30 +72,30 @@ const DailyEmailSender = ({ onClose }) => {
                   : "bg-gradient-to-b from-orange-400 to-red-400 text-black"
                 : "text-gray-300 hover:text-white"
             }`}
+            aria-pressed={template === type}
           >
             {icon} {label}
           </button>
         ))}
       </div>
 
-      {/* Task Input */}
       <textarea
         rows="5"
         placeholder="Enter your task here..."
         value={task}
         onChange={(e) => setTask(e.target.value)}
         className="w-full resize-none p-3 rounded-lg border border-white/20 bg-white/10 text-white placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-yellow-400"
+        aria-label="Task description"
       />
 
-      {/* Send Button */}
       <button
         onClick={handleSend}
+        type="button"
         className="mt-4 w-full flex items-center justify-center gap-2 py-3 rounded-lg font-semibold bg-gradient-to-b from-yellow-400 to-orange-400 text-black shadow-lg hover:scale-[1.02] transition"
       >
         <FaPaperPlane /> Send Email
       </button>
 
-      {/* Status */}
       {status && (
         <div
           className={`mt-3 text-center py-2 rounded-lg border text-sm ${
@@ -100,14 +103,17 @@ const DailyEmailSender = ({ onClose }) => {
               ? "text-yellow-400 border-yellow-500/30 bg-yellow-500/10"
               : "text-red-400 border-red-500/30 bg-red-500/10"
           }`}
+          role="alert"
         >
           {status}
         </div>
       )}
 
-      {/* Toast */}
       {showToast && (
-        <div className="absolute top-4 right-4 bg-yellow-500/10 text-yellow-400 border border-yellow-500/30 px-4 py-2 rounded-lg shadow-lg">
+        <div
+          className="absolute top-4 right-4 bg-yellow-500/10 text-yellow-400 border border-yellow-500/30 px-4 py-2 rounded-lg shadow-lg"
+          role="alert"
+        >
           ⚠️ Please enter your task first
         </div>
       )}

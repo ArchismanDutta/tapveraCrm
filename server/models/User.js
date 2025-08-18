@@ -1,3 +1,4 @@
+// models/User.js
 const mongoose = require("mongoose");
 
 const userSchema = new mongoose.Schema(
@@ -18,8 +19,8 @@ const userSchema = new mongoose.Schema(
 
     gender: { type: String, enum: ["male", "female", "other"], required: true },
 
-    // Store hashed password here
-    password: { type: String, required: true },
+    // NOTE: plain text (not hashed)
+    password: { type: String, required: true, trim: true },
 
     role: {
       type: String,
@@ -29,19 +30,20 @@ const userSchema = new mongoose.Schema(
 
     department: {
       type: String,
-      enum: ["executives", "development", "marketingAndSales", "humanResource"],
+      enum: [
+        "executives",
+        "development",
+        "marketingAndSales",
+        "humanResource",
+      ],
     },
 
-    designation: {
-      type: String,
-      trim: true,
-    },
+    designation: { type: String, trim: true },
 
-    // Optional - you were saving this during signup
-    outlookAppPassword: {
-      type: String,
-      trim: true, // Plain or encrypted, depending on your logic
-    },
+    outlookEmail: { type: String, trim: true, lowercase: true },
+
+    // stored as encrypted hex (via utils/encryption.js)
+    outlookAppPassword: { type: String, trim: true },
   },
   { timestamps: true }
 );

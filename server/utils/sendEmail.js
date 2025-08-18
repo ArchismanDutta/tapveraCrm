@@ -1,35 +1,46 @@
-// utils/sendEmail.js
-const nodemailer = require('nodemailer');
+const nodemailer = require("nodemailer");
 
-const sendEmail = async (to, subject, html) => {
+async function sendEmail({ provider = "gmail", from, to, subject, text, html, auth }) {
   try {
-    // Create transporter for Gmail
-    const transporter = nodemailer.createTransport({
-      host: process.env.EMAIL_HOST || 'smtp.gmail.com',
-      port: Number(process.env.EMAIL_PORT) || 587,
-      secure: false, // For port 587, false (TLS encryption used automatically)
-      auth: {
-        user: process.env.EMAIL_USER, // Gmail address from .env
-        pass: process.env.EMAIL_PASS, // Gmail App Password from .env
-      },
-      tls: {
-        rejectUnauthorized: false, // Allow self-signed certificates
-      },
-    });
+    let transporter;
 
-    // Send email
-    await transporter.sendMail({
-      from: `"Tapvera CRM" <${process.env.EMAIL_USER}>`,
-      to,
-      subject,
-      html,
-    });
+    if (provider === "gmail") {
+      transporter = nodemailer.createTransport({
+        host: process.env.EMAIL_HOST || "smtp.gmail.com",
+        port: Number(process.env.EMAIL_PORT) || 587,
+        secure: false, // TLS will be used automatically if supported
+        auth: {
+          user: process.env.EMAIL_USER,
+          pass: process.env.EMAIL_PASS,
+        },
+        tls: { rejectUnauthorized: false },
+      });
+      from = from || `"Tapvera CRM" <${process.env.EMAIL_USER}>`;
+    } else if (provider === "outlook") {
+      if (!auth || !auth.user || !auth.pass) {
+        throw new Error("Outlook auth user and pass must be provided");
+      }
+      transporter = nodemailer.createTransport({
+        host: "smtp.office365.com",
+        port: 587,
+        secure: false,
+        auth: {
+          user: auth.user,
+          pass: auth.pass,
+        },
+      });
+      from = from || auth.user;
+    } else {
+      throw new Error(`Unsupported email provider: ${provider}`);
+    }
 
-    console.log(`✅ Email sent to ${to}`);
+    await transporter.sendMail({ from, to, subject, text, html });
+
+    console.log(`✅ Email sent via ${provider} to ${to}`);
   } catch (err) {
-    console.error(`❌ Error sending email to ${to}`, err);
+    console.error(`❌ Error sending ${provider} email to ${to}`, err);
     throw err;
   }
-};
+}
 
 module.exports = sendEmail;

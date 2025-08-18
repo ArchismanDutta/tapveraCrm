@@ -16,8 +16,9 @@ const { initSocket } = require("./socket");
 const userRoutes = require("./routes/userRoutes");
 const taskRoutes = require("./routes/taskRoutes");
 const authRoutes = require("./routes/authRoutes");
-const passwordRoutes = require("./routes/passwordRoutes"); // ✅ Forgot/Reset Password
+const passwordRoutes = require("./routes/passwordRoutes");
 const testRoutes = require("./routes/testRoutes");
+const emailRoutes = require("./routes/emailRoutes"); // ✅ Added
 
 const app = express();
 const server = http.createServer(app);
@@ -27,13 +28,22 @@ const server = http.createServer(app);
 // =====================
 app.use(express.json());
 
-// HTTP CORS for REST API
+const frontendOrigins = [
+  process.env.FRONTEND_ORIGIN,
+  process.env.FRONTEND_URL,
+  "http://localhost:5173",
+  "http://localhost:3000",
+].filter(Boolean);
+
+if (frontendOrigins.length === 0) {
+  console.warn(
+    "⚠️ No FRONTEND_ORIGIN or FRONTEND_URL set, please check your environment variables"
+  );
+}
+
 app.use(
   cors({
-    origin: [
-      process.env.FRONTEND_ORIGIN || process.env.FRONTEND_URL || "http://localhost:5173", // ✅ Use from .env
-      "http://localhost:3000", // CRA dev
-    ],
+    origin: frontendOrigins,
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
     credentials: true,
@@ -48,13 +58,21 @@ app.use(morgan("dev"));
 initSocket(server);
 
 // =====================
+// Health Check Endpoint
+// =====================
+app.get("/api/health", (req, res) => {
+  res.json({ status: "ok", timestamp: Date.now() });
+});
+
+// =====================
 // API Routes
 // =====================
 app.use("/api/tasks", taskRoutes);
 app.use("/api/auth", authRoutes);
-app.use("/api/auth", passwordRoutes); // ✅ Forgot/Reset Password
+app.use("/api/auth", passwordRoutes);
 app.use("/api/test", testRoutes);
 app.use("/api/users", userRoutes);
+app.use("/api/email", emailRoutes); // ✅ Email route
 
 // =====================
 // Serve frontend in production
@@ -65,6 +83,14 @@ if (process.env.NODE_ENV === "production") {
     res.sendFile(path.join(__dirname, "client", "build", "index.html"))
   );
 }
+
+// =====================
+// Error Handling Middleware
+// =====================
+app.use((err, req, res, next) => {
+  console.error("❌ Unexpected error:", err);
+  res.status(500).json({ error: "Internal Server Error" });
+});
 
 // =====================
 // Database & Server Start
