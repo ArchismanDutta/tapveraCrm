@@ -1,7 +1,7 @@
 // controllers/authController.js
 const User = require("../models/User");
 const jwt = require("jsonwebtoken");
-const { encrypt } = require("../utils/crypto"); // still needed for Outlook app password
+const { encrypt } = require("../utils/crypto"); // For encrypting Outlook app password
 
 // Token generation helper
 const generateToken = (user) => {
@@ -26,18 +26,25 @@ exports.signup = async (req, res) => {
       password,
       department,
       designation,
-      outlookEmail,         // optional
-      outlookAppPassword,   // optional (will be encrypted)
+      outlookEmail, // optional
+      outlookAppPassword, // optional (will be encrypted)
     } = req.body;
 
-    const existingUser = await User.findOne({ email: String(email || "").trim().toLowerCase() });
+    // Validate mandatory fields if needed
+
+    // Normalize email and trim
+    const normalizedEmail = String(email || "").trim().toLowerCase();
+
+    // Check if user already exists
+    const existingUser = await User.findOne({ email: normalizedEmail });
     if (existingUser) {
       return res.status(400).json({ message: "Email already in use." });
     }
 
-    // 🚨 NO HASHING for login password
+    // No hashing of login password (as per your comment)
     const plainPassword = String(password || "").trim();
 
+    // Encrypt Outlook app password if provided
     let encryptedOutlookPass = null;
     if (outlookAppPassword && String(outlookAppPassword).trim()) {
       encryptedOutlookPass = encrypt(String(outlookAppPassword).trim());
@@ -45,20 +52,21 @@ exports.signup = async (req, res) => {
 
     const user = new User({
       name,
-      email: String(email || "").trim().toLowerCase(),
+      email: normalizedEmail,
       contact,
       dob,
       gender,
-      password: plainPassword, // stored as plain text
+      password: plainPassword,
       role: "employee",
       department,
       designation,
       outlookEmail: String(outlookEmail || "").trim().toLowerCase() || null,
-      outlookAppPassword: encryptedOutlookPass, // encrypted or null
+      outlookAppPassword: encryptedOutlookPass,
     });
 
     await user.save();
 
+    // Generate JWT token
     const token = generateToken(user);
 
     res.status(201).json({
@@ -90,20 +98,25 @@ exports.login = async (req, res) => {
   try {
     const { email, password } = req.body;
 
+    // Validate presence of email & password
     if (!email || !password) {
       return res.status(400).json({ message: "Email and password required." });
     }
 
-    const user = await User.findOne({ email: String(email).trim().toLowerCase() });
+    const normalizedEmail = String(email).trim().toLowerCase();
+
+    // Find user by email
+    const user = await User.findOne({ email: normalizedEmail });
     if (!user) {
       return res.status(401).json({ message: "Invalid credentials." });
     }
 
-    // 🚨 Direct string comparison (no bcrypt)
+    // Direct string comparison - no hashing
     if (String(password).trim() !== user.password) {
       return res.status(401).json({ message: "Invalid credentials." });
     }
 
+    // Generate JWT token
     const token = generateToken(user);
 
     res.json({

@@ -6,6 +6,7 @@ import {
   Navigate,
   useNavigate,
 } from "react-router-dom";
+
 // Pages
 import Login from "./pages/LoginPage";
 import Signup from "./pages/SignUp";
@@ -18,6 +19,7 @@ import ResetPassword from "./pages/ResetPassword";
 import EmployeeManagementPage from "./pages/EmployeeManagement";
 import HolidaysAndLeaves from "./pages/HolidaysAndLeaves"; // Employee & Superadmin Leaves Page
 import AdminLeaveRequests from "./pages/AdminLeaveRequests"; // Admin Leave Requests Management
+import TodayStatusPage from "./pages/TodayStatusPage"; // Today's Status Page
 
 const AppWrapper = () => {
   const navigate = useNavigate();
@@ -74,7 +76,7 @@ const AppWrapper = () => {
         element={
           !isAuthenticated ? (
             <Login onLoginSuccess={handleLoginSuccess} />
-          ) : (role === "admin" || role === "super-admin") ? (
+          ) : role === "admin" || role === "super-admin" ? (
             <Navigate to="/admin/tasks" replace />
           ) : (
             <Navigate to="/dashboard" replace />
@@ -86,7 +88,7 @@ const AppWrapper = () => {
         element={
           !isAuthenticated ? (
             <Signup onLoginSuccess={handleLoginSuccess} />
-          ) : (role === "admin" || role === "super-admin") ? (
+          ) : role === "admin" || role === "super-admin" ? (
             <Navigate to="/admin/tasks" replace />
           ) : (
             <Navigate to="/dashboard" replace />
@@ -94,6 +96,7 @@ const AppWrapper = () => {
         }
       />
 
+      {/* Forgot & Reset Password */}
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/reset-password/:token" element={<ResetPassword />} />
 
@@ -127,6 +130,30 @@ const AppWrapper = () => {
         element={
           isAuthenticated && role !== "admin" && role !== "super-admin" ? (
             <Tasks onLogout={handleLogout} />
+          ) : (
+            <Navigate to={isAuthenticated ? "/admin/tasks" : "/login"} replace />
+          )
+        }
+      />
+
+      {/* Today Status Page */}
+      <Route
+        path="/today-status"
+        element={
+          isAuthenticated && role !== "admin" && role !== "super-admin" ? (
+            <TodayStatusPage onLogout={handleLogout} />
+          ) : (
+            <Navigate to={isAuthenticated ? "/admin/tasks" : "/login"} replace />
+          )
+        }
+      />
+
+      {/* NEW ROUTE TO FIX /tasks-status */}
+      <Route
+        path="/tasks-status"
+        element={
+          isAuthenticated && role !== "admin" && role !== "super-admin" ? (
+            <TodayStatusPage onLogout={handleLogout} />
           ) : (
             <Navigate to={isAuthenticated ? "/admin/tasks" : "/login"} replace />
           )
@@ -188,7 +215,7 @@ const AppWrapper = () => {
           <Navigate
             to={
               isAuthenticated
-                ? (role === "admin" || role === "super-admin")
+                ? role === "admin" || role === "super-admin"
                   ? "/admin/tasks"
                   : "/dashboard"
                 : "/login"
