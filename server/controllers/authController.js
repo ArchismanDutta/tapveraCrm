@@ -1,7 +1,7 @@
 // controllers/authController.js
 const User = require("../models/User");
 const jwt = require("jsonwebtoken");
-const bcrypt = require("bcrypt");
+const { encrypt } = require("../utils/crypto"); // still needed for Outlook app password
 
 // Token generation helper
 const generateToken = (user) => {
@@ -26,30 +26,35 @@ exports.signup = async (req, res) => {
       password,
       department,
       designation,
-      outlookAppPassword // NEW FIELD
+      outlookEmail,         // optional
+      outlookAppPassword,   // optional (will be encrypted)
     } = req.body;
 
-    // Check if email already exists
-    const existingUser = await User.findOne({ email: email.trim() });
+    const existingUser = await User.findOne({ email: String(email || "").trim().toLowerCase() });
     if (existingUser) {
       return res.status(400).json({ message: "Email already in use." });
     }
 
-    // Hash the password before saving
-    const hashedPassword = await bcrypt.hash(password.trim(), 10);
+    // 🚨 NO HASHING for login password
+    const plainPassword = String(password || "").trim();
 
-    // Create user
+    let encryptedOutlookPass = null;
+    if (outlookAppPassword && String(outlookAppPassword).trim()) {
+      encryptedOutlookPass = encrypt(String(outlookAppPassword).trim());
+    }
+
     const user = new User({
       name,
-      email: email.trim(),
+      email: String(email || "").trim().toLowerCase(),
       contact,
       dob,
       gender,
-      password: hashedPassword,
+      password: plainPassword, // stored as plain text
       role: "employee",
       department,
       designation,
-      outlookAppPassword // store Outlook app password
+      outlookEmail: String(outlookEmail || "").trim().toLowerCase() || null,
+      outlookAppPassword: encryptedOutlookPass, // encrypted or null
     });
 
     await user.save();
@@ -68,7 +73,8 @@ exports.signup = async (req, res) => {
         role: user.role,
         department: user.department,
         designation: user.designation,
-        outlookAppPassword: user.outlookAppPassword,
+        outlookEmail: user.outlookEmail || null,
+        hasEmailCredentials: Boolean(user.outlookEmail && user.outlookAppPassword),
       },
     });
   } catch (err) {
@@ -84,19 +90,17 @@ exports.login = async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    // Basic validation
     if (!email || !password) {
       return res.status(400).json({ message: "Email and password required." });
     }
 
-    const user = await User.findOne({ email: email.trim() });
+    const user = await User.findOne({ email: String(email).trim().toLowerCase() });
     if (!user) {
       return res.status(401).json({ message: "Invalid credentials." });
     }
 
-    // Compare hashed password
-    const isMatch = await bcrypt.compare(password.trim(), user.password);
-    if (!isMatch) {
+    // 🚨 Direct string comparison (no bcrypt)
+    if (String(password).trim() !== user.password) {
       return res.status(401).json({ message: "Invalid credentials." });
     }
 
@@ -114,7 +118,8 @@ exports.login = async (req, res) => {
         role: user.role,
         department: user.department,
         designation: user.designation,
-        outlookAppPassword: user.outlookAppPassword, // send to frontend if needed
+        outlookEmail: user.outlookEmail || null,
+        hasEmailCredentials: Boolean(user.outlookEmail && user.outlookAppPassword),
       },
     });
   } catch (err) {

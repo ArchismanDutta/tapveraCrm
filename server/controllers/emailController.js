@@ -1,55 +1,116 @@
+// controllers/emailController.js
 const nodemailer = require("nodemailer");
-const crypto = require("crypto");
-const User = require("../models/User"); // adjust path
+const User = require("../models/User");
+const { decrypt } = require("../utils/crypto");
 
-// Your encryption settings (must match your storage logic)
-const ALGORITHM = "aes-256-cbc";
-const KEY = Buffer.from(process.env.ENCRYPTION_KEY, "hex");
-const IV = Buffer.from(process.env.ENCRYPTION_IV, "hex");
+const TEMPLATES = {
+  start: `Good morning Team,
 
-function decrypt(text) {
-  const encryptedText = Buffer.from(text, "hex");
-  const decipher = crypto.createDecipheriv(ALGORITHM, KEY, IV);
-  let decrypted = decipher.update(encryptedText);
-  decrypted = Buffer.concat([decrypted, decipher.final()]);
-  return decrypted.toString();
-}
+Here’s my focus for today:
+
+{task}
+
+Thanks`,
+  end: `Good evening Team,
+
+Here’s an update on what I completed today:
+
+{task}
+
+Thanks`,
+};
 
 exports.sendOutlookEmail = async (req, res) => {
   try {
-    const userId = req.user.id; // assuming auth middleware sets req.user
-    const user = await User.findById(userId);
+    console.log("📨 Email send request body:", req.body);
+    console.log("📨 Auth user:", req.user);
 
-    if (!user || !user.outlookEmail || !user.outlookAppPassword) {
-      return res.status(400).json({ error: "Outlook credentials not set" });
+    const userId = req.user?._id;
+    if (!userId) {
+      return res.status(401).json({ error: "Unauthorized" });
     }
 
-    // Decrypt app password
+    const user = await User.findById(userId);
+    if (!user || !user.outlookEmail || !user.outlookAppPassword) {
+      return res.status(400).json({ error: "Outlook credentials not set on profile" });
+    }
+
+    const { template, task } = req.body;
+    if (!template || !TEMPLATES[template]) {
+      return res.status(400).json({ error: "Invalid template selected" });
+    }
+    if (!task || !String(task).trim()) {
+      return res.status(400).json({ error: "Task is required" });
+    }
+
+    const today = new Date().toLocaleDateString("en-GB", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    });
+
+    const subject = `Today's work update - ${today}`;
+    const body = TEMPLATES[template].replace("{task}", String(task).trim());
+
+    // Recipients from env
+    const adminList = (process.env.ADMIN_EMAILS || "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+    if (adminList.length === 0) {
+      return res.status(400).json({ error: "No admin recipients configured" });
+    }
+
     const decryptedPassword = decrypt(user.outlookAppPassword);
 
-    // Create transporter for Outlook
-    const transporter = nodemailer.createTransport({
-      host: "smtp.office365.com",
-      port: 587,
-      secure: false,
-      auth: {
-        user: user.outlookEmail,
-        pass: decryptedPassword
-      }
+    // Determine SMTP host based on user's email domain
+    const emailDomain = user.outlookEmail.split("@")[1].toLowerCase();
+    let smtpConfig;
+
+    if (emailDomain === "gmail.com") {
+      // Use Gmail SMTP
+      smtpConfig = {
+        host: "smtp.gmail.com",
+        port: 587,
+        secure: false, // TLS will be used automatically
+        auth: {
+          user: user.outlookEmail,
+          pass: decryptedPassword,
+        },
+        tls: { rejectUnauthorized: false },
+      };
+    } else {
+      // Default to Outlook SMTP
+      smtpConfig = {
+        host: "smtp.office365.com",
+        port: 587,
+        secure: false,
+        auth: {
+          user: user.outlookEmail,
+          pass: decryptedPassword,
+        },
+      };
+    }
+
+    const transporter = nodemailer.createTransport(smtpConfig);
+
+    console.log("📨 Sending email with:", {
+      from: user.outlookEmail,
+      to: adminList,
+      subject,
     });
 
-    // Send email
     await transporter.sendMail({
       from: user.outlookEmail,
-      to: req.body.to,
-      subject: req.body.subject,
-      text: req.body.message
+      to: adminList,
+      subject,
+      text: body,
     });
 
-    res.json({ success: true, message: "Email sent successfully" });
-
+    return res.json({ success: true, message: "Email sent successfully" });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Failed to send email" });
+    console.error("❌ Outlook Email Error:", error);
+    return res.status(500).json({ error: error.message || "Failed to send email" });
   }
 };

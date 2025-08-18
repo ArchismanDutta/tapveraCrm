@@ -14,12 +14,12 @@ exports.getProfile = async (req, res) => {
   }
 };
 
-// Update employee's own profile
+// Update employee's own profile (including Outlook credentials)
 exports.updateProfile = async (req, res) => {
   try {
     const updateFields = {};
 
-    // Only allow specific fields
+    // Only allow specific fields to be updated
     const allowedFields = [
       "name",
       "contact",
@@ -27,16 +27,27 @@ exports.updateProfile = async (req, res) => {
       "gender",
       "department",
       "designation",
+      "outlookEmail",
+      "outlookAppPassword", // Will be encrypted if provided below
     ];
 
     allowedFields.forEach((field) => {
-      if (req.body[field] && req.body[field].toString().trim() !== "") {
-        updateFields[field] =
-          typeof req.body[field] === "string"
-            ? req.body[field].trim()
-            : req.body[field];
+      if (req.body[field] !== undefined && req.body[field] !== null) {
+        if (typeof req.body[field] === "string") {
+          if (req.body[field].trim() !== "") {
+            updateFields[field] = req.body[field].trim();
+          }
+        } else {
+          updateFields[field] = req.body[field];
+        }
       }
     });
+
+    // Encrypt outlookAppPassword if present
+    if (updateFields.outlookAppPassword) {
+      const { encrypt } = require("../utils/crypto");
+      updateFields.outlookAppPassword = encrypt(updateFields.outlookAppPassword);
+    }
 
     const updatedUser = await User.findByIdAndUpdate(
       req.user._id,

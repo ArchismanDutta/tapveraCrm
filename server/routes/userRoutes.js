@@ -7,8 +7,10 @@ const userController = require("../controllers/userController");
 // Get own profile - any authenticated user
 router.get("/me", protect, userController.getProfile);
 
-// Update own profile - only employee (you can extend later if needed)
-router.put("/me", protect, authorize("employee"), userController.updateProfile);
+// Update own profile (including Outlook credentials) - any authenticated user
+router.put("/me", protect, userController.updateProfile);
+// If you want to restrict it to employees only, use:
+// router.put("/me", protect, authorize("employee"), userController.updateProfile);
 
 // Admin and Super Admin can get list of all users
 router.get(
