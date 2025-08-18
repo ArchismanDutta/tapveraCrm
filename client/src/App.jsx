@@ -6,10 +6,9 @@ import {
   Navigate,
   useNavigate,
 } from "react-router-dom";
-
 // Pages
 import Login from "./pages/LoginPage";
-import Signup from "./pages/SignUp"; // ← fixed
+import Signup from "./pages/SignUp";
 import EmployeeDashboardPage from "./pages/EmployeeDashboard";
 import MyProfile from "./pages/MyProfile";
 import Tasks from "./pages/Tasks";
@@ -17,6 +16,8 @@ import AdminTaskPage from "./pages/AdminTaskPage";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 import EmployeeManagementPage from "./pages/EmployeeManagement";
+import HolidaysAndLeaves from "./pages/HolidaysAndLeaves"; // Employee & Superadmin Leaves Page
+import AdminLeaveRequests from "./pages/AdminLeaveRequests"; // Admin Leave Requests Management
 
 const AppWrapper = () => {
   const navigate = useNavigate();
@@ -67,25 +68,25 @@ const AppWrapper = () => {
 
   return (
     <Routes>
+      {/* Login & Signup */}
       <Route
         path="/login"
         element={
           !isAuthenticated ? (
             <Login onLoginSuccess={handleLoginSuccess} />
-          ) : role === "admin" || role === "super-admin" ? (
+          ) : (role === "admin" || role === "super-admin") ? (
             <Navigate to="/admin/tasks" replace />
           ) : (
             <Navigate to="/dashboard" replace />
           )
         }
       />
-
       <Route
         path="/signup"
         element={
           !isAuthenticated ? (
             <Signup onLoginSuccess={handleLoginSuccess} />
-          ) : role === "admin" || role === "super-admin" ? (
+          ) : (role === "admin" || role === "super-admin") ? (
             <Navigate to="/admin/tasks" replace />
           ) : (
             <Navigate to="/dashboard" replace />
@@ -96,19 +97,19 @@ const AppWrapper = () => {
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/reset-password/:token" element={<ResetPassword />} />
 
+      {/* Employee Dashboard */}
       <Route
         path="/dashboard"
         element={
           isAuthenticated && role !== "admin" && role !== "super-admin" ? (
             <EmployeeDashboardPage onLogout={handleLogout} role={role} />
           ) : (
-            <Navigate
-              to={isAuthenticated ? "/admin/tasks" : "/login"}
-              replace
-            />
+            <Navigate to={isAuthenticated ? "/admin/tasks" : "/login"} replace />
           )
         }
       />
+
+      {/* Profile */}
       <Route
         path="/profile"
         element={
@@ -119,54 +120,75 @@ const AppWrapper = () => {
           )
         }
       />
+
+      {/* Tasks */}
       <Route
         path="/tasks"
         element={
           isAuthenticated && role !== "admin" && role !== "super-admin" ? (
             <Tasks onLogout={handleLogout} />
           ) : (
-            <Navigate
-              to={isAuthenticated ? "/admin/tasks" : "/login"}
-              replace
-            />
+            <Navigate to={isAuthenticated ? "/admin/tasks" : "/login"} replace />
           )
         }
       />
 
+      {/* Holidays & Leaves for Employee & Superadmin */}
+      <Route
+        path="/leaves"
+        element={
+          isAuthenticated && role !== "admin" ? (
+            <HolidaysAndLeaves onLogout={handleLogout} />
+          ) : (
+            <Navigate to={isAuthenticated ? "/admin/tasks" : "/login"} replace />
+          )
+        }
+      />
+
+      {/* Admin Task Page */}
       <Route
         path="/admin/tasks"
         element={
           isAuthenticated && (role === "admin" || role === "super-admin") ? (
             <AdminTaskPage onLogout={handleLogout} />
           ) : (
-            <Navigate
-              to={isAuthenticated ? "/dashboard" : "/login"}
-              replace
-            />
+            <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />
           )
         }
       />
+
+      {/* Employee Management */}
       <Route
         path="/admin/employees"
         element={
           isAuthenticated && (role === "admin" || role === "super-admin") ? (
             <EmployeeManagementPage onLogout={handleLogout} />
           ) : (
-            <Navigate
-              to={isAuthenticated ? "/dashboard" : "/login"}
-              replace
-            />
+            <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />
           )
         }
       />
 
+      {/* Admin Leave Requests Management Page */}
+      <Route
+        path="/admin/leaves"
+        element={
+          isAuthenticated && (role === "admin" || role === "super-admin") ? (
+            <AdminLeaveRequests onLogout={handleLogout} />
+          ) : (
+            <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />
+          )
+        }
+      />
+
+      {/* Default Catch-All Redirect */}
       <Route
         path="*"
         element={
           <Navigate
             to={
               isAuthenticated
-                ? role === "admin" || role === "super-admin"
+                ? (role === "admin" || role === "super-admin")
                   ? "/admin/tasks"
                   : "/dashboard"
                 : "/login"

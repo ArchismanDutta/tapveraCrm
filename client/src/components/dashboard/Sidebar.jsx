@@ -1,3 +1,4 @@
+// src/components/Sidebar.jsx
 import React, { useState } from "react";
 import Modal from "../modal";
 import DailyEmailSender from "../DailyEmailSender";
@@ -16,27 +17,31 @@ import {
 import { FaChevronCircleRight } from "react-icons/fa";
 import { NavLink } from "react-router-dom";
 
+// Menu Configuration for each role
 const menuConfig = {
   employee: [
     { to: "/dashboard", icon: <LayoutDashboard size={18} />, label: "Dashboard" },
     { to: "/profile", icon: <User size={18} />, label: "My Profile" },
     { to: "/tasks", icon: <ClipboardList size={18} />, label: "Tasks" },
     { to: "/messages", icon: <MessageCircle size={18} />, label: "Messages" },
-    { to: "/reports", icon: <FileText size={18} />, label: "Reports" },
+    { to: "/leaves", icon: <FileText size={18} />, label: "Leaves & Holidays" },
     { to: "/requirements", icon: <Flag size={18} />, label: "Requirements" },
     { to: "/help", icon: <HelpCircle size={18} />, label: "Help Center" },
   ],
+
   admin: [
     { to: "/dashboard", icon: <LayoutDashboard size={18} />, label: "Dashboard" },
     { to: "/employees", icon: <Users size={18} />, label: "Employee Details" },
     { to: "/messages", icon: <MessageCircle size={18} />, label: "Messages" },
+    { to: "/admin/leaves", icon: <FileText size={18} />, label: "Leave Requests" }, // Linked to Admin Leave Requests page
     { to: "/help", icon: <HelpCircle size={18} />, label: "Help Center" },
   ],
+
   superadmin: [
     { to: "/dashboard", icon: <LayoutDashboard size={18} />, label: "Dashboard" },
     { to: "/employees", icon: <Users size={18} />, label: "Manage Employees" },
     { to: "/messages", icon: <MessageCircle size={18} />, label: "Messages" },
-    { to: "/reports", icon: <FileText size={18} />, label: "Reports" },
+    { to: "/leaves", icon: <FileText size={18} />, label: "Leaves & Holidays" },
     { to: "/help", icon: <HelpCircle size={18} />, label: "Help Center" },
   ],
 };
@@ -69,7 +74,7 @@ const Sidebar = ({ collapsed, setCollapsed, userRole = "employee", onLogout }) =
           </button>
         </div>
 
-        {/* Nav Links */}
+        {/* Navigation Links */}
         <nav className="space-y-1 p-4 flex-1">
           {navItems.map((item) => (
             <SidebarLink
@@ -82,7 +87,7 @@ const Sidebar = ({ collapsed, setCollapsed, userRole = "employee", onLogout }) =
           ))}
         </nav>
 
-        {/* Show Send Daily Updates only for employees */}
+        {/* Send Daily Updates - Employee only */}
         {userRole === "employee" && (
           <div className="p-4">
             <div
