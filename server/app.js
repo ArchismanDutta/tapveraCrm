@@ -1,6 +1,3 @@
-// =====================
-// Load environment variables FIRST
-// =====================
 require("dotenv").config();
 
 const express = require("express");
@@ -18,14 +15,15 @@ const taskRoutes = require("./routes/taskRoutes");
 const authRoutes = require("./routes/authRoutes");
 const passwordRoutes = require("./routes/passwordRoutes");
 const testRoutes = require("./routes/testRoutes");
-const emailRoutes = require("./routes/emailRoutes"); // ✅ Added
+const emailRoutes = require("./routes/emailRoutes");
+
+// Leave management routes
+const leaveRoutes = require("./routes/leaveRoutes");
 
 const app = express();
 const server = http.createServer(app);
 
-// =====================
 // Middleware
-// =====================
 app.use(express.json());
 
 const frontendOrigins = [
@@ -52,31 +50,24 @@ app.use(
 
 app.use(morgan("dev"));
 
-// =====================
 // Initialize Socket.IO
-// =====================
 initSocket(server);
 
-// =====================
-// Health Check Endpoint
-// =====================
+// Health Check
 app.get("/api/health", (req, res) => {
   res.json({ status: "ok", timestamp: Date.now() });
 });
 
-// =====================
 // API Routes
-// =====================
 app.use("/api/tasks", taskRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/auth", passwordRoutes);
 app.use("/api/test", testRoutes);
 app.use("/api/users", userRoutes);
-app.use("/api/email", emailRoutes); // ✅ Email route
+app.use("/api/email", emailRoutes);
+app.use("/api/leaves", leaveRoutes);
 
-// =====================
-// Serve frontend in production
-// =====================
+// Serve frontend (production)
 if (process.env.NODE_ENV === "production") {
   app.use(express.static(path.join(__dirname, "client", "build")));
   app.get("*", (req, res) =>
@@ -84,17 +75,13 @@ if (process.env.NODE_ENV === "production") {
   );
 }
 
-// =====================
-// Error Handling Middleware
-// =====================
+// Error handler
 app.use((err, req, res, next) => {
   console.error("❌ Unexpected error:", err);
   res.status(500).json({ error: "Internal Server Error" });
 });
 
-// =====================
-// Database & Server Start
-// =====================
+// Start server and connect DB
 const PORT = process.env.PORT || 5000;
 
 mongoose
