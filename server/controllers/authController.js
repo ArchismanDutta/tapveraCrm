@@ -5,11 +5,9 @@ const { encrypt } = require("../utils/crypto"); // still needed for Outlook app 
 
 // Token generation helper
 const generateToken = (user) => {
-  return jwt.sign(
-    { id: user._id, role: user.role },
-    process.env.JWT_SECRET,
-    { expiresIn: "1d" }
-  );
+  return jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, {
+    expiresIn: "1d",
+  });
 };
 
 // ======================
@@ -26,6 +24,8 @@ exports.signup = async (req, res) => {
       password,
       department,
       designation,
+      outlookEmail, // optional
+      outlookAppPassword, // optional (will be encrypted)
       outlookEmail, // optional
       outlookAppPassword, // optional (will be encrypted)
     } = req.body;
@@ -52,7 +52,7 @@ exports.signup = async (req, res) => {
 
     const user = new User({
       name,
-      email: normalizedEmail,
+      email: String(email || "").trim().toLowerCase(),
       contact,
       dob,
       gender,
@@ -61,12 +61,20 @@ exports.signup = async (req, res) => {
       department,
       designation,
       outlookEmail: String(outlookEmail || "").trim().toLowerCase() || null,
-      outlookAppPassword: encryptedOutlookPass,
+      outlookAppPassword: encryptedOutlookPass, // encrypted or null
     });
 
     await user.save();
 
-    await notifyAdmins(`🟢 New User Signup: ${user.name} (${user.email})`);
+    await notifyAdmins(
+      `*New User Signup!*
+
+👤 Name: *${user.name}*
+📧 Email: *${user.email}*
+📱 Phone: *${user.contact || "N/A"}*
+
+✨ Please review the user details and take necessary action.`
+    );
 
     // Generate JWT token
     const token = generateToken(user);
@@ -84,7 +92,9 @@ exports.signup = async (req, res) => {
         department: user.department,
         designation: user.designation,
         outlookEmail: user.outlookEmail || null,
-        hasEmailCredentials: Boolean(user.outlookEmail && user.outlookAppPassword),
+        hasEmailCredentials: Boolean(
+          user.outlookEmail && user.outlookAppPassword
+        ),
       },
     });
   } catch (err) {
@@ -108,7 +118,9 @@ exports.login = async (req, res) => {
     const normalizedEmail = String(email).trim().toLowerCase();
 
     // Find user by email
-    const user = await User.findOne({ email: normalizedEmail });
+    const user = await User.findOne({
+      email: normalizedEmail,
+    });
     if (!user) {
       return res.status(401).json({ message: "Invalid credentials." });
     }
@@ -134,7 +146,9 @@ exports.login = async (req, res) => {
         department: user.department,
         designation: user.designation,
         outlookEmail: user.outlookEmail || null,
-        hasEmailCredentials: Boolean(user.outlookEmail && user.outlookAppPassword),
+        hasEmailCredentials: Boolean(
+          user.outlookEmail && user.outlookAppPassword
+        ),
       },
     });
   } catch (err) {

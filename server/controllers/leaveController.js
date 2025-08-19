@@ -3,7 +3,13 @@ const LeaveRequest = require("../models/LeaveRequest");
 // Create a leave request
 exports.createLeave = async (req, res) => {
   try {
-    req.body.employee = {
+    // Require auth to have populated req.user earlier via protect middleware
+    if (!req.user) {
+      return res.status(401).json({ message: "Not authorized, no user context" });
+    }
+
+    // Build employee snapshot
+    const employee = {
       _id: req.user._id,
       name: req.user.name,
       email: req.user.email,
@@ -12,28 +18,60 @@ exports.createLeave = async (req, res) => {
       designation: req.user.designation,
     };
 
-    req.body.period = {
-      start: new Date(req.body.startDate),
-      end: new Date(req.body.endDate),
+    // Accept either {startDate,endDate} OR {period:{start,end}}
+    let start, end;
+
+    if (req.body?.period?.start || req.body?.period?.end) {
+      start = req.body.period.start;
+      end = req.body.period.end;
+    } else {
+      start = req.body.startDate;
+      end = req.body.endDate;
+    }
+
+    // Normalize dates
+    const type = req.body.type;
+    if (!start) {
+      return res.status(400).json({ message: "startDate is required" });
+    }
+
+    // For half day, if no end provided, set end = start
+    if (type === "halfDay" && !end) {
+      end = start;
+    }
+
+    const period = {
+      start: new Date(start),
+      end: new Date(end),
     };
 
-    delete req.body.startDate;
-    delete req.body.endDate;
+    if (isNaN(period.start.getTime()) || isNaN(period.end.getTime())) {
+      return res.status(400).json({ message: "Invalid start or end date" });
+    }
 
-    const leave = await LeaveRequest.create(req.body);
+    const payload = {
+      employee,
+      period,
+      type,
+      reason: req.body.reason,
+      document: req.body.document || undefined,
+    };
+
+    const leave = await LeaveRequest.create(payload);
     res.status(201).json(leave);
   } catch (error) {
-    res.status(400).json({ error: error.message });
+    res.status(400).json({ message: error.message });
   }
 };
 
 // Get leaves for logged-in user
 exports.getUserLeaves = async (req, res) => {
   try {
-    const requests = await LeaveRequest.find({ "employee.email": req.user.email }).sort({ createdAt: -1 });
+    const requests = await LeaveRequest.find({ "employee.email": req.user.email })
+      .sort({ createdAt: -1 });
     res.json(requests);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ message: error.message });
   }
 };
 
@@ -46,7 +84,7 @@ exports.getAllLeaves = async (req, res) => {
     const requests = await LeaveRequest.find(filter).sort({ createdAt: -1 });
     res.json(requests);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ message: error.message });
   }
 };
 
@@ -56,7 +94,7 @@ exports.updateLeaveStatus = async (req, res) => {
     const { status, adminRemarks } = req.body;
 
     if (!["Pending", "Approved", "Rejected"].includes(status)) {
-      return res.status(400).json({ error: "Invalid status value" });
+      return res.status(400).json({ message: "Invalid status value" });
     }
 
     const updatedLeave = await LeaveRequest.findByIdAndUpdate(
@@ -66,12 +104,12 @@ exports.updateLeaveStatus = async (req, res) => {
     );
 
     if (!updatedLeave) {
-      return res.status(404).json({ error: "Leave request not found" });
+      return res.status(404).json({ message: "Leave request not found" });
     }
 
     res.json(updatedLeave);
   } catch (error) {
-    res.status(400).json({ error: error.message });
+    res.status(400).json({ message: error.message });
   }
 };
 
@@ -79,20 +117,20 @@ exports.updateLeaveStatus = async (req, res) => {
 exports.deleteLeave = async (req, res) => {
   try {
     const leave = await LeaveRequest.findById(req.params.id);
-    if (!leave) return res.status(404).json({ error: "Leave request not found" });
+    if (!leave) return res.status(404).json({ message: "Leave request not found" });
 
     if (req.user.role !== "admin" && leave.employee.email !== req.user.email) {
-      return res.status(403).json({ error: "Not authorized to delete this leave request" });
+      return res.status(403).json({ message: "Not authorized to delete this leave request" });
     }
 
     await LeaveRequest.findByIdAndDelete(req.params.id);
     res.json({ message: "Leave request deleted" });
   } catch (error) {
-    res.status(400).json({ error: error.message });
+    res.status(400).json({ message: error.message });
   }
 };
 
-// Get team leaves for logged-in user's department (new)
+// Get team leaves for logged-in user's department
 exports.getTeamLeaves = async (req, res) => {
   try {
     const department = req.user.department;
@@ -106,6 +144,6 @@ exports.getTeamLeaves = async (req, res) => {
 
     res.json(leaves);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ message: error.message });
   }
 };
