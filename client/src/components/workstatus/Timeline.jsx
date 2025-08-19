@@ -1,3 +1,5 @@
+import React from "react";
+
 const Timeline = ({ timeline }) => (
   <div className="bg-white p-4 rounded shadow-md">
     <h3 className="font-semibold mb-2">Today's Timeline</h3>
