@@ -1,4 +1,3 @@
-// src/components/Sidebar.jsx
 import React, { useState } from "react";
 import Modal from "../modal";
 import DailyEmailSender from "../DailyEmailSender";
@@ -23,6 +22,7 @@ const menuConfig = {
     { to: "/dashboard", icon: <LayoutDashboard size={18} />, label: "Dashboard" },
     { to: "/profile", icon: <User size={18} />, label: "My Profile" },
     { to: "/tasks", icon: <ClipboardList size={18} />, label: "Tasks" },
+    { to: "/tasks-status", icon: <ClipboardList size={18} />, label: "Today's Work" }, // Added menu item
     { to: "/messages", icon: <MessageCircle size={18} />, label: "Messages" },
     { to: "/leaves", icon: <FileText size={18} />, label: "Leaves & Holidays" },
     { to: "/requirements", icon: <Flag size={18} />, label: "Requirements" },
@@ -33,7 +33,7 @@ const menuConfig = {
     { to: "/dashboard", icon: <LayoutDashboard size={18} />, label: "Dashboard" },
     { to: "/employees", icon: <Users size={18} />, label: "Employee Details" },
     { to: "/messages", icon: <MessageCircle size={18} />, label: "Messages" },
-    { to: "/admin/leaves", icon: <FileText size={18} />, label: "Leave Requests" }, // Linked to Admin Leave Requests page
+    { to: "/admin/leaves", icon: <FileText size={18} />, label: "Leave Requests" },
     { to: "/help", icon: <HelpCircle size={18} />, label: "Help Center" },
   ],
 
@@ -69,6 +69,7 @@ const Sidebar = ({ collapsed, setCollapsed, userRole = "employee", onLogout }) =
             className={`p-1 rounded-full transition-transform ${
               collapsed ? "rotate-180" : "rotate-0"
             }`}
+            aria-label="Toggle sidebar collapse"
           >
             <FaChevronCircleRight size={22} className="text-gray-600" />
           </button>
@@ -122,6 +123,7 @@ const Sidebar = ({ collapsed, setCollapsed, userRole = "employee", onLogout }) =
 const SidebarLink = ({ to, icon, label, collapsed }) => (
   <NavLink
     to={to}
+    end
     className={({ isActive }) =>
       `flex items-center space-x-3 cursor-pointer p-2 rounded transition-colors ${
         isActive
@@ -129,7 +131,7 @@ const SidebarLink = ({ to, icon, label, collapsed }) => (
           : "hover:bg-gray-100 text-gray-700"
       }`
     }
-    end
+    aria-label={label}
   >
     {icon}
     {!collapsed && <span>{label}</span>}
