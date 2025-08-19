@@ -26,8 +26,6 @@ exports.signup = async (req, res) => {
       designation,
       outlookEmail, // optional
       outlookAppPassword, // optional (will be encrypted)
-      outlookEmail, // optional
-      outlookAppPassword, // optional (will be encrypted)
     } = req.body;
 
     // Validate mandatory fields if needed
