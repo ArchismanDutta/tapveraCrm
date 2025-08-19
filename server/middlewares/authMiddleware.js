@@ -35,14 +35,19 @@ exports.protect = async (req, res, next) => {
   }
 };
 
-// ADD THIS FUNCTION TO YOUR FILE:
 exports.authorize = (...roles) => {
   return (req, res, next) => {
+    // super-admin bypasses all restrictions
+    if (req.user.role === "super-admin") {
+      return next();
+    }
+
     if (!roles.includes(req.user.role)) {
       return res.status(403).json({
         message: `User role '${req.user.role}' is not authorized`,
       });
     }
+
     next();
   };
 };

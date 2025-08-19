@@ -5,6 +5,8 @@ import AuthInput from "../components/AuthInput";
 import tapveraLogo from "../assets/tapvera.png";
 import { FaEnvelope, FaLock } from "react-icons/fa";
 
+const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000/api";
+
 const Login = ({ onLoginSuccess }) => {
   const navigate = useNavigate();
   const [form, setForm] = useState({ email: "", password: "" });
@@ -26,7 +28,7 @@ const Login = ({ onLoginSuccess }) => {
     }
 
     try {
-      const res = await fetch("/api/auth/login", {
+      const res = await fetch(`${API_BASE}/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(form),
@@ -42,11 +44,9 @@ const Login = ({ onLoginSuccess }) => {
       }
 
       // Save token & user info
-      // Save token and user info in localStorage
-localStorage.setItem("token", data.token);
-localStorage.setItem("user", JSON.stringify(data.user));
-localStorage.setItem("role", data.user.role); // optional for quick access
-
+      localStorage.setItem("token", data.token);
+      localStorage.setItem("user", JSON.stringify(data.user));
+      localStorage.setItem("role", data.user.role);
 
       // Role-based navigation
       const role = data.user.role?.toLowerCase();

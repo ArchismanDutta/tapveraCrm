@@ -13,13 +13,25 @@ const statusIcons = {
   Pending: <AlertCircle size={14} />,
 };
 
+// Map backend enums to user-friendly labels
+const leaveTypeLabels = {
+  maternity: "Maternity Leave",
+  paid: "Paid Leave",
+  unpaid: "Unpaid Leave",
+  sick: "Sick Leave",
+  workFromHome: "Work From Home",
+  halfDay: "Half Day",
+};
+
 const RecentLeaveRequests = ({ requests }) => {
+  const safeRequests = Array.isArray(requests) ? requests : [];
+
   return (
     <div className="bg-white border border-gray-100 shadow-lg rounded-2xl p-6">
       <h3 className="text-xl font-semibold mb-4 text-gray-800">
         Recent Leave Requests
       </h3>
-      {requests.length === 0 ? (
+      {safeRequests.length === 0 ? (
         <p className="text-gray-500 text-sm">No leave requests yet.</p>
       ) : (
         <div className="overflow-x-auto">
@@ -34,11 +46,11 @@ const RecentLeaveRequests = ({ requests }) => {
               </tr>
             </thead>
             <tbody>
-              {requests.map((req) => {
-                const start = req.period?.start
+              {safeRequests.map((req) => {
+                const start = req?.period?.start
                   ? new Date(req.period.start).toLocaleDateString()
                   : "N/A";
-                const end = req.period?.end
+                const end = req?.period?.end
                   ? new Date(req.period.end).toLocaleDateString()
                   : "N/A";
                 return (
@@ -47,23 +59,25 @@ const RecentLeaveRequests = ({ requests }) => {
                     className="border-b last:border-0 hover:bg-gray-50 transition group h-12"
                   >
                     <td className="p-3 text-gray-700">
-                      {req.createdAt
+                      {req?.createdAt
                         ? new Date(req.createdAt).toLocaleDateString()
                         : "N/A"}
                     </td>
-                    <td className="p-3 capitalize">{req.type}</td>
+                    <td className="p-3">
+                      {leaveTypeLabels[req?.type] || req?.type || "-"}
+                    </td>
                     <td className="p-3">{`${start} - ${end}`}</td>
                     <td className="p-3">
                       <span
                         className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium ${
-                          statusStyles[req.status] || ""
+                          statusStyles[req?.status] || ""
                         }`}
                       >
-                        {statusIcons[req.status]} {req.status}
+                        {statusIcons[req?.status]} {req?.status || "-"}
                       </span>
                     </td>
                     <td className="p-3 text-gray-600">
-                      {req.adminRemarks && req.adminRemarks.trim().length > 0
+                      {req?.adminRemarks && req.adminRemarks.trim().length > 0
                         ? req.adminRemarks
                         : "-"}
                     </td>
