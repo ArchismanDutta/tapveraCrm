@@ -9,12 +9,38 @@ const getAuthHeaders = () => {
   };
 };
 
+// Labels
+const leaveTypeLabels = {
+  annual: "Annual Leave",
+  maternity: "Maternity Leave",
+  halfDay: "Half Day",
+  paid: "Paid Leave",
+  unpaid: "Unpaid Leave",
+  sick: "Sick Leave",
+  workFromHome: "Work From Home",
+};
+export const formatLeaveType = (type) => leaveTypeLabels[type] || type;
+
+// Duration helper
+function formatDuration(type, period) {
+  if (!period || !period.start || !period.end) return "";
+  if (type === "halfDay") return "0.5 Day";
+  const days =
+    Math.ceil(
+      (new Date(period.end) - new Date(period.start)) / (1000 * 60 * 60 * 24)
+    ) + 1;
+  return `${days} Days`;
+}
+
 // Fetch leave requests for logged-in employee
 export async function fetchLeavesForEmployee() {
   const res = await fetch(`${API_BASE}/leaves/mine`, {
     headers: getAuthHeaders(),
   });
-  if (!res.ok) throw new Error("Failed to fetch leave requests");
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || "Failed to fetch leave requests");
+  }
   const data = await res.json();
 
   return data.map((r) => ({
@@ -25,27 +51,45 @@ export async function fetchLeavesForEmployee() {
     reason: r.reason,
     document: r.document,
     employee: r.employee,
-    date: `${new Date(r.period.start).toLocaleDateString()} - ${new Date(
-      r.period.end
-    ).toLocaleDateString()}`,
-    duration:
-      Math.ceil(
-        (new Date(r.period.end) - new Date(r.period.start)) /
-          (1000 * 60 * 60 * 24)
-      ) + 1 + " Days",
+    date:
+      r?.period?.start && r?.period?.end
+        ? `${new Date(r.period.start).toLocaleDateString()} - ${new Date(
+            r.period.end
+          ).toLocaleDateString()}`
+        : "",
+    duration: formatDuration(r.type, r.period),
     createdAt: r.createdAt || null,
     adminRemarks: r.adminRemarks || "",
   }));
 }
 
 // Submit a new leave request
-export async function submitLeaveRequest(data) {
+export async function submitLeaveRequest(formData) {
+  // Normalize payload to backend: use startDate/endDate, and auto-end for halfDay
+  const startDate = formData.startDate;
+  const endDate =
+    formData.type === "halfDay"
+      ? formData.startDate
+      : formData.endDate || formData.startDate;
+
+  const payload = {
+    type: formData.type,
+    startDate,
+    endDate,
+    reason: formData.reason,
+    document: formData.document || undefined,
+  };
+
   const res = await fetch(`${API_BASE}/leaves`, {
     method: "POST",
     headers: getAuthHeaders(),
-    body: JSON.stringify(data),
+    body: JSON.stringify(payload),
   });
-  if (!res.ok) throw new Error("Failed to submit leave request");
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || "Failed to submit leave request");
+  }
 
   const r = await res.json();
   return {
@@ -56,14 +100,13 @@ export async function submitLeaveRequest(data) {
     reason: r.reason,
     document: r.document,
     employee: r.employee,
-    date: `${new Date(r.period.start).toLocaleDateString()} - ${new Date(
-      r.period.end
-    ).toLocaleDateString()}`,
-    duration:
-      Math.ceil(
-        (new Date(r.period.end) - new Date(r.period.start)) /
-          (1000 * 60 * 60 * 24)
-      ) + 1 + " Days",
+    date:
+      r?.period?.start && r?.period?.end
+        ? `${new Date(r.period.start).toLocaleDateString()} - ${new Date(
+            r.period.end
+          ).toLocaleDateString()}`
+        : "",
+    duration: formatDuration(r.type, r.period),
     createdAt: r.createdAt || null,
     adminRemarks: r.adminRemarks || "",
   };
@@ -74,7 +117,10 @@ export async function fetchAllLeaveRequests() {
   const res = await fetch(`${API_BASE}/leaves`, {
     headers: getAuthHeaders(),
   });
-  if (!res.ok) throw new Error("Failed to fetch leave requests");
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || "Failed to fetch leave requests");
+  }
 
   const data = await res.json();
   return data.map((r) => ({
@@ -97,7 +143,10 @@ export async function updateLeaveRequestStatus(id, status, adminRemarks = "") {
     headers: getAuthHeaders(),
     body: JSON.stringify({ status, adminRemarks }),
   });
-  if (!res.ok) throw new Error("Failed to update leave request status");
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || "Failed to update leave request status");
+  }
 
   const r = await res.json();
   return {
@@ -109,14 +158,13 @@ export async function updateLeaveRequestStatus(id, status, adminRemarks = "") {
     document: r.document,
     employee: r.employee,
     adminRemarks: r.adminRemarks || "",
-    date: `${new Date(r.period.start).toLocaleDateString()} - ${new Date(
-      r.period.end
-    ).toLocaleDateString()}`,
-    duration:
-      Math.ceil(
-        (new Date(r.period.end) - new Date(r.period.start)) /
-          (1000 * 60 * 60 * 24)
-      ) + 1 + " Days",
+    date:
+      r?.period?.start && r?.period?.end
+        ? `${new Date(r.period.start).toLocaleDateString()} - ${new Date(
+            r.period.end
+          ).toLocaleDateString()}`
+        : "",
+    duration: formatDuration(r.type, r.period),
     createdAt: r.createdAt || null,
   };
 }
@@ -126,12 +174,15 @@ export async function fetchTeamLeaves() {
   const res = await fetch(`${API_BASE}/leaves/team`, {
     headers: getAuthHeaders(),
   });
-  if (!res.ok) throw new Error("Failed to fetch team leaves");
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || "Failed to fetch team leaves");
+  }
   const data = await res.json();
   return data.map((r) => ({
     name: r.employee.name,
     dates: formatPeriod(r.period),
-    type: capitalize(r.type),
+    type: formatLeaveType(r.type),
   }));
 }
 
@@ -147,10 +198,4 @@ function formatPeriod(period) {
     day: "numeric",
   });
   return start === end ? start : `${start}–${end}`;
-}
-
-// Utility function to capitalize a string
-function capitalize(str) {
-  if (!str) return "";
-  return str.charAt(0).toUpperCase() + str.slice(1);
 }

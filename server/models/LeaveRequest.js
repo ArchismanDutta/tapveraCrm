@@ -1,4 +1,3 @@
-// models/LeaveRequest.js
 const mongoose = require("mongoose");
 
 const LeaveRequestSchema = new mongoose.Schema({
@@ -14,8 +13,16 @@ const LeaveRequestSchema = new mongoose.Schema({
     start: { type: Date, required: true },
     end: { type: Date, required: true },
   },
-  type: { type: String, enum: ["annual", "paid", "unpaid", "sick"], required: true },
-  status: { type: String, enum: ["Pending", "Approved", "Rejected"], default: "Pending" },
+  type: {
+    type: String,
+    enum: ["maternity", "paid", "unpaid", "sick", "workFromHome", "halfDay"],
+    required: true,
+  },
+  status: {
+    type: String,
+    enum: ["Pending", "Approved", "Rejected"],
+    default: "Pending",
+  },
   reason: { type: String, required: true },
   document: {
     name: String,

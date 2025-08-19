@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Check, X, MoreVertical } from "lucide-react";
+import { formatLeaveType } from "../../api/leaveApi";
 
 const statusColor = {
   Pending: "bg-yellow-100 text-yellow-700",
@@ -30,34 +31,14 @@ const LeaveRequestsTable = ({
   return (
     <div
       className="bg-white rounded-xl shadow p-4 flex flex-col h-full"
-      style={{
-        scrollbarWidth: "none", // Firefox
-        msOverflowStyle: "none", // IE 10+
-      }}
+      style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
     >
-      {/* Hide scrollbar for Webkit */}
       <style>{`
-        .no-scrollbar::-webkit-scrollbar {
-          display: none;
-        }
-        .table-row:hover {
-          background-color: #f9fafb;
-        }
-        .btn-action {
-          padding: 6px;
-          border-radius: 0.375rem;
-          transition: background-color 0.15s ease;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-        .btn-action:hover:not(:disabled) {
-          background-color: rgba(0, 0, 0, 0.05);
-        }
-        .btn-disabled {
-          opacity: 0.4;
-          cursor: not-allowed;
-        }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .table-row:hover { background-color: #f9fafb; }
+        .btn-action { padding: 6px; border-radius: 0.375rem; transition: background-color 0.15s ease; display: flex; align-items: center; justify-content: center; }
+        .btn-action:hover:not(:disabled) { background-color: rgba(0, 0, 0, 0.05); }
+        .btn-disabled { opacity: 0.4; cursor: not-allowed; }
       `}</style>
       <div className="overflow-y-auto no-scrollbar flex-1 min-w-0">
         <table className="min-w-full text-sm table-auto border-separate border-spacing-y-2">
@@ -94,7 +75,8 @@ const LeaveRequestsTable = ({
                       ? `${start.toLocaleDateString()} - ${end.toLocaleDateString()}`
                       : ""}
                   </td>
-                  <td className="p-3 capitalize text-gray-700">{req.type}</td>
+                  {/* ✅ Use friendly label */}
+                  <td className="p-3 text-gray-700">{formatLeaveType(req.type)}</td>
                   <td className="p-3 text-center align-middle">
                     <span
                       className={`px-2 py-1 rounded-full text-xs font-semibold ${
@@ -147,36 +129,6 @@ const LeaveRequestsTable = ({
                     >
                       <MoreVertical size={17} />
                     </button>
-
-                    {menuOpenId === id && (
-                      <div
-                        className="absolute right-0 mt-10 w-40 bg-white border border-gray-200 rounded shadow-lg z-30"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <button
-                          type="button"
-                          className="block w-full px-4 py-2 text-left text-gray-700 hover:bg-gray-100"
-                          onClick={() => {
-                            if (req.status !== "Approved") onApprove(id);
-                            setMenuOpenId(null);
-                          }}
-                          disabled={req.status === "Approved"}
-                        >
-                          Approve
-                        </button>
-                        <button
-                          type="button"
-                          className="block w-full px-4 py-2 text-left text-gray-700 hover:bg-gray-100"
-                          onClick={() => {
-                            if (req.status !== "Rejected") onReject(id);
-                            setMenuOpenId(null);
-                          }}
-                          disabled={req.status === "Rejected"}
-                        >
-                          Reject
-                        </button>
-                      </div>
-                    )}
                   </td>
                 </tr>
               );
