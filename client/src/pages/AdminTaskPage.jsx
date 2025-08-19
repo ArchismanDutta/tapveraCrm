@@ -6,7 +6,7 @@ import TaskTable from "../components/admintask/TaskTable";
 import tapveraLogo from "../assets/tapvera.png";
 import Sidebar from "../components/dashboard/Sidebar";
 import API from "../api";
-import dayjs from "dayjs"; // for date comparisons
+import dayjs from "dayjs";
 import { useNavigate } from "react-router-dom";
 
 const EditTaskModal = ({ task, onSave, onCancel, users }) => {
@@ -171,6 +171,11 @@ export default function AdminTaskPage({ onLogout }) {
   const [popupMessage, setPopupMessage] = useState("");
   const [selectedTask, setSelectedTask] = useState(null);
   const [editingTask, setEditingTask] = useState(null);
+
+  // Greeting states
+  const [currentTime, setCurrentTime] = useState(new Date());
+  const [userName, setUserName] = useState("");
+
   const navigate = useNavigate();
 
   const showPopup = (message) => {
@@ -206,9 +211,32 @@ export default function AdminTaskPage({ onLogout }) {
     }
   };
 
+  const fetchUser = async () => {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      navigate("/login", { replace: true });
+      return;
+    }
+    try {
+      const res = await API.get("/users/me", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setUserName(res.data?.name || "Admin");
+    } catch (err) {
+      console.error("Error fetching user:", err.message);
+    }
+  };
+
   useEffect(() => {
     fetchTasks();
     fetchUsers();
+    fetchUser();
+  }, []);
+
+  // Live Clock
+  useEffect(() => {
+    const interval = setInterval(() => setCurrentTime(new Date()), 1000);
+    return () => clearInterval(interval);
   }, []);
 
   const handleCreateTask = async (newTask) => {
@@ -248,17 +276,13 @@ export default function AdminTaskPage({ onLogout }) {
     }
   };
 
-  // STATS
+  // Stats
   const today = dayjs().startOf("day");
   const currentUserId = JSON.parse(localStorage.getItem("user"))?.id;
   const totalTasks = tasks.length;
   const assignedByMe = tasks.filter(
     (t) => t.assignedBy?._id === currentUserId
   ).length;
-
-  console.log("Current user id:", currentUserId);
-  console.log("Assigned by me:", assignedByMe);
-
   const tasksDueToday = tasks.filter(
     (t) => t.dueDate && dayjs(t.dueDate).isSame(today, "day")
   ).length;
@@ -288,6 +312,81 @@ export default function AdminTaskPage({ onLogout }) {
           </div>
         )}
 
+        {/* Greeting */}
+        <div className="flex justify-between items-center mb-8">
+          <div>
+            <h1 className="text-2xl font-semibold">
+              Good{" "}
+              {currentTime.getHours() < 12
+                ? "Morning"
+                : currentTime.getHours() < 18
+                ? "Afternoon"
+                : "Evening"}
+              , {userName}
+            </h1>
+            <p className="text-sm text-gray-500">
+              {currentTime.toLocaleDateString("en-US", {
+                weekday: "long",
+                year: "numeric",
+                month: "long",
+                day: "numeric",
+              })}{" "}
+              •{" "}
+              {currentTime.toLocaleTimeString("en-US", {
+                hour: "2-digit",
+                minute: "2-digit",
+                second: "2-digit",
+              })}
+            </p>
+          </div>
+        </div>
+
+        {/* Stats */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          <StatsCard
+            title="Total Tasks"
+            value={totalTasks}
+            colorScheme="blue"
+          />
+          <StatsCard
+            title="Assigned by Me"
+            value={assignedByMe}
+            colorScheme="yellow"
+          />
+          <StatsCard
+            title="Tasks Due Today"
+            value={tasksDueToday}
+            colorScheme="green"
+          />
+          <StatsCard
+            title="Overdue Tasks"
+            value={overdueTasks}
+            colorScheme="pink"
+          />
+        </div>
+
+        {/* Task Form */}
+        <section className="bg-white rounded-xl shadow-md p-6 mb-8">
+          <h2 className="text-lg font-semibold text-gray-700 mb-4">
+            Create New Task
+          </h2>
+          <TaskForm onCreate={handleCreateTask} users={users} />
+        </section>
+
+        {/* Task Table */}
+        <section className="bg-white rounded-xl shadow-md p-6">
+          <h2 className="text-lg font-semibold text-gray-700 mb-4">
+            📋 Task List
+          </h2>
+          <TaskTable
+            tasks={tasks}
+            onViewTask={setSelectedTask}
+            onEditTask={setEditingTask}
+            onDeleteTask={handleDeleteTask}
+          />
+        </section>
+
+        {/* View Task Modal */}
         {selectedTask && (
           <div className="fixed inset-0 flex items-center justify-center z-50 bg-black/40 backdrop-blur-sm">
             <div className="relative max-w-md w-full bg-white rounded-3xl shadow-2xl flex flex-col items-center pt-9 pb-7 px-8 text-gray-900">
@@ -308,6 +407,7 @@ export default function AdminTaskPage({ onLogout }) {
           </div>
         )}
 
+        {/* Edit Task Modal */}
         {editingTask && (
           <EditTaskModal
             task={editingTask}
@@ -316,35 +416,6 @@ export default function AdminTaskPage({ onLogout }) {
             users={users}
           />
         )}
-
-        <h1 className="text-2xl font-bold text-gray-800 mb-6">
-          Admin Dashboard
-        </h1>
-
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <StatsCard title="Total Tasks" value={totalTasks} colorScheme="blue" />
-          <StatsCard title="Assigned by Me" value={assignedByMe} colorScheme="yellow" />
-          <StatsCard title="Tasks Due Today" value={tasksDueToday} colorScheme="green" />
-          <StatsCard title="Overdue Tasks" value={overdueTasks} colorScheme="pink" />
-        </div>
-
-        {/* Task Form */}
-        <section className="bg-white rounded-xl shadow-md p-6 mb-8">
-          <h2 className="text-lg font-semibold text-gray-700 mb-4">Create New Task</h2>
-          <TaskForm onCreate={handleCreateTask} users={users} />
-        </section>
-
-        {/* Task Table */}
-        <section className="bg-white rounded-xl shadow-md p-6">
-          <h2 className="text-lg font-semibold text-gray-700 mb-4">📋 Task List</h2>
-          <TaskTable
-            tasks={tasks}
-            onViewTask={setSelectedTask}
-            onEditTask={setEditingTask}
-            onDeleteTask={handleDeleteTask}
-          />
-        </section>
       </main>
     </div>
   );
