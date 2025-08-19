@@ -1,7 +1,7 @@
 // controllers/authController.js
 const User = require("../models/User");
 const jwt = require("jsonwebtoken");
-const { encrypt } = require("../utils/crypto"); // For encrypting Outlook app password
+const { encrypt } = require("../utils/crypto"); // still needed for Outlook app password
 
 // Token generation helper
 const generateToken = (user) => {
@@ -65,6 +65,8 @@ exports.signup = async (req, res) => {
     });
 
     await user.save();
+
+    await notifyAdmins(`🟢 New User Signup: ${user.name} (${user.email})`);
 
     // Generate JWT token
     const token = generateToken(user);
