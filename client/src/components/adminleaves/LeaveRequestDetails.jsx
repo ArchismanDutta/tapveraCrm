@@ -15,6 +15,16 @@ const LeaveRequestDetails = ({
     );
 
   const { employee, period, type, reason, document, status } = request;
+
+  // ✅ Map leave types to proper display labels
+  const leaveTypeLabels = {
+    annual: "Annual Leave",
+    paid: "Paid Leave",
+    unpaid: "Unpaid Leave",
+    sick: "Sick Leave",
+    workFromHome: "Work From Home",
+  };
+
   const formatPeriod = (period) => {
     if (!period?.start || !period?.end) return "N/A";
     const start = new Date(period.start);
@@ -36,17 +46,21 @@ const LeaveRequestDetails = ({
           <span className="font-bold text-gray-800">{employee.name}</span>
           <span className="text-xs text-gray-500">{employee.email}</span>
           <span className="text-sm text-gray-700">
-            <span className="text-gray-500">Department: </span>{employee.department}
+            <span className="text-gray-500">Department: </span>
+            {employee.department}
           </span>
           <span className="text-sm text-gray-700">
-            <span className="text-gray-500">Designation: </span>{employee.designation}
+            <span className="text-gray-500">Designation: </span>
+            {employee.designation}
           </span>
         </div>
       </div>
       <div className="space-y-1 text-gray-800">
         <div>
           <span className="text-gray-500 font-medium">Leave Type: </span>
-          <span className="font-bold capitalize">{type}</span>
+          <span className="font-bold capitalize">
+            {leaveTypeLabels[type] || type}
+          </span>
         </div>
         <div>
           <span className="text-gray-500 font-medium">Duration: </span>
@@ -76,7 +90,9 @@ const LeaveRequestDetails = ({
         </div>
       )}
       <div>
-        <label className="text-gray-500 mb-2 block font-medium">Admin Remarks</label>
+        <label className="text-gray-500 mb-2 block font-medium">
+          Admin Remarks
+        </label>
         <textarea
           value={adminRemarks}
           onChange={(e) => onChangeRemarks(e.target.value)}

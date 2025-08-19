@@ -1,33 +1,49 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 
 const LeaveApplicationForm = ({ onSubmitLeave }) => {
-  const [leaveType, setLeaveType] = useState("Paid Leave");
+  const [type, setType] = useState("paid");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [reason, setReason] = useState("");
 
+  const todayStr = useMemo(() => new Date().toISOString().split("T")[0], []);
+
   const handleSubmit = (e) => {
     e.preventDefault();
 
-    if (!startDate || !endDate) return;
-
-    const todayStr = new Date().toISOString().split("T")[0]; // yyyy-mm-dd
-
-    if (startDate < todayStr) {
-      alert("Start date cannot be in the past.");
+    if (!startDate) {
+      alert("Start date is required.");
       return;
     }
 
-    if (endDate < startDate) {
+    const isHalfDay = type === "halfDay";
+
+    if (!isHalfDay && !endDate) {
+      alert("End date is required for this leave type.");
+      return;
+    }
+
+    if (!isHalfDay && endDate < startDate) {
       alert("End date cannot be before start date.");
       return;
     }
 
-    onSubmitLeave({ leaveType, startDate, endDate, reason });
+    // Send the flat fields expected by backend (controller also accepts period)
+    onSubmitLeave({
+      type,
+      startDate,
+      endDate: isHalfDay ? startDate : endDate,
+      reason,
+    });
+
+    // reset
     setReason("");
+    setStartDate("");
+    setEndDate("");
+    setType("paid");
   };
 
-  const todayStr = new Date().toISOString().split("T")[0]; // for setting min attributes
+  const isHalfDay = type === "halfDay";
 
   return (
     <div className="bg-white backdrop-blur-xl border border-gray-100 shadow-xl rounded-2xl p-6">
@@ -36,29 +52,43 @@ const LeaveApplicationForm = ({ onSubmitLeave }) => {
         {/* Leave Type */}
         <select
           className="border border-gray-200 rounded-lg p-3 w-full shadow-sm focus:ring-2 focus:ring-yellow-500 focus:outline-none"
-          value={leaveType}
-          onChange={(e) => setLeaveType(e.target.value)}
+          value={type}
+          onChange={(e) => {
+            const next = e.target.value;
+            setType(next);
+            if (next === "halfDay" && startDate) {
+              setEndDate(startDate);
+            }
+          }}
         >
-          <option>Paid Leave</option>
-          <option>Unpaid Leave</option>
-          <option>Sick Leave</option>
+          <option value="paid">Paid Leave</option>
+          <option value="unpaid">Unpaid Leave</option>
+          <option value="sick">Sick Leave</option>
+          <option value="maternity">Maternity Leave</option>
+          <option value="workFromHome">Work From Home</option>
+          <option value="halfDay">Half Day</option>
         </select>
 
         {/* Dates */}
         <div className="flex gap-3 flex-col sm:flex-row">
           <input
             type="date"
-            min={todayStr} // Disallow past dates
+            min={todayStr}
             className="border border-gray-200 rounded-lg p-3 w-full shadow-sm focus:ring-2 focus:ring-orange-500 focus:outline-none"
             value={startDate}
-            onChange={(e) => setStartDate(e.target.value)}
+            onChange={(e) => {
+              const v = e.target.value;
+              setStartDate(v);
+              if (isHalfDay) setEndDate(v);
+            }}
           />
           <input
             type="date"
-            min={startDate || todayStr} // End date cannot be before start date
-            className="border border-gray-200 rounded-lg p-3 w-full shadow-sm focus:ring-2 focus:ring-yellow-500 focus:outline-none"
-            value={endDate}
+            min={startDate || todayStr}
+            className={`border border-gray-200 rounded-lg p-3 w-full shadow-sm focus:ring-2 focus:ring-yellow-500 focus:outline-none ${isHalfDay ? "bg-gray-100 cursor-not-allowed" : ""}`}
+            value={isHalfDay ? startDate : endDate}
             onChange={(e) => setEndDate(e.target.value)}
+            disabled={isHalfDay}
           />
         </div>
 
