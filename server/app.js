@@ -16,9 +16,10 @@ const authRoutes = require("./routes/authRoutes");
 const passwordRoutes = require("./routes/passwordRoutes");
 const testRoutes = require("./routes/testRoutes");
 const emailRoutes = require("./routes/emailRoutes");
-
-// Leave management routes
 const leaveRoutes = require("./routes/leaveRoutes");
+
+// ✅ Today Status route
+const statusRoutes = require("./routes/statusRoutes"); // make sure this exists
 
 const app = express();
 const server = http.createServer(app);
@@ -66,6 +67,9 @@ app.use("/api/test", testRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/email", emailRoutes);
 app.use("/api/leaves", leaveRoutes);
+
+// ✅ Today Status API
+app.use("/api/status", statusRoutes);
 
 // Serve frontend (production)
 if (process.env.NODE_ENV === "production") {
