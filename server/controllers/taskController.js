@@ -1,23 +1,25 @@
 const Task = require("../models/Task");
+const { notifyAdmins } = require("../services/whatsappService");
 const { getIO } = require("../socket");
 
 const populateTask = (query) =>
   query.populate("assignedTo", "name email").populate("assignedBy", "name email");
 
-// Create Task
 exports.createTask = async (req, res) => {
   try {
     const { title, description, assignedTo, dueDate, priority } = req.body;
     const assignedBy = req.user._id;
 
     if (!title || !Array.isArray(assignedTo) || assignedTo.length === 0) {
-      return res.status(400).json({ 
-        message: "Title and at least one assigned user are required." 
+      return res.status(400).json({
+        message: "Title and at least one assigned user are required.",
       });
     }
 
     const allowedPriorities = ["High", "Medium", "Low"];
-    const validatedPriority = allowedPriorities.includes(priority) ? priority : "Medium";
+    const validatedPriority = allowedPriorities.includes(priority)
+      ? priority
+      : "Medium";
 
     const task = new Task({
       title,
@@ -33,8 +35,17 @@ exports.createTask = async (req, res) => {
 
     // Emit to ALL connected clients
     getIO().emit("taskCreated", populated);
-    console.log("✅ Task created and broadcasted:", populated.title);
 
+    // 🔔 WhatsApp notification
+    await notifyAdmins(
+      `📝 *New Task Created*\n\n📌 Title: *${populated.title}*\n📅 Due: *${
+        populated.dueDate || "N/A"
+      }*\n🎯 Priority: *${populated.priority}*\n👤 Assigned By: *${
+        req.user.name
+      }*\n👥 Assigned To: ${populated.assignedTo.map((u) => u.name).join(", ")}`
+    );
+
+    console.log("✅ Task created and broadcasted:", populated.title);
     res.status(201).json(populated);
   } catch (err) {
     console.error("Error creating task:", err);
@@ -42,7 +53,7 @@ exports.createTask = async (req, res) => {
   }
 };
 
-// Edit Task - FIXED AUTHORIZATION BUG
+// Edit Task
 exports.editTask = async (req, res) => {
   try {
     const { taskId } = req.params;
@@ -51,7 +62,6 @@ exports.editTask = async (req, res) => {
     const task = await Task.findById(taskId);
     if (!task) return res.status(404).json({ message: "Task not found." });
 
-    // FIXED: Only check admin role OR if user is the task creator
     if (
       !["admin", "super-admin"].includes(req.user.role) &&
       task.assignedBy.toString() !== req.user._id.toString()
@@ -73,10 +83,14 @@ exports.editTask = async (req, res) => {
     await task.save();
     const populated = await populateTask(Task.findById(taskId)).lean();
 
-    // Emit to ALL connected clients
     getIO().emit("taskUpdated", populated);
-    console.log("✅ Task updated and broadcasted:", populated.title);
 
+    // 🔔 WhatsApp notification
+    await notifyAdmins(
+      `✏️ *Task Updated*\n\n📌 Title: *${populated.title}*\n📅 Due: *${populated.dueDate || "N/A"}*\n📊 Status: *${populated.status}*\n🎯 Priority: *${populated.priority}*\n👤 Updated By: *${req.user.name}*`
+    );
+
+    console.log("✅ Task updated and broadcasted:", populated.title);
     res.json(populated);
   } catch (err) {
     console.error("Error editing task:", err);
@@ -108,10 +122,14 @@ exports.updateTaskStatus = async (req, res) => {
     await task.save();
     const populated = await populateTask(Task.findById(taskId)).lean();
 
-    // Emit to ALL connected clients
     getIO().emit("taskUpdated", populated);
-    console.log("✅ Task status updated and broadcasted:", populated.title);
 
+    // 🔔 WhatsApp notification
+    await notifyAdmins(
+      `✅ *Task Status Changed*\n\n📌 Title: *${populated.title}*\n📊 New Status: *${status}*\n👤 Changed By: *${req.user.name}*`
+    );
+
+    console.log("✅ Task status updated and broadcasted:", populated.title);
     res.json(populated);
   } catch (err) {
     console.error("Error updating status:", err);
@@ -175,11 +193,14 @@ exports.deleteTask = async (req, res) => {
     }
 
     await task.deleteOne();
-
-    // Emit to ALL connected clients
     getIO().emit("taskDeleted", req.params.taskId);
-    console.log("✅ Task deleted and broadcasted:", req.params.taskId);
 
+    // 🔔 WhatsApp notification
+    await notifyAdmins(
+      `🗑️ *Task Deleted*\n\n📌 Title: *${task.title}*\n👤 Deleted By: *${req.user.name}*`
+    );
+
+    console.log("✅ Task deleted and broadcasted:", req.params.taskId);
     res.json({ message: "Deleted" });
   } catch (err) {
     console.error("Error deleting task:", err);

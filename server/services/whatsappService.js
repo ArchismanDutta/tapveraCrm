@@ -11,23 +11,20 @@ const adminNumbers = (process.env.ADMIN_NUMBERS || "")
   .map((num) => num.trim());
 
 /**
- * Send WhatsApp template message to all admins
+ * Send WhatsApp text message to all admins
  * @param {string} message
  */
 async function notifyAdmins(message) {
   try {
     for (const number of adminNumbers) {
-      console.log("Admin numbers:", adminNumbers);
-
       await axios.post(
         `${WHATSAPP_API_URL}/${phoneNumberId}/messages`,
         {
           messaging_product: "whatsapp",
           to: number,
-          type: "template",
-          template: {
-            name: "hello_world", // no params allowed here
-            language: { code: "en_US" },
+          type: "text",
+          text: {
+            body: message, // 👈 your custom message here
           },
         },
         {
@@ -37,7 +34,6 @@ async function notifyAdmins(message) {
           },
         }
       );
-
 
       console.log(`✅ WhatsApp sent to ${number}`);
     }
