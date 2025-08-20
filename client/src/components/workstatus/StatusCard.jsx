@@ -8,7 +8,7 @@ const StatusCard = ({
   onPunchIn,
   onPunchOut,
 }) => (
-  <div className="bg-white p-6 rounded-xl shadow-md flex flex-col lg:flex-row gap-6 lg:gap-12 items-center justify-between">
+  <div className="bg-white p-4 rounded-xl shadow-md flex flex-col sm:flex-row gap-4 sm:gap-12 items-center justify-between w-full">
     <div className="space-y-1 text-gray-700 font-semibold">
       <p>
         Work Duration: <span className="font-bold text-gray-900">{workDuration}</span>
@@ -17,7 +17,7 @@ const StatusCard = ({
         Break Time: <span className="font-bold text-gray-900">{breakTime}</span>
       </p>
       <p>
-        Arrival Time: <span className="font-bold text-gray-900">{arrivalTime}</span>
+        Arrival Time: <span className="font-bold text-gray-900">{arrivalTime || "--"}</span>
       </p>
     </div>
 
@@ -33,16 +33,22 @@ const StatusCard = ({
       )}
     </div>
 
-    <div className="flex gap-4">
+    <div className="flex gap-2">
       <button
         onClick={onPunchIn}
-        className="bg-green-600 text-white px-5 py-2 rounded-lg shadow hover:bg-green-700 transition focus:outline-none"
+        disabled={currentlyWorking}
+        className={`bg-green-600 text-white px-4 py-2 rounded-lg shadow hover:bg-green-700 transition ${
+          currentlyWorking ? "opacity-50 cursor-not-allowed" : ""
+        }`}
       >
         Punch In
       </button>
       <button
         onClick={onPunchOut}
-        className="bg-red-600 text-white px-5 py-2 rounded-lg shadow hover:bg-red-700 transition focus:outline-none"
+        disabled={!currentlyWorking}
+        className={`bg-red-600 text-white px-4 py-2 rounded-lg shadow hover:bg-red-700 transition ${
+          !currentlyWorking ? "opacity-50 cursor-not-allowed" : ""
+        }`}
       >
         Punch Out
       </button>
