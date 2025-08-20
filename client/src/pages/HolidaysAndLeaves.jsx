@@ -5,7 +5,7 @@ import LeaveApplicationForm from "../components/leaves/LeaveApplicationForm";
 import HolidayList from "../components/leaves/HolidayList";
 import TeamLeaveCalendar from "../components/leaves/TeamLeaveCalendar";
 import Sidebar from "../components/dashboard/Sidebar";
-import InfoModal from "../components/InfoModal";
+// import InfoModal from "../components/InfoModal";
 import { fetchLeavesForEmployee, submitLeaveRequest } from "../api/leaveApi";
 
 const MAX_REQUESTS = 4;
@@ -20,7 +20,7 @@ const HolidaysAndLeaves = ({ onLogout }) => {
   const [leaveRequests, setLeaveRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [showInfoModal, setShowInfoModal] = useState(true);
+  // const [showInfoModal, setShowInfoModal] = useState(true);
 
   const importantNotices = [
     "All leaves should be applied at least 7 days in advance.",
@@ -94,7 +94,7 @@ const HolidaysAndLeaves = ({ onLogout }) => {
       <main
         className={`flex-1 transition-all duration-300 overflow-y-auto ${
           collapsed ? "ml-20" : "ml-64"
-        } ${showInfoModal ? "filter blur-sm pointer-events-none" : ""}`}
+        } `}
       >
         <div className="p-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-6">
@@ -116,12 +116,12 @@ const HolidaysAndLeaves = ({ onLogout }) => {
       </main>
 
       {/* Page load modal */}
-      <InfoModal
+      {/* <InfoModal
         show={showInfoModal}
         onClose={() => setShowInfoModal(false)}
         title="Important Leave Updates"
         message={importantNotices.join("\n")}
-      />
+      /> */}
     </div>
   );
 };
