@@ -23,7 +23,7 @@ const LeaveSummary = ({ available, taken, pending, importantNotices = [] }) => {
   const [showPopover, setShowPopover] = useState(false);
 
   return (
-    <div className="bg-white backdrop-blur-xl border border-gray-100 shadow-xl rounded-2xl p-6 relative">
+    <div className="bg-white backdrop-blur-xl border border-gray-100 shadow-xl rounded-2xl p-6 relative z-10">
       {/* Header with button */}
       <div className="flex justify-between items-center mb-5 relative">
         <h2 className="text-xl font-semibold text-gray-800">Leave Overview</h2>
@@ -31,7 +31,7 @@ const LeaveSummary = ({ available, taken, pending, importantNotices = [] }) => {
         <div className="relative">
           <button
             onClick={() => setShowPopover(true)}
-            className="bg-yellow-200 border-2 border-orange-500 text-black text-sm font-medium px-3 py-1 rounded-lg shadow hover:bg-orange-500 hover:text-white transition"
+            className="bg-yellow-200 border-2 border-orange-500 text-black text-sm font-medium px-3 py-1 rounded-lg shadow hover:bg-orange-500 hover:text-white transition cursor-pointer"
           >
             Important Leave Update
           </button>

@@ -23,7 +23,7 @@ const ImportantNoticeModal = ({ notices, onClose }) => {
             </h3>
             <button
               onClick={onClose}
-              className="text-pinkAccent hover:text-pinkAccent/80 text-lg font-semibold"
+              className="text-pinkAccent hover:text-pinkAccent/80 text-lg font-semibold cursor-pointer"
             >
               ✕
             </button>

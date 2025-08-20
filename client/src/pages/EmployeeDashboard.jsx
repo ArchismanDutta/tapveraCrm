@@ -23,6 +23,7 @@ const EmployeeDashboard = ({ onLogout }) => {
   const [pendingCount, setPendingCount] = useState(0);
   const [notifications, setNotifications] = useState([]);
   const [notices, setNotices] = useState([]);
+  const [showNotices, setShowNotices] = useState(false);
   const socketRef = useRef(null);
   const navigate = useNavigate();
 
@@ -195,16 +196,37 @@ const EmployeeDashboard = ({ onLogout }) => {
     const fetchNotices = async () => {
       try {
         const token = localStorage.getItem("token");
+        if (!token) return;
+
+        const dismissed = sessionStorage.getItem("noticesDismissed");
+        if (dismissed === "true") {
+          setShowNotices(false);
+          return;
+        }
+
         const res = await axios.get(`${API_BASE}/api/notices`, {
           headers: { Authorization: `Bearer ${token}` },
         });
-        setNotices(res.data || []);
+        if (res.data && res.data.length > 0) {
+          setNotices(res.data);
+          setShowNotices(true);
+        } else {
+          setShowNotices(false);
+        }
       } catch (err) {
         console.error("Error fetching notices:", err.message);
+        setShowNotices(false);
       }
     };
     fetchNotices();
   }, []);
+
+  // Modify the handler that closes the overlay:
+  const handleCloseNotices = () => {
+    setNotices([]);
+    setShowNotices(false);
+    sessionStorage.setItem("noticesDismissed", "true"); // remember dismissal in this session
+  };
 
   return (
     <div className="flex bg-gray-50 font-sans text-gray-800">
@@ -256,7 +278,7 @@ const EmployeeDashboard = ({ onLogout }) => {
           </div>
         </div>
 
-        {notices.length > 0 && (
+        {showNotices && notices.length > 0 && (
           <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50">
             <div className="bg-white/90 rounded-lg shadow-xl p-6 max-w-lg w-full">
               <h2 className="text-xl font-bold mb-4">📢 Notices</h2>
@@ -268,13 +290,13 @@ const EmployeeDashboard = ({ onLogout }) => {
                   >
                     <p>{n.message}</p>
                     <p className="text-xs text-gray-400 mt-1">
-                      {new Date(n.createdAt).toLocaleString()}
+                      🕒 {new Date(n.createdAt).toLocaleString()}
                     </p>
                   </div>
                 ))}
               </div>
               <button
-                onClick={() => setNotices([])}
+                onClick={handleCloseNotices}
                 className="mt-4 px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600"
               >
                 Close
