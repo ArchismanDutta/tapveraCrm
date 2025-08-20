@@ -20,6 +20,7 @@ import EmployeeManagementPage from "./pages/EmployeeManagement";
 import HolidaysAndLeaves from "./pages/HolidaysAndLeaves"; // Employee & Superadmin Leaves Page
 import AdminLeaveRequests from "./pages/AdminLeaveRequests"; // Admin Leave Requests Management
 import TodayStatusPage from "./pages/TodayStatusPage"; // Today's Status Page
+import AttendancePage from "./pages/AttendancePage"; // Import AttendancePage
 
 const AppWrapper = () => {
   const navigate = useNavigate();
@@ -62,9 +63,7 @@ const AppWrapper = () => {
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-screen">
-        Loading...
-      </div>
+      <div className="flex justify-center items-center h-screen">Loading...</div>
     );
   }
 
@@ -148,12 +147,24 @@ const AppWrapper = () => {
         }
       />
 
-      {/* NEW ROUTE TO FIX /tasks-status */}
+      {/* Tasks Status */}
       <Route
         path="/tasks-status"
         element={
           isAuthenticated && role !== "admin" && role !== "super-admin" ? (
             <TodayStatusPage onLogout={handleLogout} />
+          ) : (
+            <Navigate to={isAuthenticated ? "/admin/tasks" : "/login"} replace />
+          )
+        }
+      />
+
+      {/* Attendance Page - NEW ROUTE */}
+      <Route
+        path="/attendance"
+        element={
+          isAuthenticated && role !== "admin" && role !== "super-admin" ? (
+            <AttendancePage onLogout={handleLogout} />
           ) : (
             <Navigate to={isAuthenticated ? "/admin/tasks" : "/login"} replace />
           )
