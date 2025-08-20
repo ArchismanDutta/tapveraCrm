@@ -19,10 +19,18 @@ import { NavLink } from "react-router-dom";
 // Menu Configuration for each role, added Attendance for employee
 const menuConfig = {
   employee: [
-    { to: "/dashboard", icon: <LayoutDashboard size={18} />, label: "Dashboard" },
+    {
+      to: "/dashboard",
+      icon: <LayoutDashboard size={18} />,
+      label: "Dashboard",
+    },
     { to: "/profile", icon: <User size={18} />, label: "My Profile" },
     { to: "/tasks", icon: <ClipboardList size={18} />, label: "Tasks" },
-    { to: "/tasks-status", icon: <ClipboardList size={18} />, label: "Today's Work" },
+    {
+      to: "/tasks-status",
+      icon: <ClipboardList size={18} />,
+      label: "Today's Work",
+    },
     { to: "/attendance", icon: <ClipboardList size={18} />, label: "Attendance" }, // Added Attendance here
     { to: "/messages", icon: <MessageCircle size={18} />, label: "Messages" },
     { to: "/leaves", icon: <FileText size={18} />, label: "Leaves & Holidays" },
@@ -31,18 +39,32 @@ const menuConfig = {
   ],
 
   admin: [
-    { to: "/dashboard", icon: <LayoutDashboard size={18} />, label: "Dashboard" },
+    {
+      to: "/dashboard",
+      icon: <LayoutDashboard size={18} />,
+      label: "Dashboard",
+    },
     { to: "/employees", icon: <Users size={18} />, label: "Employee Details" },
     { to: "/messages", icon: <MessageCircle size={18} />, label: "Messages" },
-    { to: "/admin/leaves", icon: <FileText size={18} />, label: "Leave Requests" },
+    {
+      to: "/admin/leaves",
+      icon: <FileText size={18} />,
+      label: "Leave Requests",
+    },
+    { to: "/admin/notices", icon: <Flag size={18} />, label: "Notice Board" },
     { to: "/help", icon: <HelpCircle size={18} />, label: "Help Center" },
   ],
 
   superadmin: [
-    { to: "/dashboard", icon: <LayoutDashboard size={18} />, label: "Dashboard" },
+    {
+      to: "/dashboard",
+      icon: <LayoutDashboard size={18} />,
+      label: "Dashboard",
+    },
     { to: "/employees", icon: <Users size={18} />, label: "Manage Employees" },
     { to: "/messages", icon: <MessageCircle size={18} />, label: "Messages" },
     { to: "/leaves", icon: <FileText size={18} />, label: "Leaves & Holidays" },
+    { to: "/notices", icon: <Flag size={18} />, label: "Notice Board" },
     { to: "/help", icon: <HelpCircle size={18} />, label: "Help Center" },
   ],
 };
