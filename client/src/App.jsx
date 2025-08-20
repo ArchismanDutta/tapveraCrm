@@ -57,6 +57,7 @@ const AppWrapper = () => {
     localStorage.removeItem("token");
     localStorage.removeItem("role");
     localStorage.removeItem("user");
+    sessionStorage.removeItem("noticesDismissed");
     setIsAuthenticated(false);
     setRole(null);
     navigate("/login", { replace: true });
