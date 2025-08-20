@@ -1,12 +1,12 @@
+// components/SummaryCard.jsx
+
 import React from "react";
 
 const SummaryCard = ({ weeklySummary }) => {
   if (!weeklySummary) {
     return (
       <div className="bg-white p-4 rounded-xl shadow-md space-y-4 w-full">
-        <h3 className="text-lg font-semibold border-b border-gray-300 pb-2">
-          Week Summary
-        </h3>
+        <h3 className="text-lg font-semibold border-b border-gray-300 pb-2">Week Summary</h3>
         <p>No weekly data available.</p>
       </div>
     );
@@ -24,9 +24,7 @@ const SummaryCard = ({ weeklySummary }) => {
 
   return (
     <div className="bg-white p-4 rounded-xl shadow-md space-y-4 w-full">
-      <h3 className="text-lg font-semibold border-b border-gray-300 pb-2">
-        Week Summary
-      </h3>
+      <h3 className="text-lg font-semibold border-b border-gray-300 pb-2">Week Summary</h3>
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
           <p className="text-gray-600 uppercase tracking-wider text-xs font-medium">Total Hours</p>
