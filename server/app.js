@@ -17,9 +17,13 @@ const passwordRoutes = require("./routes/passwordRoutes");
 const testRoutes = require("./routes/testRoutes");
 const emailRoutes = require("./routes/emailRoutes");
 const noticeRoutes = require("./routes/noticeRoutes");
-
-// Leave management routes
 const leaveRoutes = require("./routes/leaveRoutes");
+
+// Today Status route
+const statusRoutes = require("./routes/statusRoutes");
+
+// Summary routes — newly added for weekly summary API
+const summaryRoutes = require("./routes/summaryRoutes");
 
 const app = express();
 const server = http.createServer(app);
@@ -62,11 +66,20 @@ app.get("/api/health", (req, res) => {
 // API Routes
 app.use("/api/tasks", taskRoutes);
 app.use("/api/auth", authRoutes);
-app.use("/api/auth", passwordRoutes);
+
+// Changed base path to avoid conflicts
+app.use("/api/password", passwordRoutes);
+
 app.use("/api/test", testRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/email", emailRoutes);
 app.use("/api/leaves", leaveRoutes);
+
+// Today Status API
+app.use("/api/status", statusRoutes);
+
+// Summary API mounted at /api/summary
+app.use("/api/summary", summaryRoutes);
 app.use("/api/notices", noticeRoutes);
 
 
@@ -100,3 +113,4 @@ mongoose
     console.error("❌ MongoDB connection error:", err);
     process.exit(1);
   });
+

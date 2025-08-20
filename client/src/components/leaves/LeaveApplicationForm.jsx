@@ -1,10 +1,13 @@
 import React, { useState, useMemo } from "react";
+import InfoModal from "../InfoModal"; // adjust path as needed
 
 const LeaveApplicationForm = ({ onSubmitLeave }) => {
   const [type, setType] = useState("paid");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [reason, setReason] = useState("");
+  const [showHalfDayModal, setShowHalfDayModal] = useState(false);
+  const [pendingSubmission, setPendingSubmission] = useState(null);
 
   const todayStr = useMemo(() => new Date().toISOString().split("T")[0], []);
 
@@ -28,7 +31,18 @@ const LeaveApplicationForm = ({ onSubmitLeave }) => {
       return;
     }
 
-    // Send the flat fields expected by backend (controller also accepts period)
+    if (isHalfDay) {
+      setPendingSubmission({
+        type,
+        startDate,
+        endDate: startDate,
+        reason,
+      });
+      setShowHalfDayModal(true);
+      return;
+    }
+
+    // Submit other types directly
     onSubmitLeave({
       type,
       startDate,
@@ -36,7 +50,25 @@ const LeaveApplicationForm = ({ onSubmitLeave }) => {
       reason,
     });
 
-    // reset
+    resetForm();
+  };
+
+  const handleHalfDayConfirm = () => {
+    if (pendingSubmission) {
+      onSubmitLeave(pendingSubmission);
+      resetForm();
+    }
+    setShowHalfDayModal(false);
+    setPendingSubmission(null);
+  };
+
+  const handleHalfDayCancel = () => {
+    // Just close the modal and discard pending leave
+    setShowHalfDayModal(false);
+    setPendingSubmission(null);
+  };
+
+  const resetForm = () => {
     setReason("");
     setStartDate("");
     setEndDate("");
@@ -56,9 +88,7 @@ const LeaveApplicationForm = ({ onSubmitLeave }) => {
           onChange={(e) => {
             const next = e.target.value;
             setType(next);
-            if (next === "halfDay" && startDate) {
-              setEndDate(startDate);
-            }
+            if (next === "halfDay" && startDate) setEndDate(startDate);
           }}
         >
           <option value="paid">Paid Leave</option>
@@ -85,7 +115,9 @@ const LeaveApplicationForm = ({ onSubmitLeave }) => {
           <input
             type="date"
             min={startDate || todayStr}
-            className={`border border-gray-200 rounded-lg p-3 w-full shadow-sm focus:ring-2 focus:ring-yellow-500 focus:outline-none ${isHalfDay ? "bg-gray-100 cursor-not-allowed" : ""}`}
+            className={`border border-gray-200 rounded-lg p-3 w-full shadow-sm focus:ring-2 focus:ring-yellow-500 focus:outline-none ${
+              isHalfDay ? "bg-gray-100 cursor-not-allowed" : ""
+            }`}
             value={isHalfDay ? startDate : endDate}
             onChange={(e) => setEndDate(e.target.value)}
             disabled={isHalfDay}
@@ -108,6 +140,16 @@ const LeaveApplicationForm = ({ onSubmitLeave }) => {
           Submit Request
         </button>
       </form>
+
+      {/* Half Day Modal */}
+      <InfoModal
+        show={showHalfDayModal}
+        onClose={handleHalfDayConfirm} // "Okay" button
+        title="Half Day Warning"
+        message="Minimum working hours are 7 hours. If you work less, you will be marked absent."
+        cancelButton={true} // custom prop to show cancel
+        onCancel={handleHalfDayCancel} // Cancel button handler
+      />
     </div>
   );
 };

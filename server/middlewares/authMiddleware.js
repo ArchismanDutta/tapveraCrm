@@ -1,4 +1,4 @@
-// middleware/authMiddleware.js
+// server/middleware/authMiddleware.js
 const jwt = require("jsonwebtoken");
 const User = require("../models/User");
 
@@ -37,10 +37,7 @@ exports.protect = async (req, res, next) => {
 
 exports.authorize = (...roles) => {
   return (req, res, next) => {
-    // super-admin bypasses all restrictions
-    if (req.user.role === "super-admin") {
-      return next();
-    }
+    if (req.user.role === "super-admin") return next();
 
     if (!roles.includes(req.user.role)) {
       return res.status(403).json({
