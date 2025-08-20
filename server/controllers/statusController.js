@@ -1,13 +1,19 @@
+// controllers/statusController.js
+
 const UserStatus = require("../models/UserStatus");
 const DailyWork = require("../models/DailyWork");
 
-// Helper functions
+// Helpers
 function getWorkDurationSeconds(workedSessions, currentlyWorking) {
   let total = workedSessions.reduce(
     (sum, s) => (s.start && s.end ? sum + (s.end - s.start) / 1000 : sum),
     0
   );
-  if (currentlyWorking && workedSessions.length && !workedSessions[workedSessions.length - 1].end) {
+  if (
+    currentlyWorking &&
+    workedSessions.length &&
+    !workedSessions[workedSessions.length - 1].end
+  ) {
     total += (Date.now() - new Date(workedSessions[workedSessions.length - 1].start).getTime()) / 1000;
   }
   return Math.floor(total);
@@ -31,7 +37,6 @@ function secToHMS(sec) {
   return `${h}h ${m.toString().padStart(2, "0")}m ${s.toString().padStart(2, "0")}s`;
 }
 
-// Sync DailyWork collection with UserStatus
 async function syncDailyWork(userId, todayStatus) {
   const todayDate = new Date();
   todayDate.setHours(0, 0, 0, 0);
@@ -42,7 +47,7 @@ async function syncDailyWork(userId, todayStatus) {
       userId,
       date: todayDate,
       arrivalTime: todayStatus.arrivalTime || null,
-      expectedStartTime: "09:00", // Default expectedStartTime
+      expectedStartTime: "09:00",
       workDurationSeconds: 0,
       breakDurationSeconds: 0,
       breakSessions: [],
@@ -148,7 +153,7 @@ exports.updateTodayStatus = async (req, res) => {
       });
     }
 
-    // Enforce single punch in per day
+    // Validation for punch in/out duplication
     if (timelineEvent?.type === "Punch In") {
       if (todayStatus.timeline.some((e) => e.type === "Punch In")) {
         return res.status(400).json({ message: "Already punched in today" });
@@ -157,8 +162,6 @@ exports.updateTodayStatus = async (req, res) => {
         todayStatus.arrivalTime = new Date();
       }
     }
-
-    // Enforce single punch out per day
     if (timelineEvent?.type === "Punch Out") {
       if (todayStatus.timeline.some((e) => e.type === "Punch Out")) {
         return res.status(400).json({ message: "Already punched out today" });
@@ -169,7 +172,7 @@ exports.updateTodayStatus = async (req, res) => {
     if (currentlyWorking !== undefined) todayStatus.currentlyWorking = currentlyWorking;
     if (breakStartTime !== undefined) todayStatus.breakStartTime = breakStartTime;
 
-    // Work sessions update logic
+    // Update workedSessions based on timeline event
     if (timelineEvent?.type === "Punch In" || timelineEvent?.type === "Resume Work") {
       const ws = todayStatus.workedSessions;
       if (!ws.length || ws[ws.length - 1].end) ws.push({ start: new Date() });
@@ -179,7 +182,7 @@ exports.updateTodayStatus = async (req, res) => {
       if (ws.length && !ws[ws.length - 1].end) ws[ws.length - 1].end = new Date();
     }
 
-    // Break sessions update logic
+    // Update breakSessions based on timeline event
     if (timelineEvent?.type.startsWith("Break Start")) {
       const bs = todayStatus.breakSessions;
       if (!bs.length || bs[bs.length - 1].end) bs.push({ start: new Date() });
@@ -189,7 +192,7 @@ exports.updateTodayStatus = async (req, res) => {
       if (bs.length && !bs[bs.length - 1].end) bs[bs.length - 1].end = new Date();
     }
 
-    // Timeline & recent activities
+    // Add to timeline and recentActivities
     if (timelineEvent?.type && timelineEvent?.time) {
       todayStatus.timeline.push(timelineEvent);
       todayStatus.recentActivities.unshift({
@@ -200,7 +203,6 @@ exports.updateTodayStatus = async (req, res) => {
       if (todayStatus.recentActivities.length > 10) todayStatus.recentActivities.length = 10;
     }
 
-    // Durations
     const workDurationSeconds = getWorkDurationSeconds(todayStatus.workedSessions, todayStatus.currentlyWorking);
     const breakDurationSeconds = getBreakDurationSeconds(todayStatus.breakSessions, todayStatus.onBreak, todayStatus.breakStartTime);
 
