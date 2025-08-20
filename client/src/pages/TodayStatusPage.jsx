@@ -74,6 +74,8 @@ const TodayStatusPage = () => {
       setStatus(res.data);
       setSelectedBreakType("");
       fetchWeeklySummary();
+      // Notify other components/pages if needed
+      window.dispatchEvent(new Event("attendanceDataUpdate"));
     } catch (err) {
       console.error("Failed to update status:", err);
     }
@@ -85,9 +87,9 @@ const TodayStatusPage = () => {
     setLiveWork(status.workDurationSeconds || 0);
     if (status.currentlyWorking && status.lastSessionStart) {
       const base = status.workDurationSeconds || 0;
-      const lastStart = new Date(status.lastSessionStart).getTime();
+      const lastStartTime = new Date(status.lastSessionStart).getTime();
       const timer = setInterval(() => {
-        setLiveWork(base + Math.floor((Date.now() - lastStart) / 1000));
+        setLiveWork(base + Math.floor((Date.now() - lastStartTime) / 1000));
       }, 1000);
       return () => clearInterval(timer);
     }
@@ -97,9 +99,9 @@ const TodayStatusPage = () => {
   useEffect(() => {
     if (!status) return;
     if (status.onBreak && status.breakStartTs) {
-      const breakStart = new Date(status.breakStartTs).getTime();
+      const breakStartTime = new Date(status.breakStartTs).getTime();
       const timer = setInterval(() => {
-        setLiveBreak(Math.floor((Date.now() - breakStart) / 1000));
+        setLiveBreak(Math.floor((Date.now() - breakStartTime) / 1000));
       }, 1000);
       return () => clearInterval(timer);
     } else {
@@ -114,8 +116,19 @@ const TodayStatusPage = () => {
     const interval = setInterval(() => {
       fetchStatus();
       fetchWeeklySummary();
-    }, 60000); // refresh every 60s
+    }, 60000); // refresh every 60 seconds
     return () => clearInterval(interval);
+  }, []);
+
+  // Listen for external attendance data updates
+  useEffect(() => {
+    const handleAttendanceDataUpdate = () => {
+      fetchWeeklySummary();
+    };
+    window.addEventListener("attendanceDataUpdate", handleAttendanceDataUpdate);
+    return () => {
+      window.removeEventListener("attendanceDataUpdate", handleAttendanceDataUpdate);
+    };
   }, []);
 
   // Event handlers

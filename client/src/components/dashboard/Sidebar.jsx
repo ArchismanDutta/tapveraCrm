@@ -16,7 +16,7 @@ import {
 import { FaChevronCircleRight } from "react-icons/fa";
 import { NavLink } from "react-router-dom";
 
-// Menu Configuration for each role
+// Menu Configuration for each role, added Attendance for employee
 const menuConfig = {
   employee: [
     {
@@ -30,7 +30,8 @@ const menuConfig = {
       to: "/tasks-status",
       icon: <ClipboardList size={18} />,
       label: "Today's Work",
-    }, // Added menu item
+    },
+    { to: "/attendance", icon: <ClipboardList size={18} />, label: "Attendance" }, // Added Attendance here
     { to: "/messages", icon: <MessageCircle size={18} />, label: "Messages" },
     { to: "/leaves", icon: <FileText size={18} />, label: "Leaves & Holidays" },
     { to: "/requirements", icon: <Flag size={18} />, label: "Requirements" },
