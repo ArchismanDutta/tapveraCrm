@@ -21,6 +21,7 @@ import HolidaysAndLeaves from "./pages/HolidaysAndLeaves"; // Employee & Superad
 import AdminLeaveRequests from "./pages/AdminLeaveRequests"; // Admin Leave Requests Management
 import TodayStatusPage from "./pages/TodayStatusPage"; // Today's Status Page
 import AttendancePage from "./pages/AttendancePage"; // Import AttendancePage
+import NoticeForm from "./components/admintask/NoticeForm";
 
 const AppWrapper = () => {
   const navigate = useNavigate();
@@ -106,7 +107,10 @@ const AppWrapper = () => {
           isAuthenticated && role !== "admin" && role !== "super-admin" ? (
             <EmployeeDashboardPage onLogout={handleLogout} role={role} />
           ) : (
-            <Navigate to={isAuthenticated ? "/admin/tasks" : "/login"} replace />
+            <Navigate
+              to={isAuthenticated ? "/admin/tasks" : "/login"}
+              replace
+            />
           )
         }
       />
@@ -130,7 +134,10 @@ const AppWrapper = () => {
           isAuthenticated && role !== "admin" && role !== "super-admin" ? (
             <Tasks onLogout={handleLogout} />
           ) : (
-            <Navigate to={isAuthenticated ? "/admin/tasks" : "/login"} replace />
+            <Navigate
+              to={isAuthenticated ? "/admin/tasks" : "/login"}
+              replace
+            />
           )
         }
       />
@@ -142,7 +149,10 @@ const AppWrapper = () => {
           isAuthenticated && role !== "admin" && role !== "super-admin" ? (
             <TodayStatusPage onLogout={handleLogout} />
           ) : (
-            <Navigate to={isAuthenticated ? "/admin/tasks" : "/login"} replace />
+            <Navigate
+              to={isAuthenticated ? "/admin/tasks" : "/login"}
+              replace
+            />
           )
         }
       />
@@ -154,7 +164,25 @@ const AppWrapper = () => {
           isAuthenticated && role !== "admin" && role !== "super-admin" ? (
             <TodayStatusPage onLogout={handleLogout} />
           ) : (
-            <Navigate to={isAuthenticated ? "/admin/tasks" : "/login"} replace />
+            <Navigate
+              to={isAuthenticated ? "/admin/tasks" : "/login"}
+              replace
+            />
+          )
+        }
+      />
+
+      {/* Attendance Page - NEW ROUTE */}
+      <Route
+        path="/attendance"
+        element={
+          isAuthenticated && role !== "admin" && role !== "super-admin" ? (
+            <AttendancePage onLogout={handleLogout} />
+          ) : (
+            <Navigate
+              to={isAuthenticated ? "/admin/tasks" : "/login"}
+              replace
+            />
           )
         }
       />
@@ -178,7 +206,10 @@ const AppWrapper = () => {
           isAuthenticated && role !== "admin" ? (
             <HolidaysAndLeaves onLogout={handleLogout} />
           ) : (
-            <Navigate to={isAuthenticated ? "/admin/tasks" : "/login"} replace />
+            <Navigate
+              to={isAuthenticated ? "/admin/tasks" : "/login"}
+              replace
+            />
           )
         }
       />
@@ -233,6 +264,17 @@ const AppWrapper = () => {
             }
             replace
           />
+        }
+      />
+
+      <Route
+        path="/admin/notices"
+        element={
+          isAuthenticated && (role === "admin" || role === "super-admin") ? (
+            <NoticeForm />
+          ) : (
+            <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />
+          )
         }
       />
     </Routes>

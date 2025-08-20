@@ -16,6 +16,7 @@ const authRoutes = require("./routes/authRoutes");
 const passwordRoutes = require("./routes/passwordRoutes");
 const testRoutes = require("./routes/testRoutes");
 const emailRoutes = require("./routes/emailRoutes");
+const noticeRoutes = require("./routes/noticeRoutes");
 const leaveRoutes = require("./routes/leaveRoutes");
 
 // Today Status route
@@ -79,6 +80,8 @@ app.use("/api/status", statusRoutes);
 
 // Summary API mounted at /api/summary
 app.use("/api/summary", summaryRoutes);
+app.use("/api/notices", noticeRoutes);
+
 
 // Serve frontend (production)
 if (process.env.NODE_ENV === "production") {
