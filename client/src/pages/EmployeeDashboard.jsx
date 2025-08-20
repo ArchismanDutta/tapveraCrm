@@ -22,6 +22,7 @@ const EmployeeDashboard = ({ onLogout }) => {
   const [summaryData, setSummaryData] = useState([]);
   const [pendingCount, setPendingCount] = useState(0);
   const [notifications, setNotifications] = useState([]);
+  const [notices, setNotices] = useState([]);
   const socketRef = useRef(null);
   const navigate = useNavigate();
 
@@ -190,6 +191,21 @@ const EmployeeDashboard = ({ onLogout }) => {
     return () => clearInterval(interval);
   }, []);
 
+  useEffect(() => {
+    const fetchNotices = async () => {
+      try {
+        const token = localStorage.getItem("token");
+        const res = await axios.get(`${API_BASE}/api/notices`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        setNotices(res.data || []);
+      } catch (err) {
+        console.error("Error fetching notices:", err.message);
+      }
+    };
+    fetchNotices();
+  }, []);
+
   return (
     <div className="flex bg-gray-50 font-sans text-gray-800">
       <Sidebar
@@ -210,7 +226,8 @@ const EmployeeDashboard = ({ onLogout }) => {
                 ? "Morning"
                 : currentTime.getHours() < 18
                 ? "Afternoon"
-                : "Evening"}, {userName}
+                : "Evening"}
+              , {userName}
             </h1>
             <p className="text-sm text-gray-500">
               {currentTime.toLocaleDateString("en-US", {
@@ -238,6 +255,33 @@ const EmployeeDashboard = ({ onLogout }) => {
             </Link>
           </div>
         </div>
+
+        {notices.length > 0 && (
+          <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50">
+            <div className="bg-white/90 rounded-lg shadow-xl p-6 max-w-lg w-full">
+              <h2 className="text-xl font-bold mb-4">📢 Notices</h2>
+              <div className="space-y-3 max-h-80 overflow-y-auto">
+                {notices.map((n) => (
+                  <div
+                    key={n._id}
+                    className="border-l-4 border-orange-500 pl-3 text-gray-800"
+                  >
+                    <p>{n.message}</p>
+                    <p className="text-xs text-gray-400 mt-1">
+                      {new Date(n.createdAt).toLocaleString()}
+                    </p>
+                  </div>
+                ))}
+              </div>
+              <button
+                onClick={() => setNotices([])}
+                className="mt-4 px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        )}
 
         <SummaryCards data={summaryData} />
 
