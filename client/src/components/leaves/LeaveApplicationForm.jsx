@@ -78,7 +78,7 @@ const LeaveApplicationForm = ({ onSubmitLeave }) => {
   const isHalfDay = type === "halfDay";
 
   return (
-    <div className="bg-white backdrop-blur-xl border border-gray-100 shadow-xl rounded-2xl p-6">
+    <div className="bg-white backdrop-blur-xl border border-gray-100 shadow-xl rounded-2xl p-6 z-10">
       <h3 className="text-xl font-semibold mb-5 text-gray-800">Apply for Leave</h3>
       <form onSubmit={handleSubmit} className="space-y-4">
         {/* Leave Type */}
