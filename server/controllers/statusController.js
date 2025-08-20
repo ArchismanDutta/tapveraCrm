@@ -45,7 +45,7 @@ async function syncDailyWork(userId, todayStatus) {
       expectedStartTime: "09:00", // Default expectedStartTime
       workDurationSeconds: 0,
       breakDurationSeconds: 0,
-      breakSessions: []
+      breakSessions: [],
     });
   }
 
@@ -75,9 +75,9 @@ exports.getTodayStatus = async (req, res) => {
     const tomorrowStart = new Date(todayStart);
     tomorrowStart.setDate(todayStart.getDate() + 1);
 
-    let todayStatus = await UserStatus.findOne({ 
-      userId, 
-      today: { $gte: todayStart, $lt: tomorrowStart }
+    let todayStatus = await UserStatus.findOne({
+      userId,
+      today: { $gte: todayStart, $lt: tomorrowStart },
     });
 
     if (!todayStatus) {
@@ -88,7 +88,7 @@ exports.getTodayStatus = async (req, res) => {
         workedSessions: [],
         breakSessions: [],
         timeline: [],
-        recentActivities: []
+        recentActivities: [],
       });
     }
 
@@ -104,12 +104,13 @@ exports.getTodayStatus = async (req, res) => {
       breakDurationSeconds,
       workDuration: secToHMS(workDurationSeconds),
       breakDuration: secToHMS(breakDurationSeconds),
-      lastSessionStart: todayStatus.currentlyWorking &&
+      lastSessionStart:
+        todayStatus.currentlyWorking &&
         todayStatus.workedSessions.length &&
         !todayStatus.workedSessions[todayStatus.workedSessions.length - 1].end
-        ? todayStatus.workedSessions[todayStatus.workedSessions.length - 1].start
-        : null,
-      breakStartTs: todayStatus.onBreak ? todayStatus.breakStartTime : null
+          ? todayStatus.workedSessions[todayStatus.workedSessions.length - 1].start
+          : null,
+      breakStartTs: todayStatus.onBreak ? todayStatus.breakStartTime : null,
     });
   } catch (err) {
     console.error("Error fetching today's status:", err);
@@ -130,9 +131,9 @@ exports.updateTodayStatus = async (req, res) => {
     const tomorrowStart = new Date(todayStart);
     tomorrowStart.setDate(todayStart.getDate() + 1);
 
-    let todayStatus = await UserStatus.findOne({ 
-      userId, 
-      today: { $gte: todayStart, $lt: tomorrowStart }
+    let todayStatus = await UserStatus.findOne({
+      userId,
+      today: { $gte: todayStart, $lt: tomorrowStart },
     });
 
     if (!todayStatus) {
@@ -143,12 +144,25 @@ exports.updateTodayStatus = async (req, res) => {
         workedSessions: [],
         breakSessions: [],
         timeline: [],
-        recentActivities: []
+        recentActivities: [],
       });
     }
 
-    if (timelineEvent && timelineEvent.type === "Punch In" && !todayStatus.arrivalTime) {
-      todayStatus.arrivalTime = new Date();
+    // Enforce single punch in per day
+    if (timelineEvent?.type === "Punch In") {
+      if (todayStatus.timeline.some((e) => e.type === "Punch In")) {
+        return res.status(400).json({ message: "Already punched in today" });
+      }
+      if (!todayStatus.arrivalTime) {
+        todayStatus.arrivalTime = new Date();
+      }
+    }
+
+    // Enforce single punch out per day
+    if (timelineEvent?.type === "Punch Out") {
+      if (todayStatus.timeline.some((e) => e.type === "Punch Out")) {
+        return res.status(400).json({ message: "Already punched out today" });
+      }
     }
 
     if (onBreak !== undefined) todayStatus.onBreak = onBreak;
@@ -181,7 +195,7 @@ exports.updateTodayStatus = async (req, res) => {
       todayStatus.recentActivities.unshift({
         date: new Date().toLocaleDateString(),
         activity: timelineEvent.type,
-        time: timelineEvent.time
+        time: timelineEvent.time,
       });
       if (todayStatus.recentActivities.length > 10) todayStatus.recentActivities.length = 10;
     }
@@ -203,12 +217,13 @@ exports.updateTodayStatus = async (req, res) => {
       arrivalTimeFormatted: todayStatus.arrivalTime
         ? new Date(todayStatus.arrivalTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: true })
         : null,
-      lastSessionStart: todayStatus.currentlyWorking &&
+      lastSessionStart:
+        todayStatus.currentlyWorking &&
         todayStatus.workedSessions.length &&
         !todayStatus.workedSessions[todayStatus.workedSessions.length - 1].end
-        ? todayStatus.workedSessions[todayStatus.workedSessions.length - 1].start
-        : null,
-      breakStartTs: todayStatus.onBreak ? todayStatus.breakStartTime : null
+          ? todayStatus.workedSessions[todayStatus.workedSessions.length - 1].start
+          : null,
+      breakStartTs: todayStatus.onBreak ? todayStatus.breakStartTime : null,
     });
   } catch (err) {
     console.error("Error updating today's status:", err);
