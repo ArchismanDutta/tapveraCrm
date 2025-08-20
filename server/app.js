@@ -16,6 +16,7 @@ const authRoutes = require("./routes/authRoutes");
 const passwordRoutes = require("./routes/passwordRoutes");
 const testRoutes = require("./routes/testRoutes");
 const emailRoutes = require("./routes/emailRoutes");
+const noticeRoutes = require("./routes/noticeRoutes");
 
 // Leave management routes
 const leaveRoutes = require("./routes/leaveRoutes");
@@ -66,6 +67,8 @@ app.use("/api/test", testRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/email", emailRoutes);
 app.use("/api/leaves", leaveRoutes);
+app.use("/api/notices", noticeRoutes);
+
 
 // Serve frontend (production)
 if (process.env.NODE_ENV === "production") {
