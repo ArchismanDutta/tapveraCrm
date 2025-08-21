@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import {
   BrowserRouter as Router,
   Routes,
@@ -20,8 +20,12 @@ import EmployeeManagementPage from "./pages/EmployeeManagement";
 import HolidaysAndLeaves from "./pages/HolidaysAndLeaves"; // Employee & Superadmin Leaves Page
 import AdminLeaveRequests from "./pages/AdminLeaveRequests"; // Admin Leave Requests Management
 import TodayStatusPage from "./pages/TodayStatusPage"; // Today's Status Page
-import AttendancePage from "./pages/AttendancePage"; // Import AttendancePage
+import AttendancePage from "./pages/AttendancePage"; // Attendance Page
 import NoticeForm from "./components/admintask/NoticeForm";
+import TodoPage from "./pages/TodoPage"; // Import the TodoPage
+
+// Import ChatPage for chat system
+import ChatPage from "./pages/ChatPage";
 
 const AppWrapper = () => {
   const navigate = useNavigate();
@@ -32,8 +36,7 @@ const AppWrapper = () => {
   useEffect(() => {
     const token = localStorage.getItem("token");
     let storedRole =
-      JSON.parse(localStorage.getItem("user"))?.role ||
-      localStorage.getItem("role");
+      JSON.parse(localStorage.getItem("user"))?.role || localStorage.getItem("role");
 
     if (storedRole) storedRole = storedRole.toLowerCase();
 
@@ -64,9 +67,7 @@ const AppWrapper = () => {
   };
 
   if (loading) {
-    return (
-      <div className="flex justify-center items-center h-screen">Loading...</div>
-    );
+    return <div className="flex justify-center items-center h-screen">Loading...</div>;
   }
 
   return (
@@ -108,10 +109,7 @@ const AppWrapper = () => {
           isAuthenticated && role !== "admin" && role !== "super-admin" ? (
             <EmployeeDashboardPage onLogout={handleLogout} role={role} />
           ) : (
-            <Navigate
-              to={isAuthenticated ? "/admin/tasks" : "/login"}
-              replace
-            />
+            <Navigate to={isAuthenticated ? "/admin/tasks" : "/login"} replace />
           )
         }
       />
@@ -135,10 +133,7 @@ const AppWrapper = () => {
           isAuthenticated && role !== "admin" && role !== "super-admin" ? (
             <Tasks onLogout={handleLogout} />
           ) : (
-            <Navigate
-              to={isAuthenticated ? "/admin/tasks" : "/login"}
-              replace
-            />
+            <Navigate to={isAuthenticated ? "/admin/tasks" : "/login"} replace />
           )
         }
       />
@@ -150,10 +145,7 @@ const AppWrapper = () => {
           isAuthenticated && role !== "admin" && role !== "super-admin" ? (
             <TodayStatusPage onLogout={handleLogout} />
           ) : (
-            <Navigate
-              to={isAuthenticated ? "/admin/tasks" : "/login"}
-              replace
-            />
+            <Navigate to={isAuthenticated ? "/admin/tasks" : "/login"} replace />
           )
         }
       />
@@ -165,30 +157,12 @@ const AppWrapper = () => {
           isAuthenticated && role !== "admin" && role !== "super-admin" ? (
             <TodayStatusPage onLogout={handleLogout} />
           ) : (
-            <Navigate
-              to={isAuthenticated ? "/admin/tasks" : "/login"}
-              replace
-            />
+            <Navigate to={isAuthenticated ? "/admin/tasks" : "/login"} replace />
           )
         }
       />
 
-      {/* Attendance Page - NEW ROUTE */}
-      <Route
-        path="/attendance"
-        element={
-          isAuthenticated && role !== "admin" && role !== "super-admin" ? (
-            <AttendancePage onLogout={handleLogout} />
-          ) : (
-            <Navigate
-              to={isAuthenticated ? "/admin/tasks" : "/login"}
-              replace
-            />
-          )
-        }
-      />
-
-      {/* Attendance Page - NEW ROUTE */}
+      {/* Attendance Page */}
       <Route
         path="/attendance"
         element={
@@ -200,17 +174,38 @@ const AppWrapper = () => {
         }
       />
 
-      {/* Holidays & Leaves for Employee & Superadmin */}
+      {/* Todo Page */}
+      <Route
+        path="/todo"
+        element={
+          isAuthenticated && role !== "admin" && role !== "super-admin" ? (
+            <TodoPage />
+          ) : (
+            <Navigate to={isAuthenticated ? "/admin/tasks" : "/login"} replace />
+          )
+        }
+      />
+
+      {/* Chat Page */}
+      <Route
+        path="/chat"
+        element={
+          isAuthenticated && role !== "admin" && role !== "super-admin" ? (
+            <ChatPage />
+          ) : (
+            <Navigate to={isAuthenticated ? "/admin/tasks" : "/login"} replace />
+          )
+        }
+      />
+
+      {/* Holidays & Leaves */}
       <Route
         path="/leaves"
         element={
           isAuthenticated && role !== "admin" ? (
             <HolidaysAndLeaves onLogout={handleLogout} />
           ) : (
-            <Navigate
-              to={isAuthenticated ? "/admin/tasks" : "/login"}
-              replace
-            />
+            <Navigate to={isAuthenticated ? "/admin/tasks" : "/login"} replace />
           )
         }
       />
@@ -251,6 +246,18 @@ const AppWrapper = () => {
         }
       />
 
+      {/* Admin Notices */}
+      <Route
+        path="/admin/notices"
+        element={
+          isAuthenticated && (role === "admin" || role === "super-admin") ? (
+            <NoticeForm />
+          ) : (
+            <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />
+          )
+        }
+      />
+
       {/* Default Catch-All Redirect */}
       <Route
         path="*"
@@ -265,17 +272,6 @@ const AppWrapper = () => {
             }
             replace
           />
-        }
-      />
-
-      <Route
-        path="/admin/notices"
-        element={
-          isAuthenticated && (role === "admin" || role === "super-admin") ? (
-            <NoticeForm />
-          ) : (
-            <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />
-          )
         }
       />
     </Routes>

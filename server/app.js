@@ -18,6 +18,10 @@ const testRoutes = require("./routes/testRoutes");
 const emailRoutes = require("./routes/emailRoutes");
 const noticeRoutes = require("./routes/noticeRoutes");
 const leaveRoutes = require("./routes/leaveRoutes");
+const todoTaskRoutes = require("./routes/todoTaskRoutes"); // Added todoTask routes
+
+// Chat Routes (new)
+const chatRoutes = require("./routes/chatRoutes");
 
 // Today Status route
 const statusRoutes = require("./routes/statusRoutes");
@@ -75,13 +79,18 @@ app.use("/api/users", userRoutes);
 app.use("/api/email", emailRoutes);
 app.use("/api/leaves", leaveRoutes);
 
+// New TodoTask API routes
+app.use("/api/todos", todoTaskRoutes);
+
+// Chat API routes (new)
+app.use("/api/chat", chatRoutes);
+
 // Today Status API
 app.use("/api/status", statusRoutes);
 
 // Summary API mounted at /api/summary
 app.use("/api/summary", summaryRoutes);
 app.use("/api/notices", noticeRoutes);
-
 
 // Serve frontend (production)
 if (process.env.NODE_ENV === "production") {
@@ -113,4 +122,3 @@ mongoose
     console.error("❌ MongoDB connection error:", err);
     process.exit(1);
   });
-
