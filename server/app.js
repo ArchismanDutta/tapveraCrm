@@ -20,6 +20,9 @@ const noticeRoutes = require("./routes/noticeRoutes");
 const leaveRoutes = require("./routes/leaveRoutes");
 const todoTaskRoutes = require("./routes/todoTaskRoutes"); // Added todoTask routes
 
+// Chat Routes (new)
+const chatRoutes = require("./routes/chatRoutes");
+
 // Today Status route
 const statusRoutes = require("./routes/statusRoutes");
 
@@ -78,6 +81,9 @@ app.use("/api/leaves", leaveRoutes);
 
 // New TodoTask API routes
 app.use("/api/todos", todoTaskRoutes);
+
+// Chat API routes (new)
+app.use("/api/chat", chatRoutes);
 
 // Today Status API
 app.use("/api/status", statusRoutes);
