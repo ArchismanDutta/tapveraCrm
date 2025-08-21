@@ -24,6 +24,9 @@ import AttendancePage from "./pages/AttendancePage"; // Attendance Page
 import NoticeForm from "./components/admintask/NoticeForm";
 import TodoPage from "./pages/TodoPage"; // Import the TodoPage
 
+// Import ChatPage for chat system
+import ChatPage from "./pages/ChatPage";
+
 const AppWrapper = () => {
   const navigate = useNavigate();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -64,9 +67,7 @@ const AppWrapper = () => {
   };
 
   if (loading) {
-    return (
-      <div className="flex justify-center items-center h-screen">Loading...</div>
-    );
+    return <div className="flex justify-center items-center h-screen">Loading...</div>;
   }
 
   return (
@@ -108,10 +109,7 @@ const AppWrapper = () => {
           isAuthenticated && role !== "admin" && role !== "super-admin" ? (
             <EmployeeDashboardPage onLogout={handleLogout} role={role} />
           ) : (
-            <Navigate
-              to={isAuthenticated ? "/admin/tasks" : "/login"}
-              replace
-            />
+            <Navigate to={isAuthenticated ? "/admin/tasks" : "/login"} replace />
           )
         }
       />
@@ -135,10 +133,7 @@ const AppWrapper = () => {
           isAuthenticated && role !== "admin" && role !== "super-admin" ? (
             <Tasks onLogout={handleLogout} />
           ) : (
-            <Navigate
-              to={isAuthenticated ? "/admin/tasks" : "/login"}
-              replace
-            />
+            <Navigate to={isAuthenticated ? "/admin/tasks" : "/login"} replace />
           )
         }
       />
@@ -150,10 +145,7 @@ const AppWrapper = () => {
           isAuthenticated && role !== "admin" && role !== "super-admin" ? (
             <TodayStatusPage onLogout={handleLogout} />
           ) : (
-            <Navigate
-              to={isAuthenticated ? "/admin/tasks" : "/login"}
-              replace
-            />
+            <Navigate to={isAuthenticated ? "/admin/tasks" : "/login"} replace />
           )
         }
       />
@@ -165,10 +157,7 @@ const AppWrapper = () => {
           isAuthenticated && role !== "admin" && role !== "super-admin" ? (
             <TodayStatusPage onLogout={handleLogout} />
           ) : (
-            <Navigate
-              to={isAuthenticated ? "/admin/tasks" : "/login"}
-              replace
-            />
+            <Navigate to={isAuthenticated ? "/admin/tasks" : "/login"} replace />
           )
         }
       />
@@ -180,25 +169,31 @@ const AppWrapper = () => {
           isAuthenticated && role !== "admin" && role !== "super-admin" ? (
             <AttendancePage onLogout={handleLogout} />
           ) : (
-            <Navigate
-              to={isAuthenticated ? "/admin/tasks" : "/login"}
-              replace
-            />
+            <Navigate to={isAuthenticated ? "/admin/tasks" : "/login"} replace />
           )
         }
       />
 
-      {/* Todo Page - Added route */}
+      {/* Todo Page */}
       <Route
         path="/todo"
         element={
           isAuthenticated && role !== "admin" && role !== "super-admin" ? (
             <TodoPage />
           ) : (
-            <Navigate
-              to={isAuthenticated ? "/admin/tasks" : "/login"}
-              replace
-            />
+            <Navigate to={isAuthenticated ? "/admin/tasks" : "/login"} replace />
+          )
+        }
+      />
+
+      {/* Chat Page */}
+      <Route
+        path="/chat"
+        element={
+          isAuthenticated && role !== "admin" && role !== "super-admin" ? (
+            <ChatPage />
+          ) : (
+            <Navigate to={isAuthenticated ? "/admin/tasks" : "/login"} replace />
           )
         }
       />
@@ -210,10 +205,7 @@ const AppWrapper = () => {
           isAuthenticated && role !== "admin" ? (
             <HolidaysAndLeaves onLogout={handleLogout} />
           ) : (
-            <Navigate
-              to={isAuthenticated ? "/admin/tasks" : "/login"}
-              replace
-            />
+            <Navigate to={isAuthenticated ? "/admin/tasks" : "/login"} replace />
           )
         }
       />
