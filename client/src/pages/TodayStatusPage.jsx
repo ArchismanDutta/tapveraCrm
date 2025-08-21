@@ -6,6 +6,7 @@ import BreakManagement from "../components/workstatus/BreakManagement";
 import Timeline from "../components/workstatus/Timeline";
 import SummaryCard from "../components/workstatus/SummaryCard";
 import RecentActivity from "../components/workstatus/RecentActivity";
+import PunchOutTodoPopup from "../components/todo/PunchOutTodoPopup"; // import the popup component
 
 // Single definition of formatHMS function
 function formatHMS(seconds) {
@@ -22,6 +23,9 @@ const TodayStatusPage = () => {
   const [liveBreak, setLiveBreak] = useState(0);
   const [selectedBreakType, setSelectedBreakType] = useState("");
   const [weeklySummary, setWeeklySummary] = useState(null);
+
+  const [showTodoPopup, setShowTodoPopup] = useState(false);
+  const [pendingTodoTasks, setPendingTodoTasks] = useState([]);
 
   const token = localStorage.getItem("token");
 
@@ -74,7 +78,6 @@ const TodayStatusPage = () => {
       setStatus(res.data);
       setSelectedBreakType("");
       fetchWeeklySummary();
-      // Notify other components/pages if needed
       window.dispatchEvent(new Event("attendanceDataUpdate"));
     } catch (err) {
       console.error("Failed to update status:", err);
@@ -116,7 +119,7 @@ const TodayStatusPage = () => {
     const interval = setInterval(() => {
       fetchStatus();
       fetchWeeklySummary();
-    }, 60000); // refresh every 60 seconds
+    }, 60000);
     return () => clearInterval(interval);
   }, []);
 
@@ -131,7 +134,7 @@ const TodayStatusPage = () => {
     };
   }, []);
 
-  // Event handlers
+  // Punch In handler
   const handlePunchIn = () => {
     if (status?.currentlyWorking) return;
     updateStatus({
@@ -141,8 +144,35 @@ const TodayStatusPage = () => {
     });
   };
 
-  const handlePunchOut = () => {
+  // Check Todo tasks before punch out
+  const checkTodoTasksBeforePunchOut = async () => {
+    try {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const res = await axios.get("/api/todos", {
+        headers: { Authorization: `Bearer ${token}` },
+        params: { date: today.toISOString() },
+      });
+      const incompletes = res.data.filter((t) => !t.completed);
+      if (incompletes.length > 0) {
+        setPendingTodoTasks(incompletes);
+        setShowTodoPopup(true);
+        return false;
+      }
+      return true;
+    } catch (err) {
+      console.error("Error checking todo tasks before punch out:", err);
+      return true;
+    }
+  };
+
+  // Punch Out handler with todo check
+  const handlePunchOut = async () => {
     if (!(status?.currentlyWorking) && !(status?.onBreak)) return;
+
+    const canPunchOut = await checkTodoTasksBeforePunchOut();
+    if (!canPunchOut) return;
+
     updateStatus({
       currentlyWorking: false,
       onBreak: false,
@@ -150,6 +180,43 @@ const TodayStatusPage = () => {
     });
   };
 
+  // Popup button handlers
+  const onCloseTodoPopup = () => {
+    setShowTodoPopup(false);
+    setPendingTodoTasks([]);
+  };
+
+  const onFindOutTodoPopup = () => {
+    setShowTodoPopup(false);
+    setPendingTodoTasks([]);
+    window.location.href = "/todo";
+  };
+
+  const onMoveToTomorrowTodoPopup = async () => {
+    try {
+      const tomorrow = new Date();
+      tomorrow.setHours(0, 0, 0, 0);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+
+      await Promise.all(
+        pendingTodoTasks.map((task) =>
+          axios.post(
+            `/api/todos/${task._id}/move`,
+            { newDate: tomorrow.toISOString() },
+            { headers: { Authorization: `Bearer ${token}` } }
+          )
+        )
+      );
+      setShowTodoPopup(false);
+      setPendingTodoTasks([]);
+      // Redirect to todo page to show updated upcoming tasks
+      window.location.href = "/todo";
+    } catch (err) {
+      console.error("Failed to move tasks to tomorrow:", err);
+    }
+  };
+
+  // Break handlers
   const handleStartBreak = (breakType) => {
     if (!breakType || !status?.currentlyWorking || status?.onBreak) return;
     updateStatus({
@@ -206,6 +273,14 @@ const TodayStatusPage = () => {
             <RecentActivity activities={status.recentActivities || []} />
           </div>
         </div>
+        {showTodoPopup && (
+          <PunchOutTodoPopup
+            tasks={pendingTodoTasks}
+            onClose={onCloseTodoPopup}
+            onFindOut={onFindOutTodoPopup}
+            onMoveToTomorrow={onMoveToTomorrowTodoPopup}
+          />
+        )}
       </main>
     </div>
   );

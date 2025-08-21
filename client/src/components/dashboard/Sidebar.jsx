@@ -16,7 +16,7 @@ import {
 import { FaChevronCircleRight } from "react-icons/fa";
 import { NavLink } from "react-router-dom";
 
-// Menu Configuration for each role, added Attendance for employee
+// Menu Configuration for each role, added Attendance and Todo for employee
 const menuConfig = {
   employee: [
     {
@@ -31,7 +31,8 @@ const menuConfig = {
       icon: <ClipboardList size={18} />,
       label: "Today's Work",
     },
-    { to: "/attendance", icon: <ClipboardList size={18} />, label: "Attendance" }, // Added Attendance here
+    { to: "/attendance", icon: <ClipboardList size={18} />, label: "Attendance" },
+    { to: "/todo", icon: <ClipboardList size={18} />, label: "Todo" }, // Added Todo here
     { to: "/messages", icon: <MessageCircle size={18} />, label: "Messages" },
     { to: "/leaves", icon: <FileText size={18} />, label: "Leaves & Holidays" },
     { to: "/requirements", icon: <Flag size={18} />, label: "Requirements" },
@@ -53,6 +54,8 @@ const menuConfig = {
     },
     { to: "/admin/notices", icon: <Flag size={18} />, label: "Notice Board" },
     { to: "/help", icon: <HelpCircle size={18} />, label: "Help Center" },
+    // Uncomment if you want admins to access todo page:
+    // { to: "/todo", icon: <ClipboardList size={18} />, label: "Todo" },
   ],
 
   superadmin: [
