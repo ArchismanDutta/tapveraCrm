@@ -106,7 +106,10 @@ const AppWrapper = () => {
           isAuthenticated && role !== "admin" && role !== "super-admin" ? (
             <EmployeeDashboardPage onLogout={handleLogout} role={role} />
           ) : (
-            <Navigate to={isAuthenticated ? "/admin/tasks" : "/login"} replace />
+            <Navigate
+              to={isAuthenticated ? "/admin/tasks" : "/login"}
+              replace
+            />
           )
         }
       />
@@ -130,7 +133,10 @@ const AppWrapper = () => {
           isAuthenticated && role !== "admin" && role !== "super-admin" ? (
             <Tasks onLogout={handleLogout} />
           ) : (
-            <Navigate to={isAuthenticated ? "/admin/tasks" : "/login"} replace />
+            <Navigate
+              to={isAuthenticated ? "/admin/tasks" : "/login"}
+              replace
+            />
           )
         }
       />
@@ -139,10 +145,13 @@ const AppWrapper = () => {
       <Route
         path="/today-status"
         element={
-          isAuthenticated && role !== "admin" && role !== "super-admin" ? (
+          isAuthenticated ? (
             <TodayStatusPage onLogout={handleLogout} />
           ) : (
-            <Navigate to={isAuthenticated ? "/admin/tasks" : "/login"} replace />
+            <Navigate
+              to={isAuthenticated ? "/admin/tasks" : "/login"}
+              replace
+            />
           )
         }
       />
@@ -152,7 +161,10 @@ const AppWrapper = () => {
           isAuthenticated && role !== "admin" && role !== "super-admin" ? (
             <TodayStatusPage onLogout={handleLogout} />
           ) : (
-            <Navigate to={isAuthenticated ? "/admin/tasks" : "/login"} replace />
+            <Navigate
+              to={isAuthenticated ? "/admin/tasks" : "/login"}
+              replace
+            />
           )
         }
       />
@@ -164,7 +176,10 @@ const AppWrapper = () => {
           isAuthenticated && role !== "admin" && role !== "super-admin" ? (
             <AttendancePage onLogout={handleLogout} />
           ) : (
-            <Navigate to={isAuthenticated ? "/admin/tasks" : "/login"} replace />
+            <Navigate
+              to={isAuthenticated ? "/admin/tasks" : "/login"}
+              replace
+            />
           )
         }
       />
@@ -174,9 +189,12 @@ const AppWrapper = () => {
         path="/todo"
         element={
           isAuthenticated && role !== "admin" && role !== "super-admin" ? (
-            <TodoPage />
+            <TodoPage onLogout={handleLogout} />
           ) : (
-            <Navigate to={isAuthenticated ? "/admin/tasks" : "/login"} replace />
+            <Navigate
+              to={isAuthenticated ? "/admin/tasks" : "/login"}
+              replace
+            />
           )
         }
       />
@@ -188,7 +206,10 @@ const AppWrapper = () => {
           isAuthenticated && role !== "admin" ? (
             <HolidaysAndLeaves onLogout={handleLogout} />
           ) : (
-            <Navigate to={isAuthenticated ? "/admin/tasks" : "/login"} replace />
+            <Navigate
+              to={isAuthenticated ? "/admin/tasks" : "/login"}
+              replace
+            />
           )
         }
       />
