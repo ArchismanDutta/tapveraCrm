@@ -255,7 +255,7 @@ const AppWrapper = () => {
         path="/admin/notices"
         element={
           isAuthenticated && (role === "admin" || role === "super-admin") ? (
-            <NoticeBoard />
+            <NoticeBoard onLogout={handleLogout} />
           ) : (
             <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />
           )
