@@ -18,9 +18,6 @@ const noticeRoutes = require("./routes/noticeRoutes");
 const leaveRoutes = require("./routes/leaveRoutes");
 const todoTaskRoutes = require("./routes/todoTaskRoutes");
 
-// Chat Routes
-const chatRoutes = require("./routes/chatRoutes");
-
 // Today Status route
 const statusRoutes = require("./routes/statusRoutes");
 
@@ -71,7 +68,6 @@ app.use("/api/users", userRoutes);
 app.use("/api/email", emailRoutes);
 app.use("/api/leaves", leaveRoutes);
 app.use("/api/todos", todoTaskRoutes);
-app.use("/api/chat", chatRoutes);
 app.use("/api/status", statusRoutes);
 app.use("/api/summary", summaryRoutes);
 app.use("/api/notices", noticeRoutes);
