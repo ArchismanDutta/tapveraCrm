@@ -1,8 +1,7 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { Link, useNavigate } from "react-router-dom";
 import dayjs from "dayjs";
-import { io } from "socket.io-client";
 
 import SummaryCards from "../components/dashboard/SummaryCards";
 import TodayTasks from "../components/dashboard/TodayTasks";
@@ -12,6 +11,8 @@ import NotificationBell from "../components/dashboard/NotificationBell";
 
 // Backend API base
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
+
+const POLL_INTERVAL_MS = 15000; // 15 seconds
 
 const EmployeeDashboard = ({ onLogout }) => {
   const [collapsed, setCollapsed] = useState(false);
@@ -24,7 +25,6 @@ const EmployeeDashboard = ({ onLogout }) => {
   const [notifications, setNotifications] = useState([]);
   const [notices, setNotices] = useState([]);
   const [showNotices, setShowNotices] = useState(false);
-  const socketRef = useRef(null);
   const navigate = useNavigate();
 
   const messages = [
@@ -33,7 +33,6 @@ const EmployeeDashboard = ({ onLogout }) => {
     { name: "Emily Davis", msg: "Uploaded new requirements", time: "5h ago", img: "https://i.pravatar.cc/40?img=4" },
   ];
 
-  // Format task object for display
   const formatTask = (task) => ({
     id: task._id,
     label: task.title || "Untitled Task",
@@ -50,24 +49,18 @@ const EmployeeDashboard = ({ onLogout }) => {
     color: task.priority === "High" ? "red" : task.priority === "Medium" ? "yellow" : "green",
     assignedBy: task.assignedBy?.name || "Unknown",
     assignedTo: Array.isArray(task.assignedTo)
-      ? task.assignedTo
-          .map((u) => (typeof u === "string" ? "Unknown" : u?.name || "Unknown"))
-          .join(", ")
+      ? task.assignedTo.map((u) => (typeof u === "string" ? "Unknown" : u?.name || "Unknown")).join(", ")
       : "Unknown",
     dueDate: task.dueDate,
     status: task.status,
   });
 
-  // Update summary + notifications
   const updateSummaryAndNotifications = (list) => {
     const today = dayjs().startOf("day");
     const allTasksCount = list.length;
     const tasksDueTodayCount = list.filter((t) => t.dueDate && dayjs(t.dueDate).isSame(today, "day")).length;
     const overdueTasksCount = list.filter(
-      (t) =>
-        t.dueDate &&
-        dayjs(t.dueDate).isBefore(today, "day") &&
-        t.status?.toLowerCase() !== "completed"
+      (t) => t.dueDate && dayjs(t.dueDate).isBefore(today, "day") && t.status?.toLowerCase() !== "completed"
     ).length;
 
     setSummaryData([
@@ -86,7 +79,6 @@ const EmployeeDashboard = ({ onLogout }) => {
     setPendingCount(newPendingTasks.length);
   };
 
-  // Initial fetch
   const fetchTasks = async () => {
     const token = localStorage.getItem("token");
     if (!token) {
@@ -108,65 +100,14 @@ const EmployeeDashboard = ({ onLogout }) => {
     }
   };
 
-  // Socket.IO connection
+  // Polling tasks periodically
   useEffect(() => {
-    const token = localStorage.getItem("token");
-    if (!token) return; // don't connect if not authenticated
-
-    const socket = io(API_BASE, {
-      transports: ["websocket"],
-      withCredentials: true,
-    });
-    socketRef.current = socket;
-
-    socket.on("connect", () => {
-      console.log("✅ Connected to Socket.IO server:", socket.id);
-    });
-
-    socket.on("disconnect", (reason) => {
-      console.log("❌ Disconnected from server:", reason);
-    });
-
-    socket.on("taskCreated", (task) => {
-      setTasks((prev) => {
-        const updated = [formatTask(task), ...prev];
-        updateSummaryAndNotifications(updated);
-        return updated;
-      });
-    });
-
-    socket.on("taskUpdated", (task) => {
-      setTasks((prev) => {
-        const updated = prev.map((t) => (t.id === task._id ? formatTask(task) : t));
-        updateSummaryAndNotifications(updated);
-        return updated;
-      });
-    });
-
-    socket.on("taskDeleted", (taskId) => {
-      setTasks((prev) => {
-        const updated = prev.filter((t) => t.id !== taskId);
-        updateSummaryAndNotifications(updated);
-        return updated;
-      });
-    });
-
-    return () => {
-      if (socketRef.current) {
-        socketRef.current.off("taskCreated");
-        socketRef.current.off("taskUpdated");
-        socketRef.current.off("taskDeleted");
-        socketRef.current.disconnect();
-        socketRef.current = null;
-      }
-    };
+    fetchTasks(); // initial fetch
+    const intervalId = setInterval(fetchTasks, POLL_INTERVAL_MS);
+    return () => clearInterval(intervalId);
   }, []);
 
-  // Initial API calls
-  useEffect(() => {
-    fetchTasks();
-  }, []);
-
+  // Fetch user info
   useEffect(() => {
     const fetchUser = async () => {
       const token = localStorage.getItem("token");
@@ -192,6 +133,7 @@ const EmployeeDashboard = ({ onLogout }) => {
     return () => clearInterval(interval);
   }, []);
 
+  // Fetch notices
   useEffect(() => {
     const fetchNotices = async () => {
       try {
@@ -221,59 +163,30 @@ const EmployeeDashboard = ({ onLogout }) => {
     fetchNotices();
   }, []);
 
-  // Modify the handler that closes the overlay:
   const handleCloseNotices = () => {
     setNotices([]);
     setShowNotices(false);
-    sessionStorage.setItem("noticesDismissed", "true"); // remember dismissal in this session
+    sessionStorage.setItem("noticesDismissed", "true");
   };
 
   return (
     <div className="flex bg-gray-50 font-sans text-gray-800">
-      <Sidebar
-        onLogout={onLogout}
-        collapsed={collapsed}
-        setCollapsed={setCollapsed}
-      />
-      <main
-        className={`flex-1 p-8 overflow-y-auto transition-all duration-300 ${
-          collapsed ? "ml-20" : "ml-64"
-        }`}
-      >
+      <Sidebar onLogout={onLogout} collapsed={collapsed} setCollapsed={setCollapsed} />
+      <main className={`flex-1 p-8 overflow-y-auto transition-all duration-300 ${collapsed ? "ml-20" : "ml-64"}`}>
         <div className="flex justify-between items-center mb-8">
           <div>
             <h1 className="text-2xl font-semibold">
-              Good{" "}
-              {currentTime.getHours() < 12
-                ? "Morning"
-                : currentTime.getHours() < 18
-                ? "Afternoon"
-                : "Evening"}
-              , {userName}
+              Good {currentTime.getHours() < 12 ? "Morning" : currentTime.getHours() < 18 ? "Afternoon" : "Evening"}, {userName}
             </h1>
             <p className="text-sm text-gray-500">
-              {currentTime.toLocaleDateString("en-US", {
-                weekday: "long",
-                year: "numeric",
-                month: "long",
-                day: "numeric",
-              })}
-              {" • "}
-              {currentTime.toLocaleTimeString("en-US", {
-                hour: "2-digit",
-                minute: "2-digit",
-                second: "2-digit",
-              })}
+              {currentTime.toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })} •{" "}
+              {currentTime.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
             </p>
           </div>
           <div className="flex items-center gap-4 relative">
             <NotificationBell notifications={notifications} />
             <Link to="/profile">
-              <img
-                src="https://i.pravatar.cc/40?img=3"
-                alt="Profile Avatar"
-                className="w-9 h-9 rounded-full cursor-pointer"
-              />
+              <img src="https://i.pravatar.cc/40?img=3" alt="Profile Avatar" className="w-9 h-9 rounded-full cursor-pointer" />
             </Link>
           </div>
         </div>
@@ -284,21 +197,13 @@ const EmployeeDashboard = ({ onLogout }) => {
               <h2 className="text-xl font-bold mb-4">📢 Notices</h2>
               <div className="space-y-3 max-h-80 overflow-y-auto">
                 {notices.map((n) => (
-                  <div
-                    key={n._id}
-                    className="border-l-4 border-orange-500 pl-3 text-gray-800"
-                  >
+                  <div key={n._id} className="border-l-4 border-orange-500 pl-3 text-gray-800">
                     <p>{n.message}</p>
-                    <p className="text-xs text-gray-400 mt-1">
-                      🕒 {new Date(n.createdAt).toLocaleString()}
-                    </p>
+                    <p className="text-xs text-gray-400 mt-1">🕒 {new Date(n.createdAt).toLocaleString()}</p>
                   </div>
                 ))}
               </div>
-              <button
-                onClick={handleCloseNotices}
-                className="mt-4 px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600"
-              >
+              <button onClick={handleCloseNotices} className="mt-4 px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600">
                 Close
               </button>
             </div>
