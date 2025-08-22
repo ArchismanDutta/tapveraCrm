@@ -35,8 +35,8 @@ const menuConfig = {
     { to: "/todo", icon: <ClipboardList size={18} />, label: "Todo" }, // Added Todo here
     { to: "/messages", icon: <MessageCircle size={18} />, label: "Messages" },
     { to: "/leaves", icon: <FileText size={18} />, label: "Leaves & Holidays" },
-    { to: "/requirements", icon: <Flag size={18} />, label: "Requirements" },
-    { to: "/help", icon: <HelpCircle size={18} />, label: "Help Center" },
+    // { to: "/requirements", icon: <Flag size={18} />, label: "Requirements" },
+    // { to: "/help", icon: <HelpCircle size={18} />, label: "Help Center" },
   ],
 
   admin: [
@@ -53,7 +53,7 @@ const menuConfig = {
       label: "Leave Requests",
     },
     { to: "/admin/notices", icon: <Flag size={18} />, label: "Notice Board" },
-    { to: "/help", icon: <HelpCircle size={18} />, label: "Help Center" },
+    // { to: "/help", icon: <HelpCircle size={18} />, label: "Help Center" },
     // Uncomment if you want admins to access todo page:
     // { to: "/todo", icon: <ClipboardList size={18} />, label: "Todo" },
   ],
@@ -68,7 +68,7 @@ const menuConfig = {
     { to: "/messages", icon: <MessageCircle size={18} />, label: "Messages" },
     { to: "/leaves", icon: <FileText size={18} />, label: "Leaves & Holidays" },
     { to: "/notices", icon: <Flag size={18} />, label: "Notice Board" },
-    { to: "/help", icon: <HelpCircle size={18} />, label: "Help Center" },
+    // { to: "/help", icon: <HelpCircle size={18} />, label: "Help Center" },
   ],
 };
 
@@ -131,7 +131,7 @@ const Sidebar = ({ collapsed, setCollapsed, userRole = "employee", onLogout }) =
         <div className="p-4 shadow-inner">
           <button
             onClick={onLogout}
-            className="w-full p-2 rounded bg-gradient-to-r from-yellow-300 via-yellow-400 to-orange-400 text-black text-sm"
+            className="w-full p-2 rounded bg-gradient-to-r from-yellow-300 via-yellow-400 to-orange-400 text-black text-sm cursor-pointer"
           >
             {collapsed ? "⏻" : "Logout"}
           </button>
