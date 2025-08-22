@@ -1,4 +1,3 @@
-// server/middleware/authMiddleware.js
 const jwt = require("jsonwebtoken");
 const User = require("../models/User");
 
@@ -27,7 +26,16 @@ exports.protect = async (req, res, next) => {
       return res.status(401).json({ message: "Not authorized, user not found" });
     }
 
-    req.user = user;
+    // Attach only needed fields and normalize
+    req.user = {
+      _id: user._id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      department: user.department || "Unknown", // ensure department exists
+      avatar: user.avatar || "",
+    };
+
     next();
   } catch (err) {
     console.error("Auth Middleware Error:", err.message);
