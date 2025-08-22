@@ -7,8 +7,6 @@ const morgan = require("morgan");
 const path = require("path");
 const http = require("http");
 
-const { initSocket } = require("./socket");
-
 // Routes
 const userRoutes = require("./routes/userRoutes");
 const taskRoutes = require("./routes/taskRoutes");
@@ -18,15 +16,15 @@ const testRoutes = require("./routes/testRoutes");
 const emailRoutes = require("./routes/emailRoutes");
 const noticeRoutes = require("./routes/noticeRoutes");
 const leaveRoutes = require("./routes/leaveRoutes");
-const todoTaskRoutes = require("./routes/todoTaskRoutes"); // Added todoTask routes
+const todoTaskRoutes = require("./routes/todoTaskRoutes");
 
-// Chat Routes (new)
+// Chat Routes
 const chatRoutes = require("./routes/chatRoutes");
 
 // Today Status route
 const statusRoutes = require("./routes/statusRoutes");
 
-// Summary routes — newly added for weekly summary API
+// Summary routes
 const summaryRoutes = require("./routes/summaryRoutes");
 
 const app = express();
@@ -59,9 +57,6 @@ app.use(
 
 app.use(morgan("dev"));
 
-// Initialize Socket.IO
-initSocket(server);
-
 // Health Check
 app.get("/api/health", (req, res) => {
   res.json({ status: "ok", timestamp: Date.now() });
@@ -70,25 +65,14 @@ app.get("/api/health", (req, res) => {
 // API Routes
 app.use("/api/tasks", taskRoutes);
 app.use("/api/auth", authRoutes);
-
-// Changed base path to avoid conflicts
 app.use("/api/password", passwordRoutes);
-
 app.use("/api/test", testRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/email", emailRoutes);
 app.use("/api/leaves", leaveRoutes);
-
-// New TodoTask API routes
 app.use("/api/todos", todoTaskRoutes);
-
-// Chat API routes (new)
 app.use("/api/chat", chatRoutes);
-
-// Today Status API
 app.use("/api/status", statusRoutes);
-
-// Summary API mounted at /api/summary
 app.use("/api/summary", summaryRoutes);
 app.use("/api/notices", noticeRoutes);
 
