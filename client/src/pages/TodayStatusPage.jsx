@@ -6,7 +6,8 @@ import BreakManagement from "../components/workstatus/BreakManagement";
 import Timeline from "../components/workstatus/Timeline";
 import SummaryCard from "../components/workstatus/SummaryCard";
 import RecentActivity from "../components/workstatus/RecentActivity";
-import PunchOutTodoPopup from "../components/todo/PunchOutTodoPopup"; // import the popup component
+import PunchOutTodoPopup from "../components/todo/PunchOutTodoPopup";
+import PunchOutConfirmPopup from "../components/workstatus/PunchOutConfirmPopup"; // new popup component
 
 // Single definition of formatHMS function
 function formatHMS(seconds) {
@@ -26,6 +27,8 @@ const TodayStatusPage = () => {
 
   const [showTodoPopup, setShowTodoPopup] = useState(false);
   const [pendingTodoTasks, setPendingTodoTasks] = useState([]);
+
+  const [showPunchOutConfirm, setShowPunchOutConfirm] = useState(false);
 
   const token = localStorage.getItem("token");
 
@@ -166,13 +169,21 @@ const TodayStatusPage = () => {
     }
   };
 
-  // Punch Out handler with todo check
-  const handlePunchOut = async () => {
+  // Punch Out handler (trigger popup first)
+  const handlePunchOutClick = async () => {
     if (!(status?.currentlyWorking) && !(status?.onBreak)) return;
 
     const canPunchOut = await checkTodoTasksBeforePunchOut();
-    if (!canPunchOut) return;
+    if (canPunchOut) {
+      setShowPunchOutConfirm(true); // show confirmation if no pending todos
+    }
+  };
 
+  // Confirmation popup handlers
+  const onCancelPunchOut = () => setShowPunchOutConfirm(false);
+
+  const onConfirmPunchOut = () => {
+    setShowPunchOutConfirm(false);
     updateStatus({
       currentlyWorking: false,
       onBreak: false,
@@ -180,7 +191,7 @@ const TodayStatusPage = () => {
     });
   };
 
-  // Popup button handlers
+  // Todo popup handlers
   const onCloseTodoPopup = () => {
     setShowTodoPopup(false);
     setPendingTodoTasks([]);
@@ -192,6 +203,7 @@ const TodayStatusPage = () => {
     window.location.href = "/todo";
   };
 
+  // ✅ Updated handler: moves tasks to tomorrow and punches out
   const onMoveToTomorrowTodoPopup = async () => {
     try {
       const tomorrow = new Date();
@@ -207,10 +219,13 @@ const TodayStatusPage = () => {
           )
         )
       );
+
       setShowTodoPopup(false);
       setPendingTodoTasks([]);
-      // Redirect to todo page to show updated upcoming tasks
-      window.location.href = "/todo";
+
+      // Trigger punch out immediately after moving tasks
+      onConfirmPunchOut();
+
     } catch (err) {
       console.error("Failed to move tasks to tomorrow:", err);
     }
@@ -255,7 +270,7 @@ const TodayStatusPage = () => {
               arrivalTime={status.arrivalTimeFormatted || "--"}
               currentlyWorking={status.currentlyWorking}
               onPunchIn={handlePunchIn}
-              onPunchOut={handlePunchOut}
+              onPunchOut={handlePunchOutClick} // updated to trigger popup
             />
             <BreakManagement
               breakDuration={formatHMS(liveBreak)}
@@ -273,12 +288,22 @@ const TodayStatusPage = () => {
             <RecentActivity activities={status.recentActivities || []} />
           </div>
         </div>
+
+        {/* Todo Popup */}
         {showTodoPopup && (
           <PunchOutTodoPopup
             tasks={pendingTodoTasks}
             onClose={onCloseTodoPopup}
             onFindOut={onFindOutTodoPopup}
             onMoveToTomorrow={onMoveToTomorrowTodoPopup}
+          />
+        )}
+
+        {/* Punch Out Confirmation Popup */}
+        {showPunchOutConfirm && (
+          <PunchOutConfirmPopup
+            onCancel={onCancelPunchOut}
+            onConfirm={onConfirmPunchOut}
           />
         )}
       </main>

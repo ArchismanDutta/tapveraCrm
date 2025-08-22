@@ -1,26 +1,25 @@
+// controllers/leaveController.js
 const LeaveRequest = require("../models/LeaveRequest");
 
 // Create a leave request
 exports.createLeave = async (req, res) => {
   try {
-    // Require auth to have populated req.user earlier via protect middleware
     if (!req.user) {
       return res.status(401).json({ message: "Not authorized, no user context" });
     }
 
-    // Build employee snapshot
+    // Build employee snapshot using normalized department
     const employee = {
       _id: req.user._id,
       name: req.user.name,
       email: req.user.email,
-      avatar: req.user.avatar,
-      department: req.user.department,
-      designation: req.user.designation,
+      avatar: req.user.avatar || "",
+      department: req.user.department || "Unknown",
+      designation: req.user.designation || "",
     };
 
     // Accept either {startDate,endDate} OR {period:{start,end}}
     let start, end;
-
     if (req.body?.period?.start || req.body?.period?.end) {
       start = req.body.period.start;
       end = req.body.period.end;
@@ -29,20 +28,15 @@ exports.createLeave = async (req, res) => {
       end = req.body.endDate;
     }
 
-    // Normalize dates
     const type = req.body.type;
-    if (!start) {
-      return res.status(400).json({ message: "startDate is required" });
-    }
+    if (!start) return res.status(400).json({ message: "startDate is required" });
 
     // For half day, if no end provided, set end = start
-    if (type === "halfDay" && !end) {
-      end = start;
-    }
+    if (type === "halfDay" && !end) end = start;
 
     const period = {
       start: new Date(start),
-      end: new Date(end),
+      end: new Date(end || start),
     };
 
     if (isNaN(period.start.getTime()) || isNaN(period.end.getTime())) {
@@ -60,6 +54,7 @@ exports.createLeave = async (req, res) => {
     const leave = await LeaveRequest.create(payload);
     res.status(201).json(leave);
   } catch (error) {
+    console.error("Create Leave Error:", error);
     res.status(400).json({ message: error.message });
   }
 };
@@ -71,6 +66,7 @@ exports.getUserLeaves = async (req, res) => {
       .sort({ createdAt: -1 });
     res.json(requests);
   } catch (error) {
+    console.error("Get User Leaves Error:", error);
     res.status(500).json({ message: error.message });
   }
 };
@@ -84,6 +80,7 @@ exports.getAllLeaves = async (req, res) => {
     const requests = await LeaveRequest.find(filter).sort({ createdAt: -1 });
     res.json(requests);
   } catch (error) {
+    console.error("Get All Leaves Error:", error);
     res.status(500).json({ message: error.message });
   }
 };
@@ -109,6 +106,7 @@ exports.updateLeaveStatus = async (req, res) => {
 
     res.json(updatedLeave);
   } catch (error) {
+    console.error("Update Leave Status Error:", error);
     res.status(400).json({ message: error.message });
   }
 };
@@ -126,24 +124,30 @@ exports.deleteLeave = async (req, res) => {
     await LeaveRequest.findByIdAndDelete(req.params.id);
     res.json({ message: "Leave request deleted" });
   } catch (error) {
+    console.error("Delete Leave Error:", error);
     res.status(400).json({ message: error.message });
   }
 };
 
-// Get team leaves for logged-in user's department
+// Get team leaves for any department (admin)
 exports.getTeamLeaves = async (req, res) => {
   try {
-    const department = req.user.department;
-    const email = req.user.email;
+    let department = req.query.department || (req.user && req.user.department);
+    let excludeEmail = req.query.excludeEmail || (req.user && req.user.email);
+
+    if (!department) {
+      return res.status(400).json({ message: "Department is required" });
+    }
 
     const leaves = await LeaveRequest.find({
       "employee.department": department,
-      "employee.email": { $ne: email },
+      "employee.email": { $ne: excludeEmail },
       status: "Approved",
     }).sort({ "period.start": 1 });
 
     res.json(leaves);
   } catch (error) {
+    console.error("Get Team Leaves Error:", error);
     res.status(500).json({ message: error.message });
   }
 };

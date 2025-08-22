@@ -1,5 +1,3 @@
-// TodoPage.jsx with debugging and fixed handleMarkDone
-
 import React, { useState, useEffect } from "react";
 import axios from "axios";
 import Sidebar from "../components/dashboard/Sidebar";
@@ -84,16 +82,44 @@ const TodoPage = () => {
     }
   };
 
+  // ✅ Updated: handle checkbox toggle and normalize completedAtStr
   const handleMarkDone = async (task) => {
     try {
-      console.log(`Toggling completed for task ${task._id} from ${task.completed} to ${!task.completed}`);
       const response = await axios.put(
         `/api/todos/${task._id}`,
         { completed: !task.completed },
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      console.log("Response from toggle:", response.data);
-      await fetchTasks();
+
+      const updatedTaskRaw = response.data;
+
+      // Normalize the updated task
+      const updatedTask = {
+        ...updatedTaskRaw,
+        date: updatedTaskRaw.date ? new Date(updatedTaskRaw.date).toISOString() : null,
+        completedAtStr: updatedTaskRaw.completedAt
+          ? new Date(updatedTaskRaw.completedAt).toLocaleString()
+          : null,
+      };
+
+      if (updatedTask.completed) {
+        // Remove from todayTasks or upcomingTasks
+        setTodayTasks((prev) => prev.filter((t) => t._id !== updatedTask._id));
+        setUpcomingTasks((prev) => prev.filter((t) => t._id !== updatedTask._id));
+        // Add to completedTasks
+        setCompletedTasks((prev) => [updatedTask, ...prev]);
+      } else {
+        // If marking as incomplete
+        setCompletedTasks((prev) => prev.filter((t) => t._id !== updatedTask._id));
+        const taskDate = new Date(updatedTask.date);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        if (taskDate.getTime() === today.getTime()) {
+          setTodayTasks((prev) => [updatedTask, ...prev]);
+        } else {
+          setUpcomingTasks((prev) => [updatedTask, ...prev]);
+        }
+      }
     } catch (err) {
       console.error("Failed to toggle completed:", err);
     }
