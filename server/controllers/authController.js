@@ -1,7 +1,7 @@
-// controllers/authController.js
 const User = require("../models/User");
 const jwt = require("jsonwebtoken");
-const { encrypt } = require("../utils/crypto"); // still needed for Outlook app password
+const bcrypt = require("bcryptjs");
+const { encrypt } = require("../utils/crypto"); // for Outlook app password only
 
 // Token generation helper
 const generateToken = (user) => {
@@ -16,6 +16,7 @@ const generateToken = (user) => {
 exports.signup = async (req, res) => {
   try {
     const {
+      employeeId,
       name,
       email,
       contact,
@@ -26,61 +27,76 @@ exports.signup = async (req, res) => {
       designation,
       outlookEmail, // optional
       outlookAppPassword, // optional (will be encrypted)
+      doj,
+      bloodGroup,
+      permanentAddress,
+      currentAddress,
+      emergencyNo,
+      ps,
+      salary,
+      ref,
+      status,
+      totalPl,
+      location,
     } = req.body;
 
-    // Validate mandatory fields if needed
-
-    // Normalize email and trim
-    const normalizedEmail = String(email || "").trim().toLowerCase();
-
-    // Check if user already exists
-    const existingUser = await User.findOne({ email: normalizedEmail });
-    if (existingUser) {
-      return res.status(400).json({ message: "Email already in use." });
+    if (!employeeId || !name || !email || !contact || !dob || !gender || !password || !doj) {
+      return res.status(400).json({ message: "Please provide all required fields." });
     }
 
-    // No hashing of login password (as per your comment)
-    const plainPassword = String(password || "").trim();
+    const normalizedEmail = String(email || "").trim().toLowerCase();
+    const trimmedEmployeeId = String(employeeId || "").trim();
 
-    // Encrypt Outlook app password if provided
+    const existingEmailUser = await User.findOne({ email: normalizedEmail });
+    if (existingEmailUser) return res.status(400).json({ message: "Email already in use." });
+
+    const existingEmployeeIdUser = await User.findOne({ employeeId: trimmedEmployeeId });
+    if (existingEmployeeIdUser) return res.status(400).json({ message: "Employee ID already in use." });
+
+    // 🔒 Hash login password
+    const hashedPassword = await bcrypt.hash(String(password).trim(), 10);
+
+    // 🔐 Encrypt Outlook app password if provided
     let encryptedOutlookPass = null;
     if (outlookAppPassword && String(outlookAppPassword).trim()) {
       encryptedOutlookPass = encrypt(String(outlookAppPassword).trim());
     }
 
     const user = new User({
-      name,
-      email: String(email || "").trim().toLowerCase(),
-      contact,
+      employeeId: trimmedEmployeeId,
+      name: String(name).trim(),
+      email: normalizedEmail,
+      contact: String(contact).trim(),
       dob,
       gender,
-      password: plainPassword,
+      password: hashedPassword,
       role: "employee",
       department,
       designation,
-      outlookEmail: String(outlookEmail || "").trim().toLowerCase() || null,
-      outlookAppPassword: encryptedOutlookPass, // encrypted or null
+      outlookEmail: outlookEmail ? String(outlookEmail).trim().toLowerCase() : null,
+      outlookAppPassword: encryptedOutlookPass,
+      doj,
+      bloodGroup: bloodGroup ? String(bloodGroup).trim() : "",
+      permanentAddress: permanentAddress ? String(permanentAddress).trim() : "",
+      currentAddress: currentAddress ? String(currentAddress).trim() : "",
+      emergencyNo: emergencyNo ? String(emergencyNo).trim() : "",
+      ps: ps ? String(ps).trim() : "",
+      salary: salary ? Number(salary) : 0,
+      ref: ref ? String(ref).trim() : "",
+      status: status || "active",
+      totalPl: totalPl !== undefined ? Number(totalPl) : 0,
+      location: location ? String(location).trim() : "India",
     });
 
     await user.save();
 
-    await notifyAdmins(
-      `*New User Signup!*
-
-👤 Name: *${user.name}*
-📧 Email: *${user.email}*
-📱 Phone: *${user.contact || "N/A"}*
-
-✨ Please review the user details and take necessary action.`
-    );
-
-    // Generate JWT token
     const token = generateToken(user);
 
     res.status(201).json({
       token,
       user: {
         id: user._id,
+        employeeId: user.employeeId,
         name: user.name,
         email: user.email,
         contact: user.contact,
@@ -90,9 +106,18 @@ exports.signup = async (req, res) => {
         department: user.department,
         designation: user.designation,
         outlookEmail: user.outlookEmail || null,
-        hasEmailCredentials: Boolean(
-          user.outlookEmail && user.outlookAppPassword
-        ),
+        hasEmailCredentials: Boolean(user.outlookEmail && user.outlookAppPassword),
+        doj: user.doj,
+        bloodGroup: user.bloodGroup,
+        permanentAddress: user.permanentAddress,
+        currentAddress: user.currentAddress,
+        emergencyNo: user.emergencyNo,
+        ps: user.ps,
+        salary: user.salary,
+        ref: user.ref,
+        status: user.status,
+        totalPl: user.totalPl,
+        location: user.location,
       },
     });
   } catch (err) {
@@ -108,33 +133,29 @@ exports.login = async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    // Validate presence of email & password
     if (!email || !password) {
       return res.status(400).json({ message: "Email and password required." });
     }
 
     const normalizedEmail = String(email).trim().toLowerCase();
-
-    // Find user by email
-    const user = await User.findOne({
-      email: normalizedEmail,
-    });
+    const user = await User.findOne({ email: normalizedEmail });
     if (!user) {
       return res.status(401).json({ message: "Invalid credentials." });
     }
 
-    // Direct string comparison - no hashing
-    if (String(password).trim() !== user.password) {
+    // 🔒 Compare hashed password
+    const isMatch = await bcrypt.compare(String(password).trim(), user.password);
+    if (!isMatch) {
       return res.status(401).json({ message: "Invalid credentials." });
     }
 
-    // Generate JWT token
     const token = generateToken(user);
 
     res.json({
       token,
       user: {
         id: user._id,
+        employeeId: user.employeeId,
         name: user.name,
         email: user.email,
         contact: user.contact,
@@ -144,9 +165,18 @@ exports.login = async (req, res) => {
         department: user.department,
         designation: user.designation,
         outlookEmail: user.outlookEmail || null,
-        hasEmailCredentials: Boolean(
-          user.outlookEmail && user.outlookAppPassword
-        ),
+        hasEmailCredentials: Boolean(user.outlookEmail && user.outlookAppPassword),
+        doj: user.doj,
+        bloodGroup: user.bloodGroup,
+        permanentAddress: user.permanentAddress,
+        currentAddress: user.currentAddress,
+        emergencyNo: user.emergencyNo,
+        ps: user.ps,
+        salary: user.salary,
+        ref: user.ref,
+        status: user.status,
+        totalPl: user.totalPl,
+        location: user.location,
       },
     });
   } catch (err) {
