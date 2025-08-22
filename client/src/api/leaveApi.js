@@ -32,6 +32,22 @@ function formatDuration(type, period) {
   return `${days} Days`;
 }
 
+// Utility function to format leave period for display
+function formatPeriod(period) {
+  if (!period?.start || !period?.end) return "";
+  const start = new Date(period.start).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+  });
+  const end = new Date(period.end).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+  });
+  return start === end ? start : `${start}–${end}`;
+}
+
+// ------------------ Employee API ------------------
+
 // Fetch leave requests for logged-in employee
 export async function fetchLeavesForEmployee() {
   const res = await fetch(`${API_BASE}/leaves/mine`, {
@@ -65,7 +81,6 @@ export async function fetchLeavesForEmployee() {
 
 // Submit a new leave request
 export async function submitLeaveRequest(formData) {
-  // Normalize payload to backend: use startDate/endDate, and auto-end for halfDay
   const startDate = formData.startDate;
   const endDate =
     formData.type === "halfDay"
@@ -111,6 +126,8 @@ export async function submitLeaveRequest(formData) {
     adminRemarks: r.adminRemarks || "",
   };
 }
+
+// ------------------ Admin API ------------------
 
 // Fetch all leave requests (admin)
 export async function fetchAllLeaveRequests() {
@@ -169,33 +186,25 @@ export async function updateLeaveRequestStatus(id, status, adminRemarks = "") {
   };
 }
 
-// Fetch team leaves (for TeamLeaveCalendar component)
-export async function fetchTeamLeaves() {
-  const res = await fetch(`${API_BASE}/leaves/team`, {
+// ------------------ Team Leaves (for modal) ------------------
+
+// Fetch team leaves for a specific department, excluding a specific email
+export async function fetchTeamLeaves(department, excludeEmail) {
+  const res = await fetch(`${API_BASE}/leaves/team?department=${encodeURIComponent(department)}&excludeEmail=${encodeURIComponent(excludeEmail)}`, {
     headers: getAuthHeaders(),
   });
+
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.message || "Failed to fetch team leaves");
   }
+
   const data = await res.json();
   return data.map((r) => ({
-    name: r.employee.name,
-    dates: formatPeriod(r.period),
-    type: formatLeaveType(r.type),
+    _id: r._id,
+    employee: r.employee,
+    period: r.period,
+    type: r.type,
+    status: r.status,
   }));
-}
-
-// Utility function to format leave period for display
-function formatPeriod(period) {
-  if (!period?.start || !period?.end) return "";
-  const start = new Date(period.start).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-  });
-  const end = new Date(period.end).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-  });
-  return start === end ? start : `${start}–${end}`;
 }

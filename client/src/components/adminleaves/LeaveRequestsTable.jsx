@@ -40,6 +40,7 @@ const LeaveRequestsTable = ({
         .btn-action:hover:not(:disabled) { background-color: rgba(0, 0, 0, 0.05); }
         .btn-disabled { opacity: 0.4; cursor: not-allowed; }
       `}</style>
+
       <div className="overflow-y-auto no-scrollbar flex-1 min-w-0">
         <table className="min-w-full text-sm table-auto border-separate border-spacing-y-2">
           <thead>
@@ -59,6 +60,7 @@ const LeaveRequestsTable = ({
               const end = req.period?.end ? new Date(req.period.end) : null;
               const validPeriod =
                 start && end && !isNaN(start.getTime()) && !isNaN(end.getTime());
+
               return (
                 <tr
                   key={id}
@@ -75,7 +77,6 @@ const LeaveRequestsTable = ({
                       ? `${start.toLocaleDateString()} - ${end.toLocaleDateString()}`
                       : ""}
                   </td>
-                  {/* ✅ Use friendly label */}
                   <td className="p-3 text-gray-700">{formatLeaveType(req.type)}</td>
                   <td className="p-3 text-center align-middle">
                     <span
@@ -104,6 +105,7 @@ const LeaveRequestsTable = ({
                     >
                       <Check className="text-green-600" size={20} />
                     </button>
+
                     <button
                       type="button"
                       title="Reject"
@@ -118,6 +120,7 @@ const LeaveRequestsTable = ({
                     >
                       <X className="text-red-600" size={20} />
                     </button>
+
                     <button
                       type="button"
                       title="More"
