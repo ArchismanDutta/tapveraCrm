@@ -1,81 +1,123 @@
+// controllers/userController.js
 const User = require("../models/User");
 
-// Get logged-in user's profile
-exports.getProfile = async (req, res) => {
+// ======================
+// Create Employee (admin/hr/super-admin)
+// ======================
+exports.createEmployee = async (req, res) => {
   try {
-    const user = await User.findById(req.user._id).select("-password -__v");
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
+    const {
+      employeeId,
+      name,
+      email,
+      contact,
+      dob,
+      gender,
+      bloodGroup,
+      qualification,
+      permanentAddress,
+      currentAddress,
+      emergencyNo,
+      ps,
+      doj,
+      salary,
+      ref,
+      status,
+      totalPl,
+      department,
+      designation,
+      password,
+    } = req.body;
+
+    if (!employeeId || !name || !email || !contact || !dob || !gender || !doj) {
+      return res.status(400).json({ message: "Required fields are missing." });
     }
-    res.json(user);
-  } catch (err) {
-    console.error("Error fetching profile:", err);
-    res.status(500).json({ message: "Server error" });
-  }
-};
 
-// Update employee's own profile (including Outlook credentials)
-exports.updateProfile = async (req, res) => {
-  try {
-    const updateFields = {};
+    const normalizedEmail = String(email).toLowerCase().trim();
+    const trimmedEmployeeId = String(employeeId).trim();
 
-    // Only allow specific fields to be updated
-    const allowedFields = [
-      "name",
-      "contact",
-      "dob",
-      "gender",
-      "department",
-      "designation",
-      "outlookEmail",
-      "outlookAppPassword", // Will be encrypted if provided below
-    ];
+    const existingEmail = await User.findOne({ email: normalizedEmail });
+    if (existingEmail) return res.status(400).json({ message: "Email already in use." });
 
-    allowedFields.forEach((field) => {
-      if (req.body[field] !== undefined && req.body[field] !== null) {
-        if (typeof req.body[field] === "string") {
-          if (req.body[field].trim() !== "") {
-            updateFields[field] = req.body[field].trim();
-          }
-        } else {
-          updateFields[field] = req.body[field];
-        }
-      }
+    const existingEmpId = await User.findOne({ employeeId: trimmedEmployeeId });
+    if (existingEmpId) return res.status(400).json({ message: "Employee ID already in use." });
+
+    const userPassword = String(password || "Welcome123").trim();
+    const parsedSalary = typeof salary === "number" ? salary : Number(salary || 0);
+    const parsedTotalPl = typeof totalPl === "number" ? totalPl : Number(totalPl || 0);
+
+    const user = new User({
+      employeeId: trimmedEmployeeId,
+      name: String(name).trim(),
+      email: normalizedEmail,
+      contact: String(contact).trim(),
+      dob,
+      gender,
+      bloodGroup: bloodGroup ? String(bloodGroup).trim() : "",
+      qualification: qualification ? String(qualification).trim() : "",
+      permanentAddress: permanentAddress ? String(permanentAddress).trim() : "",
+      currentAddress: currentAddress ? String(currentAddress).trim() : "",
+      emergencyNo: emergencyNo ? String(emergencyNo).trim() : "",
+      ps: ps ? String(ps).trim() : "",
+      doj,
+      salary: Number.isFinite(parsedSalary) ? parsedSalary : 0,
+      ref: ref ? String(ref).trim() : "",
+      status: status || "active",
+      totalPl: Number.isFinite(parsedTotalPl) ? parsedTotalPl : 0,
+      password: userPassword, // plain text (per requirement)
+      department: department || "",
+      designation: designation ? String(designation).trim() : "",
+      role: "employee",
     });
 
-    // Encrypt outlookAppPassword if present
-    if (updateFields.outlookAppPassword) {
-      const { encrypt } = require("../utils/crypto");
-      updateFields.outlookAppPassword = encrypt(updateFields.outlookAppPassword);
-    }
+    await user.save();
 
-    const updatedUser = await User.findByIdAndUpdate(
-      req.user._id,
-      { $set: updateFields },
-      { new: true, runValidators: true, context: "query" }
-    ).select("-password -__v");
-
-    if (!updatedUser) {
-      return res.status(404).json({ message: "User not found" });
-    }
-
-    res.json(updatedUser);
-  } catch (err) {
-    console.error("Error updating profile:", err);
+    res.status(201).json({ message: "Employee created successfully", user });
+  } catch (error) {
+    console.error("Create employee error", error);
     res.status(500).json({ message: "Server error" });
   }
 };
 
-// Admin & Super Admin: Get list of all users
-exports.getUsers = async (req, res) => {
+// ======================
+// Get Current Logged-in User
+// ======================
+exports.getMe = async (req, res) => {
   try {
-    const users = await User.find()
-      .select("-password -__v")
-      .sort({ name: 1 }); // Sort alphabetically
+    if (!req.user?._id) {
+      return res.status(404).json({ message: "User not found" });
+    }
 
-    res.json(users);
+    const user = await User.findById(req.user._id).select("-password");
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    res.json({
+      id: user._id,
+      employeeId: user.employeeId,
+      name: user.name,
+      email: user.email,
+      contact: user.contact,
+      dob: user.dob,
+      gender: user.gender,
+      role: user.role,
+      department: user.department,
+      designation: user.designation,
+      doj: user.doj,
+      bloodGroup: user.bloodGroup,
+      permanentAddress: user.permanentAddress,
+      currentAddress: user.currentAddress,
+      emergencyNo: user.emergencyNo,
+      ps: user.ps,
+      salary: user.salary,
+      ref: user.ref,
+      status: user.status,
+      totalPl: user.totalPl,
+      location: user.location,
+      outlookEmail: user.outlookEmail || null,
+      hasEmailCredentials: Boolean(user.outlookEmail && user.outlookAppPassword),
+    });
   } catch (err) {
-    console.error("Error fetching users:", err);
+    console.error("GetMe Error:", err);
     res.status(500).json({ message: "Server error" });
   }
 };

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import axios from "axios";
 import { Link, useNavigate } from "react-router-dom";
 import dayjs from "dayjs";
@@ -12,7 +12,8 @@ import NotificationBell from "../components/dashboard/NotificationBell";
 // Backend API base
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
-const POLL_INTERVAL_MS = 15000; // 15 seconds
+const TASK_POLL_INTERVAL_MS = 15000; // 15 seconds
+const USER_POLL_INTERVAL_MS = 30000; // 30 seconds
 
 const EmployeeDashboard = ({ onLogout }) => {
   const [collapsed, setCollapsed] = useState(false);
@@ -55,12 +56,16 @@ const EmployeeDashboard = ({ onLogout }) => {
     status: task.status,
   });
 
-  const updateSummaryAndNotifications = (list) => {
-    const today = dayjs().startOf("day");
-    const allTasksCount = list.length;
-    const tasksDueTodayCount = list.filter((t) => t.dueDate && dayjs(t.dueDate).isSame(today, "day")).length;
-    const overdueTasksCount = list.filter(
-      (t) => t.dueDate && dayjs(t.dueDate).isBefore(today, "day") && t.status?.toLowerCase() !== "completed"
+  // Compute summary dynamically based on currentTime and tasks
+  const computeSummary = useCallback(() => {
+    const today = dayjs(currentTime).startOf("day");
+    const allTasksCount = tasks.length;
+    const tasksDueTodayCount = tasks.filter((t) => t.dueDate && dayjs(t.dueDate).isSame(today, "day")).length;
+    const overdueTasksCount = tasks.filter(
+      (t) =>
+        t.dueDate &&
+        dayjs(t.dueDate).isBefore(dayjs(currentTime)) &&
+        t.status?.toLowerCase() !== "completed"
     ).length;
 
     setSummaryData([
@@ -68,8 +73,10 @@ const EmployeeDashboard = ({ onLogout }) => {
       { label: "Tasks Due Today", count: tasksDueTodayCount, bg: "bg-green-50" },
       { label: "Overdue Tasks", count: overdueTasksCount, bg: "bg-red-50" },
     ]);
+  }, [tasks, currentTime]);
 
-    const newPendingTasks = list.filter((t) => t.status?.toLowerCase() !== "completed");
+  const updateNotifications = useCallback(() => {
+    const newPendingTasks = tasks.filter((t) => t.status?.toLowerCase() !== "completed");
     if (newPendingTasks.length > pendingCount) {
       setNotifications((prev) => [
         ...newPendingTasks.slice(pendingCount).map((t) => `New Task: ${t.label}`),
@@ -77,9 +84,9 @@ const EmployeeDashboard = ({ onLogout }) => {
       ]);
     }
     setPendingCount(newPendingTasks.length);
-  };
+  }, [tasks, pendingCount]);
 
-  const fetchTasks = async () => {
+  const fetchTasks = useCallback(async () => {
     const token = localStorage.getItem("token");
     if (!token) {
       navigate("/login", { replace: true });
@@ -92,48 +99,58 @@ const EmployeeDashboard = ({ onLogout }) => {
       });
       const formatted = res.data.map(formatTask);
       setTasks(formatted);
-      updateSummaryAndNotifications(formatted);
     } catch (err) {
       console.error("Error fetching tasks", err.response?.data || err.message);
     } finally {
       setLoading(false);
     }
-  };
+  }, [navigate]);
 
-  // Polling tasks periodically
+  const fetchUser = useCallback(async () => {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      navigate("/login", { replace: true });
+      return;
+    }
+    try {
+      const res = await axios.get(`${API_BASE}/api/users/me`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setUserName(res.data?.name || "User");
+    } catch (err) {
+      console.error("Error fetching user:", err.response?.data || err.message);
+    }
+  }, [navigate]);
+
+  // Polling tasks
   useEffect(() => {
-    fetchTasks(); // initial fetch
-    const intervalId = setInterval(fetchTasks, POLL_INTERVAL_MS);
+    fetchTasks();
+    const intervalId = setInterval(fetchTasks, TASK_POLL_INTERVAL_MS);
     return () => clearInterval(intervalId);
-  }, []);
+  }, [fetchTasks]);
 
-  // Fetch user info
+  // Polling user info
   useEffect(() => {
-    const fetchUser = async () => {
-      const token = localStorage.getItem("token");
-      if (!token) {
-        navigate("/login", { replace: true });
-        return;
-      }
-      try {
-        const res = await axios.get(`${API_BASE}/api/users/me`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        setUserName(res.data?.name || "User");
-      } catch (err) {
-        console.error("Error fetching user:", err.message);
-      }
-    };
     fetchUser();
-  }, []);
+    const intervalId = setInterval(fetchUser, USER_POLL_INTERVAL_MS);
+    return () => clearInterval(intervalId);
+  }, [fetchUser]);
 
-  // Clock
+  // Clock + recompute summary every second
   useEffect(() => {
-    const interval = setInterval(() => setCurrentTime(new Date()), 1000);
+    const interval = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000);
     return () => clearInterval(interval);
   }, []);
 
-  // Fetch notices
+  // Recompute summary and notifications whenever tasks or currentTime change
+  useEffect(() => {
+    computeSummary();
+    updateNotifications();
+  }, [computeSummary, updateNotifications]);
+
+  // Fetch notices once
   useEffect(() => {
     const fetchNotices = async () => {
       try {
