@@ -9,6 +9,7 @@ const Signup = () => {
   const navigate = useNavigate();
 
   const [form, setForm] = useState({
+    employeeId: "",
     name: "",
     email: "",
     contact: "",
@@ -18,7 +19,17 @@ const Signup = () => {
     designation: "",
     location: "India",
     password: "",
-    // NEW FIELDS
+    // New extended fields
+    bloodGroup: "",
+    permanentAddress: "",
+    currentAddress: "",
+    emergencyNo: "",
+    ps: "",
+    doj: "",
+    salary: "",
+    ref: "",
+    status: "active",
+    totalPl: 0,
     outlookEmail: "",
     outlookAppPassword: "",
   });
@@ -36,8 +47,19 @@ const Signup = () => {
     setLoading(true);
     setError("");
 
-    const requiredFields = ["name", "email", "contact", "dob", "gender", "password"];
-    const isIncomplete = requiredFields.some((field) => !String(form[field] || "").trim());
+    const requiredFields = [
+      "employeeId",
+      "name",
+      "email",
+      "contact",
+      "dob",
+      "gender",
+      "password",
+      "doj",
+    ];
+    const isIncomplete = requiredFields.some(
+      (field) => !String(form[field] || "").trim()
+    );
 
     if (isIncomplete) {
       setError("Please fill in all required fields.");
@@ -45,24 +67,38 @@ const Signup = () => {
       return;
     }
 
+    // Prepare payload with proper type conversions
+    const payload = {
+      ...form,
+      totalPl: Number(form.totalPl),
+      salary: Number(form.salary),
+    };
+
     try {
       const res = await fetch("http://localhost:5000/api/auth/signup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify(payload),
       });
 
       const data = await res.json();
 
       if (!res.ok) {
-        setError(data.message || "Something went wrong.");
+        // Show express-validator errors if present
+        if (Array.isArray(data?.errors) && data.errors.length > 0) {
+          const first = data.errors[0];
+          const msg = first?.msg || "Validation error.";
+          setError(msg);
+        } else {
+          setError(data.message || "Something went wrong.");
+        }
         setLoading(false);
         return;
       }
 
       localStorage.setItem("token", data.token);
       localStorage.setItem("user", JSON.stringify(data.user));
-      localStorage.setItem("role", data.user.role); // Recommended to store role explicitly
+      localStorage.setItem("role", data.user.role);
 
       navigate("/profile");
     } catch (err) {
@@ -73,33 +109,49 @@ const Signup = () => {
     }
   };
 
+  const todayISO = new Date().toISOString().split("T")[0];
+
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-background px-4 py-6">
       <img src={tapveraLogo} alt="Tapvera Logo" className="h-20 w-auto mb-6" />
 
       <div className="bg-surface rounded-xl shadow-lg shadow-[0_0_15px_rgba(255,153,0,0.4)] border border-border p-6 w-full max-w-lg">
-        <h2 className="text-2xl font-bold text-textMain mb-5 text-center">Create an account</h2>
+        <h2 className="text-2xl font-bold text-textMain mb-5 text-center">
+          Employee Registration
+        </h2>
 
         <form onSubmit={handleSubmit} className="space-y-4" noValidate>
           <AuthInput
-            label="Full Name"
+            label="Employee ID *"
+            type="text"
+            name="employeeId"
+            value={form.employeeId}
+            onChange={handleChange}
+            placeholder="Enter employee ID"
+            required
+            error={error && !form.employeeId ? "Employee ID is required." : ""}
+            icon={FaUser}
+          />
+
+          <AuthInput
+            label="Full Name *"
             type="text"
             name="name"
             value={form.name}
             onChange={handleChange}
-            placeholder="Enter your full name"
+            placeholder="Enter full name"
             required
             error={error && !form.name ? "Full Name is required." : ""}
             icon={FaUser}
           />
 
           <AuthInput
-            label="Email Address"
+            label="Email Address *"
             type="email"
             name="email"
             value={form.email}
             onChange={handleChange}
-            placeholder="Enter your email"
+            placeholder="Enter email"
             autoComplete="email"
             required
             error={error && !form.email ? "Email is required." : ""}
@@ -107,12 +159,12 @@ const Signup = () => {
           />
 
           <AuthInput
-            label="Contact Number"
+            label="Contact Number *"
             type="tel"
             name="contact"
             value={form.contact}
             onChange={handleChange}
-            placeholder="Enter your contact number"
+            placeholder="Enter contact number"
             autoComplete="tel"
             required
             error={error && !form.contact ? "Contact number is required." : ""}
@@ -120,7 +172,10 @@ const Signup = () => {
           />
 
           <div>
-            <label htmlFor="dob" className="block text-sm text-textMuted mb-1">
+            <label
+              htmlFor="dob"
+              className="block text-sm text-textMuted mb-1"
+            >
               Date of Birth *
             </label>
             <input
@@ -130,7 +185,7 @@ const Signup = () => {
               value={form.dob}
               onChange={handleChange}
               required
-              max={new Date().toISOString().split("T")[0]}
+              max={todayISO}
               className={`w-full px-4 py-2 rounded-md bg-background border ${
                 error && !form.dob ? "border-red-500" : "border-border"
               } text-textMain placeholder:text-textMuted focus:outline-none focus:border-primary transition`}
@@ -141,7 +196,10 @@ const Signup = () => {
           </div>
 
           <div>
-            <label htmlFor="gender" className="block text-sm text-textMuted mb-1">
+            <label
+              htmlFor="gender"
+              className="block text-sm text-textMuted mb-1"
+            >
               Gender *
             </label>
             <select
@@ -162,7 +220,7 @@ const Signup = () => {
               }}
             >
               <option value="" disabled>
-                Select your gender
+                Select gender
               </option>
               <option value="male">Male</option>
               <option value="female">Female</option>
@@ -174,7 +232,10 @@ const Signup = () => {
           </div>
 
           <div>
-            <label htmlFor="department" className="block text-sm text-textMuted mb-1">
+            <label
+              htmlFor="department"
+              className="block text-sm text-textMuted mb-1"
+            >
               Department
             </label>
             <select
@@ -185,7 +246,8 @@ const Signup = () => {
               className="w-full px-4 py-2 pr-10 rounded-md bg-background border border-border text-textMain focus:outline-none focus:border-primary appearance-none transition"
               style={{
                 backgroundImage:
-                  "url(\"data:image/svg+xml;utf8,<svg fill='%23000' height='24' viewBox='0_0_24_24' width='24' xmlns='http://www.w3.org/2000/svg'><path d='M7 10l5 5 5-5z'/></svg>\")",
+                  // FIX: corrected viewBox from "0_0_24_24" → "0 0 24 24"
+                  "url(\"data:image/svg+xml;utf8,<svg fill='%23000' height='24' viewBox='0 0 24 24' width='24' xmlns='http://www.w3.org/2000/svg'><path d='M7 10l5 5 5-5z'/></svg>\")",
                 backgroundRepeat: "no-repeat",
                 backgroundPosition: "right 0.75rem center",
                 backgroundSize: "1.2em",
@@ -199,7 +261,10 @@ const Signup = () => {
           </div>
 
           <div>
-            <label htmlFor="designation" className="block text-sm text-textMuted mb-1">
+            <label
+              htmlFor="designation"
+              className="block text-sm text-textMuted mb-1"
+            >
               Designation
             </label>
             <input
@@ -208,13 +273,16 @@ const Signup = () => {
               name="designation"
               value={form.designation}
               onChange={handleChange}
-              placeholder="Enter your designation"
+              placeholder="Enter designation"
               className="w-full px-4 py-2 rounded-md bg-background border border-border text-textMain placeholder:text-textMuted focus:outline-none focus:border-primary transition"
             />
           </div>
 
           <div>
-            <label htmlFor="location" className="block text-sm text-textMuted mb-1">
+            <label
+              htmlFor="location"
+              className="block text-sm text-textMuted mb-1"
+            >
               Location
             </label>
             <input
@@ -223,13 +291,128 @@ const Signup = () => {
               name="location"
               value={form.location}
               onChange={handleChange}
-              placeholder="Enter your location"
+              placeholder="Enter location"
               className="w-full px-4 py-2 rounded-md bg-background border border-border text-textMain placeholder:text-textMuted focus:outline-none focus:border-primary transition"
             />
           </div>
 
           <AuthInput
-            label="Password"
+            label="Blood Group"
+            type="text"
+            name="bloodGroup"
+            value={form.bloodGroup}
+            onChange={handleChange}
+            placeholder="Enter blood group"
+          />
+
+          <AuthInput
+            label="Permanent Address"
+            type="text"
+            name="permanentAddress"
+            value={form.permanentAddress}
+            onChange={handleChange}
+            placeholder="Enter permanent address"
+          />
+
+          <AuthInput
+            label="Current Address"
+            type="text"
+            name="currentAddress"
+            value={form.currentAddress}
+            onChange={handleChange}
+            placeholder="Enter current address"
+          />
+
+          <AuthInput
+            label="Emergency Number"
+            type="tel"
+            name="emergencyNo"
+            value={form.emergencyNo}
+            onChange={handleChange}
+            placeholder="Enter emergency contact number"
+          />
+
+          <AuthInput
+            label="P.S."
+            type="text"
+            name="ps"
+            value={form.ps}
+            onChange={handleChange}
+            placeholder="Additional notes"
+          />
+
+          <div>
+            <label
+              htmlFor="doj"
+              className="block text-sm text-textMuted mb-1"
+            >
+              Date of Joining *
+            </label>
+            <input
+              type="date"
+              id="doj"
+              name="doj"
+              value={form.doj}
+              onChange={handleChange}
+              required
+              max={todayISO}
+              className={`w-full px-4 py-2 rounded-md bg-background border ${
+                error && !form.doj ? "border-red-500" : "border-border"
+              } text-textMain placeholder:text-textMuted focus:outline-none focus:border-primary transition`}
+            />
+            {error && !form.doj && (
+              <p className="mt-1 text-xs text-red-500">Date of Joining is required.</p>
+            )}
+          </div>
+
+          <AuthInput
+            label="Salary"
+            type="number"
+            name="salary"
+            value={form.salary}
+            onChange={handleChange}
+            placeholder="Enter salary"
+          />
+
+          <AuthInput
+            label="Reference"
+            type="text"
+            name="ref"
+            value={form.ref}
+            onChange={handleChange}
+            placeholder="Reference"
+          />
+
+          <div>
+            <label
+              htmlFor="status"
+              className="block text-sm text-textMuted mb-1"
+            >
+              Status
+            </label>
+            <select
+              id="status"
+              name="status"
+              value={form.status}
+              onChange={handleChange}
+              className="w-full px-4 py-2 rounded-md bg-background border border-border text-textMain focus:outline-none focus:border-primary appearance-none transition"
+            >
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+            </select>
+          </div>
+
+          <AuthInput
+            label="Total PL"
+            type="number"
+            name="totalPl"
+            value={form.totalPl}
+            onChange={handleChange}
+            placeholder="Total Privilege Leaves"
+          />
+
+          <AuthInput
+            label="Password *"
             type="password"
             name="password"
             value={form.password}
@@ -278,14 +461,14 @@ const Signup = () => {
             </p>
           </div>
 
-          {error && <div className="text-sm text-red-500 text-center">{error}</div>}
+          {error && <div className="text-sm text-red-500 text-center whitespace-pre-line">{error}</div>}
 
           <button
             type="submit"
             disabled={loading}
             className="w-full py-2 rounded-md bg-yellow-300 hover:bg-orange-500 hover:text-white transition text-background font-semibold shadow focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:outline-none disabled:opacity-50"
           >
-            {loading ? "Creating Account..." : "Sign Up"}
+            {loading ? "Creating Account..." : "Register Employee"}
           </button>
         </form>
 
