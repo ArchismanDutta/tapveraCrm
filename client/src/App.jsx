@@ -26,6 +26,7 @@ import TodoPage from "./pages/TodoPage"; // Import the TodoPage
 
 // Import ChatPage for chat system
 import ChatPage from "./pages/ChatPage";
+import NoticeBoard from "./pages/NoticeBoard";
 
 const AppWrapper = () => {
   const navigate = useNavigate();
@@ -251,7 +252,7 @@ const AppWrapper = () => {
         path="/admin/notices"
         element={
           isAuthenticated && (role === "admin" || role === "super-admin") ? (
-            <NoticeForm />
+            <NoticeBoard />
           ) : (
             <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />
           )
