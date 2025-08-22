@@ -14,10 +14,12 @@ function formatHMS(seconds) {
   const h = Math.floor(seconds / 3600);
   const m = Math.floor((seconds % 3600) / 60);
   const s = seconds % 60;
-  return `${h}h ${m.toString().padStart(2, "0")}m ${s.toString().padStart(2, "0")}s`;
+  return `${h}h ${m.toString().padStart(2, "0")}m ${s
+    .toString()
+    .padStart(2, "0")}s`;
 }
 
-const TodayStatusPage = () => {
+const TodayStatusPage = ({ onLogout }) => {
   const [collapsed, setCollapsed] = useState(false);
   const [status, setStatus] = useState(null);
   const [liveWork, setLiveWork] = useState(0);
@@ -59,7 +61,10 @@ const TodayStatusPage = () => {
 
       const res = await axios.get("/api/summary/week", {
         headers: { Authorization: `Bearer ${token}` },
-        params: { startDate: monday.toISOString(), endDate: sunday.toISOString() },
+        params: {
+          startDate: monday.toISOString(),
+          endDate: sunday.toISOString(),
+        },
       });
 
       if (res.data && res.data.weeklySummary) {
@@ -133,7 +138,10 @@ const TodayStatusPage = () => {
     };
     window.addEventListener("attendanceDataUpdate", handleAttendanceDataUpdate);
     return () => {
-      window.removeEventListener("attendanceDataUpdate", handleAttendanceDataUpdate);
+      window.removeEventListener(
+        "attendanceDataUpdate",
+        handleAttendanceDataUpdate
+      );
     };
   }, []);
 
@@ -143,7 +151,10 @@ const TodayStatusPage = () => {
     updateStatus({
       currentlyWorking: true,
       onBreak: false,
-      timelineEvent: { type: "Punch In", time: new Date().toLocaleTimeString() },
+      timelineEvent: {
+        type: "Punch In",
+        time: new Date().toLocaleTimeString(),
+      },
     });
   };
 
@@ -187,7 +198,10 @@ const TodayStatusPage = () => {
     updateStatus({
       currentlyWorking: false,
       onBreak: false,
-      timelineEvent: { type: "Punch Out", time: new Date().toLocaleTimeString() },
+      timelineEvent: {
+        type: "Punch Out",
+        time: new Date().toLocaleTimeString(),
+      },
     });
   };
 
@@ -238,7 +252,10 @@ const TodayStatusPage = () => {
       onBreak: true,
       currentlyWorking: false,
       breakStartTime: new Date(),
-      timelineEvent: { type: `Break Start (${breakType})`, time: new Date().toLocaleTimeString() },
+      timelineEvent: {
+        type: `Break Start (${breakType})`,
+        time: new Date().toLocaleTimeString(),
+      },
     });
   };
 
@@ -248,7 +265,10 @@ const TodayStatusPage = () => {
       onBreak: false,
       currentlyWorking: true,
       breakStartTime: null,
-      timelineEvent: { type: "Resume Work", time: new Date().toLocaleTimeString() },
+      timelineEvent: {
+        type: "Resume Work",
+        time: new Date().toLocaleTimeString(),
+      },
     });
   };
 
@@ -258,9 +278,16 @@ const TodayStatusPage = () => {
 
   return (
     <div className="flex min-h-screen bg-gray-50">
-      <Sidebar collapsed={collapsed} setCollapsed={setCollapsed} userRole="employee" />
+      <Sidebar
+        collapsed={collapsed}
+        setCollapsed={setCollapsed}
+        userRole="employee"
+        onLogout={onLogout}
+      />
       <main
-        className={`flex-1 transition-all duration-300 ${collapsed ? "ml-20" : "ml-64"} p-2 sm:p-4 md:p-6`}
+        className={`flex-1 transition-all duration-300 ${
+          collapsed ? "ml-20" : "ml-64"
+        } p-2 sm:p-4 md:p-6`}
       >
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 h-full min-h-screen">
           <div className="col-span-2 flex flex-col gap-4">
