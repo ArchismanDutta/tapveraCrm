@@ -1,10 +1,11 @@
 const Task = require("../models/Task");
 const { notifyAdmins } = require("../services/whatsappService");
-const { getIO } = require("../socket");
 
+// Populate assignedTo and assignedBy fields
 const populateTask = (query) =>
   query.populate("assignedTo", "name email").populate("assignedBy", "name email");
 
+// Create Task
 exports.createTask = async (req, res) => {
   try {
     const { title, description, assignedTo, dueDate, priority } = req.body;
@@ -33,9 +34,6 @@ exports.createTask = async (req, res) => {
     await task.save();
     const populated = await populateTask(Task.findById(task._id)).lean();
 
-    // Emit to ALL connected clients
-    getIO().emit("taskCreated", populated);
-
     // 🔔 WhatsApp notification
     await notifyAdmins(
       `📝 *New Task Created*\n\n📌 Title: *${populated.title}*\n📅 Due: *${
@@ -45,7 +43,7 @@ exports.createTask = async (req, res) => {
       }*\n👥 Assigned To: ${populated.assignedTo.map((u) => u.name).join(", ")}`
     );
 
-    console.log("✅ Task created and broadcasted:", populated.title);
+    console.log("✅ Task created:", populated.title);
     res.status(201).json(populated);
   } catch (err) {
     console.error("Error creating task:", err);
@@ -83,14 +81,12 @@ exports.editTask = async (req, res) => {
     await task.save();
     const populated = await populateTask(Task.findById(taskId)).lean();
 
-    getIO().emit("taskUpdated", populated);
-
     // 🔔 WhatsApp notification
     await notifyAdmins(
       `✏️ *Task Updated*\n\n📌 Title: *${populated.title}*\n📅 Due: *${populated.dueDate || "N/A"}*\n📊 Status: *${populated.status}*\n🎯 Priority: *${populated.priority}*\n👤 Updated By: *${req.user.name}*`
     );
 
-    console.log("✅ Task updated and broadcasted:", populated.title);
+    console.log("✅ Task updated:", populated.title);
     res.json(populated);
   } catch (err) {
     console.error("Error editing task:", err);
@@ -122,14 +118,12 @@ exports.updateTaskStatus = async (req, res) => {
     await task.save();
     const populated = await populateTask(Task.findById(taskId)).lean();
 
-    getIO().emit("taskUpdated", populated);
-
     // 🔔 WhatsApp notification
     await notifyAdmins(
       `✅ *Task Status Changed*\n\n📌 Title: *${populated.title}*\n📊 New Status: *${status}*\n👤 Changed By: *${req.user.name}*`
     );
 
-    console.log("✅ Task status updated and broadcasted:", populated.title);
+    console.log("✅ Task status updated:", populated.title);
     res.json(populated);
   } catch (err) {
     console.error("Error updating status:", err);
@@ -178,7 +172,6 @@ exports.getTasks = async (req, res) => {
   }
 };
 
-
 // Delete Task
 exports.deleteTask = async (req, res) => {
   try {
@@ -193,14 +186,13 @@ exports.deleteTask = async (req, res) => {
     }
 
     await task.deleteOne();
-    getIO().emit("taskDeleted", req.params.taskId);
 
     // 🔔 WhatsApp notification
     await notifyAdmins(
       `🗑️ *Task Deleted*\n\n📌 Title: *${task.title}*\n👤 Deleted By: *${req.user.name}*`
     );
 
-    console.log("✅ Task deleted and broadcasted:", req.params.taskId);
+    console.log("✅ Task deleted:", req.params.taskId);
     res.json({ message: "Deleted" });
   } catch (err) {
     console.error("Error deleting task:", err);
