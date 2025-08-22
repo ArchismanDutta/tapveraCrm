@@ -4,7 +4,7 @@ import dayjs from "dayjs";
 const NoticeList = ({ notices, onDeactivate }) => {
   return (
     <div className="mt-8">
-      <h2 className="text-lg font-semibold mb-4">Previous Notices</h2>
+      <h2 className="text-lg font-semibold mb-4">Active Notices</h2>
       <div className="space-y-4">
         {notices.length === 0 && (
           <p className="text-gray-500">No notices published yet.</p>
