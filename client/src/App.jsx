@@ -17,16 +17,12 @@ import AdminTaskPage from "./pages/AdminTaskPage";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 import EmployeeManagementPage from "./pages/EmployeeManagement";
-import HolidaysAndLeaves from "./pages/HolidaysAndLeaves"; // Employee & Superadmin Leaves Page
-import AdminLeaveRequests from "./pages/AdminLeaveRequests"; // Admin Leave Requests Management
-import TodayStatusPage from "./pages/TodayStatusPage"; // Today's Status Page
-import AttendancePage from "./pages/AttendancePage"; // Attendance Page
-import NoticeForm from "./components/admintask/NoticeForm";
-import TodoPage from "./pages/TodoPage"; // Import the TodoPage
-
-// Import ChatPage for chat system
-import ChatPage from "./pages/ChatPage";
+import HolidaysAndLeaves from "./pages/HolidaysAndLeaves";
+import AdminLeaveRequests from "./pages/AdminLeaveRequests";
+import TodayStatusPage from "./pages/TodayStatusPage";
+import AttendancePage from "./pages/AttendancePage";
 import NoticeBoard from "./pages/NoticeBoard";
+import TodoPage from "./pages/TodoPage"; // TodoPage
 
 const AppWrapper = () => {
   const navigate = useNavigate();
@@ -139,7 +135,7 @@ const AppWrapper = () => {
         }
       />
 
-      {/* Today Status Page */}
+      {/* Today Status */}
       <Route
         path="/today-status"
         element={
@@ -150,8 +146,6 @@ const AppWrapper = () => {
           )
         }
       />
-
-      {/* Tasks Status */}
       <Route
         path="/tasks-status"
         element={
@@ -163,7 +157,7 @@ const AppWrapper = () => {
         }
       />
 
-      {/* Attendance Page */}
+      {/* Attendance */}
       <Route
         path="/attendance"
         element={
@@ -181,18 +175,6 @@ const AppWrapper = () => {
         element={
           isAuthenticated && role !== "admin" && role !== "super-admin" ? (
             <TodoPage />
-          ) : (
-            <Navigate to={isAuthenticated ? "/admin/tasks" : "/login"} replace />
-          )
-        }
-      />
-
-      {/* Chat Page */}
-      <Route
-        path="/chat"
-        element={
-          isAuthenticated && role !== "admin" && role !== "super-admin" ? (
-            <ChatPage />
           ) : (
             <Navigate to={isAuthenticated ? "/admin/tasks" : "/login"} replace />
           )
@@ -235,7 +217,7 @@ const AppWrapper = () => {
         }
       />
 
-      {/* Admin Leave Requests Management Page */}
+      {/* Admin Leave Requests */}
       <Route
         path="/admin/leaves"
         element={
