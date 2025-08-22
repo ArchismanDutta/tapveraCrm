@@ -2,7 +2,8 @@ import React, { useState, useEffect } from "react";
 import LeaveRequestsTable from "../components/adminleaves/LeaveRequestsTable";
 import LeaveRequestDetails from "../components/adminleaves/LeaveRequestDetails";
 import Sidebar from "../components/dashboard/Sidebar";
-import { fetchAllLeaveRequests, updateLeaveRequestStatus } from "../api/leaveApi";
+import DepartmentLeaveWarningModal from "../components/adminleaves/DepartmentLeaveWarningModal";
+import { fetchAllLeaveRequests, updateLeaveRequestStatus, fetchTeamLeaves } from "../api/leaveApi";
 
 const AdminLeaveRequests = ({ onLogout }) => {
   const [collapsed, setCollapsed] = useState(false);
@@ -10,6 +11,10 @@ const AdminLeaveRequests = ({ onLogout }) => {
   const [selectedId, setSelectedId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalLeaves, setModalLeaves] = useState([]);
+  const [pendingAction, setPendingAction] = useState(null); // { id, status }
 
   useEffect(() => {
     setLoading(true);
@@ -46,6 +51,32 @@ const AdminLeaveRequests = ({ onLogout }) => {
     }
   };
 
+  // ✅ New: handle approve/reject click with department leave check
+  const handleActionClick = async (id, status) => {
+  const req = requests.find((r) => r.id === id);
+  if (!req) return;
+
+  try {
+    // fetch current approved leaves for the same department (excluding requester)
+    const leaves = await fetchTeamLeaves(req.employee.department, req.employee.email);
+    setModalLeaves(leaves);
+    setPendingAction({ id, status });
+    setModalOpen(true);
+  } catch (err) {
+    console.error(err);
+    updateStatus(id, status); // fallback
+  }
+};
+
+
+  const handleModalProceed = () => {
+    if (pendingAction) {
+      updateStatus(pendingAction.id, pendingAction.status);
+    }
+    setModalOpen(false);
+    setPendingAction(null);
+  };
+
   if (loading) return <div className="p-8">Loading leave requests...</div>;
   if (error) return <div className="p-8 text-red-600">Error: {error}</div>;
 
@@ -68,8 +99,8 @@ const AdminLeaveRequests = ({ onLogout }) => {
               requests={requests}
               selectedId={selectedId}
               onSelect={setSelectedId}
-              onApprove={(id) => updateStatus(id, "Approved")}
-              onReject={(id) => updateStatus(id, "Rejected")}
+              onApprove={(id) => handleActionClick(id, "Approved")}
+              onReject={(id) => handleActionClick(id, "Rejected")}
             />
           </div>
           <div className="w-full max-w-[430px] flex-shrink-0 overflow-auto">
@@ -77,12 +108,22 @@ const AdminLeaveRequests = ({ onLogout }) => {
               request={selectedRequest}
               adminRemarks={selectedRequest?.adminRemarks || ""}
               onChangeRemarks={onChangeRemarks}
-              onApprove={(id) => updateStatus(id, "Approved")}
-              onReject={(id) => updateStatus(id, "Rejected")}
+              onApprove={(id) => handleActionClick(id, "Approved")}
+              onReject={(id) => handleActionClick(id, "Rejected")}
             />
           </div>
         </div>
       </main>
+
+      {/* ✅ Department leave warning modal */}
+      <DepartmentLeaveWarningModal
+        isOpen={modalOpen}
+        onClose={() => setModalOpen(false)}
+        onProceed={handleModalProceed}
+        department={selectedRequest?.employee.department}
+        currentLeaves={modalLeaves}
+        selectedEmployee={selectedRequest?.employee}
+      />
     </div>
   );
 };
