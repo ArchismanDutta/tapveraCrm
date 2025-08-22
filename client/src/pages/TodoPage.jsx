@@ -6,7 +6,7 @@ import Sidebar from "../components/dashboard/Sidebar";
 import TaskList from "../components/todo/TaskList";
 import TaskForm from "../components/todo/TaskForm";
 
-const TodoPage = () => {
+const TodoPage = ({ onLogout }) => {
   const token = localStorage.getItem("token");
   const [collapsed, setCollapsed] = useState(false);
 
@@ -26,7 +26,9 @@ const TodoPage = () => {
   const fetchTasks = async () => {
     try {
       const todayISO = normalizeDate(new Date());
-      const tomorrowISO = normalizeDate(new Date(new Date().getTime() + 24 * 3600000));
+      const tomorrowISO = normalizeDate(
+        new Date(new Date().getTime() + 24 * 3600000)
+      );
 
       const todayRes = await axios.get("/api/todos", {
         headers: { Authorization: `Bearer ${token}` },
@@ -47,7 +49,9 @@ const TodoPage = () => {
         arr.map((t) => ({
           ...t,
           date: t.date ? new Date(t.date).toISOString() : null,
-          completedAtStr: t.completedAt ? new Date(t.completedAt).toLocaleString() : null,
+          completedAtStr: t.completedAt
+            ? new Date(t.completedAt).toLocaleString()
+            : null,
         }));
 
       setTodayTasks(normalize(todayPending));
@@ -86,7 +90,11 @@ const TodoPage = () => {
 
   const handleMarkDone = async (task) => {
     try {
-      console.log(`Toggling completed for task ${task._id} from ${task.completed} to ${!task.completed}`);
+      console.log(
+        `Toggling completed for task ${task._id} from ${
+          task.completed
+        } to ${!task.completed}`
+      );
       const response = await axios.put(
         `/api/todos/${task._id}`,
         { completed: !task.completed },
@@ -101,7 +109,12 @@ const TodoPage = () => {
 
   return (
     <div className="flex min-h-screen bg-gray-50">
-      <Sidebar collapsed={collapsed} setCollapsed={setCollapsed} userRole="employee" />
+      <Sidebar
+        onLogout={onLogout}
+        collapsed={collapsed}
+        setCollapsed={setCollapsed}
+        userRole="employee"
+      />
       <main className={`flex-1 p-6 ${collapsed ? "ml-20" : "ml-64"}`}>
         <div className="max-w-4xl mx-auto">
           <header className="flex justify-between items-center mb-4">
