@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Check, X, MoreVertical } from "lucide-react";
+import { Check, X } from "lucide-react";
 import { formatLeaveType } from "../../api/leaveApi";
 
 const statusColor = {
@@ -15,19 +15,6 @@ const LeaveRequestsTable = ({
   onApprove,
   onReject,
 }) => {
-  const [menuOpenId, setMenuOpenId] = useState(null);
-  const menuRef = useRef(null);
-
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (menuRef.current && !menuRef.current.contains(event.target)) {
-        setMenuOpenId(null);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
-
   return (
     <div
       className="bg-white rounded-xl shadow p-4 flex flex-col h-full"
@@ -87,10 +74,7 @@ const LeaveRequestsTable = ({
                       {req.status}
                     </span>
                   </td>
-                  <td
-                    className="p-3 text-center flex gap-2 justify-center items-center relative"
-                    ref={menuOpenId === id ? menuRef : null}
-                  >
+                  <td className="p-3 text-center flex gap-2 justify-center items-center">
                     <button
                       type="button"
                       title="Approve"
@@ -119,18 +103,6 @@ const LeaveRequestsTable = ({
                       disabled={req.status === "Rejected"}
                     >
                       <X className="text-red-600" size={20} />
-                    </button>
-
-                    <button
-                      type="button"
-                      title="More"
-                      className="btn-action"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setMenuOpenId(menuOpenId === id ? null : id);
-                      }}
-                    >
-                      <MoreVertical size={17} />
                     </button>
                   </td>
                 </tr>

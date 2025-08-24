@@ -13,7 +13,6 @@ const statusIcons = {
   Pending: <AlertCircle size={14} />,
 };
 
-// Map backend enums to user-friendly labels
 const leaveTypeLabels = {
   maternity: "Maternity Leave",
   paid: "Paid Leave",
@@ -26,11 +25,16 @@ const leaveTypeLabels = {
 const RecentLeaveRequests = ({ requests }) => {
   const safeRequests = Array.isArray(requests) ? requests : [];
 
+  const formatFileSize = (size) => {
+    if (!size) return "";
+    const kb = parseInt(size) / 1024;
+    if (kb < 1024) return `${kb.toFixed(2)} KB`;
+    return `${(kb / 1024).toFixed(2)} MB`;
+  };
+
   return (
     <div className="bg-white border border-gray-100 shadow-lg rounded-2xl p-6">
-      <h3 className="text-xl font-semibold mb-4 text-gray-800">
-        Recent Leave Requests
-      </h3>
+      <h3 className="text-xl font-semibold mb-4 text-gray-800">Recent Leave Requests</h3>
       {safeRequests.length === 0 ? (
         <p className="text-gray-500 text-sm">No leave requests yet.</p>
       ) : (
@@ -43,6 +47,7 @@ const RecentLeaveRequests = ({ requests }) => {
                 <th className="p-3">Duration</th>
                 <th className="p-3">Status</th>
                 <th className="p-3">Remarks</th>
+                <th className="p-3">Document</th>
               </tr>
             </thead>
             <tbody>
@@ -59,27 +64,35 @@ const RecentLeaveRequests = ({ requests }) => {
                     className="border-b last:border-0 hover:bg-gray-50 transition group h-12"
                   >
                     <td className="p-3 text-gray-700">
-                      {req?.createdAt
-                        ? new Date(req.createdAt).toLocaleDateString()
-                        : "N/A"}
+                      {req?.createdAt ? new Date(req.createdAt).toLocaleDateString() : "-"}
                     </td>
-                    <td className="p-3">
-                      {leaveTypeLabels[req?.type] || req?.type || "-"}
-                    </td>
+                    <td className="p-3">{leaveTypeLabels[req?.type] || req?.type || "-"}</td>
                     <td className="p-3">{`${start} - ${end}`}</td>
                     <td className="p-3">
                       <span
                         className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium ${
-                          statusStyles[req?.status] || ""
+                          statusStyles[req?.status] || "bg-gray-100 text-gray-700"
                         }`}
                       >
-                        {statusIcons[req?.status]} {req?.status || "-"}
+                        {statusIcons[req?.status] || <AlertCircle size={14} />} {req?.status || "-"}
                       </span>
                     </td>
-                    <td className="p-3 text-gray-600">
-                      {req?.adminRemarks && req.adminRemarks.trim().length > 0
-                        ? req.adminRemarks
-                        : "-"}
+                    <td className="p-3 text-gray-600">{req?.adminRemarks?.trim() || "-"}</td>
+                    <td className="p-3 text-blue-600">
+                      {req?.document?.url ? (
+                        <a
+                          href={req.document.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          download={req.document.name || "document"}
+                          className="hover:underline"
+                        >
+                          {req.document.name || "Document"}{" "}
+                          {req.document.size ? `(${formatFileSize(req.document.size)})` : ""}
+                        </a>
+                      ) : (
+                        "-"
+                      )}
                     </td>
                   </tr>
                 );

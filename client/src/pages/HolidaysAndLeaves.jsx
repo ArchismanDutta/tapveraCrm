@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import LeaveSummary from "../components/leaves/LeaveSummary";
 import RecentLeaveRequests from "../components/leaves/RecentLeaveRequests";
 import LeaveApplicationForm from "../components/leaves/LeaveApplicationForm";
@@ -8,17 +8,15 @@ import Sidebar from "../components/dashboard/Sidebar";
 import { fetchLeavesForEmployee, submitLeaveRequest } from "../api/leaveApi";
 
 const MAX_REQUESTS = 4;
+const POLL_INTERVAL = 5000; // 5 seconds
 
 const HolidaysAndLeaves = ({ onLogout }) => {
   const [collapsed, setCollapsed] = useState(false);
-  const [leaveSummary, setLeaveSummary] = useState({
-    available: 18,
-    taken: 0,
-    pending: 0,
-  });
+  const [leaveSummary, setLeaveSummary] = useState({ available: 18, taken: 0, pending: 0 });
   const [leaveRequests, setLeaveRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const pollingRef = useRef(null);
 
   const importantNotices = [
     "All leaves should be applied at least 7 days in advance.",
@@ -35,40 +33,53 @@ const HolidaysAndLeaves = ({ onLogout }) => {
     { name: "Black Friday", date: "Nov 24", type: "Public Holiday" },
   ];
 
-  // Fetch logged-in user's leaves
+  // Fetch leaves and update summary
+  const loadLeaves = async () => {
+    try {
+      const data = await fetchLeavesForEmployee();
+      const safeData = Array.isArray(data) ? data : [];
+
+      const takenLeaves = safeData.filter(r => r.status === "Approved").length;
+      const pendingLeaves = safeData.filter(r => r.status === "Pending").length;
+
+      setLeaveRequests(safeData.slice(0, MAX_REQUESTS));
+      setLeaveSummary({
+        available: Math.max(0, 18 - takenLeaves),
+        taken: takenLeaves,
+        pending: pendingLeaves,
+      });
+      setLoading(false);
+      setError(null);
+    } catch (err) {
+      setError(err.message || "Failed to fetch leave requests");
+      setLoading(false);
+    }
+  };
+
+  // Initial load + polling
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-        const data = await fetchLeavesForEmployee();
-        setLeaveRequests(data.slice(0, MAX_REQUESTS));
-        const takenLeaves = data.filter((r) => r.status === "Approved").length;
-        const pendingLeaves = data.filter((r) => r.status === "Pending").length;
-        setLeaveSummary({
-          available: 18 - takenLeaves,
-          taken: takenLeaves,
-          pending: pendingLeaves,
-        });
-      } catch (err) {
-        setError(err.message);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchData();
+    setLoading(true);
+    loadLeaves();
+    pollingRef.current = setInterval(loadLeaves, POLL_INTERVAL);
+
+    return () => clearInterval(pollingRef.current);
   }, []);
 
-  const handleLeaveSubmit = async ({ type, startDate, endDate, reason }) => {
+  // Handle leave submission from LeaveApplicationForm
+  const handleLeaveSubmit = async (formData) => {
     try {
-      const newLeave = await submitLeaveRequest({ type, startDate, endDate, reason });
-      setLeaveRequests((prev) => [newLeave, ...prev].slice(0, MAX_REQUESTS));
-      setLeaveSummary((prev) => ({
-        available: prev.available > 0 ? prev.available - 1 : 0,
+      const newLeave = await submitLeaveRequest(formData);
+
+      setLeaveRequests(prev => [newLeave, ...prev].slice(0, MAX_REQUESTS));
+      setLeaveSummary(prev => ({
+        available: Math.max(0, prev.available - 1),
         taken: prev.taken,
         pending: prev.pending + 1,
       }));
+      setError(null);
     } catch (err) {
-      setError(err.message);
+      console.error(err);
+      setError(err.message || "Failed to submit leave request");
     }
   };
 
@@ -77,18 +88,10 @@ const HolidaysAndLeaves = ({ onLogout }) => {
 
   return (
     <div className="flex h-screen bg-gray-50 relative">
-      <Sidebar
-        collapsed={collapsed}
-        setCollapsed={setCollapsed}
-        userRole="employee"
-        onLogout={onLogout}
-      />
-      <main
-        className={`flex-1 transition-all duration-300 overflow-y-auto ${
-          collapsed ? "ml-20" : "ml-64"
-        }`}
-      >
+      <Sidebar collapsed={collapsed} setCollapsed={setCollapsed} userRole="employee" onLogout={onLogout} />
+      <main className={`flex-1 transition-all duration-300 overflow-y-auto ${collapsed ? "ml-20" : "ml-64"}`}>
         <div className="p-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
+
           {/* Employee Leaves */}
           <div className="lg:col-span-2 space-y-6">
             <div>
@@ -107,6 +110,7 @@ const HolidaysAndLeaves = ({ onLogout }) => {
             <HolidayList holidays={holidays} />
             <TeamLeaveCalendar />
           </div>
+
         </div>
       </main>
     </div>

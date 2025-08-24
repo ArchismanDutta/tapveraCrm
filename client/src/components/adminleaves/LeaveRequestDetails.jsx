@@ -14,52 +14,62 @@ const LeaveRequestDetails = ({
       </div>
     );
 
-  const { employee, period, type, reason, document, status } = request;
+  const { employee = {}, period = {}, type, reason, document, status } = request;
 
-  // ✅ Map leave types to proper display labels
   const leaveTypeLabels = {
     annual: "Annual Leave",
     paid: "Paid Leave",
     unpaid: "Unpaid Leave",
     sick: "Sick Leave",
     workFromHome: "Work From Home",
+    maternity: "Maternity Leave",
+    halfDay: "Half Day",
   };
 
   const formatPeriod = (period) => {
-    if (!period?.start || !period?.end) return "N/A";
+    if (!period.start || !period.end) return "N/A";
     const start = new Date(period.start);
     const end = new Date(period.end);
     if (isNaN(start.getTime()) || isNaN(end.getTime())) return "N/A";
     return `${start.toLocaleDateString()} - ${end.toLocaleDateString()}`;
   };
 
+  const formatFileSize = (size) => {
+    if (!size) return "";
+    const kb = parseInt(size) / 1024;
+    if (kb < 1024) return `${kb.toFixed(2)} KB`;
+    return `${(kb / 1024).toFixed(2)} MB`;
+  };
+
   return (
     <div className="bg-white rounded-xl shadow p-8 flex flex-col gap-6 min-h-[320px]">
       <h3 className="font-semibold text-xl mb-2">Leave Request Details</h3>
+
       <div className="flex gap-3 items-center">
         <img
-          src={employee.avatar}
-          alt={employee.name}
+          src={employee.avatar || "/default-avatar.png"}
+          alt={employee.name || "Employee"}
           className="w-12 h-12 rounded-full object-cover"
         />
         <div className="flex flex-col">
-          <span className="font-bold text-gray-800">{employee.name}</span>
-          <span className="text-xs text-gray-500">{employee.email}</span>
+          <span className="font-bold text-gray-800">{employee.name || "-"}</span>
+          <span className="text-xs text-gray-500">{employee.email || "-"}</span>
           <span className="text-sm text-gray-700">
             <span className="text-gray-500">Department: </span>
-            {employee.department}
+            {employee.department || "-"}
           </span>
           <span className="text-sm text-gray-700">
             <span className="text-gray-500">Designation: </span>
-            {employee.designation}
+            {employee.designation || "-"}
           </span>
         </div>
       </div>
+
       <div className="space-y-1 text-gray-800">
         <div>
           <span className="text-gray-500 font-medium">Leave Type: </span>
           <span className="font-bold capitalize">
-            {leaveTypeLabels[type] || type}
+            {leaveTypeLabels[type] || type || "-"}
           </span>
         </div>
         <div>
@@ -68,20 +78,26 @@ const LeaveRequestDetails = ({
         </div>
         <div>
           <span className="text-gray-500 font-medium">Reason: </span>
-          <span className="font-bold">{reason}</span>
+          <span className="font-bold">{reason || "-"}</span>
         </div>
       </div>
-      {document && (
+
+      {/* Display Supporting Document */}
+      {document?.url && (
         <div>
-          <span className="text-gray-500 mb-1 block">Attached Documents</span>
+          <span className="text-gray-500 mb-1 block">Supporting Document</span>
           <div className="bg-gray-100 rounded flex items-center justify-between px-3 py-2 text-sm">
-            <span>
-              {document.name}{" "}
-              <span className="text-xs text-gray-500">({document.size})</span>
+            <span className="truncate">
+              {document.name || "Document"}{" "}
+              <span className="text-xs text-gray-500">
+                ({formatFileSize(document.size)})
+              </span>
             </span>
             <a
               href={document.url}
-              download
+              target="_blank"
+              rel="noopener noreferrer"
+              download={document.name}
               className="text-blue-600 font-semibold text-sm hover:underline"
             >
               Download
@@ -89,10 +105,10 @@ const LeaveRequestDetails = ({
           </div>
         </div>
       )}
+
+      {/* Admin Remarks */}
       <div>
-        <label className="text-gray-500 mb-2 block font-medium">
-          Admin Remarks
-        </label>
+        <label className="text-gray-500 mb-2 block font-medium">Admin Remarks</label>
         <textarea
           value={adminRemarks}
           onChange={(e) => onChangeRemarks(e.target.value)}
@@ -100,6 +116,8 @@ const LeaveRequestDetails = ({
           placeholder="Add your remarks here..."
         />
       </div>
+
+      {/* Actions */}
       <div className="flex gap-3 justify-end pt-2">
         <button
           type="button"
@@ -111,7 +129,7 @@ const LeaveRequestDetails = ({
         <button
           type="button"
           className="px-4 py-2 rounded bg-green-600 text-white font-bold hover:bg-green-700 transition"
-          onClick={() => onApprove(request.id)}
+          onClick={() => onApprove(request._id)}
           disabled={status === "Approved"}
         >
           Approve Request
@@ -119,7 +137,7 @@ const LeaveRequestDetails = ({
         <button
           type="button"
           className="px-4 py-2 rounded bg-red-600 text-white font-bold hover:bg-red-700 transition"
-          onClick={() => onReject(request.id)}
+          onClick={() => onReject(request._id)}
           disabled={status === "Rejected"}
         >
           Reject Request
