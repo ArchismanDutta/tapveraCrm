@@ -1,3 +1,4 @@
+// src/components/admintask/TaskRow.jsx
 import React from "react";
 import { Eye, Trash2, Edit3 } from "lucide-react";
 
@@ -26,7 +27,10 @@ const TaskRow = ({ task, onView, onEdit, onDelete }) => {
                 src={`https://i.pravatar.cc/40?u=${user._id || user}`}
                 alt={user.name || "User"}
                 className="w-7 h-7 rounded-full border-2 border-yellow-300"
-                onError={e => { e.target.onerror = null; e.target.src = "https://i.pravatar.cc/40"; }}
+                onError={(e) => {
+                  e.target.onerror = null;
+                  e.target.src = "https://i.pravatar.cc/40";
+                }}
               />
               <span className="text-gray-700">{user.name || user.email || "Unknown"}</span>
             </div>
@@ -57,19 +61,19 @@ const TaskRow = ({ task, onView, onEdit, onDelete }) => {
       <td className="p-3 flex gap-2">
         <button
           onClick={onView}
-          className="p-1.5 rounded-lg text-blue-600 hover:bg-blue-50"
+          className="p-1.5 rounded-lg text-blue-600 hover:bg-blue-50 cursor-pointer"
         >
           <Eye size={16} />
         </button>
         <button
           onClick={onEdit}
-          className="p-1.5 rounded-lg text-green-600 hover:bg-green-50"
+          className="p-1.5 rounded-lg text-green-600 hover:bg-green-50 cursor-pointer"
         >
           <Edit3 size={16} />
         </button>
         <button
           onClick={onDelete}
-          className="p-1.5 rounded-lg text-red-600 hover:bg-red-50"
+          className="p-1.5 rounded-lg text-red-600 hover:bg-red-50 cursor-pointer"
         >
           <Trash2 size={16} />
         </button>
