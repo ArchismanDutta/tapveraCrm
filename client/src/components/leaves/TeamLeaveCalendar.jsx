@@ -1,24 +1,29 @@
 import React, { useEffect, useState } from "react";
 import { Clock } from "lucide-react";
+import { fetchTeamLeaves } from "../../api/leaveApi"; // make sure path is correct
 import axios from "axios";
 
 const TeamLeaveCalendar = () => {
   const [teamLeaves, setTeamLeaves] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [user, setUser] = useState(null);
 
   useEffect(() => {
-    const fetchTeamLeaves = async () => {
+    const fetchUserAndLeaves = async () => {
       try {
         setLoading(true);
         const token = localStorage.getItem("token");
 
-        const res = await axios.get("/api/leaves/team", {
-          withCredentials: true,
+        // Get current logged-in user
+        const meRes = await axios.get("/api/users/me", {
           headers: token ? { Authorization: `Bearer ${token}` } : {},
         });
+        setUser(meRes.data);
 
-        setTeamLeaves(res.data); // backend already filters by department
+        // Fetch team leaves for the user's department, excluding self
+        const leaves = await fetchTeamLeaves(meRes.data.department, meRes.data.email);
+        setTeamLeaves(leaves);
       } catch (err) {
         setError(err.response?.data?.message || err.message);
       } finally {
@@ -26,7 +31,7 @@ const TeamLeaveCalendar = () => {
       }
     };
 
-    fetchTeamLeaves();
+    fetchUserAndLeaves();
   }, []);
 
   if (loading) return <div className="p-6">Loading team leaves...</div>;

@@ -80,6 +80,20 @@ exports.createEmployee = async (req, res) => {
 };
 
 // ======================
+// Get All Users (list for Admin task assigning)
+// ======================
+exports.getAllUsers = async (req, res) => {
+  try {
+    const users = await User.find()
+      .select("_id name email role department designation employeeId");
+    res.json(users);
+  } catch (err) {
+    console.error("Error fetching users:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+// ======================
 // Get Current Logged-in User
 // ======================
 exports.getMe = async (req, res) => {

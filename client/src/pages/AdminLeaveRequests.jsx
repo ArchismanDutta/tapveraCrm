@@ -1,9 +1,16 @@
-import React, { useState, useEffect } from "react";
+// src/pages/AdminLeaveRequests.jsx
+import React, { useState, useEffect, useRef } from "react";
 import LeaveRequestsTable from "../components/adminleaves/LeaveRequestsTable";
 import LeaveRequestDetails from "../components/adminleaves/LeaveRequestDetails";
 import Sidebar from "../components/dashboard/Sidebar";
 import DepartmentLeaveWarningModal from "../components/adminleaves/DepartmentLeaveWarningModal";
-import { fetchAllLeaveRequests, updateLeaveRequestStatus, fetchTeamLeaves } from "../api/leaveApi";
+import {
+  fetchAllLeaveRequests,
+  updateLeaveRequestStatus,
+  fetchTeamLeaves,
+} from "../api/leaveApi";
+
+const POLL_INTERVAL = 10000; // 10 seconds
 
 const AdminLeaveRequests = ({ onLogout }) => {
   const [collapsed, setCollapsed] = useState(false);
@@ -14,60 +21,99 @@ const AdminLeaveRequests = ({ onLogout }) => {
 
   const [modalOpen, setModalOpen] = useState(false);
   const [modalLeaves, setModalLeaves] = useState([]);
-  const [pendingAction, setPendingAction] = useState(null); // { id, status }
+  const [pendingAction, setPendingAction] = useState(null);
+
+  const pollingRef = useRef(null);
+
+  // Load all leave requests
+  const loadLeaveRequests = async () => {
+    try {
+      const data = await fetchAllLeaveRequests();
+      const safeData = Array.isArray(data) ? data : [];
+
+      setRequests((prev) => {
+        // preserve adminRemarks from local state if request exists
+        return safeData.map((req) => {
+          const existing = prev.find(
+            (r) => r.id === req.id || r._id === req._id
+          );
+          if (existing?.adminRemarks) {
+            return { ...req, adminRemarks: existing.adminRemarks };
+          }
+          return req;
+        });
+      });
+
+      // preserve selection if still exists, else select first
+      if (!selectedId && safeData[0]) {
+        setSelectedId(safeData[0].id || safeData[0]._id);
+      }
+
+      setLoading(false);
+    } catch (err) {
+      console.error(err);
+      setError(err.message || "Failed to fetch leave requests");
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    setLoading(true);
-    fetchAllLeaveRequests()
-      .then((data) => {
-        setRequests(data);
-        setSelectedId(data[0]?.id || null);
-        setLoading(false);
-      })
-      .catch((err) => {
-        setError(err.message);
-        setLoading(false);
-      });
+    loadLeaveRequests();
+    pollingRef.current = setInterval(loadLeaveRequests, POLL_INTERVAL);
+
+    return () => clearInterval(pollingRef.current);
   }, []);
 
-  const selectedRequest = requests.find((r) => r.id === selectedId);
+  const selectedRequest = requests.find(
+    (r) => r.id === selectedId || r._id === selectedId
+  );
 
   const onChangeRemarks = (value) => {
+    if (!selectedRequest) return;
     setRequests((prev) =>
-      prev.map((r) => (r.id === selectedId ? { ...r, adminRemarks: value } : r))
+      prev.map((r) =>
+        r.id === selectedRequest.id || r._id === selectedRequest._id
+          ? { ...r, adminRemarks: value }
+          : r
+      )
     );
   };
 
   const updateStatus = async (id, status) => {
     try {
-      const requestToUpdate = requests.find((r) => r.id === id);
-      const remarksToSend = requestToUpdate?.adminRemarks || "";
+      const requestToUpdate =
+        requests.find((r) => r.id === id || r._id === id) || {};
+      const remarksToSend = requestToUpdate.adminRemarks || "";
+
       const updatedReq = await updateLeaveRequestStatus(id, status, remarksToSend);
+
+      // Ensure updated request replaces old one
       setRequests((prev) =>
-        prev.map((r) => (r.id === id ? updatedReq : r))
+        prev.map((r) =>
+          r.id === id || r._id === id ? { ...r, ...updatedReq } : r
+        )
       );
     } catch (err) {
-      setError(err.message);
+      console.error(err);
+      setError(err.message || "Failed to update leave request");
     }
   };
 
-  // ✅ New: handle approve/reject click with department leave check
   const handleActionClick = async (id, status) => {
-  const req = requests.find((r) => r.id === id);
-  if (!req) return;
+    const req = requests.find((r) => r.id === id || r._id === id);
+    if (!req) return;
 
-  try {
-    // fetch current approved leaves for the same department (excluding requester)
-    const leaves = await fetchTeamLeaves(req.employee.department, req.employee.email);
-    setModalLeaves(leaves);
-    setPendingAction({ id, status });
-    setModalOpen(true);
-  } catch (err) {
-    console.error(err);
-    updateStatus(id, status); // fallback
-  }
-};
-
+    try {
+      const leaves = await fetchTeamLeaves(req.employee?.department, req.employee?.email);
+      setModalLeaves(Array.isArray(leaves) ? leaves : []);
+      setPendingAction({ id, status });
+      setModalOpen(true);
+    } catch (err) {
+      console.error(err);
+      // fallback: directly update if fetching leaves fails
+      updateStatus(id, status);
+    }
+  };
 
   const handleModalProceed = () => {
     if (pendingAction) {
@@ -78,7 +124,8 @@ const AdminLeaveRequests = ({ onLogout }) => {
   };
 
   if (loading) return <div className="p-8">Loading leave requests...</div>;
-  if (error) return <div className="p-8 text-red-600">Error: {error}</div>;
+  if (error)
+    return <div className="p-8 text-red-600">Error: {error || "Unknown error"}</div>;
 
   return (
     <div className="flex bg-gray-50 min-h-screen">
@@ -115,12 +162,11 @@ const AdminLeaveRequests = ({ onLogout }) => {
         </div>
       </main>
 
-      {/* ✅ Department leave warning modal */}
       <DepartmentLeaveWarningModal
         isOpen={modalOpen}
         onClose={() => setModalOpen(false)}
         onProceed={handleModalProceed}
-        department={selectedRequest?.employee.department}
+        department={selectedRequest?.employee?.department}
         currentLeaves={modalLeaves}
         selectedEmployee={selectedRequest?.employee}
       />
