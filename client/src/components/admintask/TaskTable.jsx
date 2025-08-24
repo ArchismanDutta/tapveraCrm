@@ -1,3 +1,4 @@
+// src/components/admintask/TaskTable.jsx
 import React, { useState } from "react";
 import TaskRow from "./TaskRow";
 
@@ -30,12 +31,12 @@ const TaskTable = ({ tasks, onViewTask, onEditTask, onDeleteTask }) => {
         <input
           type="text"
           placeholder="🔍 Search tasks..."
-          className="border border-gray-200 focus:border-orange-400 focus:ring focus:ring-orange-100 rounded-xl px-4 py-2 w-full md:w-1/3 text-sm transition-all duration-200"
+          className="border border-gray-200 focus:border-orange-400 focus:ring focus:ring-orange-100 rounded-xl px-4 py-2 w-full md:w-1/3 text-sm transition-all duration-200 cursor-pointer"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
         <select
-          className="border border-gray-200 focus:border-orange-400 focus:ring focus:ring-orange-100 rounded-xl px-4 py-2 text-sm w-full md:w-auto transition-all duration-200 bg-white"
+          className="border border-gray-200 focus:border-orange-400 focus:ring focus:ring-orange-100 rounded-xl px-4 py-2 text-sm w-full md:w-auto transition-all duration-200 bg-white cursor-pointer"
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
         >
@@ -74,6 +75,7 @@ const TaskTable = ({ tasks, onViewTask, onEditTask, onDeleteTask }) => {
                   onView={() => onViewTask(task)}
                   onEdit={() => onEditTask(task)}
                   onDelete={() => onDeleteTask(task._id)}
+                  className="cursor-pointer"
                 />
               ))
             ) : (

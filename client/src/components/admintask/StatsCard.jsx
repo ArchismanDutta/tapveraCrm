@@ -1,8 +1,8 @@
+// src/components/admintask/StatsCard.jsx
 import React from "react";
 import { motion } from "framer-motion";
 
-const StatsCard = ({ title, value, colorScheme = "orange" }) => {
-  // Define color schemes for different cards
+const StatsCard = ({ title, value, colorScheme = "orange", onClick }) => {
   const colorSchemes = {
     blue: "bg-gradient-to-br from-blue-50 via-blue-100 to-blue-200 border-blue-200",
     green: "bg-gradient-to-br from-green-50 via-green-100 to-green-200 border-green-200",
@@ -19,6 +19,7 @@ const StatsCard = ({ title, value, colorScheme = "orange" }) => {
         boxShadow: "0 8px 20px rgba(255, 165, 0, 0.15)",
       }}
       transition={{ type: "spring", stiffness: 300, damping: 20 }}
+      onClick={onClick}
       className={`
         relative
         rounded-3xl
@@ -31,11 +32,9 @@ const StatsCard = ({ title, value, colorScheme = "orange" }) => {
         flex flex-col justify-between
       `}
     >
-      {/* Large number at top-left */}
       <div className="flex justify-start">
         <span className="text-4xl font-bold text-black-500">{value}</span>
       </div>
-      {/* Text at bottom-left */}
       <div className="flex justify-start">
         <span className="text-sm font-medium text-black-500 leading-tight">{title}</span>
       </div>
