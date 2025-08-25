@@ -3,6 +3,7 @@ const router = express.Router();
 
 const { protect } = require("../middlewares/authMiddleware");
 const { authorize } = require("../middlewares/roleMiddleware");
+
 const userController = require("../controllers/userController");
 const User = require("../models/User")
 const {
@@ -10,27 +11,28 @@ const {
   getAllUsers,
   getMe,
   getEmployeeDirectory,
+  getEmployeeById,
   updateEmployeeStatus,
 } = require("../controllers/userController");
 
-// ---------------------------
-// Employee Directory (all authenticated users)
-// ---------------------------
+// ======================
+// Employee Directory (all logged-in users)
+// ======================
 router.get("/directory", protect, getEmployeeDirectory);
 
-// ---------------------------
-// Get all users (admin & super-admin only)
-// ---------------------------
+// ======================
+// Get all users (for assigning tasks) — admin & super-admin only
+// ======================
 router.get("/", protect, authorize("admin", "super-admin"), getAllUsers);
 
-// ---------------------------
-// Get current logged-in user info
-// ---------------------------
+// ======================
+// Get current logged-in user
+// ======================
 router.get("/me", protect, getMe);
 
-// ---------------------------
-// Create new employee (admin, hr, super-admin only)
-// ---------------------------
+// ======================
+// Create new employee (admin/hr/super-admin only)
+// ======================
 router.post(
   "/create",
   protect,
@@ -38,9 +40,19 @@ router.post(
   createEmployee
 );
 
-// ---------------------------
-// Update employee status (admin, hr, super-admin only)
-// ---------------------------
+// ======================
+// Get single employee by ID (admin/hr/super-admin only)
+// ======================
+router.get(
+  "/:id",
+  protect,
+  authorize("admin", "hr", "super-admin"),
+  getEmployeeById
+);
+
+// ======================
+// Update employee status (admin/hr/super-admin only)
+// ======================
 router.patch(
   "/:id/status",
   protect,

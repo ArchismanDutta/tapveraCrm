@@ -7,34 +7,37 @@ const AuthInput = ({
   name,
   value,
   onChange,
-  placeholder,
-  autoComplete,
+  placeholder = '',
+  autoComplete = 'off',
   required = false,
   error = '',
   showTogglePassword = false,
   icon: Icon,
 }) => {
   const [showPassword, setShowPassword] = useState(false);
+
+  // Determine the actual input type
   const inputType = showTogglePassword && showPassword ? 'text' : type;
 
   const inputId = `auth-input-${name}`;
   const errorId = error ? `${inputId}-error` : undefined;
 
   return (
-    <div>
+    <div className="w-full">
+      {/* Label */}
       <label htmlFor={inputId} className="block text-sm text-textMuted mb-1">
-        {label}
-        {required && ' *'}
+        {label}{required && ' *'}
       </label>
 
-      <div className="relative">
+      <div className="relative w-full">
         {/* Optional left icon */}
         {Icon && (
-          <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-textMuted">
+          <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-textMuted pointer-events-none">
             <Icon />
           </div>
         )}
 
+        {/* Input field */}
         <input
           id={inputId}
           name={name}
@@ -46,13 +49,13 @@ const AuthInput = ({
           required={required}
           aria-invalid={error ? 'true' : 'false'}
           aria-describedby={errorId}
-          className={`w-full px-4 py-2 rounded-md bg-background border ${
-            error ? 'border-red-500' : 'border-border'
-          } text-textMain placeholder:text-textMuted focus:outline-none focus:border-primary transition
-          ${Icon ? 'pl-10' : ''} ${showTogglePassword ? 'pr-10' : ''}`}
+          className={`w-full px-4 py-2 rounded-md bg-background border 
+            ${error ? 'border-red-500' : 'border-border'} text-textMain 
+            placeholder:text-textMuted focus:outline-none focus:border-primary transition
+            ${Icon ? 'pl-10' : ''} ${showTogglePassword ? 'pr-10' : ''}`}
         />
 
-        {/* Password toggle icon */}
+        {/* Password toggle button */}
         {showTogglePassword && type === 'password' && (
           <button
             type="button"
@@ -66,6 +69,7 @@ const AuthInput = ({
         )}
       </div>
 
+      {/* Error message */}
       {error && (
         <p id={errorId} className="mt-1 text-xs text-red-500" role="alert">
           {error}
