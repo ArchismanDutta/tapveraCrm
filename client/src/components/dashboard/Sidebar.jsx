@@ -45,7 +45,7 @@ const menuConfig = {
       icon: <LayoutDashboard size={18} />,
       label: "Dashboard",
     },
-    { to: "/employees", icon: <Users size={18} />, label: "Employee Details" },
+    { to: "/directory", icon: <Users size={18} />, label: "Employee Details" },
     { to: "/messages", icon: <MessageCircle size={18} />, label: "Messages" },
     {
       to: "/admin/leaves",

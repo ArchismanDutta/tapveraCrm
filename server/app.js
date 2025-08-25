@@ -8,6 +8,7 @@ const path = require("path");
 const http = require("http");
 const WebSocket = require("ws");
 
+
 // Routes
 const userRoutes = require("./routes/userRoutes");
 const taskRoutes = require("./routes/taskRoutes");
@@ -28,9 +29,15 @@ const ChatController = require("./controllers/chatController");
 const app = express();
 const server = http.createServer(app);
 
+// =====================
 // Middleware
+// =====================
 app.use(express.json());
 
+// Serve uploaded files (e.g., employee photos, avatars)
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+
+// Allowed frontend origins
 const frontendOrigins = [
   process.env.FRONTEND_ORIGIN,
   process.env.FRONTEND_URL,
@@ -40,7 +47,7 @@ const frontendOrigins = [
 
 if (frontendOrigins.length === 0) {
   console.warn(
-    "⚠️ No FRONTEND_ORIGIN or FRONTEND_URL set, please check your environment variables"
+    "⚠️ No FRONTEND_ORIGIN or FRONTEND_URL set in .env. CORS may block requests."
   );
 }
 
@@ -55,12 +62,16 @@ app.use(
 
 app.use(morgan("dev"));
 
+// =====================
 // Health Check
+// =====================
 app.get("/api/health", (req, res) => {
   res.json({ status: "ok", timestamp: Date.now() });
 });
 
+// =====================
 // API Routes
+
 app.use("/api/tasks", taskRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/password", passwordRoutes);
@@ -82,9 +93,11 @@ if (process.env.NODE_ENV === "production") {
   );
 }
 
+// =====================
 // Error handler
+// =====================
 app.use((err, req, res, next) => {
-  console.error("❌ Unexpected error:", err);
+  console.error("❌ Unexpected error:", err.stack || err);
   res.status(500).json({ error: "Internal Server Error" });
 });
 
@@ -144,16 +157,24 @@ wss.on("connection", (ws) => {
 // Connect to MongoDB and start server
 const PORT = process.env.PORT || 5000;
 
+if (!process.env.MONGODB_URI) {
+  console.error("❌ MONGODB_URI not set in .env file");
+  process.exit(1);
+}
+
 mongoose
-  .connect(process.env.MONGODB_URI)
+  .connect(process.env.MONGODB_URI, {
+    useNewUrlParser: true,
+    useUnifiedTopology: true,
+  })
   .then(() => {
     console.log("✅ Connected to MongoDB");
     server.listen(PORT, () =>
-      console.log(`🚀 Server running on http://localhost:${PORT}`)
+      console.log(`🚀 Server running at http://localhost:${PORT}`)
     );
-    console.log("🌐 FRONTEND_URL for emails:", process.env.FRONTEND_URL);
+    console.log("🌐 FRONTEND_URL for emails:", process.env.FRONTEND_URL || "not set");
   })
   .catch((err) => {
-    console.error("❌ MongoDB connection error:", err);
+    console.error("❌ MongoDB connection error:", err.message);
     process.exit(1);
   });
