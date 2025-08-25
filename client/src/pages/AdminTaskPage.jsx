@@ -178,6 +178,8 @@ export default function AdminTaskPage({ onLogout }) {
   const [selectedTask, setSelectedTask] = useState(null);
   const [editingTask, setEditingTask] = useState(null);
   const [filterType, setFilterType] = useState("all");
+  const [currentTime, setCurrentTime] = useState(new Date());
+  const [userName, setUserName] = useState("");
 
   const navigate = useNavigate();
   const tableRef = useRef(null);
@@ -187,7 +189,6 @@ export default function AdminTaskPage({ onLogout }) {
     setTimeout(() => setPopupMessage(""), 3000);
   };
 
-  // ✅ FIXED fetchTasks
   const fetchTasks = async () => {
     const token = localStorage.getItem("token");
     if (!token) {
@@ -240,9 +241,28 @@ export default function AdminTaskPage({ onLogout }) {
   };
 
   useEffect(() => {
-    fetchTasks();
+    let intervalId;
+
+    const loadTasks = async () => {
+      await fetchTasks();
+    };
+
+    // initial fetch
     fetchUsers();
     fetchUser();
+    loadTasks();
+
+    // poll tasks every 30 seconds
+    intervalId = setInterval(loadTasks, 30000);
+
+    // clock update every second
+    const clockInterval = setInterval(() => setCurrentTime(new Date()), 1000);
+
+    // cleanup on unmount
+    return () => {
+      clearInterval(intervalId);
+      clearInterval(clockInterval);
+    };
   }, []);
 
   const ensureAssignedArray = (obj) => {
@@ -330,14 +350,6 @@ export default function AdminTaskPage({ onLogout }) {
       dayjs(t.dueDate).isBefore(today, "day") &&
       (t.status || "").toLowerCase() !== "completed"
   ).length;
-
-  const [currentTime, setCurrentTime] = useState(new Date());
-  const [userName, setUserName] = useState("");
-
-  useEffect(() => {
-    const interval = setInterval(() => setCurrentTime(new Date()), 1000);
-    return () => clearInterval(interval);
-  }, []);
 
   const handleFilterAndScroll = (type) => {
     setFilterType(type);
