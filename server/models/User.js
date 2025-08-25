@@ -1,5 +1,19 @@
+// models/User.js
 const mongoose = require("mongoose");
 
+// ======================
+// Sub-schema: Qualification
+// ======================
+const qualificationSchema = new mongoose.Schema({
+  school: { type: String, trim: true },
+  degree: { type: String, trim: true },
+  year: { type: Number },
+  marks: { type: String, trim: true }, // e.g., percentage or CGPA
+});
+
+// ======================
+// Main User Schema
+// ======================
 const userSchema = new mongoose.Schema(
   {
     employeeId: { type: String, required: true, unique: true, trim: true },
@@ -18,8 +32,7 @@ const userSchema = new mongoose.Schema(
     doj: { type: Date, required: true },
     salary: { type: Number, default: 0 },
     ref: { type: String, trim: true },
-    // Default should be INACTIVE as per requirement
-    status: { type: String, enum: ["active", "inactive"], default: "inactive" },
+    status: { type: String, enum: ["active", "inactive"], default: "active" },
     totalPl: { type: Number, default: 0 },
 
     password: { type: String, required: true },
@@ -27,18 +40,23 @@ const userSchema = new mongoose.Schema(
 
     department: {
       type: String,
-      enum: ["executives", "development", "marketingAndSales", "humanResource"],
-      // no invalid empty-string default; omit by default
-      required: false,
+      enum: ["executives", "development", "marketingAndSales", "humanResource", ""],
+      default: "",
     },
     designation: { type: String, trim: true, default: "" },
+    employmentType: { type: String, enum: ["full-time", "part-time", "contract", "internship"], default: "full-time" },
+
+    skills: [{ type: String, trim: true }], // array of strings
+    qualifications: [qualificationSchema], // array of qualifications
 
     outlookEmail: { type: String, lowercase: true, trim: true },
     outlookAppPassword: { type: String, trim: true },
+    location: { type: String, trim: true, default: "India" },
   },
   { timestamps: true }
 );
 
-// No bcrypt hashing here since you don't want password hashing
-
+// ======================
+// Export the User Model
+// ======================
 module.exports = mongoose.model("User", userSchema);
