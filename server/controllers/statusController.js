@@ -2,6 +2,7 @@
 
 const UserStatus = require("../models/UserStatus");
 const DailyWork = require("../models/DailyWork");
+const User = require("../models/User");
 
 // Helpers
 function getWorkDurationSeconds(workedSessions, currentlyWorking) {
@@ -153,7 +154,7 @@ exports.updateTodayStatus = async (req, res) => {
       });
     }
 
-    // Validation for punch in/out duplication
+    // Validate duplicates & sync User.status
     if (timelineEvent?.type === "Punch In") {
       if (todayStatus.timeline.some((e) => e.type === "Punch In")) {
         return res.status(400).json({ message: "Already punched in today" });
@@ -161,29 +162,34 @@ exports.updateTodayStatus = async (req, res) => {
       if (!todayStatus.arrivalTime) {
         todayStatus.arrivalTime = new Date();
       }
+      // set active on punch in
+      await User.findByIdAndUpdate(userId, { status: "active" });
     }
+
     if (timelineEvent?.type === "Punch Out") {
       if (todayStatus.timeline.some((e) => e.type === "Punch Out")) {
         return res.status(400).json({ message: "Already punched out today" });
       }
+      // set inactive on punch out
+      await User.findByIdAndUpdate(userId, { status: "inactive" });
     }
 
     if (onBreak !== undefined) todayStatus.onBreak = onBreak;
     if (currentlyWorking !== undefined) todayStatus.currentlyWorking = currentlyWorking;
     if (breakStartTime !== undefined) todayStatus.breakStartTime = breakStartTime;
 
-    // Update workedSessions based on timeline event
+    // Work sessions
     if (timelineEvent?.type === "Punch In" || timelineEvent?.type === "Resume Work") {
       const ws = todayStatus.workedSessions;
       if (!ws.length || ws[ws.length - 1].end) ws.push({ start: new Date() });
     }
-    if (timelineEvent?.type.startsWith("Break Start") || timelineEvent?.type === "Punch Out") {
+    if (timelineEvent?.type?.startsWith("Break Start") || timelineEvent?.type === "Punch Out") {
       const ws = todayStatus.workedSessions;
       if (ws.length && !ws[ws.length - 1].end) ws[ws.length - 1].end = new Date();
     }
 
-    // Update breakSessions based on timeline event
-    if (timelineEvent?.type.startsWith("Break Start")) {
+    // Break sessions
+    if (timelineEvent?.type?.startsWith("Break Start")) {
       const bs = todayStatus.breakSessions;
       if (!bs.length || bs[bs.length - 1].end) bs.push({ start: new Date() });
     }
@@ -192,7 +198,7 @@ exports.updateTodayStatus = async (req, res) => {
       if (bs.length && !bs[bs.length - 1].end) bs[bs.length - 1].end = new Date();
     }
 
-    // Add to timeline and recentActivities
+    // Timeline + activities
     if (timelineEvent?.type && timelineEvent?.time) {
       todayStatus.timeline.push(timelineEvent);
       todayStatus.recentActivities.unshift({

@@ -129,13 +129,6 @@ const Login = ({ onLoginSuccess }) => {
             </a>
           </span>
         </div>
-
-        <p className="mt-4 text-center text-textMuted text-sm">
-          Don&apos;t have an account?{" "}
-          <a href="/signup" className="text-primary hover:text-orangeDark">
-            Sign up
-          </a>
-        </p>
       </div>
     </div>
   );
