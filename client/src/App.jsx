@@ -11,7 +11,7 @@ import "react-toastify/dist/ReactToastify.css";
 
 // Pages
 import Login from "./pages/LoginPage";
-import Signup from "./pages/Signup"; // ✅ Only Admin/HR/Super Admin
+import Signup from "./pages/Signup"; // Admin/HR/Super Admin only
 import EmployeeDashboardPage from "./pages/EmployeeDashboard";
 import MyProfile from "./pages/MyProfile";
 import Tasks from "./pages/Tasks";
@@ -33,7 +33,7 @@ const AppWrapper = () => {
   const [role, setRole] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // ✅ Load auth state on mount
+  // Load auth state on mount
   useEffect(() => {
     const token = localStorage.getItem("token");
     let storedRole =
@@ -94,12 +94,11 @@ const AppWrapper = () => {
           }
         />
 
-        {/* Signup (Restricted to HR, Admin, Super Admin) */}
+        {/* Signup (Admin/HR/Super Admin only) */}
         <Route
           path="/signup"
           element={
-            isAuthenticated &&
-            ["admin", "super-admin", "hr"].includes(role) ? (
+            isAuthenticated && ["admin", "super-admin", "hr"].includes(role) ? (
               <Signup onLoginSuccess={handleLoginSuccess} />
             ) : (
               <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />
@@ -143,8 +142,7 @@ const AppWrapper = () => {
         <Route
           path="/tasks"
           element={
-            isAuthenticated &&
-            !["admin", "super-admin", "hr"].includes(role) ? (
+            isAuthenticated && !["admin", "super-admin", "hr"].includes(role) ? (
               <Tasks onLogout={handleLogout} />
             ) : (
               <Navigate
@@ -159,28 +157,20 @@ const AppWrapper = () => {
         <Route
           path="/today-status"
           element={
-            isAuthenticated &&
-            !["admin", "super-admin", "hr"].includes(role) ? (
+            isAuthenticated ? (
               <TodayStatusPage onLogout={handleLogout} />
             ) : (
-              <Navigate
-                to={isAuthenticated ? "/admin/tasks" : "/login"}
-                replace
-              />
+              <Navigate to={isAuthenticated ? "/admin/tasks" : "/login"} replace />
             )
           }
         />
         <Route
           path="/tasks-status"
           element={
-            isAuthenticated &&
-            !["admin", "super-admin", "hr"].includes(role) ? (
+            isAuthenticated && !["admin", "super-admin", "hr"].includes(role) ? (
               <TodayStatusPage onLogout={handleLogout} />
             ) : (
-              <Navigate
-                to={isAuthenticated ? "/admin/tasks" : "/login"}
-                replace
-              />
+              <Navigate to={isAuthenticated ? "/admin/tasks" : "/login"} replace />
             )
           }
         />
@@ -189,8 +179,7 @@ const AppWrapper = () => {
         <Route
           path="/attendance"
           element={
-            isAuthenticated &&
-            !["admin", "super-admin", "hr"].includes(role) ? (
+            isAuthenticated && !["admin", "super-admin", "hr"].includes(role) ? (
               <AttendancePage onLogout={handleLogout} />
             ) : (
               <Navigate
@@ -205,9 +194,8 @@ const AppWrapper = () => {
         <Route
           path="/todo"
           element={
-            isAuthenticated &&
-            !["admin", "super-admin", "hr"].includes(role) ? (
-              <TodoPage />
+            isAuthenticated && !["admin", "super-admin", "hr"].includes(role) ? (
+              <TodoPage onLogout={handleLogout} />
             ) : (
               <Navigate
                 to={isAuthenticated ? "/admin/tasks" : "/login"}
