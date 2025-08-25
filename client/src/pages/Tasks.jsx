@@ -46,7 +46,7 @@ const Tasks = ({ onLogout }) => {
   // Polling every 60 seconds
   useEffect(() => {
     fetchTasks(); // initial fetch
-    const interval = setInterval(fetchTasks, 60000); // poll every 60s
+    const interval = setInterval(fetchTasks, 30000); // poll every 60s
     return () => clearInterval(interval);
   }, []);
 

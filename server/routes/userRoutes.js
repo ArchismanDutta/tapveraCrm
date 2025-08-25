@@ -1,25 +1,49 @@
-// routes/userRoutes.js
 const express = require("express");
 const router = express.Router();
 
 const { protect } = require("../middlewares/authMiddleware");
-// NOTE: Your taskRoutes imported authorize from "../middlewares/roleMiddleware".
-// To stay consistent, we do the same here:
 const { authorize } = require("../middlewares/roleMiddleware");
-
 const {
   createEmployee,
   getAllUsers,
   getMe,
+  getEmployeeDirectory,
+  updateEmployeeStatus,
 } = require("../controllers/userController");
 
-// List all users (for assigning tasks) — admin/super-admin only
+// ---------------------------
+// Employee Directory (all authenticated users)
+// ---------------------------
+router.get("/directory", protect, getEmployeeDirectory);
+
+// ---------------------------
+// Get all users (admin & super-admin only)
+// ---------------------------
 router.get("/", protect, authorize("admin", "super-admin"), getAllUsers);
 
-// Current user
+// ---------------------------
+// Get current logged-in user info
+// ---------------------------
 router.get("/me", protect, getMe);
 
-// Create employee
-router.post("/create", protect, authorize("admin", "hr", "super-admin"), createEmployee);
+// ---------------------------
+// Create new employee (admin, hr, super-admin only)
+// ---------------------------
+router.post(
+  "/create",
+  protect,
+  authorize("admin", "hr", "super-admin"),
+  createEmployee
+);
+
+// ---------------------------
+// Update employee status (admin, hr, super-admin only)
+// ---------------------------
+router.patch(
+  "/:id/status",
+  protect,
+  authorize("admin", "hr", "super-admin"),
+  updateEmployeeStatus
+);
 
 module.exports = router;
