@@ -18,7 +18,8 @@ const userSchema = new mongoose.Schema(
     doj: { type: Date, required: true },
     salary: { type: Number, default: 0 },
     ref: { type: String, trim: true },
-    status: { type: String, enum: ["active", "inactive"], default: "active" },
+    // Default should be INACTIVE as per requirement
+    status: { type: String, enum: ["active", "inactive"], default: "inactive" },
     totalPl: { type: Number, default: 0 },
 
     password: { type: String, required: true },
@@ -27,7 +28,8 @@ const userSchema = new mongoose.Schema(
     department: {
       type: String,
       enum: ["executives", "development", "marketingAndSales", "humanResource"],
-      default: "",
+      // no invalid empty-string default; omit by default
+      required: false,
     },
     designation: { type: String, trim: true, default: "" },
 

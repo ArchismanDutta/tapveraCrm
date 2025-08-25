@@ -1,22 +1,27 @@
+// src/components/admintask/TaskTable.jsx
 import React, { useState } from "react";
 import TaskRow from "./TaskRow";
 
-const TaskTable = ({ tasks, onViewTask, onEditTask, onDeleteTask }) => {
+const TaskTable = ({ tasks = [], onViewTask, onEditTask, onDeleteTask }) => {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("All Status");
 
+  // Defensive check
   const safeTasks = Array.isArray(tasks) ? tasks : [];
 
-  const filteredTasks = safeTasks.filter((t) => {
+  // Filter + search logic
+  const filteredTasks = safeTasks.filter((task) => {
     const titleMatch =
-      t?.title?.toLowerCase().includes(search.toLowerCase()) ?? false;
-    const statusMatch = filter === "All Status" || t?.status === filter;
+      task?.title?.toLowerCase().includes(search.toLowerCase()) ?? false;
+    const statusMatch = filter === "All Status" || task?.status === filter;
     return titleMatch && statusMatch;
   });
 
+  // Safe date formatting
   const formatDueDateTime = (dateValue) => {
     if (!dateValue) return "No due date";
     const dateObj = new Date(dateValue);
+    if (isNaN(dateObj.getTime())) return "Invalid date";
     return `${dateObj.toLocaleDateString()} ${dateObj.toLocaleTimeString([], {
       hour: "2-digit",
       minute: "2-digit",
@@ -30,12 +35,12 @@ const TaskTable = ({ tasks, onViewTask, onEditTask, onDeleteTask }) => {
         <input
           type="text"
           placeholder="🔍 Search tasks..."
-          className="border border-gray-200 focus:border-orange-400 focus:ring focus:ring-orange-100 rounded-xl px-4 py-2 w-full md:w-1/3 text-sm transition-all duration-200"
+          className="border border-gray-200 focus:border-orange-400 focus:ring focus:ring-orange-100 rounded-xl px-4 py-2 w-full md:w-1/3 text-sm transition-all duration-200 cursor-pointer"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
         <select
-          className="border border-gray-200 focus:border-orange-400 focus:ring focus:ring-orange-100 rounded-xl px-4 py-2 text-sm w-full md:w-auto transition-all duration-200 bg-white"
+          className="border border-gray-200 focus:border-orange-400 focus:ring focus:ring-orange-100 rounded-xl px-4 py-2 text-sm w-full md:w-auto transition-all duration-200 bg-white cursor-pointer"
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
         >

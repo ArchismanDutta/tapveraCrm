@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const { body, validationResult } = require("express-validator");
 const authController = require("../controllers/authController");
+const { protect, authorize } = require("../middlewares/authMiddleware");
 
 // Middleware to handle validation results
 const validateRequest = (req, res, next) => {
@@ -13,7 +14,9 @@ const validateRequest = (req, res, next) => {
   next();
 };
 
+// ---------------------------
 // Validation rules for signup
+// ---------------------------
 const signupValidation = [
   body("name").trim().notEmpty().withMessage("Name is required"),
   body("email").isEmail().withMessage("Valid email is required"),
@@ -25,7 +28,7 @@ const signupValidation = [
     .isIn(["male", "female", "other"])
     .withMessage("Gender must be male, female, or other"),
 
-  // Optional department validation: if present, must be from enum list (case sensitive)
+  // Optional fields
   body("department")
     .optional()
     .isIn(["executives", "development", "marketingAndSales", "humanResource"])
@@ -33,7 +36,6 @@ const signupValidation = [
       "Department must be one of executives, development, marketingAndSales, humanResource"
     ),
 
-  // Optional designation validation: if present, must be string & max length
   body("designation")
     .optional()
     .isString()
@@ -44,24 +46,36 @@ const signupValidation = [
   body("password")
     .isLength({ min: 6 })
     .withMessage("Password must be at least 6 characters long"),
+
+  body("employeeId").trim().notEmpty().withMessage("Employee ID is required"),
+  body("doj")
+    .isISO8601()
+    .withMessage("Valid Date of Joining is required (YYYY-MM-DD)"),
 ];
 
-
+// ---------------------------
 // Validation rules for login
+// ---------------------------
 const loginValidation = [
   body("email").isEmail().withMessage("Valid email is required"),
   body("password").notEmpty().withMessage("Password is required"),
 ];
 
-// Signup route with validation middleware
+// ---------------------------
+// Routes
+// ---------------------------
+
+// ✅ Signup route (protected: only HR/Admin/Super Admin can create employees)
 router.post(
   "/signup",
+  protect,
+  authorize("hr", "admin", "super-admin"),
   signupValidation,
   validateRequest,
   authController.signup
 );
 
-// Login route with validation middleware
+// ✅ Login route (public)
 router.post("/login", loginValidation, validateRequest, authController.login);
 
 module.exports = router;

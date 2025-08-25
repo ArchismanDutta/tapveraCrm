@@ -1,5 +1,5 @@
 // src/pages/AdminTaskPage.jsx
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import StatsCard from "../components/admintask/StatsCard";
 import TaskForm from "../components/admintask/TaskForm";
 import TaskTable from "../components/admintask/TaskTable";
@@ -11,10 +11,7 @@ import { useNavigate } from "react-router-dom";
 
 const EditTaskModal = ({ task, onSave, onCancel, users }) => {
   const [editedTask, setEditedTask] = useState(task || {});
-
-  useEffect(() => {
-    setEditedTask(task ? { ...task } : {});
-  }, [task]);
+  useEffect(() => setEditedTask(task ? { ...task } : {}), [task]);
 
   const handleChange = (field, value) => {
     setEditedTask((prev) => ({
@@ -28,14 +25,24 @@ const EditTaskModal = ({ task, onSave, onCancel, users }) => {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!editedTask.title?.trim() || !editedTask.assignedTo) return;
-    onSave(editedTask);
+    const payload = {
+      ...editedTask,
+      assignedTo: Array.isArray(editedTask.assignedTo)
+        ? editedTask.assignedTo
+        : editedTask.assignedTo
+        ? [editedTask.assignedTo]
+        : [],
+    };
+    if (!payload.title?.trim() || payload.assignedTo.length === 0) return;
+    onSave(payload);
   };
 
   const dueDateValue =
     typeof editedTask.dueDate === "string"
       ? editedTask.dueDate.slice(0, 10)
-      : editedTask?.dueDate || "";
+      : editedTask?.dueDate
+      ? dayjs(editedTask.dueDate).format("YYYY-MM-DD")
+      : "";
 
   return (
     <div className="fixed inset-0 flex items-center justify-center z-50 bg-black/40 backdrop-blur-sm">
@@ -47,9 +54,7 @@ const EditTaskModal = ({ task, onSave, onCancel, users }) => {
           ✏️ Edit Task
         </h2>
 
-        {/* Fields */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* Title */}
           <div>
             <label className="block text-sm font-semibold text-gray-700 mb-1">
               Task Title
@@ -62,14 +67,18 @@ const EditTaskModal = ({ task, onSave, onCancel, users }) => {
               required
             />
           </div>
-          {/* Assign To */}
+
           <div>
             <label className="block text-sm font-semibold text-gray-700 mb-1">
               Assign To
             </label>
             <select
               className="border border-gray-300 rounded-lg p-2 w-full text-sm bg-white focus:ring-2 focus:ring-orange-400"
-              value={editedTask.assignedTo || ""}
+              value={
+                Array.isArray(editedTask.assignedTo)
+                  ? editedTask.assignedTo[0]?._id || editedTask.assignedTo[0] || ""
+                  : editedTask.assignedTo?._id || editedTask.assignedTo || ""
+              }
               onChange={(e) => handleChange("assignedTo", e.target.value)}
               required
             >
@@ -81,7 +90,7 @@ const EditTaskModal = ({ task, onSave, onCancel, users }) => {
               ))}
             </select>
           </div>
-          {/* Due Date */}
+
           <div>
             <label className="block text-sm font-semibold text-gray-700 mb-1">
               Due Date
@@ -94,7 +103,7 @@ const EditTaskModal = ({ task, onSave, onCancel, users }) => {
               required
             />
           </div>
-          {/* Priority */}
+
           <div>
             <label className="block text-sm font-semibold text-gray-700 mb-1">
               Priority
@@ -113,7 +122,6 @@ const EditTaskModal = ({ task, onSave, onCancel, users }) => {
           </div>
         </div>
 
-        {/* Description */}
         <div>
           <label className="block text-sm font-semibold text-gray-700 mb-1">
             Description
@@ -126,24 +134,22 @@ const EditTaskModal = ({ task, onSave, onCancel, users }) => {
           />
         </div>
 
-        {/* Status */}
         <div>
           <label className="block text-sm font-semibold text-gray-700 mb-1">
             Status
           </label>
           <select
             className="border border-gray-300 rounded-lg p-2 w-full text-sm bg-white focus:ring-2 focus:ring-orange-400"
-            value={editedTask.status || "Pending"}
+            value={editedTask.status || "pending"}
             onChange={(e) => handleChange("status", e.target.value)}
             required
           >
-            <option value="Pending">Pending</option>
-            <option value="Completed">Completed</option>
-            <option value="Overdue">Overdue</option>
+            <option value="pending">Pending</option>
+            <option value="in-progress">In Progress</option>
+            <option value="completed">Completed</option>
           </select>
         </div>
 
-        {/* Buttons */}
         <div className="flex justify-end gap-2 pt-2">
           <button
             type="button"
@@ -171,12 +177,12 @@ export default function AdminTaskPage({ onLogout }) {
   const [popupMessage, setPopupMessage] = useState("");
   const [selectedTask, setSelectedTask] = useState(null);
   const [editingTask, setEditingTask] = useState(null);
-
-  // Greeting states
+  const [filterType, setFilterType] = useState("all");
   const [currentTime, setCurrentTime] = useState(new Date());
   const [userName, setUserName] = useState("");
 
   const navigate = useNavigate();
+  const tableRef = useRef(null);
 
   const showPopup = (message) => {
     setPopupMessage(message);
@@ -190,9 +196,12 @@ export default function AdminTaskPage({ onLogout }) {
       return;
     }
     try {
-      const res = await API.get("/tasks");
-      const payload = res?.data?.data ?? res?.data;
-      setTasks(Array.isArray(payload) ? payload : []);
+      const res = await API.get("/tasks", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const tasksArray = Array.isArray(res.data) ? res.data : [];
+      tasksArray.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+      setTasks(tasksArray);
     } catch (err) {
       console.error("fetchTasks error:", err);
       showPopup("❌ Failed to fetch tasks");
@@ -203,8 +212,12 @@ export default function AdminTaskPage({ onLogout }) {
     const token = localStorage.getItem("token");
     if (!token) return;
     try {
-      const res = await API.get("/users");
+      const res = await API.get("/users", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       if (Array.isArray(res.data)) setUsers(res.data);
+      else if (Array.isArray(res.data?.data)) setUsers(res.data.data);
+      else setUsers([]);
     } catch (err) {
       console.error("fetchUsers error:", err);
       showPopup("❌ Failed to fetch users");
@@ -228,20 +241,47 @@ export default function AdminTaskPage({ onLogout }) {
   };
 
   useEffect(() => {
-    fetchTasks();
+    let intervalId;
+
+    const loadTasks = async () => {
+      await fetchTasks();
+    };
+
+    // initial fetch
     fetchUsers();
     fetchUser();
+    loadTasks();
+
+    // poll tasks every 30 seconds
+    intervalId = setInterval(loadTasks, 30000);
+
+    // clock update every second
+    const clockInterval = setInterval(() => setCurrentTime(new Date()), 1000);
+
+    // cleanup on unmount
+    return () => {
+      clearInterval(intervalId);
+      clearInterval(clockInterval);
+    };
   }, []);
 
-  // Live Clock
-  useEffect(() => {
-    const interval = setInterval(() => setCurrentTime(new Date()), 1000);
-    return () => clearInterval(interval);
-  }, []);
+  const ensureAssignedArray = (obj) => {
+    if (!obj) return obj;
+    const assigned = obj.assignedTo;
+    return {
+      ...obj,
+      assignedTo: Array.isArray(assigned)
+        ? assigned
+        : assigned
+        ? [assigned]
+        : [],
+    };
+  };
 
   const handleCreateTask = async (newTask) => {
     try {
-      const res = await API.post("/tasks", newTask);
+      const payload = ensureAssignedArray(newTask);
+      const res = await API.post("/tasks", payload);
       setTasks((prev) => [res.data, ...prev]);
       showPopup("✅ Task created successfully!");
     } catch (err) {
@@ -252,8 +292,9 @@ export default function AdminTaskPage({ onLogout }) {
 
   const handleUpdateTask = async (updatedTask) => {
     try {
-      const id = updatedTask._id || updatedTask.id;
-      const res = await API.put(`/tasks/${id}`, updatedTask);
+      const payload = ensureAssignedArray(updatedTask);
+      const id = payload._id || payload.id;
+      const res = await API.put(`/tasks/${id}`, payload);
       setTasks((prev) =>
         prev.map((t) => ((t._id || t.id) === id ? res.data : t))
       );
@@ -276,22 +317,46 @@ export default function AdminTaskPage({ onLogout }) {
     }
   };
 
-  // Stats
   const today = dayjs().startOf("day");
   const currentUserId = JSON.parse(localStorage.getItem("user"))?.id;
+
+  const filteredTasks = tasks.filter((t) => {
+    switch (filterType) {
+      case "assignedByMe":
+        return t.assignedBy?._id === currentUserId;
+      case "dueToday":
+        return t.dueDate && dayjs(t.dueDate).isSame(today, "day");
+      case "overdue":
+        return (
+          t.dueDate &&
+          dayjs(t.dueDate).isBefore(today, "day") &&
+          (t.status || "").toLowerCase() !== "completed"
+        );
+      default:
+        return true;
+    }
+  });
+
   const totalTasks = tasks.length;
-  const assignedByMe = tasks.filter(
+  const assignedByMeCount = tasks.filter(
     (t) => t.assignedBy?._id === currentUserId
   ).length;
-  const tasksDueToday = tasks.filter(
+  const tasksDueTodayCount = tasks.filter(
     (t) => t.dueDate && dayjs(t.dueDate).isSame(today, "day")
   ).length;
-  const overdueTasks = tasks.filter(
+  const overdueTasksCount = tasks.filter(
     (t) =>
       t.dueDate &&
       dayjs(t.dueDate).isBefore(today, "day") &&
-      t.status?.toLowerCase() !== "completed"
+      (t.status || "").toLowerCase() !== "completed"
   ).length;
+
+  const handleFilterAndScroll = (type) => {
+    setFilterType(type);
+    setTimeout(() => {
+      tableRef.current?.scrollIntoView({ behavior: "smooth" });
+    }, 100);
+  };
 
   return (
     <div className="flex">
@@ -347,21 +412,25 @@ export default function AdminTaskPage({ onLogout }) {
             title="Total Tasks"
             value={totalTasks}
             colorScheme="blue"
+            onClick={() => handleFilterAndScroll("all")}
           />
           <StatsCard
             title="Assigned by Me"
-            value={assignedByMe}
+            value={assignedByMeCount}
             colorScheme="yellow"
+            onClick={() => handleFilterAndScroll("assignedByMe")}
           />
           <StatsCard
             title="Tasks Due Today"
-            value={tasksDueToday}
+            value={tasksDueTodayCount}
             colorScheme="green"
+            onClick={() => handleFilterAndScroll("dueToday")}
           />
           <StatsCard
             title="Overdue Tasks"
-            value={overdueTasks}
+            value={overdueTasksCount}
             colorScheme="pink"
+            onClick={() => handleFilterAndScroll("overdue")}
           />
         </div>
 
@@ -374,12 +443,12 @@ export default function AdminTaskPage({ onLogout }) {
         </section>
 
         {/* Task Table */}
-        <section className="bg-white rounded-xl shadow-md p-6">
+        <section ref={tableRef} className="bg-white rounded-xl shadow-md p-6">
           <h2 className="text-lg font-semibold text-gray-700 mb-4">
             📋 Task List
           </h2>
           <TaskTable
-            tasks={tasks}
+            tasks={filteredTasks}
             onViewTask={setSelectedTask}
             onEditTask={setEditingTask}
             onDeleteTask={handleDeleteTask}
@@ -407,7 +476,6 @@ export default function AdminTaskPage({ onLogout }) {
           </div>
         )}
 
-        {/* Edit Task Modal */}
         {editingTask && (
           <EditTaskModal
             task={editingTask}

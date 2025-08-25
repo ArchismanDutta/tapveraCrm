@@ -1,4 +1,3 @@
-// controllers/userController.js
 const User = require("../models/User");
 
 // ======================
@@ -37,14 +36,18 @@ exports.createEmployee = async (req, res) => {
     const trimmedEmployeeId = String(employeeId).trim();
 
     const existingEmail = await User.findOne({ email: normalizedEmail });
-    if (existingEmail) return res.status(400).json({ message: "Email already in use." });
+    if (existingEmail)
+      return res.status(400).json({ message: "Email already in use." });
 
     const existingEmpId = await User.findOne({ employeeId: trimmedEmployeeId });
-    if (existingEmpId) return res.status(400).json({ message: "Employee ID already in use." });
+    if (existingEmpId)
+      return res.status(400).json({ message: "Employee ID already in use." });
 
     const userPassword = String(password || "Welcome123").trim();
-    const parsedSalary = typeof salary === "number" ? salary : Number(salary || 0);
-    const parsedTotalPl = typeof totalPl === "number" ? totalPl : Number(totalPl || 0);
+    const parsedSalary =
+      typeof salary === "number" ? salary : Number(salary || 0);
+    const parsedTotalPl =
+      typeof totalPl === "number" ? totalPl : Number(totalPl || 0);
 
     const user = new User({
       employeeId: trimmedEmployeeId,
@@ -62,19 +65,85 @@ exports.createEmployee = async (req, res) => {
       doj,
       salary: Number.isFinite(parsedSalary) ? parsedSalary : 0,
       ref: ref ? String(ref).trim() : "",
-      status: status || "active",
+      status: status ? String(status).toLowerCase().trim() : "inactive", // ✅ default inactive
       totalPl: Number.isFinite(parsedTotalPl) ? parsedTotalPl : 0,
-      password: userPassword, // plain text (per requirement)
-      department: department || "",
+      password: userPassword, // ⚠️ consider hashing
+      department: department || undefined,
       designation: designation ? String(designation).trim() : "",
       role: "employee",
     });
 
     await user.save();
 
-    res.status(201).json({ message: "Employee created successfully", user });
+    res
+      .status(201)
+      .json({ message: "Employee created successfully", user });
   } catch (error) {
     console.error("Create employee error", error);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+// ======================
+// Employee Directory (with filters & search)
+// ======================
+exports.getEmployeeDirectory = async (req, res) => {
+  try {
+    let { department, designation, status, search } = req.query;
+
+    const filter = {};
+    if (department && department !== "all")
+      filter.department = String(department).trim();
+
+    if (designation && designation !== "all") {
+      filter.designation = {
+        $regex: String(designation).trim(),
+        $options: "i",
+      };
+    }
+
+    if (status && status !== "all")
+      filter.status = String(status).toLowerCase().trim();
+
+    if (search) {
+      const searchTerm = String(search).trim();
+      filter.$or = [
+        { name: { $regex: searchTerm, $options: "i" } },
+        { email: { $regex: searchTerm, $options: "i" } },
+        { employeeId: { $regex: searchTerm, $options: "i" } },
+      ];
+    }
+
+    const employees = await User.find(filter)
+      .select(
+        "_id employeeId name email contact department designation role status doj"
+      )
+      .sort({ name: 1 });
+
+    // ✅ normalize status in API response
+    const employeesWithStatus = employees.map((emp) => ({
+      ...emp.toObject(),
+      status: emp.status || "inactive",
+    }));
+
+    res.json(employeesWithStatus);
+  } catch (err) {
+    console.error("Error fetching employee directory:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+// ======================
+// Get All Users (minimal list for tasks)
+// ======================
+exports.getAllUsers = async (req, res) => {
+  try {
+    const users = await User.find().select(
+      "_id name email role department designation employeeId"
+    );
+    res.json(users);
+  } catch (err) {
+    console.error("Error fetching users:", err);
     res.status(500).json({ message: "Server error" });
   }
 };
@@ -110,14 +179,45 @@ exports.getMe = async (req, res) => {
       ps: user.ps,
       salary: user.salary,
       ref: user.ref,
-      status: user.status,
+      status: user.status || "inactive", // ✅ normalize
       totalPl: user.totalPl,
       location: user.location,
       outlookEmail: user.outlookEmail || null,
-      hasEmailCredentials: Boolean(user.outlookEmail && user.outlookAppPassword),
+      hasEmailCredentials: Boolean(
+        user.outlookEmail && user.outlookAppPassword
+      ),
     });
   } catch (err) {
     console.error("GetMe Error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+// ======================
+// Update Employee Status (manual toggle if needed)
+// ======================
+exports.updateEmployeeStatus = async (req, res) => {
+  try {
+    const userId = req.params.id;
+    const { status } = req.body;
+
+    if (!["active", "inactive"].includes(status)) {
+      return res.status(400).json({ message: "Invalid status value" });
+    }
+
+    const user = await User.findByIdAndUpdate(
+      userId,
+      { status },
+      { new: true }
+    );
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    res.json({ message: "Status updated successfully", user });
+  } catch (err) {
+    console.error("Update employee status error:", err);
     res.status(500).json({ message: "Server error" });
   }
 };

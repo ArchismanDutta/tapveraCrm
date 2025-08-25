@@ -1,43 +1,23 @@
 const jwt = require("jsonwebtoken");
 const User = require("../models/User");
 
-// Protect routes (authentication)
+// Protect routes
 exports.protect = async (req, res, next) => {
   let token;
 
   try {
-    // Get token from header
-    if (
-      req.headers.authorization &&
-      req.headers.authorization.startsWith("Bearer")
-    ) {
-      token = req.headers.authorization.split(" ")[1]?.trim();
+    if (req.headers.authorization?.startsWith("Bearer")) {
+      token = req.headers.authorization.split(" ")[1].trim();
     }
 
-    if (!token) {
-      return res
-        .status(401)
-        .json({ message: "Not authorized, no token provided" });
-    }
+    if (!token) return res.status(401).json({ message: "No token provided" });
 
-    let decoded;
-    try {
-      decoded = jwt.verify(token, process.env.JWT_SECRET);
-    } catch (err) {
-      return res.status(401).json({ message: "Not authorized, invalid or expired token" });
-    }
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    if (!decoded?.id) return res.status(401).json({ message: "Invalid token" });
 
-    if (!decoded?.id) {
-      return res.status(401).json({ message: "Not authorized, invalid token payload" });
-    }
-
-    // Find user in DB
     const user = await User.findById(decoded.id).select("-password");
-    if (!user) {
-      return res.status(401).json({ message: "Not authorized, user not found" });
-    }
+    if (!user) return res.status(401).json({ message: "User not found" });
 
-    // Attach normalized user to request
     req.user = {
       _id: user._id,
       name: user.name,
@@ -49,26 +29,21 @@ exports.protect = async (req, res, next) => {
 
     next();
   } catch (err) {
-    console.error("Auth Middleware Error:", err.message);
-    return res.status(500).json({ message: "Server error in authentication" });
+    console.error("Auth Error:", err.message);
+    res.status(401).json({ message: "Authentication failed" });
   }
 };
 
 // Role-based authorization
 exports.authorize = (...roles) => {
   return (req, res, next) => {
-    if (!req.user) {
-      return res.status(401).json({ message: "Not authorized, user missing" });
-    }
-
-    if (req.user.role === "super-admin") return next();
-
+    if (!req.user) return res.status(401).json({ message: "User missing" });
+    if (req.user.role === "super-admin") return next(); // unrestricted
     if (!roles.includes(req.user.role)) {
-      return res.status(403).json({
-        message: `User role '${req.user.role}' is not authorized`,
-      });
+      return res
+        .status(403)
+        .json({ message: `Role '${req.user.role}' not authorized` });
     }
-
     next();
   };
 };
