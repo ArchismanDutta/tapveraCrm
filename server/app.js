@@ -111,6 +111,7 @@ wss.on("connection", (ws) => {
     let data;
     try {
       data = JSON.parse(message);
+      console.log("Received WS data:", data);
     } catch (err) {
       console.error("Invalid JSON:", err);
       return;
@@ -118,15 +119,31 @@ wss.on("connection", (ws) => {
 
     if (data.type === "register") {
       users[data.userId] = ws;
+      console.log(`User registered with userId: ${data.userId}`);
       return;
     }
 
     if (data.type === "private_message") {
-      const { senderId, recipientId, message: msg } = data;
+      // Log full data before destructuring
+      console.log("Private message data:", data);
+
+      // Safe destructuring with fallback
+      const senderId = data.senderId || data.senderid || data.senderID;
+      const recipientId =
+        data.recipientId || data.recipientid || data.recipientID;
+      const msg = data.message || data.msg;
+
+      if (!senderId || !recipientId || !msg) {
+        console.error(
+          "Missing senderId, recipientId or message in private_message data"
+        );
+        return;
+      }
 
       try {
-        // Save to DB
+        // Save the message to DB
         await ChatController.saveMessage(senderId, recipientId, msg);
+        console.log(`Saved message from ${senderId} to ${recipientId}`);
       } catch (err) {
         console.error("Error saving chat message:", err);
       }
@@ -144,15 +161,8 @@ wss.on("connection", (ws) => {
       }
     }
   });
-
-  ws.on("close", () => {
-    Object.keys(users).forEach((id) => {
-      if (users[id] === ws) {
-        delete users[id];
-      }
-    });
-  });
 });
+
 
 // Connect to MongoDB and start server
 const PORT = process.env.PORT || 5000;
