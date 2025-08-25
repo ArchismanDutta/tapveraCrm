@@ -20,7 +20,6 @@ const EmployeeDirectory = () => {
     department: "all",
     status: "all",
   });
-  const [selectedEmployee, setSelectedEmployee] = useState(null);
 
   const buildQueryParams = () => {
     const params = new URLSearchParams();
@@ -35,7 +34,7 @@ const EmployeeDirectory = () => {
     try {
       const token = localStorage.getItem("token");
       if (!token) {
-        navigate("/login");
+        navigate("/login", { replace: true });
         return;
       }
 
@@ -57,30 +56,33 @@ const EmployeeDirectory = () => {
       const data = await res.json();
       setEmployees(
         Array.isArray(data)
-          ? data.map((emp) => ({ ...emp, status: emp.status || "inactive" }))
+          ? data.map((emp) => ({
+              _id: emp._id,
+              name: emp.fullName || emp.name || emp.email || `Employee ${emp._id}`,
+              department: emp.department || "N/A",
+              status: emp.status || "inactive",
+              designation: emp.designation || "N/A",
+              email: emp.email || "N/A",
+            }))
           : []
       );
     } catch (err) {
-      console.error("Error fetching employees:", err);
+      console.error("Error fetching employees:", err.message);
       setEmployees([]);
     } finally {
       setLoading(false);
     }
   };
 
-  // Fetch employees on mount or filter change
   useEffect(() => {
     fetchEmployees();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters]);
 
-  // Refresh if coming from signup page
   useEffect(() => {
     if (location.state?.refresh) {
       fetchEmployees();
-      window.history.replaceState({}, document.title); // Clear the flag
+      window.history.replaceState({}, document.title);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.state]);
 
   return (
@@ -97,30 +99,14 @@ const EmployeeDirectory = () => {
         ) : (
           <EmployeeTable
             employees={employees}
-            onView={(emp) => setSelectedEmployee(emp)}
-            onEdit={() => {}}
+            onView={(emp) => {
+              if (emp && emp._id) {
+                navigate(`/employee/${emp._id}`);
+              } else {
+                console.warn("Invalid employee ID");
+              }
+            }}
           />
-        )}
-
-        {selectedEmployee && (
-          <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
-            <div className="bg-white p-6 rounded-lg shadow-xl w-96">
-              <h2 className="text-lg font-bold mb-3">Employee Details</h2>
-              <p><b>Name:</b> {selectedEmployee.name}</p>
-              <p><b>Email:</b> {selectedEmployee.email}</p>
-              <p><b>Department:</b> {selectedEmployee.department}</p>
-              <p><b>Designation:</b> {selectedEmployee.designation}</p>
-              <p><b>Status:</b> {selectedEmployee.status}</p>
-              <div className="mt-4 text-right">
-                <button
-                  className="px-4 py-2 bg-yellow-400 rounded hover:bg-yellow-500"
-                  onClick={() => setSelectedEmployee(null)}
-                >
-                  Close
-                </button>
-              </div>
-            </div>
-          </div>
         )}
       </main>
     </div>
