@@ -25,6 +25,7 @@ import TodayStatusPage from "./pages/TodayStatusPage";
 import AttendancePage from "./pages/AttendancePage";
 import NoticeBoard from "./pages/NoticeBoard";
 import TodoPage from "./pages/TodoPage";
+import ChatPage from "./pages/ChatPage";
 import EmployeeDirectory from "./pages/EmployeeDirectory"; // NEW
 
 const AppWrapper = () => {
@@ -32,23 +33,34 @@ const AppWrapper = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [role, setRole] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [currentUser, setCurrentUser] = useState(null);
 
   // Load auth state on mount
   useEffect(() => {
     const token = localStorage.getItem("token");
-    let storedRole =
-      JSON.parse(localStorage.getItem("user"))?.role || localStorage.getItem("role");
+    const userStr = localStorage.getItem("user");
+    let storedRole = JSON.parse(userStr)?.role || localStorage.getItem("role");
 
     if (storedRole) storedRole = storedRole.toLowerCase();
 
     if (token && token.trim() !== "") {
       setIsAuthenticated(true);
       setRole(storedRole);
+      setCurrentUser(userStr ? JSON.parse(userStr) : null);
     } else {
       setIsAuthenticated(false);
       setRole(null);
+      setCurrentUser(null);
     }
     setLoading(false);
+  }, []);
+
+
+  useEffect(() => {
+    const userStr = localStorage.getItem("user");
+    if (userStr) {
+      setCurrentUser(JSON.parse(userStr));
+    }
   }, []);
 
   const handleLoginSuccess = () => {
@@ -126,6 +138,33 @@ const AppWrapper = () => {
           }
         />
 
+
+      <Route
+        path="/messages"
+        element={
+          isAuthenticated ? (
+            <ChatPage onLogout={handleLogout} currentUser={currentUser} />
+          ) : (
+            <Navigate to="/login" replace />
+          )
+        }
+      />
+
+      {/* Tasks */}
+      <Route
+        path="/tasks"
+        element={
+          isAuthenticated && role !== "admin" && role !== "super-admin" ? (
+            <Tasks onLogout={handleLogout} />
+          ) : (
+            <Navigate
+              to={isAuthenticated ? "/admin/tasks" : "/login"}
+              replace
+            />
+          )
+        }
+      />
+
         {/* Profile */}
         <Route
           path="/profile"
@@ -137,6 +176,7 @@ const AppWrapper = () => {
             )
           }
         />
+
 
         {/* Employee Tasks */}
         <Route
@@ -246,6 +286,19 @@ const AppWrapper = () => {
             )
           }
         />
+
+
+      {/* Admin Notices */}
+      <Route
+        path="/admin/notices"
+        element={
+          isAuthenticated && (role === "admin" || role === "super-admin") ? (
+            <NoticeBoard onLogout={handleLogout} />
+          ) : (
+            <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />
+          )
+        }
+      />
 
         {/* Employee Management */}
         <Route
