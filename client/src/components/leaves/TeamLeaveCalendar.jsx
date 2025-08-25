@@ -1,6 +1,7 @@
+// src/components/leave/TeamLeaveCalendar.jsx
 import React, { useEffect, useState } from "react";
 import { Clock } from "lucide-react";
-import { fetchTeamLeaves } from "../../api/leaveApi"; // make sure path is correct
+import { fetchTeamLeaves, formatLeaveType, formatDuration } from "../../api/leaveApi";
 import axios from "axios";
 
 const TeamLeaveCalendar = () => {
@@ -63,7 +64,7 @@ const TeamLeaveCalendar = () => {
                   {t.period?.end && t.period.end !== t.period.start
                     ? ` - ${new Date(t.period.end).toLocaleDateString()}`
                     : ""}{" "}
-                  • {t.type || "Unknown Type"}
+                  • {formatLeaveType(t.type)} • {formatDuration(t.type, t.period)}
                 </p>
               </div>
             </li>
