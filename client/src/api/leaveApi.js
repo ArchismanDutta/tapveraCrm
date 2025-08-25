@@ -7,6 +7,7 @@ const getAuthHeaders = (isJson = true) => {
   return headers;
 };
 
+// Format leave type to human-readable string
 export const formatLeaveType = (type) => {
   const leaveTypeLabels = {
     annual: "Annual Leave",
@@ -20,7 +21,8 @@ export const formatLeaveType = (type) => {
   return leaveTypeLabels[type] || type;
 };
 
-function formatDuration(type, period) {
+// Format leave duration
+export function formatDuration(type, period) {
   if (!period || !period.start || !period.end) return "";
   if (type === "halfDay") return "0.5 Day";
   const days =
@@ -29,7 +31,7 @@ function formatDuration(type, period) {
   return `${days} Days`;
 }
 
-// Employee leaves
+// Fetch leaves for logged-in employee
 export async function fetchLeavesForEmployee() {
   const res = await fetch(`${API_BASE}/leaves/mine`, { headers: getAuthHeaders() });
   if (!res.ok) throw new Error((await res.json()).message || "Failed to fetch leave requests");
@@ -48,6 +50,7 @@ export async function fetchLeavesForEmployee() {
   }));
 }
 
+// Submit a new leave request
 export async function submitLeaveRequest(formData) {
   const res = await fetch(`${API_BASE}/leaves`, {
     method: "POST",
@@ -70,7 +73,7 @@ export async function submitLeaveRequest(formData) {
   };
 }
 
-// Admin
+// Admin: Fetch all leave requests
 export async function fetchAllLeaveRequests() {
   const res = await fetch(`${API_BASE}/leaves`, { headers: getAuthHeaders() });
   if (!res.ok) throw new Error((await res.json()).message || "Failed to fetch leave requests");
@@ -88,6 +91,7 @@ export async function fetchAllLeaveRequests() {
   }));
 }
 
+// Admin: Update leave request status
 export async function updateLeaveRequestStatus(_id, status, adminRemarks = "") {
   if (!_id) throw new Error("Leave request ID is required");
   const res = await fetch(`${API_BASE}/leaves/${_id}`, {
@@ -110,7 +114,7 @@ export async function updateLeaveRequestStatus(_id, status, adminRemarks = "") {
   };
 }
 
-// Team leaves
+// Fetch team leaves (same department, excluding logged-in user)
 export async function fetchTeamLeaves(department, excludeEmail) {
   const res = await fetch(
     `${API_BASE}/leaves/team?department=${encodeURIComponent(department)}&excludeEmail=${encodeURIComponent(
@@ -126,5 +130,7 @@ export async function fetchTeamLeaves(department, excludeEmail) {
     period: r.period,
     type: r.type,
     status: r.status,
+    duration: formatDuration(r.type, r.period),
+    formattedType: formatLeaveType(r.type),
   }));
 }
