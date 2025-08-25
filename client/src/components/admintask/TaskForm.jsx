@@ -107,7 +107,10 @@ const TaskForm = ({ onCreate }) => {
     "border border-gray-300 p-2 rounded-xl shadow-sm text-sm w-full focus:ring-2 focus:ring-pinkAccent focus:border-pinkAccent outline-none cursor-pointer";
 
   return (
-    <form onSubmit={handleSubmit} className="p-6 space-y-5 bg-white rounded-xl shadow-md">
+    <form
+      onSubmit={handleSubmit}
+      className="p-6 space-y-5 bg-white rounded-xl shadow-md"
+    >
       {/* Task Title */}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -124,7 +127,7 @@ const TaskForm = ({ onCreate }) => {
       </div>
 
       {/* Assign To */}
-      <div ref={dropdownRef}>
+      <div className="relative" ref={dropdownRef}>
         <label className="block text-sm font-medium text-gray-700 mb-1">
           Assign To (Multiple)
         </label>
@@ -138,7 +141,8 @@ const TaskForm = ({ onCreate }) => {
         </div>
 
         {dropdownOpen && (
-          <div className="absolute left-0 top-full mt-1 border border-gray-200 bg-white rounded-xl shadow-lg w-full z-10">
+          <div className="absolute left-0 top-full mt-1 border border-gray-200 bg-white rounded-xl shadow-lg w-full z-50">
+            {/* Search */}
             <div className="p-2 border-b border-gray-200">
               <input
                 type="text"
@@ -148,12 +152,13 @@ const TaskForm = ({ onCreate }) => {
                 className={commonInputClasses}
               />
             </div>
-            <div className="max-h-40 overflow-y-auto">
+            {/* User List */}
+            <div className="max-h-60 overflow-y-auto">
               {filteredUsers.length > 0 ? (
                 filteredUsers.map((user) => (
                   <label
                     key={user._id}
-                    className="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer rounded-xl"
+                    className="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer"
                   >
                     <input
                       type="checkbox"
@@ -165,7 +170,9 @@ const TaskForm = ({ onCreate }) => {
                   </label>
                 ))
               ) : (
-                <div className="px-3 py-2 text-sm text-gray-500">No users found</div>
+                <div className="px-3 py-2 text-sm text-gray-500">
+                  No users found
+                </div>
               )}
             </div>
           </div>
@@ -194,7 +201,7 @@ const TaskForm = ({ onCreate }) => {
             onClick={() => setTimeOpen(!timeOpen)}
           />
           {timeOpen && (
-            <div className="absolute top-full mt-1 bg-white shadow-lg rounded-xl p-2 max-h-40 overflow-y-auto w-full z-20">
+            <div className="absolute top-full mt-1 bg-white shadow-lg rounded-xl p-2 max-h-60 overflow-y-auto w-full z-50">
               {timeSlots.map((time) => (
                 <div
                   key={time}
