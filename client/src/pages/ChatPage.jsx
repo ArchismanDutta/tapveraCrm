@@ -6,6 +6,8 @@ const ChatPage = ({ currentUser }) => {
   const [messages, setMessages] = useState([]);
   const ws = useRef(null);
 
+  const userId = currentUser.id || currentUser._id;
+
   useEffect(() => {
     // Fetch all users
     fetch("/api/users/all", {
@@ -17,10 +19,10 @@ const ChatPage = ({ currentUser }) => {
     // Setup WebSocket connection
     ws.current = new WebSocket("ws://localhost:5000");
 
+    // In useEffect:
     ws.current.onopen = () => {
-      ws.current.send(
-        JSON.stringify({ type: "register", userId: currentUser.id })
-      );
+      console.log("Sending register with userId:", userId);
+      ws.current.send(JSON.stringify({ type: "register", userId }));
     };
 
     ws.current.onmessage = (event) => {
@@ -34,7 +36,7 @@ const ChatPage = ({ currentUser }) => {
     };
 
     return () => ws.current.close();
-  }, [currentUser.id, selectedUser]);
+  }, [userId, selectedUser]);
 
   const selectUser = (user) => {
     setSelectedUser(user);
@@ -52,10 +54,16 @@ const ChatPage = ({ currentUser }) => {
       return;
     }
 
+    console.log("Sending private_message", {
+      senderId: userId,
+      recipientId: selectedUser._id,
+      message: msg,
+    });
+
     ws.current.send(
       JSON.stringify({
         type: "private_message",
-        senderId: currentUser.id,
+        senderId: userId,
         recipientId: selectedUser._id,
         message: msg,
       })
@@ -64,7 +72,7 @@ const ChatPage = ({ currentUser }) => {
     // Optimistically add to messages
     setMessages((prev) => [
       ...prev,
-      { senderId: currentUser.id, message: msg, timestamp: new Date() },
+      { senderId: userId, message: msg, timestamp: new Date() },
     ]);
   };
 
@@ -106,14 +114,12 @@ const ChatPage = ({ currentUser }) => {
             <div
               key={idx}
               className={`flex ${
-                msg.senderId === currentUser.id
-                  ? "justify-end"
-                  : "justify-start"
+                msg.senderId === userId ? "justify-end" : "justify-start"
               }`}
             >
               <div
                 className={`max-w-xs px-4 py-2 rounded-2xl shadow ${
-                  msg.senderId === currentUser.id
+                  msg.senderId === userId
                     ? "bg-blue-500 text-white rounded-br-none"
                     : "bg-gray-200 text-gray-900 rounded-bl-none"
                 }`}
