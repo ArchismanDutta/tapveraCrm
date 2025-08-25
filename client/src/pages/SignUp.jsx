@@ -1,9 +1,13 @@
-// src/pages/Signup.jsx
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import AuthInput from "../components/AuthInput";
 import tapveraLogo from "../assets/tapvera.png";
 import { FaUser, FaEnvelope, FaPhone, FaLock } from "react-icons/fa";
+import { toast } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
+
+const API_BASE =
+  import.meta.env.VITE_API_BASE || "http://localhost:5000/api";
 
 const Signup = () => {
   const navigate = useNavigate();
@@ -19,7 +23,6 @@ const Signup = () => {
     designation: "",
     location: "India",
     password: "",
-    // New extended fields
     bloodGroup: "",
     permanentAddress: "",
     currentAddress: "",
@@ -34,8 +37,25 @@ const Signup = () => {
     outlookAppPassword: "",
   });
 
-  const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [role, setRole] = useState(null);
+
+  // ✅ Restrict access to HR/Admin/Superadmin
+  useEffect(() => {
+    const savedRole = JSON.parse(localStorage.getItem("user"))?.role || localStorage.getItem("role");
+    if (savedRole) {
+      setRole(savedRole.toLowerCase());
+    } else {
+      navigate("/login");
+    }
+  }, [navigate]);
+
+  useEffect(() => {
+    if (role && !["hr", "admin", "super-admin"].includes(role)) {
+      toast.error("Access denied. Only HR/Admin/Super Admin can register employees.");
+      navigate("/login");
+    }
+  }, [role, navigate]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -45,71 +65,61 @@ const Signup = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
-    setError("");
 
-    const requiredFields = [
-      "employeeId",
-      "name",
-      "email",
-      "contact",
-      "dob",
-      "gender",
-      "password",
-      "doj",
-    ];
-    const isIncomplete = requiredFields.some(
-      (field) => !String(form[field] || "").trim()
-    );
+    // Required fields validation
+    const requiredFields = ["employeeId", "name", "email", "contact", "dob", "gender", "password", "doj"];
+    const isIncomplete = requiredFields.some((field) => !String(form[field] || "").trim());
 
     if (isIncomplete) {
-      setError("Please fill in all required fields.");
+      toast.error("⚠️ Please fill in all required fields.");
       setLoading(false);
       return;
     }
 
-    // Prepare payload with proper type conversions
-    const payload = {
-      ...form,
-      totalPl: Number(form.totalPl),
-      salary: Number(form.salary),
-    };
+    const payload = { ...form, totalPl: Number(form.totalPl), salary: Number(form.salary) };
 
     try {
-      const res = await fetch("http://localhost:5000/api/auth/signup", {
+      const token = localStorage.getItem("token");
+      if (!token) {
+        toast.error("No auth token found. Please login again.");
+        navigate("/login");
+        return;
+      }
+
+      const res = await fetch(`${API_BASE}/users/create`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify(payload),
       });
 
       const data = await res.json();
 
       if (!res.ok) {
-        // Show express-validator errors if present
         if (Array.isArray(data?.errors) && data.errors.length > 0) {
-          const first = data.errors[0];
-          const msg = first?.msg || "Validation error.";
-          setError(msg);
+          toast.error(data.errors[0].msg || "Validation error.");
         } else {
-          setError(data.message || "Something went wrong.");
+          toast.error(data.message || "Something went wrong.");
         }
         setLoading(false);
         return;
       }
 
-      localStorage.setItem("token", data.token);
-      localStorage.setItem("user", JSON.stringify(data.user));
-      localStorage.setItem("role", data.user.role);
-
-      navigate("/profile");
+      toast.success("✅ Employee registered successfully!");
+      navigate("/directory");
     } catch (err) {
       console.error("Signup Error:", err);
-      setError("Failed to connect to the server. Please try again.");
+      toast.error("❌ Failed to connect to the server. Please try again.");
     } finally {
       setLoading(false);
     }
   };
 
   const todayISO = new Date().toISOString().split("T")[0];
+
+  if (!["hr", "admin", "super-admin"].includes(role)) return null; // hide page until role loaded
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-background px-4 py-6">
@@ -121,138 +131,29 @@ const Signup = () => {
         </h2>
 
         <form onSubmit={handleSubmit} className="space-y-4" noValidate>
-          <AuthInput
-            label="Employee ID *"
-            type="text"
-            name="employeeId"
-            value={form.employeeId}
-            onChange={handleChange}
-            placeholder="Enter employee ID"
-            required
-            error={error && !form.employeeId ? "Employee ID is required." : ""}
-            icon={FaUser}
-          />
-
-          <AuthInput
-            label="Full Name *"
-            type="text"
-            name="name"
-            value={form.name}
-            onChange={handleChange}
-            placeholder="Enter full name"
-            required
-            error={error && !form.name ? "Full Name is required." : ""}
-            icon={FaUser}
-          />
-
-          <AuthInput
-            label="Email Address *"
-            type="email"
-            name="email"
-            value={form.email}
-            onChange={handleChange}
-            placeholder="Enter email"
-            autoComplete="email"
-            required
-            error={error && !form.email ? "Email is required." : ""}
-            icon={FaEnvelope}
-          />
-
-          <AuthInput
-            label="Contact Number *"
-            type="tel"
-            name="contact"
-            value={form.contact}
-            onChange={handleChange}
-            placeholder="Enter contact number"
-            autoComplete="tel"
-            required
-            error={error && !form.contact ? "Contact number is required." : ""}
-            icon={FaPhone}
-          />
+          <AuthInput label="Employee ID *" type="text" name="employeeId" value={form.employeeId} onChange={handleChange} placeholder="Enter employee ID" required icon={FaUser} />
+          <AuthInput label="Full Name *" type="text" name="name" value={form.name} onChange={handleChange} placeholder="Enter full name" required icon={FaUser} />
+          <AuthInput label="Email Address *" type="email" name="email" value={form.email} onChange={handleChange} placeholder="Enter email" autoComplete="email" required icon={FaEnvelope} />
+          <AuthInput label="Contact Number *" type="tel" name="contact" value={form.contact} onChange={handleChange} placeholder="Enter contact number" autoComplete="tel" required icon={FaPhone} />
 
           <div>
-            <label
-              htmlFor="dob"
-              className="block text-sm text-textMuted mb-1"
-            >
-              Date of Birth *
-            </label>
-            <input
-              type="date"
-              id="dob"
-              name="dob"
-              value={form.dob}
-              onChange={handleChange}
-              required
-              max={todayISO}
-              className={`w-full px-4 py-2 rounded-md bg-background border ${
-                error && !form.dob ? "border-red-500" : "border-border"
-              } text-textMain placeholder:text-textMuted focus:outline-none focus:border-primary transition`}
-            />
-            {error && !form.dob && (
-              <p className="mt-1 text-xs text-red-500">Date of Birth is required.</p>
-            )}
+            <label htmlFor="dob" className="block text-sm text-textMuted mb-1">Date of Birth *</label>
+            <input type="date" id="dob" name="dob" value={form.dob} onChange={handleChange} required max={todayISO} className="w-full px-4 py-2 rounded-md bg-background border border-border text-textMain focus:outline-none focus:border-primary transition" />
           </div>
 
           <div>
-            <label
-              htmlFor="gender"
-              className="block text-sm text-textMuted mb-1"
-            >
-              Gender *
-            </label>
-            <select
-              id="gender"
-              name="gender"
-              value={form.gender}
-              onChange={handleChange}
-              required
-              className={`w-full px-4 py-2 pr-10 rounded-md bg-background border ${
-                error && !form.gender ? "border-red-500" : "border-border"
-              } text-textMain focus:outline-none focus:border-primary appearance-none transition`}
-              style={{
-                backgroundImage:
-                  "url(\"data:image/svg+xml;utf8,<svg fill='%23000' height='24' viewBox='0 0 24 24' width='24' xmlns='http://www.w3.org/2000/svg'><path d='M7 10l5 5 5-5z'/></svg>\")",
-                backgroundRepeat: "no-repeat",
-                backgroundPosition: "right 0.75rem center",
-                backgroundSize: "1.2em",
-              }}
-            >
-              <option value="" disabled>
-                Select gender
-              </option>
+            <label htmlFor="gender" className="block text-sm text-textMuted mb-1">Gender *</label>
+            <select id="gender" name="gender" value={form.gender} onChange={handleChange} required className="w-full px-4 py-2 rounded-md bg-background border border-border text-textMain focus:outline-none focus:border-primary">
+              <option value="" disabled>Select gender</option>
               <option value="male">Male</option>
               <option value="female">Female</option>
               <option value="other">Other</option>
             </select>
-            {error && !form.gender && (
-              <p className="mt-1 text-xs text-red-500">Please select your gender.</p>
-            )}
           </div>
 
           <div>
-            <label
-              htmlFor="department"
-              className="block text-sm text-textMuted mb-1"
-            >
-              Department
-            </label>
-            <select
-              id="department"
-              name="department"
-              value={form.department}
-              onChange={handleChange}
-              className="w-full px-4 py-2 pr-10 rounded-md bg-background border border-border text-textMain focus:outline-none focus:border-primary appearance-none transition"
-              style={{
-                backgroundImage:
-                  // FIX: corrected viewBox from "0_0_24_24" → "0 0 24 24"
-                  "url(\"data:image/svg+xml;utf8,<svg fill='%23000' height='24' viewBox='0 0 24 24' width='24' xmlns='http://www.w3.org/2000/svg'><path d='M7 10l5 5 5-5z'/></svg>\")",
-                backgroundRepeat: "no-repeat",
-                backgroundPosition: "right 0.75rem center",
-                backgroundSize: "1.2em",
-              }}
-            >
+            <label htmlFor="department" className="block text-sm text-textMuted mb-1">Department</label>
+            <select id="department" name="department" value={form.department} onChange={handleChange} className="w-full px-4 py-2 rounded-md bg-background border border-border text-textMain">
               <option value="">Select a department</option>
               <option value="development">Development</option>
               <option value="marketingAndSales">Marketing & Sales</option>
@@ -260,224 +161,51 @@ const Signup = () => {
             </select>
           </div>
 
+          <AuthInput label="Designation" type="text" name="designation" value={form.designation} onChange={handleChange} placeholder="Enter designation" />
+          <AuthInput label="Location" type="text" name="location" value={form.location} onChange={handleChange} placeholder="Enter location" />
+          <AuthInput label="Blood Group" type="text" name="bloodGroup" value={form.bloodGroup} onChange={handleChange} />
+          <AuthInput label="Permanent Address" type="text" name="permanentAddress" value={form.permanentAddress} onChange={handleChange} />
+          <AuthInput label="Current Address" type="text" name="currentAddress" value={form.currentAddress} onChange={handleChange} />
+          <AuthInput label="Emergency Number" type="tel" name="emergencyNo" value={form.emergencyNo} onChange={handleChange} />
+          <AuthInput label="P.S." type="text" name="ps" value={form.ps} onChange={handleChange} />
+
           <div>
-            <label
-              htmlFor="designation"
-              className="block text-sm text-textMuted mb-1"
-            >
-              Designation
-            </label>
-            <input
-              type="text"
-              id="designation"
-              name="designation"
-              value={form.designation}
-              onChange={handleChange}
-              placeholder="Enter designation"
-              className="w-full px-4 py-2 rounded-md bg-background border border-border text-textMain placeholder:text-textMuted focus:outline-none focus:border-primary transition"
-            />
+            <label htmlFor="doj" className="block text-sm text-textMuted mb-1">Date of Joining *</label>
+            <input type="date" id="doj" name="doj" value={form.doj} onChange={handleChange} required max={todayISO} className="w-full px-4 py-2 rounded-md bg-background border border-border text-textMain" />
           </div>
 
-          <div>
-            <label
-              htmlFor="location"
-              className="block text-sm text-textMuted mb-1"
-            >
-              Location
-            </label>
-            <input
-              type="text"
-              id="location"
-              name="location"
-              value={form.location}
-              onChange={handleChange}
-              placeholder="Enter location"
-              className="w-full px-4 py-2 rounded-md bg-background border border-border text-textMain placeholder:text-textMuted focus:outline-none focus:border-primary transition"
-            />
-          </div>
-
-          <AuthInput
-            label="Blood Group"
-            type="text"
-            name="bloodGroup"
-            value={form.bloodGroup}
-            onChange={handleChange}
-            placeholder="Enter blood group"
-          />
-
-          <AuthInput
-            label="Permanent Address"
-            type="text"
-            name="permanentAddress"
-            value={form.permanentAddress}
-            onChange={handleChange}
-            placeholder="Enter permanent address"
-          />
-
-          <AuthInput
-            label="Current Address"
-            type="text"
-            name="currentAddress"
-            value={form.currentAddress}
-            onChange={handleChange}
-            placeholder="Enter current address"
-          />
-
-          <AuthInput
-            label="Emergency Number"
-            type="tel"
-            name="emergencyNo"
-            value={form.emergencyNo}
-            onChange={handleChange}
-            placeholder="Enter emergency contact number"
-          />
-
-          <AuthInput
-            label="P.S."
-            type="text"
-            name="ps"
-            value={form.ps}
-            onChange={handleChange}
-            placeholder="Additional notes"
-          />
+          <AuthInput label="Salary" type="number" name="salary" value={form.salary} onChange={handleChange} />
+          <AuthInput label="Reference" type="text" name="ref" value={form.ref} onChange={handleChange} />
 
           <div>
-            <label
-              htmlFor="doj"
-              className="block text-sm text-textMuted mb-1"
-            >
-              Date of Joining *
-            </label>
-            <input
-              type="date"
-              id="doj"
-              name="doj"
-              value={form.doj}
-              onChange={handleChange}
-              required
-              max={todayISO}
-              className={`w-full px-4 py-2 rounded-md bg-background border ${
-                error && !form.doj ? "border-red-500" : "border-border"
-              } text-textMain placeholder:text-textMuted focus:outline-none focus:border-primary transition`}
-            />
-            {error && !form.doj && (
-              <p className="mt-1 text-xs text-red-500">Date of Joining is required.</p>
-            )}
-          </div>
-
-          <AuthInput
-            label="Salary"
-            type="number"
-            name="salary"
-            value={form.salary}
-            onChange={handleChange}
-            placeholder="Enter salary"
-          />
-
-          <AuthInput
-            label="Reference"
-            type="text"
-            name="ref"
-            value={form.ref}
-            onChange={handleChange}
-            placeholder="Reference"
-          />
-
-          <div>
-            <label
-              htmlFor="status"
-              className="block text-sm text-textMuted mb-1"
-            >
-              Status
-            </label>
-            <select
-              id="status"
-              name="status"
-              value={form.status}
-              onChange={handleChange}
-              className="w-full px-4 py-2 rounded-md bg-background border border-border text-textMain focus:outline-none focus:border-primary appearance-none transition"
-            >
+            <label htmlFor="status" className="block text-sm text-textMuted mb-1">Status</label>
+            <select id="status" name="status" value={form.status} onChange={handleChange} className="w-full px-4 py-2 rounded-md bg-background border border-border text-textMain">
               <option value="active">Active</option>
               <option value="inactive">Inactive</option>
             </select>
           </div>
 
-          <AuthInput
-            label="Total PL"
-            type="number"
-            name="totalPl"
-            value={form.totalPl}
-            onChange={handleChange}
-            placeholder="Total Privilege Leaves"
-          />
+          <AuthInput label="Total PL" type="number" name="totalPl" value={form.totalPl} onChange={handleChange} />
 
-          <AuthInput
-            label="Password *"
-            type="password"
-            name="password"
-            value={form.password}
-            onChange={handleChange}
-            placeholder="Create a password"
-            autoComplete="new-password"
-            required
-            error={error && !form.password ? "Password is required." : ""}
-            showTogglePassword={true}
-            icon={FaLock}
-          />
+          <AuthInput label="Password *" type="password" name="password" value={form.password} onChange={handleChange} placeholder="Create a password" autoComplete="new-password" required showTogglePassword={true} icon={FaLock} />
 
-          {/* Optional per-user credentials */}
           <div className="mt-6 pt-4 border-t border-border">
-            <h3 className="text-lg font-semibold text-textMain mb-2">
-              Optional: Email Sending Setup
-            </h3>
-            <p className="text-sm text-textMuted mb-3">
-              Add your work email and app password to send emails from your own account (encrypted and stored securely).
-            </p>
-
-            <AuthInput
-              label="Work Email (Outlook/Gmail)"
-              type="email"
-              name="outlookEmail"
-              value={form.outlookEmail}
-              onChange={handleChange}
-              placeholder="Enter your work email"
-              icon={FaEnvelope}
-            />
-
-            <AuthInput
-              label="Email App Password"
-              type="password"
-              name="outlookAppPassword"
-              value={form.outlookAppPassword}
-              onChange={handleChange}
-              placeholder="Enter your email app password"
-              showTogglePassword={true}
-              icon={FaLock}
-            />
-
-            <p className="text-xs text-textMuted mt-2">
-              We recommend creating an <span className="font-semibold">App Password</span> from your email provider’s security settings.
-              This will be encrypted before storage.
-            </p>
+            <h3 className="text-lg font-semibold text-textMain mb-2">Optional: Email Sending Setup</h3>
+            <AuthInput label="Work Email" type="email" name="outlookEmail" value={form.outlookEmail} onChange={handleChange} icon={FaEnvelope} />
+            <AuthInput label="Email App Password" type="password" name="outlookAppPassword" value={form.outlookAppPassword} onChange={handleChange} showTogglePassword={true} icon={FaLock} />
           </div>
 
-          {error && <div className="text-sm text-red-500 text-center whitespace-pre-line">{error}</div>}
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full py-2 rounded-md bg-yellow-300 hover:bg-orange-500 hover:text-white transition text-background font-semibold shadow focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:outline-none disabled:opacity-50"
-          >
+          <button type="submit" disabled={loading} className="w-full py-2 rounded-md bg-yellow-300 hover:bg-orange-500 hover:text-white transition text-background font-semibold shadow disabled:opacity-50">
             {loading ? "Creating Account..." : "Register Employee"}
           </button>
         </form>
 
-        <p className="mt-4 text-center text-textMuted text-sm">
+        {/* <p className="mt-4 text-center text-textMuted text-sm">
           Already have an account?{" "}
           <a href="/login" className="text-primary hover:text-orangeDark">
             Log in
           </a>
-        </p>
+        </p> */}
       </div>
     </div>
   );
