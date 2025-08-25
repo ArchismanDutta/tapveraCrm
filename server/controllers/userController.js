@@ -28,6 +28,7 @@ exports.createEmployee = async (req, res) => {
       password,
     } = req.body;
 
+    // Validate required fields
     if (!employeeId || !name || !email || !contact || !dob || !gender || !doj) {
       return res.status(400).json({ message: "Required fields are missing." });
     }
@@ -35,19 +36,17 @@ exports.createEmployee = async (req, res) => {
     const normalizedEmail = String(email).toLowerCase().trim();
     const trimmedEmployeeId = String(employeeId).trim();
 
-    const existingEmail = await User.findOne({ email: normalizedEmail });
-    if (existingEmail)
+    // Check duplicates
+    if (await User.findOne({ email: normalizedEmail })) {
       return res.status(400).json({ message: "Email already in use." });
-
-    const existingEmpId = await User.findOne({ employeeId: trimmedEmployeeId });
-    if (existingEmpId)
+    }
+    if (await User.findOne({ employeeId: trimmedEmployeeId })) {
       return res.status(400).json({ message: "Employee ID already in use." });
+    }
 
     const userPassword = String(password || "Welcome123").trim();
-    const parsedSalary =
-      typeof salary === "number" ? salary : Number(salary || 0);
-    const parsedTotalPl =
-      typeof totalPl === "number" ? totalPl : Number(totalPl || 0);
+    const parsedSalary = typeof salary === "number" ? salary : Number(salary || 0);
+    const parsedTotalPl = typeof totalPl === "number" ? totalPl : Number(totalPl || 0);
 
     const user = new User({
       employeeId: trimmedEmployeeId,
@@ -65,19 +64,16 @@ exports.createEmployee = async (req, res) => {
       doj,
       salary: Number.isFinite(parsedSalary) ? parsedSalary : 0,
       ref: ref ? String(ref).trim() : "",
-      status: status ? String(status).toLowerCase().trim() : "inactive", // ✅ default inactive
+      status: status ? String(status).toLowerCase().trim() : "inactive",
       totalPl: Number.isFinite(parsedTotalPl) ? parsedTotalPl : 0,
       password: userPassword, // ⚠️ consider hashing
-      department: department || undefined,
+      department: department || "",
       designation: designation ? String(designation).trim() : "",
       role: "employee",
     });
 
     await user.save();
-
-    res
-      .status(201)
-      .json({ message: "Employee created successfully", user });
+    res.status(201).json({ message: "Employee created successfully", user });
   } catch (error) {
     console.error("Create employee error", error);
     res.status(500).json({ message: "Server error" });
@@ -90,21 +86,13 @@ exports.createEmployee = async (req, res) => {
 exports.getEmployeeDirectory = async (req, res) => {
   try {
     let { department, designation, status, search } = req.query;
-
     const filter = {};
-    if (department && department !== "all")
-      filter.department = String(department).trim();
 
+    if (department && department !== "all") filter.department = String(department).trim();
     if (designation && designation !== "all") {
-      filter.designation = {
-        $regex: String(designation).trim(),
-        $options: "i",
-      };
+      filter.designation = { $regex: String(designation).trim(), $options: "i" };
     }
-
-    if (status && status !== "all")
-      filter.status = String(status).toLowerCase().trim();
-
+    if (status && status !== "all") filter.status = String(status).toLowerCase().trim();
     if (search) {
       const searchTerm = String(search).trim();
       filter.$or = [
@@ -115,12 +103,9 @@ exports.getEmployeeDirectory = async (req, res) => {
     }
 
     const employees = await User.find(filter)
-      .select(
-        "_id employeeId name email contact department designation role status doj"
-      )
+      .select("_id employeeId name email contact department designation role status doj")
       .sort({ name: 1 });
 
-    // ✅ normalize status in API response
     const employeesWithStatus = employees.map((emp) => ({
       ...emp.toObject(),
       status: emp.status || "inactive",
@@ -134,7 +119,7 @@ exports.getEmployeeDirectory = async (req, res) => {
 };
 
 // ======================
-// Get All Users (minimal list for tasks)
+// Get All Users (admin & super-admin minimal list)
 // ======================
 exports.getAllUsers = async (req, res) => {
   try {
@@ -153,9 +138,7 @@ exports.getAllUsers = async (req, res) => {
 // ======================
 exports.getMe = async (req, res) => {
   try {
-    if (!req.user?._id) {
-      return res.status(404).json({ message: "User not found" });
-    }
+    if (!req.user?._id) return res.status(404).json({ message: "User not found" });
 
     const user = await User.findById(req.user._id).select("-password");
     if (!user) return res.status(404).json({ message: "User not found" });
@@ -179,13 +162,11 @@ exports.getMe = async (req, res) => {
       ps: user.ps,
       salary: user.salary,
       ref: user.ref,
-      status: user.status || "inactive", // ✅ normalize
+      status: user.status || "inactive",
       totalPl: user.totalPl,
       location: user.location,
       outlookEmail: user.outlookEmail || null,
-      hasEmailCredentials: Boolean(
-        user.outlookEmail && user.outlookAppPassword
-      ),
+      hasEmailCredentials: Boolean(user.outlookEmail && user.outlookAppPassword),
     });
   } catch (err) {
     console.error("GetMe Error:", err);
@@ -194,26 +175,64 @@ exports.getMe = async (req, res) => {
 };
 
 // ======================
-// Update Employee Status (manual toggle if needed)
+// Get Single Employee by ID
+// ======================
+exports.getEmployeeById = async (req, res) => {
+  try {
+    const userId = req.params.id;
+    const user = await User.findById(userId).lean();
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    const employee = {
+      ...user,
+      status: user.status || "inactive",
+      personalInfo: {
+        dob: user.dob || "",
+        gender: user.gender || "",
+        nationality: user.nationality || "",
+      },
+      contactInfo: {
+        email: user.email || "",
+        phone: user.contact || "",
+        address: user.currentAddress || "",
+      },
+      employmentDetails: {
+        designation: user.designation || "",
+        department: user.department || "",
+        dateOfJoining: user.doj || "",
+        status: user.status || "inactive",
+      },
+      salary: {
+        basic: user.salary || 0,
+        total: user.salary || 0,
+        paymentMode: user.paymentMode || "bank",
+      },
+      qualifications: {
+        education: user.qualifications || [],
+        skills: user.skills || [],
+      },
+    };
+
+    res.json(employee);
+  } catch (err) {
+    console.error("Error fetching employee by ID:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+// ======================
+// Update Employee Status
 // ======================
 exports.updateEmployeeStatus = async (req, res) => {
   try {
     const userId = req.params.id;
     const { status } = req.body;
 
-    if (!["active", "inactive"].includes(status)) {
+    if (!["active", "inactive"].includes(status))
       return res.status(400).json({ message: "Invalid status value" });
-    }
 
-    const user = await User.findByIdAndUpdate(
-      userId,
-      { status },
-      { new: true }
-    );
-
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
+    const user = await User.findByIdAndUpdate(userId, { status }, { new: true });
+    if (!user) return res.status(404).json({ message: "User not found" });
 
     res.json({ message: "Status updated successfully", user });
   } catch (err) {

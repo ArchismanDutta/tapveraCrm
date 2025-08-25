@@ -1,7 +1,17 @@
+// File: src/components/employeedetails/EmployeeTable.jsx
 import React from "react";
 import { FaEye } from "react-icons/fa";
+import { useNavigate } from "react-router-dom";
 
-const EmployeeTable = ({ employees, onView }) => {
+const EmployeeTable = ({ employees = [] }) => {
+  const navigate = useNavigate();
+
+  const handleView = (emp) => {
+    if (emp && emp._id) {
+      navigate(`/employee/${emp._id}`);
+    }
+  };
+
   return (
     <div className="overflow-x-auto border rounded-xl shadow-md">
       <table className="min-w-full bg-white border-collapse">
@@ -33,10 +43,7 @@ const EmployeeTable = ({ employees, onView }) => {
         <tbody className="divide-y divide-gray-100">
           {employees.length === 0 ? (
             <tr>
-              <td
-                colSpan="7"
-                className="px-6 py-10 text-center text-gray-500 text-sm"
-              >
+              <td colSpan="7" className="px-6 py-10 text-center text-gray-500 text-sm">
                 No employees found.
               </td>
             </tr>
@@ -48,11 +55,11 @@ const EmployeeTable = ({ employees, onView }) => {
                   index % 2 === 0 ? "bg-gray-50" : "bg-white"
                 } transition-colors duration-200`}
               >
-                <td className="px-6 py-4 text-gray-800 font-medium">{emp.name}</td>
-                <td className="px-6 py-4 text-gray-700">{emp.employeeId}</td>
-                <td className="px-6 py-4 text-gray-700">{emp.email}</td>
-                <td className="px-6 py-4 text-gray-700">{emp.department}</td>
-                <td className="px-6 py-4 text-gray-700">{emp.designation}</td>
+                <td className="px-6 py-4 text-gray-800 font-medium">{emp.name || "-"}</td>
+                <td className="px-6 py-4 text-gray-700">{emp.employeeId || "-"}</td>
+                <td className="px-6 py-4 text-gray-700">{emp.email || "-"}</td>
+                <td className="px-6 py-4 text-gray-700">{emp.department || "-"}</td>
+                <td className="px-6 py-4 text-gray-700">{emp.designation || "-"}</td>
                 <td className="px-6 py-4">
                   <span
                     className={`px-3 py-1 text-xs font-semibold rounded-full ${
@@ -61,13 +68,13 @@ const EmployeeTable = ({ employees, onView }) => {
                         : "bg-red-100 text-red-800"
                     }`}
                   >
-                    {emp.status.charAt(0).toUpperCase() + emp.status.slice(1)}
+                    {emp.status ? emp.status.charAt(0).toUpperCase() + emp.status.slice(1) : "Inactive"}
                   </span>
                 </td>
                 <td className="px-6 py-4">
                   <button
                     className="text-blue-600 hover:text-blue-800 flex items-center gap-1"
-                    onClick={() => onView(emp)}
+                    onClick={() => handleView(emp)}
                     title="View"
                   >
                     <FaEye /> View
