@@ -2,22 +2,26 @@
 import React, { useState } from "react";
 import TaskRow from "./TaskRow";
 
-const TaskTable = ({ tasks, onViewTask, onEditTask, onDeleteTask }) => {
+const TaskTable = ({ tasks = [], onViewTask, onEditTask, onDeleteTask }) => {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("All Status");
 
+  // Defensive check
   const safeTasks = Array.isArray(tasks) ? tasks : [];
 
-  const filteredTasks = safeTasks.filter((t) => {
+  // Filter + search logic
+  const filteredTasks = safeTasks.filter((task) => {
     const titleMatch =
-      t?.title?.toLowerCase().includes(search.toLowerCase()) ?? false;
-    const statusMatch = filter === "All Status" || t?.status === filter;
+      task?.title?.toLowerCase().includes(search.toLowerCase()) ?? false;
+    const statusMatch = filter === "All Status" || task?.status === filter;
     return titleMatch && statusMatch;
   });
 
+  // Safe date formatting
   const formatDueDateTime = (dateValue) => {
     if (!dateValue) return "No due date";
     const dateObj = new Date(dateValue);
+    if (isNaN(dateObj.getTime())) return "Invalid date";
     return `${dateObj.toLocaleDateString()} ${dateObj.toLocaleTimeString([], {
       hour: "2-digit",
       minute: "2-digit",
@@ -75,7 +79,6 @@ const TaskTable = ({ tasks, onViewTask, onEditTask, onDeleteTask }) => {
                   onView={() => onViewTask(task)}
                   onEdit={() => onEditTask(task)}
                   onDelete={() => onDeleteTask(task._id)}
-                  className="cursor-pointer"
                 />
               ))
             ) : (

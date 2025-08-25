@@ -76,8 +76,8 @@ const EditTaskModal = ({ task, onSave, onCancel, users }) => {
               className="border border-gray-300 rounded-lg p-2 w-full text-sm bg-white focus:ring-2 focus:ring-orange-400"
               value={
                 Array.isArray(editedTask.assignedTo)
-                  ? editedTask.assignedTo[0] || ""
-                  : editedTask.assignedTo || ""
+                  ? editedTask.assignedTo[0]?._id || editedTask.assignedTo[0] || ""
+                  : editedTask.assignedTo?._id || editedTask.assignedTo || ""
               }
               onChange={(e) => handleChange("assignedTo", e.target.value)}
               required
@@ -180,13 +180,14 @@ export default function AdminTaskPage({ onLogout }) {
   const [filterType, setFilterType] = useState("all");
 
   const navigate = useNavigate();
-  const tableRef = useRef(null); // ref for TaskTable section
+  const tableRef = useRef(null);
 
   const showPopup = (message) => {
     setPopupMessage(message);
     setTimeout(() => setPopupMessage(""), 3000);
   };
 
+  // ✅ FIXED fetchTasks
   const fetchTasks = async () => {
     const token = localStorage.getItem("token");
     if (!token) {
@@ -194,14 +195,11 @@ export default function AdminTaskPage({ onLogout }) {
       return;
     }
     try {
-      const res = await API.get("/tasks");
-      const payload = res?.data?.data ?? res?.data;
-      const tasksArray = Array.isArray(payload) ? payload : [];
-      tasksArray.sort(
-        (a, b) =>
-          new Date(b.createdAt || b._id?.toString().slice(-8)) -
-          new Date(a.createdAt || a._id?.toString().slice(-8))
-      );
+      const res = await API.get("/tasks", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const tasksArray = Array.isArray(res.data) ? res.data : [];
+      tasksArray.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
       setTasks(tasksArray);
     } catch (err) {
       console.error("fetchTasks error:", err);
@@ -213,7 +211,9 @@ export default function AdminTaskPage({ onLogout }) {
     const token = localStorage.getItem("token");
     if (!token) return;
     try {
-      const res = await API.get("/users");
+      const res = await API.get("/users", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       if (Array.isArray(res.data)) setUsers(res.data);
       else if (Array.isArray(res.data?.data)) setUsers(res.data.data);
       else setUsers([]);
@@ -243,11 +243,6 @@ export default function AdminTaskPage({ onLogout }) {
     fetchTasks();
     fetchUsers();
     fetchUser();
-  }, []);
-
-  useEffect(() => {
-    const interval = setInterval(() => setCurrentTime(new Date()), 1000);
-    return () => clearInterval(interval);
   }, []);
 
   const ensureAssignedArray = (obj) => {
@@ -339,7 +334,11 @@ export default function AdminTaskPage({ onLogout }) {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [userName, setUserName] = useState("");
 
-  // Function to filter and scroll
+  useEffect(() => {
+    const interval = setInterval(() => setCurrentTime(new Date()), 1000);
+    return () => clearInterval(interval);
+  }, []);
+
   const handleFilterAndScroll = (type) => {
     setFilterType(type);
     setTimeout(() => {
