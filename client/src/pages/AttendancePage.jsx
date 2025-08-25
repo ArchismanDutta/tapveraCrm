@@ -6,7 +6,7 @@ import WeeklyHoursChart from "../components/attendance/WeeklyHoursChart";
 import RecentActivityTable from "../components/attendance/RecentActivityTable";
 import Sidebar from "../components/dashboard/Sidebar";
 
-const AttendancePage = () => {
+const AttendancePage = ({ onLogout }) => {
   const [collapsed, setCollapsed] = useState(false);
   const [stats, setStats] = useState(null);
   const [calendarData, setCalendarData] = useState(null);
@@ -29,7 +29,10 @@ const AttendancePage = () => {
 
       const res = await axios.get("/api/summary/week", {
         headers: { Authorization: `Bearer ${token}` },
-        params: { startDate: monday.toISOString(), endDate: sunday.toISOString() },
+        params: {
+          startDate: monday.toISOString(),
+          endDate: sunday.toISOString(),
+        },
       });
 
       const data = res.data;
@@ -55,7 +58,9 @@ const AttendancePage = () => {
       };
 
       setStats({
-        attendanceRate: Math.round((weeklySummary.onTimeRate?.replace("%", "") || 0)),
+        attendanceRate: Math.round(
+          weeklySummary.onTimeRate?.replace("%", "") || 0
+        ),
         presentDays: dailyData.length,
         totalDays: 30, // Customize total days in month or period as needed
         workingHours: truncateTwoDecimals(parseHours(weeklySummary.totalWork)),
@@ -90,7 +95,8 @@ const AttendancePage = () => {
       const hoursByWeekday = Array(7).fill(0);
       dailyData.forEach((d) => {
         const dt = new Date(d.date);
-        if (d.workDurationSeconds) hoursByWeekday[dt.getDay()] += d.workDurationSeconds / 3600;
+        if (d.workDurationSeconds)
+          hoursByWeekday[dt.getDay()] += d.workDurationSeconds / 3600;
       });
       const weekDays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
       setWeeklyHours(
@@ -110,15 +116,17 @@ const AttendancePage = () => {
           return {
             date: new Date(d.date).toISOString().split("T")[0],
             timeIn: d.arrivalTime
-              ? arrivalDate.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+              ? arrivalDate.toLocaleTimeString([], {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })
               : "--",
             timeOut: "--", // enrich if available
-            status:
-              !d.arrivalTime
-                ? "Absent"
-                : arrivalDate > expectedDate
-                ? "Late"
-                : "Present",
+            status: !d.arrivalTime
+              ? "Absent"
+              : arrivalDate > expectedDate
+              ? "Late"
+              : "Present",
           };
         })
       );
@@ -139,7 +147,11 @@ const AttendancePage = () => {
       fetchAttendanceData();
     }
     window.addEventListener("attendanceDataUpdate", handleAttendanceUpdate);
-    return () => window.removeEventListener("attendanceDataUpdate", handleAttendanceUpdate);
+    return () =>
+      window.removeEventListener(
+        "attendanceDataUpdate",
+        handleAttendanceUpdate
+      );
   }, [fetchAttendanceData]);
 
   if (!stats || !calendarData) {
@@ -148,7 +160,12 @@ const AttendancePage = () => {
 
   return (
     <div className="flex min-h-screen bg-gray-50">
-      <Sidebar collapsed={collapsed} setCollapsed={setCollapsed} userRole="employee" />
+      <Sidebar
+        onLogout={onLogout}
+        collapsed={collapsed}
+        setCollapsed={setCollapsed}
+        userRole="employee"
+      />
       <main className="flex-1 p-4 space-y-6 ml-64">
         <AttendanceStats stats={stats} />
         <div className="grid lg:grid-cols-3 grid-cols-1 gap-6">
