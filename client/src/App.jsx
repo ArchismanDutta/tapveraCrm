@@ -22,29 +22,41 @@ import AdminLeaveRequests from "./pages/AdminLeaveRequests";
 import TodayStatusPage from "./pages/TodayStatusPage";
 import AttendancePage from "./pages/AttendancePage";
 import NoticeBoard from "./pages/NoticeBoard";
-import TodoPage from "./pages/TodoPage"; // TodoPage
+import TodoPage from "./pages/TodoPage";
+import ChatPage from "./pages/ChatPage";
 
 const AppWrapper = () => {
   const navigate = useNavigate();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [role, setRole] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [currentUser, setCurrentUser] = useState(null);
 
   useEffect(() => {
     const token = localStorage.getItem("token");
-    let storedRole =
-      JSON.parse(localStorage.getItem("user"))?.role || localStorage.getItem("role");
+    const userStr = localStorage.getItem("user");
+    let storedRole = JSON.parse(userStr)?.role || localStorage.getItem("role");
 
     if (storedRole) storedRole = storedRole.toLowerCase();
 
     if (token && token.trim() !== "") {
       setIsAuthenticated(true);
       setRole(storedRole);
+      setCurrentUser(userStr ? JSON.parse(userStr) : null);
     } else {
       setIsAuthenticated(false);
       setRole(null);
+      setCurrentUser(null);
     }
     setLoading(false);
+  }, []);
+
+
+  useEffect(() => {
+    const userStr = localStorage.getItem("user");
+    if (userStr) {
+      setCurrentUser(JSON.parse(userStr));
+    }
   }, []);
 
   const handleLoginSuccess = () => {
@@ -120,6 +132,17 @@ const AppWrapper = () => {
         element={
           isAuthenticated ? (
             <MyProfile onLogout={handleLogout} userType={role || "employee"} />
+          ) : (
+            <Navigate to="/login" replace />
+          )
+        }
+      />
+
+      <Route
+        path="/messages"
+        element={
+          isAuthenticated ? (
+            <ChatPage onLogout={handleLogout} currentUser={currentUser} />
           ) : (
             <Navigate to="/login" replace />
           )
