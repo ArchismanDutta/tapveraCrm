@@ -54,7 +54,7 @@ const NoticeBoard = ({ onLogout }) => {
           ${collapsed ? "ml-20" : "ml-64"}
         `}
       >
-        <h1 className="text-2xl font-bold mb-6">📢 Notice Board</h1>
+        <h1 className="text-2xl font-bold mb-6">Notice Board</h1>
 
         {/* Create Form */}
         <NoticeForm onPublish={handlePublish} />
