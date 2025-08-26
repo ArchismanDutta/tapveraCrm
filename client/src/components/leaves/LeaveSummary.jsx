@@ -2,20 +2,22 @@ import React, { useState } from "react";
 import { Calendar, Clock, Hourglass } from "lucide-react";
 import ImportantNoticeModal from "./ImportantNoticeModal";
 
-// Map color names to Tailwind classes
+// Map color names to Tailwind classes tailored for your theme
 const colorMap = {
-  green: { bg: "bg-green-100", text: "text-green-600" },
-  blue: { bg: "bg-blue-100", text: "text-blue-600" },
-  yellow: { bg: "bg-yellow-100", text: "text-yellow-600" },
+  green: { bg: "bg-[rgba(46,170,102,0.15)]", text: "text-green-500" },
+  blue: { bg: "bg-[rgba(91,122,201,0.15)]", text: "text-blue-500" },
+  yellow: { bg: "bg-[rgba(255,128,0,0.15)]", text: "text-[#ff8000]" },
 };
 
 const StatCard = ({ icon: Icon, value, label, color }) => (
-  <div className="flex flex-col items-center justify-center p-5 rounded-xl bg-gradient-to-tr from-white to-gray-50 shadow-md hover:shadow-xl transition hover:-translate-y-1 border border-gray-100">
-    <div className={`p-3 rounded-full ${colorMap[color].bg} ${colorMap[color].text} mb-3`}>
+  <div
+    className={`flex flex-col items-center justify-center p-6 rounded-3xl bg-[rgba(22,28,48,0.68)] border border-[rgba(84,123,209,0.13)] shadow-[0_8px_32px_0_rgba(10,40,100,0.14),_inset_0_1.5px_10px_0_rgba(84,123,209,0.08)] backdrop-blur-[10px] cursor-default select-none transition hover:-translate-y-1`}
+  >
+    <div className={`p-3 rounded-full mb-3 ${colorMap[color].bg} ${colorMap[color].text} shadow-md`}>
       <Icon className="h-6 w-6" />
     </div>
-    <p className="text-2xl font-bold text-gray-800">{value}</p>
-    <p className="text-sm text-gray-500">{label}</p>
+    <p className="text-4xl font-extrabold text-blue-100">{value}</p>
+    <p className="text-lg text-blue-300">{label}</p>
   </div>
 );
 
@@ -23,24 +25,23 @@ const LeaveSummary = ({ available, taken, pending, importantNotices = [] }) => {
   const [showPopover, setShowPopover] = useState(false);
 
   return (
-    <div className="bg-white backdrop-blur-xl border border-gray-100 shadow-xl rounded-2xl p-6 relative z-10">
+    <div
+      className="bg-[rgba(22,28,48,0.68)] border border-[rgba(84,123,209,0.13)] rounded-3xl p-6 shadow-[0_8px_32px_0_rgba(10,40,100,0.14),_inset_0_1.5px_10px_0_rgba(84,123,209,0.08)] backdrop-blur-[10px] relative z-10"
+    >
       {/* Header with button */}
       <div className="flex justify-between items-center mb-5 relative">
-        <h2 className="text-xl font-semibold text-gray-800">Leave Overview</h2>
+        <h2 className="text-xl font-semibold text-blue-100">Leave Overview</h2>
 
         <div className="relative">
           <button
             onClick={() => setShowPopover(true)}
-            className="bg-yellow-200 border-2 border-orange-500 text-black text-sm font-medium px-3 py-1 rounded-lg shadow hover:bg-orange-500 hover:text-white transition cursor-pointer"
+            className="bg-[#ffb347]/80 border-2 border-[#ff8000] text-black text-sm font-bold px-3 py-1 rounded-xl shadow hover:bg-[#ff8000] hover:text-white transition cursor-pointer"
           >
             Important Leave Update
           </button>
 
           {showPopover && (
-            <ImportantNoticeModal
-              notices={importantNotices}
-              onClose={() => setShowPopover(false)}
-            />
+            <ImportantNoticeModal notices={importantNotices} onClose={() => setShowPopover(false)} />
           )}
         </div>
       </div>

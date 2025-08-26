@@ -9,15 +9,15 @@ import RecentActivity from "../components/workstatus/RecentActivity";
 import PunchOutTodoPopup from "../components/todo/PunchOutTodoPopup";
 import PunchOutConfirmPopup from "../components/workstatus/PunchOutConfirmPopup";
 
-// Single definition of formatHMS function
 function formatHMS(seconds) {
   const h = Math.floor(seconds / 3600);
   const m = Math.floor((seconds % 3600) / 60);
   const s = seconds % 60;
-  return `${h}h ${m.toString().padStart(2, "0")}m ${s
-    .toString()
-    .padStart(2, "0")}s`;
+  return `${h}h ${m.toString().padStart(2, "0")}m ${s.toString().padStart(2, "0")}s`;
 }
+
+const SIDEBAR_WIDTH_EXPANDED = 288; // w-72 = 18rem = 288px
+const SIDEBAR_WIDTH_COLLAPSED = 80; // w-20 = 5rem = 80px
 
 const TodayStatusPage = ({ onLogout }) => {
   const [collapsed, setCollapsed] = useState(false);
@@ -129,10 +129,7 @@ const TodayStatusPage = ({ onLogout }) => {
     };
     window.addEventListener("attendanceDataUpdate", handleAttendanceDataUpdate);
     return () => {
-      window.removeEventListener(
-        "attendanceDataUpdate",
-        handleAttendanceDataUpdate
-      );
+      window.removeEventListener("attendanceDataUpdate", handleAttendanceDataUpdate);
     };
   }, []);
 
@@ -141,10 +138,7 @@ const TodayStatusPage = ({ onLogout }) => {
     updateStatus({
       currentlyWorking: true,
       onBreak: false,
-      timelineEvent: {
-        type: "Punch In",
-        time: new Date().toLocaleTimeString(),
-      },
+      timelineEvent: { type: "Punch In", time: new Date().toLocaleTimeString() },
     });
   };
 
@@ -171,7 +165,6 @@ const TodayStatusPage = ({ onLogout }) => {
 
   const handlePunchOutClick = async () => {
     if (!(status?.currentlyWorking) && !(status?.onBreak)) return;
-
     const canPunchOut = await checkTodoTasksBeforePunchOut();
     if (canPunchOut) {
       setShowPunchOutConfirm(true);
@@ -185,10 +178,7 @@ const TodayStatusPage = ({ onLogout }) => {
     updateStatus({
       currentlyWorking: false,
       onBreak: false,
-      timelineEvent: {
-        type: "Punch Out",
-        time: new Date().toLocaleTimeString(),
-      },
+      timelineEvent: { type: "Punch Out", time: new Date().toLocaleTimeString() },
     });
   };
 
@@ -211,11 +201,7 @@ const TodayStatusPage = ({ onLogout }) => {
 
       await Promise.all(
         pendingTodoTasks.map((task) =>
-          axios.post(
-            `/api/todos/${task._id}/move`,
-            { newDate: tomorrow.toISOString() },
-            { headers: { Authorization: `Bearer ${token}` } }
-          )
+          axios.post(`/api/todos/${task._id}/move`, { newDate: tomorrow.toISOString() }, { headers: { Authorization: `Bearer ${token}` } })
         )
       );
 
@@ -233,10 +219,7 @@ const TodayStatusPage = ({ onLogout }) => {
       onBreak: true,
       currentlyWorking: false,
       breakStartTime: new Date(),
-      timelineEvent: {
-        type: `Break Start (${breakType})`,
-        time: new Date().toLocaleTimeString(),
-      },
+      timelineEvent: { type: `Break Start (${breakType})`, time: new Date().toLocaleTimeString() },
     });
   };
 
@@ -246,29 +229,28 @@ const TodayStatusPage = ({ onLogout }) => {
       onBreak: false,
       currentlyWorking: true,
       breakStartTime: null,
-      timelineEvent: {
-        type: "Resume Work",
-        time: new Date().toLocaleTimeString(),
-      },
+      timelineEvent: { type: "Resume Work", time: new Date().toLocaleTimeString() },
     });
   };
 
   const handleSelectBreakType = (type) => setSelectedBreakType(type);
 
-  if (!status) return <div className="text-gray-100 bg-[#101525] min-h-screen flex items-center justify-center">Loading...</div>;
+  if (!status)
+    return (
+      <div className="text-gray-100 bg-[#101525] min-h-screen flex items-center justify-center">
+        Loading...
+      </div>
+    );
 
   return (
-    <div className="flex min-h-screen bg-[#101525] text-gray-100">
-      <Sidebar
-        collapsed={collapsed}
-        setCollapsed={setCollapsed}
-        userRole="employee"
-        onLogout={onLogout}
-      />
+    <div className="bg-[#101525] min-h-screen text-gray-100">
+      <Sidebar collapsed={collapsed} setCollapsed={setCollapsed} userRole="employee" onLogout={onLogout} />
       <main
-        className={`flex-1 transition-all duration-300 ${
-          collapsed ? "ml-20" : "ml-64"
-        } p-2 sm:p-6`}
+        className="transition-all duration-300 p-2 sm:p-6 overflow-auto"
+        style={{
+          marginLeft: collapsed ? SIDEBAR_WIDTH_COLLAPSED : SIDEBAR_WIDTH_EXPANDED,
+          minHeight: "100vh",
+        }}
       >
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 h-full min-h-screen">
           <div className="col-span-2 flex flex-col gap-4">
@@ -297,7 +279,6 @@ const TodayStatusPage = ({ onLogout }) => {
           </div>
         </div>
 
-        {/* Todo Popup */}
         {showTodoPopup && (
           <PunchOutTodoPopup
             tasks={pendingTodoTasks}
@@ -307,12 +288,8 @@ const TodayStatusPage = ({ onLogout }) => {
           />
         )}
 
-        {/* Punch Out Confirmation Popup */}
         {showPunchOutConfirm && (
-          <PunchOutConfirmPopup
-            onCancel={onCancelPunchOut}
-            onConfirm={onConfirmPunchOut}
-          />
+          <PunchOutConfirmPopup onCancel={onCancelPunchOut} onConfirm={onConfirmPunchOut} />
         )}
       </main>
     </div>

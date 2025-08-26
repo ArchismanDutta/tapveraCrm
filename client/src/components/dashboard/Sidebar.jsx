@@ -15,7 +15,7 @@ import {
 import { FaChevronCircleRight } from "react-icons/fa";
 import { NavLink } from "react-router-dom";
 
-// Menu configuration per role
+// Menu config per role
 const menuConfig = {
   employee: [
     { to: "/dashboard", icon: <LayoutDashboard size={18} />, label: "Dashboard" },
@@ -54,7 +54,7 @@ const Sidebar = ({ collapsed, setCollapsed, userRole = "employee", onLogout }) =
       <aside
         className={`${
           collapsed ? "w-20" : "w-72"
-        } bg-gradient-to-br from-[#13161c]/80 via-[#181d2a]/90 to-[#191f2b]/90 text-blue-100 shadow-2xl border-r border-[#232945] flex flex-col h-screen fixed left-0 top-0 transition-all duration-300 z-30 backdrop-blur-xl`}
+        } bg-gradient-to-br from-[#13161c]/80 via-[#181d2a]/90 to-[#191f2b]/90 text-blue-100 shadow-2xl border-r border-[#232945] fixed left-0 top-0 h-screen flex flex-col transition-all duration-300 z-30 backdrop-blur-xl`}
       >
         {/* Logo & Collapse */}
         <div className={`p-4 flex items-center ${collapsed ? "justify-center" : "justify-between"}`}>
@@ -73,15 +73,9 @@ const Sidebar = ({ collapsed, setCollapsed, userRole = "employee", onLogout }) =
         </div>
 
         {/* Navigation Links */}
-        <nav className="mt-3 space-y-1 px-3 flex-1">
+        <nav className="mt-3 space-y-1 px-3 flex-1 overflow-y-auto">
           {navItems.map((item) => (
-            <SidebarLink
-              key={item.to}
-              to={item.to}
-              icon={item.icon}
-              label={item.label}
-              collapsed={collapsed}
-            />
+            <SidebarLink key={item.to} to={item.to} icon={item.icon} label={item.label} collapsed={collapsed} />
           ))}
         </nav>
 
@@ -132,7 +126,6 @@ const SidebarLink = ({ to, icon, label, collapsed }) => (
     style={{
       fontWeight: 600,
       fontSize: "1.04rem",
-      boxShadow: isActive => isActive ? "0 2px 12px 0 rgba(180,200,255,0.09) inset" : undefined,
     }}
   >
     {icon}

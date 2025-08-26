@@ -9,7 +9,7 @@ const BreakManagement = ({
   onResumeWork,
   onSelectBreakType,
   selectedBreakType,
-  currentlyWorking
+  currentlyWorking,
 }) => {
   const [localSelectedType, setLocalSelectedType] = useState(selectedBreakType || "");
 
