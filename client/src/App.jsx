@@ -42,7 +42,6 @@ const AppWrapper = () => {
     if (userStr) setCurrentUser(JSON.parse(userStr));
   }, []);
 
-
   // Load auth state on mount
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -61,14 +60,13 @@ const AppWrapper = () => {
     setLoading(false);
   }, []);
 
- const handleLoginSuccess = () => {
-   const savedUser = JSON.parse(localStorage.getItem("user"));
-   setCurrentUser(savedUser);
-   setIsAuthenticated(true);
-   setRole(savedUser?.role?.toLowerCase() || null);
-   toast.success("✅ Login successful!");
- };
-
+  const handleLoginSuccess = () => {
+    const savedUser = JSON.parse(localStorage.getItem("user"));
+    setCurrentUser(savedUser);
+    setIsAuthenticated(true);
+    setRole(savedUser?.role?.toLowerCase() || null);
+    toast.success("✅ Login successful!");
+  };
 
   const handleLogout = () => {
     localStorage.removeItem("token");
@@ -81,7 +79,6 @@ const AppWrapper = () => {
     toast.info("👋 Logged out successfully!");
     navigate("/login", { replace: true });
   };
-
 
   if (loading) {
     return (
@@ -109,6 +106,7 @@ const AppWrapper = () => {
             )
           }
         />
+
         {/* ChatPage / Messages */}
         <Route
           path="/messages"
@@ -240,65 +238,53 @@ const AppWrapper = () => {
         <Route
           path="/tasks"
           element={
-            isAuthenticated && !isAdmin ? (
+            isAuthenticated ? (
               <Tasks onLogout={handleLogout} />
             ) : (
-              <Navigate
-                to={isAuthenticated ? "/admin/tasks" : "/login"}
-                replace
-              />
+              <Navigate to="/login" replace />
             )
           }
         />
+
+        {/* Today Status - accessible to all authenticated employees */}
         <Route
           path="/today-status"
           element={
-            isAuthenticated && !isAdmin ? (
+            isAuthenticated ? (
               <TodayStatusPage onLogout={handleLogout} />
             ) : (
-              <Navigate
-                to={isAuthenticated ? "/admin/tasks" : "/login"}
-                replace
-              />
+              <Navigate to="/login" replace />
             )
           }
         />
+
         <Route
           path="/attendance"
           element={
-            isAuthenticated && !isAdmin ? (
+            isAuthenticated ? (
               <AttendancePage onLogout={handleLogout} />
             ) : (
-              <Navigate
-                to={isAuthenticated ? "/admin/tasks" : "/login"}
-                replace
-              />
+              <Navigate to="/login" replace />
             )
           }
         />
         <Route
           path="/todo"
           element={
-            isAuthenticated && !isAdmin ? (
+            isAuthenticated ? (
               <TodoPage onLogout={handleLogout} />
             ) : (
-              <Navigate
-                to={isAuthenticated ? "/admin/tasks" : "/login"}
-                replace
-              />
+              <Navigate to="/login" replace />
             )
           }
         />
         <Route
           path="/leaves"
           element={
-            isAuthenticated && !isAdmin ? (
+            isAuthenticated ? (
               <HolidaysAndLeaves onLogout={handleLogout} />
             ) : (
-              <Navigate
-                to={isAuthenticated ? "/admin/tasks" : "/login"}
-                replace
-              />
+              <Navigate to="/login" replace />
             )
           }
         />
