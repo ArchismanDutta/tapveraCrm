@@ -1,11 +1,10 @@
-// AttendanceCalendar.jsx
 import React from "react";
 
 const STATUS_COLOR = {
-  present: "bg-green-100 text-green-700",
-  absent: "bg-red-100 text-red-700",
-  late: "bg-yellow-100 text-yellow-700",
-  default: "bg-gray-100 text-gray-700",
+  present: "bg-green-700 text-green-200",
+  absent: "bg-red-700 text-red-200",
+  late: "bg-yellow-700 text-yellow-200",
+  default: "bg-gray-700 text-gray-300",
 };
 
 const AttendanceCalendar = ({ data }) => {
@@ -21,13 +20,13 @@ const AttendanceCalendar = ({ data }) => {
   });
 
   return (
-    <div className="bg-white rounded-xl shadow-md p-4 w-full">
+    <div className="bg-[#161c2c] rounded-xl shadow-md p-4 w-full border border-[#232945]">
       <div className="flex justify-between items-center mb-4">
-        <h3 className="font-semibold text-lg">{data.month} {data.year}</h3>
+        <h3 className="font-semibold text-lg text-gray-100">{data.month} {data.year}</h3>
       </div>
       <div className="grid grid-cols-7 gap-2 mb-2">
         {daysOfWeek.map((d) => (
-          <div key={d} className="text-xs font-semibold text-center text-gray-500">{d}</div>
+          <div key={d} className="text-xs font-semibold text-center text-gray-400">{d}</div>
         ))}
       </div>
       <div className="grid grid-cols-7 gap-2">

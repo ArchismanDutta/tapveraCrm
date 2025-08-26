@@ -1,4 +1,3 @@
-// File: src/components/Sidebar.jsx
 import React, { useState } from "react";
 import Modal from "../modal";
 import DailyEmailSender from "../DailyEmailSender";
@@ -16,7 +15,7 @@ import {
 import { FaChevronCircleRight } from "react-icons/fa";
 import { NavLink } from "react-router-dom";
 
-// Menu Configuration for each role
+// Menu configuration per role
 const menuConfig = {
   employee: [
     { to: "/dashboard", icon: <LayoutDashboard size={18} />, label: "Dashboard" },
@@ -28,7 +27,6 @@ const menuConfig = {
     { to: "/messages", icon: <MessageCircle size={18} />, label: "Messages" },
     { to: "/leaves", icon: <FileText size={18} />, label: "Leaves & Holidays" },
   ],
-
   admin: [
     { to: "/dashboard", icon: <LayoutDashboard size={18} />, label: "Dashboard" },
     { to: "/directory", icon: <Users size={18} />, label: "Employee Details" },
@@ -37,7 +35,6 @@ const menuConfig = {
     { to: "/admin/notices", icon: <Flag size={18} />, label: "Notice Board" },
     { to: "/today-status", icon: <ClipboardList size={18} />, label: "Today's Work" },
   ],
-
   superadmin: [
     { to: "/dashboard", icon: <LayoutDashboard size={18} />, label: "Dashboard" },
     { to: "/employees", icon: <Users size={18} />, label: "Manage Employees" },
@@ -56,31 +53,27 @@ const Sidebar = ({ collapsed, setCollapsed, userRole = "employee", onLogout }) =
     <>
       <aside
         className={`${
-          collapsed ? "w-20" : "w-64"
-        } bg-white shadow-md flex flex-col h-screen fixed left-0 top-0 transition-all duration-300 z-20`}
+          collapsed ? "w-20" : "w-72"
+        } bg-gradient-to-br from-[#13161c]/80 via-[#181d2a]/90 to-[#191f2b]/90 text-blue-100 shadow-2xl border-r border-[#232945] flex flex-col h-screen fixed left-0 top-0 transition-all duration-300 z-30 backdrop-blur-xl`}
       >
         {/* Logo & Collapse */}
-        <div
-          className={`p-4 flex items-center ${
-            collapsed ? "justify-center" : "justify-between"
-          }`}
-        >
+        <div className={`p-4 flex items-center ${collapsed ? "justify-center" : "justify-between"}`}>
           <NavLink to="/dashboard">
-            <img src={tapveraLogo} alt="Tapvera Logo" className="h-10 w-auto" />
+            <img src={tapveraLogo} alt="Tapvera Logo" className="h-10 w-auto drop-shadow-lg" />
           </NavLink>
           <button
             onClick={() => setCollapsed(!collapsed)}
             className={`p-1 rounded-full transition-transform ${
               collapsed ? "rotate-180" : "rotate-0"
-            }`}
+            } bg-[#232945] hover:bg-white/40 shadow`}
             aria-label="Toggle sidebar collapse"
           >
-            <FaChevronCircleRight size={22} className="text-gray-600" />
+            <FaChevronCircleRight size={22} className="text-blue-200" />
           </button>
         </div>
 
         {/* Navigation Links */}
-        <nav className="space-y-1 p-4 flex-1">
+        <nav className="mt-3 space-y-1 px-3 flex-1">
           {navItems.map((item) => (
             <SidebarLink
               key={item.to}
@@ -94,22 +87,22 @@ const Sidebar = ({ collapsed, setCollapsed, userRole = "employee", onLogout }) =
 
         {/* Send Daily Updates - Employee only */}
         {userRole === "employee" && (
-          <div className="p-4">
+          <div className="px-4 pb-2 pt-3">
             <div
               onClick={() => setShowEmailModal(true)}
-              className="flex items-center space-x-3 cursor-pointer p-2 rounded bg-yellow-50 hover:bg-yellow-100 text-gray-700"
+              className="flex items-center space-x-3 cursor-pointer p-2 rounded-xl bg-gradient-to-r from-white/60 to-white/40 hover:from-white/80 hover:to-white/60 text-black font-semibold shadow-lg"
             >
               <Send size={18} />
-              {!collapsed && <span className="font-semibold">Send Daily Updates</span>}
+              {!collapsed && <span>Send Daily Updates</span>}
             </div>
           </div>
         )}
 
         {/* Logout */}
-        <div className="p-4 shadow-inner">
+        <div className="px-4 py-5 border-t border-[#232945]">
           <button
             onClick={onLogout}
-            className="w-full p-2 rounded bg-gradient-to-r from-yellow-300 via-yellow-400 to-orange-400 text-black text-sm cursor-pointer"
+            className="w-full px-4 py-2 rounded-xl bg-gradient-to-r from-white/70 to-white/60 text-black text-base font-bold shadow-lg hover:from-white/90 hover:to-white/80 transition"
           >
             {collapsed ? "⏻" : "Logout"}
           </button>
@@ -129,13 +122,18 @@ const SidebarLink = ({ to, icon, label, collapsed }) => (
     to={to}
     end
     className={({ isActive }) =>
-      `flex items-center space-x-3 cursor-pointer p-2 rounded transition-colors ${
+      `flex items-center space-x-3 cursor-pointer p-2 rounded-xl font-bold transition-all duration-150 ${
         isActive
-          ? "bg-blue-50 text-yellow-600 font-semibold"
-          : "hover:bg-gray-100 text-gray-700"
+          ? "bg-white/25 backdrop-blur-md border border-white/40 shadow-inner text-blue-900"
+          : "hover:bg-white/10 hover:backdrop-blur-[2px] text-blue-100"
       }`
     }
     aria-label={label}
+    style={{
+      fontWeight: 600,
+      fontSize: "1.04rem",
+      boxShadow: isActive => isActive ? "0 2px 12px 0 rgba(180,200,255,0.09) inset" : undefined,
+    }}
   >
     {icon}
     {!collapsed && <span>{label}</span>}

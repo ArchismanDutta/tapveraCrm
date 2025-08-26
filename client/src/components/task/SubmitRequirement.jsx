@@ -32,8 +32,8 @@ const SubmitRequirement = ({ onSubmit }) => {
   };
 
   return (
-    <div className="bg-gradient-to-br from-yellow-50 via-orange-50 to-yellow-100 rounded-xl shadow-lg p-5 border border-yellow-200">
-      <h3 className="font-bold text-lg text-orange-500 mb-4 flex items-center gap-2">
+    <div className="bg-[#181d2a] rounded-xl shadow-lg p-5 border border-[#262e4a]">
+      <h3 className="font-bold text-lg text-[#ff8000] mb-4 flex items-center gap-2">
         📌 Submit Requirement
       </h3>
 
@@ -41,7 +41,7 @@ const SubmitRequirement = ({ onSubmit }) => {
         type="text"
         name="name"
         placeholder="Enter project name"
-        className="border border-black-200 focus:border-orange-400 focus:ring-1 focus:ring-orange-300 w-full p-2 rounded-lg mb-3 text-sm bg-white/70"
+        className="border border-[#262e4a] focus:border-[#ff8000] focus:ring-1 focus:ring-[#ff8000] w-full p-2 rounded-lg mb-3 text-sm bg-[#141a29] text-blue-100"
         value={form.name}
         onChange={handleChange}
       />
@@ -49,7 +49,7 @@ const SubmitRequirement = ({ onSubmit }) => {
       <textarea
         name="description"
         placeholder="Enter description"
-        className="border border-black-200 focus:border-orange-400 focus:ring-1 focus:ring-orange-300 w-full p-2 rounded-lg mb-3 text-sm bg-white/70"
+        className="border border-[#262e4a] focus:border-[#ff8000] focus:ring-1 focus:ring-[#ff8000] w-full p-2 rounded-lg mb-3 text-sm bg-[#141a29] text-blue-100"
         rows="3"
         value={form.description}
         onChange={handleChange}
@@ -57,7 +57,7 @@ const SubmitRequirement = ({ onSubmit }) => {
 
       <select
         name="priority"
-        className="border border-black-200 focus:border-orange-400 focus:ring-1 focus:ring-orange-300 w-full p-2 rounded-lg mb-3 text-sm bg-white/70"
+        className="border border-[#262e4a] focus:border-[#ff8000] focus:ring-1 focus:ring-[#ff8000] w-full p-2 rounded-lg mb-3 text-sm bg-[#141a29] text-blue-100"
         value={form.priority}
         onChange={handleChange}
       >
@@ -69,7 +69,7 @@ const SubmitRequirement = ({ onSubmit }) => {
       <button
         onClick={handleSubmit}
         disabled={loading}
-        className={`w-full p-2 rounded-lg font-semibold shadow-md focus:outline-none focus:ring-2 focus:ring-orange-400 transition-all duration-200 bg-gradient-to-r from-yellow-300 via-orange-300 to-orange-400 text-black hover:from-orange-400 hover:to-yellow-300 text-sm transform active:scale-95 ${
+        className={`w-full p-2 rounded-lg font-semibold shadow-md focus:outline-none focus:ring-2 focus:ring-[#ff8000] transition-all duration-200 bg-gradient-to-r from-yellow-400 via-orange-400 to-orange-500 text-black hover:from-orange-500 hover:to-yellow-400 text-sm transform active:scale-95 ${
           loading ? "opacity-70 cursor-not-allowed" : ""
         }`}
       >

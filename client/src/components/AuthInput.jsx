@@ -1,23 +1,23 @@
-import React, { useState } from 'react';
-import { FaEye, FaEyeSlash } from 'react-icons/fa';
+import React, { useState } from "react";
+import { FaEye, FaEyeSlash } from "react-icons/fa";
 
 const AuthInput = ({
   label,
-  type = 'text',
+  type = "text",
   name,
   value,
   onChange,
-  placeholder = '',
-  autoComplete = 'off',
+  placeholder = "",
+  autoComplete = "off",
   required = false,
-  error = '',
+  error = "",
   showTogglePassword = false,
   icon: Icon,
 }) => {
   const [showPassword, setShowPassword] = useState(false);
 
-  // Determine the actual input type
-  const inputType = showTogglePassword && showPassword ? 'text' : type;
+  // Determine actual input type based on toggle
+  const inputType = showTogglePassword && showPassword ? "text" : type;
 
   const inputId = `auth-input-${name}`;
   const errorId = error ? `${inputId}-error` : undefined;
@@ -25,14 +25,15 @@ const AuthInput = ({
   return (
     <div className="w-full">
       {/* Label */}
-      <label htmlFor={inputId} className="block text-sm text-textMuted mb-1">
-        {label}{required && ' *'}
+      <label htmlFor={inputId} className="block text-sm text-blue-200 mb-1 font-semibold">
+        {label}
+        {required && " *"}
       </label>
 
       <div className="relative w-full">
         {/* Optional left icon */}
         {Icon && (
-          <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-textMuted pointer-events-none">
+          <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-white pointer-events-none">
             <Icon />
           </div>
         )}
@@ -47,21 +48,22 @@ const AuthInput = ({
           placeholder={placeholder}
           autoComplete={autoComplete}
           required={required}
-          aria-invalid={error ? 'true' : 'false'}
+          aria-invalid={error ? "true" : "false"}
           aria-describedby={errorId}
-          className={`w-full px-4 py-2 rounded-md bg-background border 
-            ${error ? 'border-red-500' : 'border-border'} text-textMain 
-            placeholder:text-textMuted focus:outline-none focus:border-primary transition
-            ${Icon ? 'pl-10' : ''} ${showTogglePassword ? 'pr-10' : ''}`}
+          className={`w-full px-4 py-2 rounded-md bg-[#141a29] border ${
+            error ? "border-red-500" : "border-white"
+          } text-white placeholder-white shadow-sm focus:outline-none focus:ring-2 focus:ring-[#ff8000] focus:border-[#ff8000] transition ${
+            Icon ? "pl-10" : ""
+          } ${showTogglePassword ? "pr-10" : ""}`}
         />
 
         {/* Password toggle button */}
-        {showTogglePassword && type === 'password' && (
+        {showTogglePassword && type === "password" && (
           <button
             type="button"
             onClick={() => setShowPassword(!showPassword)}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-secondary hover:text-primary focus:outline-none focus:ring-2 focus:ring-primary rounded"
-            aria-label={showPassword ? 'Hide password' : 'Show password'}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-white hover:text-[#ff9500] transition focus:outline-none focus:ring-2 focus:ring-[#ff8000] rounded"
+            aria-label={showPassword ? "Hide password" : "Show password"}
             aria-pressed={showPassword}
           >
             {showPassword ? <FaEyeSlash /> : <FaEye />}
@@ -71,7 +73,7 @@ const AuthInput = ({
 
       {/* Error message */}
       {error && (
-        <p id={errorId} className="mt-1 text-xs text-red-500" role="alert">
+        <p id={errorId} className="mt-1 text-xs text-red-500 font-medium" role="alert">
           {error}
         </p>
       )}
