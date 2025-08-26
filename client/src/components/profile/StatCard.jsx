@@ -1,24 +1,28 @@
 import React from "react";
 
-const GRADIENTS = [
-  "from-[#193991] via-[#1e225c] to-[#141a29]", // dark blue
-  "from-[#5a189a] via-[#351e5c] to-[#141a29]", // purple
-  "from-[#1b7c4a] via-[#235c4a] to-[#141a29]", // greenish
-];
+// Not using pastel gradients, but instead a translucent dark background for glass-morphism effect
+const GLASS_BG = "bg-[rgba(22,28,48,0.68)]";
+const GLASS_BORDER = "border border-[rgba(84,123,209,0.13)]";
+const GLASS_SHADOW =
+  "shadow-[0_8px_32px_0_rgba(10,40,100,0.14),_inset_0_1.5px_10px_0_rgba(84,123,209,0.08)]";
+const GLASS_BLUR = "backdrop-blur-[10px]";
 
-const StatCard = ({ value, label, icon, index = 0 }) => {
-  const gradientClass = GRADIENTS[index % GRADIENTS.length];
-  return (
-    <div
-      className={`rounded-2xl p-7 text-white shadow-lg bg-gradient-to-br ${gradientClass} w-full`}
-    >
-      <div className="w-14 h-14 flex items-center justify-center rounded-full bg-white/30 shadow mb-4">
-        <span className="text-white text-2xl">{icon}</span>
-      </div>
-      <h3 className="text-3xl font-bold leading-tight">{value}</h3>
-      <p className="text-white text-sm mt-2">{label}</p>
-    </div>
-  );
-};
+// The StatCard
+const StatCard = ({ value, label }) => (
+  <div
+    className={`rounded-2xl p-8 min-w-[220px] flex flex-col justify-center ${GLASS_BG} ${GLASS_BORDER} ${GLASS_SHADOW} ${GLASS_BLUR} transition duration-300`}
+    style={{
+      boxShadow:
+        "0 8px 32px 0 rgba(10,40,100,0.14), 0 1.5px 10px 0 rgba(84,123,209,0.08) inset",
+      background: "rgba(22,28,48,0.68)",
+      border: "1.5px solid rgba(84,123,209,0.13)",
+      backdropFilter: "blur(10px)",
+      WebkitBackdropFilter: "blur(10px)",
+    }}
+  >
+    <div className="text-5xl font-extrabold text-[#e83e18] mb-1">{value}</div>
+    <div className="text-lg font-semibold text-blue-100">{label}</div>
+  </div>
+);
 
 export default StatCard;

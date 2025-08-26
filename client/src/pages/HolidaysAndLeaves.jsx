@@ -24,7 +24,7 @@ const HolidaysAndLeaves = ({ onLogout }) => {
     "Leaves on Fridays or Mondays will lead to a club deduction with weekends too.",
     "Sudden sick leave needs to reported the same day with supporting documents.",
     "Uninformed leave of more than 3 days is regarded as absconding.",
-    "Confirmed employees not taking leaves are eligible for encashment after 6 months."
+    "Confirmed employees not taking leaves are eligible for encashment after 6 months.",
   ];
 
   const holidays = [
@@ -39,8 +39,8 @@ const HolidaysAndLeaves = ({ onLogout }) => {
       const data = await fetchLeavesForEmployee();
       const safeData = Array.isArray(data) ? data : [];
 
-      const takenLeaves = safeData.filter(r => r.status === "Approved").length;
-      const pendingLeaves = safeData.filter(r => r.status === "Pending").length;
+      const takenLeaves = safeData.filter((r) => r.status === "Approved").length;
+      const pendingLeaves = safeData.filter((r) => r.status === "Pending").length;
 
       setLeaveRequests(safeData.slice(0, MAX_REQUESTS));
       setLeaveSummary({
@@ -70,8 +70,8 @@ const HolidaysAndLeaves = ({ onLogout }) => {
     try {
       const newLeave = await submitLeaveRequest(formData);
 
-      setLeaveRequests(prev => [newLeave, ...prev].slice(0, MAX_REQUESTS));
-      setLeaveSummary(prev => ({
+      setLeaveRequests((prev) => [newLeave, ...prev].slice(0, MAX_REQUESTS));
+      setLeaveSummary((prev) => ({
         available: Math.max(0, prev.available - 1),
         taken: prev.taken,
         pending: prev.pending + 1,
@@ -83,34 +83,42 @@ const HolidaysAndLeaves = ({ onLogout }) => {
     }
   };
 
-  if (loading) return <div className="p-8">Loading your leave data...</div>;
-  if (error) return <div className="p-8 text-red-600">Error: {error}</div>;
+  if (loading)
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#141a29] via-[#181d2a] to-[#1b2233] text-blue-100 font-medium text-lg">
+        Loading your leave data...
+      </div>
+    );
+  if (error)
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#141a29] via-[#181d2a] to-[#1b2233] text-red-600 font-semibold text-lg">
+        Error: {error}
+      </div>
+    );
 
   return (
-    <div className="flex h-screen bg-gray-50 relative">
+    <div className="flex bg-gradient-to-br from-[#141a29] via-[#181d2a] to-[#1b2233] min-h-screen font-sans text-blue-100">
       <Sidebar collapsed={collapsed} setCollapsed={setCollapsed} userRole="employee" onLogout={onLogout} />
-      <main className={`flex-1 transition-all duration-300 overflow-y-auto ${collapsed ? "ml-20" : "ml-64"}`}>
-        <div className="p-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
-
+      <main className={`flex-1 p-8 transition-all duration-300 overflow-y-auto ${collapsed ? "ml-24" : "ml-72"}`}>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Employee Leaves */}
-          <div className="lg:col-span-2 space-y-6">
+          <section className="lg:col-span-2 space-y-6">
             <div>
-              <h2 className="text-2xl font-semibold text-gray-800 mb-4">Your Leaves</h2>
+              <h2 className="text-2xl font-semibold text-blue-100 mb-4">Your Leaves</h2>
               <LeaveSummary {...leaveSummary} importantNotices={importantNotices} />
             </div>
             <div className="space-y-4">
               <RecentLeaveRequests requests={leaveRequests} />
               <LeaveApplicationForm onSubmitLeave={handleLeaveSubmit} />
             </div>
-          </div>
+          </section>
 
           {/* Team & Holidays */}
-          <div className="space-y-6">
-            <h2 className="text-2xl font-semibold text-gray-800 mb-4">Team & Holidays</h2>
+          <section className="space-y-6">
+            <h2 className="text-2xl font-semibold text-blue-100 mb-4">Team & Holidays</h2>
             <HolidayList holidays={holidays} />
             <TeamLeaveCalendar />
-          </div>
-
+          </section>
         </div>
       </main>
     </div>

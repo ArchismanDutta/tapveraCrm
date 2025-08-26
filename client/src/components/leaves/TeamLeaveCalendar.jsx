@@ -1,4 +1,3 @@
-// src/components/leave/TeamLeaveCalendar.jsx
 import React, { useEffect, useState } from "react";
 import { Clock } from "lucide-react";
 import { fetchTeamLeaves, formatLeaveType, formatDuration } from "../../api/leaveApi";
@@ -35,29 +34,33 @@ const TeamLeaveCalendar = () => {
     fetchUserAndLeaves();
   }, []);
 
-  if (loading) return <div className="p-6">Loading team leaves...</div>;
-  if (error) return <div className="p-6 text-red-600">Error: {error}</div>;
+  if (loading)
+    return (
+      <div className="p-6 text-blue-100 flex justify-center items-center">Loading team leaves...</div>
+    );
+  if (error)
+    return <div className="p-6 text-red-600">Error: {error}</div>;
 
   return (
-    <div className="bg-white backdrop-blur-xl border border-gray-100 shadow-xl rounded-2xl p-6">
-      <h3 className="text-xl font-semibold mb-5 text-gray-800">Team Leave Calendar</h3>
+    <div
+      className="bg-[rgba(22,28,48,0.68)] border border-[rgba(84,123,209,0.13)] rounded-3xl p-6 shadow-[0_8px_32px_0_rgba(10,40,100,0.14),_inset_0_1.5px_10px_0_rgba(84,123,209,0.08)] backdrop-blur-[10px]"
+    >
+      <h3 className="text-xl font-semibold mb-5 text-blue-100">Team Leave Calendar</h3>
       {teamLeaves.length === 0 ? (
-        <p className="text-gray-500 text-sm">No team leaves from your department.</p>
+        <p className="text-blue-300 text-sm">No team leaves from your department.</p>
       ) : (
         <ul className="space-y-4">
           {teamLeaves.map((t) => (
             <li
               key={t._id}
-              className="flex items-start gap-3 p-4 rounded-lg hover:bg-gray-50 transition shadow-sm border hover:shadow-md"
+              className="flex items-start gap-3 p-4 rounded-xl hover:bg-[rgba(36,44,92,0.2)] transition shadow-sm border border-[rgba(84,123,209,0.13)] hover:shadow-md text-blue-100"
             >
-              <div className="p-2 rounded-lg bg-gray-100 text-gray-600">
+              <div className="p-2 rounded-lg bg-[#262e4a] text-[#ff8000]">
                 <Clock className="w-5 h-5" />
               </div>
               <div>
-                <p className="font-medium text-gray-800">
-                  {t.employee?.name || "Unknown Employee"}
-                </p>
-                <p className="text-sm text-gray-500">
+                <p className="font-medium">{t.employee?.name || "Unknown Employee"}</p>
+                <p className="text-sm text-blue-300">
                   {t.period?.start
                     ? new Date(t.period.start).toLocaleDateString()
                     : "Unknown"}{" "}

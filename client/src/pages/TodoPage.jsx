@@ -22,16 +22,14 @@ const TodoPage = ({ onLogout }) => {
   const fetchTasks = async () => {
     try {
       const todayISO = normalizeDate(new Date());
-      const tomorrowISO = normalizeDate(
-        new Date(new Date().getTime() + 24 * 3600000)
-      );
+      const tomorrowISO = normalizeDate(new Date(new Date().getTime() + 24 * 3600000));
       const todayRes = await axios.get("/api/todos", {
         headers: { Authorization: `Bearer ${token}` },
-        params: { date: todayISO }
+        params: { date: todayISO },
       });
       const upcomingRes = await axios.get("/api/todos/upcoming", {
         headers: { Authorization: `Bearer ${token}` },
-        params: { startDate: tomorrowISO }
+        params: { startDate: tomorrowISO },
       });
       const allTasks = [...todayRes.data, ...upcomingRes.data];
       const completed = allTasks.filter((t) => t.completed);
@@ -41,9 +39,7 @@ const TodoPage = ({ onLogout }) => {
         arr.map((t) => ({
           ...t,
           date: t.date ? new Date(t.date).toISOString() : null,
-          completedAtStr: t.completedAt
-            ? new Date(t.completedAt).toLocaleString()
-            : null,
+          completedAtStr: t.completedAt ? new Date(t.completedAt).toLocaleString() : null,
         }));
       setTodayTasks(normalize(todayPending));
       setUpcomingTasks(normalize(upcomingPending));
@@ -90,9 +86,7 @@ const TodoPage = ({ onLogout }) => {
       const updatedTask = {
         ...updatedTaskRaw,
         date: updatedTaskRaw.date ? new Date(updatedTaskRaw.date).toISOString() : null,
-        completedAtStr: updatedTaskRaw.completedAt
-          ? new Date(updatedTaskRaw.completedAt).toLocaleString()
-          : null,
+        completedAtStr: updatedTaskRaw.completedAt ? new Date(updatedTaskRaw.completedAt).toLocaleString() : null,
       };
       if (updatedTask.completed) {
         setTodayTasks((prev) => prev.filter((t) => t._id !== updatedTask._id));
@@ -114,16 +108,16 @@ const TodoPage = ({ onLogout }) => {
     }
   };
 
+  const totalTasks = todayTasks.length + upcomingTasks.length + completedTasks.length;
+  const completedCount =
+    completedTasks.length + todayTasks.filter((t) => t.completed).length + upcomingTasks.filter((t) => t.completed).length;
+  const completionPercent = totalTasks ? (completedCount / totalTasks) * 100 : 0;
+
   return (
     <div className="flex min-h-screen bg-gradient-to-br from-[#131720] via-[#161c2c] to-black text-gray-100">
-      <Sidebar
-        onLogout={onLogout}
-        collapsed={collapsed}
-        setCollapsed={setCollapsed}
-        userRole="employee"
-      />
+      <Sidebar onLogout={onLogout} collapsed={collapsed} setCollapsed={setCollapsed} userRole="employee" />
       <main className={`flex-1 pt-10 ${collapsed ? "ml-20" : "ml-64"}`}>
-        <div className="max-w-4xl mx-auto">
+        <div className="max-w-3xl mx-auto">
           <header className="flex justify-between items-center mb-6">
             <div>
               <h1 className="text-2xl font-bold tracking-tight text-gray-100">Tasks Overview</h1>
@@ -136,27 +130,18 @@ const TodoPage = ({ onLogout }) => {
               + Add New Task
             </button>
           </header>
-          {/* Progress Bar Example (static calculation - replace with your logic if required) */}
-          <div className="mb-8">
+          {/* Progress Bar */}
+          <div className="mb-8 max-w-lg">
             <div className="flex items-center justify-between mb-1">
               <span className="text-sm font-medium text-gray-400">Completion</span>
               <span className="text-xs text-gray-300">
-                {completedTasks.length + todayTasks.filter(t => t.completed).length + upcomingTasks.filter(t => t.completed).length} / {todayTasks.length + upcomingTasks.length + completedTasks.length} tasks
+                {completedCount} / {totalTasks} tasks
               </span>
             </div>
-            <div className="h-3 bg-[#161c2c] rounded-md overflow-hidden">
+            <div className="h-2 bg-[#161c2c] rounded-md overflow-hidden">
               <div
-                className="h-full bg-gradient-to-r from-orange-400 to-yellow-400 transition duration-700"
-                style={{
-                  width: `${
-                    ((completedTasks.length +
-                      todayTasks.filter(t => t.completed).length +
-                      upcomingTasks.filter(t => t.completed).length) /
-                      (todayTasks.length +
-                        upcomingTasks.length +
-                        completedTasks.length || 1)) * 100
-                  }%`
-                }}
+                className="h-full bg-gradient-to-r from-orange-400 to-green-400 transition duration-700"
+                style={{ width: `${completionPercent}%` }}
               />
             </div>
           </div>

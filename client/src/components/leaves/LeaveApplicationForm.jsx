@@ -1,7 +1,5 @@
-// src/components/leave/LeaveApplicationForm.jsx
 import React, { useState, useMemo } from "react";
 import InfoModal from "../InfoModal"; // Adjust path if needed
-import axios from "axios";
 
 const LeaveApplicationForm = ({ onSubmitLeave }) => {
   const [type, setType] = useState("paid");
@@ -75,13 +73,15 @@ const LeaveApplicationForm = ({ onSubmitLeave }) => {
   const isHalfDay = type === "halfDay";
 
   return (
-    <div className="flex-1 flex flex-col bg-white backdrop-blur-xl border border-gray-100 shadow-xl rounded-2xl p-6">
-      <h3 className="text-xl font-semibold mb-5 text-gray-800">Apply for Leave</h3>
+    <div
+      className="flex-1 flex flex-col bg-[rgba(22,28,48,0.68)] border border-[rgba(84,123,209,0.13)] rounded-3xl p-6 shadow-[0_8px_32px_0_rgba(10,40,100,0.14),_inset_0_1.5px_10px_0_rgba(84,123,209,0.08)] backdrop-blur-[10px]"
+    >
+      <h3 className="text-xl font-semibold mb-5 text-blue-100">Apply for Leave</h3>
 
       <form onSubmit={handleSubmit} className="flex flex-col flex-1 gap-4 h-full">
         {/* Leave Type */}
         <select
-          className="border border-gray-200 rounded-lg p-3 w-full shadow-sm focus:ring-2 focus:ring-yellow-500 focus:outline-none"
+          className="border border-[rgba(84,123,209,0.3)] rounded-2xl p-3 w-full shadow-sm focus:ring-2 focus:ring-[#ff8000] focus:outline-none bg-[#141a29] text-blue-100"
           value={type}
           onChange={(e) => {
             const next = e.target.value;
@@ -102,7 +102,7 @@ const LeaveApplicationForm = ({ onSubmitLeave }) => {
           <input
             type="date"
             min={todayStr}
-            className="border border-gray-200 rounded-lg p-3 w-full shadow-sm focus:ring-2 focus:ring-orange-500 focus:outline-none"
+            className="border border-[rgba(84,123,209,0.3)] rounded-2xl p-3 w-full shadow-sm focus:ring-2 focus:ring-[#ff8000] focus:outline-none bg-[#141a29] text-blue-100"
             value={startDate}
             onChange={(e) => {
               const v = e.target.value;
@@ -113,8 +113,8 @@ const LeaveApplicationForm = ({ onSubmitLeave }) => {
           <input
             type="date"
             min={startDate || todayStr}
-            className={`border border-gray-200 rounded-lg p-3 w-full shadow-sm focus:ring-2 focus:ring-yellow-500 focus:outline-none ${
-              isHalfDay ? "bg-gray-100 cursor-not-allowed" : ""
+            className={`border border-[rgba(84,123,209,0.3)] rounded-2xl p-3 w-full shadow-sm focus:ring-2 focus:ring-[#ff8000] focus:outline-none bg-[#141a29] text-blue-100 ${
+              isHalfDay ? "bg-[#262e4a] cursor-not-allowed" : ""
             }`}
             value={isHalfDay ? startDate : endDate}
             onChange={(e) => setEndDate(e.target.value)}
@@ -125,7 +125,7 @@ const LeaveApplicationForm = ({ onSubmitLeave }) => {
         {/* Reason */}
         <textarea
           placeholder="Enter your reason..."
-          className="border border-gray-200 rounded-lg p-3 w-full shadow-sm focus:ring-2 focus:ring-orange-500 focus:outline-none flex-1 resize-none"
+          className="border border-[rgba(84,123,209,0.3)] rounded-2xl p-3 w-full shadow-sm focus:ring-2 focus:ring-[#ff8000] focus:outline-none flex-1 resize-none bg-[#141a29] text-blue-100"
           value={reason}
           onChange={(e) => setReason(e.target.value)}
         />
@@ -134,11 +134,11 @@ const LeaveApplicationForm = ({ onSubmitLeave }) => {
         <div className="flex items-center gap-3">
           <label
             htmlFor="documentUpload"
-            className="cursor-pointer bg-gradient-to-r from-white-500 to-white-600 text-black font-medium px-4 py-2 rounded-xl shadow hover:opacity-90 transition"
+            className="cursor-pointer bg-[#141a29] border border-[rgba(84,123,209,0.3)] text-white font-semibold px-4 py-2 rounded-2xl shadow hover:opacity-90 transition"
           >
             {document ? "Change Document" : "Upload Supporting Document"}
           </label>
-          {document && <span className="text-gray-700 truncate">{document.name}</span>}
+          {document && <span className="text-blue-200 truncate">{document.name}</span>}
           <input
             type="file"
             id="documentUpload"
@@ -152,7 +152,7 @@ const LeaveApplicationForm = ({ onSubmitLeave }) => {
         <button
           type="submit"
           disabled={loading}
-          className="mt-3 w-full bg-gradient-to-r from-orange-500 to-yellow-600 text-white font-medium px-4 py-3 rounded-xl hover:opacity-90 shadow-lg transition transform hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="mt-3 w-full bg-gradient-to-r from-[#ad7237] to-[#bb863d] text-black font-semibold px-4 py-3 rounded-2xl hover:opacity-90 shadow-lg transition transform hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {loading ? "Submitting..." : "Submit Request"}
         </button>
