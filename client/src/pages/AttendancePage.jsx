@@ -14,7 +14,6 @@ const AttendancePage = ({ onLogout }) => {
   const [recentActivity, setRecentActivity] = useState([]);
   const token = localStorage.getItem("token");
 
-  // Use useCallback to memoize fetchAttendanceData function
   const fetchAttendanceData = useCallback(async () => {
     try {
       const now = new Date();
@@ -62,7 +61,7 @@ const AttendancePage = ({ onLogout }) => {
           weeklySummary.onTimeRate?.replace("%", "") || 0
         ),
         presentDays: dailyData.length,
-        totalDays: 30, // Customize total days in month or period as needed
+        totalDays: 30,
         workingHours: truncateTwoDecimals(parseHours(weeklySummary.totalWork)),
         onTimeRate: parseInt(weeklySummary.onTimeRate) || 0,
         lastUpdated: "Today",
@@ -137,7 +136,6 @@ const AttendancePage = ({ onLogout }) => {
 
   useEffect(() => {
     fetchAttendanceData();
-    // Poll attendance data every 60 seconds
     const intervalId = setInterval(fetchAttendanceData, 60000);
     return () => clearInterval(intervalId);
   }, [fetchAttendanceData]);
@@ -148,25 +146,26 @@ const AttendancePage = ({ onLogout }) => {
     }
     window.addEventListener("attendanceDataUpdate", handleAttendanceUpdate);
     return () =>
-      window.removeEventListener(
-        "attendanceDataUpdate",
-        handleAttendanceUpdate
-      );
+      window.removeEventListener("attendanceDataUpdate", handleAttendanceUpdate);
   }, [fetchAttendanceData]);
 
   if (!stats || !calendarData) {
-    return <div className="p-4">Loading attendance data...</div>;
+    return (
+      <div className="p-4 text-gray-100 bg-[#101525] min-h-screen flex items-center justify-center">
+        Loading attendance data...
+      </div>
+    );
   }
 
   return (
-    <div className="flex min-h-screen bg-gray-50">
+    <div className="flex min-h-screen bg-[#101525] text-gray-100">
       <Sidebar
         onLogout={onLogout}
         collapsed={collapsed}
         setCollapsed={setCollapsed}
         userRole="employee"
       />
-      <main className="flex-1 p-4 space-y-6 ml-64">
+      <main className="flex-1 p-6 space-y-6 ml-64">
         <AttendanceStats stats={stats} />
         <div className="grid lg:grid-cols-3 grid-cols-1 gap-6">
           <div className="lg:col-span-2 flex flex-col space-y-6">

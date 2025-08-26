@@ -7,7 +7,7 @@ import Timeline from "../components/workstatus/Timeline";
 import SummaryCard from "../components/workstatus/SummaryCard";
 import RecentActivity from "../components/workstatus/RecentActivity";
 import PunchOutTodoPopup from "../components/todo/PunchOutTodoPopup";
-import PunchOutConfirmPopup from "../components/workstatus/PunchOutConfirmPopup"; // new popup component
+import PunchOutConfirmPopup from "../components/workstatus/PunchOutConfirmPopup";
 
 // Single definition of formatHMS function
 function formatHMS(seconds) {
@@ -26,15 +26,12 @@ const TodayStatusPage = ({ onLogout }) => {
   const [liveBreak, setLiveBreak] = useState(0);
   const [selectedBreakType, setSelectedBreakType] = useState("");
   const [weeklySummary, setWeeklySummary] = useState(null);
-
   const [showTodoPopup, setShowTodoPopup] = useState(false);
   const [pendingTodoTasks, setPendingTodoTasks] = useState([]);
-
   const [showPunchOutConfirm, setShowPunchOutConfirm] = useState(false);
 
   const token = localStorage.getItem("token");
 
-  // Fetch today's status
   const fetchStatus = async () => {
     try {
       const res = await axios.get("/api/status", {
@@ -46,7 +43,6 @@ const TodayStatusPage = ({ onLogout }) => {
     }
   };
 
-  // Fetch weekly summary
   const fetchWeeklySummary = async () => {
     try {
       const now = new Date();
@@ -77,7 +73,6 @@ const TodayStatusPage = ({ onLogout }) => {
     }
   };
 
-  // Update today's status
   const updateStatus = async (update) => {
     try {
       const res = await axios.put("/api/status", update, {
@@ -92,7 +87,6 @@ const TodayStatusPage = ({ onLogout }) => {
     }
   };
 
-  // Live Work Timer
   useEffect(() => {
     if (!status) return;
     setLiveWork(status.workDurationSeconds || 0);
@@ -106,7 +100,6 @@ const TodayStatusPage = ({ onLogout }) => {
     }
   }, [status]);
 
-  // Live Break Timer
   useEffect(() => {
     if (!status) return;
     if (status.onBreak && status.breakStartTs) {
@@ -120,7 +113,6 @@ const TodayStatusPage = ({ onLogout }) => {
     }
   }, [status]);
 
-  // Initial fetch & periodic refresh
   useEffect(() => {
     fetchStatus();
     fetchWeeklySummary();
@@ -131,7 +123,6 @@ const TodayStatusPage = ({ onLogout }) => {
     return () => clearInterval(interval);
   }, []);
 
-  // Listen for external attendance data updates
   useEffect(() => {
     const handleAttendanceDataUpdate = () => {
       fetchWeeklySummary();
@@ -145,7 +136,6 @@ const TodayStatusPage = ({ onLogout }) => {
     };
   }, []);
 
-  // Punch In handler
   const handlePunchIn = () => {
     if (status?.currentlyWorking) return;
     updateStatus({
@@ -158,7 +148,6 @@ const TodayStatusPage = ({ onLogout }) => {
     });
   };
 
-  // Check Todo tasks before punch out
   const checkTodoTasksBeforePunchOut = async () => {
     try {
       const today = new Date();
@@ -180,17 +169,15 @@ const TodayStatusPage = ({ onLogout }) => {
     }
   };
 
-  // Punch Out handler (trigger popup first)
   const handlePunchOutClick = async () => {
     if (!(status?.currentlyWorking) && !(status?.onBreak)) return;
 
     const canPunchOut = await checkTodoTasksBeforePunchOut();
     if (canPunchOut) {
-      setShowPunchOutConfirm(true); // show confirmation if no pending todos
+      setShowPunchOutConfirm(true);
     }
   };
 
-  // Confirmation popup handlers
   const onCancelPunchOut = () => setShowPunchOutConfirm(false);
 
   const onConfirmPunchOut = () => {
@@ -205,7 +192,6 @@ const TodayStatusPage = ({ onLogout }) => {
     });
   };
 
-  // Todo popup handlers
   const onCloseTodoPopup = () => {
     setShowTodoPopup(false);
     setPendingTodoTasks([]);
@@ -217,7 +203,6 @@ const TodayStatusPage = ({ onLogout }) => {
     window.location.href = "/todo";
   };
 
-  // ✅ Updated handler: moves tasks to tomorrow and punches out
   const onMoveToTomorrowTodoPopup = async () => {
     try {
       const tomorrow = new Date();
@@ -236,16 +221,12 @@ const TodayStatusPage = ({ onLogout }) => {
 
       setShowTodoPopup(false);
       setPendingTodoTasks([]);
-
-      // Trigger punch out immediately after moving tasks
       onConfirmPunchOut();
-
     } catch (err) {
       console.error("Failed to move tasks to tomorrow:", err);
     }
   };
 
-  // Break handlers
   const handleStartBreak = (breakType) => {
     if (!breakType || !status?.currentlyWorking || status?.onBreak) return;
     updateStatus({
@@ -274,10 +255,10 @@ const TodayStatusPage = ({ onLogout }) => {
 
   const handleSelectBreakType = (type) => setSelectedBreakType(type);
 
-  if (!status) return <div>Loading...</div>;
+  if (!status) return <div className="text-gray-100 bg-[#101525] min-h-screen flex items-center justify-center">Loading...</div>;
 
   return (
-    <div className="flex min-h-screen bg-gray-50">
+    <div className="flex min-h-screen bg-[#101525] text-gray-100">
       <Sidebar
         collapsed={collapsed}
         setCollapsed={setCollapsed}
@@ -287,7 +268,7 @@ const TodayStatusPage = ({ onLogout }) => {
       <main
         className={`flex-1 transition-all duration-300 ${
           collapsed ? "ml-20" : "ml-64"
-        } p-2 sm:p-4 md:p-6`}
+        } p-2 sm:p-6`}
       >
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 h-full min-h-screen">
           <div className="col-span-2 flex flex-col gap-4">
@@ -297,7 +278,7 @@ const TodayStatusPage = ({ onLogout }) => {
               arrivalTime={status.arrivalTimeFormatted || "--"}
               currentlyWorking={status.currentlyWorking}
               onPunchIn={handlePunchIn}
-              onPunchOut={handlePunchOutClick} // updated to trigger popup
+              onPunchOut={handlePunchOutClick}
             />
             <BreakManagement
               breakDuration={formatHMS(liveBreak)}
