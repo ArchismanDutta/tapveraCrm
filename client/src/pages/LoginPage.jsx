@@ -66,16 +66,20 @@ const Login = ({ onLoginSuccess }) => {
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-background px-4 py-8">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-[#141a29] via-[#181d2a] to-[#1b2233] px-4 py-8">
       {/* Logo */}
-      <img src={tapveraLogo} alt="Tapvera Logo" className="h-24 w-auto mb-6" />
+      <img
+        src={tapveraLogo}
+        alt="Tapvera Logo"
+        className="h-24 w-auto mb-6 drop-shadow-[0_0_6px_rgba(255,128,0,0.75)]"
+      />
 
-      <div className="bg-surface rounded-xl shadow-lg p-8 w-full max-w-md border border-border">
-        <h2 className="text-2xl font-bold text-textMain mb-6 text-center">
+      <div className="bg-[#181d2a]/80 backdrop-blur-xl rounded-xl shadow-lg p-8 w-full max-w-md border border-white">
+        <h2 className="text-2xl font-bold text-[#ff8000] mb-6 text-center">
           Log in to your account
         </h2>
 
-        <form onSubmit={handleSubmit} className="space-y-4" noValidate>
+        <form onSubmit={handleSubmit} className="space-y-6" noValidate>
           <AuthInput
             label="Email Address"
             type="email"
@@ -87,6 +91,7 @@ const Login = ({ onLoginSuccess }) => {
             required
             error={error && !form.email ? "Email is required." : ""}
             icon={FaEnvelope}
+            className="bg-[#141a29] border border-white text-blue-100 placeholder-blue-500 focus:ring-2 focus:ring-[#ff8000] focus:border-[#ff8000]"
           />
 
           <AuthInput
@@ -101,10 +106,11 @@ const Login = ({ onLoginSuccess }) => {
             error={error && !form.password ? "Password is required." : ""}
             showTogglePassword={true}
             icon={FaLock}
+            className="bg-[#141a29] border border-white text-blue-100 placeholder-blue-500 focus:ring-2 focus:ring-[#ff8000] focus:border-[#ff8000]"
           />
 
           {error && (
-            <div className="text-sm text-red-500 bg-background border border-red-700 p-2 rounded">
+            <div className="text-sm text-red-500 bg-[#3b1a1a] border border-red-700 p-2 rounded">
               {error}
             </div>
           )}
@@ -112,18 +118,18 @@ const Login = ({ onLoginSuccess }) => {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-2 rounded-md bg-yellow-300 hover:bg-orange-500 transition text-background font-semibold shadow focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:outline-none disabled:opacity-50"
+            className="w-full py-2 rounded-md bg-[#ff8000] hover:bg-[#ff9500] transition text-black font-semibold shadow focus:ring-2 focus:ring-[#ff9c33] focus:ring-offset-2 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? "Logging in..." : "Log In"}
           </button>
         </form>
 
         <div className="mt-6 text-center">
-          <span className="text-textMuted text-sm">
+          <span className="text-blue-400 text-sm">
             Forgot your password?
             <a
               href="/forgot-password"
-              className="ml-2 text-secondary hover:underline"
+              className="ml-2 text-[#ff8000] hover:underline"
             >
               Click here
             </a>

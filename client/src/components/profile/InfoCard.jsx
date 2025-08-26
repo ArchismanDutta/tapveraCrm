@@ -11,15 +11,15 @@ const formatDate = (dateString) => {
 };
 
 const InfoCard = ({ title, data }) => (
-  <div className="bg-white p-7 rounded-2xl shadow-lg">
-    <h2 className="text-lg font-semibold mb-5 text-gray-800">{title}</h2>
+  <div className="bg-[#181d2a]/70 p-7 rounded-2xl shadow-lg border border-[#262e4a]">
+    <h2 className="text-lg font-semibold mb-5 text-blue-100">{title}</h2>
     <ul className="space-y-5">
       {data.map((item, idx) => (
         <li key={idx} className="flex items-center gap-4">
-          <span className="text-blue-700">{item.icon}</span>
+          <span className="text-[#ff8000]">{item.icon}</span>
           <div>
-            <p className="text-xs text-gray-400 mb-0.5">{item.label}</p>
-            <p className="font-medium text-gray-700">
+            <p className="text-xs text-blue-300 mb-0.5">{item.label}</p>
+            <p className="font-medium text-blue-50">
               {item.label.toLowerCase() === "dob"
                 ? formatDate(item.value)
                 : item.value || "N/A"}

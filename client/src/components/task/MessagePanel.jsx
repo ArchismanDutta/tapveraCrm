@@ -9,7 +9,6 @@ const MessagesPanel = ({ messages = [], onSendMessage }) => {
     if (!input.trim()) return;
     setSending(true);
 
-    // Simulate quick send delay
     setTimeout(() => {
       onSendMessage(input);
       setInput("");
@@ -17,7 +16,6 @@ const MessagesPanel = ({ messages = [], onSendMessage }) => {
     }, 300);
   };
 
-  // Always scroll to the latest message on update
   useEffect(() => {
     if (messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
@@ -26,21 +24,21 @@ const MessagesPanel = ({ messages = [], onSendMessage }) => {
 
   return (
     <div
-      className="bg-gradient-to-br from-yellow-50 via-orange-50 to-yellow-100 rounded-xl shadow-lg p-5 border border-yellow-200 flex flex-col"
+      className="bg-gradient-to-br from-[#141a29] via-[#181d2a] to-[#1b2233] rounded-xl shadow-lg p-5 border border-[#262e4a] flex flex-col text-blue-100"
       style={{
-        maxHeight: "80vh", // prevent overflowing the screen
-        minHeight: "350px", // nice minimum size
+        maxHeight: "80vh",
+        minHeight: "350px",
         height: "100%",
       }}
     >
-      <h3 className="font-bold text-lg text-orange-500 mb-4 flex items-center gap-2">
+      <h3 className="font-bold text-lg text-[#ff8000] mb-4 flex items-center gap-2">
         💬 Messages
       </h3>
 
       {/* Messages container */}
       <div
-        className="flex-1 overflow-y-auto mb-3 space-y-3 pr-1"
-        style={{ minHeight: "0" }} // flexbox scroll fix
+        className="flex-1 overflow-y-auto mb-3 space-y-3 pr-1 scrollbar-thin scrollbar-thumb-[#ff9500]/80 scrollbar-track-transparent"
+        style={{ minHeight: "0" }}
       >
         {messages.map((msg, index) => (
           <div
@@ -50,15 +48,16 @@ const MessagesPanel = ({ messages = [], onSendMessage }) => {
             }`}
           >
             {msg.sender !== "me" && (
-              <div className="bg-yellow-200 flex items-center justify-center text-orange-800 font-bold rounded-full h-8 w-8 mr-2 shadow-sm">
+              <div className="bg-[#ff8000] flex items-center justify-center text-black font-bold rounded-full h-8 w-8 mr-2 shadow-lg">
                 {msg.sender.charAt(0).toUpperCase()}
               </div>
             )}
+
             <div
-              className={`rounded-xl px-3 py-2 text-sm shadow-sm max-w-[70%] break-words ${
+              className={`rounded-xl px-3 py-2 text-sm shadow max-w-[70%] break-words ${
                 msg.sender === "me"
-                  ? "bg-gradient-to-r from-yellow-300 via-orange-300 to-orange-400 text-black"
-                  : "bg-white/80 text-gray-800 border border-yellow-100"
+                  ? "bg-gradient-to-r from-[#ff8000] via-[#ff9500] to-[#ff8000] text-black"
+                  : "bg-[#222b41]/90 text-blue-100 border border-[#ff8000]"
               }`}
             >
               {msg.text}
@@ -73,7 +72,7 @@ const MessagesPanel = ({ messages = [], onSendMessage }) => {
         <input
           type="text"
           placeholder="Type a message..."
-          className="border border-yellow-200 focus:border-orange-400 focus:ring-1 focus:ring-orange-300 w-full p-2 rounded-lg text-sm bg-white/70"
+          className="border border-[#ff8000] focus:border-[#ff9500] focus:ring-1 focus:ring-[#ff9500] w-full p-2 rounded-lg text-sm bg-[#141a29] text-blue-100 caret-[#ff8000]"
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && handleSend()}
@@ -81,7 +80,7 @@ const MessagesPanel = ({ messages = [], onSendMessage }) => {
         <button
           onClick={handleSend}
           disabled={sending}
-          className={`px-4 py-2 rounded-lg font-semibold shadow-md focus:outline-none focus:ring-2 focus:ring-orange-400 transition-all duration-200 bg-gradient-to-r from-yellow-300 via-orange-300 to-orange-400 text-black hover:from-orange-400 hover:to-yellow-300 text-sm transform active:scale-95 ${
+          className={`px-4 py-2 rounded-lg font-semibold shadow-md focus:outline-none focus:ring-2 focus:ring-[#ff8000] transition-all duration-200 bg-gradient-to-r from-[#ff8000] via-[#ff9500] to-[#ff8000] text-black hover:from-[#ff9500] hover:to-[#ff8000] text-sm transform active:scale-95 ${
             sending ? "opacity-70 cursor-not-allowed" : ""
           }`}
         >

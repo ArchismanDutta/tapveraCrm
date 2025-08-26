@@ -1,9 +1,9 @@
 import React from "react";
 
 const GRADIENTS = [
-  "from-blue-400 via-blue-500 to-blue-600",
-  "from-purple-400 via-purple-500 to-purple-600",
-  "from-green-400 via-green-500 to-green-600",
+  "from-[#193991] via-[#1e225c] to-[#141a29]", // dark blue
+  "from-[#5a189a] via-[#351e5c] to-[#141a29]", // purple
+  "from-[#1b7c4a] via-[#235c4a] to-[#141a29]", // greenish
 ];
 
 const StatCard = ({ value, label, icon, index = 0 }) => {

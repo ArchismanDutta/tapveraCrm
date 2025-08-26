@@ -1,74 +1,68 @@
 import React from "react";
 import { MessageCircle, Reply, MoreHorizontal } from "lucide-react";
 
-// Define accent colors (muted pink and soft border)
 const colors = {
-  accent: "#C07A7A",            // Muted, friendly "pink"
-  accentLight: "#f9ecec",       // Gentle background highlight
-  avatarBorder: "#e3bdbd",      // Softer border for avatar
-  border: "#ebe7e3",            // Card border
-  title: "#885353",             // Heading (not ultra black)
-  messageBg: "#fff",
-  msgName: "#423037",
-  msgText: "#88807b",
-  msgTime: "#b9b1ab",
+  accent: "#ff8000",         // Neon orange accent
+  accentLight: "#232945",    // Glassy neon hover
+  avatarBorder: "#ffb366",   // Neon orange border for avatar
+  border: "#232945",         // Glass card border
+  title: "#ffc87c",          // Neon orange title
+  messageBg: "linear-gradient(90deg, #191f2b 70%, #232945 100%)", // Glassy gradient
+  msgName: "#ffc87c",        // Light neon username
+  msgText: "#dab875",        // Softer neon for message text
+  msgTime: "#ffaa33",        // Muted neon for timestamp
 };
 
 const RecentMessages = ({ messages }) => (
   <div
-    className="rounded-xl shadow-sm px-6 py-5 w-full"
+    className="rounded-2xl shadow-xl px-7 py-6 w-full border"
     style={{
       background: colors.messageBg,
-      border: `1px solid ${colors.border}`,
-      // maxWidth: 440,
+      border: `1.5px solid ${colors.border}`,
       margin: "0 auto",
     }}
   >
     <h2
-      className="text-base font-semibold mb-4 flex items-center gap-2 tracking-tight"
+      className="text-base font-extrabold mb-5 flex items-center gap-2 tracking-tight drop-shadow"
       style={{ color: colors.title }}
     >
-      <MessageCircle className="w-5 h-5" style={{ color: colors.accent }} />
+      <MessageCircle className="w-5 h-5" color={colors.accent} />
       Recent Messages
     </h2>
 
     {messages.map((msg, idx) => (
       <div
         key={idx}
-        className="flex items-center mb-3 px-2 py-2 rounded-lg transition-colors group cursor-pointer"
+        className="flex items-center mb-2 last:mb-0 px-3 py-2 rounded-xl cursor-pointer transition-all duration-150 group shadow-none hover:shadow-lg"
         style={{
-          background: "none",
           minHeight: 52,
+          background: "",
         }}
-        onMouseOver={(e) =>
-          (e.currentTarget.style.background = colors.accentLight)
-        }
-        onMouseOut={(e) => (e.currentTarget.style.background = "none")}
       >
         {/* Avatar */}
         <img
           src={msg.img}
           alt={msg.name}
-          className="w-10 h-10 rounded-full object-cover"
+          className="w-10 h-10 rounded-full object-cover border-2 shadow"
           style={{
-            border: `2px solid ${colors.avatarBorder}`,
-            background: "#fff",
+            borderColor: colors.avatarBorder,
+            background: "#181d2a",
           }}
         />
 
         {/* Message Content */}
-        <div className="flex-1 min-w-0 ml-3">
+        <div className="flex-1 min-w-0 ml-4">
           <p
-            className="text-sm font-medium truncate"
-            style={{ color: colors.msgName }}
+            className="text-sm font-semibold tracking-tight truncate"
             title={msg.name}
+            style={{ color: colors.msgName }}
           >
             {msg.name}
           </p>
           <p
-            className="text-xs truncate"
+            className="text-xs truncate mt-0.5 font-medium"
             title={msg.msg}
-            style={{ color: colors.msgText, marginTop: ".15rem" }}
+            style={{ color: colors.msgText }}
           >
             {msg.msg}
           </p>
@@ -77,28 +71,32 @@ const RecentMessages = ({ messages }) => (
         {/* Time */}
         <span
           className="text-xs ml-2"
-          style={{ color: colors.msgTime, minWidth: 38, textAlign: "right" }}
+          style={{
+            color: colors.msgTime,
+            minWidth: 38,
+            textAlign: "right"
+          }}
         >
           {msg.time}
         </span>
 
-        {/* Actions: shown on hover */}
-        <div className="flex items-center gap-1.5 ml-2 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+        {/* Actions on hover */}
+        <div className="flex items-center gap-2 ml-2 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
           <button
-            className="p-1 rounded-full hover:bg-[#f4dedf] outline-none focus:ring-2 focus:ring-[#ead6d3] transition"
+            className="p-1 rounded-lg hover:bg-[#2e313a] outline-none focus:ring-2 focus:ring-orange-400 transition"
             tabIndex={0}
-            style={{ border: "none" }}
             aria-label="Reply"
+            style={{ border: "none" }}
           >
-            <Reply className="w-4 h-4" style={{ color: colors.accent }} />
+            <Reply className="w-4 h-4" color={colors.accent} />
           </button>
           <button
-            className="p-1 rounded-full hover:bg-[#f0e9e9] outline-none focus:ring-2 focus:ring-[#e8dedd] transition"
+            className="p-1 rounded-lg hover:bg-[#2e313a] outline-none focus:ring-2 focus:ring-yellow-400 transition"
             tabIndex={0}
-            style={{ border: "none" }}
             aria-label="More"
+            style={{ border: "none" }}
           >
-            <MoreHorizontal className="w-4 h-4" style={{ color: "#a09b98" }} />
+            <MoreHorizontal className="w-4 h-4" color="#a09b98" />
           </button>
         </div>
       </div>
