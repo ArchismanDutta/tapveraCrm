@@ -17,9 +17,10 @@ const Tasks = ({ onLogout }) => {
       const storedToken = localStorage.getItem("token");
       if (!storedToken) return;
 
-      const token = storedToken.startsWith("{") && storedToken.endsWith("}")
-        ? JSON.parse(storedToken).token
-        : storedToken;
+      const token =
+        storedToken.startsWith("{") && storedToken.endsWith("}")
+          ? JSON.parse(storedToken).token
+          : storedToken;
 
       const config = { headers: { Authorization: `Bearer ${token}` } };
       const res = await axios.get(`${API_BASE}/api/tasks`, config);
@@ -61,7 +62,7 @@ const Tasks = ({ onLogout }) => {
     <div className="flex bg-gradient-to-br from-[#141a29] via-[#181d2a] to-[#1b2233] min-h-screen text-blue-100">
       <Sidebar collapsed={collapsed} setCollapsed={setCollapsed} onLogout={onLogout} />
 
-      <div className={`flex-1 transition-all duration-300 ${collapsed ? "ml-20" : "ml-64"} p-6`}>
+      <div className={`flex-1 transition-all duration-300 ${collapsed ? "ml-20" : "ml-72"} p-6`}>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Left Side - Tasks */}
           <div className="lg:col-span-2 space-y-6">

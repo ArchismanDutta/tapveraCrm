@@ -91,7 +91,7 @@ const RecentMessages = ({ messages }) => (
             <Reply className="w-4 h-4" color={colors.accent} />
           </button>
           <button
-            className="p-1 rounded-lg hover:bg-[#2e313a] outline-none focus:ring-2 focus:ring-yellow-400 transition"
+            className="p-1 rounded-lg hover:bg-[#2e313a] outline-none focus:ring-2 focus:ring-gray-400 transition"
             tabIndex={0}
             aria-label="More"
             style={{ border: "none" }}

@@ -33,73 +33,71 @@ const RecentLeaveRequests = ({ requests }) => {
   };
 
   return (
-    <div className="bg-white border border-gray-100 shadow-lg rounded-2xl p-6">
-      <h3 className="text-xl font-semibold mb-4 text-gray-800">Recent Leave Requests</h3>
+    <div
+      className="bg-[rgba(22,28,48,0.68)] border border-[rgba(84,123,209,0.13)] shadow-[0_8px_32px_0_rgba(10,40,100,0.14)] rounded-3xl p-6 overflow-x-auto"
+    >
+      <h3 className="text-xl font-semibold mb-4 text-blue-100">Recent Leave Requests</h3>
       {safeRequests.length === 0 ? (
-        <p className="text-gray-500 text-sm">No leave requests yet.</p>
+        <p className="text-blue-300 text-sm">No leave requests yet.</p>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm border-collapse">
-            <thead className="bg-gray-50">
-              <tr className="text-left border-b">
-                <th className="p-3">Date</th>
-                <th className="p-3">Leave Type</th>
-                <th className="p-3">Duration</th>
-                <th className="p-3">Status</th>
-                <th className="p-3">Remarks</th>
-                <th className="p-3">Document</th>
-              </tr>
-            </thead>
-            <tbody>
-              {safeRequests.map((req) => {
-                const start = req?.period?.start
-                  ? new Date(req.period.start).toLocaleDateString()
-                  : "N/A";
-                const end = req?.period?.end
-                  ? new Date(req.period.end).toLocaleDateString()
-                  : "N/A";
-                return (
-                  <tr
-                    key={req._id || req.id}
-                    className="border-b last:border-0 hover:bg-gray-50 transition group h-12"
-                  >
-                    <td className="p-3 text-gray-700">
-                      {req?.createdAt ? new Date(req.createdAt).toLocaleDateString() : "-"}
-                    </td>
-                    <td className="p-3">{leaveTypeLabels[req?.type] || req?.type || "-"}</td>
-                    <td className="p-3">{`${start} - ${end}`}</td>
-                    <td className="p-3">
-                      <span
-                        className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium ${
-                          statusStyles[req?.status] || "bg-gray-100 text-gray-700"
-                        }`}
+        <table className="w-full text-sm border-collapse">
+          <thead className="bg-[rgba(36,44,92,0.4)] text-blue-300">
+            <tr>
+              <th className="p-3 text-left">Date</th>
+              <th className="p-3 text-left">Leave Type</th>
+              <th className="p-3 text-left">Duration</th>
+              <th className="p-3 text-left">Status</th>
+              <th className="p-3 text-left">Remarks</th>
+              <th className="p-3 text-left">Document</th>
+            </tr>
+          </thead>
+          <tbody>
+            {safeRequests.map((req) => {
+              const start = req?.period?.start
+                ? new Date(req.period.start).toLocaleDateString()
+                : "N/A";
+              const end = req?.period?.end
+                ? new Date(req.period.end).toLocaleDateString()
+                : "N/A";
+              return (
+                <tr
+                  key={req._id || req.id}
+                  className="border-b border-[rgba(84,123,209,0.13)] last:border-0 hover:bg-[rgba(36,44,92,0.3)] transition group h-12 text-blue-100"
+                >
+                  <td className="p-3">{req?.createdAt ? new Date(req.createdAt).toLocaleDateString() : "-"}</td>
+                  <td className="p-3">{leaveTypeLabels[req?.type] || req?.type || "-"}</td>
+                  <td className="p-3">{`${start} - ${end}`}</td>
+                  <td className="p-3">
+                    <span
+                      className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium ${
+                        statusStyles[req?.status] || "bg-gray-100 text-gray-700"
+                      }`}
+                    >
+                      {statusIcons[req?.status] || <AlertCircle size={14} />} {req?.status || "-"}
+                    </span>
+                  </td>
+                  <td className="p-3 text-blue-300">{req?.adminRemarks?.trim() || "-"}</td>
+                  <td className="p-3">
+                    {req?.document?.url ? (
+                      <a
+                        href={req.document.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        download={req.document.name || "document"}
+                        className="hover:underline text-[#ff8000]"
                       >
-                        {statusIcons[req?.status] || <AlertCircle size={14} />} {req?.status || "-"}
-                      </span>
-                    </td>
-                    <td className="p-3 text-gray-600">{req?.adminRemarks?.trim() || "-"}</td>
-                    <td className="p-3 text-blue-600">
-                      {req?.document?.url ? (
-                        <a
-                          href={req.document.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          download={req.document.name || "document"}
-                          className="hover:underline"
-                        >
-                          {req.document.name || "Document"}{" "}
-                          {req.document.size ? `(${formatFileSize(req.document.size)})` : ""}
-                        </a>
-                      ) : (
-                        "-"
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                        {req.document.name || "Document"}{" "}
+                        {req.document.size ? `(${formatFileSize(req.document.size)})` : ""}
+                      </a>
+                    ) : (
+                      "-"
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       )}
     </div>
   );
