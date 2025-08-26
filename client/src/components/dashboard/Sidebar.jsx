@@ -1,3 +1,4 @@
+// File: src/components/Sidebar.jsx
 import React, { useState } from "react";
 import Modal from "../modal";
 import DailyEmailSender from "../DailyEmailSender";
@@ -9,66 +10,41 @@ import {
   MessageCircle,
   FileText,
   Flag,
-  HelpCircle,
   Send,
   Users,
 } from "lucide-react";
 import { FaChevronCircleRight } from "react-icons/fa";
 import { NavLink } from "react-router-dom";
 
-// Menu Configuration for each role, added Attendance and Todo for employee
+// Menu Configuration for each role
 const menuConfig = {
   employee: [
-    {
-      to: "/dashboard",
-      icon: <LayoutDashboard size={18} />,
-      label: "Dashboard",
-    },
+    { to: "/dashboard", icon: <LayoutDashboard size={18} />, label: "Dashboard" },
     { to: "/profile", icon: <User size={18} />, label: "My Profile" },
     { to: "/tasks", icon: <ClipboardList size={18} />, label: "Tasks" },
-    {
-      to: "/tasks-status",
-      icon: <ClipboardList size={18} />,
-      label: "Today's Work",
-    },
+    { to: "/today-status", icon: <ClipboardList size={18} />, label: "Today's Work" }, // updated
     { to: "/attendance", icon: <ClipboardList size={18} />, label: "Attendance" },
-    { to: "/todo", icon: <ClipboardList size={18} />, label: "Todo" }, // Added Todo here
+    { to: "/todo", icon: <ClipboardList size={18} />, label: "Todo" },
     { to: "/messages", icon: <MessageCircle size={18} />, label: "Messages" },
     { to: "/leaves", icon: <FileText size={18} />, label: "Leaves & Holidays" },
-    // { to: "/requirements", icon: <Flag size={18} />, label: "Requirements" },
-    // { to: "/help", icon: <HelpCircle size={18} />, label: "Help Center" },
   ],
 
   admin: [
-    {
-      to: "/dashboard",
-      icon: <LayoutDashboard size={18} />,
-      label: "Dashboard",
-    },
+    { to: "/dashboard", icon: <LayoutDashboard size={18} />, label: "Dashboard" },
     { to: "/directory", icon: <Users size={18} />, label: "Employee Details" },
     { to: "/messages", icon: <MessageCircle size={18} />, label: "Messages" },
-    {
-      to: "/admin/leaves",
-      icon: <FileText size={18} />,
-      label: "Leave Requests",
-    },
+    { to: "/admin/leaves", icon: <FileText size={18} />, label: "Leave Requests" },
     { to: "/admin/notices", icon: <Flag size={18} />, label: "Notice Board" },
-    // { to: "/help", icon: <HelpCircle size={18} />, label: "Help Center" },
-    // Uncomment if you want admins to access todo page:
-    // { to: "/todo", icon: <ClipboardList size={18} />, label: "Todo" },
+    { to: "/today-status", icon: <ClipboardList size={18} />, label: "Today's Work" }, // added
   ],
 
   superadmin: [
-    {
-      to: "/dashboard",
-      icon: <LayoutDashboard size={18} />,
-      label: "Dashboard",
-    },
+    { to: "/dashboard", icon: <LayoutDashboard size={18} />, label: "Dashboard" },
     { to: "/employees", icon: <Users size={18} />, label: "Manage Employees" },
     { to: "/messages", icon: <MessageCircle size={18} />, label: "Messages" },
     { to: "/leaves", icon: <FileText size={18} />, label: "Leaves & Holidays" },
     { to: "/notices", icon: <Flag size={18} />, label: "Notice Board" },
-    // { to: "/help", icon: <HelpCircle size={18} />, label: "Help Center" },
+    { to: "/today-status", icon: <ClipboardList size={18} />, label: "Today's Work" },
   ],
 };
 
