@@ -27,7 +27,10 @@ const chatSlice = createSlice({
       if (!state.messagesByUser[userId]) {
         state.messagesByUser[userId] = [];
       }
-      state.messagesByUser[userId] = [...state.messagesByUser[userId], ...messages];
+      state.messagesByUser[userId] = [
+        ...state.messagesByUser[userId],
+        ...messages,
+      ];
     },
     addMessage(state, action) {
       const { userId, message } = action.payload;
@@ -50,11 +53,15 @@ const chatSlice = createSlice({
     clearNewMessages(state, action) {
       delete state.newMessagesByUser[action.payload];
     },
+    resetChat(state) {
+      Object.assign(state, initialState);
+    },
   },
 });
 
 export const {
   setUsers,
+  resetChat,
   selectUser,
   addMessages,
   addMessage,
