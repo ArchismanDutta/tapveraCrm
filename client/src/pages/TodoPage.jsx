@@ -7,11 +7,9 @@ import TaskForm from "../components/todo/TaskForm";
 const TodoPage = ({ onLogout }) => {
   const token = localStorage.getItem("token");
   const [collapsed, setCollapsed] = useState(false);
-
   const [todayTasks, setTodayTasks] = useState([]);
   const [upcomingTasks, setUpcomingTasks] = useState([]);
   const [completedTasks, setCompletedTasks] = useState([]);
-
   const [showForm, setShowForm] = useState(false);
   const [editTask, setEditTask] = useState(null);
 
@@ -27,22 +25,18 @@ const TodoPage = ({ onLogout }) => {
       const tomorrowISO = normalizeDate(
         new Date(new Date().getTime() + 24 * 3600000)
       );
-
       const todayRes = await axios.get("/api/todos", {
         headers: { Authorization: `Bearer ${token}` },
-        params: { date: todayISO },
+        params: { date: todayISO }
       });
-
       const upcomingRes = await axios.get("/api/todos/upcoming", {
         headers: { Authorization: `Bearer ${token}` },
-        params: { startDate: tomorrowISO },
+        params: { startDate: tomorrowISO }
       });
-
       const allTasks = [...todayRes.data, ...upcomingRes.data];
       const completed = allTasks.filter((t) => t.completed);
       const todayPending = todayRes.data.filter((t) => !t.completed);
       const upcomingPending = upcomingRes.data.filter((t) => !t.completed);
-
       const normalize = (arr) =>
         arr.map((t) => ({
           ...t,
@@ -51,7 +45,6 @@ const TodoPage = ({ onLogout }) => {
             ? new Date(t.completedAt).toLocaleString()
             : null,
         }));
-
       setTodayTasks(normalize(todayPending));
       setUpcomingTasks(normalize(upcomingPending));
       setCompletedTasks(normalize(completed));
@@ -86,25 +79,14 @@ const TodoPage = ({ onLogout }) => {
     }
   };
 
-  // ✅ Updated: handle checkbox toggle and normalize completedAtStr
   const handleMarkDone = async (task) => {
     try {
-
-      console.log(
-        `Toggling completed for task ${task._id} from ${
-          task.completed
-        } to ${!task.completed}`
-      );
-
       const response = await axios.put(
         `/api/todos/${task._id}`,
         { completed: !task.completed },
         { headers: { Authorization: `Bearer ${token}` } }
       );
-
       const updatedTaskRaw = response.data;
-
-      // Normalize the updated task
       const updatedTask = {
         ...updatedTaskRaw,
         date: updatedTaskRaw.date ? new Date(updatedTaskRaw.date).toISOString() : null,
@@ -112,15 +94,11 @@ const TodoPage = ({ onLogout }) => {
           ? new Date(updatedTaskRaw.completedAt).toLocaleString()
           : null,
       };
-
       if (updatedTask.completed) {
-        // Remove from todayTasks or upcomingTasks
         setTodayTasks((prev) => prev.filter((t) => t._id !== updatedTask._id));
         setUpcomingTasks((prev) => prev.filter((t) => t._id !== updatedTask._id));
-        // Add to completedTasks
         setCompletedTasks((prev) => [updatedTask, ...prev]);
       } else {
-        // If marking as incomplete
         setCompletedTasks((prev) => prev.filter((t) => t._id !== updatedTask._id));
         const taskDate = new Date(updatedTask.date);
         const today = new Date();
@@ -137,24 +115,51 @@ const TodoPage = ({ onLogout }) => {
   };
 
   return (
-    <div className="flex min-h-screen bg-gray-50">
+    <div className="flex min-h-screen bg-gradient-to-br from-[#131720] via-[#161c2c] to-black text-gray-100">
       <Sidebar
         onLogout={onLogout}
         collapsed={collapsed}
         setCollapsed={setCollapsed}
         userRole="employee"
       />
-      <main className={`flex-1 p-6 ${collapsed ? "ml-20" : "ml-64"}`}>
+      <main className={`flex-1 pt-10 ${collapsed ? "ml-20" : "ml-64"}`}>
         <div className="max-w-4xl mx-auto">
-          <header className="flex justify-between items-center mb-4">
-            <h1 className="text-xl font-semibold">My Tasks</h1>
+          <header className="flex justify-between items-center mb-6">
+            <div>
+              <h1 className="text-2xl font-bold tracking-tight text-gray-100">Tasks Overview</h1>
+              <p className="text-sm text-gray-500 mt-1">Personal productivity progress</p>
+            </div>
             <button
               onClick={() => setShowForm(true)}
-              className="px-4 py-2 bg-yellow-500 text-white rounded hover:bg-yellow-600 transition"
+              className="px-4 py-2 bg-gradient-to-r from-yellow-400 via-amber-500 to-orange-400 text-gray-900 rounded shadow font-semibold hover:from-yellow-500 hover:via-amber-600 hover:to-orange-500 transition"
             >
               + Add New Task
             </button>
           </header>
+          {/* Progress Bar Example (static calculation - replace with your logic if required) */}
+          <div className="mb-8">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-sm font-medium text-gray-400">Completion</span>
+              <span className="text-xs text-gray-300">
+                {completedTasks.length + todayTasks.filter(t => t.completed).length + upcomingTasks.filter(t => t.completed).length} / {todayTasks.length + upcomingTasks.length + completedTasks.length} tasks
+              </span>
+            </div>
+            <div className="h-3 bg-[#161c2c] rounded-md overflow-hidden">
+              <div
+                className="h-full bg-gradient-to-r from-orange-400 to-yellow-400 transition duration-700"
+                style={{
+                  width: `${
+                    ((completedTasks.length +
+                      todayTasks.filter(t => t.completed).length +
+                      upcomingTasks.filter(t => t.completed).length) /
+                      (todayTasks.length +
+                        upcomingTasks.length +
+                        completedTasks.length || 1)) * 100
+                  }%`
+                }}
+              />
+            </div>
+          </div>
           <TaskList
             todayTasks={todayTasks}
             upcomingTasks={upcomingTasks}
@@ -166,7 +171,6 @@ const TodoPage = ({ onLogout }) => {
             onMarkDone={handleMarkDone}
           />
         </div>
-
         {showForm && (
           <TaskForm
             task={editTask}

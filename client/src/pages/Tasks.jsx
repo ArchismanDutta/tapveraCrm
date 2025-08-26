@@ -5,7 +5,6 @@ import TaskStats from "../components/task/TaskStats";
 import TaskList from "../components/task/TaskList";
 import SubmitRequirement from "../components/task/SubmitRequirement";
 
-// ✅ Use Vite env syntax
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 const Tasks = ({ onLogout }) => {
@@ -18,10 +17,9 @@ const Tasks = ({ onLogout }) => {
       const storedToken = localStorage.getItem("token");
       if (!storedToken) return;
 
-      const token =
-        storedToken.startsWith("{") && storedToken.endsWith("}")
-          ? JSON.parse(storedToken).token
-          : storedToken;
+      const token = storedToken.startsWith("{") && storedToken.endsWith("}")
+        ? JSON.parse(storedToken).token
+        : storedToken;
 
       const config = { headers: { Authorization: `Bearer ${token}` } };
       const res = await axios.get(`${API_BASE}/api/tasks`, config);
@@ -43,10 +41,9 @@ const Tasks = ({ onLogout }) => {
     }
   };
 
-  // Polling every 60 seconds
   useEffect(() => {
-    fetchTasks(); // initial fetch
-    const interval = setInterval(fetchTasks, 30000); // poll every 60s
+    fetchTasks();
+    const interval = setInterval(fetchTasks, 30000);
     return () => clearInterval(interval);
   }, []);
 
@@ -61,13 +58,13 @@ const Tasks = ({ onLogout }) => {
   };
 
   return (
-    <div className="flex bg-gray-50 min-h-screen">
+    <div className="flex bg-gradient-to-br from-[#141a29] via-[#181d2a] to-[#1b2233] min-h-screen text-blue-100">
       <Sidebar collapsed={collapsed} setCollapsed={setCollapsed} onLogout={onLogout} />
 
       <div className={`flex-1 transition-all duration-300 ${collapsed ? "ml-20" : "ml-64"} p-6`}>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Left Side - Tasks */}
-          <div className="lg:col-span-2">
+          <div className="lg:col-span-2 space-y-6">
             <TaskStats totalTasks={tasks.length} />
             <TaskList tasks={tasks} onStatusChange={handleStatusChange} />
           </div>

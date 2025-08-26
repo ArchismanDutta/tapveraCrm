@@ -1,19 +1,18 @@
-// RecentActivityTable.jsx
 import React from "react";
 
 const STATUS_STYLES = {
-  Present: "text-green-600 bg-green-50",
-  Late: "text-yellow-600 bg-yellow-50",
-  Absent: "text-red-600 bg-red-50",
-  default: "text-gray-600 bg-gray-50",
+  Present: "text-green-400 bg-green-900",
+  Late: "text-yellow-400 bg-yellow-900",
+  Absent: "text-red-400 bg-red-900",
+  default: "text-gray-400 bg-gray-900",
 };
 
 const RecentActivityTable = ({ activities }) => (
-  <div className="bg-white rounded-xl shadow-md p-4 w-full">
-    <h3 className="font-semibold text-lg mb-4">Recent Activity</h3>
-    <table className="w-full text-sm">
+  <div className="bg-[#161c2c] rounded-xl shadow-md p-4 w-full border border-[#232945]">
+    <h3 className="font-semibold text-lg mb-4 text-gray-100">Recent Activity</h3>
+    <table className="w-full text-sm text-gray-300">
       <thead>
-        <tr className="border-b border-gray-200 text-left text-gray-600">
+        <tr className="border-b border-[#232945] text-left">
           <th className="py-2 px-3">Date</th>
           <th className="py-2 px-3">Time In</th>
           <th className="py-2 px-3">Time Out</th>
@@ -24,7 +23,7 @@ const RecentActivityTable = ({ activities }) => (
         {activities.map(({ date, timeIn, timeOut, status }, idx) => (
           <tr
             key={idx}
-            className="border-b border-gray-100 last:border-none hover:bg-gray-50"
+            className="border-b border-[#232945] last:border-none hover:bg-[#232945]"
           >
             <td className="py-2 px-3">{date}</td>
             <td className="py-2 px-3">{timeIn}</td>

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import { Link, useNavigate } from "react-router-dom";
 import dayjs from "dayjs";
@@ -9,11 +9,9 @@ import RecentMessages from "../components/dashboard/RecentMessages";
 import Sidebar from "../components/dashboard/Sidebar";
 import NotificationBell from "../components/dashboard/NotificationBell";
 
-// Backend API base
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
-
-const TASK_POLL_INTERVAL_MS = 15000; // 15 seconds
-const USER_POLL_INTERVAL_MS = 30000; // 30 seconds
+const TASK_POLL_INTERVAL_MS = 15000;
+const USER_POLL_INTERVAL_MS = 30000;
 
 const EmployeeDashboard = ({ onLogout }) => {
   const [collapsed, setCollapsed] = useState(false);
@@ -47,7 +45,12 @@ const EmployeeDashboard = ({ onLogout }) => {
         })
       : "",
     level: task.priority || "Normal",
-    color: task.priority === "High" ? "red" : task.priority === "Medium" ? "yellow" : "green",
+    color:
+      task.priority === "High"
+        ? "red"
+        : task.priority === "Medium"
+        ? "yellow"
+        : "green",
     assignedBy: task.assignedBy?.name || "Unknown",
     assignedTo: Array.isArray(task.assignedTo)
       ? task.assignedTo.map((u) => (typeof u === "string" ? "Unknown" : u?.name || "Unknown")).join(", ")
@@ -56,22 +59,18 @@ const EmployeeDashboard = ({ onLogout }) => {
     status: task.status,
   });
 
-  // Compute summary dynamically based on currentTime and tasks
   const computeSummary = useCallback(() => {
     const today = dayjs(currentTime).startOf("day");
     const allTasksCount = tasks.length;
     const tasksDueTodayCount = tasks.filter((t) => t.dueDate && dayjs(t.dueDate).isSame(today, "day")).length;
     const overdueTasksCount = tasks.filter(
-      (t) =>
-        t.dueDate &&
-        dayjs(t.dueDate).isBefore(dayjs(currentTime)) &&
-        t.status?.toLowerCase() !== "completed"
+      (t) => t.dueDate && dayjs(t.dueDate).isBefore(dayjs(currentTime)) && t.status?.toLowerCase() !== "completed"
     ).length;
 
     setSummaryData([
-      { label: "All Tasks", count: allTasksCount, bg: "bg-blue-50" },
-      { label: "Tasks Due Today", count: tasksDueTodayCount, bg: "bg-green-50" },
-      { label: "Overdue Tasks", count: overdueTasksCount, bg: "bg-red-50" },
+      { label: "All Tasks", count: allTasksCount },
+      { label: "Tasks Due Today", count: tasksDueTodayCount },
+      { label: "Overdue Tasks", count: overdueTasksCount },
     ]);
   }, [tasks, currentTime]);
 
@@ -122,21 +121,18 @@ const EmployeeDashboard = ({ onLogout }) => {
     }
   }, [navigate]);
 
-  // Polling tasks
   useEffect(() => {
     fetchTasks();
     const intervalId = setInterval(fetchTasks, TASK_POLL_INTERVAL_MS);
     return () => clearInterval(intervalId);
   }, [fetchTasks]);
 
-  // Polling user info
   useEffect(() => {
     fetchUser();
     const intervalId = setInterval(fetchUser, USER_POLL_INTERVAL_MS);
     return () => clearInterval(intervalId);
   }, [fetchUser]);
 
-  // Clock + recompute summary every second
   useEffect(() => {
     const interval = setInterval(() => {
       setCurrentTime(new Date());
@@ -144,13 +140,11 @@ const EmployeeDashboard = ({ onLogout }) => {
     return () => clearInterval(interval);
   }, []);
 
-  // Recompute summary and notifications whenever tasks or currentTime change
   useEffect(() => {
     computeSummary();
     updateNotifications();
   }, [computeSummary, updateNotifications]);
 
-  // Fetch notices once
   useEffect(() => {
     const fetchNotices = async () => {
       try {
@@ -187,15 +181,16 @@ const EmployeeDashboard = ({ onLogout }) => {
   };
 
   return (
-    <div className="flex bg-gray-50 font-sans text-gray-800">
-      <Sidebar onLogout={onLogout} collapsed={collapsed} setCollapsed={setCollapsed} />
-      <main className={`flex-1 p-8 overflow-y-auto transition-all duration-300 ${collapsed ? "ml-20" : "ml-64"}`}>
+    <div className="flex bg-gradient-to-br from-[#141a21] via-[#191f2b] to-[#101218] font-sans text-blue-100 min-h-screen">
+      <Sidebar onLogout={onLogout} collapsed={collapsed} setCollapsed={setCollapsed} userRole="employee" />
+      {/* Main content margin-left matched to sidebar width */}
+      <main className={`flex-1 p-8 overflow-y-auto transition-all duration-300 ${collapsed ? "ml-20" : "ml-72"}`}>
         <div className="flex justify-between items-center mb-8">
           <div>
-            <h1 className="text-2xl font-semibold">
+            <h1 className="text-2xl font-bold text-white tracking-tight">
               Good {currentTime.getHours() < 12 ? "Morning" : currentTime.getHours() < 18 ? "Afternoon" : "Evening"}, {userName}
             </h1>
-            <p className="text-sm text-gray-500">
+            <p className="text-sm text-blue-300">
               {currentTime.toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })} •{" "}
               {currentTime.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
             </p>
@@ -203,24 +198,31 @@ const EmployeeDashboard = ({ onLogout }) => {
           <div className="flex items-center gap-4 relative">
             <NotificationBell notifications={notifications} />
             <Link to="/profile">
-              <img src="https://i.pravatar.cc/40?img=3" alt="Profile Avatar" className="w-9 h-9 rounded-full cursor-pointer" />
+              <img
+                src="https://i.pravatar.cc/40?img=3"
+                alt="Profile Avatar"
+                className="w-9 h-9 rounded-full cursor-pointer border-2 border-orange-500 shadow-lg"
+              />
             </Link>
           </div>
         </div>
 
         {showNotices && notices.length > 0 && (
-          <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50">
-            <div className="bg-white/90 rounded-lg shadow-xl p-6 max-w-lg w-full">
-              <h2 className="text-xl font-bold mb-4">📢 Notices</h2>
-              <div className="space-y-3 max-h-80 overflow-y-auto">
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
+            <div className="bg-[#181d2a]/90 rounded-lg shadow-xl p-6 max-w-lg w-full border border-orange-500">
+              <h2 className="text-xl font-semibold mb-4 text-orange-400">📢 Notices</h2>
+              <div className="space-y-3 max-h-80 overflow-y-auto text-blue-200">
                 {notices.map((n) => (
-                  <div key={n._id} className="border-l-4 border-orange-500 pl-3 text-gray-800">
+                  <div key={n._id} className="border-l-4 border-orange-400 pl-3">
                     <p>{n.message}</p>
-                    <p className="text-xs text-gray-400 mt-1">🕒 {new Date(n.createdAt).toLocaleString()}</p>
+                    <p className="text-xs text-blue-400 mt-1">🕒 {new Date(n.createdAt).toLocaleString()}</p>
                   </div>
                 ))}
               </div>
-              <button onClick={handleCloseNotices} className="mt-4 px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600">
+              <button
+                onClick={handleCloseNotices}
+                className="mt-4 px-4 py-2 bg-orange-400 text-black rounded-lg hover:bg-orange-500 transition"
+              >
                 Close
               </button>
             </div>
@@ -231,10 +233,10 @@ const EmployeeDashboard = ({ onLogout }) => {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-8">
           <div className="lg:col-span-2">
-            <TodayTasks data={tasks} loading={loading} />
+            <TodayTasks data={tasks} loading={loading} className="bg-[#191f2b]/70 p-4 rounded-xl shadow-xl border border-[#232945]" />
           </div>
           <div className="flex flex-col gap-6">
-            <RecentMessages messages={messages} className="flex-1" />
+            <RecentMessages messages={messages} />
           </div>
         </div>
       </main>
