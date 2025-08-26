@@ -22,7 +22,7 @@ const menuConfig = {
     { to: "/dashboard", icon: <LayoutDashboard size={18} />, label: "Dashboard" },
     { to: "/profile", icon: <User size={18} />, label: "My Profile" },
     { to: "/tasks", icon: <ClipboardList size={18} />, label: "Tasks" },
-    { to: "/today-status", icon: <ClipboardList size={18} />, label: "Today's Work" }, // updated
+    { to: "/today-status", icon: <ClipboardList size={18} />, label: "Today's Work" },
     { to: "/attendance", icon: <ClipboardList size={18} />, label: "Attendance" },
     { to: "/todo", icon: <ClipboardList size={18} />, label: "Todo" },
     { to: "/messages", icon: <MessageCircle size={18} />, label: "Messages" },
@@ -35,7 +35,7 @@ const menuConfig = {
     { to: "/messages", icon: <MessageCircle size={18} />, label: "Messages" },
     { to: "/admin/leaves", icon: <FileText size={18} />, label: "Leave Requests" },
     { to: "/admin/notices", icon: <Flag size={18} />, label: "Notice Board" },
-    { to: "/today-status", icon: <ClipboardList size={18} />, label: "Today's Work" }, // added
+    { to: "/today-status", icon: <ClipboardList size={18} />, label: "Today's Work" },
   ],
 
   superadmin: [
@@ -65,7 +65,9 @@ const Sidebar = ({ collapsed, setCollapsed, userRole = "employee", onLogout }) =
             collapsed ? "justify-center" : "justify-between"
           }`}
         >
-          <img src={tapveraLogo} alt="Tapvera Logo" className="h-10 w-auto" />
+          <NavLink to="/dashboard">
+            <img src={tapveraLogo} alt="Tapvera Logo" className="h-10 w-auto" />
+          </NavLink>
           <button
             onClick={() => setCollapsed(!collapsed)}
             className={`p-1 rounded-full transition-transform ${

@@ -1,46 +1,32 @@
+// File: controllers/taskController.js
 const Task = require("../models/Task");
 const { notifyAdmins } = require("../services/whatsappService");
 
-// Populate assignedTo and assignedBy fields
+// Helper: populate assignedTo and assignedBy fields
 const populateTask = (query) =>
   query.populate("assignedTo", "name email").populate("assignedBy", "name email");
 
-// Create Task
+// ------------------- CREATE TASK -------------------
 exports.createTask = async (req, res) => {
   try {
     const { title, description, assignedTo, dueDate, priority } = req.body;
     const assignedBy = req.user._id;
 
     if (!title || !Array.isArray(assignedTo) || assignedTo.length === 0) {
-      return res.status(400).json({
-        message: "Title and at least one assigned user are required.",
-      });
+      return res.status(400).json({ message: "Title and at least one assigned user are required." });
     }
 
     const allowedPriorities = ["High", "Medium", "Low"];
-    const validatedPriority = allowedPriorities.includes(priority)
-      ? priority
-      : "Medium";
+    const validatedPriority = allowedPriorities.includes(priority) ? priority : "Medium";
 
-    const task = new Task({
-      title,
-      description,
-      assignedTo,
-      assignedBy,
-      dueDate,
-      priority: validatedPriority,
-    });
-
+    const task = new Task({ title, description, assignedTo, assignedBy, dueDate, priority: validatedPriority });
     await task.save();
+
     const populated = await populateTask(Task.findById(task._id)).lean();
 
-    // 🔔 WhatsApp notification
+    // WhatsApp notification
     await notifyAdmins(
-      `📝 *New Task Created*\n\n📌 Title: *${populated.title}*\n📅 Due: *${
-        populated.dueDate || "N/A"
-      }*\n🎯 Priority: *${populated.priority}*\n👤 Assigned By: *${
-        req.user.name
-      }*\n👥 Assigned To: ${populated.assignedTo.map((u) => u.name).join(", ")}`
+      `📝 *New Task Created*\n📌 Title: *${populated.title}*\n📅 Due: *${populated.dueDate || "N/A"}*\n🎯 Priority: *${populated.priority}*\n👤 Assigned By: *${req.user.name}*\n👥 Assigned To: ${populated.assignedTo.map(u => u.name).join(", ")}`
     );
 
     console.log("✅ Task created:", populated.title);
@@ -51,7 +37,7 @@ exports.createTask = async (req, res) => {
   }
 };
 
-// Edit Task
+// ------------------- EDIT TASK -------------------
 exports.editTask = async (req, res) => {
   try {
     const { taskId } = req.params;
@@ -60,10 +46,7 @@ exports.editTask = async (req, res) => {
     const task = await Task.findById(taskId);
     if (!task) return res.status(404).json({ message: "Task not found." });
 
-    if (
-      !["admin", "super-admin"].includes(req.user.role) &&
-      task.assignedBy.toString() !== req.user._id.toString()
-    ) {
+    if (!["admin", "super-admin"].includes(req.user.role) && task.assignedBy.toString() !== req.user._id.toString()) {
       return res.status(403).json({ message: "Not authorized" });
     }
 
@@ -71,19 +54,14 @@ exports.editTask = async (req, res) => {
     if (description) task.description = description;
     if (Array.isArray(assignedTo) && assignedTo.length) task.assignedTo = assignedTo;
     if (dueDate) task.dueDate = dueDate;
-    if (status && ["pending", "in-progress", "completed"].includes(status)) {
-      task.status = status;
-    }
-    if (priority && ["High", "Medium", "Low"].includes(priority)) {
-      task.priority = priority;
-    }
+    if (status && ["pending", "in-progress", "completed"].includes(status)) task.status = status;
+    if (priority && ["High", "Medium", "Low"].includes(priority)) task.priority = priority;
 
     await task.save();
     const populated = await populateTask(Task.findById(taskId)).lean();
 
-    // 🔔 WhatsApp notification
     await notifyAdmins(
-      `✏️ *Task Updated*\n\n📌 Title: *${populated.title}*\n📅 Due: *${populated.dueDate || "N/A"}*\n📊 Status: *${populated.status}*\n🎯 Priority: *${populated.priority}*\n👤 Updated By: *${req.user.name}*`
+      `✏️ *Task Updated*\n📌 Title: *${populated.title}*\n📅 Due: *${populated.dueDate || "N/A"}*\n📊 Status: *${populated.status}*\n🎯 Priority: *${populated.priority}*\n👤 Updated By: *${req.user.name}*`
     );
 
     console.log("✅ Task updated:", populated.title);
@@ -94,7 +72,7 @@ exports.editTask = async (req, res) => {
   }
 };
 
-// Update Task Status
+// ------------------- UPDATE TASK STATUS -------------------
 exports.updateTaskStatus = async (req, res) => {
   try {
     const { taskId } = req.params;
@@ -107,10 +85,8 @@ exports.updateTaskStatus = async (req, res) => {
     const task = await Task.findById(taskId);
     if (!task) return res.status(404).json({ message: "Task not found." });
 
-    if (
-      task.assignedBy.toString() !== req.user._id.toString() &&
-      !task.assignedTo.some((id) => id.toString() === req.user._id.toString())
-    ) {
+    if (task.assignedBy.toString() !== req.user._id.toString() &&
+        !task.assignedTo.some(id => id.toString() === req.user._id.toString())) {
       return res.status(403).json({ message: "Unauthorized" });
     }
 
@@ -118,9 +94,8 @@ exports.updateTaskStatus = async (req, res) => {
     await task.save();
     const populated = await populateTask(Task.findById(taskId)).lean();
 
-    // 🔔 WhatsApp notification
     await notifyAdmins(
-      `✅ *Task Status Changed*\n\n📌 Title: *${populated.title}*\n📊 New Status: *${status}*\n👤 Changed By: *${req.user.name}*`
+      `✅ *Task Status Changed*\n📌 Title: *${populated.title}*\n📊 New Status: *${status}*\n👤 Changed By: *${req.user.name}*`
     );
 
     console.log("✅ Task status updated:", populated.title);
@@ -131,17 +106,15 @@ exports.updateTaskStatus = async (req, res) => {
   }
 };
 
-// Get Task by ID
+// ------------------- GET TASK BY ID -------------------
 exports.getTaskById = async (req, res) => {
   try {
     const task = await populateTask(Task.findById(req.params.taskId));
     if (!task) return res.status(404).json({ message: "Task not found." });
 
-    if (
-      task.assignedBy._id.toString() !== req.user._id.toString() &&
-      !task.assignedTo.some((u) => u._id.toString() === req.user._id.toString()) &&
-      !["admin", "super-admin"].includes(req.user.role)
-    ) {
+    if (task.assignedBy._id.toString() !== req.user._id.toString() &&
+        !task.assignedTo.some(u => u._id.toString() === req.user._id.toString()) &&
+        !["admin", "super-admin"].includes(req.user.role)) {
       return res.status(403).json({ message: "Not authorized" });
     }
 
@@ -152,18 +125,13 @@ exports.getTaskById = async (req, res) => {
   }
 };
 
-// Get all Tasks
+// ------------------- GET ALL TASKS -------------------
 exports.getTasks = async (req, res) => {
   try {
     let query = {};
-
-    // Show all tasks if user is admin/super-admin, else only related tasks
     if (!["admin", "super-admin"].includes(req.user.role)) {
-      query = {
-        $or: [{ assignedTo: req.user._id }, { assignedBy: req.user._id }],
-      };
+      query = { $or: [{ assignedTo: req.user._id }, { assignedBy: req.user._id }] };
     }
-
     const tasks = await populateTask(Task.find(query)).lean();
     res.json(tasks);
   } catch (err) {
@@ -172,24 +140,21 @@ exports.getTasks = async (req, res) => {
   }
 };
 
-// Delete Task
+// ------------------- DELETE TASK -------------------
 exports.deleteTask = async (req, res) => {
   try {
     const task = await Task.findById(req.params.taskId);
     if (!task) return res.status(404).json({ message: "Task not found." });
 
-    if (
-      !["admin", "super-admin"].includes(req.user.role) &&
-      task.assignedBy.toString() !== req.user._id.toString()
-    ) {
+    if (!["admin", "super-admin"].includes(req.user.role) &&
+        task.assignedBy.toString() !== req.user._id.toString()) {
       return res.status(403).json({ message: "Unauthorized" });
     }
 
     await task.deleteOne();
 
-    // 🔔 WhatsApp notification
     await notifyAdmins(
-      `🗑️ *Task Deleted*\n\n📌 Title: *${task.title}*\n👤 Deleted By: *${req.user.name}*`
+      `🗑️ *Task Deleted*\n📌 Title: *${task.title}*\n👤 Deleted By: *${req.user.name}*`
     );
 
     console.log("✅ Task deleted:", req.params.taskId);
