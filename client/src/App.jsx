@@ -29,6 +29,8 @@ import TodoPage from "./pages/TodoPage";
 import ChatPage from "./pages/ChatPage";
 import EmployeeDirectory from "./pages/EmployeeDirectory";
 import EmployeePage from "./pages/EmployeePage";
+import { resetChat } from "./store/slices/chatSlice";
+import { useDispatch } from "react-redux";
 
 const AppWrapper = () => {
   const navigate = useNavigate();
@@ -36,6 +38,7 @@ const AppWrapper = () => {
   const [role, setRole] = useState(null);
   const [loading, setLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState(null);
+  const dispatch = useDispatch();
 
   useEffect(() => {
     const userStr = localStorage.getItem("user");
@@ -73,6 +76,7 @@ const AppWrapper = () => {
     localStorage.removeItem("role");
     localStorage.removeItem("user");
     sessionStorage.removeItem("noticesDismissed");
+    dispatch(resetChat());
     setCurrentUser(null);
     setIsAuthenticated(false);
     setRole(null);
