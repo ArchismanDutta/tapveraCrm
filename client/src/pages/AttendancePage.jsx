@@ -57,9 +57,7 @@ const AttendancePage = ({ onLogout }) => {
       };
 
       setStats({
-        attendanceRate: Math.round(
-          weeklySummary.onTimeRate?.replace("%", "") || 0
-        ),
+        attendanceRate: Math.round(weeklySummary.onTimeRate?.replace("%", "") || 0),
         presentDays: dailyData.length,
         totalDays: 30,
         workingHours: truncateTwoDecimals(parseHours(weeklySummary.totalWork)),
@@ -94,8 +92,7 @@ const AttendancePage = ({ onLogout }) => {
       const hoursByWeekday = Array(7).fill(0);
       dailyData.forEach((d) => {
         const dt = new Date(d.date);
-        if (d.workDurationSeconds)
-          hoursByWeekday[dt.getDay()] += d.workDurationSeconds / 3600;
+        if (d.workDurationSeconds) hoursByWeekday[dt.getDay()] += d.workDurationSeconds / 3600;
       });
       const weekDays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
       setWeeklyHours(
@@ -121,11 +118,7 @@ const AttendancePage = ({ onLogout }) => {
                 })
               : "--",
             timeOut: "--", // enrich if available
-            status: !d.arrivalTime
-              ? "Absent"
-              : arrivalDate > expectedDate
-              ? "Late"
-              : "Present",
+            status: !d.arrivalTime ? "Absent" : arrivalDate > expectedDate ? "Late" : "Present",
           };
         })
       );
@@ -145,8 +138,7 @@ const AttendancePage = ({ onLogout }) => {
       fetchAttendanceData();
     }
     window.addEventListener("attendanceDataUpdate", handleAttendanceUpdate);
-    return () =>
-      window.removeEventListener("attendanceDataUpdate", handleAttendanceUpdate);
+    return () => window.removeEventListener("attendanceDataUpdate", handleAttendanceUpdate);
   }, [fetchAttendanceData]);
 
   if (!stats || !calendarData) {
@@ -159,13 +151,12 @@ const AttendancePage = ({ onLogout }) => {
 
   return (
     <div className="flex min-h-screen bg-[#101525] text-gray-100">
-      <Sidebar
-        onLogout={onLogout}
-        collapsed={collapsed}
-        setCollapsed={setCollapsed}
-        userRole="employee"
-      />
-      <main className="flex-1 p-6 space-y-6 ml-64">
+      <Sidebar onLogout={onLogout} collapsed={collapsed} setCollapsed={setCollapsed} userRole="employee" />
+      <main
+        className={`flex-1 p-6 space-y-6 transition-all duration-300 ${
+          collapsed ? "ml-20" : "ml-72"
+        }`}
+      >
         <AttendanceStats stats={stats} />
         <div className="grid lg:grid-cols-3 grid-cols-1 gap-6">
           <div className="lg:col-span-2 flex flex-col space-y-6">

@@ -1,9 +1,27 @@
 import React from "react";
 
 const colorMap = {
-  red: "bg-gradient-to-r from-red-800 via-red-900 to-red-800 text-red-200 border border-red-900 shadow-red-900/30",
-  yellow: "bg-gradient-to-r from-yellow-800 via-yellow-900 to-yellow-800 text-yellow-200 border border-yellow-900 shadow-yellow-900/30",
-  green: "bg-gradient-to-r from-green-800 via-green-900 to-green-800 text-green-200 border border-green-900 shadow-green-900/30",
+  red: "bg-red-300 text-black border-red-700",
+  yellow: "bg-yellow-300 text-black border-yellow-700",
+  green: "bg-green-400 text-black border-green-700",
+
+  lightRed: "bg-red-300 text-black border-red-700",
+  lightYellow: "bg-yellow-300 text-black border-yellow-700",
+  lightGreen: "bg-green-400 text-black border-green-700",
+};
+
+const getColorClass = (color) => {
+  // Use brighter pastel backgrounds similar to traffic light colors with strong borders
+  switch (color) {
+    case "red":
+      return colorMap.lightRed;
+    case "yellow":
+      return colorMap.lightYellow;
+    case "green":
+      return colorMap.lightGreen;
+    default:
+      return colorMap.lightGreen; // default to bright green pastel
+  }
 };
 
 const TodayTasks = ({ data = [], className }) => {
@@ -24,19 +42,19 @@ const TodayTasks = ({ data = [], className }) => {
               <div className="flex flex-wrap gap-4 text-xs text-gray-400 mt-1">
                 <span>
                   Due:{" "}
-                  <span className="font-semibold text-orange-400">
+                  <span className="font-semibold text-green-400">
                     {task.dueDateTime || "No due date"}
                   </span>
                 </span>
                 <span>
                   Assigned By:{" "}
-                  <span className="font-semibold text-yellow-300">
+                  <span className="font-semibold text-gray-300">
                     {task.assignedBy || "Unknown"}
                   </span>
                 </span>
                 <span>
                   Assigned To:{" "}
-                  <span className="font-semibold text-blue-200">
+                  <span className="font-semibold text-gray-400">
                     {Array.isArray(task.assignedTo) ? task.assignedTo.join(", ") : task.assignedTo || "Unknown"}
                   </span>
                 </span>
@@ -44,9 +62,9 @@ const TodayTasks = ({ data = [], className }) => {
             </div>
             {/* Priority Badge */}
             <span
-              className={`mt-3 sm:mt-0 ml-0 sm:ml-6 text-xs min-w-[72px] px-4 py-1 rounded-full font-bold shadow-lg border-2 text-center
-              ${colorMap[task.color] || "bg-[#171c28] text-blue-200 border border-[#232945] shadow-blue-800/20"}
-              group-hover:scale-105 transition-all duration-200`}
+              className={`mt-3 sm:mt-0 ml-0 sm:ml-6 text-xs min-w-[72px] px-4 py-1 rounded-full font-bold border-2 text-center
+                ${getColorClass(task.color)}
+                group-hover:scale-105 transition-all duration-200`}
             >
               {task.level || "Normal"}
             </span>

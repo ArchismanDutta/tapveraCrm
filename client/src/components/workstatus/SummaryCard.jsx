@@ -4,7 +4,9 @@ const SummaryCard = ({ weeklySummary }) => {
   if (!weeklySummary) {
     return (
       <div className="bg-[#161c2c] p-4 rounded-xl shadow-md space-y-4 w-full border border-[#232945]">
-        <h3 className="text-lg font-semibold border-b border-[#232945] pb-2 text-gray-100">Week Summary</h3>
+        <h3 className="text-lg font-semibold border-b border-[#232945] pb-2 text-gray-100">
+          Week Summary
+        </h3>
         <p className="text-gray-400">No weekly data available.</p>
       </div>
     );
@@ -22,30 +24,44 @@ const SummaryCard = ({ weeklySummary }) => {
 
   return (
     <div className="bg-[#161c2c] p-4 rounded-xl shadow-md space-y-4 w-full border border-[#232945]">
-      <h3 className="text-lg font-semibold border-b border-[#232945] pb-2 text-gray-100">Week Summary</h3>
+      <h3 className="text-lg font-semibold border-b border-[#232945] pb-2 text-gray-100">
+        Week Summary
+      </h3>
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
-          <p className="text-[#FFA500] uppercase tracking-wider text-xs font-medium">Total Hours</p>
+          <p className="text-[#ffffff] uppercase tracking-wider text-xs font-medium">
+            Total Hours
+          </p>
           <p className="text-xl font-bold text-orange-400">{totalWork}</p>
         </div>
         <div>
-          <p className="text-[#FFA500] uppercase tracking-wider text-xs font-medium">Avg. Daily Work</p>
+          <p className="text-[#ffffff] uppercase tracking-wider text-xs font-medium">
+            Avg. Daily Work
+          </p>
           <p className="text-xl font-bold text-orange-400">{avgDailyWork}</p>
         </div>
         <div>
-          <p className="text-[#FFA500] uppercase tracking-wider text-xs font-medium">Total Break</p>
+          <p className="text-[#ffffff] uppercase tracking-wider text-xs font-medium">
+            Total Break
+          </p>
           <p className="text-xl font-bold text-orange-400">{totalBreak}</p>
         </div>
         <div>
-          <p className="text-[#FFA500] uppercase tracking-wider text-xs font-medium">Avg. Daily Break</p>
+          <p className="text-[#ffffff] uppercase tracking-wider text-xs font-medium">
+            Avg. Daily Break
+          </p>
           <p className="text-xl font-bold text-orange-400">{avgDailyBreak}</p>
         </div>
         <div>
-          <p className="text-[#FFA500] uppercase tracking-wider text-xs font-medium">On-Time Rate</p>
+          <p className="text-[#ffffff] uppercase tracking-wider text-xs font-medium">
+            On-Time Rate
+          </p>
           <p className="text-xl font-bold text-orange-400">{onTimeRate}</p>
         </div>
         <div>
-          <p className="text-[#FFA500] uppercase tracking-wider text-xs font-medium">Breaks Taken</p>
+          <p className="text-[#ffffff] uppercase tracking-wider text-xs font-medium">
+            Breaks Taken
+          </p>
           <p className="text-xl font-bold text-orange-400">{breaksTaken}</p>
         </div>
       </div>
