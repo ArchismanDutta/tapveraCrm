@@ -1,28 +1,45 @@
 import React, { useEffect, useState, useRef } from "react";
+import { useSelector, useDispatch } from "react-redux";
 import Sidebar from "../components/dashboard/Sidebar";
 import { motion } from "framer-motion";
 import { Send, Smile, Paperclip, Circle } from "lucide-react";
+import {
+  setUsers,
+  selectUser as selectUserAction,
+  addMessages,
+  addMessage,
+  setTypingUser,
+  removeTypingUser,
+  clearNewMessages,
+} from "../store/slices/chatSlice";
 
 const ChatPage = ({ currentUser, onLogout }) => {
-  const [users, setUsers] = useState([]);
-  const [selectedUser, setSelectedUser] = useState(null);
-  const [messagesByUser, setMessagesByUser] = useState({});
-  const [collapsed, setCollapsed] = useState(false);
+  const dispatch = useDispatch();
+  const users = useSelector((state) => state.chat.users);
+  const selectedUser = useSelector((state) => state.chat.selectedUser);
+  const messagesByUser = useSelector((state) => state.chat.messagesByUser);
+  const typingUsers = useSelector((state) => state.chat.typingUsers);
+  const newMessagesByUser = useSelector(
+    (state) => state.chat.newMessagesByUser
+  );
+
   const [newMessage, setNewMessage] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
-  const [typingUsers, setTypingUsers] = useState({}); // Track who is typing
-
-  const ws = useRef(null);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const bottomRef = useRef(null);
+  const ws = useRef(null);
   const userId = currentUser.id || currentUser._id;
 
   useEffect(() => {
+    // Fetch all users once
     fetch("/api/users/all", {
       headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
     })
       .then((res) => res.json())
-      .then(setUsers);
+      .then((data) => dispatch(setUsers(data)));
+  }, [dispatch]);
 
+  useEffect(() => {
     ws.current = new WebSocket("ws://localhost:5000");
 
     ws.current.onopen = () => {
@@ -36,42 +53,31 @@ const ChatPage = ({ currentUser, onLogout }) => {
         const chatPartnerId =
           data.senderId === userId ? data.recipientId : data.senderId;
 
-        setMessagesByUser((prev) => ({
-          ...prev,
-          [chatPartnerId]: [...(prev[chatPartnerId] || []), data],
-        }));
+        dispatch(addMessage({ userId: chatPartnerId, message: data }));
       }
 
       if (data.type === "typing") {
-        setTypingUsers((prev) => ({
-          ...prev,
-          [data.userId]: true,
-        }));
-
-        // Remove typing status after 2s
-        setTimeout(() => {
-          setTypingUsers((prev) => {
-            const updated = { ...prev };
-            delete updated[data.userId];
-            return updated;
-          });
-        }, 2000);
+        dispatch(setTypingUser(data.userId));
+        setTimeout(() => dispatch(removeTypingUser(data.userId)), 2000);
       }
     };
 
     return () => ws.current && ws.current.close();
-  }, [userId]);
+  }, [userId, dispatch]);
 
   const selectUser = (user) => {
-    setSelectedUser(user);
+    dispatch(selectUserAction(user));
+    dispatch(clearNewMessages(user._id));
 
-    fetch(`/api/chat/${user._id}`, {
-      headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
-    })
-      .then((res) => res.json())
-      .then((msgs) =>
-        setMessagesByUser((prev) => ({ ...prev, [user._id]: msgs }))
-      );
+    if (!messagesByUser[user._id]) {
+      fetch(`/api/chat/${user._id}`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+      })
+        .then((res) => res.json())
+        .then((msgs) =>
+          dispatch(addMessages({ userId: user._id, messages: msgs }))
+        );
+    }
   };
 
   const sendMessage = () => {
@@ -86,12 +92,7 @@ const ChatPage = ({ currentUser, onLogout }) => {
     };
 
     ws.current.send(JSON.stringify(messageObj));
-
-    setMessagesByUser((prev) => ({
-      ...prev,
-      [selectedUser._id]: [...(prev[selectedUser._id] || []), messageObj],
-    }));
-
+    dispatch(addMessage({ userId: selectedUser._id, message: messageObj }));
     setNewMessage("");
   };
 
@@ -111,28 +112,32 @@ const ChatPage = ({ currentUser, onLogout }) => {
     ? messagesByUser[selectedUser._id] || []
     : [];
 
-  // Auto scroll to bottom on new messages
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messagesToShow]);
-
-  // Filtered users for search
   const filteredUsers = users.filter((u) =>
     u.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messagesToShow]);
+
   return (
     <div className="flex h-screen overflow-hidden">
-      <Sidebar
-        collapsed={collapsed}
-        setCollapsed={setCollapsed}
-        onLogout={onLogout}
-      />
+      <div
+        className={`${
+          sidebarCollapsed ? "w-20" : "w-64"
+        } shrink-0 transition-all duration-300`}
+      >
+        <Sidebar
+          collapsed={sidebarCollapsed}
+          setCollapsed={setSidebarCollapsed}
+          onLogout={onLogout}
+        />
+      </div>
 
       <div
-        className={`flex-1 flex bg-gray-50 h-full overflow-hidden transition-all duration-300 ${
-          collapsed ? "ml-20" : "ml-64"
-        }`}
+        className={
+          "flex-1 flex bg-gray-50 h-full overflow-hidden transition-all duration-300"
+        }
       >
         {/* Chat column */}
         <div className="flex flex-col flex-1 h-full overflow-hidden">
@@ -163,7 +168,7 @@ const ChatPage = ({ currentUser, onLogout }) => {
             )}
           </div>
 
-          {/* Messages (only this scrolls in the chat column) */}
+          {/* Messages (scrollable) */}
           <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gradient-to-b from-gray-100 to-gray-200 hide-scrollbar">
             {messagesToShow.map((msg, idx) => {
               const isOutgoing = msg.senderId === userId;
@@ -184,7 +189,7 @@ const ChatPage = ({ currentUser, onLogout }) => {
                         : "bg-white text-gray-900 border border-gray-200 rounded-bl-none"
                     }`}
                   >
-                    <p>{msg.message}</p>
+                    <p className="break-">{msg.message}</p>
                     <small
                       className={`block text-[8px] opacity-70 mt-1 ${
                         isOutgoing ? "text-right" : "text-left"
@@ -200,7 +205,7 @@ const ChatPage = ({ currentUser, onLogout }) => {
               );
             })}
 
-            {/* Typing bubble in chat window */}
+            {/* Typing animation */}
             {typingUsers[selectedUser?._id] && (
               <div className="flex justify-start">
                 <div className="bg-gray-300 px-3 py-2 rounded-2xl max-w-xs flex gap-1">
@@ -226,7 +231,7 @@ const ChatPage = ({ currentUser, onLogout }) => {
             <div ref={bottomRef} />
           </div>
 
-          {/* Input (always visible; not inside the scrollable area) */}
+          {/* Input */}
           {selectedUser && (
             <div className="p-3 border-t border-gray-300 bg-white flex items-center gap-2 shadow-md shrink-0">
               <button className="p-2 hover:bg-gray-100 rounded-full">
@@ -261,14 +266,12 @@ const ChatPage = ({ currentUser, onLogout }) => {
           )}
         </div>
 
-        {/* Contact List column (only the list scrolls) */}
+        {/* Contacts list */}
         <div className="w-1/4 bg-white border-l border-gray-300 flex flex-col h-full overflow-hidden">
-          {/* Header */}
           <div className="p-4 border-b border-gray-300 shrink-0">
             <h3 className="text-lg font-bold">Contacts</h3>
           </div>
 
-          {/* Search (fixed under header) */}
           <div className="p-2 border-b border-gray-200 shrink-0">
             <input
               type="text"
@@ -279,27 +282,35 @@ const ChatPage = ({ currentUser, onLogout }) => {
             />
           </div>
 
-          {/* Scrollable list */}
           <div className="flex-1 overflow-y-auto hide-scrollbar">
-            {filteredUsers.map((user) => (
-              <div
-                key={user._id}
-                onClick={() => selectUser(user)}
-                className={`flex items-center gap-3 p-3 cursor-pointer hover:bg-gray-100 ${
-                  selectedUser?._id === user._id ? "bg-blue-50" : ""
-                }`}
-              >
-                <img
-                  src={`https://ui-avatars.com/api/?name=${user.name}`}
-                  alt="avatar"
-                  className="w-10 h-10 rounded-full"
-                />
-                <div>
-                  <p className="font-medium">{user.name}</p>
-                  <span className="text-xs text-gray-500">{user.role}</span>
+            {filteredUsers.map((user) => {
+              const isSelected = selectedUser?._id === user._id;
+              const hasNewMessage = newMessagesByUser[user._id];
+
+              return (
+                <div
+                  key={user._id}
+                  onClick={() => selectUser(user)}
+                  className={`flex items-center gap-3 p-3 cursor-pointer hover:bg-gray-100 ${
+                    isSelected
+                      ? "bg-blue-50"
+                      : hasNewMessage
+                      ? "bg-yellow-100 font-semibold"
+                      : ""
+                  }`}
+                >
+                  <img
+                    src={`https://ui-avatars.com/api/?name=${user.name}`}
+                    alt="avatar"
+                    className="w-10 h-10 rounded-full"
+                  />
+                  <div>
+                    <p className="font-medium">{user.name}</p>
+                    <span className="text-xs text-gray-500">{user.role}</span>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </div>

@@ -114,7 +114,7 @@ const AppWrapper = () => {
           path="/messages"
           element={
             isAuthenticated ? (
-              <ChatPage currentUser={currentUser} />
+              <ChatPage onLogout={handleLogout} currentUser={currentUser} />
             ) : (
               <Navigate to="/login" replace />
             )
