@@ -1,4 +1,3 @@
-// src/components/admintask/TaskForm.jsx
 import React, { useState, useEffect, useRef } from "react";
 import API from "../../api";
 
@@ -21,7 +20,6 @@ const TaskForm = ({ onCreate }) => {
   const [timeOpen, setTimeOpen] = useState(false);
   const timeRef = useRef(null);
 
-  // Fetch users
   useEffect(() => {
     const fetchUsers = async () => {
       try {
@@ -34,7 +32,6 @@ const TaskForm = ({ onCreate }) => {
     fetchUsers();
   }, []);
 
-  // Close dropdown and time picker when clicking outside
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
@@ -53,9 +50,7 @@ const TaskForm = ({ onCreate }) => {
       const alreadySelected = prev.assignedTo.includes(userId);
       return {
         ...prev,
-        assignedTo: alreadySelected
-          ? prev.assignedTo.filter((id) => id !== userId)
-          : [...prev.assignedTo, userId],
+        assignedTo: alreadySelected ? prev.assignedTo.filter((id) => id !== userId) : [...prev.assignedTo, userId],
       };
     });
   };
@@ -84,11 +79,8 @@ const TaskForm = ({ onCreate }) => {
     setSearchTerm("");
   };
 
-  const filteredUsers = users.filter((u) =>
-    u.name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredUsers = users.filter((u) => u.name.toLowerCase().includes(searchTerm.toLowerCase()));
 
-  // Generate time slots for time picker
   const generateTimeSlots = () => {
     const slots = [];
     for (let h = 0; h < 24; h++) {
@@ -104,18 +96,13 @@ const TaskForm = ({ onCreate }) => {
   const timeSlots = generateTimeSlots();
 
   const commonInputClasses =
-    "border border-gray-300 p-2 rounded-xl shadow-sm text-sm w-full focus:ring-2 focus:ring-pinkAccent focus:border-pinkAccent outline-none cursor-pointer";
+    "bg-[#141a29] border border-[rgba(84,123,209,0.4)] p-2 rounded-2xl shadow-sm text-sm text-blue-100 w-full focus:ring-2 focus:ring-[#ff8000] outline-none cursor-pointer";
 
   return (
-    <form
-      onSubmit={handleSubmit}
-      className="p-6 space-y-5 bg-white rounded-xl shadow-md"
-    >
+    <form onSubmit={handleSubmit} className="space-y-5">
       {/* Task Title */}
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          Task Title
-        </label>
+        <label className="block text-sm font-medium mb-1">Task Title</label>
         <input
           type="text"
           placeholder="Enter task title"
@@ -128,53 +115,41 @@ const TaskForm = ({ onCreate }) => {
 
       {/* Assign To */}
       <div className="relative" ref={dropdownRef}>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          Assign To (Multiple)
-        </label>
-        <div
-          className={commonInputClasses}
-          onClick={() => setDropdownOpen((prev) => !prev)}
-        >
-          {task.assignedTo.length > 0
-            ? `${task.assignedTo.length} user(s) selected`
-            : "Select users..."}
+        <label className="block text-sm font-medium mb-1">Assign To (Multiple)</label>
+        <div className={commonInputClasses} onClick={() => setDropdownOpen((prev) => !prev)}>
+          {task.assignedTo.length > 0 ? `${task.assignedTo.length} user(s) selected` : "Select users..."}
         </div>
 
         {dropdownOpen && (
-          <div className="absolute left-0 top-full mt-1 border border-gray-200 bg-white rounded-xl shadow-lg w-full z-50">
-            {/* Search */}
-            <div className="p-2 border-b border-gray-200">
+          <div className="absolute left-0 top-full mt-1 border border-[rgba(84,123,209,0.4)] bg-[#141a29] rounded-2xl shadow-lg w-full z-50 text-blue-100 max-h-60 overflow-y-auto">
+            <div className="p-2 border-b border-[rgba(84,123,209,0.4)]">
               <input
                 type="text"
                 placeholder="Search users..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className={commonInputClasses}
+                className="bg-[#141a29] border border-[rgba(84,123,209,0.4)] rounded-2xl p-2 text-blue-100 w-full focus:ring-2 focus:ring-[#ff8000] outline-none"
               />
             </div>
-            {/* User List */}
-            <div className="max-h-60 overflow-y-auto">
-              {filteredUsers.length > 0 ? (
-                filteredUsers.map((user) => (
-                  <label
-                    key={user._id}
-                    className="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={task.assignedTo.includes(user._id)}
-                      onChange={() => toggleUserSelection(user._id)}
-                      className="mr-2 cursor-pointer"
-                    />
-                    {user.name}
-                  </label>
-                ))
-              ) : (
-                <div className="px-3 py-2 text-sm text-gray-500">
-                  No users found
-                </div>
-              )}
-            </div>
+
+            {filteredUsers.length > 0 ? (
+              filteredUsers.map((user) => (
+                <label
+                  key={user._id}
+                  className="flex items-center px-3 py-2 hover:bg-[rgba(255,128,0,0.15)] cursor-pointer rounded-md"
+                >
+                  <input
+                    type="checkbox"
+                    checked={task.assignedTo.includes(user._id)}
+                    onChange={() => toggleUserSelection(user._id)}
+                    className="mr-2 cursor-pointer"
+                  />
+                  {user.name}
+                </label>
+              ))
+            ) : (
+              <div className="px-3 py-2 text-sm text-blue-300">No users found</div>
+            )}
           </div>
         )}
       </div>
@@ -201,11 +176,11 @@ const TaskForm = ({ onCreate }) => {
             onClick={() => setTimeOpen(!timeOpen)}
           />
           {timeOpen && (
-            <div className="absolute top-full mt-1 bg-white shadow-lg rounded-xl p-2 max-h-60 overflow-y-auto w-full z-50">
+            <div className="absolute top-full mt-1 bg-[#141a29] border border-[rgba(84,123,209,0.4)] rounded-2xl shadow-lg max-h-60 overflow-y-auto w-full z-50 text-blue-100">
               {timeSlots.map((time) => (
                 <div
                   key={time}
-                  className="px-3 py-1 hover:bg-pinkAccent/20 cursor-pointer rounded-md text-sm"
+                  className="px-3 py-1 hover:bg-[#ff8000]/50 cursor-pointer rounded-md text-sm"
                   onClick={() => {
                     setTask({ ...task, dueTime: time });
                     setTimeOpen(false);
@@ -221,9 +196,7 @@ const TaskForm = ({ onCreate }) => {
 
       {/* Priority */}
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          Priority
-        </label>
+        <label className="block text-sm font-medium mb-1">Priority</label>
         <select
           className={commonInputClasses}
           value={task.priority}
@@ -239,12 +212,10 @@ const TaskForm = ({ onCreate }) => {
 
       {/* Description */}
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          Description
-        </label>
+        <label className="block text-sm font-medium mb-1">Description</label>
         <textarea
           placeholder="Enter task description"
-          className={commonInputClasses + " resize-none"}
+          className={`${commonInputClasses} resize-none`}
           rows={3}
           value={task.description}
           onChange={(e) => setTask({ ...task, description: e.target.value })}
@@ -254,7 +225,7 @@ const TaskForm = ({ onCreate }) => {
       {/* Submit */}
       <button
         type="submit"
-        className="w-full p-3 rounded-xl font-semibold bg-gradient-to-r from-pinkAccent to-orange-500 text-black hover:opacity-90 transition cursor-pointer"
+        className="w-full p-3 rounded-2xl font-semibold bg-gradient-to-r from-[#ff8000] to-[#ffa733] text-black hover:opacity-90 transition cursor-pointer"
       >
         Create Task
       </button>
