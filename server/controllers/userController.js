@@ -1,4 +1,6 @@
 const User = require("../models/User");
+const Task = require("../models/Task");
+const LeaveRequest = require("../models/LeaveRequest");
 
 // ======================
 // Create Employee (admin/hr/super-admin)
@@ -28,7 +30,6 @@ exports.createEmployee = async (req, res) => {
       password,
     } = req.body;
 
-    // Validate required fields
     if (!employeeId || !name || !email || !contact || !dob || !gender || !doj) {
       return res.status(400).json({ message: "Required fields are missing." });
     }
@@ -36,7 +37,6 @@ exports.createEmployee = async (req, res) => {
     const normalizedEmail = String(email).toLowerCase().trim();
     const trimmedEmployeeId = String(employeeId).trim();
 
-    // Check duplicates
     if (await User.findOne({ email: normalizedEmail })) {
       return res.status(400).json({ message: "Email already in use." });
     }
@@ -66,7 +66,7 @@ exports.createEmployee = async (req, res) => {
       ref: ref ? String(ref).trim() : "",
       status: status ? String(status).toLowerCase().trim() : "inactive",
       totalPl: Number.isFinite(parsedTotalPl) ? parsedTotalPl : 0,
-      password: userPassword, // ⚠️ consider hashing
+      password: userPassword, // consider hashing in production
       department: department || "",
       designation: designation ? String(designation).trim() : "",
       role: "employee",
@@ -119,7 +119,7 @@ exports.getEmployeeDirectory = async (req, res) => {
 };
 
 // ======================
-// Get All Users (admin & super-admin minimal list)
+// Get All Users (minimal list)
 // ======================
 exports.getAllUsers = async (req, res) => {
   try {
@@ -134,7 +134,7 @@ exports.getAllUsers = async (req, res) => {
 };
 
 // ======================
-// Get Current Logged-in User
+// Get Current Logged-in User + Stats
 // ======================
 exports.getMe = async (req, res) => {
   try {
@@ -142,6 +142,31 @@ exports.getMe = async (req, res) => {
 
     const user = await User.findById(req.user._id).select("-password");
     if (!user) return res.status(404).json({ message: "User not found" });
+
+    // Compute task stats
+    const tasks = await Task.find({
+      $or: [{ assignedTo: user._id }, { assignedBy: user._id }],
+    });
+
+    const tasksCompleted = tasks.filter(t => t.status === "completed").length;
+    const ongoingProjects = tasks.filter(t => t.status === "pending" || t.status === "in-progress").length;
+
+    // Compute attendance based on approved leaves in current month
+    const today = new Date();
+    const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+    const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+
+    const approvedLeaves = await LeaveRequest.find({
+      "employee.email": user.email,
+      status: "Approved",
+      "period.start": { $gte: monthStart, $lte: monthEnd }
+    });
+
+    const totalDays = monthEnd.getDate();
+    const attendancePercent = Math.max(
+      0,
+      Math.round(((totalDays - approvedLeaves.length) / totalDays) * 100)
+    );
 
     res.json({
       id: user._id,
@@ -167,6 +192,9 @@ exports.getMe = async (req, res) => {
       location: user.location,
       outlookEmail: user.outlookEmail || null,
       hasEmailCredentials: Boolean(user.outlookEmail && user.outlookAppPassword),
+      tasksCompleted,
+      ongoingProjects,
+      attendancePercent,
     });
   } catch (err) {
     console.error("GetMe Error:", err);
