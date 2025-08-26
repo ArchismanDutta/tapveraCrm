@@ -7,7 +7,13 @@ const { protect } = require("../middlewares/authMiddleware");
 
 router.get("/:otherUserId", protect, async (req, res) => {
   try {
-    const userId = req.user.id; // assuming authMiddleware sets req.user
+    console.log(
+      "API request by:",
+      req.user._id,
+      "for chat with:",
+      req.params.otherUserId
+    );
+    const userId = req.user._id; // assuming authMiddleware sets req.user
     const otherUserId = req.params.otherUserId;
     const messages = await ChatController.getMessages(userId, otherUserId);
     res.json(messages);
