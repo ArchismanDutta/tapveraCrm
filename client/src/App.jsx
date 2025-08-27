@@ -29,6 +29,8 @@ import TodoPage from "./pages/TodoPage";
 import ChatPage from "./pages/ChatPage";
 import EmployeeDirectory from "./pages/EmployeeDirectory";
 import EmployeePage from "./pages/EmployeePage";
+import HRDashboard from "./pages/HRDashboard";
+
 import { resetChat } from "./store/slices/chatSlice";
 import { useDispatch } from "react-redux";
 
@@ -45,12 +47,11 @@ const AppWrapper = () => {
     if (userStr) setCurrentUser(JSON.parse(userStr));
   }, []);
 
-  // Load auth state on mount
+  // Load auth state and role on mount
   useEffect(() => {
     const token = localStorage.getItem("token");
     const userStr = localStorage.getItem("user");
     let storedRole = JSON.parse(userStr)?.role || localStorage.getItem("role");
-
     if (storedRole) storedRole = storedRole.toLowerCase();
 
     if (token && token.trim() !== "") {
@@ -92,7 +93,8 @@ const AppWrapper = () => {
     );
   }
 
-  const isAdmin = ["admin", "super-admin", "hr"].includes(role);
+  const isAdmin = role === "admin" || role === "super-admin";
+  const isHR = role === "hr";
 
   return (
     <>
@@ -103,6 +105,8 @@ const AppWrapper = () => {
           element={
             !isAuthenticated ? (
               <Login onLoginSuccess={handleLoginSuccess} />
+            ) : isHR ? (
+              <Navigate to="/hrdashboard" replace />
             ) : isAdmin ? (
               <Navigate to="/admin/tasks" replace />
             ) : (
@@ -111,7 +115,19 @@ const AppWrapper = () => {
           }
         />
 
-        {/* ChatPage / Messages */}
+        {/* HR Dashboard */}
+        <Route
+          path="/hrdashboard"
+          element={
+            isAuthenticated && isHR ? (
+              <HRDashboard onLogout={handleLogout} currentUser={currentUser} />
+            ) : (
+              <Navigate to="/login" replace />
+            )
+          }
+        />
+
+        {/* ChatPage / Messages - authenticated only */}
         <Route
           path="/messages"
           element={
@@ -127,7 +143,7 @@ const AppWrapper = () => {
         <Route
           path="/signup"
           element={
-            isAuthenticated && isAdmin ? (
+            isAuthenticated && (isAdmin || isHR) ? (
               <Signup onLoginSuccess={handleLoginSuccess} />
             ) : (
               <Navigate to={isAuthenticated ? "/" : "/login"} replace />
@@ -139,22 +155,28 @@ const AppWrapper = () => {
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password/:token" element={<ResetPassword />} />
 
-        {/* Employee Dashboard */}
+        {/* Employee Dashboard (non admin, non HR) */}
         <Route
           path="/dashboard"
           element={
-            isAuthenticated && !isAdmin ? (
+            isAuthenticated && !isAdmin && !isHR ? (
               <EmployeeDashboardPage onLogout={handleLogout} role={role} />
             ) : (
               <Navigate
-                to={isAuthenticated ? "/admin/tasks" : "/login"}
+                to={
+                  isAuthenticated
+                    ? isAdmin
+                      ? "/admin/tasks"
+                      : "/login"
+                    : "/login"
+                }
                 replace
               />
             )
           }
         />
 
-        {/* Profile */}
+        {/* Profile - any authenticated user */}
         <Route
           path="/profile"
           element={
@@ -173,7 +195,7 @@ const AppWrapper = () => {
         <Route
           path="/employee/:id"
           element={
-            isAuthenticated && isAdmin ? (
+            isAuthenticated && (isAdmin || isHR) ? (
               <EmployeePage userRole={role} onLogout={handleLogout} />
             ) : (
               <Navigate
@@ -184,7 +206,7 @@ const AppWrapper = () => {
           }
         />
 
-        {/* Admin Pages */}
+        {/* Admin routes */}
         <Route
           path="/admin/tasks"
           element={
@@ -238,7 +260,7 @@ const AppWrapper = () => {
           }
         />
 
-        {/* Employee Pages */}
+        {/* Employee pages accessible to any authenticated user */}
         <Route
           path="/tasks"
           element={
@@ -249,8 +271,6 @@ const AppWrapper = () => {
             )
           }
         />
-
-        {/* Today Status - accessible to all authenticated employees */}
         <Route
           path="/today-status"
           element={
@@ -261,7 +281,6 @@ const AppWrapper = () => {
             )
           }
         />
-
         <Route
           path="/attendance"
           element={
@@ -304,13 +323,15 @@ const AppWrapper = () => {
         />
 
         {/* Catch-All */}
-        <Route
+        {/* <Route
           path="*"
           element={
             <Navigate
               to={
                 isAuthenticated
-                  ? isAdmin
+                  ? isHR
+                    ? "/hrdashboard"
+                    : isAdmin
                     ? "/admin/tasks"
                     : "/dashboard"
                   : "/login"
@@ -318,7 +339,7 @@ const AppWrapper = () => {
               replace
             />
           }
-        />
+        /> */}
       </Routes>
 
       <ToastContainer position="top-right" autoClose={3000} />
