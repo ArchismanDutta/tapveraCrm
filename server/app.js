@@ -7,7 +7,7 @@ const morgan = require("morgan");
 const path = require("path");
 const http = require("http");
 const WebSocket = require("ws");
-
+const jwt = require("jsonwebtoken");
 
 // Routes
 const userRoutes = require("./routes/userRoutes");
@@ -29,15 +29,12 @@ const ChatController = require("./controllers/chatController");
 const app = express();
 const server = http.createServer(app);
 
-// =====================
 // Middleware
-// =====================
 app.use(express.json());
 
-// Serve uploaded files (e.g., employee photos, avatars)
+// Serve uploaded files
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
-// Allowed frontend origins
 const frontendOrigins = [
   process.env.FRONTEND_ORIGIN,
   process.env.FRONTEND_URL,
@@ -62,16 +59,12 @@ app.use(
 
 app.use(morgan("dev"));
 
-// =====================
-// Health Check
-// =====================
+// Health check
 app.get("/api/health", (req, res) => {
   res.json({ status: "ok", timestamp: Date.now() });
 });
 
-// =====================
-// API Routes
-
+// API routes
 app.use("/api/tasks", taskRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/password", passwordRoutes);
@@ -85,7 +78,7 @@ app.use("/api/summary", summaryRoutes);
 app.use("/api/notices", noticeRoutes);
 app.use("/api/chat", chatRoutes);
 
-// Serve frontend (production)
+// Serve frontend in production
 if (process.env.NODE_ENV === "production") {
   app.use(express.static(path.join(__dirname, "client", "build")));
   app.get("*", (req, res) =>
@@ -93,9 +86,7 @@ if (process.env.NODE_ENV === "production") {
   );
 }
 
-// =====================
 // Error handler
-// =====================
 app.use((err, req, res, next) => {
   console.error("❌ Unexpected error:", err.stack || err);
   res.status(500).json({ error: "Internal Server Error" });
@@ -104,60 +95,126 @@ app.use((err, req, res, next) => {
 // WebSocket Server Setup
 const wss = new WebSocket.Server({ server });
 
+// Store connected users: userId -> ws
 let users = {};
 
+// Track online users per conversation: conversationId -> Set of userIds
+let conversationMembersOnline = {};
+
 wss.on("connection", (ws) => {
+  ws.isAuthenticated = false;
+
   ws.on("message", async (message) => {
     let data;
     try {
       data = JSON.parse(message);
-      console.log("Received WS data:", data);
     } catch (err) {
       console.error("Invalid JSON:", err);
+      ws.close();
       return;
     }
 
-    if (data.type === "register") {
-      users[data.userId] = ws;
-      console.log(`User registered with userId: ${data.userId}`);
-      return;
-    }
+    // Handle authentication
+    if (!ws.isAuthenticated) {
+      if (data.type === "authenticate" && data.token) {
+        try {
+          const user = jwt.verify(data.token, process.env.JWT_SECRET);
+          ws.isAuthenticated = true;
+          ws.user = user;
+          users[user.id] = ws;
+          console.log(user);
+          console.log(`User authenticated: ${user.id}`);
 
-    if (data.type === "private_message") {
-      // Log full data before destructuring
-      console.log("Private message data:", data);
+          // Track which conversations the user is currently viewing
+          if (Array.isArray(data.conversationIds)) {
+            data.conversationIds.forEach((convId) => {
+              if (!conversationMembersOnline[convId]) {
+                conversationMembersOnline[convId] = new Set();
+              }
+              conversationMembersOnline[convId].add(user.id);
+            });
+          }
 
-      // Safe destructuring with fallback
-      const senderId = data.senderId || data.senderid || data.senderID;
-      const recipientId =
-        data.recipientId || data.recipientid || data.recipientID;
-      const msg = data.message || data.msg;
-
-      if (!senderId || !recipientId || !msg) {
-        console.error(
-          "Missing senderId, recipientId or message in private_message data"
+          ws.send(JSON.stringify({ type: "authenticated", userId: user.id }));
+        } catch (err) {
+          ws.send(
+            JSON.stringify({ type: "auth_failed", message: "Invalid Token" })
+          );
+          ws.close();
+        }
+      } else {
+        ws.send(
+          JSON.stringify({ type: "auth_required", message: "Token Required" })
         );
+        ws.close();
+      }
+      return;
+    }
+
+    // Handle chat message
+    if (data.type === "message") {
+      const { conversationId, message: msgText } = data;
+      const senderId = ws.user.id;
+
+      if (!conversationId || !msgText) {
+        console.error("Missing conversationId or message");
         return;
       }
 
       try {
-        // Save the message to DB
-        await ChatController.saveMessage(senderId, recipientId, msg);
-        console.log(`Saved message from ${senderId} to ${recipientId}`);
-      } catch (err) {
-        console.error("Error saving chat message:", err);
-      }
-
-      const recipientSocket = users[recipientId];
-      if (recipientSocket) {
-        recipientSocket.send(
-          JSON.stringify({
-            type: "private_message",
-            senderId,
-            message: msg,
-            timestamp: new Date(),
-          })
+        // Save the message
+        const savedMessage = await ChatController.saveMessage(
+          conversationId,
+          senderId,
+          msgText
         );
+        console.log(
+          `Saved message from ${senderId} in conversation ${conversationId}`
+        );
+
+        // Broadcast to all online members of the conversation
+        const conversation = await ChatController.getConversationById(
+          conversationId
+        );
+        if (!conversation) {
+          console.error(`Conversation ${conversationId} not found`);
+          return;
+        }
+
+        conversation.members.forEach((memberId) => {
+          const memberWs = users[memberId];
+          if (memberWs && memberWs.readyState === WebSocket.OPEN) {
+            memberWs.send(
+              JSON.stringify({
+                type: "message",
+                conversationId,
+                senderId,
+                message: msgText,
+                timestamp: savedMessage.timestamp,
+                messageId: savedMessage._id,
+              })
+            );
+          }
+        });
+      } catch (err) {
+        console.error("Error handling message:", err);
+      }
+    }
+  });
+
+  ws.on("close", () => {
+    if (ws.user) {
+      console.log(`User disconnected: ${ws.user.id}`);
+
+      // Remove user from users map
+      delete users[ws.user.id];
+
+      // Remove user from conversationMembersOnline tracking
+      for (const convId in conversationMembersOnline) {
+        conversationMembersOnline[convId].delete(ws.user.id);
+        if (conversationMembersOnline[convId].size === 0) {
+          delete conversationMembersOnline[convId];
+        }
       }
     }
   });
@@ -182,7 +239,10 @@ mongoose
     server.listen(PORT, () =>
       console.log(`🚀 Server running at http://localhost:${PORT}`)
     );
-    console.log("🌐 FRONTEND_URL for emails:", process.env.FRONTEND_URL || "not set");
+    console.log(
+      "🌐 FRONTEND_URL for emails:",
+      process.env.FRONTEND_URL || "not set"
+    );
   })
   .catch((err) => {
     console.error("❌ MongoDB connection error:", err.message);
