@@ -124,7 +124,7 @@ exports.getEmployeeDirectory = async (req, res) => {
 exports.getAllUsers = async (req, res) => {
   try {
     const users = await User.find().select(
-      "_id name email role department designation employeeId"
+      "_id name email role department designation employeeId dob doj"
     );
     res.json(users);
   } catch (err) {
