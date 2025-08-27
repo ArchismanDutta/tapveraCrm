@@ -27,7 +27,7 @@ router.get("/me", protect, getMe);
 // ======================
 // Get all users (for assigning tasks) — admin & super-admin only
 // ======================
-router.get("/", protect, authorize("admin", "super-admin"), getAllUsers);
+router.get("/", protect, authorize("admin", "super-admin", "hr"), getAllUsers);
 
 // ======================
 // Get all users (ignoring roles, custom endpoint)
