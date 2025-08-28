@@ -22,8 +22,8 @@ const ChatWindow = ({
 
   return (
     <div className="flex flex-col h-full bg-gray-900 text-gray-100">
-      {/* Messages Area */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-3">
+      {/* Messages Area: take full height except input box */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-3 hide-scrollbar">
         {messages.length === 0 ? (
           <p className="text-gray-500 text-center text-sm">
             No messages yet...
@@ -43,7 +43,7 @@ const ChatWindow = ({
                       : "bg-gray-700 text-gray-100 rounded-bl-none"
                   }`}
                 >
-                  <p className="text-sm">{msg.message}</p>
+                  <p className="text-sm hide-scrollbar">{msg.message}</p>
                   <span className="block text-[10px] text-gray-400 mt-1 text-right">
                     {new Date(msg.timestamp).toLocaleTimeString([], {
                       hour: "2-digit",
@@ -58,8 +58,8 @@ const ChatWindow = ({
         <div ref={chatEndRef} />
       </div>
 
-      {/* Input Box */}
-      <div className="flex items-center">
+      {/* Sticky Input Box */}
+      <div className="sticky bottom-0 flex items-center z-10">
         <input
           type="text"
           value={input}
@@ -77,6 +77,7 @@ const ChatWindow = ({
       </div>
     </div>
   );
+
 };
 
 export default ChatWindow;
