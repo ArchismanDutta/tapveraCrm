@@ -1,4 +1,3 @@
-// src/pages/AdminLeaveRequests.jsx
 import React, { useState, useEffect, useRef } from "react";
 import LeaveRequestsTable from "../components/adminleaves/LeaveRequestsTable";
 import LeaveRequestDetails from "../components/adminleaves/LeaveRequestDetails";
@@ -123,12 +122,12 @@ const AdminLeaveRequests = ({ onLogout }) => {
     setPendingAction(null);
   };
 
-  if (loading) return <div className="p-8">Loading leave requests...</div>;
+  if (loading) return <div className="p-8 text-gray-200 dark:text-gray-300">Loading leave requests...</div>;
   if (error)
-    return <div className="p-8 text-red-600">Error: {error || "Unknown error"}</div>;
+    return <div className="p-8 text-red-600 dark:text-red-400">Error: {error || "Unknown error"}</div>;
 
   return (
-    <div className="flex bg-gray-50 min-h-screen">
+    <div className="flex bg-gray-900 dark:bg-gray-900 min-h-screen text-gray-100">
       <Sidebar
         collapsed={collapsed}
         setCollapsed={setCollapsed}

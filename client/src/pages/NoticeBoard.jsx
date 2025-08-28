@@ -22,7 +22,7 @@ const NoticeBoard = ({ onLogout }) => {
     fetchNotices();
   }, []);
 
-  // Create notice
+  // Create notice (assuming form calls this)
   const handlePublish = async (message) => {
     await fetchNotices();
   };
@@ -37,27 +37,25 @@ const NoticeBoard = ({ onLogout }) => {
     }
   };
 
+  // Sidebar width
+  const sidebarWidth = collapsed ? 80 : 288; // Tailwind w-20=80px, w-72=288px
+
   return (
-    <div className="flex">
+    <div className="flex min-h-screen bg-gray-900 text-gray-200">
       {/* Sidebar */}
-      <Sidebar
-        collapsed={collapsed}
-        setCollapsed={setCollapsed}
-        userRole="admin"
-        onLogout={onLogout}
-      />
+      <Sidebar collapsed={collapsed} setCollapsed={setCollapsed} onLogout={onLogout} />
 
       {/* Main Content */}
       <div
-        className={`
-          flex-1 p-6 bg-gray-50 min-h-screen transition-all duration-300
-          ${collapsed ? "ml-20" : "ml-64"}
-        `}
+        className="flex-1 p-6 transition-all duration-300 overflow-y-auto"
+        style={{ marginLeft: `${sidebarWidth}px` }}
       >
-        <h1 className="text-2xl font-bold mb-6">Notice Board</h1>
+        <h1 className="text-3xl font-bold mb-6 text-gray-100">Notice Board</h1>
 
         {/* Create Form */}
-        <NoticeForm onPublish={handlePublish} />
+        <div className="mb-8">
+          <NoticeForm onPublish={handlePublish} />
+        </div>
 
         {/* Notice List */}
         <NoticeList notices={notices} onDeactivate={handleDeactivate} />

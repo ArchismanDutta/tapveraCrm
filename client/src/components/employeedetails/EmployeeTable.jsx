@@ -1,9 +1,8 @@
-// File: src/components/employeedetails/EmployeeTable.jsx
 import React from "react";
 import { FaEye } from "react-icons/fa";
 import { useNavigate } from "react-router-dom";
 
-const EmployeeTable = ({ employees = [] }) => {
+const EmployeeTable = ({ employees = [], currentUser }) => {
   const navigate = useNavigate();
 
   const handleView = (emp) => {
@@ -12,76 +11,97 @@ const EmployeeTable = ({ employees = [] }) => {
     }
   };
 
+  if (!currentUser) return null; // Wait until currentUser is loaded
+
+  // Sort so current user comes first
+  const sortedEmployees = [...employees].sort((a, b) => {
+    if (a._id === String(currentUser._id)) return -1;
+    if (b._id === String(currentUser._id)) return 1;
+    return 0;
+  });
+
   return (
-    <div className="overflow-x-auto border rounded-xl shadow-md">
-      <table className="min-w-full bg-white border-collapse">
-        <thead className="bg-orange-100 border-b-2 border-orange-300">
+    <div className="overflow-x-auto border rounded-xl shadow-md bg-gray-800">
+      <table className="min-w-full border-collapse">
+        <thead className="bg-orange-800 border-b-2 border-orange-600">
           <tr>
-            <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700 uppercase tracking-wider">
+            <th className="px-6 py-3 text-left text-sm font-semibold text-gray-200 uppercase tracking-wider">
               Employee
             </th>
-            <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700 uppercase tracking-wider">
+            <th className="px-6 py-3 text-left text-sm font-semibold text-gray-200 uppercase tracking-wider">
               Employee ID
             </th>
-            <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700 uppercase tracking-wider">
+            <th className="px-6 py-3 text-left text-sm font-semibold text-gray-200 uppercase tracking-wider">
               Email
             </th>
-            <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700 uppercase tracking-wider">
+            <th className="px-6 py-3 text-left text-sm font-semibold text-gray-200 uppercase tracking-wider">
               Department
             </th>
-            <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700 uppercase tracking-wider">
+            <th className="px-6 py-3 text-left text-sm font-semibold text-gray-200 uppercase tracking-wider">
               Designation
             </th>
-            <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700 uppercase tracking-wider">
+            <th className="px-6 py-3 text-left text-sm font-semibold text-gray-200 uppercase tracking-wider">
               Status
             </th>
-            <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700 uppercase tracking-wider">
+            <th className="px-6 py-3 text-left text-sm font-semibold text-gray-200 uppercase tracking-wider">
               Actions
             </th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-gray-100">
-          {employees.length === 0 ? (
+        <tbody>
+          {sortedEmployees.length === 0 ? (
             <tr>
-              <td colSpan="7" className="px-6 py-10 text-center text-gray-500 text-sm">
+              <td
+                colSpan="7"
+                className="px-6 py-10 text-center text-gray-400 text-sm"
+              >
                 No employees found.
               </td>
             </tr>
           ) : (
-            employees.map((emp, index) => (
-              <tr
-                key={emp._id}
-                className={`hover:bg-orange-50 ${
-                  index % 2 === 0 ? "bg-gray-50" : "bg-white"
-                } transition-colors duration-200`}
-              >
-                <td className="px-6 py-4 text-gray-800 font-medium">{emp.name || "-"}</td>
-                <td className="px-6 py-4 text-gray-700">{emp.employeeId || "-"}</td>
-                <td className="px-6 py-4 text-gray-700">{emp.email || "-"}</td>
-                <td className="px-6 py-4 text-gray-700">{emp.department || "-"}</td>
-                <td className="px-6 py-4 text-gray-700">{emp.designation || "-"}</td>
-                <td className="px-6 py-4">
-                  <span
-                    className={`px-3 py-1 text-xs font-semibold rounded-full ${
-                      emp.status === "active"
-                        ? "bg-green-100 text-green-800"
-                        : "bg-red-100 text-red-800"
-                    }`}
-                  >
-                    {emp.status ? emp.status.charAt(0).toUpperCase() + emp.status.slice(1) : "Inactive"}
-                  </span>
-                </td>
-                <td className="px-6 py-4">
-                  <button
-                    className="text-blue-600 hover:text-blue-800 flex items-center gap-1"
-                    onClick={() => handleView(emp)}
-                    title="View"
-                  >
-                    <FaEye /> View
-                  </button>
-                </td>
-              </tr>
-            ))
+            sortedEmployees.map((emp) => {
+              const isCurrentUser = emp._id === String(currentUser._id);
+
+              return (
+                <tr
+                  key={emp._id}
+                  className={`transition-colors duration-200 ${
+                    isCurrentUser
+                      ? "bg-gradient-to-r from-blue-200 to-blue-400 text-gray-900 font-bold"
+                      : "bg-gray-800 hover:bg-gray-700"
+                  }`}
+                >
+                  <td className="px-6 py-4">{emp.name || "-"}</td>
+                  <td className="px-6 py-4">{emp.employeeId || "-"}</td>
+                  <td className="px-6 py-4">{emp.email || "-"}</td>
+                  <td className="px-6 py-4">{emp.department || "-"}</td>
+                  <td className="px-6 py-4">{emp.designation || "-"}</td>
+                  <td className="px-6 py-4">
+                    <span
+                      className={`px-3 py-1 text-xs font-semibold rounded-full ${
+                        emp.status === "active"
+                          ? "bg-green-700 text-green-300"
+                          : "bg-red-700 text-red-300"
+                      }`}
+                    >
+                      {emp.status
+                        ? emp.status.charAt(0).toUpperCase() +
+                          emp.status.slice(1)
+                        : "Inactive"}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4">
+                    <button
+                      className="text-blue-400 hover:text-blue-600 flex items-center gap-1"
+                      onClick={() => handleView(emp)}
+                      title="View"
+                    >
+                      <FaEye /> View
+                    </button>
+                  </td>
+                </tr>
+              );
+            })
           )}
         </tbody>
       </table>
