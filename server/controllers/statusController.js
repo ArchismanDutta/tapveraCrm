@@ -1,10 +1,12 @@
-// controllers/statusController.js
+// File: controllers/statusController.js
 
 const UserStatus = require("../models/UserStatus");
 const DailyWork = require("../models/DailyWork");
 const User = require("../models/User");
 
+// ======================
 // Helpers
+// ======================
 function getWorkDurationSeconds(workedSessions, currentlyWorking) {
   let total = workedSessions.reduce(
     (sum, s) => (s.start && s.end ? sum + (s.end - s.start) / 1000 : sum),
@@ -15,7 +17,10 @@ function getWorkDurationSeconds(workedSessions, currentlyWorking) {
     workedSessions.length &&
     !workedSessions[workedSessions.length - 1].end
   ) {
-    total += (Date.now() - new Date(workedSessions[workedSessions.length - 1].start).getTime()) / 1000;
+    total +=
+      (Date.now() -
+        new Date(workedSessions[workedSessions.length - 1].start).getTime()) /
+      1000;
   }
   return Math.floor(total);
 }
@@ -35,12 +40,20 @@ function secToHMS(sec) {
   const h = Math.floor(sec / 3600);
   const m = Math.floor((sec % 3600) / 60);
   const s = sec % 60;
-  return `${h}h ${m.toString().padStart(2, "0")}m ${s.toString().padStart(2, "0")}s`;
+  return `${h}h ${m.toString().padStart(2, "0")}m ${s
+    .toString()
+    .padStart(2, "0")}s`;
 }
 
+// ======================
+// Sync DailyWork with UserStatus
+// ======================
 async function syncDailyWork(userId, todayStatus) {
   const todayDate = new Date();
   todayDate.setHours(0, 0, 0, 0);
+
+  const user = await User.findById(userId);
+  const expectedStartTime = user?.shift?.start || "09:00";
 
   let dailyWork = await DailyWork.findOne({ userId, date: todayDate });
   if (!dailyWork) {
@@ -48,29 +61,42 @@ async function syncDailyWork(userId, todayStatus) {
       userId,
       date: todayDate,
       arrivalTime: todayStatus.arrivalTime || null,
-      expectedStartTime: "09:00",
+      expectedStartTime,
       workDurationSeconds: 0,
       breakDurationSeconds: 0,
       breakSessions: [],
     });
   }
 
-  dailyWork.workDurationSeconds = getWorkDurationSeconds(todayStatus.workedSessions, todayStatus.currentlyWorking);
-  dailyWork.breakDurationSeconds = getBreakDurationSeconds(todayStatus.breakSessions, todayStatus.onBreak, todayStatus.breakStartTime);
+  dailyWork.workDurationSeconds = getWorkDurationSeconds(
+    todayStatus.workedSessions,
+    todayStatus.currentlyWorking
+  );
+  dailyWork.breakDurationSeconds = getBreakDurationSeconds(
+    todayStatus.breakSessions,
+    todayStatus.onBreak,
+    todayStatus.breakStartTime
+  );
 
   if (!dailyWork.arrivalTime && todayStatus.arrivalTime) {
     dailyWork.arrivalTime = todayStatus.arrivalTime;
-  }
-  if (!dailyWork.expectedStartTime) {
-    dailyWork.expectedStartTime = "09:00";
+
+    // Check for late or early based on shift
+    const [expHour, expMin] = dailyWork.expectedStartTime.split(":").map(Number);
+    const shiftStart = new Date(dailyWork.arrivalTime);
+    shiftStart.setHours(expHour, expMin, 0, 0);
+
+    dailyWork.isLate = dailyWork.arrivalTime > shiftStart;
+    dailyWork.isEarly = dailyWork.arrivalTime < shiftStart;
   }
 
   dailyWork.breakSessions = todayStatus.breakSessions || [];
-
   await dailyWork.save();
 }
 
+// ======================
 // GET /api/status
+// ======================
 exports.getTodayStatus = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -98,13 +124,24 @@ exports.getTodayStatus = async (req, res) => {
       });
     }
 
-    const workDurationSeconds = getWorkDurationSeconds(todayStatus.workedSessions, todayStatus.currentlyWorking);
-    const breakDurationSeconds = getBreakDurationSeconds(todayStatus.breakSessions, todayStatus.onBreak, todayStatus.breakStartTime);
+    const workDurationSeconds = getWorkDurationSeconds(
+      todayStatus.workedSessions,
+      todayStatus.currentlyWorking
+    );
+    const breakDurationSeconds = getBreakDurationSeconds(
+      todayStatus.breakSessions,
+      todayStatus.onBreak,
+      todayStatus.breakStartTime
+    );
 
     res.json({
       ...todayStatus.toObject(),
       arrivalTimeFormatted: todayStatus.arrivalTime
-        ? new Date(todayStatus.arrivalTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: true })
+        ? new Date(todayStatus.arrivalTime).toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+            hour12: true,
+          })
         : null,
       workDurationSeconds,
       breakDurationSeconds,
@@ -124,7 +161,9 @@ exports.getTodayStatus = async (req, res) => {
   }
 };
 
+// ======================
 // PUT /api/status
+// ======================
 exports.updateTodayStatus = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -154,51 +193,65 @@ exports.updateTodayStatus = async (req, res) => {
       });
     }
 
-    // Validate duplicates & sync User.status
+    const user = await User.findById(userId);
+    const expectedStartTime = user?.shift?.start || "09:00";
+
+    // Punch In
     if (timelineEvent?.type === "Punch In") {
       if (todayStatus.timeline.some((e) => e.type === "Punch In")) {
         return res.status(400).json({ message: "Already punched in today" });
       }
       if (!todayStatus.arrivalTime) {
         todayStatus.arrivalTime = new Date();
+
+        const [expHour, expMin] = expectedStartTime.split(":").map(Number);
+        const shiftStart = new Date(todayStatus.arrivalTime);
+        shiftStart.setHours(expHour, expMin, 0, 0);
+
+        const daily =
+          (await DailyWork.findOne({ userId, date: todayStart })) ||
+          new DailyWork({ userId, date: todayStart, expectedStartTime });
+
+        daily.arrivalTime = todayStatus.arrivalTime;
+        daily.isLate = todayStatus.arrivalTime > shiftStart;
+        daily.isEarly = todayStatus.arrivalTime < shiftStart;
+        await daily.save();
       }
-      // set active on punch in
+
       await User.findByIdAndUpdate(userId, { status: "active" });
     }
 
+    // Punch Out
     if (timelineEvent?.type === "Punch Out") {
       if (todayStatus.timeline.some((e) => e.type === "Punch Out")) {
         return res.status(400).json({ message: "Already punched out today" });
       }
-      // set inactive on punch out
       await User.findByIdAndUpdate(userId, { status: "inactive" });
     }
 
+    // Update break & working flags
     if (onBreak !== undefined) todayStatus.onBreak = onBreak;
     if (currentlyWorking !== undefined) todayStatus.currentlyWorking = currentlyWorking;
     if (breakStartTime !== undefined) todayStatus.breakStartTime = breakStartTime;
 
-    // Work sessions
+    // Handle work & break sessions
+    const ws = todayStatus.workedSessions;
+    const bs = todayStatus.breakSessions;
+
     if (timelineEvent?.type === "Punch In" || timelineEvent?.type === "Resume Work") {
-      const ws = todayStatus.workedSessions;
       if (!ws.length || ws[ws.length - 1].end) ws.push({ start: new Date() });
     }
     if (timelineEvent?.type?.startsWith("Break Start") || timelineEvent?.type === "Punch Out") {
-      const ws = todayStatus.workedSessions;
       if (ws.length && !ws[ws.length - 1].end) ws[ws.length - 1].end = new Date();
     }
-
-    // Break sessions
     if (timelineEvent?.type?.startsWith("Break Start")) {
-      const bs = todayStatus.breakSessions;
       if (!bs.length || bs[bs.length - 1].end) bs.push({ start: new Date() });
     }
     if (timelineEvent?.type === "Resume Work" || timelineEvent?.type === "Punch Out") {
-      const bs = todayStatus.breakSessions;
       if (bs.length && !bs[bs.length - 1].end) bs[bs.length - 1].end = new Date();
     }
 
-    // Timeline + activities
+    // Timeline + recent activities
     if (timelineEvent?.type && timelineEvent?.time) {
       todayStatus.timeline.push(timelineEvent);
       todayStatus.recentActivities.unshift({
@@ -206,11 +259,19 @@ exports.updateTodayStatus = async (req, res) => {
         activity: timelineEvent.type,
         time: timelineEvent.time,
       });
-      if (todayStatus.recentActivities.length > 10) todayStatus.recentActivities.length = 10;
+      if (todayStatus.recentActivities.length > 10)
+        todayStatus.recentActivities.length = 10;
     }
 
-    const workDurationSeconds = getWorkDurationSeconds(todayStatus.workedSessions, todayStatus.currentlyWorking);
-    const breakDurationSeconds = getBreakDurationSeconds(todayStatus.breakSessions, todayStatus.onBreak, todayStatus.breakStartTime);
+    const workDurationSeconds = getWorkDurationSeconds(
+      todayStatus.workedSessions,
+      todayStatus.currentlyWorking
+    );
+    const breakDurationSeconds = getBreakDurationSeconds(
+      todayStatus.breakSessions,
+      todayStatus.onBreak,
+      todayStatus.breakStartTime
+    );
 
     todayStatus.totalWorkMs = workDurationSeconds * 1000;
     todayStatus.breakDurationSeconds = breakDurationSeconds;
@@ -223,7 +284,11 @@ exports.updateTodayStatus = async (req, res) => {
       workDurationSeconds,
       breakDurationSeconds,
       arrivalTimeFormatted: todayStatus.arrivalTime
-        ? new Date(todayStatus.arrivalTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: true })
+        ? new Date(todayStatus.arrivalTime).toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+            hour12: true,
+          })
         : null,
       lastSessionStart:
         todayStatus.currentlyWorking &&
