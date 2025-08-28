@@ -168,6 +168,7 @@ const ChatPage = ({ onLogout }) => {
                   sendMessage={sendMessage}
                   conversationId={selectedConversation._id}
                   currentUserId={JSON.parse(localStorage.getItem("user"))?.id}
+                  conversationMembers={selectedConversation.members || []}
                 />
               </div>
             </>
