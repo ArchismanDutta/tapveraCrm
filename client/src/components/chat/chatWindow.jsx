@@ -5,6 +5,7 @@ const ChatWindow = ({
   sendMessage,
   conversationId,
   currentUserId,
+  conversationMembers, // New prop
 }) => {
   const [input, setInput] = useState("");
   const chatEndRef = useRef(null);
@@ -15,6 +16,12 @@ const ChatWindow = ({
     setInput("");
   };
 
+  // Helper to get sender name by ID
+  const getSenderName = (senderId) => {
+    const member = conversationMembers.find((m) => m._id === senderId);
+    return member ? member.name : "Unknown";
+  };
+
   // Auto scroll to bottom when new messages arrive
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -23,19 +30,22 @@ const ChatWindow = ({
   return (
     <div className="flex flex-col h-full bg-gray-900 text-gray-100">
       {/* Messages Area */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-3">
+      <div className="flex-1 overflow-y-auto p-4 space-y-3 hide-scrollbar">
         {messages.length === 0 ? (
-          <p className="text-gray-500 text-center text-sm">
-            No messages yet...
-          </p>
+          <p className="text-gray-500 text-center text-sm">No messages yet...</p>
         ) : (
           messages.map((msg) => {
             const isSelf = msg.senderId === currentUserId;
             return (
               <div
                 key={msg.messageId}
-                className={`flex ${isSelf ? "justify-end" : "justify-start"}`}
+                className={`flex flex-col ${isSelf ? "items-end" : "items-start"}`}
               >
+                {!isSelf && (
+                  <p className="text-xs font-semibold text-gray-400 mb-1">
+                    {getSenderName(msg.senderId)}
+                  </p>
+                )}
                 <div
                   className={`max-w-xs md:max-w-md px-3 py-2 rounded-lg ${
                     isSelf
@@ -58,8 +68,8 @@ const ChatWindow = ({
         <div ref={chatEndRef} />
       </div>
 
-      {/* Input Box */}
-      <div className="flex items-center">
+      {/* Sticky Input Box */}
+      <div className="sticky bottom-0 flex items-center z-10">
         <input
           type="text"
           value={input}
