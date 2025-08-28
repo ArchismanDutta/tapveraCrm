@@ -1,3 +1,4 @@
+// models/User.js
 const mongoose = require("mongoose");
 
 // ======================
@@ -13,6 +14,40 @@ const qualificationSchema = new mongoose.Schema({
     required: true,
   },
   marks: { type: String, trim: true }, // percentage or CGPA
+});
+
+// ======================
+// Sub-schema: Shift Timing
+// ======================
+const shiftSchema = new mongoose.Schema({
+  name: { type: String, trim: true, default: "Morning 9-6" },
+  start: {
+    type: String,
+    trim: true,
+    default: "09:00",
+    required: true,
+    validate: {
+      validator: (v) => /^\d{2}:\d{2}$/.test(v),
+      message: "Shift start must be in HH:MM format",
+    },
+  },
+  end: {
+    type: String,
+    trim: true,
+    default: "18:00",
+    required: true,
+    validate: {
+      validator: function (v) {
+        if (!this.start) return true;
+        const [startH, startM] = this.start.split(":").map(Number);
+        const [endH, endM] = v.split(":").map(Number);
+        return endH > startH || (endH === startH && endM > startM);
+      },
+      message: "Shift end time must be after start time",
+    },
+  },
+  durationHours: { type: Number, default: 9 },
+  isFlexible: { type: Boolean, default: false },
 });
 
 // ======================
@@ -126,6 +161,19 @@ const userSchema = new mongoose.Schema(
     location: { type: String, trim: true, default: "India" },
 
     avatar: { type: String, trim: true, default: "" },
+
+    // ======================
+    // Shift Timing (Strict/Flexible)
+    // ======================
+    shift: { type: shiftSchema, default: () => ({}) },
+
+    // Optional reference to flexible shift requests
+    flexibleShiftRequests: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "FlexibleShiftRequest",
+      },
+    ],
   },
   { timestamps: true }
 );
@@ -136,6 +184,7 @@ const userSchema = new mongoose.Schema(
 userSchema.set("toJSON", {
   transform: (doc, ret) => {
     delete ret.outlookAppPassword;
+    delete ret.password;
     return ret;
   },
 });
@@ -143,6 +192,7 @@ userSchema.set("toJSON", {
 userSchema.set("toObject", {
   transform: (doc, ret) => {
     delete ret.outlookAppPassword;
+    delete ret.password;
     return ret;
   },
 });

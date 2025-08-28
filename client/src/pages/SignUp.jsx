@@ -36,6 +36,7 @@ const Signup = () => {
     outlookAppPassword: "",
     employmentType: "full-time",
     qualifications: [{ school: "", degree: "", marks: "", year: "" }],
+    shift: { start: "09:00", end: "18:00" }, // Default shift
   });
 
   const [skillsInput, setSkillsInput] = useState(""); // temp string for skills input
@@ -77,6 +78,10 @@ const Signup = () => {
   const removeQualification = (index) => {
     const updated = form.qualifications.filter((_, i) => i !== index);
     setForm((prev) => ({ ...prev, qualifications: updated }));
+  };
+
+  const handleShiftChange = (field, value) => {
+    setForm((prev) => ({ ...prev, shift: { ...prev.shift, [field]: value } }));
   };
 
   const handleSubmit = async (e) => {
@@ -251,6 +256,18 @@ const Signup = () => {
               onChange={(e) => setSkillsInput(e.target.value)}
               placeholder="e.g. JavaScript, React, Node.js"
             />
+          </div>
+
+          {/* Shift Timing */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
+            <div>
+              <label className="block text-sm text-textMuted mb-1">Shift Start</label>
+              <input type="time" value={form.shift.start} onChange={(e) => handleShiftChange("start", e.target.value)} className="w-full px-4 py-2 border border-border rounded-md" />
+            </div>
+            <div>
+              <label className="block text-sm text-textMuted mb-1">Shift End</label>
+              <input type="time" value={form.shift.end} onChange={(e) => handleShiftChange("end", e.target.value)} className="w-full px-4 py-2 border border-border rounded-md" />
+            </div>
           </div>
 
           {/* Qualification Section */}
