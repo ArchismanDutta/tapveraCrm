@@ -20,7 +20,11 @@ const EmployeeDirectory = () => {
     department: "all",
     status: "all",
   });
+  const [currentUser, setCurrentUser] = useState(null);
 
+  const sidebarWidth = collapsed ? 80 : 288; // px (matches your Sidebar w-20/w-72)
+
+  // Build query string from filters
   const buildQueryParams = () => {
     const params = new URLSearchParams();
     if (filters.search.trim() !== "") params.append("search", filters.search.trim());
@@ -33,10 +37,14 @@ const EmployeeDirectory = () => {
     setLoading(true);
     try {
       const token = localStorage.getItem("token");
-      if (!token) {
+      const userData = localStorage.getItem("user"); // Logged-in user info
+      if (!token || !userData) {
         navigate("/login", { replace: true });
         return;
       }
+
+      const user = JSON.parse(userData);
+      setCurrentUser(user);
 
       const query = buildQueryParams();
       const url = `${API_BASE}/users/directory${query ? `?${query}` : ""}`;
@@ -54,18 +62,36 @@ const EmployeeDirectory = () => {
       }
 
       const data = await res.json();
-      setEmployees(
-        Array.isArray(data)
-          ? data.map((emp) => ({
-              _id: emp._id,
-              name: emp.fullName || emp.name || emp.email || `Employee ${emp._id}`,
-              department: emp.department || "N/A",
-              status: emp.status || "inactive",
-              designation: emp.designation || "N/A",
-              email: emp.email || "N/A",
-            }))
-          : []
-      );
+
+      let mappedEmployees = Array.isArray(data)
+        ? data.map((emp) => ({
+            _id: String(emp._id),
+            name: emp.fullName || emp.name || emp.email || `Employee ${emp._id}`,
+            department: emp.department || "N/A",
+            status: emp.status || "inactive",
+            designation: emp.designation || "N/A",
+            email: emp.email || "N/A",
+            employeeId: emp.employeeId || "-",
+          }))
+        : [];
+
+      // Ensure current user is included at the top
+      if (!mappedEmployees.find((e) => e._id === String(user._id))) {
+        mappedEmployees = [
+          {
+            _id: String(user._id),
+            name: user.fullName || user.name || user.email || "You",
+            department: user.department || "N/A",
+            status: user.status || "active",
+            designation: user.designation || "N/A",
+            email: user.email || "N/A",
+            employeeId: user.employeeId || "-",
+          },
+          ...mappedEmployees,
+        ];
+      }
+
+      setEmployees(mappedEmployees);
     } catch (err) {
       console.error("Error fetching employees:", err.message);
       setEmployees([]);
@@ -86,27 +112,23 @@ const EmployeeDirectory = () => {
   }, [location.state]);
 
   return (
-    <div className="flex">
+    <div className="flex bg-gray-900 min-h-screen text-gray-200">
+      {/* Sidebar */}
       <Sidebar collapsed={collapsed} setCollapsed={setCollapsed} userRole="admin" />
 
-      <main className={`flex-1 p-6 transition-all duration-300 ${collapsed ? "ml-20" : "ml-64"}`}>
-        <h1 className="text-2xl font-semibold mb-4">Employee Directory</h1>
+      {/* Main content */}
+      <main
+        className="flex-1 p-6 transition-all duration-300 min-h-screen overflow-y-auto"
+        style={{ marginLeft: `${sidebarWidth}px` }}
+      >
+        <h1 className="text-2xl font-semibold mb-4 text-gray-100">Employee Directory</h1>
 
         <EmployeeFilters filters={filters} setFilters={setFilters} />
 
         {loading ? (
-          <div className="text-center py-8">Loading employees...</div>
+          <div className="text-center py-8 text-gray-300">Loading employees...</div>
         ) : (
-          <EmployeeTable
-            employees={employees}
-            onView={(emp) => {
-              if (emp && emp._id) {
-                navigate(`/employee/${emp._id}`);
-              } else {
-                console.warn("Invalid employee ID");
-              }
-            }}
-          />
+          <EmployeeTable employees={employees} currentUser={currentUser} />
         )}
       </main>
     </div>

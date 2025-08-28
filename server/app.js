@@ -7,7 +7,7 @@ const morgan = require("morgan");
 const path = require("path");
 const http = require("http");
 const WebSocket = require("ws");
-
+const jwt = require("jsonwebtoken");
 // =====================
 // Routes
 // =====================
@@ -31,16 +31,14 @@ const ChatController = require("./controllers/chatController");
 const app = express();
 const server = http.createServer(app);
 
-// =====================
 // Middleware
-// =====================
 app.use(express.json());
 app.use(morgan("dev"));
 
-// Serve uploaded files (photos, avatars)
+// Serve uploaded files (e.g., employee photos, avatars)
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
-// CORS setup
+// Allowed frontend origins
 const frontendOrigins = [
   process.env.FRONTEND_ORIGIN,
   process.env.FRONTEND_URL,
@@ -61,18 +59,14 @@ app.use(
   })
 );
 
-// =====================
-// Health Check
-// =====================
+// Health check
 app.get("/api/health", (req, res) => {
   res.json({ status: "ok", timestamp: Date.now() });
 });
 
 // =====================
 // API Routes
-// =====================
-app.use("/api/auth", authRoutes);
-app.use("/api/users", userRoutes);
+
 app.use("/api/tasks", taskRoutes);
 app.use("/api/password", passwordRoutes);
 app.use("/api/test", testRoutes);
@@ -85,9 +79,7 @@ app.use("/api/notices", noticeRoutes);
 app.use("/api/chat", chatRoutes);
 app.use("/api/wishes", wishRoutes); // Wish API
 
-// =====================
 // Serve frontend (production)
-// =====================
 if (process.env.NODE_ENV === "production") {
   app.use(express.static(path.join(__dirname, "client", "build")));
   app.get("*", (req, res) =>
@@ -96,7 +88,7 @@ if (process.env.NODE_ENV === "production") {
 }
 
 // =====================
-// Error Handler
+// Error handler
 // =====================
 app.use((err, req, res, next) => {
   console.error("❌ Unexpected error:", err.stack || err);
@@ -107,52 +99,102 @@ app.use((err, req, res, next) => {
 // WebSocket Setup
 // =====================
 const wss = new WebSocket.Server({ server });
+
 let users = {};
 
+// Track online users per conversation: conversationId -> Set of userIds
+let conversationMembersOnline = {};
+
 wss.on("connection", (ws) => {
+  ws.isAuthenticated = false;
+
   ws.on("message", async (message) => {
     let data;
     try {
       data = JSON.parse(message);
-      console.log("Received WS data:", data);
     } catch (err) {
       console.error("Invalid JSON:", err);
+      ws.close();
       return;
     }
 
-    if (data.type === "register") {
-      users[data.userId] = ws;
-      console.log(`User registered with userId: ${data.userId}`);
+    // Handle authentication
+    if (!ws.isAuthenticated) {
+      if (data.type === "authenticate" && data.token) {
+        try {
+          const user = jwt.verify(data.token, process.env.JWT_SECRET);
+          ws.isAuthenticated = true;
+          ws.user = user;
+          users[user.id] = ws;
+          console.log(user);
+          console.log(`User authenticated: ${user.id}`);
+
+          // Track which conversations the user is currently viewing
+          if (Array.isArray(data.conversationIds)) {
+            data.conversationIds.forEach((convId) => {
+              if (!conversationMembersOnline[convId]) {
+                conversationMembersOnline[convId] = new Set();
+              }
+              conversationMembersOnline[convId].add(user.id);
+            });
+          }
+
+          ws.send(JSON.stringify({ type: "authenticated", userId: user.id }));
+        } catch (err) {
+          ws.send(
+            JSON.stringify({ type: "auth_failed", message: "Invalid Token" })
+          );
+          ws.close();
+        }
+      } else {
+        ws.send(
+          JSON.stringify({ type: "auth_required", message: "Token Required" })
+        );
+        ws.close();
+      }
       return;
     }
 
     if (data.type === "private_message") {
+      // Log full data before destructuring
+      console.log("Private message data:", data);
+
+      // Safe destructuring with fallback
       const senderId = data.senderId || data.senderid || data.senderID;
-      const recipientId = data.recipientId || data.recipientid || data.recipientID;
+      const recipientId =
+        data.recipientId || data.recipientid || data.recipientID;
       const msg = data.message || data.msg;
 
       if (!senderId || !recipientId || !msg) {
-        console.error("Missing senderId, recipientId or message in private_message data");
+        console.error(
+          "Missing senderId, recipientId or message in private_message data"
+        );
         return;
       }
 
       try {
+        // Save the message to DB
         await ChatController.saveMessage(senderId, recipientId, msg);
         console.log(`Saved message from ${senderId} to ${recipientId}`);
       } catch (err) {
-        console.error("Error saving chat message:", err);
+        console.error("Error handling message:", err);
       }
+    }
+  });
 
-      const recipientSocket = users[recipientId];
-      if (recipientSocket) {
-        recipientSocket.send(
-          JSON.stringify({
-            type: "private_message",
-            senderId,
-            message: msg,
-            timestamp: new Date(),
-          })
-        );
+  ws.on("close", () => {
+    if (ws.user) {
+      console.log(`User disconnected: ${ws.user.id}`);
+
+      // Remove user from users map
+      delete users[ws.user.id];
+
+      // Remove user from conversationMembersOnline tracking
+      for (const convId in conversationMembersOnline) {
+        conversationMembersOnline[convId].delete(ws.user.id);
+        if (conversationMembersOnline[convId].size === 0) {
+          delete conversationMembersOnline[convId];
+        }
       }
     }
   });
@@ -184,7 +226,10 @@ mongoose
     server.listen(PORT, () =>
       console.log(`🚀 Server running at http://localhost:${PORT}`)
     );
-    console.log("🌐 FRONTEND_URL for emails:", process.env.FRONTEND_URL || "not set");
+    console.log(
+      "🌐 FRONTEND_URL for emails:",
+      process.env.FRONTEND_URL || "not set"
+    );
   })
   .catch((err) => {
     console.error("❌ MongoDB connection error:", err.message);
