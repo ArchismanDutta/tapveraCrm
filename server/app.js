@@ -1,3 +1,4 @@
+// File: server.js
 require("dotenv").config();
 
 const express = require("express");
@@ -8,6 +9,7 @@ const path = require("path");
 const http = require("http");
 const WebSocket = require("ws");
 const jwt = require("jsonwebtoken");
+
 // =====================
 // Routes
 // =====================
@@ -23,7 +25,7 @@ const todoTaskRoutes = require("./routes/todoTaskRoutes");
 const chatRoutes = require("./routes/chatRoutes");
 const statusRoutes = require("./routes/statusRoutes");
 const summaryRoutes = require("./routes/summaryRoutes");
-const wishRoutes = require("./routes/wishRoutes"); // Added Wish routes
+const wishRoutes = require("./routes/wishRoutes");
 
 // Controllers
 const ChatController = require("./controllers/chatController");
@@ -31,14 +33,16 @@ const ChatController = require("./controllers/chatController");
 const app = express();
 const server = http.createServer(app);
 
+// =====================
 // Middleware
+// =====================
 app.use(express.json());
 app.use(morgan("dev"));
 
-// Serve uploaded files (e.g., employee photos, avatars)
+// Serve uploaded files (e.g., avatars, photos)
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
-// Allowed frontend origins
+// CORS setup
 const frontendOrigins = [
   process.env.FRONTEND_ORIGIN,
   process.env.FRONTEND_URL,
@@ -46,7 +50,7 @@ const frontendOrigins = [
   "http://localhost:3000",
 ].filter(Boolean);
 
-if (frontendOrigins.length === 0) {
+if (!frontendOrigins.length) {
   console.warn("⚠️ No FRONTEND_ORIGIN or FRONTEND_URL set. CORS may block requests.");
 }
 
@@ -66,7 +70,9 @@ app.get("/api/health", (req, res) => {
 
 // =====================
 // API Routes
-
+// =====================
+app.use("/api/auth", authRoutes);
+app.use("/api/users", userRoutes);
 app.use("/api/tasks", taskRoutes);
 app.use("/api/password", passwordRoutes);
 app.use("/api/test", testRoutes);
@@ -77,9 +83,9 @@ app.use("/api/status", statusRoutes);
 app.use("/api/summary", summaryRoutes);
 app.use("/api/notices", noticeRoutes);
 app.use("/api/chat", chatRoutes);
-app.use("/api/wishes", wishRoutes); // Wish API
+app.use("/api/wishes", wishRoutes);
 
-// Serve frontend (production)
+// Serve frontend in production
 if (process.env.NODE_ENV === "production") {
   app.use(express.static(path.join(__dirname, "client", "build")));
   app.get("*", (req, res) =>
@@ -99,11 +105,8 @@ app.use((err, req, res, next) => {
 // WebSocket Setup
 // =====================
 const wss = new WebSocket.Server({ server });
-
 let users = {};
-
-// Track online users per conversation: conversationId -> Set of userIds
-let conversationMembersOnline = {};
+let conversationMembersOnline = {}; // conversationId -> Set of userIds
 
 wss.on("connection", (ws) => {
   ws.isAuthenticated = false;
@@ -118,7 +121,7 @@ wss.on("connection", (ws) => {
       return;
     }
 
-    // Handle authentication
+    // Authentication
     if (!ws.isAuthenticated) {
       if (data.type === "authenticate" && data.token) {
         try {
@@ -126,58 +129,44 @@ wss.on("connection", (ws) => {
           ws.isAuthenticated = true;
           ws.user = user;
           users[user.id] = ws;
-          console.log(user);
-          console.log(`User authenticated: ${user.id}`);
 
-          // Track which conversations the user is currently viewing
+          // Track conversation membership
           if (Array.isArray(data.conversationIds)) {
             data.conversationIds.forEach((convId) => {
-              if (!conversationMembersOnline[convId]) {
-                conversationMembersOnline[convId] = new Set();
-              }
+              if (!conversationMembersOnline[convId]) conversationMembersOnline[convId] = new Set();
               conversationMembersOnline[convId].add(user.id);
             });
           }
 
           ws.send(JSON.stringify({ type: "authenticated", userId: user.id }));
+          console.log(`User authenticated: ${user.id}`);
         } catch (err) {
-          ws.send(
-            JSON.stringify({ type: "auth_failed", message: "Invalid Token" })
-          );
+          ws.send(JSON.stringify({ type: "auth_failed", message: "Invalid Token" }));
           ws.close();
         }
       } else {
-        ws.send(
-          JSON.stringify({ type: "auth_required", message: "Token Required" })
-        );
+        ws.send(JSON.stringify({ type: "auth_required", message: "Token Required" }));
         ws.close();
       }
       return;
     }
 
+    // Handle private messages
     if (data.type === "private_message") {
-      // Log full data before destructuring
-      console.log("Private message data:", data);
-
-      // Safe destructuring with fallback
       const senderId = data.senderId || data.senderid || data.senderID;
-      const recipientId =
-        data.recipientId || data.recipientid || data.recipientID;
+      const recipientId = data.recipientId || data.recipientid || data.recipientID;
       const msg = data.message || data.msg;
 
       if (!senderId || !recipientId || !msg) {
-        console.error(
-          "Missing senderId, recipientId or message in private_message data"
-        );
+        console.error("Missing senderId, recipientId, or message in private_message");
         return;
       }
 
       try {
-        // Save the message to DB
         await ChatController.saveMessage(senderId, recipientId, msg);
         console.log(`Saved message from ${senderId} to ${recipientId}`);
       } catch (err) {
-        console.error("Error handling message:", err);
+        console.error("Error saving message:", err);
       }
     }
   });
@@ -185,23 +174,13 @@ wss.on("connection", (ws) => {
   ws.on("close", () => {
     if (ws.user) {
       console.log(`User disconnected: ${ws.user.id}`);
-
-      // Remove user from users map
       delete users[ws.user.id];
 
-      // Remove user from conversationMembersOnline tracking
+      // Remove from conversation tracking
       for (const convId in conversationMembersOnline) {
         conversationMembersOnline[convId].delete(ws.user.id);
-        if (conversationMembersOnline[convId].size === 0) {
-          delete conversationMembersOnline[convId];
-        }
+        if (conversationMembersOnline[convId].size === 0) delete conversationMembersOnline[convId];
       }
-    }
-  });
-
-  ws.on("close", () => {
-    for (const key in users) {
-      if (users[key] === ws) delete users[key];
     }
   });
 });
@@ -217,19 +196,11 @@ if (!process.env.MONGODB_URI) {
 }
 
 mongoose
-  .connect(process.env.MONGODB_URI, {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
-  })
+  .connect(process.env.MONGODB_URI, { useNewUrlParser: true, useUnifiedTopology: true })
   .then(() => {
     console.log("✅ Connected to MongoDB");
-    server.listen(PORT, () =>
-      console.log(`🚀 Server running at http://localhost:${PORT}`)
-    );
-    console.log(
-      "🌐 FRONTEND_URL for emails:",
-      process.env.FRONTEND_URL || "not set"
-    );
+    server.listen(PORT, () => console.log(`🚀 Server running at http://localhost:${PORT}`));
+    console.log("🌐 FRONTEND_URL for emails:", process.env.FRONTEND_URL || "not set");
   })
   .catch((err) => {
     console.error("❌ MongoDB connection error:", err.message);

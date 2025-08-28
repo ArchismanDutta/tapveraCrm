@@ -3,6 +3,7 @@ const jwt = require("jsonwebtoken");
 const { encrypt } = require("../utils/crypto"); // optional for Outlook password
 const Token = require("../models/Token");
 const sendEmail = require("../utils/sendEmail");
+const crypto = require("crypto");
 
 // ======================
 // JWT Token generation
@@ -58,12 +59,10 @@ exports.signup = async (req, res) => {
 
     // Check duplicates
     const existingEmailUser = await User.findOne({ email: normalizedEmail });
-    if (existingEmailUser)
-      return res.status(400).json({ message: "Email already in use." });
+    if (existingEmailUser) return res.status(400).json({ message: "Email already in use." });
 
     const existingEmployeeIdUser = await User.findOne({ employeeId: trimmedEmployeeId });
-    if (existingEmployeeIdUser)
-      return res.status(400).json({ message: "Employee ID already in use." });
+    if (existingEmployeeIdUser) return res.status(400).json({ message: "Employee ID already in use." });
 
     // Encrypt Outlook password if provided
     let encryptedOutlookPass = null;
@@ -80,13 +79,13 @@ exports.signup = async (req, res) => {
       gender,
       password: String(password).trim(), // plain-text
       role: "employee",
-      department,
-      designation,
+      department: department || "",
+      designation: designation ? String(designation).trim() : "",
       employmentType: employmentType || "full-time",
       skills: Array.isArray(skills) ? skills.map((s) => s.trim()) : [],
       qualifications: Array.isArray(qualifications) ? qualifications : [],
-      outlookEmail: outlookEmail ? String(outlookEmail).trim().toLowerCase() : null,
-      outlookAppPassword: encryptedOutlookPass,
+      outlookEmail: outlookEmail ? String(outlookEmail).trim().toLowerCase() : "",
+      outlookAppPassword: encryptedOutlookPass || "",
       doj,
       bloodGroup: bloodGroup ? String(bloodGroup).trim() : "",
       permanentAddress: permanentAddress ? String(permanentAddress).trim() : "",
@@ -118,16 +117,14 @@ exports.login = async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    if (!email || !password)
-      return res.status(400).json({ message: "Email and password required." });
+    if (!email || !password) return res.status(400).json({ message: "Email and password required." });
 
     const normalizedEmail = String(email).trim().toLowerCase();
     const user = await User.findOne({ email: normalizedEmail });
     if (!user) return res.status(401).json({ message: "Invalid credentials." });
 
     // Plain-text password check
-    if (String(password).trim() !== user.password)
-      return res.status(401).json({ message: "Invalid credentials." });
+    if (String(password).trim() !== user.password) return res.status(401).json({ message: "Invalid credentials." });
 
     const token = generateToken(user);
 
@@ -150,9 +147,10 @@ exports.forgotPassword = async (req, res) => {
     const genericMsg = "If an account with this email exists, a password reset link has been sent.";
     if (!user) return res.json({ message: genericMsg });
 
+    // Remove existing tokens
     await Token.deleteMany({ userId: user._id });
 
-    const resetToken = require("crypto").randomBytes(32).toString("hex");
+    const resetToken = crypto.randomBytes(32).toString("hex");
     await new Token({ userId: user._id, token: resetToken }).save();
 
     const resetLink = `${process.env.FRONTEND_URL}/reset-password/${resetToken}`;

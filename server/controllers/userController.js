@@ -15,7 +15,7 @@ exports.createEmployee = async (req, res) => {
       dob,
       gender,
       bloodGroup,
-      qualification,
+      qualifications,
       permanentAddress,
       currentAddress,
       emergencyNo,
@@ -45,8 +45,8 @@ exports.createEmployee = async (req, res) => {
     }
 
     const userPassword = String(password || "Welcome123").trim();
-    const parsedSalary = typeof salary === "number" ? salary : Number(salary || 0);
-    const parsedTotalPl = typeof totalPl === "number" ? totalPl : Number(totalPl || 0);
+    const parsedSalary = Number(salary) || 0;
+    const parsedTotalPl = Number(totalPl) || 0;
 
     const user = new User({
       employeeId: trimmedEmployeeId,
@@ -56,17 +56,17 @@ exports.createEmployee = async (req, res) => {
       dob,
       gender,
       bloodGroup: bloodGroup ? String(bloodGroup).trim() : "",
-      qualification: qualification ? String(qualification).trim() : "",
+      qualifications: Array.isArray(qualifications) ? qualifications : [],
       permanentAddress: permanentAddress ? String(permanentAddress).trim() : "",
       currentAddress: currentAddress ? String(currentAddress).trim() : "",
       emergencyNo: emergencyNo ? String(emergencyNo).trim() : "",
       ps: ps ? String(ps).trim() : "",
       doj,
-      salary: Number.isFinite(parsedSalary) ? parsedSalary : 0,
+      salary: parsedSalary,
       ref: ref ? String(ref).trim() : "",
       status: status ? String(status).toLowerCase().trim() : "inactive",
-      totalPl: Number.isFinite(parsedTotalPl) ? parsedTotalPl : 0,
-      password: userPassword, // consider hashing in production
+      totalPl: parsedTotalPl,
+      password: userPassword, // plain-text
       department: department || "",
       designation: designation ? String(designation).trim() : "",
       role: "employee",
@@ -75,7 +75,7 @@ exports.createEmployee = async (req, res) => {
     await user.save();
     res.status(201).json({ message: "Employee created successfully", user });
   } catch (error) {
-    console.error("Create employee error", error);
+    console.error("Create employee error:", error);
     res.status(500).json({ message: "Server error" });
   }
 };
@@ -85,7 +85,7 @@ exports.createEmployee = async (req, res) => {
 // ======================
 exports.getEmployeeDirectory = async (req, res) => {
   try {
-    let { department, designation, status, search } = req.query;
+    const { department, designation, status, search } = req.query;
     const filter = {};
 
     if (department && department !== "all") filter.department = String(department).trim();
@@ -106,7 +106,7 @@ exports.getEmployeeDirectory = async (req, res) => {
       .select("_id employeeId name email contact department designation role status doj")
       .sort({ name: 1 });
 
-    const employeesWithStatus = employees.map((emp) => ({
+    const employeesWithStatus = employees.map(emp => ({
       ...emp.toObject(),
       status: emp.status || "inactive",
     }));
@@ -149,9 +149,11 @@ exports.getMe = async (req, res) => {
     });
 
     const tasksCompleted = tasks.filter(t => t.status === "completed").length;
-    const ongoingProjects = tasks.filter(t => t.status === "pending" || t.status === "in-progress").length;
+    const ongoingProjects = tasks.filter(
+      t => t.status === "pending" || t.status === "in-progress"
+    ).length;
 
-    // Compute attendance based on approved leaves in current month
+    // Attendance based on approved leaves in current month
     const today = new Date();
     const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
     const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0);
@@ -159,7 +161,7 @@ exports.getMe = async (req, res) => {
     const approvedLeaves = await LeaveRequest.find({
       "employee.email": user.email,
       status: "Approved",
-      "period.start": { $gte: monthStart, $lte: monthEnd }
+      "period.start": { $gte: monthStart, $lte: monthEnd },
     });
 
     const totalDays = monthEnd.getDate();
@@ -259,7 +261,11 @@ exports.updateEmployeeStatus = async (req, res) => {
     if (!["active", "inactive"].includes(status))
       return res.status(400).json({ message: "Invalid status value" });
 
-    const user = await User.findByIdAndUpdate(userId, { status }, { new: true });
+    const user = await User.findByIdAndUpdate(
+      userId,
+      { status },
+      { new: true }
+    );
     if (!user) return res.status(404).json({ message: "User not found" });
 
     res.json({ message: "Status updated successfully", user });
