@@ -6,7 +6,12 @@ const mongoose = require("mongoose");
 const qualificationSchema = new mongoose.Schema({
   school: { type: String, trim: true, required: true },
   degree: { type: String, trim: true, required: true },
-  year: { type: Number, min: 1900, max: new Date().getFullYear() },
+  year: {
+    type: Number,
+    min: 1900,
+    max: new Date().getFullYear(),
+    required: true,
+  },
   marks: { type: String, trim: true }, // percentage or CGPA
 });
 
@@ -35,9 +40,21 @@ const userSchema = new mongoose.Schema(
       match: [/^\S+@\S+\.\S+$/, "Please provide a valid email"],
     },
 
-    contact: { type: String, required: true, trim: true },
+    contact: {
+      type: String,
+      required: true,
+      trim: true,
+      match: [/^\+?\d{7,15}$/, "Please provide a valid phone number"],
+    },
 
-    dob: { type: Date, required: true },
+    dob: {
+      type: Date,
+      required: true,
+      validate: {
+        validator: (v) => v <= new Date(),
+        message: "Date of birth cannot be in the future",
+      },
+    },
 
     gender: {
       type: String,
@@ -51,14 +68,24 @@ const userSchema = new mongoose.Schema(
     emergencyNo: { type: String, trim: true },
     ps: { type: String, trim: true },
 
-    doj: { type: Date, required: true },
+    doj: {
+      type: Date,
+      required: true,
+      validate: {
+        validator: (v) => v <= new Date(),
+        message: "Date of joining cannot be in the future",
+      },
+    },
+
     salary: { type: Number, default: 0, min: 0 },
     ref: { type: String, trim: true },
+
     status: {
       type: String,
       enum: ["active", "inactive"],
       default: "active",
     },
+
     totalPl: { type: Number, default: 0, min: 0 },
 
     password: { type: String, required: true, minlength: 1 }, // plain-text

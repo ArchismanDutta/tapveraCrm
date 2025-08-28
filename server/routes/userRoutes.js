@@ -1,3 +1,4 @@
+// File: routes/userRoutes.js
 const express = require("express");
 const router = express.Router();
 
@@ -25,20 +26,20 @@ router.get("/directory", protect, getEmployeeDirectory);
 router.get("/me", protect, getMe);
 
 // ======================
-// Get all users (for assigning tasks) — admin & super-admin only
+// Get all users (for assigning tasks) — admin, hr & super-admin only
 // ======================
-router.get("/", protect, authorize("admin", "super-admin", "hr"), getAllUsers);
+router.get("/", protect, authorize("admin", "hr", "super-admin"), getAllUsers);
 
 // ======================
 // Get all users (ignoring roles, custom endpoint)
-// NOTE: This must be before '/:id' to avoid route conflict
+// Must be before '/:id' to avoid route conflict
 // ======================
 router.get("/all", protect, async (req, res) => {
   try {
     const users = await User.find({}, "_id name email role"); // select necessary fields
     res.json(users);
   } catch (err) {
-    console.error(err);
+    console.error("Fetch all users error:", err);
     res.status(500).json({ error: "Failed to fetch users" });
   }
 });
