@@ -2,6 +2,7 @@
 
 const ChatMessage = require("../models/ChatMessage");
 const Conversation = require("../models/Conversation");
+const User = require("../models/User");
 
 // Save a message (supports one-to-one and group messages)
 exports.saveMessage = async (conversationId, senderId, message) => {
@@ -43,7 +44,24 @@ exports.getOrCreatePrivateConversation = async (userIdA, userIdB) => {
 
 // List all group conversations a user belongs to
 exports.getGroupConversationsForUser = async (userId) => {
-  return await Conversation.find({ type: "group", members: userId });
+  // Find groups where userId is in members array (strings)
+  const groups = await Conversation.find({ type: "group", members: userId });
+
+  // For each group, fetch user details for members manually
+  const populatedGroups = await Promise.all(
+    groups.map(async (group) => {
+      const memberDetails = await User.find(
+        { _id: { $in: group.members } },
+        "name role"
+      );
+      return {
+        ...group.toObject(),
+        members: memberDetails,
+      };
+    })
+  );
+
+  return populatedGroups;
 };
 
 // Create a new group conversation (admin or super-admin only)
