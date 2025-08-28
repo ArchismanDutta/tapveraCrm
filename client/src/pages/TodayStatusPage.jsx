@@ -16,8 +16,8 @@ function formatHMS(seconds) {
   return `${h}h ${m.toString().padStart(2, "0")}m ${s.toString().padStart(2, "0")}s`;
 }
 
-const SIDEBAR_WIDTH_EXPANDED = 288; // w-72 = 18rem = 288px
-const SIDEBAR_WIDTH_COLLAPSED = 80; // w-20 = 5rem = 80px
+const SIDEBAR_WIDTH_EXPANDED = 288;
+const SIDEBAR_WIDTH_COLLAPSED = 80;
 
 const TodayStatusPage = ({ onLogout }) => {
   const [collapsed, setCollapsed] = useState(false);
@@ -57,17 +57,10 @@ const TodayStatusPage = ({ onLogout }) => {
 
       const res = await axios.get("/api/summary/week", {
         headers: { Authorization: `Bearer ${token}` },
-        params: {
-          startDate: monday.toISOString(),
-          endDate: sunday.toISOString(),
-        },
+        params: { startDate: monday.toISOString(), endDate: sunday.toISOString() },
       });
 
-      if (res.data && res.data.weeklySummary) {
-        setWeeklySummary(res.data.weeklySummary);
-      } else {
-        setWeeklySummary(null);
-      }
+      setWeeklySummary(res.data?.weeklySummary || null);
     } catch (err) {
       console.error("Failed to fetch weekly summary:", err);
     }
@@ -87,29 +80,29 @@ const TodayStatusPage = ({ onLogout }) => {
     }
   };
 
+  // Live work timer (fixed)
   useEffect(() => {
     if (!status) return;
     setLiveWork(status.workDurationSeconds || 0);
-    if (status.currentlyWorking && status.lastSessionStart) {
-      const base = status.workDurationSeconds || 0;
-      const lastStartTime = new Date(status.lastSessionStart).getTime();
+
+    if (status.currentlyWorking) {
       const timer = setInterval(() => {
-        setLiveWork(base + Math.floor((Date.now() - lastStartTime) / 1000));
+        setLiveWork((prev) => prev + 1);
       }, 1000);
       return () => clearInterval(timer);
     }
   }, [status]);
 
+  // Live break timer (fixed)
   useEffect(() => {
     if (!status) return;
-    if (status.onBreak && status.breakStartTs) {
-      const breakStartTime = new Date(status.breakStartTs).getTime();
+    setLiveBreak(status.breakDurationSeconds || 0);
+
+    if (status.onBreak) {
       const timer = setInterval(() => {
-        setLiveBreak(Math.floor((Date.now() - breakStartTime) / 1000));
+        setLiveBreak((prev) => prev + 1);
       }, 1000);
       return () => clearInterval(timer);
-    } else {
-      setLiveBreak(0);
     }
   }, [status]);
 
@@ -124,13 +117,9 @@ const TodayStatusPage = ({ onLogout }) => {
   }, []);
 
   useEffect(() => {
-    const handleAttendanceDataUpdate = () => {
-      fetchWeeklySummary();
-    };
+    const handleAttendanceDataUpdate = () => fetchWeeklySummary();
     window.addEventListener("attendanceDataUpdate", handleAttendanceDataUpdate);
-    return () => {
-      window.removeEventListener("attendanceDataUpdate", handleAttendanceDataUpdate);
-    };
+    return () => window.removeEventListener("attendanceDataUpdate", handleAttendanceDataUpdate);
   }, []);
 
   const handlePunchIn = () => {
@@ -166,13 +155,10 @@ const TodayStatusPage = ({ onLogout }) => {
   const handlePunchOutClick = async () => {
     if (!(status?.currentlyWorking) && !(status?.onBreak)) return;
     const canPunchOut = await checkTodoTasksBeforePunchOut();
-    if (canPunchOut) {
-      setShowPunchOutConfirm(true);
-    }
+    if (canPunchOut) setShowPunchOutConfirm(true);
   };
 
   const onCancelPunchOut = () => setShowPunchOutConfirm(false);
-
   const onConfirmPunchOut = () => {
     setShowPunchOutConfirm(false);
     updateStatus({

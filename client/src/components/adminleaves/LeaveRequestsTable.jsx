@@ -1,11 +1,11 @@
-import React, { useState, useEffect, useRef } from "react";
+import React from "react";
 import { Check, X } from "lucide-react";
 import { formatLeaveType } from "../../api/leaveApi";
 
 const statusColor = {
-  Pending: "bg-yellow-100 text-yellow-700",
-  Approved: "bg-green-100 text-green-700",
-  Rejected: "bg-red-100 text-red-700",
+  Pending: "bg-yellow-800 text-yellow-300",
+  Approved: "bg-green-800 text-green-300",
+  Rejected: "bg-red-800 text-red-300",
 };
 
 const LeaveRequestsTable = ({
@@ -17,21 +17,21 @@ const LeaveRequestsTable = ({
 }) => {
   return (
     <div
-      className="bg-white rounded-xl shadow p-4 flex flex-col h-full"
+      className="bg-gray-900 rounded-xl shadow p-4 flex flex-col h-full text-gray-200"
       style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
     >
       <style>{`
         .no-scrollbar::-webkit-scrollbar { display: none; }
-        .table-row:hover { background-color: #f9fafb; }
+        .table-row:hover { background-color: #1f2937; }
         .btn-action { padding: 6px; border-radius: 0.375rem; transition: background-color 0.15s ease; display: flex; align-items: center; justify-content: center; }
-        .btn-action:hover:not(:disabled) { background-color: rgba(0, 0, 0, 0.05); }
+        .btn-action:hover:not(:disabled) { background-color: rgba(255 255 255 / 0.1); }
         .btn-disabled { opacity: 0.4; cursor: not-allowed; }
       `}</style>
 
       <div className="overflow-y-auto no-scrollbar flex-1 min-w-0">
         <table className="min-w-full text-sm table-auto border-separate border-spacing-y-2">
           <thead>
-            <tr className="bg-gray-50 text-gray-700">
+            <tr className="bg-gray-800 text-gray-300">
               <th className="p-3 text-left rounded-tl-lg">Department</th>
               <th className="p-3 text-left">Designation</th>
               <th className="p-3 text-left">Leave Period</th>
@@ -51,24 +51,26 @@ const LeaveRequestsTable = ({
               return (
                 <tr
                   key={id}
-                  className={`table-row bg-white border border-gray-200 rounded-lg cursor-pointer select-none shadow-sm transition ${
-                    selectedId === id ? "bg-blue-50 ring-2 ring-blue-300 shadow-md" : ""
+                  className={`table-row bg-gray-900 border border-gray-700 rounded-lg cursor-pointer select-none shadow-sm transition ${
+                    selectedId === id
+                      ? "bg-blue-800 ring-2 ring-blue-500 shadow-md"
+                      : ""
                   }`}
                   onClick={() => onSelect(id)}
                   style={{ height: "62px" }}
                 >
-                  <td className="p-3 text-gray-700">{req.employee.department}</td>
-                  <td className="p-3 text-gray-700">{req.employee.designation}</td>
-                  <td className="p-3 text-gray-700 whitespace-nowrap">
+                  <td className="p-3 text-gray-300">{req.employee.department}</td>
+                  <td className="p-3 text-gray-300">{req.employee.designation}</td>
+                  <td className="p-3 text-gray-300 whitespace-nowrap">
                     {validPeriod
                       ? `${start.toLocaleDateString()} - ${end.toLocaleDateString()}`
                       : ""}
                   </td>
-                  <td className="p-3 text-gray-700">{formatLeaveType(req.type)}</td>
+                  <td className="p-3 text-gray-300">{formatLeaveType(req.type)}</td>
                   <td className="p-3 text-center align-middle">
                     <span
                       className={`px-2 py-1 rounded-full text-xs font-semibold ${
-                        statusColor[req.status] || "bg-gray-100 text-gray-700"
+                        statusColor[req.status] || "bg-gray-700 text-gray-300"
                       }`}
                     >
                       {req.status}
@@ -87,7 +89,7 @@ const LeaveRequestsTable = ({
                       }}
                       disabled={req.status === "Approved"}
                     >
-                      <Check className="text-green-600" size={20} />
+                      <Check className="text-green-400" size={20} />
                     </button>
 
                     <button
@@ -102,7 +104,7 @@ const LeaveRequestsTable = ({
                       }}
                       disabled={req.status === "Rejected"}
                     >
-                      <X className="text-red-600" size={20} />
+                      <X className="text-red-400" size={20} />
                     </button>
                   </td>
                 </tr>
