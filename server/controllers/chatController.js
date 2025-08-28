@@ -1,15 +1,76 @@
-const ChatMessage = require("../models/ChatMessage");
+// controllers/chatController.js
 
-exports.saveMessage = async (senderId, recipientId, message) => {
-  const chatMessage = new ChatMessage({ senderId, recipientId, message });
+const ChatMessage = require("../models/ChatMessage");
+const Conversation = require("../models/Conversation");
+const User = require("../models/User");
+
+// Save a message (supports one-to-one and group messages)
+exports.saveMessage = async (conversationId, senderId, message) => {
+  const chatMessage = new ChatMessage({
+    conversationId,
+    senderId,
+    message,
+    readBy: [senderId], // Mark sender as having read
+  });
   return await chatMessage.save();
 };
 
-exports.getMessages = async (userId, otherUserId) => {
-  return await ChatMessage.find({
-    $or: [
-      { senderId: userId, recipientId: otherUserId },
-      { senderId: otherUserId, recipientId: userId },
-    ],
-  }).sort({ timestamp: 1 });
+
+exports.getConversationById = async (conversationId) => {
+  return await Conversation.findById(conversationId);
+};
+
+
+// Get all messages for a conversation (ordered by time)
+exports.getMessagesByConversation = async (conversationId) => {
+  return await ChatMessage.find({ conversationId }).sort({ timestamp: 1 });
+};
+
+// Get or create a private conversation between two users
+exports.getOrCreatePrivateConversation = async (userIdA, userIdB) => {
+  let conversation = await Conversation.findOne({
+    type: "private",
+    members: { $all: [userIdA, userIdB], $size: 2 },
+  });
+  if (!conversation) {
+    conversation = new Conversation({
+      type: "private",
+      members: [userIdA, userIdB],
+    });
+    await conversation.save();
+  }
+  return conversation;
+};
+
+// List all group conversations a user belongs to
+exports.getGroupConversationsForUser = async (userId) => {
+  // Find groups where userId is in members array (strings)
+  const groups = await Conversation.find({ type: "group", members: userId });
+
+  // For each group, fetch user details for members manually
+  const populatedGroups = await Promise.all(
+    groups.map(async (group) => {
+      const memberDetails = await User.find(
+        { _id: { $in: group.members } },
+        "name role"
+      );
+      return {
+        ...group.toObject(),
+        members: memberDetails,
+      };
+    })
+  );
+
+  return populatedGroups;
+};
+
+// Create a new group conversation (admin or super-admin only)
+exports.createGroupConversation = async (name, memberIds, createdBy) => {
+  const conversation = new Conversation({
+    type: "group",
+    name,
+    members: memberIds,
+    createdBy,
+  });
+  return await conversation.save();
 };

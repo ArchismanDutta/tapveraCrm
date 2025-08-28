@@ -1,170 +1,192 @@
-import React, { useEffect, useState, useRef } from "react";
-import { useSelector, useDispatch } from "react-redux";
-
-
-import ContactsList from "../components/message/ContactList";
-import ChatHeader from "../components/message/ChatHeader";
-import MessagesList from "../components/message/MessagesList";
-import ChatInput from "../components/message/ChatInput";
-
-import {
-  setUsers,
-  selectUser as selectUserAction,
-  addMessages,
-  addMessage,
-  setTypingUser,
-  removeTypingUser,
-  clearNewMessages,
-} from "../store/slices/chatSlice";
+import React, { useState, useEffect } from "react";
+import CreateGroupModal from "../components/chat/CreateGroupModal";
+import ChatWindow from "../components/chat/ChatWindow";
+import useChatWebSocket from "../hooks/useChatWebSocket";
 import Sidebar from "../components/dashboard/Sidebar";
 
-const ChatPage = ({ currentUser, onLogout }) => {
-  const dispatch = useDispatch();
+const ChatPage = ({ onLogout }) => {
+  const [collapsed, setCollapsed] = useState(false);
 
-  const users = useSelector((state) => state.chat.users);
-  const selectedUser = useSelector((state) => state.chat.selectedUser);
-  const messagesByUser = useSelector((state) => state.chat.messagesByUser);
-  const typingUsers = useSelector((state) => state.chat.typingUsers);
-  const newMessagesByUser = useSelector(
-    (state) => state.chat.newMessagesByUser
+  const [userRole, setUserRole] = useState(null);
+  const [jwtToken, setJwtToken] = useState(null);
+  const [conversations, setConversations] = useState([]);
+  const [selectedConversation, setSelectedConversation] = useState(null);
+  const { messages: liveMessages, sendMessage } = useChatWebSocket(
+    jwtToken,
+    selectedConversation?._id
   );
 
-  const [newMessage, setNewMessage] = useState("");
-  const [searchTerm, setSearchTerm] = useState("");
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-
-  const ws = useRef(null);
-  const userId = currentUser.id || currentUser._id;
+  const [showCreateGroup, setShowCreateGroup] = useState(false);
+  const [initialMessages, setInitialMessages] = useState([]);
 
   useEffect(() => {
-    // Fetch all users once
-    fetch("/api/users/all", {
-      headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
-    })
-      .then((res) => res.json())
-      .then((data) => dispatch(setUsers(data)));
-  }, [dispatch]);
+    const storedUser = localStorage.getItem("user");
+    const storedRole = localStorage.getItem("role");
+    const storedToken = localStorage.getItem("token");
+
+    if (storedUser && storedRole && storedToken) {
+      setUserRole(storedRole);
+      setJwtToken(storedToken);
+      fetchConversations(storedToken);
+    }
+  }, []);
 
   useEffect(() => {
-    ws.current = new WebSocket("ws://localhost:5000");
+    if (!selectedConversation || !jwtToken) return;
 
-    ws.current.onopen = () => {
-      ws.current.send(JSON.stringify({ type: "register", userId }));
-    };
-
-    ws.current.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-
-      if (data.type === "private_message") {
-        const chatPartnerId =
-          data.senderId === userId ? data.recipientId : data.senderId;
-
-        dispatch(addMessage({ userId: chatPartnerId, message: data }));
-      }
-
-      if (data.type === "typing") {
-        dispatch(setTypingUser(data.userId));
-        setTimeout(() => dispatch(removeTypingUser(data.userId)), 2000);
-      }
-    };
-
-    return () => ws.current && ws.current.close();
-  }, [userId, dispatch]);
-
-  const selectUser = (user) => {
-    dispatch(selectUserAction(user));
-    dispatch(clearNewMessages(user._id));
-
-    if (!messagesByUser[user._id]) {
-      fetch(`/api/chat/${user._id}`, {
-        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
-      })
-        .then((res) => res.json())
-        .then((msgs) =>
-          dispatch(addMessages({ userId: user._id, messages: msgs }))
+    const fetchMessages = async () => {
+      try {
+        const res = await fetch(
+          `http://localhost:5000/api/chat/messages/${selectedConversation._id}`,
+          {
+            headers: { Authorization: `Bearer ${jwtToken}` },
+          }
         );
-    }
-  };
-
-  const sendMessage = () => {
-    if (!newMessage.trim() || !ws.current || !selectedUser) return;
-
-    const messageObj = {
-      type: "private_message",
-      senderId: userId,
-      recipientId: selectedUser._id,
-      message: newMessage,
-      timestamp: new Date(),
+        if (!res.ok) throw new Error("Failed to fetch messages");
+        const data = await res.json();
+        setInitialMessages(data);
+      } catch (error) {
+        console.error(error);
+      }
     };
 
-    ws.current.send(JSON.stringify(messageObj));
-    dispatch(addMessage({ userId: selectedUser._id, message: messageObj }));
-    setNewMessage("");
-  };
+    fetchMessages();
+  }, [selectedConversation, jwtToken]);
 
-  const handleTyping = () => {
-    if (ws.current && selectedUser) {
-      ws.current.send(
-        JSON.stringify({
-          type: "typing",
-          userId,
-          recipientId: selectedUser._id,
-        })
-      );
+  const combinedMessages = [
+    ...initialMessages,
+    ...liveMessages.filter(
+      (msg) => !initialMessages.find((m) => m._id === msg._id)
+    ),
+  ];
+
+  const fetchConversations = async (token) => {
+    try {
+      const res = await fetch("http://localhost:5000/api/chat/groups", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error("Failed to fetch conversations");
+      const data = await res.json();
+      setConversations(data);
+      if (data.length > 0) setSelectedConversation(data[0]);
+    } catch (error) {
+      console.error(error);
     }
   };
 
-  const messagesToShow = selectedUser
-    ? messagesByUser[selectedUser._id] || []
-    : [];
-
-  const filteredUsers = users.filter((u) =>
-    u.name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const handleCreateGroup = async (name, memberIds) => {
+    try {
+      const res = await fetch("http://localhost:5000/api/chat/groups", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${jwtToken}`,
+        },
+        body: JSON.stringify({ name, memberIds }),
+      });
+      if (!res.ok) throw new Error("Failed to create group");
+      const newGroup = await res.json();
+      setConversations((prev) => [newGroup, ...prev]);
+      setShowCreateGroup(false);
+    } catch (error) {
+      alert(error.message);
+    }
+  };
 
   return (
-    <div className="flex h-screen overflow-hidden">
-      {/* Sidebar (unchanged) */}
+    <div className="flex h-screen bg-[#101525] text-gray-100">
+      {/* Shared Sidebar (same as AttendancePage) */}
       <Sidebar
-        collapsed={sidebarCollapsed}
-        setCollapsed={setSidebarCollapsed}
         onLogout={onLogout}
+        collapsed={collapsed}
+        setCollapsed={setCollapsed}
+        userRole={userRole || "employee"}
       />
 
-      {/* Main Chat Area with margin-left */}
-      <div
-        className={`flex-1 flex bg-gray-50 h-full overflow-hidden transition-all duration-300
-    ${sidebarCollapsed ? "ml-20" : "ml-64"}`}
+      {/* Main Chat Area */}
+      <main
+        className={`flex-1 flex transition-all duration-300 h-screen ${
+          collapsed ? "ml-20" : "ml-72"
+        }`}
       >
-        <div className="flex flex-col flex-1 h-full overflow-hidden">
-          <ChatHeader selectedUser={selectedUser} typingUsers={typingUsers} />
-
-          <MessagesList
-            messagesToShow={messagesToShow}
-            userId={userId}
-            typingUsers={typingUsers}
-            selectedUser={selectedUser}
-          />
-
-          {selectedUser && (
-            <ChatInput
-              newMessage={newMessage}
-              setNewMessage={setNewMessage}
-              sendMessage={sendMessage}
-              handleTyping={handleTyping}
-            />
+        {/* Conversations Panel */}
+        <div className="w-1/4 border-r border-gray-700 bg-gray-800 flex flex-col h-full ">
+          <h3 className="text-lg font-bold p-4 pb-0 text-white">
+            Conversations
+          </h3>
+          <div className="flex-1 overflow-y-auto px-4 pb-2">
+            <ul className="list-none p-0 space-y-2">
+              {conversations.map((conv) => (
+                <li
+                  key={conv._id}
+                  className={`cursor-pointer px-3 py-2 rounded transition-colors ${
+                    selectedConversation?._id === conv._id
+                      ? "bg-gray-700 text-white"
+                      : "hover:bg-gray-600"
+                  }`}
+                  onClick={() => setSelectedConversation(conv)}
+                >
+                  {conv.name || "Unnamed Group"}
+                </li>
+              ))}
+            </ul>
+          </div>
+          {(userRole === "admin" || userRole === "super-admin") && (
+            <div className="p-4 pt-0">
+              <button
+                onClick={() => setShowCreateGroup(true)}
+                className="w-full bg-indigo-600 text-white px-3 py-2 rounded-lg hover:bg-indigo-700 transition-colors shadow-sm"
+              >
+                + New Group
+              </button>
+            </div>
           )}
         </div>
 
-        <ContactsList
-          filteredUsers={filteredUsers}
-          selectedUser={selectedUser}
-          newMessagesByUser={newMessagesByUser}
-          selectUser={selectUser}
-          searchTerm={searchTerm}
-          setSearchTerm={setSearchTerm}
-        />
-      </div>
+        {/* Chat Panel */}
+        <div className="flex-1 flex flex-col h-full bg-gray-900">
+          {selectedConversation ? (
+            <>
+              {/* Header */}
+              <div className="flex justify-between items-center p-4 border-b border-gray-700 bg-gray-800">
+                <h4 className="text-lg font-semibold text-white">
+                  {selectedConversation.name || "Group Chat"}
+                </h4>
+                {selectedConversation.members && (
+                  <div className="text-sm text-gray-400">
+                    Members:{" "}
+                    {selectedConversation.members
+                      .map((m) => m.name || m._id)
+                      .join(", ")}
+                  </div>
+                )}
+              </div>
+              {/* Messages - scrollable */}
+              <div className="flex-1 overflow-y-auto p-4">
+                <ChatWindow
+                  messages={combinedMessages}
+                  sendMessage={sendMessage}
+                  conversationId={selectedConversation._id}
+                  currentUserId={JSON.parse(localStorage.getItem("user"))?.id}
+                  conversationMembers={selectedConversation.members || []}
+                />
+              </div>
+            </>
+          ) : (
+            <div className="flex items-center justify-center flex-1 text-gray-500 text-center font-medium">
+              Select a conversation to start chatting
+            </div>
+          )}
+        </div>
+      </main>
+
+      {/* Group Modal */}
+      <CreateGroupModal
+        isOpen={showCreateGroup}
+        onClose={() => setShowCreateGroup(false)}
+        onCreate={handleCreateGroup}
+        jwtToken={jwtToken}
+      />
     </div>
   );
 };
