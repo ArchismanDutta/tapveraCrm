@@ -22,21 +22,24 @@ router.get("/directory", protect, getEmployeeDirectory);
 
 // ======================
 // Get current logged-in user
+// Includes shift info if set
 // ======================
 router.get("/me", protect, getMe);
 
 // ======================
-// Get all users (for assigning tasks) — admin, hr & super-admin only
+// Get all users (for assigning tasks)
+// Accessible only by admin, hr & super-admin
 // ======================
 router.get("/", protect, authorize("admin", "hr", "super-admin"), getAllUsers);
 
 // ======================
-// Get all users (ignoring roles, custom endpoint)
-// Must be before '/:id' to avoid route conflict
+// Get all users (custom endpoint)
+// Includes minimal info + shift
+// Must be before '/:id' to avoid route conflicts
 // ======================
 router.get("/all", protect, async (req, res) => {
   try {
-    const users = await User.find({}, "_id name email role"); // select necessary fields
+    const users = await User.find({}, "_id name email role shift");
     res.json(users);
   } catch (err) {
     console.error("Fetch all users error:", err);
@@ -45,7 +48,9 @@ router.get("/all", protect, async (req, res) => {
 });
 
 // ======================
-// Create new employee (admin/hr/super-admin only)
+// Create new employee
+// Accepts shift: { start: "09:00", end: "18:00" }
+// Accessible only by admin, hr & super-admin
 // ======================
 router.post(
   "/create",
@@ -55,7 +60,9 @@ router.post(
 );
 
 // ======================
-// Get single employee by ID (admin/hr/super-admin only)
+// Get single employee by ID
+// Includes shift info
+// Accessible only by admin, hr & super-admin
 // ======================
 router.get(
   "/:id",
@@ -65,7 +72,8 @@ router.get(
 );
 
 // ======================
-// Update employee status (admin/hr/super-admin only)
+// Update employee status
+// Accessible only by admin, hr & super-admin
 // ======================
 router.patch(
   "/:id/status",
