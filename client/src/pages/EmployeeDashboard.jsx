@@ -8,7 +8,9 @@ import TodayTasks from "../components/dashboard/TodayTasks";
 import RecentMessages from "../components/dashboard/RecentMessages";
 import Sidebar from "../components/dashboard/Sidebar";
 import NotificationBell from "../components/dashboard/NotificationBell";
+import WishPopup from "../components/dashboard/WishPopup";
 
+// Ensure API_BASE points to backend without duplicate /api
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 const TASK_POLL_INTERVAL_MS = 15000;
 const USER_POLL_INTERVAL_MS = 30000;
@@ -22,8 +24,9 @@ const EmployeeDashboard = ({ onLogout }) => {
   const [summaryData, setSummaryData] = useState([]);
   const [pendingCount, setPendingCount] = useState(0);
   const [notifications, setNotifications] = useState([]);
-  const [notices, setNotices] = useState([]);
-  const [showNotices, setShowNotices] = useState(false);
+  const [wishes, setWishes] = useState([]);
+  const [showWishPopup, setShowWishPopup] = useState(false);
+
   const navigate = useNavigate();
 
   const messages = [
@@ -36,21 +39,10 @@ const EmployeeDashboard = ({ onLogout }) => {
     id: task._id,
     label: task.title || "Untitled Task",
     dueDateTime: task.dueDate
-      ? new Date(task.dueDate).toLocaleString([], {
-          year: "numeric",
-          month: "short",
-          day: "numeric",
-          hour: "2-digit",
-          minute: "2-digit",
-        })
+      ? new Date(task.dueDate).toLocaleString([], { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })
       : "",
     level: task.priority || "Normal",
-    color:
-      task.priority === "High"
-        ? "red"
-        : task.priority === "Medium"
-        ? "yellow"
-        : "green",
+    color: task.priority === "High" ? "red" : task.priority === "Medium" ? "yellow" : "green",
     assignedBy: task.assignedBy?.name || "Unknown",
     assignedTo: Array.isArray(task.assignedTo)
       ? task.assignedTo.map((u) => (typeof u === "string" ? "Unknown" : u?.name || "Unknown")).join(", ")
@@ -61,16 +53,10 @@ const EmployeeDashboard = ({ onLogout }) => {
 
   const computeSummary = useCallback(() => {
     const today = dayjs(currentTime).startOf("day");
-    const allTasksCount = tasks.length;
-    const tasksDueTodayCount = tasks.filter((t) => t.dueDate && dayjs(t.dueDate).isSame(today, "day")).length;
-    const overdueTasksCount = tasks.filter(
-      (t) => t.dueDate && dayjs(t.dueDate).isBefore(dayjs(currentTime)) && t.status?.toLowerCase() !== "completed"
-    ).length;
-
     setSummaryData([
-      { label: "All Tasks", count: allTasksCount },
-      { label: "Tasks Due Today", count: tasksDueTodayCount },
-      { label: "Overdue Tasks", count: overdueTasksCount },
+      { label: "All Tasks", count: tasks.length },
+      { label: "Tasks Due Today", count: tasks.filter((t) => t.dueDate && dayjs(t.dueDate).isSame(today, "day")).length },
+      { label: "Overdue Tasks", count: tasks.filter((t) => t.dueDate && dayjs(t.dueDate).isBefore(dayjs(currentTime)) && t.status?.toLowerCase() !== "completed").length },
     ]);
   }, [tasks, currentTime]);
 
@@ -87,17 +73,11 @@ const EmployeeDashboard = ({ onLogout }) => {
 
   const fetchTasks = useCallback(async () => {
     const token = localStorage.getItem("token");
-    if (!token) {
-      navigate("/login", { replace: true });
-      return;
-    }
+    if (!token) return navigate("/login", { replace: true });
     try {
       setLoading(true);
-      const res = await axios.get(`${API_BASE}/api/tasks`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const formatted = res.data.map(formatTask);
-      setTasks(formatted);
+      const res = await axios.get(`${API_BASE}/api/tasks`, { headers: { Authorization: `Bearer ${token}` } });
+      setTasks(res.data.map(formatTask));
     } catch (err) {
       console.error("Error fetching tasks", err.response?.data || err.message);
     } finally {
@@ -105,19 +85,22 @@ const EmployeeDashboard = ({ onLogout }) => {
     }
   }, [navigate]);
 
-  const fetchUser = useCallback(async () => {
+  const fetchUserAndWishes = useCallback(async () => {
     const token = localStorage.getItem("token");
-    if (!token) {
-      navigate("/login", { replace: true });
-      return;
-    }
+    if (!token) return navigate("/login", { replace: true });
     try {
-      const res = await axios.get(`${API_BASE}/api/users/me`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      // Fetch logged-in employee data
+      const res = await axios.get(`${API_BASE}/api/users/me`, { headers: { Authorization: `Bearer ${token}` } });
       setUserName(res.data?.name || "User");
+
+      // Fetch unread wishes
+      const wishesRes = await axios.get(`${API_BASE}/api/wishes/me`, { headers: { Authorization: `Bearer ${token}` } });
+      const unreadWishes = wishesRes.data.filter((w) => !w.read);
+      setWishes(unreadWishes);
+
+      if (unreadWishes.length > 0) setShowWishPopup(true);
     } catch (err) {
-      console.error("Error fetching user:", err.response?.data || err.message);
+      console.error("Error fetching user or wishes:", err.response?.data || err.message);
     }
   }, [navigate]);
 
@@ -128,15 +111,13 @@ const EmployeeDashboard = ({ onLogout }) => {
   }, [fetchTasks]);
 
   useEffect(() => {
-    fetchUser();
-    const intervalId = setInterval(fetchUser, USER_POLL_INTERVAL_MS);
+    fetchUserAndWishes();
+    const intervalId = setInterval(fetchUserAndWishes, USER_POLL_INTERVAL_MS);
     return () => clearInterval(intervalId);
-  }, [fetchUser]);
+  }, [fetchUserAndWishes]);
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      setCurrentTime(new Date());
-    }, 1000);
+    const interval = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(interval);
   }, []);
 
@@ -145,45 +126,25 @@ const EmployeeDashboard = ({ onLogout }) => {
     updateNotifications();
   }, [computeSummary, updateNotifications]);
 
-  useEffect(() => {
-    const fetchNotices = async () => {
-      try {
-        const token = localStorage.getItem("token");
-        if (!token) return;
-
-        const dismissed = sessionStorage.getItem("noticesDismissed");
-        if (dismissed === "true") {
-          setShowNotices(false);
-          return;
-        }
-
-        const res = await axios.get(`${API_BASE}/api/notices`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (res.data && res.data.length > 0) {
-          setNotices(res.data);
-          setShowNotices(true);
-        } else {
-          setShowNotices(false);
-        }
-      } catch (err) {
-        console.error("Error fetching notices:", err.message);
-        setShowNotices(false);
-      }
-    };
-    fetchNotices();
-  }, []);
-
-  const handleCloseNotices = () => {
-    setNotices([]);
-    setShowNotices(false);
-    sessionStorage.setItem("noticesDismissed", "true");
+  const handleCloseWishPopup = async () => {
+    setShowWishPopup(false);
+    try {
+      const token = localStorage.getItem("token");
+      await Promise.all(
+        wishes.map((w) =>
+          axios.patch(`${API_BASE}/api/wishes/${w._id}/read`, null, { headers: { Authorization: `Bearer ${token}` } })
+        )
+      );
+      // Clear wishes after marking read
+      setWishes([]);
+    } catch (err) {
+      console.error("Error marking wishes as read:", err.response?.data || err.message);
+    }
   };
 
   return (
     <div className="flex bg-gradient-to-br from-[#141a21] via-[#191f2b] to-[#101218] font-sans text-blue-100 min-h-screen">
-      <Sidebar onLogout={onLogout} collapsed={collapsed} setCollapsed={setCollapsed} userRole="employee" />
-      {/* Main content margin-left matched to sidebar width */}
+      <Sidebar collapsed={collapsed} setCollapsed={setCollapsed} onLogout={onLogout} userRole="employee" />
       <main className={`flex-1 p-8 overflow-y-auto transition-all duration-300 ${collapsed ? "ml-20" : "ml-72"}`}>
         <div className="flex justify-between items-center mb-8">
           <div>
@@ -198,36 +159,10 @@ const EmployeeDashboard = ({ onLogout }) => {
           <div className="flex items-center gap-4 relative">
             <NotificationBell notifications={notifications} />
             <Link to="/profile">
-              <img
-                src="https://i.pravatar.cc/40?img=3"
-                alt="Profile Avatar"
-                className="w-9 h-9 rounded-full cursor-pointer border-2 border-orange-500 shadow-lg"
-              />
+              <img src="https://i.pravatar.cc/40?img=3" alt="Profile Avatar" className="w-9 h-9 rounded-full cursor-pointer border-2 border-orange-500 shadow-lg" />
             </Link>
           </div>
         </div>
-
-        {showNotices && notices.length > 0 && (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
-            <div className="bg-[#181d2a]/90 rounded-lg shadow-xl p-6 max-w-lg w-full border border-orange-500">
-              <h2 className="text-xl font-semibold mb-4 text-orange-400">📢 Notices</h2>
-              <div className="space-y-3 max-h-80 overflow-y-auto text-blue-200">
-                {notices.map((n) => (
-                  <div key={n._id} className="border-l-4 border-orange-400 pl-3">
-                    <p>{n.message}</p>
-                    <p className="text-xs text-blue-400 mt-1">🕒 {new Date(n.createdAt).toLocaleString()}</p>
-                  </div>
-                ))}
-              </div>
-              <button
-                onClick={handleCloseNotices}
-                className="mt-4 px-4 py-2 bg-orange-400 text-black rounded-lg hover:bg-orange-500 transition"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        )}
 
         <SummaryCards data={summaryData} />
 
@@ -240,6 +175,8 @@ const EmployeeDashboard = ({ onLogout }) => {
           </div>
         </div>
       </main>
+
+      <WishPopup isOpen={showWishPopup} wishes={wishes} onClose={handleCloseWishPopup} />
     </div>
   );
 };

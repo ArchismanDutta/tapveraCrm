@@ -13,9 +13,11 @@ const Login = ({ onLoginSuccess }) => {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
+  // Handle input change
   const handleChange = (e) =>
     setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
 
+  // Handle form submit
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -35,7 +37,7 @@ const Login = ({ onLoginSuccess }) => {
       });
 
       const data = await res.json();
-      console.log("Login response data:", data);
+      console.log("Login response:", data);
 
       if (!res.ok) {
         setError(data.message || "Invalid email or password.");
@@ -56,7 +58,7 @@ const Login = ({ onLoginSuccess }) => {
         navigate("/dashboard");
       }
 
-      onLoginSuccess(data.token);
+      if (onLoginSuccess) onLoginSuccess(data.token);
     } catch (err) {
       console.error("Login Error:", err);
       setError("Failed to connect to the server. Please try again.");
@@ -104,7 +106,7 @@ const Login = ({ onLoginSuccess }) => {
             autoComplete="current-password"
             required
             error={error && !form.password ? "Password is required." : ""}
-            showTogglePassword={true}
+            showTogglePassword
             icon={FaLock}
             className="bg-[#141a29] border border-white text-blue-100 placeholder-blue-500 focus:ring-2 focus:ring-[#ff8000] focus:border-[#ff8000]"
           />
@@ -141,7 +143,7 @@ const Login = ({ onLoginSuccess }) => {
 };
 
 Login.propTypes = {
-  onLoginSuccess: PropTypes.func.isRequired,
+  onLoginSuccess: PropTypes.func,
 };
 
 export default Login;
