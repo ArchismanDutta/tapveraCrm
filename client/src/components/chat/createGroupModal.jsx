@@ -38,42 +38,54 @@ const CreateGroupModal = ({ isOpen, onClose, onCreate, jwtToken }) => {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-40 flex justify-center items-center z-50">
-      <div className="bg-white rounded-lg shadow-lg p-6 w-96 max-w-full">
-        <h2 className="text-xl font-semibold mb-4">Create New Group</h2>
-        <form onSubmit={handleSubmit}>
+    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex justify-center items-center z-50">
+      <div className="bg-gray-900 text-gray-100 rounded-2xl shadow-2xl p-6 w-96 max-w-full border border-gray-800">
+        <h2 className="text-2xl font-bold mb-4 text-white">Create New Group</h2>
+        <form onSubmit={handleSubmit} className="space-y-4">
           <input
             type="text"
             placeholder="Group Name"
             value={groupName}
             onChange={(e) => setGroupName(e.target.value)}
-            className="w-full px-3 py-2 mb-4 border rounded"
+            className="w-full px-4 py-2 rounded-lg bg-gray-800 text-gray-100 border border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
             required
           />
-          <div className="max-h-48 overflow-y-auto mb-4 border rounded p-2">
-            {users.map((user) => (
-              <label key={user._id} className="block">
-                <input
-                  type="checkbox"
-                  checked={selectedMembers.includes(user._id)}
-                  onChange={() => toggleMember(user._id)}
-                  className="mr-2"
-                />
-                {user.name} ({user.role})
-              </label>
-            ))}
+
+          <div className="max-h-48 overflow-y-auto rounded-lg bg-gray-800 border border-gray-700 p-3 custom-scroll">
+            {users.length === 0 ? (
+              <p className="text-gray-400 text-sm">No users available</p>
+            ) : (
+              users.map((user) => (
+                <label
+                  key={user._id}
+                  className="flex items-center py-1 px-2 rounded-md cursor-pointer hover:bg-gray-700 transition"
+                >
+                  <input
+                    type="checkbox"
+                    checked={selectedMembers.includes(user._id)}
+                    onChange={() => toggleMember(user._id)}
+                    className="mr-2 accent-blue-500"
+                  />
+                  <span>
+                    {user.name}{" "}
+                    <span className="text-xs text-gray-400">({user.role})</span>
+                  </span>
+                </label>
+              ))
+            )}
           </div>
-          <div className="flex justify-end space-x-2">
+
+          <div className="flex justify-end space-x-3 pt-2">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 bg-gray-300 rounded hover:bg-gray-400"
+              className="px-4 py-2 rounded-lg bg-gray-700 text-gray-300 hover:bg-gray-600 transition"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+              className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-medium shadow-md hover:shadow-lg transition"
             >
               Create
             </button>
