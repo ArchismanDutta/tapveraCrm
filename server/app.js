@@ -8,8 +8,9 @@ const path = require("path");
 const http = require("http");
 const WebSocket = require("ws");
 
-
+// =====================
 // Routes
+// =====================
 const userRoutes = require("./routes/userRoutes");
 const taskRoutes = require("./routes/taskRoutes");
 const authRoutes = require("./routes/authRoutes");
@@ -22,6 +23,7 @@ const todoTaskRoutes = require("./routes/todoTaskRoutes");
 const chatRoutes = require("./routes/chatRoutes");
 const statusRoutes = require("./routes/statusRoutes");
 const summaryRoutes = require("./routes/summaryRoutes");
+const wishRoutes = require("./routes/wishRoutes"); // Added Wish routes
 
 // Controllers
 const ChatController = require("./controllers/chatController");
@@ -33,11 +35,12 @@ const server = http.createServer(app);
 // Middleware
 // =====================
 app.use(express.json());
+app.use(morgan("dev"));
 
-// Serve uploaded files (e.g., employee photos, avatars)
+// Serve uploaded files (photos, avatars)
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
-// Allowed frontend origins
+// CORS setup
 const frontendOrigins = [
   process.env.FRONTEND_ORIGIN,
   process.env.FRONTEND_URL,
@@ -46,9 +49,7 @@ const frontendOrigins = [
 ].filter(Boolean);
 
 if (frontendOrigins.length === 0) {
-  console.warn(
-    "⚠️ No FRONTEND_ORIGIN or FRONTEND_URL set in .env. CORS may block requests."
-  );
+  console.warn("⚠️ No FRONTEND_ORIGIN or FRONTEND_URL set. CORS may block requests.");
 }
 
 app.use(
@@ -60,8 +61,6 @@ app.use(
   })
 );
 
-app.use(morgan("dev"));
-
 // =====================
 // Health Check
 // =====================
@@ -71,12 +70,12 @@ app.get("/api/health", (req, res) => {
 
 // =====================
 // API Routes
-
-app.use("/api/tasks", taskRoutes);
+// =====================
 app.use("/api/auth", authRoutes);
+app.use("/api/users", userRoutes);
+app.use("/api/tasks", taskRoutes);
 app.use("/api/password", passwordRoutes);
 app.use("/api/test", testRoutes);
-app.use("/api/users", userRoutes);
 app.use("/api/email", emailRoutes);
 app.use("/api/leaves", leaveRoutes);
 app.use("/api/todos", todoTaskRoutes);
@@ -84,8 +83,11 @@ app.use("/api/status", statusRoutes);
 app.use("/api/summary", summaryRoutes);
 app.use("/api/notices", noticeRoutes);
 app.use("/api/chat", chatRoutes);
+app.use("/api/wishes", wishRoutes); // Wish API
 
+// =====================
 // Serve frontend (production)
+// =====================
 if (process.env.NODE_ENV === "production") {
   app.use(express.static(path.join(__dirname, "client", "build")));
   app.get("*", (req, res) =>
@@ -94,16 +96,17 @@ if (process.env.NODE_ENV === "production") {
 }
 
 // =====================
-// Error handler
+// Error Handler
 // =====================
 app.use((err, req, res, next) => {
   console.error("❌ Unexpected error:", err.stack || err);
   res.status(500).json({ error: "Internal Server Error" });
 });
 
-// WebSocket Server Setup
+// =====================
+// WebSocket Setup
+// =====================
 const wss = new WebSocket.Server({ server });
-
 let users = {};
 
 wss.on("connection", (ws) => {
@@ -124,24 +127,16 @@ wss.on("connection", (ws) => {
     }
 
     if (data.type === "private_message") {
-      // Log full data before destructuring
-      console.log("Private message data:", data);
-
-      // Safe destructuring with fallback
       const senderId = data.senderId || data.senderid || data.senderID;
-      const recipientId =
-        data.recipientId || data.recipientid || data.recipientID;
+      const recipientId = data.recipientId || data.recipientid || data.recipientID;
       const msg = data.message || data.msg;
 
       if (!senderId || !recipientId || !msg) {
-        console.error(
-          "Missing senderId, recipientId or message in private_message data"
-        );
+        console.error("Missing senderId, recipientId or message in private_message data");
         return;
       }
 
       try {
-        // Save the message to DB
         await ChatController.saveMessage(senderId, recipientId, msg);
         console.log(`Saved message from ${senderId} to ${recipientId}`);
       } catch (err) {
@@ -161,10 +156,17 @@ wss.on("connection", (ws) => {
       }
     }
   });
+
+  ws.on("close", () => {
+    for (const key in users) {
+      if (users[key] === ws) delete users[key];
+    }
+  });
 });
 
-
-// Connect to MongoDB and start server
+// =====================
+// MongoDB Connection & Server Start
+// =====================
 const PORT = process.env.PORT || 5000;
 
 if (!process.env.MONGODB_URI) {

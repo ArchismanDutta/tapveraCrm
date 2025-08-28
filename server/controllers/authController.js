@@ -1,15 +1,18 @@
-// controllers/authController.js
 const User = require("../models/User");
 const jwt = require("jsonwebtoken");
 const { encrypt } = require("../utils/crypto"); // optional for Outlook password
 const Token = require("../models/Token");
 const sendEmail = require("../utils/sendEmail");
 
-// Token generation helper
+// ======================
+// JWT Token generation
+// ======================
 const generateToken = (user) => {
-  return jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, {
-    expiresIn: "1d",
-  });
+  return jwt.sign(
+    { id: user._id, role: user.role },
+    process.env.JWT_SECRET,
+    { expiresIn: "1d" }
+  );
 };
 
 // ======================
@@ -42,7 +45,7 @@ exports.signup = async (req, res) => {
       location,
       employmentType,
       skills,
-      qualifications, // match frontend
+      qualifications,
     } = req.body;
 
     // Required fields validation
@@ -55,12 +58,14 @@ exports.signup = async (req, res) => {
 
     // Check duplicates
     const existingEmailUser = await User.findOne({ email: normalizedEmail });
-    if (existingEmailUser) return res.status(400).json({ message: "Email already in use." });
+    if (existingEmailUser)
+      return res.status(400).json({ message: "Email already in use." });
 
     const existingEmployeeIdUser = await User.findOne({ employeeId: trimmedEmployeeId });
-    if (existingEmployeeIdUser) return res.status(400).json({ message: "Employee ID already in use." });
+    if (existingEmployeeIdUser)
+      return res.status(400).json({ message: "Employee ID already in use." });
 
-    // Encrypt Outlook app password if provided
+    // Encrypt Outlook password if provided
     let encryptedOutlookPass = null;
     if (outlookAppPassword && String(outlookAppPassword).trim()) {
       encryptedOutlookPass = encrypt(String(outlookAppPassword).trim());
@@ -73,7 +78,7 @@ exports.signup = async (req, res) => {
       contact: String(contact).trim(),
       dob,
       gender,
-      password: String(password).trim(), // plain text
+      password: String(password).trim(), // plain-text
       role: "employee",
       department,
       designation,
@@ -99,37 +104,7 @@ exports.signup = async (req, res) => {
 
     const token = generateToken(user);
 
-    res.status(201).json({
-      token,
-      user: {
-        id: user._id,
-        employeeId: user.employeeId,
-        name: user.name,
-        email: user.email,
-        contact: user.contact,
-        dob: user.dob,
-        gender: user.gender,
-        role: user.role,
-        department: user.department,
-        designation: user.designation,
-        employmentType: user.employmentType,
-        skills: user.skills,
-        qualifications: user.qualifications,
-        outlookEmail: user.outlookEmail || null,
-        hasEmailCredentials: Boolean(user.outlookEmail && user.outlookAppPassword),
-        doj: user.doj,
-        bloodGroup: user.bloodGroup,
-        permanentAddress: user.permanentAddress,
-        currentAddress: user.currentAddress,
-        emergencyNo: user.emergencyNo,
-        ps: user.ps,
-        salary: user.salary,
-        ref: user.ref,
-        status: user.status,
-        totalPl: user.totalPl,
-        location: user.location,
-      },
-    });
+    res.status(201).json({ token, user });
   } catch (err) {
     console.error("Signup Error:", err);
     res.status(500).json({ message: "Server error" });
@@ -137,57 +112,26 @@ exports.signup = async (req, res) => {
 };
 
 // ======================
-// Login for all users (plain text check)
+// Login (plain-text)
 // ======================
 exports.login = async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    if (!email || !password) {
+    if (!email || !password)
       return res.status(400).json({ message: "Email and password required." });
-    }
 
     const normalizedEmail = String(email).trim().toLowerCase();
     const user = await User.findOne({ email: normalizedEmail });
     if (!user) return res.status(401).json({ message: "Invalid credentials." });
 
-    if (String(password).trim() !== user.password) {
+    // Plain-text password check
+    if (String(password).trim() !== user.password)
       return res.status(401).json({ message: "Invalid credentials." });
-    }
 
     const token = generateToken(user);
 
-    res.json({
-      token,
-      user: {
-        id: user._id,
-        employeeId: user.employeeId,
-        name: user.name,
-        email: user.email,
-        contact: user.contact,
-        dob: user.dob,
-        gender: user.gender,
-        role: user.role,
-        department: user.department,
-        designation: user.designation,
-        employmentType: user.employmentType,
-        skills: user.skills,
-        qualifications: user.qualifications,
-        outlookEmail: user.outlookEmail || null,
-        hasEmailCredentials: Boolean(user.outlookEmail && user.outlookAppPassword),
-        doj: user.doj,
-        bloodGroup: user.bloodGroup,
-        permanentAddress: user.permanentAddress,
-        currentAddress: user.currentAddress,
-        emergencyNo: user.emergencyNo,
-        ps: user.ps,
-        salary: user.salary,
-        ref: user.ref,
-        status: user.status,
-        totalPl: user.totalPl,
-        location: user.location,
-      },
-    });
+    res.json({ token, user });
   } catch (err) {
     console.error("Login Error:", err);
     res.status(500).json({ message: "Server error" });
@@ -200,31 +144,21 @@ exports.login = async (req, res) => {
 exports.forgotPassword = async (req, res) => {
   try {
     const { email } = req.body;
-
-    if (!email || !email.trim()) {
-      return res.status(400).json({ message: "Email is required" });
-    }
+    if (!email || !email.trim()) return res.status(400).json({ message: "Email is required" });
 
     const user = await User.findOne({ email: email.trim().toLowerCase() });
-    const genericMsg =
-      "If an account with this email exists, a password reset link has been sent.";
-
+    const genericMsg = "If an account with this email exists, a password reset link has been sent.";
     if (!user) return res.json({ message: genericMsg });
 
     await Token.deleteMany({ userId: user._id });
 
     const resetToken = require("crypto").randomBytes(32).toString("hex");
-
     await new Token({ userId: user._id, token: resetToken }).save();
 
     const resetLink = `${process.env.FRONTEND_URL}/reset-password/${resetToken}`;
 
     let provider = "gmail";
-    if (
-      user.email.includes("@outlook.") ||
-      user.email.includes("@hotmail.") ||
-      user.email.includes("@live.")
-    ) {
+    if (user.email.includes("@outlook.") || user.email.includes("@hotmail.") || user.email.includes("@live.")) {
       provider = "outlook";
     }
 
@@ -256,18 +190,15 @@ exports.resetPassword = async (req, res) => {
     const { token } = req.params;
     const { password } = req.body;
 
-    if (!password || !password.trim()) {
-      return res.status(400).json({ message: "Password is required" });
-    }
+    if (!password || !password.trim()) return res.status(400).json({ message: "Password is required" });
 
     const passwordResetToken = await Token.findOne({ token });
-    if (!passwordResetToken)
-      return res.status(400).json({ message: "Invalid or expired link" });
+    if (!passwordResetToken) return res.status(400).json({ message: "Invalid or expired link" });
 
     const user = await User.findById(passwordResetToken.userId);
     if (!user) return res.status(400).json({ message: "User not found" });
 
-    user.password = String(password).trim();
+    user.password = String(password).trim(); // plain-text update
     await user.save();
 
     await passwordResetToken.deleteOne();
