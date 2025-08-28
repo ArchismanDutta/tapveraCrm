@@ -21,13 +21,11 @@ export default function NoticeForm({ onPublish }) {
   return (
     <form
       onSubmit={handleSubmit}
-      className="bg-white rounded-xl shadow-md p-6 mb-8"
+      className="bg-gray-800 rounded-xl shadow-md p-6 mb-8 text-gray-200"
     >
-      <h2 className="text-lg font-semibold text-gray-700 mb-4">
-        📢 Publish Notice
-      </h2>
+      <h2 className="text-lg font-semibold text-gray-200 mb-4">📢 Publish Notice</h2>
       <textarea
-        className="border border-gray-300 rounded-lg p-3 w-full text-sm focus:ring-2 focus:ring-orange-400"
+        className="border border-gray-600 bg-gray-700 rounded-lg p-3 w-full text-sm text-gray-200 placeholder-gray-400 focus:ring-2 focus:ring-orange-400 focus:border-orange-400"
         rows={4}
         placeholder="Write a notice for all employees..."
         value={message}
@@ -36,7 +34,7 @@ export default function NoticeForm({ onPublish }) {
       />
       <button
         type="submit"
-        className="mt-3 px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600"
+        className="mt-3 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-orange-600 focus:outline-none focus:ring-2 focus:ring-orange-500"
       >
         Publish now
       </button>

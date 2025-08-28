@@ -323,7 +323,7 @@ const AppWrapper = () => {
         />
 
         {/* Catch-All */}
-        {/* <Route
+         <Route
           path="*"
           element={
             <Navigate
@@ -339,7 +339,7 @@ const AppWrapper = () => {
               replace
             />
           }
-        /> */}
+        />
       </Routes>
 
       <ToastContainer position="top-right" autoClose={3000} />
