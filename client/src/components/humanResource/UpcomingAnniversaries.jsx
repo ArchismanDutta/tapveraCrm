@@ -1,8 +1,10 @@
 import React from "react";
 
-const formatDate = (dateString) => {
-  const date = new Date(dateString);
-  return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+const formatDate = (date) => {
+  if (!date) return "-";
+  const d = new Date(date);
+  if (isNaN(d)) return "-";
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 };
 
 const UpcomingAnniversaries = ({ anniversaries }) => {
@@ -23,7 +25,6 @@ const UpcomingAnniversaries = ({ anniversaries }) => {
             className="flex items-center justify-between p-3 rounded-xl hover:bg-[#2a314d] transition"
           >
             <div className="flex items-center gap-3">
-              {/* Avatar or Initial */}
               {a.avatar ? (
                 <img
                   src={a.avatar}
@@ -37,9 +38,7 @@ const UpcomingAnniversaries = ({ anniversaries }) => {
               )}
               <div>
                 <p className="font-medium text-gray-100">{a.name}</p>
-                <span className="text-xs text-gray-400">
-                  {a.designation || "Employee"}
-                </span>
+                <span className="text-xs text-gray-400">{a.designation || "Employee"}</span>
               </div>
             </div>
             <span className="px-3 py-1 rounded-full text-xs font-medium bg-gray-700 text-gray-300">
