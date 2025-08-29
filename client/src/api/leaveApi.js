@@ -88,6 +88,7 @@ export async function fetchAllLeaveRequests() {
     employee: r.employee,
     adminRemarks: r.adminRemarks || "",
     createdAt: r.createdAt || null,
+    approvedBy: r.approvedBy || null,
   }));
 }
 

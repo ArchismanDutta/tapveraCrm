@@ -62,4 +62,27 @@ router.post("/private-conversation", protect, async (req, res) => {
   }
 });
 
+// Delete a conversation and its messages
+router.delete("/conversations/:id", protect, async (req, res) => {
+  try {
+    const conversationId = req.params.id;
+
+    // Optionally: Add authorization checks if needed to allow only members or admins to delete
+
+    const deletedConversation = await chatController.deleteConversation(
+      conversationId
+    );
+
+    if (!deletedConversation) {
+      return res.status(404).json({ error: "Conversation not found" });
+    }
+
+    res.json({ message: "Conversation and its messages deleted successfully" });
+  } catch (error) {
+    console.error("Delete conversation error:", error);
+    res.status(500).json({ error: "Failed to delete conversation" });
+  }
+});
+
+
 module.exports = router;
