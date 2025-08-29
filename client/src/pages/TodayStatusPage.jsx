@@ -1,3 +1,5 @@
+// File: TodayStatusPage.jsx
+
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 import Sidebar from "../components/dashboard/Sidebar";
@@ -11,7 +13,11 @@ import PunchOutConfirmPopup from "../components/workstatus/PunchOutConfirmPopup"
 import { toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 
-const formatHMS = (seconds) => {
+// --- Backend URL ---
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
+
+// --- Helpers ---
+const formatHMS = (seconds = 0) => {
   const h = Math.floor(seconds / 3600);
   const m = Math.floor((seconds % 3600) / 60);
   const s = seconds % 60;
@@ -28,6 +34,7 @@ const TodayStatusPage = ({ onLogout }) => {
   const [liveBreak, setLiveBreak] = useState(0);
   const [selectedBreakType, setSelectedBreakType] = useState("");
   const [weeklySummary, setWeeklySummary] = useState(null);
+
   const [showTodoPopup, setShowTodoPopup] = useState(false);
   const [pendingTodoTasks, setPendingTodoTasks] = useState([]);
   const [showPunchOutConfirm, setShowPunchOutConfirm] = useState(false);
@@ -39,17 +46,22 @@ const TodayStatusPage = ({ onLogout }) => {
   const [requestReason, setRequestReason] = useState("");
   const [isSubmittingRequest, setIsSubmittingRequest] = useState(false);
 
-  const token = localStorage.getItem("token");
+  const [flexibleRequests, setFlexibleRequests] = useState([]);
 
+  const token = localStorage.getItem("token");
+  const axiosConfig = { headers: { Authorization: `Bearer ${token}` } };
+
+  // --- Fetch Status ---
   const fetchStatus = async () => {
     try {
-      const res = await axios.get("/api/status", { headers: { Authorization: `Bearer ${token}` } });
+      const res = await axios.get(`${API_BASE}/api/status`, axiosConfig);
       setStatus(res.data);
     } catch (err) {
       console.error("Failed to fetch status:", err);
     }
   };
 
+  // --- Fetch Weekly Summary ---
   const fetchWeeklySummary = async () => {
     try {
       const now = new Date();
@@ -62,8 +74,8 @@ const TodayStatusPage = ({ onLogout }) => {
       sunday.setDate(monday.getDate() + 6);
       sunday.setHours(23, 59, 59, 999);
 
-      const res = await axios.get("/api/summary/week", {
-        headers: { Authorization: `Bearer ${token}` },
+      const res = await axios.get(`${API_BASE}/api/summary/week`, {
+        ...axiosConfig,
         params: { startDate: monday.toISOString(), endDate: sunday.toISOString() },
       });
       setWeeklySummary(res.data?.weeklySummary || null);
@@ -72,55 +84,84 @@ const TodayStatusPage = ({ onLogout }) => {
     }
   };
 
-  const updateStatus = async (update) => {
+  // --- Fetch Employee Flexible Requests ---
+  const fetchFlexibleRequests = async () => {
     try {
-      const res = await axios.put("/api/status", update, { headers: { Authorization: `Bearer ${token}` } });
+      const res = await axios.get(`${API_BASE}/api/flexible-shift/my-requests`, axiosConfig);
+      setFlexibleRequests(res.data || []);
+    } catch (err) {
+      console.error("Failed to fetch flexible shift requests:", err);
+    }
+  };
+
+  // --- Update Status (Safe payload) ---
+  const updateStatus = async (update) => {
+    if (!status) return;
+    try {
+      // Ensure all required fields are always sent
+      const payload = {
+        currentlyWorking: status.currentlyWorking,
+        onBreak: status.onBreak,
+        workDurationSeconds: status.workDurationSeconds || 0,
+        breakDurationSeconds: status.breakDurationSeconds || 0,
+        arrivalTime: status.arrivalTime || null,
+        ...update, // override with updates
+      };
+      const res = await axios.put(`${API_BASE}/api/status`, payload, axiosConfig);
       setStatus(res.data);
       setSelectedBreakType("");
       fetchWeeklySummary();
       window.dispatchEvent(new Event("attendanceDataUpdate"));
     } catch (err) {
       console.error("Failed to update status:", err);
-      toast.error("Failed to update status.");
+      toast.error(err?.response?.data?.message || "Failed to update status.");
     }
   };
 
-  // Live timers
+  // --- Live Timers ---
   useEffect(() => {
-    if (!status) return setLiveWork(0);
+    if (!status) return;
     setLiveWork(status.workDurationSeconds || 0);
-    if (status.currentlyWorking) {
-      const timer = setInterval(() => setLiveWork((prev) => prev + 1), 1000);
-      return () => clearInterval(timer);
-    }
-  }, [status]);
-
-  useEffect(() => {
-    if (!status) return setLiveBreak(0);
     setLiveBreak(status.breakDurationSeconds || 0);
-    if (status.onBreak) {
-      const timer = setInterval(() => setLiveBreak((prev) => prev + 1), 1000);
-      return () => clearInterval(timer);
+
+    let workTimer, breakTimer;
+    if (status.currentlyWorking) {
+      workTimer = setInterval(() => setLiveWork((prev) => prev + 1), 1000);
     }
+    if (status.onBreak) {
+      breakTimer = setInterval(() => setLiveBreak((prev) => prev + 1), 1000);
+    }
+    return () => {
+      clearInterval(workTimer);
+      clearInterval(breakTimer);
+    };
   }, [status]);
 
-  // Initial fetch
+  // --- Initial Fetch ---
   useEffect(() => {
     fetchStatus();
     fetchWeeklySummary();
+    fetchFlexibleRequests();
+
     const interval = setInterval(() => {
       fetchStatus();
       fetchWeeklySummary();
+      fetchFlexibleRequests();
     }, 60000);
+
     return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
-    const handler = () => fetchWeeklySummary();
+    const handler = () => {
+      fetchWeeklySummary();
+      fetchFlexibleRequests();
+    };
     window.addEventListener("attendanceDataUpdate", handler);
     return () => window.removeEventListener("attendanceDataUpdate", handler);
   }, []);
 
+  // --- Punch In/Out ---
   const handlePunchIn = () => {
     if (status?.currentlyWorking) return;
     updateStatus({
@@ -134,8 +175,8 @@ const TodayStatusPage = ({ onLogout }) => {
     try {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
-      const res = await axios.get("/api/todos", {
-        headers: { Authorization: `Bearer ${token}` },
+      const res = await axios.get(`${API_BASE}/api/todos`, {
+        ...axiosConfig,
         params: { date: today.toISOString() },
       });
       const incompletes = res.data.filter((t) => !t.completed);
@@ -167,44 +208,12 @@ const TodayStatusPage = ({ onLogout }) => {
     });
   };
 
-  const onCloseTodoPopup = () => {
-    setShowTodoPopup(false);
-    setPendingTodoTasks([]);
-  };
-  const onFindOutTodoPopup = () => {
-    setShowTodoPopup(false);
-    setPendingTodoTasks([]);
-    window.location.href = "/todo";
-  };
-  const onMoveToTomorrowTodoPopup = async () => {
-    try {
-      const tomorrow = new Date();
-      tomorrow.setHours(0, 0, 0, 0);
-      tomorrow.setDate(tomorrow.getDate() + 1);
-
-      await Promise.all(
-        pendingTodoTasks.map((task) =>
-          axios.post(
-            `/api/todos/${task._id}/move`,
-            { newDate: tomorrow.toISOString() },
-            { headers: { Authorization: `Bearer ${token}` } }
-          )
-        )
-      );
-      setShowTodoPopup(false);
-      setPendingTodoTasks([]);
-      onConfirmPunchOut();
-    } catch (err) {
-      console.error("Failed to move tasks:", err);
-      toast.error("Failed to move tasks.");
-    }
-  };
-
+  // --- Break Handlers ---
   const handleStartBreak = (breakType) => {
     if (!breakType || !status?.currentlyWorking || status?.onBreak) return;
     updateStatus({
-      onBreak: true,
       currentlyWorking: false,
+      onBreak: true,
       breakStartTime: new Date(),
       timelineEvent: { type: `Break Start (${breakType})`, time: new Date().toLocaleTimeString() },
     });
@@ -213,8 +222,8 @@ const TodayStatusPage = ({ onLogout }) => {
   const handleResumeWork = () => {
     if (!status?.onBreak) return;
     updateStatus({
-      onBreak: false,
       currentlyWorking: true,
+      onBreak: false,
       breakStartTime: null,
       timelineEvent: { type: "Resume Work", time: new Date().toLocaleTimeString() },
     });
@@ -222,6 +231,7 @@ const TodayStatusPage = ({ onLogout }) => {
 
   const handleSelectBreakType = (type) => setSelectedBreakType(type);
 
+  // --- Flexible Shift Modal ---
   const openFlexibleModal = () => {
     setRequestDate(new Date().toISOString().split("T")[0]);
     setRequestStartTime("");
@@ -233,29 +243,33 @@ const TodayStatusPage = ({ onLogout }) => {
     setShowFlexibleModal(false);
     setIsSubmittingRequest(false);
   };
+
   const submitFlexibleRequest = async (e) => {
     e.preventDefault();
     if (!requestDate || !requestStartTime) {
       toast.error("Please select date and start time.");
       return;
     }
+
     setIsSubmittingRequest(true);
     try {
-      const payload = {
-        date: requestDate,
-        requestedStartTime: requestStartTime,
-        durationHours: Number(requestDurationHours) || 9,
-        reason: requestReason?.trim() || "",
-      };
-      await axios.post("/api/flexible-shift/request", payload, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      await axios.post(
+        `${API_BASE}/api/flexible-shift/request`,
+        {
+          requestedDate: requestDate,
+          requestedStartTime: requestStartTime,
+          durationHours: Number(requestDurationHours) || 9,
+          reason: requestReason?.trim() || "",
+        },
+        axiosConfig
+      );
+
       toast.success("Flexible shift request submitted.");
       closeFlexibleModal();
       fetchStatus();
       fetchWeeklySummary();
+      fetchFlexibleRequests();
     } catch (err) {
-      console.error("Flexible request failed:", err);
       const msg = err?.response?.data?.message || "Failed to submit request.";
       toast.error(msg);
       setIsSubmittingRequest(false);
@@ -277,7 +291,10 @@ const TodayStatusPage = ({ onLogout }) => {
 
       <main
         className="transition-all duration-300 p-2 sm:p-6 overflow-auto"
-        style={{ marginLeft: collapsed ? SIDEBAR_WIDTH_COLLAPSED : SIDEBAR_WIDTH_EXPANDED, minHeight: "100vh" }}
+        style={{
+          marginLeft: collapsed ? SIDEBAR_WIDTH_COLLAPSED : SIDEBAR_WIDTH_EXPANDED,
+          minHeight: "100vh",
+        }}
       >
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 h-full min-h-screen">
           <div className="col-span-2 flex flex-col gap-4">
@@ -288,9 +305,8 @@ const TodayStatusPage = ({ onLogout }) => {
               currentlyWorking={status.currentlyWorking}
               onPunchIn={handlePunchIn}
               onPunchOut={handlePunchOutClick}
-              onRequestFlexible={openFlexibleModal} // new prop
+              onRequestFlexible={openFlexibleModal}
             />
-
             <BreakManagement
               breakDuration={formatHMS(liveBreak)}
               onBreak={status.onBreak}
@@ -300,7 +316,6 @@ const TodayStatusPage = ({ onLogout }) => {
               onSelectBreakType={handleSelectBreakType}
               currentlyWorking={status.currentlyWorking}
             />
-
             <Timeline timeline={status.timeline || []} />
           </div>
 
@@ -313,9 +328,35 @@ const TodayStatusPage = ({ onLogout }) => {
         {showTodoPopup && (
           <PunchOutTodoPopup
             tasks={pendingTodoTasks}
-            onClose={onCloseTodoPopup}
-            onFindOut={onFindOutTodoPopup}
-            onMoveToTomorrow={onMoveToTomorrowTodoPopup}
+            onClose={() => {
+              setShowTodoPopup(false);
+              setPendingTodoTasks([]);
+            }}
+            onFindOut={() => (window.location.href = "/todo")}
+            onMoveToTomorrow={async () => {
+              try {
+                const tomorrow = new Date();
+                tomorrow.setDate(tomorrow.getDate() + 1);
+                tomorrow.setHours(0, 0, 0, 0);
+
+                await Promise.all(
+                  pendingTodoTasks.map((task) =>
+                    axios.post(
+                      `${API_BASE}/api/todos/${task._id}/move`,
+                      { newDate: tomorrow.toISOString() },
+                      axiosConfig
+                    )
+                  )
+                );
+
+                setShowTodoPopup(false);
+                setPendingTodoTasks([]);
+                onConfirmPunchOut();
+              } catch (err) {
+                console.error("Failed to move tasks:", err);
+                toast.error("Failed to move tasks.");
+              }
+            }}
           />
         )}
 
@@ -324,10 +365,16 @@ const TodayStatusPage = ({ onLogout }) => {
         )}
 
         {showFlexibleModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-            <div className="bg-[#0f1724] text-gray-100 rounded-lg shadow-lg w-full max-w-md p-6">
-              <h3 className="text-lg font-semibold mb-3">Request Flexible Shift</h3>
-              <form onSubmit={submitFlexibleRequest} className="space-y-3">
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 overflow-auto"
+            onClick={closeFlexibleModal}
+          >
+            <div
+              className="bg-[#0f1724] text-gray-100 rounded-lg shadow-lg w-full max-w-md p-6 max-h-[80vh] overflow-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h3 className="text-lg font-semibold mb-3">Flexible Shift Requests</h3>
+              <form onSubmit={submitFlexibleRequest} className="space-y-3 mb-6">
                 <div>
                   <label className="block text-sm text-gray-300 mb-1">Date</label>
                   <input
@@ -388,6 +435,50 @@ const TodayStatusPage = ({ onLogout }) => {
                   </button>
                 </div>
               </form>
+
+              <div>
+                <h4 className="text-md font-semibold mb-2">Your Requests</h4>
+                {flexibleRequests.length === 0 ? (
+                  <p className="text-sm text-gray-400">No requests submitted yet.</p>
+                ) : (
+                  <ul className="space-y-2 max-h-60 overflow-auto">
+                    {flexibleRequests.map((req) => (
+                      <li
+                        key={req._id}
+                        className="flex justify-between items-center bg-[#111827] p-2 rounded border border-gray-700"
+                      >
+                        <div className="flex flex-col">
+                          <span className="text-sm">
+                            <strong>Date:</strong> {new Date(req.requestedDate).toLocaleDateString()}
+                          </span>
+                          <span className="text-sm">
+                            <strong>Start:</strong> {req.requestedStartTime}
+                          </span>
+                          <span className="text-sm">
+                            <strong>Duration:</strong> {req.durationHours}h
+                          </span>
+                          {req.reason && (
+                            <span className="text-sm">
+                              <strong>Reason:</strong> {req.reason}
+                            </span>
+                          )}
+                        </div>
+                        <span
+                          className={`px-2 py-1 text-xs rounded ${
+                            req.status === "approved"
+                              ? "bg-green-600 text-white"
+                              : req.status === "rejected"
+                              ? "bg-red-600 text-white"
+                              : "bg-yellow-500 text-black"
+                          }`}
+                        >
+                          {req.status}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
             </div>
           </div>
         )}
