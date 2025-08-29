@@ -15,7 +15,7 @@ exports.createEmployee = async (req, res) => {
       dob,
       gender,
       bloodGroup,
-      qualification,
+      qualifications,
       permanentAddress,
       currentAddress,
       emergencyNo,
@@ -28,6 +28,7 @@ exports.createEmployee = async (req, res) => {
       department,
       designation,
       password,
+      shift, // shift info
     } = req.body;
 
     if (!employeeId || !name || !email || !contact || !dob || !gender || !doj) {
@@ -44,38 +45,35 @@ exports.createEmployee = async (req, res) => {
       return res.status(400).json({ message: "Employee ID already in use." });
     }
 
-    const userPassword = String(password || "Welcome123").trim();
-    const parsedSalary = typeof salary === "number" ? salary : Number(salary || 0);
-    const parsedTotalPl = typeof totalPl === "number" ? totalPl : Number(totalPl || 0);
-
     const user = new User({
       employeeId: trimmedEmployeeId,
-      name: String(name).trim(),
+      name: name.trim(),
       email: normalizedEmail,
-      contact: String(contact).trim(),
+      contact: contact.trim(),
       dob,
       gender,
-      bloodGroup: bloodGroup ? String(bloodGroup).trim() : "",
-      qualification: qualification ? String(qualification).trim() : "",
-      permanentAddress: permanentAddress ? String(permanentAddress).trim() : "",
-      currentAddress: currentAddress ? String(currentAddress).trim() : "",
-      emergencyNo: emergencyNo ? String(emergencyNo).trim() : "",
-      ps: ps ? String(ps).trim() : "",
+      bloodGroup: bloodGroup?.trim() || "",
+      qualifications: Array.isArray(qualifications) ? qualifications : [],
+      permanentAddress: permanentAddress?.trim() || "",
+      currentAddress: currentAddress?.trim() || "",
+      emergencyNo: emergencyNo?.trim() || "",
+      ps: ps?.trim() || "",
       doj,
-      salary: Number.isFinite(parsedSalary) ? parsedSalary : 0,
-      ref: ref ? String(ref).trim() : "",
-      status: status ? String(status).toLowerCase().trim() : "inactive",
-      totalPl: Number.isFinite(parsedTotalPl) ? parsedTotalPl : 0,
-      password: userPassword, // consider hashing in production
+      salary: Number(salary) || 0,
+      ref: ref?.trim() || "",
+      status: status?.toLowerCase() || "inactive",
+      totalPl: Number(totalPl) || 0,
+      password: password || "Welcome123", // plain-text for now
       department: department || "",
-      designation: designation ? String(designation).trim() : "",
+      designation: designation?.trim() || "",
       role: "employee",
+      shift: shift?.start && shift?.end ? shift : undefined, // assign shift if provided
     });
 
     await user.save();
     res.status(201).json({ message: "Employee created successfully", user });
   } catch (error) {
-    console.error("Create employee error", error);
+    console.error("Create employee error:", error);
     res.status(500).json({ message: "Server error" });
   }
 };
@@ -85,28 +83,27 @@ exports.createEmployee = async (req, res) => {
 // ======================
 exports.getEmployeeDirectory = async (req, res) => {
   try {
-    let { department, designation, status, search } = req.query;
+    const { department, designation, status, search } = req.query;
     const filter = {};
 
-    if (department && department !== "all") filter.department = String(department).trim();
-    if (designation && designation !== "all") {
-      filter.designation = { $regex: String(designation).trim(), $options: "i" };
-    }
-    if (status && status !== "all") filter.status = String(status).toLowerCase().trim();
+    if (department && department !== "all") filter.department = department.trim();
+    if (designation && designation !== "all")
+      filter.designation = { $regex: designation.trim(), $options: "i" };
+    if (status && status !== "all") filter.status = status.toLowerCase().trim();
     if (search) {
-      const searchTerm = String(search).trim();
+      const term = search.trim();
       filter.$or = [
-        { name: { $regex: searchTerm, $options: "i" } },
-        { email: { $regex: searchTerm, $options: "i" } },
-        { employeeId: { $regex: searchTerm, $options: "i" } },
+        { name: { $regex: term, $options: "i" } },
+        { email: { $regex: term, $options: "i" } },
+        { employeeId: { $regex: term, $options: "i" } },
       ];
     }
 
     const employees = await User.find(filter)
-      .select("_id employeeId name email contact department designation role status doj")
+      .select("_id employeeId name email contact department designation role status doj shift")
       .sort({ name: 1 });
 
-    const employeesWithStatus = employees.map((emp) => ({
+    const employeesWithStatus = employees.map(emp => ({
       ...emp.toObject(),
       status: emp.status || "inactive",
     }));
@@ -124,7 +121,7 @@ exports.getEmployeeDirectory = async (req, res) => {
 exports.getAllUsers = async (req, res) => {
   try {
     const users = await User.find().select(
-      "_id name email role department designation employeeId dob doj"
+      "_id name email role department designation employeeId dob doj shift"
     );
     res.json(users);
   } catch (err) {
@@ -138,35 +135,28 @@ exports.getAllUsers = async (req, res) => {
 // ======================
 exports.getMe = async (req, res) => {
   try {
-    if (!req.user?._id) return res.status(404).json({ message: "User not found" });
+    const userId = req.user?._id;
+    if (!userId) return res.status(404).json({ message: "User not found" });
 
-    const user = await User.findById(req.user._id).select("-password");
+    const user = await User.findById(userId).select("-password");
     if (!user) return res.status(404).json({ message: "User not found" });
 
-    // Compute task stats
-    const tasks = await Task.find({
-      $or: [{ assignedTo: user._id }, { assignedBy: user._id }],
-    });
-
+    // Task stats
+    const tasks = await Task.find({ $or: [{ assignedTo: userId }, { assignedBy: userId }] });
     const tasksCompleted = tasks.filter(t => t.status === "completed").length;
     const ongoingProjects = tasks.filter(t => t.status === "pending" || t.status === "in-progress").length;
 
-    // Compute attendance based on approved leaves in current month
+    // Attendance (approved leaves this month)
     const today = new Date();
     const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
     const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-
     const approvedLeaves = await LeaveRequest.find({
       "employee.email": user.email,
       status: "Approved",
-      "period.start": { $gte: monthStart, $lte: monthEnd }
+      "period.start": { $gte: monthStart, $lte: monthEnd },
     });
-
     const totalDays = monthEnd.getDate();
-    const attendancePercent = Math.max(
-      0,
-      Math.round(((totalDays - approvedLeaves.length) / totalDays) * 100)
-    );
+    const attendancePercent = Math.max(0, Math.round(((totalDays - approvedLeaves.length) / totalDays) * 100));
 
     res.json({
       id: user._id,
@@ -195,6 +185,7 @@ exports.getMe = async (req, res) => {
       tasksCompleted,
       ongoingProjects,
       attendancePercent,
+      shift: user.shift || null, // include shift info
     });
   } catch (err) {
     console.error("GetMe Error:", err);
@@ -229,6 +220,7 @@ exports.getEmployeeById = async (req, res) => {
         department: user.department || "",
         dateOfJoining: user.doj || "",
         status: user.status || "inactive",
+        shift: user.shift || null, // include shift info
       },
       salary: {
         basic: user.salary || 0,
