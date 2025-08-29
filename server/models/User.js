@@ -1,4 +1,4 @@
-// models/User.js
+// File: models/User.js
 const mongoose = require("mongoose");
 
 // ======================
@@ -46,7 +46,7 @@ const shiftSchema = new mongoose.Schema({
       message: "Shift end time must be after start time",
     },
   },
-  durationHours: { type: Number, default: 9 },
+  durationHours: { type: Number, default: 9, min: 1, max: 24 },
   isFlexible: { type: Boolean, default: false },
 });
 
@@ -123,7 +123,7 @@ const userSchema = new mongoose.Schema(
 
     totalPl: { type: Number, default: 0, min: 0 },
 
-    password: { type: String, required: true, minlength: 1 }, // plain-text
+    password: { type: String, required: true, minlength: 1 }, // store hashed in production
 
     role: {
       type: String,
@@ -167,7 +167,9 @@ const userSchema = new mongoose.Schema(
     // ======================
     shift: { type: shiftSchema, default: () => ({}) },
 
-    // Optional reference to flexible shift requests
+    // ======================
+    // Flexible Shift Requests
+    // ======================
     flexibleShiftRequests: [
       {
         type: mongoose.Schema.Types.ObjectId,
@@ -179,20 +181,20 @@ const userSchema = new mongoose.Schema(
 );
 
 // ======================
-// Remove sensitive fields in JSON
+// Remove sensitive fields in JSON/Objects
 // ======================
 userSchema.set("toJSON", {
   transform: (doc, ret) => {
-    delete ret.outlookAppPassword;
     delete ret.password;
+    delete ret.outlookAppPassword;
     return ret;
   },
 });
 
 userSchema.set("toObject", {
   transform: (doc, ret) => {
-    delete ret.outlookAppPassword;
     delete ret.password;
+    delete ret.outlookAppPassword;
     return ret;
   },
 });

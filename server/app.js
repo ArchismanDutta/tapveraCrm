@@ -1,4 +1,3 @@
-// File: server.js
 require("dotenv").config();
 
 const express = require("express");
@@ -26,6 +25,7 @@ const chatRoutes = require("./routes/chatRoutes");
 const statusRoutes = require("./routes/statusRoutes");
 const summaryRoutes = require("./routes/summaryRoutes");
 const wishRoutes = require("./routes/wishRoutes");
+const flexibleShiftRoutes = require("./routes/flexibleShiftRoutes"); // ✅ flexible shifts
 
 // Controllers
 const ChatController = require("./controllers/chatController");
@@ -39,7 +39,7 @@ const server = http.createServer(app);
 app.use(express.json());
 app.use(morgan("dev"));
 
-// Serve uploaded files (e.g., avatars, photos)
+// Serve uploaded files
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 // CORS setup
@@ -84,6 +84,9 @@ app.use("/api/summary", summaryRoutes);
 app.use("/api/notices", noticeRoutes);
 app.use("/api/chat", chatRoutes);
 app.use("/api/wishes", wishRoutes);
+
+// ✅ Flexible shift routes (matches frontend /api/flexible-shift)
+app.use("/api/flexible-shift", flexibleShiftRoutes);
 
 // Serve frontend in production
 if (process.env.NODE_ENV === "production") {
@@ -133,7 +136,9 @@ wss.on("connection", (ws) => {
           // Track conversation membership
           if (Array.isArray(data.conversationIds)) {
             data.conversationIds.forEach((convId) => {
-              if (!conversationMembersOnline[convId]) conversationMembersOnline[convId] = new Set();
+              if (!conversationMembersOnline[convId]) {
+                conversationMembersOnline[convId] = new Set();
+              }
               conversationMembersOnline[convId].add(user.id);
             });
           }
@@ -179,7 +184,9 @@ wss.on("connection", (ws) => {
       // Remove from conversation tracking
       for (const convId in conversationMembersOnline) {
         conversationMembersOnline[convId].delete(ws.user.id);
-        if (conversationMembersOnline[convId].size === 0) delete conversationMembersOnline[convId];
+        if (conversationMembersOnline[convId].size === 0) {
+          delete conversationMembersOnline[convId];
+        }
       }
     }
   });
