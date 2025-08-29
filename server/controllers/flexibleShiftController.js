@@ -1,16 +1,24 @@
-// File: controllers/flexibleShiftController.js
-
 const FlexibleShiftRequest = require("../models/FlexibleShiftRequest");
 const User = require("../models/User");
 
 // ======================
 // Create Flexible Shift Request (Employee)
-// POST /api/flexible-shift/request
+// POST /api/flexible-shifts/request
 // ======================
 exports.createFlexibleShiftRequest = async (req, res) => {
   try {
     const userId = req.user?._id;
     if (!userId) return res.status(401).json({ message: "Unauthorized" });
+
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    // Only employees with flexible-type shifts can request changes
+    if (!user.shift?.isFlexible) {
+      return res.status(400).json({
+        message: "Only employees with flexible shift can submit flexible shift requests",
+      });
+    }
 
     const { requestedDate, requestedStartTime, durationHours, reason } = req.body;
 
@@ -22,7 +30,7 @@ exports.createFlexibleShiftRequest = async (req, res) => {
       employee: userId,
       requestedDate,
       requestedStartTime,
-      durationHours: durationHours || 9,
+      durationHours: durationHours || 9, // default 9 hours for flexible 9-hour shift
       reason: reason?.trim() || "",
       status: "pending",
     });
@@ -37,7 +45,7 @@ exports.createFlexibleShiftRequest = async (req, res) => {
 
 // ======================
 // Get All Flexible Shift Requests (HR/Admin)
-// GET /api/flexible-shift
+// GET /api/flexible-shifts
 // ======================
 exports.getFlexibleShiftRequests = async (req, res) => {
   try {
@@ -54,15 +62,14 @@ exports.getFlexibleShiftRequests = async (req, res) => {
 
 // ======================
 // Get Employee's Own Flexible Shift Requests
-// GET /api/flexible-shift/my-requests
+// GET /api/flexible-shifts/my-requests
 // ======================
 exports.getEmployeeFlexibleRequests = async (req, res) => {
   try {
     const userId = req.user?._id;
     if (!userId) return res.status(401).json({ message: "Unauthorized" });
 
-    const requests = await FlexibleShiftRequest.find({ employee: userId })
-      .sort({ createdAt: -1 });
+    const requests = await FlexibleShiftRequest.find({ employee: userId }).sort({ createdAt: -1 });
 
     res.json(requests);
   } catch (err) {
@@ -73,7 +80,7 @@ exports.getEmployeeFlexibleRequests = async (req, res) => {
 
 // ======================
 // Update Flexible Shift Request Status (HR/Admin)
-// PUT /api/flexible-shift/:requestId/status
+// PUT /api/flexible-shifts/:requestId/status
 // ======================
 exports.updateFlexibleShiftStatus = async (req, res) => {
   try {
@@ -87,19 +94,24 @@ exports.updateFlexibleShiftStatus = async (req, res) => {
     const request = await FlexibleShiftRequest.findById(requestId);
     if (!request) return res.status(404).json({ message: "Flexible shift request not found" });
 
+    const user = await User.findById(request.employee);
+    if (!user) return res.status(404).json({ message: "Employee not found" });
+
+    // Cannot approve a flexible shift request for standard-shift employee
+    if (!user.shift?.isFlexible && status === "approved") {
+      return res.status(400).json({
+        message: "Cannot approve flexible shift request for a standard shift employee",
+      });
+    }
+
     request.status = status;
     request.reviewedBy = req.user?._id;
     request.reviewedAt = new Date();
     await request.save();
 
-    // If approved, update user's shift
+    // If approved, update user's shift for that day
     if (status === "approved") {
-      const user = await User.findById(request.employee);
-      if (!user) return res.status(404).json({ message: "Employee not found" });
-
       const duration = request.durationHours || 9;
-
-      // Calculate end time
       const [startH, startM] = request.requestedStartTime.split(":").map(Number);
       let endH = startH + Math.floor(duration);
       let endM = startM + Math.round((duration % 1) * 60);
@@ -108,13 +120,12 @@ exports.updateFlexibleShiftStatus = async (req, res) => {
 
       const endTime = `${String(endH).padStart(2, "0")}:${String(endM).padStart(2, "0")}`;
 
-      // Save to user.shift (optional: for that specific date)
-      user.shift = {
-        name: `Flexible ${new Date(request.requestedDate).toDateString()}`,
+      // For flexible 9-hour shift employees, just store start/end/duration; no early/late logic
+      user.shiftOverrides = user.shiftOverrides || {};
+      user.shiftOverrides[request.requestedDate] = {
         start: request.requestedStartTime,
         end: endTime,
         durationHours: duration,
-        isFlexible: true,
       };
 
       await user.save();

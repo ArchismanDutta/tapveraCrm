@@ -45,6 +45,11 @@ const DailyWorkSchema = new mongoose.Schema({
   date: { type: Date, required: true },
   arrivalTime: { type: Date, default: null },
   shift: { type: shiftForDaySchema, required: true }, // shift assigned for this day
+  shiftType: { 
+    type: String, 
+    enum: ["standard", "flexibleRequest", "flexible9"], 
+    default: "standard" 
+  },
   workDurationSeconds: { type: Number, default: 0 },
   breakDurationSeconds: { type: Number, default: 0 },
   breakSessions: [breakSessionSchema],
