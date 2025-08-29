@@ -68,7 +68,7 @@ const ChatPage = ({ onLogout }) => {
       if (!res.ok) throw new Error("Failed to fetch conversations");
       const data = await res.json();
       setConversations(data);
-      if (data.length > 0) setSelectedConversation(data[0]);
+      // if (data.length > 0) setSelectedConversation(data[0]);
     } catch (error) {
       console.error(error);
     }
@@ -92,6 +92,42 @@ const ChatPage = ({ onLogout }) => {
       alert(error.message);
     }
   };
+
+  const handleDeleteConversation = async (conversationId) => {
+    if (!window.confirm("Are you sure you want to delete this conversation?"))
+      return;
+
+    try {
+      const res = await fetch(
+        `http://localhost:5000/api/chat/conversations/${conversationId}`,
+        {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${jwtToken}` },
+        }
+      );
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || "Failed to delete conversation");
+      }
+
+      // Remove deleted conversation from list
+      setConversations((prev) =>
+        prev.filter((conv) => conv._id !== conversationId)
+      );
+
+      // Clear selected conversation if deleted
+      if (selectedConversation?._id === conversationId) {
+        setSelectedConversation(null);
+        setInitialMessages([]);
+      }
+
+      alert("Conversation deleted successfully");
+    } catch (error) {
+      alert(error.message);
+    }
+  };
+
 
   return (
     <div className="flex h-screen bg-[#101525] text-gray-100">
@@ -152,15 +188,30 @@ const ChatPage = ({ onLogout }) => {
                 <h4 className="text-lg font-semibold text-white">
                   {selectedConversation.name || "Group Chat"}
                 </h4>
-                {selectedConversation.members && (
-                  <div className="text-sm text-gray-400">
-                    Members:{" "}
-                    {selectedConversation.members
-                      .map((m) => m.name || m._id)
-                      .join(", ")}
-                  </div>
-                )}
+                <div className="flex items-center gap-4">
+                  {selectedConversation.members && (
+                    <div className="text-sm text-gray-400">
+                      Members:{" "}
+                      {selectedConversation.members
+                        .map((m) => m.name || m._id)
+                        .join(", ")}
+                    </div>
+                  )}
+
+                  {(userRole === "admin" || userRole === "super-admin") && (
+                    <button
+                      title="Delete Conversation"
+                      onClick={() =>
+                        handleDeleteConversation(selectedConversation._id)
+                      }
+                      className="text-red-500 hover:text-red-700 transition"
+                    >
+                      🗑️
+                    </button>
+                  )}
+                </div>
               </div>
+
               {/* Messages - scrollable */}
               <div className="flex-1 overflow-y-auto p-4">
                 <ChatWindow
