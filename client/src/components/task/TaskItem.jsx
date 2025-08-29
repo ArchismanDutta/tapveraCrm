@@ -47,12 +47,14 @@ const TaskItem = ({ task, onStatusUpdated }) => {
   };
 
   return (
-    <div className="border rounded-xl p-5 bg-[#181d2a] shadow-md hover:shadow-lg transition-all duration-200 border-[#fbfbfc]">
+    <div className="border rounded-xl p-5 bg-[#181d2a] shadow-md hover:shadow-lg transition-all duration-200 border-blue-950">
       {/* Header */}
       <div className="flex justify-between items-center mb-3">
         <h4 className="font-semibold text-blue-100 text-lg">{task.title}</h4>
         <span
-          className={`px-3 py-1 text-xs font-medium rounded-full ${priorityColors[task.priority]}`}
+          className={`px-3 py-1 text-xs font-medium rounded-full ${
+            priorityColors[task.priority]
+          }`}
         >
           {task.priority}
         </span>
@@ -73,7 +75,9 @@ const TaskItem = ({ task, onStatusUpdated }) => {
       </div>
 
       {/* Description */}
-      <p className="text-blue-300 text-sm mb-4 leading-relaxed">{task.description}</p>
+      <p className="text-blue-300 text-sm mb-4 leading-relaxed">
+        {task.description}
+      </p>
 
       {/* Status Selector */}
       <div className="flex justify-between items-center">
@@ -86,7 +90,7 @@ const TaskItem = ({ task, onStatusUpdated }) => {
           value={status}
           onChange={(e) => handleStatusChange(e.target.value)}
           disabled={loading}
-          className="rounded-lg px-3 py-1.5 text-sm bg-[#141a29] shadow-sm border border-[#f5f6f9] text-blue-100 focus:outline-none focus:ring-2 focus:ring-[#ff8000] transition"
+          className="rounded-lg px-3 py-1.5 text-sm bg-[#141a29] shadow-sm border border-blue-950 text-blue-100 focus:outline-none focus:ring-2 focus:ring-[#ff8000] transition"
         >
           <option value="pending">Pending</option>
           <option value="in-progress">In Progress</option>
