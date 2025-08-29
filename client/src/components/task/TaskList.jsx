@@ -9,7 +9,7 @@ const TaskList = ({ tasks: initialTasks }) => {
   }, [initialTasks]);
 
   return (
-    <div className="bg-[#181d2a] rounded-lg shadow-lg p-4 border border-[#f9f9fb]">
+    <div className="bg-[#181d2a] rounded-lg shadow-lg p-4 border border-blue-950">
       <h3 className="font-semibold mb-4 text-blue-100">Today's Tasks</h3>
       <div className="flex flex-col gap-4">
         {tasks && tasks.length > 0 ? (
