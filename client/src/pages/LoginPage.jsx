@@ -37,7 +37,9 @@ const Login = ({ onLoginSuccess }) => {
       });
 
       const data = await res.json();
+
       console.log("Login response:", data);
+
 
       if (!res.ok) {
         setError(data.message || "Invalid email or password.");
@@ -45,12 +47,10 @@ const Login = ({ onLoginSuccess }) => {
         return;
       }
 
-      // Save token & user info
       localStorage.setItem("token", data.token);
       localStorage.setItem("user", JSON.stringify(data.user));
       localStorage.setItem("role", data.user.role);
 
-      // Role-based navigation
       const role = data.user.role?.toLowerCase();
       if (role === "admin" || role === "super-admin") {
         navigate("/admin/tasks");
@@ -60,7 +60,6 @@ const Login = ({ onLoginSuccess }) => {
 
       if (onLoginSuccess) onLoginSuccess(data.token);
     } catch (err) {
-      console.error("Login Error:", err);
       setError("Failed to connect to the server. Please try again.");
     } finally {
       setLoading(false);
@@ -68,19 +67,24 @@ const Login = ({ onLoginSuccess }) => {
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-[#141a29] via-[#181d2a] to-[#1b2233] px-4 py-8">
-      {/* Logo */}
-      <img
-        src={tapveraLogo}
-        alt="Tapvera Logo"
-        className="h-24 w-auto mb-6 drop-shadow-[0_0_6px_rgba(255,128,0,0.75)]"
-      />
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#0f121a] via-[#141a1f] to-[#181d26] px-4 py-8">
+      <div className="w-full max-w-md bg-white/10 backdrop-blur-lg rounded-2xl shadow-xl p-8 border border-white/20">
+        {/* Logo */}
+        <div className="flex flex-col items-center mb-8">
+          <img
+            src={tapveraLogo}
+            alt="Tapvera Logo"
+            className="h-20 w-auto mb-3 drop-shadow-[0_0_8px_rgba(255,128,0,0.6)]"
+          />
+          <h1 className="text-2xl md:text-3xl font-bold text-center text-white tracking-tight">
+            Welcome Back
+          </h1>
+          <p className="text-sm text-gray-400 mt-1 text-center">
+            Log in to continue to your account
+          </p>
+        </div>
 
-      <div className="bg-[#181d2a]/80 backdrop-blur-xl rounded-xl shadow-lg p-8 w-full max-w-md border border-white">
-        <h2 className="text-2xl font-bold text-[#ff8000] mb-6 text-center">
-          Log in to your account
-        </h2>
-
+        {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-6" noValidate>
           <AuthInput
             label="Email Address"
@@ -93,7 +97,7 @@ const Login = ({ onLoginSuccess }) => {
             required
             error={error && !form.email ? "Email is required." : ""}
             icon={FaEnvelope}
-            className="bg-[#141a29] border border-white text-blue-100 placeholder-blue-500 focus:ring-2 focus:ring-[#ff8000] focus:border-[#ff8000]"
+            className="bg-[#10141c] border border-white/20 text-white placeholder-gray-500 focus:ring-2 focus:ring-[#ff8000] focus:border-[#ff8000]"
           />
 
           <AuthInput
@@ -108,11 +112,11 @@ const Login = ({ onLoginSuccess }) => {
             error={error && !form.password ? "Password is required." : ""}
             showTogglePassword
             icon={FaLock}
-            className="bg-[#141a29] border border-white text-blue-100 placeholder-blue-500 focus:ring-2 focus:ring-[#ff8000] focus:border-[#ff8000]"
+            className="bg-[#10141c] border border-white/20 text-white placeholder-gray-500 focus:ring-2 focus:ring-[#ff8000] focus:border-[#ff8000]"
           />
 
           {error && (
-            <div className="text-sm text-red-500 bg-[#3b1a1a] border border-red-700 p-2 rounded">
+            <div className="text-sm text-red-400 bg-red-900/40 border border-red-700 p-2 rounded-lg text-center">
               {error}
             </div>
           )}
@@ -120,18 +124,19 @@ const Login = ({ onLoginSuccess }) => {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-2 rounded-md bg-[#ff8000] hover:bg-[#ff9500] transition text-black font-semibold shadow focus:ring-2 focus:ring-[#ff9c33] focus:ring-offset-2 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full py-3 rounded-xl bg-[#ff8000] hover:bg-[#ff9500] transition text-black font-semibold shadow-md focus:ring-4 focus:ring-[#ff9c33]/50 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? "Logging in..." : "Log In"}
           </button>
         </form>
 
+        {/* Footer */}
         <div className="mt-6 text-center">
-          <span className="text-blue-400 text-sm">
+          <span className="text-gray-400 text-sm">
             Forgot your password?
             <a
               href="/forgot-password"
-              className="ml-2 text-[#ff8000] hover:underline"
+              className="ml-2 text-[#ff8000] font-medium hover:underline"
             >
               Click here
             </a>

@@ -29,6 +29,11 @@ const LeaveRequestSchema = new mongoose.Schema({
     size: String,
     url: String,
   },
+  approvedBy: {
+    _id: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+    name: String,
+    email: String,
+  },
   adminRemarks: { type: String, default: "" },
   createdAt: { type: Date, default: Date.now },
 });

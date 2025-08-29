@@ -52,7 +52,9 @@ const LeaveRequestDetails = ({
           className="w-12 h-12 rounded-full object-cover"
         />
         <div className="flex flex-col">
-          <span className="font-bold text-gray-100">{employee.name || "-"}</span>
+          <span className="font-bold text-gray-100">
+            {employee.name || "-"}
+          </span>
           <span className="text-xs text-gray-400">{employee.email || "-"}</span>
           <span className="text-sm text-gray-300">
             <span className="text-gray-500">Department: </span>
@@ -64,6 +66,21 @@ const LeaveRequestDetails = ({
           </span>
         </div>
       </div>
+
+      {/* Display Approved By (for approved requests) */}
+      {status === "Approved" && request.approvedBy && (
+        <div className="bg-green-900 rounded p-3 mb-2 flex items-center gap-3">
+          <span className="font-medium text-gray-100">Approved By:</span>
+          <div className="flex flex-col">
+            <span className="font-semibold text-green-300">
+              {request.approvedBy.name || "-"}
+            </span>
+            <span className="text-xs text-green-200">
+              {request.approvedBy.email || "-"}
+            </span>
+          </div>
+        </div>
+      )}
 
       <div className="space-y-1 text-gray-200">
         <div>
@@ -89,7 +106,9 @@ const LeaveRequestDetails = ({
           <div className="bg-gray-800 rounded flex items-center justify-between px-3 py-2 text-sm">
             <span className="truncate">
               {document.name || "Document"}{" "}
-              <span className="text-xs text-gray-400">({formatFileSize(document.size)})</span>
+              <span className="text-xs text-gray-400">
+                ({formatFileSize(document.size)})
+              </span>
             </span>
             <a
               href={document.url}
@@ -106,7 +125,9 @@ const LeaveRequestDetails = ({
 
       {/* Admin Remarks */}
       <div>
-        <label className="text-gray-400 mb-2 block font-medium">Admin Remarks</label>
+        <label className="text-gray-400 mb-2 block font-medium">
+          Admin Remarks
+        </label>
         <textarea
           value={adminRemarks}
           onChange={(e) => onChangeRemarks(e.target.value)}
