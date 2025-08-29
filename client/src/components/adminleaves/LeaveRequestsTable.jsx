@@ -14,6 +14,7 @@ const LeaveRequestsTable = ({
   onSelect,
   onApprove,
   onReject,
+  setRequests, // allows remark updates if needed
 }) => {
   return (
     <div
