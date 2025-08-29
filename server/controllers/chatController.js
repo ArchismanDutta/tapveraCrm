@@ -74,3 +74,17 @@ exports.createGroupConversation = async (name, memberIds, createdBy) => {
   });
   return await conversation.save();
 };
+
+
+// Delete conversation along with its messages
+exports.deleteConversation = async (conversationId) => {
+  // Delete all messages related to the conversation
+  await ChatMessage.deleteMany({ conversationId });
+
+  // Delete the conversation document by ID from the Conversation model
+  const deletedConversation = await Conversation.findByIdAndDelete(conversationId);
+
+  return deletedConversation;
+};
+
+

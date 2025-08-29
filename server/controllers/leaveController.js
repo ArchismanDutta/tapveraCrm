@@ -71,24 +71,41 @@ exports.getAllLeaves = async (req, res) => {
 exports.updateLeaveStatus = async (req, res) => {
   try {
     const { status, adminRemarks } = req.body;
+
     if (!["Pending", "Approved", "Rejected"].includes(status))
       return res.status(400).json({ message: "Invalid status value" });
 
+    // Build dynamic update object
+    const update = { status, adminRemarks };
+
+    // If approved, set approvedBy
+    if (status === "Approved") {
+      update.approvedBy = {
+        _id: req.user._id,
+        name: req.user.name,
+        email: req.user.email,
+      };
+    } else {
+      // Remove approvedBy if status is not Approved
+      update.$unset = { approvedBy: "" };
+    }
+
     const updatedLeave = await LeaveRequest.findByIdAndUpdate(
       req.params.id,
-      { status, adminRemarks },
-      { new: true } // return the updated document
+      update,
+      { new: true }
     );
 
-    if (!updatedLeave) return res.status(404).json({ message: "Leave request not found" });
+    if (!updatedLeave)
+      return res.status(404).json({ message: "Leave request not found" });
 
-    // Respond with updated leave so frontend can update state
     res.json(updatedLeave);
   } catch (error) {
     console.error(error);
     res.status(400).json({ message: error.message });
   }
 };
+
 
 // Delete leave request
 exports.deleteLeave = async (req, res) => {
