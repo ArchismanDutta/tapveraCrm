@@ -1,3 +1,5 @@
+// File: StatusCard.jsx
+
 import React from "react";
 
 const StatusCard = ({
@@ -7,7 +9,7 @@ const StatusCard = ({
   currentlyWorking,
   onPunchIn,
   onPunchOut,
-  onRequestFlexible, // new prop
+  onRequestFlexible, // new prop for flexible shift
 }) => {
   return (
     <div className="bg-[#161c2c] border border-[#232945] rounded-xl shadow-lg p-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6 w-full transition-all">
