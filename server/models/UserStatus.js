@@ -4,25 +4,39 @@ const mongoose = require("mongoose");
 // ======================
 // Sub-schemas
 // ======================
+
+// Timeline event for punch-in/out or custom events
 const TimelineEventSchema = new mongoose.Schema({
-  type: { type: String, required: true },
-  time: { type: String, required: true }, // format: HH:mm or "Punch In"/"Punch Out"
+  type: { type: String, required: true }, // e.g., "Punch In", "Punch Out", "Break Start"
+  time: { type: String, required: true }, // "HH:mm" format or descriptive
 });
 
+// Worked session
 const WorkedSessionSchema = new mongoose.Schema({
   start: { type: Date, required: true },
-  end: { type: Date },
+  end: { type: Date, default: null },
 });
 
+// Break session
 const BreakSessionSchema = new mongoose.Schema({
   start: { type: Date, required: true },
-  end: { type: Date },
+  end: { type: Date, default: null },
 });
 
+// Quick weekly stats
 const QuickStatsSchema = new mongoose.Schema({
   earlyArrivals: { type: Number, default: 0 },
   lateArrivals: { type: Number, default: 0 },
   perfectDays: { type: Number, default: 0 },
+});
+
+// Shift sub-schema
+const ShiftSchema = new mongoose.Schema({
+  name: { type: String, trim: true, default: "Morning 9-6" },
+  start: { type: String, trim: true, default: "09:00" },
+  end: { type: String, trim: true, default: "18:00" },
+  durationHours: { type: Number, default: 9 },
+  isFlexible: { type: Boolean, default: false },
 });
 
 // ======================
@@ -30,23 +44,28 @@ const QuickStatsSchema = new mongoose.Schema({
 // ======================
 const UserStatusSchema = new mongoose.Schema(
   {
-    userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, index: true },
+
+    // Effective shift for the day
+    shift: { type: ShiftSchema, default: () => ({}) },
 
     // Daily durations
-    workDuration: { type: String, default: "0h 0m 0s" },
-    totalWorkMs: { type: Number, default: 0 },
-    breakDuration: { type: String, default: "0h 0m 0s" },
+    workDuration: { type: String, default: "0h 0m" }, // formatted string
+    workDurationSeconds: { type: Number, default: 0 }, // numeric
+    totalWorkMs: { type: Number, default: 0 }, // for precise calculations
+    breakDuration: { type: String, default: "0h 0m" },
     breakDurationSeconds: { type: Number, default: 0 },
-    workDurationSeconds: { type: Number, default: 0 },
 
+    // Punch / status flags
     arrivalTime: { type: Date, default: null },
     currentlyWorking: { type: Boolean, default: false },
     onBreak: { type: Boolean, default: false },
     breakStartTime: { type: Date, default: null },
 
-    workedSessions: [WorkedSessionSchema],
-    breakSessions: [BreakSessionSchema],
-    timeline: [TimelineEventSchema],
+    // Session tracking
+    workedSessions: { type: [WorkedSessionSchema], default: [] },
+    breakSessions: { type: [BreakSessionSchema], default: [] },
+    timeline: { type: [TimelineEventSchema], default: [] },
 
     // Weekly summary & quick stats
     weekSummary: {
@@ -57,15 +76,19 @@ const UserStatusSchema = new mongoose.Schema(
       quickStats: { type: QuickStatsSchema, default: () => ({}) },
     },
 
-    // Recent activities
-    recentActivities: [
-      {
-        date: { type: String },
-        activity: { type: String },
-        time: { type: String },
-      },
-    ],
+    // Optional recent activities (for dashboard)
+    recentActivities: {
+      type: [
+        {
+          date: { type: String, default: "" },
+          activity: { type: String, default: "" },
+          time: { type: String, default: "" },
+        },
+      ],
+      default: [],
+    },
 
+    // Reference day
     today: {
       type: Date,
       default: () => {
@@ -78,5 +101,10 @@ const UserStatusSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+// ======================
+// Compound index: quick lookup for user/day
+// ======================
+UserStatusSchema.index({ userId: 1, today: 1 }, { unique: true });
 
 module.exports = mongoose.model("UserStatus", UserStatusSchema);

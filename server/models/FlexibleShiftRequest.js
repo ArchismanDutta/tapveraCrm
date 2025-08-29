@@ -1,5 +1,3 @@
-// File: models/FlexibleShiftRequest.js
-
 const mongoose = require("mongoose");
 
 const flexibleShiftRequestSchema = new mongoose.Schema(
@@ -9,7 +7,7 @@ const flexibleShiftRequestSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: [true, "Employee ID is required"],
-      index: true, // optimized queries by employee
+      index: true,
     },
 
     // Requested date for flexible shift
@@ -23,7 +21,7 @@ const flexibleShiftRequestSchema = new mongoose.Schema(
     requestedStartTime: {
       type: String,
       required: [true, "Requested start time is required"],
-      match: /^([01]\d|2[0-3]):([0-5]\d)$/, // validates "HH:mm" format
+      match: /^([01]\d|2[0-3]):([0-5]\d)$/,
     },
 
     // Duration of shift in hours (default 9)
@@ -60,9 +58,16 @@ const flexibleShiftRequestSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+
+    // Shift type: standard / flexibleRequest / flexible9
+    shiftType: {
+      type: String,
+      enum: ["flexibleRequest", "flexible9"],
+      default: "flexibleRequest",
+    },
   },
   {
-    timestamps: true, // adds createdAt and updatedAt automatically
+    timestamps: true,
   }
 );
 
