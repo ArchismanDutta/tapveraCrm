@@ -36,10 +36,11 @@ const Signup = () => {
     outlookAppPassword: "",
     employmentType: "full-time",
     qualifications: [{ school: "", degree: "", marks: "", year: "" }],
-    shift: { start: "09:00", end: "18:00" }, // Default shift
+    shiftType: "standard",
+    shift: { start: "09:00", end: "18:00" },
   });
 
-  const [skillsInput, setSkillsInput] = useState(""); // temp string for skills input
+  const [skillsInput, setSkillsInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [role, setRole] = useState(null);
 
@@ -97,21 +98,21 @@ const Signup = () => {
       return;
     }
 
-    // Convert skills string to array, removing empty values
     const skillsArray = skillsInput.split(",").map((s) => s.trim()).filter(Boolean);
 
-    // Filter out empty qualifications
     const validQualifications = form.qualifications.filter(
       (q) => q.school || q.degree || q.marks || q.year
     );
 
-    const payload = {
+    let payload = {
       ...form,
       skills: skillsArray,
       qualifications: validQualifications,
       totalPl: Number(form.totalPl),
       salary: Number(form.salary),
     };
+
+    if (form.shiftType === "flexible") delete payload.shift;
 
     try {
       const token = localStorage.getItem("token");
@@ -160,7 +161,6 @@ const Signup = () => {
       <img src={tapveraLogo} alt="Tapvera Logo" className="h-20 w-auto mb-6" />
       <div className="bg-surface rounded-xl shadow-lg border border-border p-6 w-full max-w-lg space-y-6">
         <h2 className="text-2xl font-bold text-textMain mb-4 text-center">Employee Registration</h2>
-
         <form onSubmit={handleSubmit} className="space-y-5" noValidate>
           {/* Basic Info */}
           <div className="space-y-3">
@@ -258,17 +258,43 @@ const Signup = () => {
             />
           </div>
 
-          {/* Shift Timing */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
-            <div>
-              <label className="block text-sm text-textMuted mb-1">Shift Start</label>
-              <input type="time" value={form.shift.start} onChange={(e) => handleShiftChange("start", e.target.value)} className="w-full px-4 py-2 border border-border rounded-md" />
-            </div>
-            <div>
-              <label className="block text-sm text-textMuted mb-1">Shift End</label>
-              <input type="time" value={form.shift.end} onChange={(e) => handleShiftChange("end", e.target.value)} className="w-full px-4 py-2 border border-border rounded-md" />
-            </div>
+          {/* Shift Type Selection */}
+          <div>
+            <label className="block text-sm text-textMuted mb-1">Shift Type</label>
+            <select
+              name="shiftType"
+              value={form.shiftType}
+              onChange={handleChange}
+              className="w-full px-4 py-2 border border-border rounded-md"
+            >
+              <option value="standard">Standard Shift</option>
+              <option value="flexible">Flexible Shift</option>
+            </select>
           </div>
+
+          {/* Shift Timing only if Standard */}
+          {form.shiftType === "standard" && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
+              <div>
+                <label className="block text-sm text-textMuted mb-1">Shift Start</label>
+                <input
+                  type="time"
+                  value={form.shift.start}
+                  onChange={(e) => handleShiftChange("start", e.target.value)}
+                  className="w-full px-4 py-2 border border-border rounded-md"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-textMuted mb-1">Shift End</label>
+                <input
+                  type="time"
+                  value={form.shift.end}
+                  onChange={(e) => handleShiftChange("end", e.target.value)}
+                  className="w-full px-4 py-2 border border-border rounded-md"
+                />
+              </div>
+            </div>
+          )}
 
           {/* Qualification Section */}
           <div className="space-y-4">
