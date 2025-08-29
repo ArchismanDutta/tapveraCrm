@@ -10,7 +10,6 @@ import Sidebar from "../components/dashboard/Sidebar";
 import NotificationBell from "../components/dashboard/NotificationBell";
 import WishPopup from "../components/dashboard/WishPopup";
 
-// Ensure API_BASE points to backend without duplicate /api
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 const TASK_POLL_INTERVAL_MS = 15000;
 const USER_POLL_INTERVAL_MS = 30000;
@@ -29,12 +28,14 @@ const EmployeeDashboard = ({ onLogout }) => {
 
   const navigate = useNavigate();
 
+  // Sample static messages (replace with API if needed)
   const messages = [
     { name: "Sarah Johnson", msg: "Updated project timeline", time: "2h ago", img: "https://i.pravatar.cc/40?img=1" },
     { name: "Mike Wilson", msg: "Meeting moved to 3 PM", time: "4h ago", img: "https://i.pravatar.cc/40?img=2" },
     { name: "Emily Davis", msg: "Uploaded new requirements", time: "5h ago", img: "https://i.pravatar.cc/40?img=4" },
   ];
 
+  // Format task data
   const formatTask = (task) => ({
     id: task._id,
     label: task.title || "Untitled Task",
@@ -51,6 +52,7 @@ const EmployeeDashboard = ({ onLogout }) => {
     status: task.status,
   });
 
+  // Compute summary cards
   const computeSummary = useCallback(() => {
     const today = dayjs(currentTime).startOf("day");
     setSummaryData([
@@ -60,6 +62,7 @@ const EmployeeDashboard = ({ onLogout }) => {
     ]);
   }, [tasks, currentTime]);
 
+  // Update notifications
   const updateNotifications = useCallback(() => {
     const newPendingTasks = tasks.filter((t) => t.status?.toLowerCase() !== "completed");
     if (newPendingTasks.length > pendingCount) {
@@ -71,6 +74,7 @@ const EmployeeDashboard = ({ onLogout }) => {
     setPendingCount(newPendingTasks.length);
   }, [tasks, pendingCount]);
 
+  // Fetch tasks from API
   const fetchTasks = useCallback(async () => {
     const token = localStorage.getItem("token");
     if (!token) return navigate("/login", { replace: true });
@@ -85,15 +89,14 @@ const EmployeeDashboard = ({ onLogout }) => {
     }
   }, [navigate]);
 
+  // Fetch user info & unread wishes
   const fetchUserAndWishes = useCallback(async () => {
     const token = localStorage.getItem("token");
     if (!token) return navigate("/login", { replace: true });
     try {
-      // Fetch logged-in employee data
       const res = await axios.get(`${API_BASE}/api/users/me`, { headers: { Authorization: `Bearer ${token}` } });
       setUserName(res.data?.name || "User");
 
-      // Fetch unread wishes
       const wishesRes = await axios.get(`${API_BASE}/api/wishes/me`, { headers: { Authorization: `Bearer ${token}` } });
       const unreadWishes = wishesRes.data.filter((w) => !w.read);
       setWishes(unreadWishes);
@@ -104,28 +107,33 @@ const EmployeeDashboard = ({ onLogout }) => {
     }
   }, [navigate]);
 
+  // Auto-refresh tasks
   useEffect(() => {
     fetchTasks();
     const intervalId = setInterval(fetchTasks, TASK_POLL_INTERVAL_MS);
     return () => clearInterval(intervalId);
   }, [fetchTasks]);
 
+  // Auto-refresh user/wishes
   useEffect(() => {
     fetchUserAndWishes();
     const intervalId = setInterval(fetchUserAndWishes, USER_POLL_INTERVAL_MS);
     return () => clearInterval(intervalId);
   }, [fetchUserAndWishes]);
 
+  // Update current time every second
   useEffect(() => {
     const interval = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(interval);
   }, []);
 
+  // Compute summary & notifications on tasks/time change
   useEffect(() => {
     computeSummary();
     updateNotifications();
   }, [computeSummary, updateNotifications]);
 
+  // Mark wishes as read
   const handleCloseWishPopup = async () => {
     setShowWishPopup(false);
     try {
@@ -135,7 +143,6 @@ const EmployeeDashboard = ({ onLogout }) => {
           axios.patch(`${API_BASE}/api/wishes/${w._id}/read`, null, { headers: { Authorization: `Bearer ${token}` } })
         )
       );
-      // Clear wishes after marking read
       setWishes([]);
     } catch (err) {
       console.error("Error marking wishes as read:", err.response?.data || err.message);
@@ -145,7 +152,9 @@ const EmployeeDashboard = ({ onLogout }) => {
   return (
     <div className="flex bg-gradient-to-br from-[#141a21] via-[#191f2b] to-[#101218] font-sans text-blue-100 min-h-screen">
       <Sidebar collapsed={collapsed} setCollapsed={setCollapsed} onLogout={onLogout} userRole="employee" />
+
       <main className={`flex-1 p-8 overflow-y-auto transition-all duration-300 ${collapsed ? "ml-20" : "ml-72"}`}>
+        {/* Greeting */}
         <div className="flex justify-between items-center mb-8">
           <div>
             <h1 className="text-2xl font-bold text-white tracking-tight">
@@ -164,8 +173,10 @@ const EmployeeDashboard = ({ onLogout }) => {
           </div>
         </div>
 
+        {/* Summary Cards */}
         <SummaryCards data={summaryData} />
 
+        {/* Main content */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-8">
           <div className="lg:col-span-2">
             <TodayTasks data={tasks} loading={loading} className="bg-[#191f2b]/70 p-4 rounded-xl shadow-xl border border-[#232945]" />
@@ -176,6 +187,7 @@ const EmployeeDashboard = ({ onLogout }) => {
         </div>
       </main>
 
+      {/* Wishes Popup */}
       <WishPopup isOpen={showWishPopup} wishes={wishes} onClose={handleCloseWishPopup} />
     </div>
   );
