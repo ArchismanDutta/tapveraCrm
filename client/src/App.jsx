@@ -9,6 +9,7 @@ import {
 } from "react-router-dom";
 import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
+import "./styles/toastify-custom.css";
 
 // Pages
 import Login from "./pages/LoginPage";
@@ -236,7 +237,7 @@ const AppWrapper = () => {
         <Route
           path="/admin/leaves"
           element={
-            isAuthenticated && isAdmin ? (
+            isAuthenticated && (isAdmin || isHR) ? (
               <AdminLeaveRequests onLogout={handleLogout} />
             ) : (
               <Navigate
@@ -323,7 +324,7 @@ const AppWrapper = () => {
         />
 
         {/* Catch-All */}
-         <Route
+        <Route
           path="*"
           element={
             <Navigate

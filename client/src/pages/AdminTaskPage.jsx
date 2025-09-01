@@ -322,7 +322,7 @@ export default function AdminTaskPage({ onLogout }) {
   };
 
   return (
-    <div className="flex bg-gradient-to-br from-[#161c2c] via-[#1f263b] to-[#282f47] min-h-screen text-blue-200">
+    <div className="flex bg-gradient-to-br from-[#161c2c] via-[#1f263b] to-[#282f47] min-h-screen text-white">
       <Sidebar collapsed={collapsed} setCollapsed={setCollapsed} userRole="admin" onLogout={onLogout} />
       <main className={`flex-1 transition-all duration-300 ${collapsed ? "ml-24" : "ml-72"} p-8`}>
         {popupMessage && (
@@ -381,7 +381,7 @@ export default function AdminTaskPage({ onLogout }) {
           <StatsCard
             title="Overdue Tasks"
             value={overdueTasksCount}
-            colorScheme="pink"
+            colorScheme="purple"
             onClick={() => handleFilterAndScroll("overdue")}
           />
         </div>

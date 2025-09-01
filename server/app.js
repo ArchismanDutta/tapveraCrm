@@ -26,6 +26,7 @@ const statusRoutes = require("./routes/statusRoutes");
 const summaryRoutes = require("./routes/summaryRoutes");
 const wishRoutes = require("./routes/wishRoutes");
 const flexibleShiftRoutes = require("./routes/flexibleShiftRoutes"); // ✅ flexible shifts
+const holidayRoutes = require("./routes/holidayRoutes");
 
 // Controllers
 const ChatController = require("./controllers/chatController");
@@ -84,6 +85,7 @@ app.use("/api/summary", summaryRoutes);
 app.use("/api/notices", noticeRoutes);
 app.use("/api/chat", chatRoutes);
 app.use("/api/wishes", wishRoutes);
+app.use("/api/holidays", holidayRoutes);
 
 // ✅ Flexible shift routes (matches frontend /api/flexible-shift)
 app.use("/api/flexible-shift", flexibleShiftRoutes);

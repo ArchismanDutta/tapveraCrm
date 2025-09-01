@@ -96,7 +96,7 @@ const TaskForm = ({ onCreate }) => {
   const timeSlots = generateTimeSlots();
 
   const commonInputClasses =
-    "bg-[#141a29] border border-[rgba(84,123,209,0.4)] p-2 rounded-2xl shadow-sm text-sm text-blue-100 w-full focus:ring-2 focus:ring-[#ff8000] outline-none cursor-pointer";
+    "bg-[#141a29] border border-[rgba(84,123,209,0.4)] p-2 rounded-lg shadow-sm text-sm text-blue-100 w-full focus:ring-2 focus:ring-[#ff8000] outline-none cursor-pointer";
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
@@ -121,7 +121,7 @@ const TaskForm = ({ onCreate }) => {
         </div>
 
         {dropdownOpen && (
-          <div className="absolute left-0 top-full mt-1 border border-[rgba(84,123,209,0.4)] bg-[#141a29] rounded-2xl shadow-lg w-full z-50 text-blue-100 max-h-60 overflow-y-auto">
+          <div className="absolute left-0 top-full mt-1 border border-[rgba(84,123,209,0.4)] bg-[#141a29] rounded-lg shadow-lg w-full z-50 text-blue-100 max-h-60 overflow-y-auto">
             <div className="p-2 border-b border-[rgba(84,123,209,0.4)]">
               <input
                 type="text"
@@ -225,7 +225,7 @@ const TaskForm = ({ onCreate }) => {
       {/* Submit */}
       <button
         type="submit"
-        className="w-full p-3 rounded-2xl font-semibold bg-gradient-to-r from-[#ff8000] to-[#ffa733] text-black hover:opacity-90 transition cursor-pointer"
+        className="w-full p-3 rounded-lg font-semibold bg-gradient-to-r from-[#ff8000] to-[#ffa733] text-black hover:opacity-90 transition cursor-pointer"
       >
         Create Task
       </button>
