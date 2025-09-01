@@ -15,7 +15,6 @@ import {
 import { FaChevronCircleRight } from "react-icons/fa";
 import { NavLink } from "react-router-dom";
 
-// Sidebar menu config based on roles
 const menuConfig = {
   employee: [
     { to: "/dashboard", icon: <LayoutDashboard size={18} />, label: "Employee Dashboard" },
@@ -29,7 +28,7 @@ const menuConfig = {
   ],
   hr: [
     { to: "/hrdashboard", icon: <LayoutDashboard size={18} />, label: "HR Dashboard" },
-    { to: "/today-status", icon: <ClipboardList size={18} />, label: "Punch In / Out" },
+    { to: "/today-status", icon: <ClipboardList size={18} />, label: "Punch In/Out" },
     { to: "/tasks", icon: <ClipboardList size={18} />, label: "Tasks" },
     { to: "/todo", icon: <ClipboardList size={18} />, label: "Todo" },
     { to: "/admin/leaves", icon: <FileText size={18} />, label: "Leave Requests" },
@@ -42,8 +41,7 @@ const menuConfig = {
   ],
   admin: [
     { to: "/dashboard", icon: <LayoutDashboard size={18} />, label: "Admin Dashboard" },
-    { to: "/today-status", icon: <ClipboardList size={18} />, label: "Punch In / Out" },
-    // { to: "/admin/leaves", icon: <FileText size={18} />, label: "Leave Requests" },
+    { to: "/today-status", icon: <ClipboardList size={18} />, label: "Punch In/Out" },
     { to: "/todo", icon: <ClipboardList size={18} />, label: "Todo" },
     { to: "/tasks", icon: <ClipboardList size={18} />, label: "Tasks" },
     { to: "/leaves", icon: <FileText size={18} />, label: "My Leaves" },
@@ -52,7 +50,6 @@ const menuConfig = {
   ],
   "super-admin": [
     { to: "/dashboard", icon: <LayoutDashboard size={18} />, label: "Super Admin Dashboard" },
-    // { to: "/today-status", icon: <ClipboardList size={18} />, label: "Punch-In / Punch-Out" },
     { to: "/admin/leaves", icon: <FileText size={18} />, label: "Leave Requests" },
     { to: "/directory", icon: <Users size={18} />, label: "Employee Details" },
     { to: "/todo", icon: <ClipboardList size={18} />, label: "Todo" },
@@ -66,94 +63,101 @@ const Sidebar = ({ collapsed, setCollapsed, onLogout }) => {
   const [showEmailModal, setShowEmailModal] = useState(false);
 
   // Determine role from JWT
-  let roleKey = "employee";
+  let role = "employee";
   const token = localStorage.getItem("token");
   if (token) {
     try {
       const payload = JSON.parse(atob(token.split(".")[1]));
-      roleKey = payload.role?.toLowerCase() || "employee";
-    } catch (err) {
-      console.error("Invalid token", err);
+      role = payload.role ? payload.role.toLowerCase() : "employee";
+    } catch {
+      // invalid token
     }
   }
 
-  const navItems = menuConfig[roleKey] || menuConfig["employee"];
+  const menuItems = menuConfig[role] || menuConfig["employee"];
 
   return (
     <>
       <aside
-        className={`fixed top-0 left-0 h-screen z-30 flex flex-col bg-gradient-to-br from-[#13161c]/90 via-[#181d2a]/95 to-[#191f2b]/95 text-blue-100 shadow-2xl border-r border-[#232945] transition-all duration-300 ${
-          collapsed ? "w-20" : "w-72"
+        className={`fixed top-0 left-0 h-full z-40 flex flex-col bg-gradient-to-br from-[#13161c]/90 via-[#181a25]/95 to-[#191a27]/95 text-blue-100 shadow-2xl border-r border-[#232945] transition-width duration-300 ease-in-out overflow-hidden ${
+          collapsed ? "w-16" : "w-56"
         }`}
       >
-        <div className={`p-4 flex items-center ${collapsed ? "justify-center" : "justify-between"}`}>
+        <div className={`flex items-center p-4 ${collapsed ? "justify-center" : "justify-between"}`}>
           {!collapsed && (
-            <NavLink to="/dashboard">
-              <img src={tapveraLogo} alt="Tapvera Logo" className="h-10 w-auto drop-shadow-lg" />
+            <NavLink to="/dashboard" tabIndex={collapsed ? -1 : 0}>
+              <img src={tapveraLogo} alt="Tapvera" className="h-10 w-auto drop-shadow-lg" />
             </NavLink>
           )}
           <button
-            onClick={() => setCollapsed(!collapsed)}
-            className={`p-1 rounded-full transition-transform bg-[#232945] hover:bg-white/30 shadow ${
+            aria-label="Toggle Sidebar"
+            className={`p-2 rounded-full transition transform bg-[#232945] hover:bg-white/20 ${
               collapsed ? "rotate-0" : "rotate-180"
             }`}
-            aria-label="Toggle sidebar"
+            onClick={() => setCollapsed(!collapsed)}
+            tabIndex={0}
           >
-            <FaChevronCircleRight size={22} className="text-blue-200" />
+            <FaChevronCircleRight size={22} />
           </button>
         </div>
 
-        <nav className="mt-3 space-y-1 px-3 flex-1 overflow-y-auto">
-          {navItems.map((item) => (
-            <SidebarLink key={item.to} {...item} collapsed={collapsed} />
+        <nav className="flex-1 overflow-y-auto px-2 space-y-1">
+          {menuItems.map((item) => (
+            <NavLink
+              to={item.to}
+              key={item.to}
+              className={({ isActive }) =>
+                `group flex items-center gap-4 rounded-lg px-4 py-3 text-sm font-semibold transition-colors duration-150 ${
+                  isActive
+                    ? "bg-gradient-to-r from-blue-600 to-blue-400 text-white shadow-md"
+                    : "text-blue-100 hover:text-blue-300"
+                } ${collapsed ? "justify-center" : "justify-start"}`
+              }
+              tabIndex={collapsed ? -1 : 0}
+            >
+              <span className="flex items-center justify-center">{item.icon}</span>
+              {!collapsed && <span>{item.label}</span>}
+            </NavLink>
           ))}
         </nav>
 
-        {roleKey === "employee" && (
-          <div className="px-4 pb-2 pt-3">
-            <div
+        {role === "employee" && !collapsed && (
+          <div className="px-4 py-2 border-t border-[#232945]">
+            <button
               onClick={() => setShowEmailModal(true)}
-              className="flex items-center justify-center space-x-3 cursor-pointer p-2 rounded-xl bg-gradient-to-r from-blue-500/70 to-blue-400/70 hover:from-blue-500 hover:to-blue-400 text-white font-semibold shadow-lg"
+              className="w-full rounded-lg bg-gradient-to-r from-blue-600 to-blue-400 text-white py-2 font-semibold shadow-lg hover:brightness-110 transition"
+              tabIndex={0}
             >
-              <Send size={18} />
-              {!collapsed && <span>Send Daily Updates</span>}
-            </div>
+              Send Daily Updates
+            </button>
           </div>
         )}
 
-        <div className="px-4 py-5 border-t border-[#232945]">
+        <div className="px-4 py-3 border-t border-[#232945]">
           <button
-            onClick={onLogout}
-            className="w-full px-4 py-2 rounded-xl bg-gradient-to-r from-red-500/70 to-red-400/70 text-white text-base font-bold shadow-lg hover:from-red-500 hover:to-red-400 transition"
-          >
-            {collapsed ? "⏻" : "Logout"}
-          </button>
+  onClick={onLogout}
+  className="w-full rounded-lg bg-gradient-to-r from-red-600 to-red-400 text-white shadow-lg hover:brightness-110 transition flex items-center justify-center"
+  tabIndex={0}
+>
+  {collapsed ? (
+    <span aria-label="Logout" role="img" style={{ fontSize: 20 }}>
+      ⏻
+    </span>
+  ) : (
+    "Logout"
+  )}
+</button>
+
         </div>
       </aside>
 
-      <Modal isOpen={showEmailModal} onClose={() => setShowEmailModal(false)}>
-        <DailyEmailSender onClose={() => setShowEmailModal(false)} />
-      </Modal>
+      {showEmailModal && (
+        <Modal isOpen={showEmailModal} onClose={() => setShowEmailModal(false)}>
+          <DailyEmailSender onClose={() => setShowEmailModal(false)} />
+        </Modal>
+      )}
     </>
   );
 };
-
-const SidebarLink = ({ to, icon, label, collapsed }) => (
-  <NavLink
-    to={to}
-    className={({ isActive }) =>
-      `flex items-center ${collapsed ? "justify-center" : "space-x-3"} cursor-pointer p-2 rounded-xl font-medium transition-all duration-200 ${
-        isActive
-          ? "bg-gradient-to-r from-blue-500/80 to-blue-400/80 text-white shadow-md"
-          : "text-blue-100 hover:text-blue-300"
-      }`
-    }
-    aria-label={label}
-    style={{ fontWeight: 600, fontSize: "1.04rem" }}
-  >
-    {icon}
-    {!collapsed && <span>{label}</span>}
-  </NavLink>
-);
 
 export default Sidebar;

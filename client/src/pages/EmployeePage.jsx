@@ -7,30 +7,34 @@ const API_BASE =
   `${window.location.origin.replace(/\/$/, "")}/api` ||
   "http://localhost:5000/api";
 
-// --- Card and Pills ---
+// --- Card and Pills Components ---
 const Card = ({ title, icon, children }) => (
   <section
     style={{
-      background: "#fff",
-      borderRadius: 12,
-      boxShadow: "0 2px 8px rgba(0,0,0,0.07)",
+      background: "rgba(31, 41, 55, 0.9)", // dark glass
+      backdropFilter: "blur(12px)",
+      borderRadius: 16,
+      boxShadow: "0 8px 24px rgba(0, 0, 0, 0.5)",
       padding: "1.5rem",
       marginBottom: "2rem",
-      minHeight: 128,
-      flex: "1 1 300px",
+      minHeight: 150,
+      flex: "1 1 320px",
+      color: "#cbd5e1",
     }}
   >
-    <div style={{ display: "flex", alignItems: "center", marginBottom: 16 }}>
-      {icon && (
-        <span
-          style={{ color: "#407fd5", marginRight: 10, fontSize: 22, lineHeight: 0 }}
-        >
-          {icon}
-        </span>
-      )}
-      <span style={{ fontWeight: 600, color: "#1a202c", fontSize: 17 }}>{title}</span>
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        marginBottom: 16,
+        color: "#60a5fa",
+        fontSize: 22,
+      }}
+    >
+      {icon && <span style={{ marginRight: 10 }}>{icon}</span>}
+      <span style={{ fontWeight: 600, fontSize: 18 }}>{title}</span>
     </div>
-    <div style={{ color: "#4b5563", fontSize: 15 }}>{children}</div>
+    <div style={{ fontSize: 15 }}>{children}</div>
   </section>
 );
 
@@ -38,20 +42,20 @@ const Pill = ({ children }) => (
   <span
     style={{
       display: "inline-block",
-      background: "#f3f4f6",
-      color: "#1e293b",
-      borderRadius: 24,
-      padding: "0.32em 1.1em",
+      background: "rgba(96, 165, 250, 0.2)",
+      color: "#60a5fa",
+      borderRadius: 9999,
+      padding: "0.3em 1.1em",
       fontWeight: 500,
-      fontSize: "0.97em",
-      margin: "0.2em 0.3em 0.2em 0",
+      fontSize: "0.9em",
+      margin: "0.2em 0.35em 0.2em 0",
+      userSelect: "none",
     }}
   >
     {children}
   </span>
 );
 
-// --- Page ---
 const EmployeePage = ({ onLogout }) => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -83,7 +87,7 @@ const EmployeePage = ({ onLogout }) => {
           manager: data.manager || "",
           employeeId: data.employeeId || "",
           dob: data.dob ? new Date(data.dob).toLocaleDateString() : "N/A",
-          address: data.currentAddress || "",
+          address: data.currentAddress || "N/A",
           reportingTo: data.reportingTo || "",
           status: data.status || "Inactive",
           startDate: data.doj ? new Date(data.doj).toLocaleDateString() : "N/A",
@@ -94,9 +98,8 @@ const EmployeePage = ({ onLogout }) => {
           },
           skills: Array.isArray(data.skills) ? data.skills : [],
           qualifications: Array.isArray(data.qualifications) ? data.qualifications : [],
-          recentActivity: Array.isArray(data.activity) ? data.activity : [],
-          emergencyContact: data.emergencyContact || "",
-          jobLevel: data.jobLevel || "",
+          emergencyContact: data.emergencyContact || "N/A",
+          jobLevel: data.jobLevel || "N/A",
         });
       } catch (err) {
         setSelectedEmployee(null);
@@ -114,8 +117,10 @@ const EmployeePage = ({ onLogout }) => {
         style={{
           padding: "3rem",
           textAlign: "center",
-          color: "#6b7280",
+          color: "#9ca3af",
           fontSize: 18,
+          minHeight: "100vh",
+          background: "#0f1523",
         }}
       >
         Loading employee details...
@@ -129,8 +134,10 @@ const EmployeePage = ({ onLogout }) => {
         style={{
           padding: "3rem",
           textAlign: "center",
-          color: "#6b7280",
+          color: "#9ca3af",
           fontSize: 18,
+          minHeight: "100vh",
+          background: "#0f1523",
         }}
       >
         Employee not found.
@@ -139,97 +146,111 @@ const EmployeePage = ({ onLogout }) => {
   }
 
   return (
-    <div style={{ display: "flex", background: "#f7fafc", minHeight: "100vh" }}>
-      {/* Admin Sidebar */}
+    <div style={{ display: "flex", height: "100vh", background: "#0f1523" }}>
+      {/* Fixed Sidebar */}
       <Sidebar
         collapsed={sidebarCollapsed}
         setCollapsed={setSidebarCollapsed}
         userRole="admin"
         onLogout={onLogout}
+        style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          height: "100vh",
+          width: sidebarCollapsed ? 80 : 260,
+          transition: "width 0.3s",
+          zIndex: 1000,
+        }}
       />
 
       {/* Main Content */}
       <main
         style={{
           flex: 1,
-          padding: "0 2rem",
+          padding: "2rem",
           marginLeft: sidebarCollapsed ? 80 : 260,
-          maxWidth: 1280,
-          marginTop: 0,
+          maxWidth: `calc(100vw - ${sidebarCollapsed ? 80 : 260}px)`,
+          transition: "margin-left 0.3s, max-width 0.3s",
+          overflowY: "auto",
+          color: "#cbd5e1",
         }}
       >
         {/* Profile Header */}
-        <div
+        <section
           style={{
-            background: "#e7f0fa",
+            background: "rgba(255 255 255 / 0.05)",
             borderRadius: 16,
-            padding: "2.2rem 2rem 1.7rem 2rem",
+            padding: "2rem",
             textAlign: "center",
-            marginTop: "2.5rem",
-            marginBottom: "2rem",
+            marginBottom: "3rem",
+            boxShadow: "0 8px 32px rgba(67, 67, 67, 0.37)",
+            backdropFilter: "blur(7.6px)",
+            color: "#f3f4f6",
           }}
         >
           <div
             style={{
               width: 100,
               height: 100,
-              background: "#fff",
+              background: "#23272e",
               borderRadius: "50%",
-              margin: "0 auto 1rem auto",
-              border: "2.5px solid #79a5da",
+              margin: "0 auto 1rem",
+              border: "3px solid #60a5fa",
               overflow: "hidden",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
+              color: "#3b82f6",
+              fontSize: 48,
+              fontWeight: "bold",
+              textTransform: "uppercase",
             }}
+            title={selectedEmployee.name}
           >
-            {/* Avatar placeholder */}
+            {selectedEmployee.name.charAt(0)}
           </div>
-          <div
+          <h1
             style={{
               fontWeight: 700,
-              fontSize: 27,
-              color: "#0f1436",
-              marginBottom: 10,
+              fontSize: 28,
+              marginBottom: 8,
+              color: "#60a5fa",
             }}
           >
             {selectedEmployee.name}
-          </div>
-          <div
-            style={{
-              fontWeight: 500,
-              fontSize: 18,
-              color: "#446185",
-              marginBottom: 18,
-            }}
-          >
+          </h1>
+          <p style={{ fontWeight: 500, fontSize: 18, color: "#94a3b8" }}>
             {selectedEmployee.jobTitle}
             {selectedEmployee.department ? ` - ${selectedEmployee.department}` : ""}
-          </div>
+          </p>
           <button
+            onClick={() => window.open(`mailto:${selectedEmployee.email}`)}
             style={{
-              padding: "0.57em 1.25em",
+              padding: "0.5em 1.25em",
               borderRadius: 8,
-              background: "#fff",
-              color: "#3b7dd8",
-              border: "1.5px solid #b5cef7",
-              fontWeight: 500,
+              background: "#2563eb",
+              color: "#f3f4f6",
+              fontWeight: "600",
               fontSize: 16,
               cursor: "pointer",
-              marginTop: 6,
-              transition: "background 0.2s",
+              marginTop: 12,
+              border: "none",
+              boxShadow: "0 4px 14px rgb(37 99 235 / 0.39)",
+              transition: "background-color 0.3s ease",
             }}
-            onClick={() => window.open(`mailto:${selectedEmployee.email}`)}
+            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#1e40af")}
+            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#2563eb")}
           >
             Contact Employee
           </button>
-        </div>
+        </section>
 
-        {/* Cards Grid */}
-        <div
+        {/* Info Grid */}
+        <section
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))",
+            gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
             gap: "2rem",
           }}
         >
@@ -238,7 +259,7 @@ const EmployeePage = ({ onLogout }) => {
               <strong>Work Email:</strong> {selectedEmployee.email}
             </div>
             <div>
-              <strong>Work Phone:</strong> {selectedEmployee.contact}
+              <strong>Work Phone:</strong> {selectedEmployee.contact || "N/A"}
             </div>
             <div>
               <strong>Employee ID:</strong> {selectedEmployee.employeeId || "N/A"}
@@ -293,9 +314,7 @@ const EmployeePage = ({ onLogout }) => {
                 {selectedEmployee.skills.length > 0 ? (
                   selectedEmployee.skills.map((skill, idx) => <Pill key={idx}>{skill}</Pill>)
                 ) : (
-                  <span style={{ color: "#7c899d", fontStyle: "italic", marginLeft: 8 }}>
-                    N/A
-                  </span>
+                  <span style={{ color: "#7c899d", fontStyle: "italic", marginLeft: 8 }}>N/A</span>
                 )}
               </div>
             </div>
@@ -305,26 +324,12 @@ const EmployeePage = ({ onLogout }) => {
                 {selectedEmployee.qualifications.length > 0 ? (
                   selectedEmployee.qualifications.map((q, idx) => <div key={idx}>{q}</div>)
                 ) : (
-                  <span style={{ color: "#7c899d", fontStyle: "italic", marginLeft: 8 }}>
-                    N/A
-                  </span>
+                  <span style={{ color: "#7c899d", fontStyle: "italic", marginLeft: 8 }}>N/A</span>
                 )}
               </div>
             </div>
           </Card>
-
-          <Card title="Recent Activity" icon="🔔">
-            {selectedEmployee.recentActivity && selectedEmployee.recentActivity.length > 0 ? (
-              <ul style={{ paddingLeft: 16, marginTop: 5 }}>
-                {selectedEmployee.recentActivity.map((act, idx) => (
-                  <li key={idx}>{act}</li>
-                ))}
-              </ul>
-            ) : (
-              <div style={{ color: "#7c899d", fontStyle: "italic" }}>No activity recorded.</div>
-            )}
-          </Card>
-        </div>
+        </section>
       </main>
     </div>
   );
