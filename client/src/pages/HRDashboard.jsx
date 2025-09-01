@@ -50,7 +50,7 @@ const HRDashboard = ({ onLogout }) => {
       const [usersRes, leavesRes, flexRes] = await Promise.all([
         axios.get(`${API_BASE}/api/users`, { headers: { Authorization: `Bearer ${token}` } }),
         axios.get(`${API_BASE}/api/leaves`, { headers: { Authorization: `Bearer ${token}` } }),
-        axios.get(`${API_BASE}/api/flexible-shift`, { headers: { Authorization: `Bearer ${token}` } }), // <-- Fixed path
+        axios.get(`${API_BASE}/api/flexible-shifts`, { headers: { Authorization: `Bearer ${token}` } }), // <-- Corrected endpoint
       ]);
 
       const usersData = usersRes.data || [];
