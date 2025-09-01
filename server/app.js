@@ -13,28 +13,30 @@ const jwt = require("jsonwebtoken");
 const userRoutes = require("./routes/userRoutes");
 const authRoutes = require("./routes/authRoutes");
 const adminAttendanceRoutes = require("./routes/adminAttendanceRoutes");
-const leaveRoutes = require("./routes/leaveRoutes"); // ✅ Add this
-const flexibleShiftRoutes = require("./routes/flexibleShiftRoutes"); // ✅ Add this
+const leaveRoutes = require("./routes/leaveRoutes");
+const flexibleShiftRoutes = require("./routes/flexibleShiftRoutes");
+const summaryRoutes = require("./routes/summaryRoutes"); // ✅ Weekly summary
 
+// Controllers
 const ChatController = require("./controllers/chatController");
 
 const app = express();
 const server = http.createServer(app);
 
+// -----------------------------
+// Middleware
+// -----------------------------
 app.use(express.json());
 app.use(morgan("dev"));
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
+// CORS setup
 const frontendOrigins = [
   process.env.FRONTEND_ORIGIN,
   process.env.FRONTEND_URL,
   "http://localhost:5173",
   "http://localhost:3000",
 ].filter(Boolean);
-
-if (!frontendOrigins.length) {
-  console.warn("⚠️ No FRONTEND_ORIGIN or FRONTEND_URL set. CORS may block requests.");
-}
 
 app.use(cors({
   origin: frontendOrigins,
@@ -43,17 +45,26 @@ app.use(cors({
   credentials: true,
 }));
 
+// -----------------------------
+// Health check
+// -----------------------------
 app.get("/api/health", (req, res) => {
   res.json({ status: "ok", timestamp: Date.now() });
 });
 
-// 🔹 Register all routes
+// -----------------------------
+// Register API routes
+// -----------------------------
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/admin", adminAttendanceRoutes);
-app.use("/api/leaves", leaveRoutes); // ✅ Leave routes
-app.use("/api/flexible-shifts", flexibleShiftRoutes); // ✅ Flexible shift routes
+app.use("/api/leaves", leaveRoutes);
+app.use("/api/flexible-shifts", flexibleShiftRoutes);
+app.use("/api/summary", summaryRoutes); // ✅ Weekly summary route mounted
 
+// -----------------------------
+// Serve frontend (production)
+// -----------------------------
 if (process.env.NODE_ENV === "production") {
   app.use(express.static(path.join(__dirname, "client", "build")));
   app.get("*", (req, res) =>
@@ -61,13 +72,17 @@ if (process.env.NODE_ENV === "production") {
   );
 }
 
+// -----------------------------
 // Global error handler
+// -----------------------------
 app.use((err, req, res, next) => {
   console.error("❌ Unexpected error:", err.stack || err);
   res.status(500).json({ error: "Internal Server Error" });
 });
 
-// WebSocket setup (unchanged)
+// -----------------------------
+// WebSocket setup
+// -----------------------------
 const wss = new WebSocket.Server({ server });
 let users = {};
 let conversationMembersOnline = {};
@@ -124,6 +139,9 @@ wss.on("connection", (ws) => {
   });
 });
 
+// -----------------------------
+// MongoDB connection & server start
+// -----------------------------
 const PORT = process.env.PORT || 5000;
 
 if (!process.env.MONGODB_URI) {
