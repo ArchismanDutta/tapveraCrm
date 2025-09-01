@@ -16,28 +16,30 @@ const {
 } = require("../controllers/userController");
 
 // ======================
-// Employee Directory (accessible by all logged-in users)
+// Employee Directory
+// Accessible by all logged-in users
+// Supports filters & search
 // ======================
 router.get("/directory", protect, getEmployeeDirectory);
 
 // ======================
-// Get current logged-in user
-// Includes shift info if set
+// Current logged-in user info
+// Includes shift info
 // ======================
 router.get("/me", protect, getMe);
 
 // ======================
-// Get all users (for assigning tasks)
-// Accessible only by admin, hr & super-admin
+// Get all users (full info for admin/hr/super-admin)
+// For assigning tasks or management purposes
 // ======================
 router.get("/", protect, authorize("admin", "hr", "super-admin"), getAllUsers);
 
 // ======================
-// Get all users (custom endpoint)
-// Includes minimal info + shift
+// Get all users (minimal info + shift)
+// Accessible only by admin/hr/super-admin
 // Must be before '/:id' to avoid route conflicts
 // ======================
-router.get("/all", protect, async (req, res) => {
+router.get("/all", protect, authorize("admin", "hr", "super-admin"), async (req, res) => {
   try {
     const users = await User.find({}, "_id name email role shift");
     res.json(users);
@@ -49,8 +51,8 @@ router.get("/all", protect, async (req, res) => {
 
 // ======================
 // Create new employee
-// Accepts shift: { start: "09:00", end: "18:00" }
-// Accessible only by admin, hr & super-admin
+// Optional shift: { start, end, isFlexible }
+// Accessible by admin/hr/super-admin
 // ======================
 router.post(
   "/create",
@@ -62,24 +64,14 @@ router.post(
 // ======================
 // Get single employee by ID
 // Includes shift info
-// Accessible only by admin, hr & super-admin
+// Accessible by admin/hr/super-admin
 // ======================
-router.get(
-  "/:id",
-  protect,
-  authorize("admin", "hr", "super-admin"),
-  getEmployeeById
-);
+router.get("/:id", protect, authorize("admin", "hr", "super-admin"), getEmployeeById);
 
 // ======================
 // Update employee status
-// Accessible only by admin, hr & super-admin
+// Accessible by admin/hr/super-admin
 // ======================
-router.patch(
-  "/:id/status",
-  protect,
-  authorize("admin", "hr", "super-admin"),
-  updateEmployeeStatus
-);
+router.patch("/:id/status", protect, authorize("admin", "hr", "super-admin"), updateEmployeeStatus);
 
 module.exports = router;

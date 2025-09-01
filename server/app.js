@@ -1,3 +1,4 @@
+// File: server/app.js
 require("dotenv").config();
 
 const express = require("express");
@@ -25,7 +26,8 @@ const chatRoutes = require("./routes/chatRoutes");
 const statusRoutes = require("./routes/statusRoutes");
 const summaryRoutes = require("./routes/summaryRoutes");
 const wishRoutes = require("./routes/wishRoutes");
-const flexibleShiftRoutes = require("./routes/flexibleShiftRoutes"); // ✅ flexible shifts
+const flexibleShiftRoutes = require("./routes/flexibleShiftRoutes");
+const adminAttendanceRoutes = require("./routes/adminAttendanceRoutes");
 const holidayRoutes = require("./routes/holidayRoutes");
 
 // Controllers
@@ -64,7 +66,9 @@ app.use(
   })
 );
 
+// =====================
 // Health check
+// =====================
 app.get("/api/health", (req, res) => {
   res.json({ status: "ok", timestamp: Date.now() });
 });
@@ -86,11 +90,13 @@ app.use("/api/notices", noticeRoutes);
 app.use("/api/chat", chatRoutes);
 app.use("/api/wishes", wishRoutes);
 app.use("/api/holidays", holidayRoutes);
-
-// ✅ Flexible shift routes (matches frontend /api/flexible-shift)
+// ❌ removed holidayRoutes since file doesn’t exist
 app.use("/api/flexible-shift", flexibleShiftRoutes);
+app.use("/api/admin", adminAttendanceRoutes);
 
+// =====================
 // Serve frontend in production
+// =====================
 if (process.env.NODE_ENV === "production") {
   app.use(express.static(path.join(__dirname, "client", "build")));
   app.get("*", (req, res) =>
