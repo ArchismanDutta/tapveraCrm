@@ -29,7 +29,7 @@ exports.createEmployee = async (req, res) => {
       designation,
       password,
       shift,      // shift info
-      shiftType,  // new field: 'standard' | 'flexible9' | 'flexibleRequest'
+      shiftType,  // new field: 'standard' | 'flexible' | 'flexiblePermanent'
     } = req.body;
 
     if (!employeeId || !name || !email || !contact || !dob || !gender || !doj) {
@@ -42,6 +42,7 @@ exports.createEmployee = async (req, res) => {
     if (await User.findOne({ email: normalizedEmail })) {
       return res.status(400).json({ message: "Email already in use." });
     }
+
     if (await User.findOne({ employeeId: trimmedEmployeeId })) {
       return res.status(400).json({ message: "Employee ID already in use." });
     }
@@ -79,6 +80,7 @@ exports.createEmployee = async (req, res) => {
         durationHours: shift.durationHours || 9,
       };
     }
+    // No need to save shift timings for flexible or flexiblePermanent
 
     const user = new User(userData);
     await user.save();
