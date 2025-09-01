@@ -140,11 +140,11 @@ const userSchema = new mongoose.Schema(
     avatar: { type: String, trim: true, default: "" },
 
     // ======================
-    // Shift Type: standard/flexible
+    // Shift Type: standard/flexible/flexiblePermanent
     // ======================
     shiftType: {
       type: String,
-      enum: ["standard", "flexible"],
+      enum: ["standard", "flexible", "flexiblePermanent"],
       default: "standard",
     },
 
