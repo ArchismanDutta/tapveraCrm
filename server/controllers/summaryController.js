@@ -1,7 +1,5 @@
-// File: controllers/weeklySummaryController.js
-
 const DailyWork = require("../models/DailyWork");
-const { getEffectiveShift } = require("./statusController"); // reuse your existing helper
+const { getEffectiveShift } = require("./statusController");
 
 // ======================
 // Helper: Convert seconds to "Hh Mm" format
@@ -23,7 +21,7 @@ exports.getWeeklySummary = async (req, res) => {
 
     let { startDate, endDate } = req.query;
 
-    // Default to current week (Monday → Sunday)
+    // Default: current week (Monday → Sunday)
     if (!startDate || !endDate) {
       const now = new Date();
       const day = now.getDay(); // Sunday = 0
@@ -58,10 +56,15 @@ exports.getWeeklySummary = async (req, res) => {
     let perfectDays = 0;
     let onTimeCount = 0;
     let breaksTaken = 0;
+    let halfDays = 0;
+    let absentDays = 0;
+
+    const MIN_HALF_DAY_SECONDS = 5 * 3600; // 5 hours
+    const MIN_FULL_DAY_SECONDS = 8 * 3600; // 8 hours
 
     const dailyData = [];
 
-    for (let day of rawDailyData) {
+    for (const day of rawDailyData) {
       const effectiveShift = await getEffectiveShift(userId, day.date);
 
       const workSeconds = day.workDurationSeconds || 0;
@@ -70,35 +73,45 @@ exports.getWeeklySummary = async (req, res) => {
       totalWorkSeconds += workSeconds;
       totalBreakSeconds += breakSeconds;
 
-      // Determine punctuality using effective shift
       let isEarly = false;
       let isLate = false;
+      let isHalfDay = false;
+      let isAbsent = false;
 
-      if (day.arrivalTime && effectiveShift?.start) {
-        const arrival = new Date(day.arrivalTime);
-        const [expHour, expMin] = effectiveShift.start.split(":").map(Number);
-        const expected = new Date(arrival);
-        expected.setHours(expHour, expMin, 0, 0);
-
-        if (arrival <= expected) {
-          isEarly = true;
-          earlyArrivals++;
-          onTimeCount++;
-        } else {
-          isLate = true;
-          lateArrivals++;
-        }
+      // Determine absent / half-day
+      if (!day.arrivalTime || workSeconds < MIN_HALF_DAY_SECONDS) {
+        isAbsent = true;
+        absentDays++;
+      } else if (workSeconds >= MIN_HALF_DAY_SECONDS && workSeconds < MIN_FULL_DAY_SECONDS) {
+        isHalfDay = true;
+        halfDays++;
       }
 
-      // Perfect day: >= 8 hours work & arrived by shift start
-      if (workSeconds >= 8 * 3600 && day.arrivalTime && effectiveShift?.start) {
-        const arrival = new Date(day.arrivalTime);
-        const expectedShift = new Date(day.date);
-        const [shiftH, shiftM] = effectiveShift.start.split(":").map(Number);
-        expectedShift.setHours(shiftH, shiftM, 0, 0);
+      // Punctuality & perfect day logic
+      if (!isAbsent) {
+        if (effectiveShift.isFlexiblePermanent) {
+          if (workSeconds >= MIN_FULL_DAY_SECONDS) {
+            perfectDays++;
+            onTimeCount++;
+          }
+        } else if (day.arrivalTime && effectiveShift?.start) {
+          const arrival = new Date(day.arrivalTime);
+          const [shiftH, shiftM] = effectiveShift.start.split(":").map(Number);
+          const expectedShift = new Date(day.date);
+          expectedShift.setHours(shiftH, shiftM, 0, 0);
 
-        if (arrival <= expectedShift) {
-          perfectDays++;
+          if (arrival <= expectedShift) {
+            isEarly = true;
+            earlyArrivals++;
+            if (!isHalfDay) onTimeCount++;
+          } else {
+            isLate = true;
+            lateArrivals++;
+          }
+
+          if (!isHalfDay && workSeconds >= MIN_FULL_DAY_SECONDS && arrival <= expectedShift) {
+            perfectDays++;
+          }
         }
       }
 
@@ -109,6 +122,8 @@ exports.getWeeklySummary = async (req, res) => {
         effectiveShift,
         isEarly,
         isLate,
+        isHalfDay,
+        isAbsent,
       });
     }
 
@@ -127,6 +142,8 @@ exports.getWeeklySummary = async (req, res) => {
       daysCount,
       onTimeRate,
       breaksTaken,
+      halfDays,
+      absentDays,
       quickStats: {
         earlyArrivals,
         lateArrivals,
