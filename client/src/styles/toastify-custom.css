@@ -1,0 +1,53 @@
+/* Premium Black Apple-like Toasts */
+
+/* Base Toast */
+.Toastify__toast {
+  background: rgba(18, 18, 18, 0.85) !important; /* deep black glass */
+  color: #f5f5f7 !important; /* Apple off-white */
+  border-radius: 8px !important; /* smoother Apple-like rounding */
+  padding: 14px 18px !important;
+  backdrop-filter: blur(2px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(16px) saturate(180%) !important;
+  border: 1px solid rgb(92, 92, 92) !important; /* soft border */
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, sans-serif;
+  font-weight: 500;
+  transition: transform 0.25s ease, opacity 0.25s ease;
+}
+
+/* Hover animation */
+.Toastify__toast:hover {
+  transform: translateY(-3px) scale(1.01);
+}
+
+/* Success / Error / Info / Warning — minimal accent bars */
+.Toastify__toast--success {
+  border-left: 4px solid #30d158 !important; /* Apple green */
+}
+.Toastify__toast--error {
+  border-left: 4px solid #ff453a !important; /* Apple red */
+}
+.Toastify__toast--info {
+  border-left: 4px solid #0a84ff !important; /* Apple blue */
+}
+.Toastify__toast--warning {
+  border-left: 4px solid #ffd60a !important; /* Apple yellow */
+}
+
+/* Close button */
+.Toastify__close-button {
+  color: #999 !important;
+  opacity: 0.6;
+  transition: color 0.2s ease, opacity 0.2s ease;
+}
+.Toastify__close-button:hover {
+  color: #fff !important;
+  opacity: 1;
+}
+
+/* Progress bar – subtle glowing orange */
+.Toastify__progress-bar {
+  background: linear-gradient(90deg, #373737, #373737) !important;
+  height: 1px;
+  border-radius: 0 0 20px 20px;
+  box-shadow: 0 0 12px rgba(255, 149, 0, 0.6);
+}
