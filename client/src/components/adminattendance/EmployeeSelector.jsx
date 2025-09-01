@@ -1,24 +1,48 @@
+// File: components/dashboard/EmployeeSelector.jsx
 import React from "react";
 
-const EmployeeSelector = ({ employees, selected, onSelect }) => {
+const EmployeeSelector = ({
+  employees = [],
+  selected = null,
+  onSelect = () => {},
+}) => {
+  // Handle selection change
+  const handleChange = (e) => {
+    const selectedEmployee = employees.find((emp) => emp._id === e.target.value);
+    onSelect(selectedEmployee || null);
+  };
+
   return (
-    <select
-      className="w-full p-2 rounded border bg-gray-800 text-white"
-      value={selected?._id || ""}
-      onChange={(e) => {
-        const emp = employees.find(emp => emp._id === e.target.value);
-        onSelect(emp || null);
-      }}
-    >
-      <option value="" disabled>
+    <div className="flex flex-col w-full">
+      <label
+        htmlFor="employee-select"
+        className="text-gray-300 text-sm mb-1"
+      >
         Select Employee
-      </option>
-      {employees.map((emp) => (
-        <option key={emp._id} value={emp._id}>
-          {emp.name} ({emp.department || "N/A"})
-        </option>
-      ))}
-    </select>
+      </label>
+      <select
+        id="employee-select"
+        className="w-full p-2 rounded border border-gray-600 bg-gray-800 text-white focus:outline-none focus:ring-2 focus:ring-pink-500"
+        value={selected?._id || ""}
+        onChange={handleChange}
+        disabled={employees.length === 0}
+      >
+        {employees.length === 0 ? (
+          <option value="">No employees available</option>
+        ) : (
+          <>
+            <option value="" disabled>
+              -- Select Employee --
+            </option>
+            {employees.map((emp) => (
+              <option key={emp._id} value={emp._id}>
+                {emp.name} ({emp.department || "N/A"})
+              </option>
+            ))}
+          </>
+        )}
+      </select>
+    </div>
   );
 };
 
