@@ -28,6 +28,7 @@ const summaryRoutes = require("./routes/summaryRoutes");
 const wishRoutes = require("./routes/wishRoutes");
 const flexibleShiftRoutes = require("./routes/flexibleShiftRoutes");
 const adminAttendanceRoutes = require("./routes/adminAttendanceRoutes");
+const holidayRoutes = require("./routes/holidayRoutes");
 
 // Controllers
 const ChatController = require("./controllers/chatController");
@@ -88,6 +89,7 @@ app.use("/api/summary", summaryRoutes);
 app.use("/api/notices", noticeRoutes);
 app.use("/api/chat", chatRoutes);
 app.use("/api/wishes", wishRoutes);
+app.use("/api/holidays", holidayRoutes);
 // ❌ removed holidayRoutes since file doesn’t exist
 app.use("/api/flexible-shift", flexibleShiftRoutes);
 app.use("/api/admin", adminAttendanceRoutes);

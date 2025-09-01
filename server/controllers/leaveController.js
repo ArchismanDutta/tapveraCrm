@@ -1,7 +1,7 @@
-// src/controllers/leaveController.js
 const LeaveRequest = require("../models/LeaveRequest");
+const holidayService = require("../services/holidayService");
 
-// Create a leave request
+// Create a leave request with sandwich policy
 exports.createLeave = async (req, res) => {
   try {
     const employee = {
@@ -17,31 +17,63 @@ exports.createLeave = async (req, res) => {
     let end = req.body.endDate;
     const type = req.body.type;
 
-    if (!start) return res.status(400).json({ message: "startDate is required" });
+    if (!start)
+      return res.status(400).json({ message: "startDate is required" });
     if (type === "halfDay" && !end) end = start;
 
-    const period = { start: new Date(start), end: new Date(end || start) };
+    let period = { start: new Date(start), end: new Date(end || start) };
     if (isNaN(period.start.getTime()) || isNaN(period.end.getTime()))
       return res.status(400).json({ message: "Invalid start or end date" });
 
+    // 🔥 Sandwich Policy Expansion
+    let adjustedStart = new Date(period.start);
+    let adjustedEnd = new Date(period.end);
+
+    // expand backwards
+    let checkPrev = new Date(adjustedStart);
+    checkPrev.setDate(checkPrev.getDate() - 1);
+    while (await holidayService.isHolidayOrWeekend(checkPrev)) {
+      adjustedStart = new Date(checkPrev);
+      checkPrev.setDate(checkPrev.getDate() - 1);
+    }
+
+    // expand forwards
+    let checkNext = new Date(adjustedEnd);
+    checkNext.setDate(checkNext.getDate() + 1);
+    while (await holidayService.isHolidayOrWeekend(checkNext)) {
+      adjustedEnd = new Date(checkNext);
+      checkNext.setDate(checkNext.getDate() + 1);
+    }
+
+    // prepare document if uploaded
     let document;
     if (req.file) {
       document = {
         name: req.file.originalname,
         size: req.file.size,
-        url: `${req.protocol}://${req.get("host")}/uploads/${req.file.filename}`,
+        url: `${req.protocol}://${req.get("host")}/uploads/${
+          req.file.filename
+        }`,
       };
     }
 
-    const payload = { employee, period, type, reason: req.body.reason, document, status: "Pending" };
-    const leave = await LeaveRequest.create(payload);
+    const payload = {
+      employee,
+      period: { start: adjustedStart, end: adjustedEnd },
+      type,
+      reason: req.body.reason,
+      document,
+      status: "Pending",
+    };
 
+    const leave = await LeaveRequest.create(payload);
     res.status(201).json(leave);
   } catch (error) {
     console.error("Create Leave Error:", error);
     res.status(400).json({ message: error.message });
   }
 };
+
 
 // Get logged-in user's leaves
 exports.getUserLeaves = async (req, res) => {
