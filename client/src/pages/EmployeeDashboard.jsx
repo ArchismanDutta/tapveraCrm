@@ -5,7 +5,6 @@ import dayjs from "dayjs";
 
 import SummaryCards from "../components/dashboard/SummaryCards";
 import TodayTasks from "../components/dashboard/TodayTasks";
-import RecentMessages from "../components/dashboard/RecentMessages";
 import Sidebar from "../components/dashboard/Sidebar";
 import NotificationBell from "../components/dashboard/NotificationBell";
 import WishPopup from "../components/dashboard/WishPopup";
@@ -27,13 +26,6 @@ const EmployeeDashboard = ({ onLogout }) => {
   const [showWishPopup, setShowWishPopup] = useState(false);
 
   const navigate = useNavigate();
-
-  // Sample static messages (replace with API if needed)
-  const messages = [
-    { name: "Sarah Johnson", msg: "Updated project timeline", time: "2h ago", img: "https://i.pravatar.cc/40?img=1" },
-    { name: "Mike Wilson", msg: "Meeting moved to 3 PM", time: "4h ago", img: "https://i.pravatar.cc/40?img=2" },
-    { name: "Emily Davis", msg: "Uploaded new requirements", time: "5h ago", img: "https://i.pravatar.cc/40?img=4" },
-  ];
 
   // Format task data
   const formatTask = (task) => ({
@@ -177,13 +169,8 @@ const EmployeeDashboard = ({ onLogout }) => {
         <SummaryCards data={summaryData} />
 
         {/* Main content */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-8">
-          <div className="lg:col-span-2">
-            <TodayTasks data={tasks} loading={loading} className="bg-[#191f2b]/70 p-4 rounded-xl shadow-xl border border-[#232945]" />
-          </div>
-          <div className="flex flex-col gap-6">
-            <RecentMessages messages={messages} />
-          </div>
+        <div className="mt-8">
+          <TodayTasks data={tasks} loading={loading} className="bg-[#191f2b]/70 p-4 rounded-xl shadow-xl border border-[#232945]" />
         </div>
       </main>
 

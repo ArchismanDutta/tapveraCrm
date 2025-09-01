@@ -26,8 +26,8 @@ const EmployeeManagement = () => {
     updateStats();
   }, [employees]);
 
-  const fetchEmployees = async () => {
-    // Example fetch - replace with real API or state management
+  const fetchEmployees = () => {
+    // Dummy static data; replace with your API fetch
     setEmployees([
       {
         id: "EMP001",
@@ -39,8 +39,7 @@ const EmployeeManagement = () => {
         salary: 85000,
         avatar: "https://randomuser.me/api/portraits/women/44.jpg",
       },
-      
-       {
+      {
         id: "EMP002",
         name: "Archisman Dutta",
         department: "Engineering",
@@ -50,8 +49,7 @@ const EmployeeManagement = () => {
         salary: 85000,
         avatar: "https://randomuser.me/api/portraits/women/44.jpg",
       },
-
-       {
+      {
         id: "EMP003",
         name: "Anish Jaiswal",
         department: "Engineering",
@@ -61,46 +59,41 @@ const EmployeeManagement = () => {
         salary: 85000,
         avatar: "https://randomuser.me/api/portraits/women/44.jpg",
       },
-
-       {
-        id: "EMP001",
+      {
+        id: "EMP004",
         name: "Sahil Khureshi",
         department: "Engineering",
         designation: "Senior Developer",
         status: "On Leave",
         attendance: 100,
         salary: 200000,
-        avatar: "https://randomuser.me/api/portraits/women/44.jpg",
+        avatar: "https://randomuser.me/api/portraits/men/44.jpg",
       },
     ]);
   };
 
   const updateStats = () => {
     const total = employees.length;
-    const active = employees.filter(e => e.status === "Active").length;
-    const onLeave = employees.filter(e => e.status === "On Leave").length;
-    const newHires = 0; // Optionally track new hires by date added if available
-    setStats({ total, active, onLeave, newHires });
+    const active = employees.filter((e) => e.status === "Active").length;
+    const onLeave = employees.filter((e) => e.status === "On Leave").length;
+    setStats({ total, active, onLeave });
   };
 
-  const filteredEmployees = employees.filter(emp => {
+  const filteredEmployees = employees.filter((emp) => {
     return (
       (filters.department === "" || emp.department === filters.department) &&
       (filters.designation === "" || emp.designation === filters.designation) &&
       (filters.status === "" || emp.status === filters.status) &&
       (emp.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-       emp.id.toLowerCase().includes(searchQuery.toLowerCase()))
+        emp.id.toLowerCase().includes(searchQuery.toLowerCase()))
     );
   });
 
-  // Add or Edit employee handler
   const handleAddOrEditEmployee = (employee) => {
     if (isEditing) {
-      // edit existing
-      setEmployees(prev => prev.map(e => (e.id === employee.id ? employee : e)));
+      setEmployees((prev) => prev.map((e) => (e.id === employee.id ? employee : e)));
     } else {
-      // add new
-      setEmployees(prev => [...prev, employee]);
+      setEmployees((prev) => [...prev, employee]);
     }
     setModalOpen(false);
     setSelectedEmployee(null);
@@ -109,7 +102,7 @@ const EmployeeManagement = () => {
 
   const handleDeleteEmployee = (id) => {
     if (window.confirm("Are you sure you want to delete this employee?")) {
-      setEmployees(prev => prev.filter(emp => emp.id !== id));
+      setEmployees((prev) => prev.filter((emp) => emp.id !== id));
     }
   };
 
@@ -125,57 +118,87 @@ const EmployeeManagement = () => {
   };
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex flex-col items-start">
-        <img src={tapveraLogo} alt="Tapvera Logo" className="h-12 w-auto" />
-        <h1 className="text-2xl font-semibold text-center w-full">Employee Management</h1>
-      </div>
+    <div
+      className="min-h-screen bg-gradient-to-tr from-[#0F141D] via-[#121923] to-[#1E2231] p-6"
+      style={{ fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif" }}
+    >
+      <div className="max-w-7xl mx-auto">
+        <header className="flex items-center mb-8">
+          <img
+            src={tapveraLogo}
+            alt="Tapvera"
+            className="h-14 w-auto rounded-lg shadow-lg bg-white/10"
+          />
+          <h1 className="ml-6 text-white text-4xl font-extrabold tracking-tight drop-shadow-lg">
+            Employee Management
+          </h1>
+        </header>
 
-      <EmployeeStats stats={stats} />
+        <section className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+          <div className="bg-[#202538] rounded-2xl p-8 shadow-lg border border-[#2a2d48]">
+            <h2 className="text-white text-2xl font-bold mb-4">Total Employees</h2>
+            <p className="text-5xl font-extrabold text-blue-400 text-center">{stats.total ?? 0}</p>
+          </div>
+          <div className="bg-[#202538] rounded-2xl p-8 shadow-lg border border-[#2a2d48]">
+            <h2 className="text-white text-2xl font-bold mb-4">Active Employees</h2>
+            <p className="text-5xl font-extrabold text-green-400 text-center">{stats.active ?? 0}</p>
+          </div>
+          <div className="bg-[#202538] rounded-2xl p-8 shadow-lg border border-[#2a2d48]">
+            <h2 className="text-white text-2xl font-bold mb-4">On Leave</h2>
+            <p className="text-5xl font-extrabold text-amber-400 text-center">{stats.onLeave ?? 0}</p>
+          </div>
+        </section>
 
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        <EmployeeSearch query={searchQuery} onSearch={setSearchQuery} />
-        <div className="flex items-center gap-3">
-          <EmployeeFilters filters={filters} setFilters={setFilters} />
-          <EmployeeActions
-            onAdd={() => setModalOpen(true)}
-            onExport={() => {
-              // Implement CSV/JSON export here
+        <section className="flex flex-col md:flex-row gap-4 mb-8 items-center justify-between">
+          <EmployeeSearch query={searchQuery} onSearch={setSearchQuery} />
+          <div className="flex items-center gap-4">
+            <EmployeeFilters filters={filters} setFilters={setFilters} />
+            <EmployeeActions
+              onAdd={() => setModalOpen(true)}
+              onExport={() => { /* implement export if needed */ }}
+            />
+          </div>
+        </section>
+
+        <section className="bg-[#202538] rounded-2xl p-6 shadow-xl border border-[#2a2d48] overflow-x-auto">
+          {filteredEmployees.length ? (
+            <EmployeeTable
+              employees={filteredEmployees}
+              onEdit={openEditModal}
+              onDelete={handleDeleteEmployee}
+              onViewDetails={openDetailsModal}
+            />
+          ) : (
+            <p className="text-center text-slate-400 py-20 font-semibold  text-xl">
+              No employees found.
+            </p>
+          )}
+        </section>
+
+        {modalOpen && (
+          <EmployeeFormModal
+            isEditing={isEditing}
+            employee={selectedEmployee}
+            onClose={() => {
+              setModalOpen(false);
+              setSelectedEmployee(null);
+              setIsEditing(false);
+            }}
+            onSubmit={handleAddOrEditEmployee}
+            existingIds={employees.map((e) => e.id)}
+          />
+        )}
+
+        {detailsOpen && (
+          <EmployeeDetailsModal
+            employee={selectedEmployee}
+            onClose={() => {
+              setDetailsOpen(false);
+              setSelectedEmployee(null);
             }}
           />
-        </div>
+        )}
       </div>
-
-      <EmployeeTable
-        employees={filteredEmployees}
-        onEdit={openEditModal}
-        onDelete={handleDeleteEmployee}
-        onViewDetails={openDetailsModal}
-      />
-
-      {modalOpen && (
-        <EmployeeFormModal
-          isEditing={isEditing}
-          employee={selectedEmployee}
-          onClose={() => {
-            setModalOpen(false);
-            setSelectedEmployee(null);
-            setIsEditing(false);
-          }}
-          onSubmit={handleAddOrEditEmployee}
-          existingIds={employees.map(e => e.id)}
-        />
-      )}
-
-      {detailsOpen && (
-        <EmployeeDetailsModal
-          employee={selectedEmployee}
-          onClose={() => {
-            setDetailsOpen(false);
-            setSelectedEmployee(null);
-          }}
-        />
-      )}
     </div>
   );
 };
