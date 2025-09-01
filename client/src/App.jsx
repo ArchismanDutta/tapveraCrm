@@ -1,4 +1,3 @@
-// File: src/App.jsx
 import React, { useEffect, useState } from "react";
 import {
   BrowserRouter as Router,
@@ -31,6 +30,7 @@ import ChatPage from "./pages/ChatPage";
 import EmployeeDirectory from "./pages/EmployeeDirectory";
 import EmployeePage from "./pages/EmployeePage";
 import HRDashboard from "./pages/HRDashboard";
+import AdminAttendancePage from "./pages/AdminAttendancePage"; // <-- Import new page
 
 import { resetChat } from "./store/slices/chatSlice";
 import { useDispatch } from "react-redux";
@@ -88,9 +88,7 @@ const AppWrapper = () => {
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-screen">
-        Loading...
-      </div>
+      <div className="flex justify-center items-center h-screen">Loading...</div>
     );
   }
 
@@ -182,10 +180,7 @@ const AppWrapper = () => {
           path="/profile"
           element={
             isAuthenticated ? (
-              <MyProfile
-                onLogout={handleLogout}
-                userType={role || "employee"}
-              />
+              <MyProfile onLogout={handleLogout} userType={role || "employee"} />
             ) : (
               <Navigate to="/login" replace />
             )
@@ -199,10 +194,7 @@ const AppWrapper = () => {
             isAuthenticated && (isAdmin || isHR) ? (
               <EmployeePage userRole={role} onLogout={handleLogout} />
             ) : (
-              <Navigate
-                to={isAuthenticated ? "/dashboard" : "/login"}
-                replace
-              />
+              <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />
             )
           }
         />
@@ -214,10 +206,7 @@ const AppWrapper = () => {
             isAuthenticated && isAdmin ? (
               <AdminTaskPage onLogout={handleLogout} />
             ) : (
-              <Navigate
-                to={isAuthenticated ? "/dashboard" : "/login"}
-                replace
-              />
+              <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />
             )
           }
         />
@@ -227,10 +216,7 @@ const AppWrapper = () => {
             isAuthenticated && isAdmin ? (
               <EmployeeManagementPage onLogout={handleLogout} />
             ) : (
-              <Navigate
-                to={isAuthenticated ? "/dashboard" : "/login"}
-                replace
-              />
+              <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />
             )
           }
         />
@@ -240,10 +226,7 @@ const AppWrapper = () => {
             isAuthenticated && (isAdmin || isHR) ? (
               <AdminLeaveRequests onLogout={handleLogout} />
             ) : (
-              <Navigate
-                to={isAuthenticated ? "/dashboard" : "/login"}
-                replace
-              />
+              <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />
             )
           }
         />
@@ -253,10 +236,19 @@ const AppWrapper = () => {
             isAuthenticated && isAdmin ? (
               <NoticeBoard onLogout={handleLogout} />
             ) : (
-              <Navigate
-                to={isAuthenticated ? "/dashboard" : "/login"}
-                replace
-              />
+              <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />
+            )
+          }
+        />
+
+        {/* New Admin Attendance Overview Page */}
+        <Route
+          path="/admin/attendance"
+          element={
+            isAuthenticated && isAdmin ? (
+              <AdminAttendancePage onLogout={handleLogout} />
+            ) : (
+              <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />
             )
           }
         />

@@ -20,25 +20,17 @@ const { protect, authorize } = require("../middlewares/authMiddleware");
 router.get(
   "/",
   protect,
-  authorize("hr", "admin"), 
+  authorize("hr", "admin"),
   getFlexibleShiftRequests
 );
 
 // Employee: Fetch their own flexible shift requests
 // GET /api/flexible-shifts/my-requests
-router.get(
-  "/my-requests",
-  protect,
-  getEmployeeFlexibleRequests
-);
+router.get("/my-requests", protect, getEmployeeFlexibleRequests);
 
 // Employee: Submit a new flexible shift request
 // POST /api/flexible-shifts/request
-router.post(
-  "/request",
-  protect,
-  createFlexibleShiftRequest
-);
+router.post("/request", protect, createFlexibleShiftRequest);
 
 // HR/Admin: Approve or reject a flexible shift request
 // PUT /api/flexible-shifts/:requestId/status
