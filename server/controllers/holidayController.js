@@ -45,7 +45,7 @@ exports.checkIfHoliday = async (req, res) => {
 // POST /holidays/sandwich
 exports.applySandwich = async (req, res) => {
   try {
-    const { leaves, shift } = req.body; // { leaves: ["2025-08-14", "2025-08-16"], shift: "standard" }
+    const { leaves, shift } = req.body; // e.g. { leaves: ["2025-08-14", "2025-08-16"], shift: "standard" }
     const expanded = await holidayService.applySandwichPolicy(
       leaves,
       shift || "ALL"
