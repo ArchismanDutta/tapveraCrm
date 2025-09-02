@@ -11,6 +11,13 @@ const holidaySchema = new mongoose.Schema(
     },
     recurring: { type: Boolean, default: false },
     optional: { type: Boolean, default: false },
+    shifts: [
+      {
+        type: String,
+        enum: ["standard", "flexiblePermanent", "ALL"],
+        default: "ALL",
+      },
+    ],
   },
   { timestamps: true }
 );
