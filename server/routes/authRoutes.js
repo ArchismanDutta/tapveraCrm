@@ -33,7 +33,9 @@ const signupValidation = [
   body("department")
     .optional()
     .isIn(["executives", "development", "marketingAndSales", "humanResource"])
-    .withMessage("Department must be one of executives, development, marketingAndSales, humanResource"),
+    .withMessage(
+      "Department must be one of executives, development, marketingAndSales, humanResource"
+    ),
 
   body("designation")
     .optional()
@@ -48,6 +50,21 @@ const signupValidation = [
 
   body("employeeId").trim().notEmpty().withMessage("Employee ID is required"),
   body("doj").isISO8601().withMessage("Valid Date of Joining is required (YYYY-MM-DD)"),
+
+  // ✅ Allow arrays for skills
+  body("skills").optional().isArray().withMessage("Skills must be an array"),
+  body("skills.*").optional().isString().trim(),
+
+  // ✅ Allow array of qualification objects
+  body("qualifications").optional().isArray().withMessage("Qualifications must be an array"),
+  body("qualifications.*.school").optional().isString().trim(),
+  body("qualifications.*.degree").optional().isString().trim(),
+  body("qualifications.*.year").optional().isInt().toInt(),
+  body("qualifications.*.marks").optional().isString().trim(),
+
+  // ✅ Ensure salary and totalPl are numbers if provided
+  body("salary").optional().isNumeric().toFloat(),
+  body("totalPl").optional().isInt().toInt(),
 ];
 
 // ======================
