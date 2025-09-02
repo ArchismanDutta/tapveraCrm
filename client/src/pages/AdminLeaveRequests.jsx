@@ -52,32 +52,41 @@ const AdminLeaveRequests = ({ onLogout }) => {
 
   return (
     <div className="flex bg-gray-900 min-h-screen text-gray-100">
-      <Sidebar collapsed={collapsed} setCollapsed={setCollapsed} userRole="admin" onLogout={onLogout} />
+      <Sidebar
+        collapsed={collapsed}
+        setCollapsed={setCollapsed}
+        userRole="admin"
+        onLogout={onLogout}
+      />
 
-      <main className={`flex-1 transition-all duration-300 ${collapsed ? "ml-20" : "ml-64"} p-4 md:p-6 flex flex-col`}>
-        <div className="flex flex-1 flex-col lg:flex-row gap-6 overflow-hidden">
-          <div className="flex-1 min-w-0">
-            <PollingLeaveRequestsTable
-              selectedId={selectedId}
-              onSelect={setSelectedId}
-              onApprove={(id) => handleActionClick(id, "Approved")}
-              onReject={(id) => handleActionClick(id, "Rejected")}
-              requests={requests}
-              setRequests={setRequests}
-            />
-          </div>
-
-          <div className="w-full lg:w-[430px] flex-shrink-0 overflow-auto">
-            <LeaveRequestDetails
-              request={selectedRequest}
-              adminRemarks={adminRemarks}
-              onChangeRemarks={setAdminRemarks}
-              onApprove={(id) => handleActionClick(id, "Approved")}
-              onReject={(id) => handleActionClick(id, "Rejected")}
-            />
-          </div>
+      {/* Main Content shifted left */}
+      <main
+        className={`flex-1 transition-all duration-300 ${
+          collapsed ? "ml-20" : "ml-64"
+        } p-4 md:p-6 flex flex-col mr-0 lg:mr-[430px]`} // <- Add right margin for desktop
+      >
+        <div className="flex flex-1 flex-col gap-6 overflow-hidden">
+          <PollingLeaveRequestsTable
+            selectedId={selectedId}
+            onSelect={setSelectedId}
+            onApprove={(id) => handleActionClick(id, "Approved")}
+            onReject={(id) => handleActionClick(id, "Rejected")}
+            requests={requests}
+            setRequests={setRequests}
+          />
         </div>
       </main>
+
+      {/* Fixed right panel */}
+      <div className="fixed top-0 right-0 h-screen w-full lg:w-[430px] p-4 overflow-auto z-20 shadow-lg bg-gray-900">
+        <LeaveRequestDetails
+          request={selectedRequest}
+          adminRemarks={adminRemarks}
+          onChangeRemarks={setAdminRemarks}
+          onApprove={(id) => handleActionClick(id, "Approved")}
+          onReject={(id) => handleActionClick(id, "Rejected")}
+        />
+      </div>
 
       <DepartmentLeaveWarningModal
         isOpen={modalOpen}

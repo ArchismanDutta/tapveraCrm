@@ -9,7 +9,7 @@ const API_BASE =
   `${window.location.origin.replace(/\/$/, "")}/api` ||
   "http://localhost:5000/api";
 
-const EmployeeDirectory = () => {
+const EmployeeDirectory = ({onLogout}) => {
   const navigate = useNavigate();
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
@@ -114,19 +114,28 @@ const EmployeeDirectory = () => {
   return (
     <div className="flex bg-gray-900 min-h-screen text-gray-200">
       {/* Sidebar */}
-      <Sidebar collapsed={collapsed} setCollapsed={setCollapsed} userRole="admin" />
+      <Sidebar
+        onLogout={onLogout}
+        collapsed={collapsed}
+        setCollapsed={setCollapsed}
+        userRole="admin"
+      />
 
       {/* Main content */}
       <main
         className="flex-1 p-6 transition-all duration-300 min-h-screen overflow-y-auto"
         style={{ marginLeft: `${sidebarWidth}px` }}
       >
-        <h1 className="text-2xl font-semibold mb-4 text-gray-100">Employee Directory</h1>
+        <h1 className="text-2xl font-semibold mb-4 text-gray-100">
+          Employee Directory
+        </h1>
 
         <EmployeeFilters filters={filters} setFilters={setFilters} />
 
         {loading ? (
-          <div className="text-center py-8 text-gray-300">Loading employees...</div>
+          <div className="text-center py-8 text-gray-300">
+            Loading employees...
+          </div>
         ) : (
           <EmployeeTable employees={employees} currentUser={currentUser} />
         )}
