@@ -3,11 +3,11 @@ const router = express.Router();
 const holidayController = require("../controllers/holidayController");
 const { protect, authorize } = require("../middlewares/authMiddleware");
 
-// Public
+// Public holiday routes
 router.get("/", holidayController.getHolidays);
 router.get("/check", holidayController.checkIfHoliday);
 
-// Admin / HR only
+// Protected routes for Admin / HR only
 router.post(
   "/",
   protect,
@@ -20,7 +20,8 @@ router.delete(
   authorize("admin", "super-admin", "hr"),
   holidayController.removeHoliday
 );
-// Apply sandwich policy (used in payroll)
+
+// Sandwich policy applied in payroll logic
 router.post(
   "/sandwich",
   protect,
