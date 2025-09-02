@@ -18,7 +18,7 @@ exports.createEmployee = async (req, res) => {
       qualifications,
       permanentAddress,
       currentAddress,
-      emergencyNo,
+      emergencyContact, // ✅ renamed
       ps,
       doj,
       salary,
@@ -29,7 +29,9 @@ exports.createEmployee = async (req, res) => {
       designation,
       password,
       shift,      // shift info
-      shiftType,  // new field: 'standard' | 'flexible' | 'flexiblePermanent'
+      shiftType,  // 'standard' | 'flexible' | 'flexiblePermanent'
+      skills,
+      jobLevel    // ✅ NEW FIELD
     } = req.body;
 
     if (!employeeId || !name || !email || !contact || !dob || !gender || !doj) {
@@ -47,6 +49,23 @@ exports.createEmployee = async (req, res) => {
       return res.status(400).json({ message: "Employee ID already in use." });
     }
 
+    // ✅ Normalize skills input
+    const skillsArray = Array.isArray(skills)
+      ? skills.map((s) => s.trim()).filter((s) => s.length > 0)
+      : typeof skills === "string"
+        ? skills.split(",").map((s) => s.trim()).filter((s) => s.length > 0)
+        : [];
+
+    // ✅ Normalize qualifications input
+    const qualificationsArray = Array.isArray(qualifications)
+      ? qualifications.map((q) => ({
+          school: q.school?.trim() || "",
+          degree: q.degree?.trim() || "",
+          year: Number(q.year) || null,
+          marks: q.marks?.trim() || "",
+        }))
+      : [];
+
     const userData = {
       employeeId: trimmedEmployeeId,
       name: name.trim(),
@@ -55,13 +74,18 @@ exports.createEmployee = async (req, res) => {
       dob,
       gender,
       bloodGroup: bloodGroup?.trim() || "",
-      qualifications: Array.isArray(qualifications) ? qualifications : [],
+      qualifications: qualificationsArray,
+      skills: skillsArray,
       permanentAddress: permanentAddress?.trim() || "",
       currentAddress: currentAddress?.trim() || "",
-      emergencyNo: emergencyNo?.trim() || "",
+      emergencyContact: emergencyContact?.trim() || "",
       ps: ps?.trim() || "",
       doj,
-      salary: Number(salary) || 0,
+      salary: {
+        basic: Number(salary) || 0,
+        total: Number(salary) || 0,
+        paymentMode: "bank",
+      },
       ref: ref?.trim() || "",
       status: status?.toLowerCase() || "inactive",
       totalPl: Number(totalPl) || 0,
@@ -70,9 +94,10 @@ exports.createEmployee = async (req, res) => {
       designation: designation?.trim() || "",
       role: "employee",
       shiftType: shiftType || "standard",
+      jobLevel: jobLevel || "junior", // ✅ default to "junior"
     };
 
-    // Only save shift for standard shifts
+    // ✅ Only save shift for standard type
     if (shiftType === "standard" && shift?.start && shift?.end) {
       userData.shift = {
         start: shift.start,
@@ -80,7 +105,6 @@ exports.createEmployee = async (req, res) => {
         durationHours: shift.durationHours || 9,
       };
     }
-    // No need to save shift timings for flexible or flexiblePermanent
 
     const user = new User(userData);
     await user.save();
@@ -97,12 +121,14 @@ exports.createEmployee = async (req, res) => {
 // ======================
 exports.getEmployeeDirectory = async (req, res) => {
   try {
-    const { department, designation, status, search } = req.query;
+    const { department, designation, status, jobLevel, search } = req.query;
     const filter = {};
 
     if (department && department !== "all") filter.department = department.trim();
     if (designation && designation !== "all") filter.designation = { $regex: designation.trim(), $options: "i" };
     if (status && status !== "all") filter.status = status.toLowerCase().trim();
+    if (jobLevel && jobLevel !== "all") filter.jobLevel = jobLevel.trim(); // ✅ filter by jobLevel
+
     if (search) {
       const term = search.trim();
       filter.$or = [
@@ -113,13 +139,14 @@ exports.getEmployeeDirectory = async (req, res) => {
     }
 
     const employees = await User.find(filter)
-      .select("_id employeeId name email contact department designation role status doj shift shiftType")
+      .select("_id employeeId name email contact department designation jobLevel role status doj shift shiftType")
       .sort({ name: 1 });
 
-    const employeesWithStatus = employees.map(emp => ({
+    const employeesWithStatus = employees.map((emp) => ({
       ...emp.toObject(),
       status: emp.status || "inactive",
       shiftType: emp.shiftType || "standard",
+      jobLevel: emp.jobLevel || "junior",
     }));
 
     res.json(employeesWithStatus);
@@ -134,7 +161,7 @@ exports.getEmployeeDirectory = async (req, res) => {
 // ======================
 exports.getAllUsers = async (req, res) => {
   try {
-    const users = await User.find().select("_id name email role department designation employeeId dob doj shift shiftType");
+    const users = await User.find().select("_id name email role department designation employeeId dob doj shift shiftType jobLevel");
     res.json(users);
   } catch (err) {
     console.error("Error fetching users:", err);
@@ -154,8 +181,8 @@ exports.getMe = async (req, res) => {
     if (!user) return res.status(404).json({ message: "User not found" });
 
     const tasks = await Task.find({ $or: [{ assignedTo: userId }, { assignedBy: userId }] });
-    const tasksCompleted = tasks.filter(t => t.status === "completed").length;
-    const ongoingProjects = tasks.filter(t => t.status === "pending" || t.status === "in-progress").length;
+    const tasksCompleted = tasks.filter((t) => t.status === "completed").length;
+    const ongoingProjects = tasks.filter((t) => t.status === "pending" || t.status === "in-progress").length;
 
     const today = new Date();
     const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
@@ -166,7 +193,10 @@ exports.getMe = async (req, res) => {
       "period.start": { $gte: monthStart, $lte: monthEnd },
     });
     const totalDays = monthEnd.getDate();
-    const attendancePercent = Math.max(0, Math.round(((totalDays - approvedLeaves.length) / totalDays) * 100));
+    const attendancePercent = Math.max(
+      0,
+      Math.round(((totalDays - approvedLeaves.length) / totalDays) * 100)
+    );
 
     res.json({
       id: user._id,
@@ -179,11 +209,12 @@ exports.getMe = async (req, res) => {
       role: user.role,
       department: user.department,
       designation: user.designation,
+      jobLevel: user.jobLevel || "junior", // ✅ include jobLevel
       doj: user.doj,
       bloodGroup: user.bloodGroup,
       permanentAddress: user.permanentAddress,
       currentAddress: user.currentAddress,
-      emergencyNo: user.emergencyNo,
+      emergencyContact: user.emergencyContact,
       ps: user.ps,
       salary: user.salary,
       ref: user.ref,
@@ -197,6 +228,8 @@ exports.getMe = async (req, res) => {
       attendancePercent,
       shift: user.shift || null,
       shiftType: user.shiftType || "standard",
+      skills: user.skills || [],
+      qualifications: user.qualifications || [],
     });
   } catch (err) {
     console.error("GetMe Error:", err);
@@ -217,11 +250,29 @@ exports.getEmployeeById = async (req, res) => {
       ...user,
       status: user.status || "inactive",
       shiftType: user.shiftType || "standard",
-      personalInfo: { dob: user.dob || "", gender: user.gender || "", nationality: user.nationality || "" },
-      contactInfo: { email: user.email || "", phone: user.contact || "", address: user.currentAddress || "" },
-      employmentDetails: { designation: user.designation || "", department: user.department || "", dateOfJoining: user.doj || "", status: user.status || "inactive", shift: user.shift || null },
-      salary: { basic: user.salary || 0, total: user.salary || 0, paymentMode: user.paymentMode || "bank" },
-      qualifications: { education: user.qualifications || [], skills: user.skills || [] },
+      jobLevel: user.jobLevel || "junior", // ✅ include jobLevel
+      personalInfo: {
+        dob: user.dob || "",
+        gender: user.gender || "",
+        nationality: user.nationality || "",
+      },
+      contactInfo: {
+        email: user.email || "",
+        phone: user.contact || "",
+        address: user.currentAddress || "",
+        emergencyContact: user.emergencyContact || "",
+      },
+      employmentDetails: {
+        designation: user.designation || "",
+        department: user.department || "",
+        jobLevel: user.jobLevel || "junior", // ✅ include in employment details
+        dateOfJoining: user.doj || "",
+        status: user.status || "inactive",
+        shift: user.shift || null,
+      },
+      salary: user.salary || { basic: 0, total: 0, paymentMode: "bank" },
+      qualifications: user.qualifications || [],
+      skills: user.skills || [],
     });
   } catch (err) {
     console.error("Error fetching employee by ID:", err);
@@ -237,7 +288,8 @@ exports.updateEmployeeStatus = async (req, res) => {
     const userId = req.params.id;
     const { status } = req.body;
 
-    if (!["active", "inactive"].includes(status)) return res.status(400).json({ message: "Invalid status value" });
+    if (!["active", "inactive"].includes(status))
+      return res.status(400).json({ message: "Invalid status value" });
 
     const user = await User.findByIdAndUpdate(userId, { status }, { new: true });
     if (!user) return res.status(404).json({ message: "User not found" });

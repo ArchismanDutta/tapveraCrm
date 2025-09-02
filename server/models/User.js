@@ -16,6 +16,15 @@ const qualificationSchema = new mongoose.Schema({
 });
 
 // ======================
+// Sub-schema: Salary
+// ======================
+const salarySchema = new mongoose.Schema({
+  basic: { type: Number, default: 0, min: 0 },
+  total: { type: Number, default: 0, min: 0 },
+  paymentMode: { type: String, enum: ["bank", "cash"], default: "bank" },
+});
+
+// ======================
 // Sub-schema: Shift Timing
 // ======================
 const shiftSchema = new mongoose.Schema({
@@ -34,13 +43,13 @@ const shiftSchema = new mongoose.Schema({
     trim: true,
     default: "18:00",
     validate: {
-      validator: function (v) {
+      validator: function () {
         if (!this.start) return true;
         const [startH, startM] = this.start.split(":").map(Number);
-        const [endH, endM] = v.split(":").map(Number);
+        const [endH, endM] = this.end.split(":").map(Number);
         return endH > startH || (endH === startH && endM > startM);
       },
-      message: "Shift end time must be after start time",
+      message: "Shift end must be after start time",
     },
   },
   durationHours: { type: Number, default: 9, min: 1, max: 24 },
@@ -91,7 +100,7 @@ const userSchema = new mongoose.Schema(
     bloodGroup: { type: String, trim: true },
     permanentAddress: { type: String, trim: true },
     currentAddress: { type: String, trim: true },
-    emergencyNo: { type: String, trim: true },
+    emergencyContact: { type: String, trim: true }, // ✅ renamed (was emergencyNo)
     ps: { type: String, trim: true },
     doj: {
       type: Date,
@@ -101,7 +110,7 @@ const userSchema = new mongoose.Schema(
         message: "Date of joining cannot be in the future",
       },
     },
-    salary: { type: Number, default: 0, min: 0 },
+    salary: { type: salarySchema, default: () => ({}) }, // ✅ changed from Number → Object
     ref: { type: String, trim: true },
     status: {
       type: String,
@@ -127,6 +136,14 @@ const userSchema = new mongoose.Schema(
       default: "",
     },
     designation: { type: String, trim: true, default: "" },
+
+    // ✅ NEW FIELD: Job Level
+    jobLevel: {
+      type: String,
+      enum: ["intern", "junior", "mid", "senior", "lead", "director", "executive"],
+      default: "junior",
+    },
+
     employmentType: {
       type: String,
       enum: ["full-time", "part-time", "contract", "internship"],
@@ -139,23 +156,13 @@ const userSchema = new mongoose.Schema(
     location: { type: String, trim: true, default: "India" },
     avatar: { type: String, trim: true, default: "" },
 
-    // ======================
-    // Shift Type: standard/flexible/flexiblePermanent
-    // ======================
     shiftType: {
       type: String,
       enum: ["standard", "flexible", "flexiblePermanent"],
       default: "standard",
     },
-
-    // ======================
-    // Shift Timing (Strict/Flexible)
-    // ======================
     shift: { type: shiftSchema, default: () => ({}) },
 
-    // ======================
-    // Flexible Shift Requests
-    // ======================
     flexibleShiftRequests: [
       {
         type: mongoose.Schema.Types.ObjectId,
@@ -166,9 +173,7 @@ const userSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// ======================
-// Remove sensitive fields in JSON/Objects
-// ======================
+// Remove sensitive fields
 userSchema.set("toJSON", {
   transform: (doc, ret) => {
     delete ret.password;
@@ -184,7 +189,4 @@ userSchema.set("toObject", {
   },
 });
 
-// ======================
-// Export the User Model
-// ======================
 module.exports = mongoose.model("User", userSchema);
