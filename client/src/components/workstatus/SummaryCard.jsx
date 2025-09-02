@@ -7,6 +7,13 @@ const parseTimeStrToMinutes = (timeStr) => {
   return (h || 0) * 60 + (m || 0);
 };
 
+// Helper: format minutes back to "Hh Mm"
+const formatMinutesToHoursStr = (mins) => {
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return `${h}h ${m}m`;
+};
+
 const SummaryCard = ({ weeklySummary, dailyData }) => {
   if (!weeklySummary) {
     return (
@@ -19,17 +26,10 @@ const SummaryCard = ({ weeklySummary, dailyData }) => {
     );
   }
 
-  const {
-    totalWork,
-    avgDailyWork,
-    totalBreak,
-    avgDailyBreak,
-    onTimeRate,
-    breaksTaken,
-  } = weeklySummary;
+  const { totalWork, avgDailyWork, totalBreak, avgDailyBreak, onTimeRate, breaksTaken } = weeklySummary;
 
   // -------------------------
-  // Recalculate quick stats dynamically
+  // Recalculate quick stats dynamically from dailyData
   // -------------------------
   let earlyArrivals = 0;
   let lateArrivals = 0;
@@ -40,6 +40,7 @@ const SummaryCard = ({ weeklySummary, dailyData }) => {
       if (!day.arrivalTime) return;
 
       const arrival = new Date(day.arrivalTime);
+
       const expectedStart = day.effectiveShift?.start || day.expectedStartTime || "09:00";
       const [expH, expM] = expectedStart.split(":").map(Number);
       const expected = new Date(arrival);
@@ -48,8 +49,16 @@ const SummaryCard = ({ weeklySummary, dailyData }) => {
       if (arrival <= expected) earlyArrivals++;
       else lateArrivals++;
 
+      // Determine work duration in minutes
+      let workMins = 0;
+      if (day.workDurationSeconds != null) {
+        workMins = Math.floor(day.workDurationSeconds / 60);
+      } else if (day.workDuration) {
+        workMins = parseTimeStrToMinutes(day.workDuration);
+      }
+
       // Perfect day: >= 8h work & arrived on time (before 9am)
-      if ((day.workDurationSeconds || 0) >= 8 * 3600 && arrival.getHours() <= 9) {
+      if (workMins >= 480 && arrival.getHours() <= 9) {
         perfectDays++;
       }
     });
@@ -68,32 +77,32 @@ const SummaryCard = ({ weeklySummary, dailyData }) => {
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
         <div className="bg-[#232945] p-4 rounded-lg flex flex-col items-center justify-center hover:bg-[#2a3050] transition-colors">
           <p className="text-gray-400 text-xs uppercase tracking-wider">Total Hours</p>
-          <p className="text-orange-400 text-xl font-bold">{totalWork}</p>
+          <p className="text-orange-400 text-xl font-bold">{totalWork || "0h 0m"}</p>
         </div>
 
         <div className="bg-[#232945] p-4 rounded-lg flex flex-col items-center justify-center hover:bg-[#2a3050] transition-colors">
           <p className="text-gray-400 text-xs uppercase tracking-wider">Avg. Daily Work</p>
-          <p className="text-orange-400 text-xl font-bold">{avgDailyWork}</p>
+          <p className="text-orange-400 text-xl font-bold">{avgDailyWork || "0h 0m"}</p>
         </div>
 
         <div className="bg-[#232945] p-4 rounded-lg flex flex-col items-center justify-center hover:bg-[#2a3050] transition-colors">
           <p className="text-gray-400 text-xs uppercase tracking-wider">Total Break</p>
-          <p className="text-orange-400 text-xl font-bold">{totalBreak}</p>
+          <p className="text-orange-400 text-xl font-bold">{totalBreak || "0h 0m"}</p>
         </div>
 
         <div className="bg-[#232945] p-4 rounded-lg flex flex-col items-center justify-center hover:bg-[#2a3050] transition-colors">
           <p className="text-gray-400 text-xs uppercase tracking-wider">Avg. Daily Break</p>
-          <p className="text-orange-400 text-xl font-bold">{avgDailyBreak}</p>
+          <p className="text-orange-400 text-xl font-bold">{avgDailyBreak || "0h 0m"}</p>
         </div>
 
         <div className="bg-[#232945] p-4 rounded-lg flex flex-col items-center justify-center hover:bg-[#2a3050] transition-colors">
           <p className="text-gray-400 text-xs uppercase tracking-wider">On-Time Rate</p>
-          <p className="text-orange-400 text-xl font-bold">{onTimeRate}</p>
+          <p className="text-orange-400 text-xl font-bold">{onTimeRate != null ? `${onTimeRate}%` : "0%"}</p>
         </div>
 
         <div className="bg-[#232945] p-4 rounded-lg flex flex-col items-center justify-center hover:bg-[#2a3050] transition-colors">
           <p className="text-gray-400 text-xs uppercase tracking-wider">Breaks Taken</p>
-          <p className="text-orange-400 text-xl font-bold">{breaksTaken}</p>
+          <p className="text-orange-400 text-xl font-bold">{breaksTaken != null ? breaksTaken : 0}</p>
         </div>
       </div>
 

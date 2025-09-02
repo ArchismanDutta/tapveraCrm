@@ -157,13 +157,15 @@ const TaskForm = ({ onCreate }) => {
       {/* Date + Time Picker */}
       <div className="flex gap-3">
         {/* Date */}
-        <input
-          type="date"
-          className={commonInputClasses}
-          value={task.dueDate}
-          onChange={(e) => setTask({ ...task, dueDate: e.target.value })}
-          required
-        />
+<input
+  type="date"
+  className={commonInputClasses}
+  value={task.dueDate}
+  onChange={(e) => setTask({ ...task, dueDate: e.target.value })}
+  required
+  min={new Date().toISOString().split("T")[0]} // <-- Prevent past dates
+/>
+
 
         {/* Time */}
         <div className="relative w-full" ref={timeRef}>
