@@ -31,7 +31,7 @@ const TodayStatusPage = ({ onLogout }) => {
   const [liveBreak, setLiveBreak] = useState(0);
   const [selectedBreakType, setSelectedBreakType] = useState("");
   const [weeklySummary, setWeeklySummary] = useState(null);
-  const [dailyData, setDailyData] = useState([]); // Added dailyData state
+  const [dailyData, setDailyData] = useState([]);
 
   const [showTodoPopup, setShowTodoPopup] = useState(false);
   const [pendingTodoTasks, setPendingTodoTasks] = useState([]);
@@ -77,13 +77,13 @@ const TodayStatusPage = ({ onLogout }) => {
         params: { startDate: monday.toISOString(), endDate: sunday.toISOString() },
       });
       setWeeklySummary(res.data?.weeklySummary || null);
-      setDailyData(res.data?.dailyData || []); // Store dailyData for SummaryCard
+      setDailyData(res.data?.dailyData || []);
     } catch (err) {
       console.error("Failed to fetch weekly summary:", err);
     }
   };
 
-  // --- Fetch Employee Flexible Requests ---
+  // --- Fetch Flexible Requests ---
   const fetchFlexibleRequests = async () => {
     try {
       const res = await axios.get(`${API_BASE}/api/flexible-shifts/my-requests`, axiosConfig);
@@ -93,7 +93,7 @@ const TodayStatusPage = ({ onLogout }) => {
     }
   };
 
-  // --- Update Status (Safe payload) ---
+  // --- Update Status ---
   const updateStatus = async (update) => {
     if (!status) return;
     try {
@@ -359,6 +359,7 @@ const TodayStatusPage = ({ onLogout }) => {
           <PunchOutConfirmPopup onCancel={onCancelPunchOut} onConfirm={onConfirmPunchOut} />
         )}
 
+        {/* --- Flexible Shift Modal --- */}
         {showFlexibleModal && (
           <div
             className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 overflow-auto"
@@ -368,8 +369,66 @@ const TodayStatusPage = ({ onLogout }) => {
               className="bg-[#0f1724] text-gray-100 rounded-lg shadow-lg w-full max-w-md p-6 max-h-[80vh] overflow-auto"
               onClick={(e) => e.stopPropagation()}
             >
-              {/* Flexible Shift Modal Content */}
-              {/* ... unchanged ... */}
+              <h2 className="text-xl font-semibold mb-4">Request Flexible Shift</h2>
+              <form className="flex flex-col gap-4" onSubmit={submitFlexibleRequest}>
+                <label className="flex flex-col gap-1">
+                  Date:
+                  <input
+                    type="date"
+                    className="w-full rounded bg-gray-800 text-white px-2 py-1"
+                    value={requestDate}
+                    onChange={(e) => setRequestDate(e.target.value)}
+                    required
+                  />
+                </label>
+                <label className="flex flex-col gap-1">
+                  Start Time:
+                  <input
+                    type="time"
+                    className="w-full rounded bg-gray-800 text-white px-2 py-1"
+                    value={requestStartTime}
+                    onChange={(e) => setRequestStartTime(e.target.value)}
+                    required
+                  />
+                </label>
+                <label className="flex flex-col gap-1">
+                  Duration (hours):
+                  <input
+                    type="number"
+                    min={1}
+                    max={24}
+                    className="w-full rounded bg-gray-800 text-white px-2 py-1"
+                    value={requestDurationHours}
+                    onChange={(e) => setRequestDurationHours(e.target.value)}
+                    required
+                  />
+                </label>
+                <label className="flex flex-col gap-1">
+                  Reason:
+                  <textarea
+                    className="w-full rounded bg-gray-800 text-white px-2 py-1"
+                    value={requestReason}
+                    onChange={(e) => setRequestReason(e.target.value)}
+                  />
+                </label>
+
+                <div className="flex justify-end gap-2 mt-2">
+                  <button
+                    type="button"
+                    onClick={closeFlexibleModal}
+                    className="px-4 py-2 bg-gray-600 rounded hover:bg-gray-500"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSubmittingRequest}
+                    className="px-4 py-2 bg-blue-600 rounded hover:bg-blue-700 text-white"
+                  >
+                    {isSubmittingRequest ? "Submitting..." : "Submit"}
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
         )}
