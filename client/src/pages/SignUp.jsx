@@ -20,6 +20,7 @@ const Signup = () => {
     gender: "",
     department: "",
     designation: "",
+    jobLevel: "", // <-- added jobLevel
     location: "India",
     password: "",
     bloodGroup: "",
@@ -40,6 +41,7 @@ const Signup = () => {
     shift: { start: "09:00", end: "18:00" },
   });
 
+  // Controlled input for skills as string, later converted to array
   const [skillsInput, setSkillsInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [role, setRole] = useState(null);
@@ -88,10 +90,9 @@ const Signup = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    console.log("Form submitted", form); // DEBUGGING
-
     setLoading(true);
 
+    // Validate required fields
     const requiredFields = ["employeeId", "name", "email", "contact", "dob", "gender", "password", "doj"];
     const isIncomplete = requiredFields.some((field) => !String(form[field] || "").trim());
 
@@ -101,28 +102,40 @@ const Signup = () => {
       return;
     }
 
-    const skillsArray = skillsInput.split(",").map((s) => s.trim()).filter(Boolean);
+    // Convert skillsInput (comma separated string) to array, trimming each skill
+    const skillsArray = skillsInput
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean); // filter out empty strings
 
+    // Filter out empty qualification entries
     const validQualifications = form.qualifications.filter(
       (q) => q.school || q.degree || q.marks || q.year
     );
 
+    // Prepare final payload
     let payload = {
       ...form,
       skills: skillsArray,
       qualifications: validQualifications,
       totalPl: Number(form.totalPl),
       salary: Number(form.salary),
+      jobLevel: form.jobLevel || "", // include job level
+      // Map emergencyNo -> emergencyContact so backend gets expected key
+      emergencyContact: form.emergencyNo || "",
     };
 
-    if (form.shiftType === "flexible") delete payload.shift;
+    // Remove shift field if shiftType is 'flexible' or 'flexiblePermanent'
+    if (form.shiftType !== "standard") {
+      delete payload.shift;
+    }
 
     try {
       const token = localStorage.getItem("token");
-      console.log("Auth token:", token); // DEBUGGING
       if (!token) {
         toast.error("No auth token found. Please login again.");
         navigate("/login");
+        setLoading(false);
         return;
       }
 
@@ -157,7 +170,9 @@ const Signup = () => {
     }
   };
 
+  // Prepare today's date to set max for date inputs
   const todayISO = new Date().toISOString().split("T")[0];
+
   if (!["hr", "admin", "super-admin"].includes(role)) return null;
 
   return (
@@ -168,20 +183,71 @@ const Signup = () => {
         <form onSubmit={handleSubmit} className="space-y-5" noValidate>
           {/* Basic Info */}
           <div className="space-y-3">
-            <AuthInput label="Employee ID *" type="text" name="employeeId" value={form.employeeId} onChange={handleChange} placeholder="Enter employee ID" required icon={FaUser} />
-            <AuthInput label="Full Name *" type="text" name="name" value={form.name} onChange={handleChange} placeholder="Enter full name" required icon={FaUser} />
-            <AuthInput label="Email Address *" type="email" name="email" value={form.email} onChange={handleChange} placeholder="Enter email" required icon={FaEnvelope} />
-            <AuthInput label="Contact Number *" type="tel" name="contact" value={form.contact} onChange={handleChange} placeholder="Enter contact number" required icon={FaPhone} />
+            <AuthInput
+              label="Employee ID *"
+              type="text"
+              name="employeeId"
+              value={form.employeeId}
+              onChange={handleChange}
+              placeholder="Enter employee ID"
+              required
+              icon={FaUser}
+            />
+            <AuthInput
+              label="Full Name *"
+              type="text"
+              name="name"
+              value={form.name}
+              onChange={handleChange}
+              placeholder="Enter full name"
+              required
+              icon={FaUser}
+            />
+            <AuthInput
+              label="Email Address *"
+              type="email"
+              name="email"
+              value={form.email}
+              onChange={handleChange}
+              placeholder="Enter email"
+              required
+              icon={FaEnvelope}
+            />
+            <AuthInput
+              label="Contact Number *"
+              type="tel"
+              name="contact"
+              value={form.contact}
+              onChange={handleChange}
+              placeholder="Enter contact number"
+              required
+              icon={FaPhone}
+            />
           </div>
+
           {/* Date of Birth & Gender */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm text-textMuted mb-1">Date of Birth *</label>
-              <input type="date" name="dob" value={form.dob} onChange={handleChange} max={todayISO} className="w-full px-4 py-2 border border-border rounded-md" required />
+              <input
+                type="date"
+                name="dob"
+                value={form.dob}
+                max={todayISO}
+                onChange={handleChange}
+                className="w-full px-4 py-2 border border-border rounded-md"
+                required
+              />
             </div>
             <div>
               <label className="block text-sm text-textMuted mb-1">Gender *</label>
-              <select name="gender" value={form.gender} onChange={handleChange} className="w-full px-4 py-2 border border-border rounded-md" required>
+              <select
+                name="gender"
+                value={form.gender}
+                onChange={handleChange}
+                className="w-full px-4 py-2 border border-border rounded-md"
+                required
+              >
                 <option value="">Select gender</option>
                 <option value="male">Male</option>
                 <option value="female">Female</option>
@@ -189,20 +255,62 @@ const Signup = () => {
               </select>
             </div>
           </div>
-          {/* Department & Designation */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+          {/* Department, Designation & Job Level */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label className="block text-sm text-textMuted mb-1">Department</label>
-              <select name="department" value={form.department} onChange={handleChange} className="w-full px-4 py-2 border border-border rounded-md">
+              <select
+                name="department"
+                value={form.department}
+                onChange={handleChange}
+                className="w-full px-4 py-2 border border-border rounded-md"
+              >
                 <option value="">Select a department</option>
                 <option value="development">Development</option>
                 <option value="marketingAndSales">Marketing & Sales</option>
                 <option value="humanResource">Human Resource</option>
               </select>
             </div>
-            <AuthInput label="Designation" type="text" name="designation" value={form.designation} onChange={handleChange} placeholder="Enter designation" />
+
+            <AuthInput
+              label="Designation"
+              type="text"
+              name="designation"
+              value={form.designation}
+              onChange={handleChange}
+              placeholder="Enter designation"
+            />
+
+            <div>
+              <label className="block text-sm text-textMuted mb-1">Job Level</label>
+              <select
+                name="jobLevel"
+                value={form.jobLevel}
+                onChange={handleChange}
+                className="w-full px-4 py-2 border border-border rounded-md"
+              >
+                <option value="">Select job level</option>
+                <option value="intern">Intern</option>
+                <option value="junior">Junior</option>
+                <option value="mid">Mid</option>
+                <option value="senior">Senior</option>
+                <option value="lead">Lead</option>
+                <option value="manager">Manager</option>
+                <option value="director">Director</option>
+              </select>
+            </div>
           </div>
-          <AuthInput label="Location" type="text" name="location" value={form.location} onChange={handleChange} placeholder="Enter location" />
+
+          <AuthInput
+            label="Location"
+            type="text"
+            name="location"
+            value={form.location}
+            onChange={handleChange}
+            placeholder="Enter location"
+          />
+
           {/* Optional Personal Info */}
           <div className="space-y-3">
             <AuthInput label="Blood Group" type="text" name="bloodGroup" value={form.bloodGroup} onChange={handleChange} />
@@ -211,15 +319,26 @@ const Signup = () => {
             <AuthInput label="Emergency Number" type="tel" name="emergencyNo" value={form.emergencyNo} onChange={handleChange} />
             <AuthInput label="P.S." type="text" name="ps" value={form.ps} onChange={handleChange} />
           </div>
+
           {/* Joining & Salary */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm text-textMuted mb-1">Date of Joining *</label>
-              <input type="date" name="doj" value={form.doj} onChange={handleChange} max={todayISO} className="w-full px-4 py-2 border border-border rounded-md" required />
+              <input
+                type="date"
+                name="doj"
+                value={form.doj}
+                max={todayISO}
+                onChange={handleChange}
+                className="w-full px-4 py-2 border border-border rounded-md"
+                required
+              />
             </div>
             <AuthInput label="Salary" type="number" name="salary" value={form.salary} onChange={handleChange} />
           </div>
+
           <AuthInput label="Reference" type="text" name="ref" value={form.ref} onChange={handleChange} />
+
           {/* Status & Total PL */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
@@ -231,7 +350,20 @@ const Signup = () => {
             </div>
             <AuthInput label="Total PL" type="number" name="totalPl" value={form.totalPl} onChange={handleChange} />
           </div>
-          <AuthInput label="Password *" type="password" name="password" value={form.password} onChange={handleChange} placeholder="Create a password" autoComplete="new-password" required showTogglePassword icon={FaLock} />
+
+          <AuthInput
+            label="Password *"
+            type="password"
+            name="password"
+            value={form.password}
+            onChange={handleChange}
+            placeholder="Create a password"
+            autoComplete="new-password"
+            required
+            showTogglePassword
+            icon={FaLock}
+          />
+
           {/* Employment Type & Skills */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
@@ -243,15 +375,19 @@ const Signup = () => {
                 <option value="internship">Internship</option>
               </select>
             </div>
-            <AuthInput
-              label="Skills (comma separated)"
-              type="text"
-              name="skills"
-              value={skillsInput}
-              onChange={(e) => setSkillsInput(e.target.value)}
-              placeholder="e.g. JavaScript, React, Node.js"
-            />
+            <div>
+              <label className="block text-sm text-textMuted mb-1">Skills (comma separated)</label>
+              <input
+                type="text"
+                name="skills"
+                value={skillsInput}
+                onChange={(e) => setSkillsInput(e.target.value)}
+                placeholder="e.g. JavaScript, React, Node.js"
+                className="w-full px-4 py-2 border border-border rounded-md"
+              />
+            </div>
           </div>
+
           {/* Shift Type Selection */}
           <div>
             <label className="block text-sm text-textMuted mb-1">Shift Type</label>
@@ -266,6 +402,7 @@ const Signup = () => {
               <option value="flexiblePermanent">Permanent Flexible Shift</option>
             </select>
           </div>
+
           {/* Shift Timing only if Standard */}
           {form.shiftType === "standard" && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
@@ -289,6 +426,7 @@ const Signup = () => {
               </div>
             </div>
           )}
+
           {/* Qualification Section */}
           <div className="space-y-4">
             <h3 className="text-lg font-semibold text-textMain">Qualification Details</h3>
@@ -303,10 +441,34 @@ const Signup = () => {
                   )}
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <input type="text" value={q.school} onChange={(e) => handleQualificationChange(index, "school", e.target.value)} placeholder="School/University" className="w-full px-3 py-2 border border-border rounded-md" />
-                  <input type="text" value={q.degree} onChange={(e) => handleQualificationChange(index, "degree", e.target.value)} placeholder="Degree/Certification" className="w-full px-3 py-2 border border-border rounded-md" />
-                  <input type="text" value={q.marks} onChange={(e) => handleQualificationChange(index, "marks", e.target.value)} placeholder="Marks/Percentage" className="w-full px-3 py-2 border border-border rounded-md" />
-                  <input type="number" value={q.year} onChange={(e) => handleQualificationChange(index, "year", e.target.value)} placeholder="Year of Passing" className="w-full px-3 py-2 border border-border rounded-md" />
+                  <input
+                    type="text"
+                    value={q.school}
+                    onChange={(e) => handleQualificationChange(index, "school", e.target.value)}
+                    placeholder="School/University"
+                    className="w-full px-3 py-2 border border-border rounded-md"
+                  />
+                  <input
+                    type="text"
+                    value={q.degree}
+                    onChange={(e) => handleQualificationChange(index, "degree", e.target.value)}
+                    placeholder="Degree/Certification"
+                    className="w-full px-3 py-2 border border-border rounded-md"
+                  />
+                  <input
+                    type="text"
+                    value={q.marks}
+                    onChange={(e) => handleQualificationChange(index, "marks", e.target.value)}
+                    placeholder="Marks/Percentage"
+                    className="w-full px-3 py-2 border border-border rounded-md"
+                  />
+                  <input
+                    type="number"
+                    value={q.year}
+                    onChange={(e) => handleQualificationChange(index, "year", e.target.value)}
+                    placeholder="Year of Passing"
+                    className="w-full px-3 py-2 border border-border rounded-md"
+                  />
                 </div>
               </div>
             ))}
@@ -314,12 +476,14 @@ const Signup = () => {
               + Add Qualification
             </button>
           </div>
+
           {/* Optional Email Setup */}
           <div className="mt-6 pt-4 border-t border-border space-y-3">
             <h3 className="text-lg font-semibold text-textMain">Optional: Email Setup</h3>
             <AuthInput label="Work Email" type="email" name="outlookEmail" value={form.outlookEmail} onChange={handleChange} icon={FaEnvelope} />
             <AuthInput label="Email App Password" type="password" name="outlookAppPassword" value={form.outlookAppPassword} onChange={handleChange} showTogglePassword icon={FaLock} />
           </div>
+
           <button type="submit" disabled={loading} className="w-full py-2 rounded-md bg-yellow-300 hover:bg-orange-500 hover:text-white transition text-background font-semibold shadow disabled:opacity-50">
             {loading ? "Creating Account..." : "Register Employee"}
           </button>
