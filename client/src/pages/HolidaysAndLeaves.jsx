@@ -6,6 +6,7 @@ import HolidayList from "../components/leaves/HolidayList";
 import TeamLeaveCalendar from "../components/leaves/TeamLeaveCalendar";
 import Sidebar from "../components/dashboard/Sidebar";
 import { fetchLeavesForEmployee, submitLeaveRequest } from "../api/leaveApi";
+import axios from "axios";
 
 const MAX_REQUESTS = 4;
 const POLL_INTERVAL = 5000; // 5 seconds
@@ -14,8 +15,13 @@ const HolidaysAndLeaves = ({ onLogout }) => {
   const [collapsed, setCollapsed] = useState(false);
   const [leaveSummary, setLeaveSummary] = useState({ available: 18, taken: 0, pending: 0 });
   const [leaveRequests, setLeaveRequests] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [loadingLeaves, setLoadingLeaves] = useState(true);
+  const [errorLeaves, setErrorLeaves] = useState(null);
+
+  const [holidays, setHolidays] = useState([]);
+  const [loadingHolidays, setLoadingHolidays] = useState(true);
+  const [errorHolidays, setErrorHolidays] = useState(null);
+
   const pollingRef = useRef(null);
 
   const importantNotices = [
@@ -25,12 +31,6 @@ const HolidaysAndLeaves = ({ onLogout }) => {
     "Sudden sick leave needs to reported the same day with supporting documents.",
     "Uninformed leave of more than 3 days is regarded as absconding.",
     "Confirmed employees not taking leaves are eligible for encashment after 6 months.",
-  ];
-
-  const holidays = [
-    { name: "Halloween", date: "Oct 31", type: "Public Holiday" },
-    { name: "Thanksgiving", date: "Nov 23", type: "Public Holiday" },
-    { name: "Black Friday", date: "Nov 24", type: "Public Holiday" },
   ];
 
   // Fetch leaves and update summary
@@ -48,18 +48,39 @@ const HolidaysAndLeaves = ({ onLogout }) => {
         taken: takenLeaves,
         pending: pendingLeaves,
       });
-      setLoading(false);
-      setError(null);
+      setErrorLeaves(null);
     } catch (err) {
-      setError(err.message || "Failed to fetch leave requests");
-      setLoading(false);
+      setErrorLeaves(err.message || "Failed to fetch leave requests");
+    } finally {
+      setLoadingLeaves(false);
     }
   };
 
-  // Initial load + polling
+  // Fetch holidays from backend
+  const loadHolidays = async () => {
+    try {
+      setLoadingHolidays(true);
+      const res = await axios.get("/api/holidays?shift=ALL");
+      const data = res.data.map((h) => ({
+        name: h.name,
+        date: new Date(h.date).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }),
+        type: h.type,
+      }));
+      setHolidays(data);
+      setErrorHolidays(null);
+    } catch (err) {
+      console.error("Failed to fetch holidays:", err);
+      setHolidays([]);
+      setErrorHolidays("Failed to load holidays");
+    } finally {
+      setLoadingHolidays(false);
+    }
+  };
+
+  // Initial load + polling for leaves
   useEffect(() => {
-    setLoading(true);
     loadLeaves();
+    loadHolidays();
     pollingRef.current = setInterval(loadLeaves, POLL_INTERVAL);
 
     return () => clearInterval(pollingRef.current);
@@ -76,23 +97,25 @@ const HolidaysAndLeaves = ({ onLogout }) => {
         taken: prev.taken,
         pending: prev.pending + 1,
       }));
-      setError(null);
+      setErrorLeaves(null);
     } catch (err) {
       console.error(err);
-      setError(err.message || "Failed to submit leave request");
+      setErrorLeaves(err.message || "Failed to submit leave request");
     }
   };
 
-  if (loading)
+  // Global loading/error
+  if (loadingLeaves && loadingHolidays)
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#141a29] via-[#181d2a] to-[#1b2233] text-blue-100 font-medium text-lg">
-        Loading your leave data...
+        Loading your leave and holiday data...
       </div>
     );
-  if (error)
+  if (errorLeaves || errorHolidays)
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#141a29] via-[#181d2a] to-[#1b2233] text-red-600 font-semibold text-lg">
-        Error: {error}
+      <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-[#141a29] via-[#181d2a] to-[#1b2233] text-red-600 font-semibold text-lg">
+        {errorLeaves && <p>Error fetching leaves: {errorLeaves}</p>}
+        {errorHolidays && <p>Error fetching holidays: {errorHolidays}</p>}
       </div>
     );
 
