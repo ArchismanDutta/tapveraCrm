@@ -1,28 +1,13 @@
 import React from "react";
 
-const ContactInfo = ({ info = {} }) => {
-  const { email = "N/A", phone = "N/A", address = "N/A" } = info;
-
-  return (
-    <div
-      className="border border-[#2a2d48] rounded-2xl shadow-xl p-8 bg-gradient-to-tr from-[#1a1e2c] to-[#222734] 
-                 hover:shadow-3xl transition-shadow duration-500 transform hover:-translate-y-1 text-white"
-      style={{ backdropFilter: "blur(10px)" }}
-    >
-      <h2 className="text-3xl font-extrabold text-indigo-400 mb-6 tracking-wide uppercase drop-shadow-sm">
-        Contact Information
-      </h2>
-      <p className="text-gray-300 text-lg mb-3">
-        <strong className="text-indigo-400">Email:</strong> {email}
-      </p>
-      <p className="text-gray-300 text-lg mb-3">
-        <strong className="text-indigo-400">Phone:</strong> {phone}
-      </p>
-      <p className="text-gray-300 text-lg">
-        <strong className="text-indigo-400">Address:</strong> {address}
-      </p>
-    </div>
-  );
-};
+const ContactInfo = ({ info }) => (
+  <div className="p-6 rounded-2xl shadow border border-[#283255] bg-[#181f34] text-blue-100">
+    <h3 className="text-xl font-semibold text-blue-300 mb-3">📞 Contact Info</h3>
+    <p><strong>Email:</strong> {info.email || "N/A"}</p>
+    <p><strong>Phone:</strong> {info.phone || "N/A"}</p>
+    <p><strong>Address:</strong> {info.address || "N/A"}</p>
+    <p><strong>Emergency Contact:</strong> {info.emergencyContact || "N/A"}</p>
+  </div>
+);
 
 export default ContactInfo;

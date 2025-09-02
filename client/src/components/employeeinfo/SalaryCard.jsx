@@ -1,28 +1,21 @@
 import React from "react";
 
-const SalaryCard = ({ salary = {} }) => {
-  const { basic = 0, total = 0, paymentMode = "N/A" } = salary;
+const SalaryCard = ({ salary }) => {
+  const totalSalary = salary?.total || salary?.basic || 0;
 
   return (
-    <div
-      className="border border-green-700 rounded-3xl shadow-2xl p-8
-                 bg-gradient-to-r from-green-900/20 to-green-800/20
-                 hover:from-green-900/30 hover:to-green-800/30
-                 transition-all duration-400 transform hover:-translate-y-1"
-      style={{ backdropFilter: "blur(12px)" }}
-    >
-      <h2 className="text-3xl font-extrabold text-green-300 mb-6 tracking-widest drop-shadow-md">
-        Salary &amp; Benefits
-      </h2>
-      <p className="text-green-100 text-lg mb-5">
-        <strong className="font-semibold">Basic:</strong> ${basic.toLocaleString()}
+    <div className="p-6 rounded-2xl shadow border border-[#283255] bg-[#181f34] text-blue-100">
+      <h3 className="text-xl font-semibold text-blue-300 mb-3">💰 Salary</h3>
+      <p className="text-blue-100 text-lg font-medium">
+        {totalSalary > 0
+          ? `₹${totalSalary.toLocaleString("en-IN")}`
+          : "Not Assigned"}
       </p>
-      <p className="text-green-100 text-lg mb-5">
-        <strong className="font-semibold">Total Compensation:</strong> ${total.toLocaleString()}
-      </p>
-      <p className="text-green-100 text-lg">
-        <strong className="font-semibold">Payment Mode:</strong> {paymentMode}
-      </p>
+      {salary?.paymentMode && (
+        <p className="text-blue-300 text-sm mt-1">
+          Payment Mode: {salary.paymentMode}
+        </p>
+      )}
     </div>
   );
 };
