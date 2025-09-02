@@ -1,5 +1,8 @@
 const mongoose = require("mongoose");
 
+// ======================
+// Flexible Shift Request Schema
+// ======================
 const flexibleShiftRequestSchema = new mongoose.Schema(
   {
     // Employee submitting the request
@@ -42,7 +45,7 @@ const flexibleShiftRequestSchema = new mongoose.Schema(
     // Status of the request
     status: {
       type: String,
-      enum: ["pending", "approved", "rejected"],
+      enum: ["pending", "approved", "rejected", "Pending", "Approved", "Rejected"],
       default: "pending",
     },
 
@@ -59,10 +62,10 @@ const flexibleShiftRequestSchema = new mongoose.Schema(
       default: null,
     },
 
-    // Shift type: standard / flexibleRequest / flexible9
+    // Shift type: always "flexibleRequest"
     shiftType: {
       type: String,
-      enum: ["flexibleRequest", "flexible9"],
+      enum: ["flexibleRequest"],
       default: "flexibleRequest",
     },
   },
@@ -71,9 +74,12 @@ const flexibleShiftRequestSchema = new mongoose.Schema(
   }
 );
 
-// Compound index for faster queries by employee and requested date
-flexibleShiftRequestSchema.index({ employee: 1, requestedDate: 1 });
+// Compound unique index: one request per employee per date
+flexibleShiftRequestSchema.index({ employee: 1, requestedDate: 1 }, { unique: true });
 
+// ======================
+// Export the Model
+// ======================
 module.exports = mongoose.model(
   "FlexibleShiftRequest",
   flexibleShiftRequestSchema
