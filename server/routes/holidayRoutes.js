@@ -20,7 +20,6 @@ router.delete(
   authorize("admin", "super-admin", "hr"),
   holidayController.removeHoliday
 );
-
 // Apply sandwich policy (used in payroll)
 router.post(
   "/sandwich",
