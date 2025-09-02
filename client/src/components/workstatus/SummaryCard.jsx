@@ -97,7 +97,9 @@ const SummaryCard = ({ weeklySummary, dailyData }) => {
 
         <div className="bg-[#232945] p-4 rounded-lg flex flex-col items-center justify-center hover:bg-[#2a3050] transition-colors">
           <p className="text-gray-400 text-xs uppercase tracking-wider">On-Time Rate</p>
-          <p className="text-orange-400 text-xl font-bold">{onTimeRate != null ? `${onTimeRate}%` : "0%"}</p>
+          <p className="text-orange-400 text-xl font-bold">
+  {onTimeRate != null ? onTimeRate : "0%"}
+</p>
         </div>
 
         <div className="bg-[#232945] p-4 rounded-lg flex flex-col items-center justify-center hover:bg-[#2a3050] transition-colors">
