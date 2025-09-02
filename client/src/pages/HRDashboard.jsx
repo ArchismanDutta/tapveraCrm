@@ -34,6 +34,8 @@ const HRDashboard = ({ onLogout }) => {
   const token = localStorage.getItem("token");
   const navigate = useNavigate();
 
+  if (!token) navigate("/login");
+
   const getNextDate = (dateString) => {
     if (!dateString) return null;
     const today = new Date();
@@ -50,7 +52,7 @@ const HRDashboard = ({ onLogout }) => {
       const [usersRes, leavesRes, flexRes] = await Promise.all([
         axios.get(`${API_BASE}/api/users`, { headers: { Authorization: `Bearer ${token}` } }),
         axios.get(`${API_BASE}/api/leaves`, { headers: { Authorization: `Bearer ${token}` } }),
-        axios.get(`${API_BASE}/api/flexible-shifts`, { headers: { Authorization: `Bearer ${token}` } }), // <-- Corrected endpoint
+        axios.get(`${API_BASE}/api/flexible-shifts`, { headers: { Authorization: `Bearer ${token}` } }),
       ]);
 
       const usersData = usersRes.data || [];
@@ -70,7 +72,7 @@ const HRDashboard = ({ onLogout }) => {
       setStats([
         { title: "Total Employees", value: usersData.length, icon: <Users />, color: "bg-blue-500", onClick: () => navigate("/directory") },
         { title: "Active Leaves", value: activeLeavesCount, icon: <Calendar />, color: "bg-orange-500", onClick: () => setShowLeavesModal(true) },
-        { title: "Pending Approvals", value: pendingLeavesCount, subtitle: "Leave requests", icon: <AlertTriangle />, color: "bg-red-500", onClick: () => navigate("/leaves") },
+        { title: "Pending Approvals", value: pendingLeavesCount, subtitle: "Leave requests", icon: <AlertTriangle />, color: "bg-red-500", onClick: () => navigate("/admin/leaves") },
         { title: "Flexible Requests", value: pendingFlexCount, subtitle: "Shift changes", icon: <Clock />, color: "bg-purple-500", onClick: () => setShowFlexModal(true) },
       ]);
 
@@ -92,11 +94,10 @@ const HRDashboard = ({ onLogout }) => {
   };
 
   useEffect(() => {
-    if (!token) return navigate("/login");
     fetchDashboardData();
     const intervalId = setInterval(fetchDashboardData, 15000);
     return () => clearInterval(intervalId);
-  }, [token]);
+  }, []);
 
   useEffect(() => {
     if (!users.length) return;
@@ -106,14 +107,26 @@ const HRDashboard = ({ onLogout }) => {
       .filter((u) => u.nextDate)
       .sort((a, b) => a.nextDate - b.nextDate)
       .slice(0, 3)
-      .map((u) => ({ _id: u._id, name: u.name, role: u.designation || u.role, dob: u.nextDate, avatar: u.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(u.name)}` }));
+      .map((u) => ({
+        _id: u._id,
+        name: u.name,
+        role: u.designation || u.role,
+        dob: u.nextDate,
+        avatar: u.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(u.name)}`,
+      }));
 
     const upcomingAnni = users
       .map((u) => ({ ...u, nextDate: getNextDate(u.doj) }))
       .filter((u) => u.nextDate)
       .sort((a, b) => a.nextDate - b.nextDate)
       .slice(0, 3)
-      .map((u) => ({ _id: u._id, name: u.name, designation: u.designation || u.role, doj: u.nextDate, avatar: u.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(u.name)}` }));
+      .map((u) => ({
+        _id: u._id,
+        name: u.name,
+        designation: u.designation || u.role,
+        doj: u.nextDate,
+        avatar: u.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(u.name)}`,
+      }));
 
     setBirthdays(upcomingBdays);
     setAnniversaries(upcomingAnni);
@@ -138,7 +151,10 @@ const HRDashboard = ({ onLogout }) => {
     <div className="bg-[#101525] text-gray-100 min-h-screen flex">
       <Sidebar collapsed={collapsed} setCollapsed={setCollapsed} userRole="hr" onLogout={onLogout} />
 
-      <main className="flex-1 p-6 space-y-6 overflow-auto transition-all duration-300" style={{ marginLeft: collapsed ? SIDEBAR_WIDTH_COLLAPSED : SIDEBAR_WIDTH_EXPANDED }}>
+      <main
+        className="flex-1 p-6 space-y-6 overflow-auto transition-all duration-300"
+        style={{ marginLeft: collapsed ? SIDEBAR_WIDTH_COLLAPSED : SIDEBAR_WIDTH_EXPANDED }}
+      >
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
           {stats.map((s, idx) => <StatCard key={idx} {...s} />)}
         </div>
@@ -147,7 +163,12 @@ const HRDashboard = ({ onLogout }) => {
           <div className="bg-[#1a1f36] p-4 rounded shadow">
             <div className="flex justify-between items-center mb-3">
               <h3 className="text-lg font-semibold">Upcoming Birthdays</h3>
-              <button className="px-3 py-1 bg-blue-600/70 hover:bg-blue-300 text-gray rounded text-sm font-medium transition-colors" onClick={() => setShowWishingModal(true)}>Send Wishes</button>
+              <button
+                className="px-3 py-1 bg-blue-600/70 hover:bg-blue-300 text-gray rounded text-sm font-medium transition-colors"
+                onClick={() => setShowWishingModal(true)}
+              >
+                Send Wishes
+              </button>
             </div>
             <UpcomingBirthdays birthdays={birthdays} />
           </div>
@@ -155,7 +176,12 @@ const HRDashboard = ({ onLogout }) => {
           <div className="bg-[#1a1f36] p-4 rounded shadow">
             <div className="flex justify-between items-center mb-3">
               <h3 className="text-lg font-semibold">Upcoming Anniversaries</h3>
-              <button className="px-3 py-1 bg-blue-600/70 hover:bg-blue-300 text-gray rounded text-sm font-medium transition-colors" onClick={() => setShowWishingModal(true)}>Send Wishes</button>
+              <button
+                className="px-3 py-1 bg-blue-600/70 hover:bg-blue-300 text-gray rounded text-sm font-medium transition-colors"
+                onClick={() => setShowWishingModal(true)}
+              >
+                Send Wishes
+              </button>
             </div>
             <UpcomingAnniversaries anniversaries={anniversaries} />
           </div>
@@ -165,8 +191,19 @@ const HRDashboard = ({ onLogout }) => {
       </main>
 
       <ActiveLeavesModal isOpen={showLeavesModal} onClose={() => setShowLeavesModal(false)} leaves={activeLeaves} />
-      <WishingModal isOpen={showWishingModal} onClose={() => setShowWishingModal(false)} birthdays={birthdays} anniversaries={anniversaries} onSend={handleSendWishes} />
-      <FlexibleRequestsModal isOpen={showFlexModal} onClose={() => setShowFlexModal(false)} requests={flexibleRequests} refresh={fetchDashboardData} />
+      <WishingModal
+        isOpen={showWishingModal}
+        onClose={() => setShowWishingModal(false)}
+        birthdays={birthdays}
+        anniversaries={anniversaries}
+        onSend={handleSendWishes}
+      />
+      <FlexibleRequestsModal
+        isOpen={showFlexModal}
+        onClose={() => setShowFlexModal(false)}
+        requests={flexibleRequests}
+        refresh={fetchDashboardData}
+      />
 
       <ToastContainer position="top-right" autoClose={3000} />
     </div>

@@ -15,7 +15,7 @@ import {
 import { FaChevronCircleRight } from "react-icons/fa";
 import { NavLink } from "react-router-dom";
 
-// Updated menu config with Holidays for admin, super-admin, and hr
+// Menu configuration
 const menuConfig = {
   employee: [
     { to: "/dashboard", icon: <LayoutDashboard size={18} />, label: "Employee Dashboard" },
@@ -37,7 +37,7 @@ const menuConfig = {
     { to: "/attendance", icon: <ClipboardList size={18} />, label: "Attendance" },
     { to: "/directory", icon: <Users size={18} />, label: "Employee Details" },
     { to: "/admin/notices", icon: <Flag size={18} />, label: "Notice Board" },
-    { to: "/admin/holidays", icon: <Calendar size={18} />, label: "Holidays List" }, // new link
+    { to: "/admin/holidays", icon: <Calendar size={18} />, label: "Holidays List" },
     { to: "/messages", icon: <MessageCircle size={18} />, label: "Messages" },
     { to: "/profile", icon: <User size={18} />, label: "My Profile" },
   ],
@@ -48,7 +48,7 @@ const menuConfig = {
     { to: "/tasks", icon: <ClipboardList size={18} />, label: "Tasks" },
     { to: "/leaves", icon: <FileText size={18} />, label: "My Leaves" },
     { to: "/messages", icon: <MessageCircle size={18} />, label: "Messages" },
-    { to: "/admin/holidays", icon: <Calendar size={18} />, label: "Holidays List" }, // new link
+    { to: "/admin/holidays", icon: <Calendar size={18} />, label: "Holidays List" },
     { to: "/profile", icon: <User size={18} />, label: "My Profile" },
   ],
   "super-admin": [
@@ -58,21 +58,21 @@ const menuConfig = {
     { to: "/todo", icon: <ClipboardList size={18} />, label: "Todo" },
     { to: "/admin/notices", icon: <Flag size={18} />, label: "Notice Board" },
     { to: "/messages", icon: <MessageCircle size={18} />, label: "Messages" },
-    { to: "/admin/holidays", icon: <Calendar size={18} />, label: "Holidays List" }, // new link
+    { to: "/admin/holidays", icon: <Calendar size={18} />, label: "Holidays List" },
     { to: "/profile", icon: <User size={18} />, label: "My Profile" },
   ],
 };
 
-const Sidebar = ({ collapsed, setCollapsed, onLogout }) => {
+const Sidebar = ({ collapsed, setCollapsed, onLogout, userRole }) => {
   const [showEmailModal, setShowEmailModal] = useState(false);
 
-  // Determine role from JWT
-  let role = "employee";
+  // Determine role from prop or JWT
+  let role = userRole || "employee";
   const token = localStorage.getItem("token");
   if (token) {
     try {
       const payload = JSON.parse(atob(token.split(".")[1]));
-      role = payload.role ? payload.role.toLowerCase() : "employee";
+      role = payload.role ? payload.role.toLowerCase() : role;
     } catch {
       // invalid token
     }
@@ -87,6 +87,7 @@ const Sidebar = ({ collapsed, setCollapsed, onLogout }) => {
           collapsed ? "w-16" : "w-56"
         }`}
       >
+        {/* Logo & Toggle */}
         <div className={`flex items-center p-4 ${collapsed ? "justify-center" : "justify-between"}`}>
           {!collapsed && (
             <NavLink to="/dashboard" tabIndex={collapsed ? -1 : 0}>
@@ -105,6 +106,7 @@ const Sidebar = ({ collapsed, setCollapsed, onLogout }) => {
           </button>
         </div>
 
+        {/* Menu Items */}
         <nav className="flex-1 overflow-y-auto px-2 space-y-1">
           {menuItems.map((item) => (
             <NavLink
@@ -125,6 +127,7 @@ const Sidebar = ({ collapsed, setCollapsed, onLogout }) => {
           ))}
         </nav>
 
+        {/* Daily Updates Button */}
         {role === "employee" && !collapsed && (
           <div className="px-4 py-2 border-t border-[#232945]">
             <button
@@ -137,6 +140,7 @@ const Sidebar = ({ collapsed, setCollapsed, onLogout }) => {
           </div>
         )}
 
+        {/* Logout Button */}
         <div className="px-4 py-3 border-t border-[#232945]">
           <button
             onClick={onLogout}
@@ -154,6 +158,7 @@ const Sidebar = ({ collapsed, setCollapsed, onLogout }) => {
         </div>
       </aside>
 
+      {/* Daily Email Modal */}
       {showEmailModal && (
         <Modal isOpen={showEmailModal} onClose={() => setShowEmailModal(false)}>
           <DailyEmailSender onClose={() => setShowEmailModal(false)} />
