@@ -1,4 +1,3 @@
-// QualificationsSkills.jsx
 import React from "react";
 
 const QualificationsSkills = ({ info = {} }) => {
@@ -6,15 +5,27 @@ const QualificationsSkills = ({ info = {} }) => {
   const skills = Array.isArray(info.skills) ? info.skills : [];
 
   return (
-    <div className="border rounded-3xl shadow-2xl p-8 bg-gradient-to-br from-yellow-50 to-yellow-100 hover:from-yellow-100 hover:to-yellow-200 transition-all duration-400 transform hover:scale-[1.04]">
-      <h2 className="text-3xl font-extrabold text-yellow-900 mb-8 tracking-wide">Qualifications & Skills</h2>
+    <div
+      className="border border-yellow-600 rounded-3xl shadow-xl p-8
+                 bg-gradient-to-br from-yellow-950/10 to-yellow-900/10
+                 hover:from-yellow-900/20 hover:to-yellow-850/20
+                 transition-colors duration-300 transform hover:scale-105"
+      style={{ backdropFilter: "blur(12px)" }}
+    >
+      <h2 className="text-3xl font-extrabold text-yellow-800 mb-8 tracking-wide drop-shadow-sm">
+        Qualifications &amp; Skills
+      </h2>
 
-      <div className="mb-8">
-        <h3 className="text-xl font-semibold text-yellow-800 mb-4 border-b-2 border-yellow-400 pb-1">Education</h3>
+      <div className="mb-9">
+        <h3 className="text-xl font-semibold text-yellow-700 mb-3 border-b-2 border-yellow-400 pb-1">
+          Education
+        </h3>
         {education.length > 0 ? (
-          <ul className="list-disc list-inside text-yellow-900 space-y-2">
+          <ul className="list-disc list-inside text-yellow-700 space-y-2">
             {education.map((edu, idx) => (
-              <li key={idx} className="text-lg font-medium">{edu}</li>
+              <li key={idx} className="text-lg font-medium">
+                {edu}
+              </li>
             ))}
           </ul>
         ) : (
@@ -23,11 +34,15 @@ const QualificationsSkills = ({ info = {} }) => {
       </div>
 
       <div>
-        <h3 className="text-xl font-semibold text-yellow-800 mb-4 border-b-2 border-yellow-400 pb-1">Skills</h3>
+        <h3 className="text-xl font-semibold text-yellow-700 mb-3 border-b-2 border-yellow-400 pb-1">
+          Skills
+        </h3>
         {skills.length > 0 ? (
-          <ul className="list-disc list-inside text-yellow-900 space-y-2">
+          <ul className="list-disc list-inside text-yellow-700 space-y-2">
             {skills.map((skill, idx) => (
-              <li key={idx} className="text-lg font-medium">{skill}</li>
+              <li key={idx} className="text-lg font-medium">
+                {skill}
+              </li>
             ))}
           </ul>
         ) : (
