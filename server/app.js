@@ -90,8 +90,7 @@ app.use("/api/notices", noticeRoutes);
 app.use("/api/chat", chatRoutes);
 app.use("/api/wishes", wishRoutes);
 app.use("/api/holidays", holidayRoutes);
-// ❌ removed holidayRoutes since file doesn’t exist
-app.use("/api/flexible-shift", flexibleShiftRoutes);
+app.use("/api/flexible-shifts", flexibleShiftRoutes);
 app.use("/api/admin", adminAttendanceRoutes);
 
 // =====================
