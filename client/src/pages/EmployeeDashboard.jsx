@@ -10,8 +10,8 @@ import NotificationBell from "../components/dashboard/NotificationBell";
 import WishPopup from "../components/dashboard/WishPopup";
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
-const TASK_POLL_INTERVAL_MS = 15000;
-const USER_POLL_INTERVAL_MS = 30000;
+const TASK_POLL_INTERVAL_MS = 10000;
+const USER_POLL_INTERVAL_MS = 25000;
 
 const EmployeeDashboard = ({ onLogout }) => {
   const [collapsed, setCollapsed] = useState(false);
