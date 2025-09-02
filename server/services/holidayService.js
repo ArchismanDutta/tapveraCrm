@@ -1,50 +1,42 @@
-const dayjs = require("dayjs");
 const moment = require("moment");
 const Holiday = require("../models/Holiday");
 
-// Check if a given date is holiday or weekend
-async function isHolidayOrWeekend(date) {
+// Check if a given date is a holiday or weekend, and for a particular shift if provided
+async function isHolidayOrWeekend(date, shift = "ALL") {
   const checkDate = moment(date).startOf("day");
-
-  // Weekend check
+  // Weekend check (Sunday/Saturday)
   if (checkDate.day() === 0 || checkDate.day() === 6) return true;
-
   const start = checkDate.toDate();
   const end = checkDate.clone().endOf("day").toDate();
-
-  const holiday = await Holiday.findOne({ date: { $gte: start, $lte: end } });
+  const holiday = await Holiday.findOne({
+    date: { $gte: start, $lte: end },
+    $or: [{ shifts: "ALL" }, { shifts: shift }],
+  });
   return !!holiday;
 }
-
 exports.isHolidayOrWeekend = isHolidayOrWeekend;
 
-// Check single date
-exports.checkHoliday = async (date) => {
+// Check single date and shift (default: ALL)
+exports.checkHoliday = async (date, shift = "ALL") => {
   const checkDate = moment(date, "YYYY-MM-DD");
-
   // Weekend check
   if (checkDate.day() === 0 || checkDate.day() === 6) {
     return { isHoliday: true, reason: "Weekend", sandwich: false };
   }
-
   const start = checkDate.startOf("day").toDate();
   const end = checkDate.endOf("day").toDate();
-
   const holiday = await Holiday.findOne({
     date: { $gte: start, $lte: end },
+    $or: [{ shifts: "ALL" }, { shifts: shift }],
   });
-
   if (holiday) {
     return { isHoliday: true, reason: holiday.name, sandwich: false };
   }
-
   // Sandwich Policy
   const prevDate = moment(checkDate).subtract(1, "day");
   const nextDate = moment(checkDate).add(1, "day");
-
-  const prevHoliday = await isHolidayOrWeekend(prevDate);
-  const nextHoliday = await isHolidayOrWeekend(nextDate);
-
+  const prevHoliday = await isHolidayOrWeekend(prevDate, shift);
+  const nextHoliday = await isHolidayOrWeekend(nextDate, shift);
   if (prevHoliday && nextHoliday) {
     return {
       isHoliday: false,
@@ -52,13 +44,18 @@ exports.checkHoliday = async (date) => {
       reason: "Sandwich Policy Applied (between two holidays/weekends)",
     };
   }
-
   return { isHoliday: false, sandwich: false };
 };
 
-// Get all holidays
-exports.getAllHolidays = async () => {
-  return await Holiday.find({});
+// Get all holidays (filter by shift if provided)
+exports.getAllHolidays = async (shift = null) => {
+  if (!shift || shift === "ALL") {
+    return await Holiday.find({});
+  } else {
+    return await Holiday.find({
+      $or: [{ shifts: "ALL" }, { shifts: shift }],
+    });
+  }
 };
 
 // Add holiday
@@ -71,29 +68,25 @@ exports.deleteHoliday = async (id) => {
   return await Holiday.findByIdAndDelete(id);
 };
 
-// Sandwich Policy Expansion
-exports.applySandwichPolicy = async (employeeLeaves = []) => {
+// Sandwich Policy expansion for a shift
+exports.applySandwichPolicy = async (employeeLeaves = [], shift = "ALL") => {
   if (!employeeLeaves.length) return [];
-
-  const leaves = employeeLeaves.map((d) => dayjs(d).startOf("day"));
-  const allHolidays = await Holiday.find({});
-  const holidayDates = allHolidays.map((h) => dayjs(h.date).startOf("day"));
-
+  const leaves = employeeLeaves.map((d) => moment(d).startOf("day"));
+  const allHolidays = await Holiday.find({
+    $or: [{ shifts: "ALL" }, { shifts: shift }],
+  });
+  const holidayDates = allHolidays.map((h) => moment(h.date).startOf("day"));
   const expandedLeaves = new Set();
-
   for (let leave of leaves) {
     expandedLeaves.add(leave.format("YYYY-MM-DD"));
-
-    const prev = leave.subtract(1, "day");
-    if (await isHolidayOrWeekend(prev, holidayDates)) {
+    const prev = moment(leave).subtract(1, "day");
+    if (await isHolidayOrWeekend(prev, shift)) {
       expandedLeaves.add(prev.format("YYYY-MM-DD"));
     }
-
-    const next = leave.add(1, "day");
-    if (await isHolidayOrWeekend(next, holidayDates)) {
+    const next = moment(leave).add(1, "day");
+    if (await isHolidayOrWeekend(next, shift)) {
       expandedLeaves.add(next.format("YYYY-MM-DD"));
     }
   }
-
   return Array.from(expandedLeaves).sort();
 };
