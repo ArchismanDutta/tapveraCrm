@@ -12,7 +12,7 @@ import "./styles/toastify-custom.css";
 
 // Pages
 import Login from "./pages/LoginPage";
-import Signup from "./pages/Signup"; // Admin/HR/Super Admin only
+import Signup from "./pages/SignUp"; // Admin/HR/Super Admin only
 import EmployeeDashboardPage from "./pages/EmployeeDashboard";
 import MyProfile from "./pages/MyProfile";
 import Tasks from "./pages/Tasks";
