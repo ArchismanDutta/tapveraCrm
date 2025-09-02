@@ -12,10 +12,7 @@ const HolidayForm = ({ onAdd }) => {
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
-    setForm({
-      ...form,
-      [name]: type === "checkbox" ? checked : value,
-    });
+    setForm({ ...form, [name]: type === "checkbox" ? checked : value });
   };
 
   const handleShiftsChange = (e) => {
@@ -43,70 +40,86 @@ const HolidayForm = ({ onAdd }) => {
   return (
     <form
       onSubmit={handleSubmit}
-      className="flex flex-wrap gap-4 bg-gray-50 p-4 rounded shadow-md"
+      className="flex flex-col gap-4"
     >
-      <input
-        type="text"
-        name="name"
-        value={form.name}
-        onChange={handleChange}
-        placeholder="Holiday Name"
-        className="border p-2 rounded w-48"
-        required
-      />
-      <input
-        type="date"
-        name="date"
-        value={form.date}
-        onChange={handleChange}
-        className="border p-2 rounded"
-        required
-      />
-      <select
-        name="type"
-        value={form.type}
-        onChange={handleChange}
-        className="border p-2 rounded"
-      >
-        <option value="NATIONAL">National</option>
-        <option value="COMPANY">Company</option>
-        <option value="RELIGIOUS">Religious</option>
-        <option value="FESTIVAL">Festival</option>
-      </select>
-      <select
-        name="shifts"
-        value={form.shifts[0]}
-        onChange={handleShiftsChange}
-        className="border p-2 rounded"
-      >
-        <option value="ALL">All</option>
-        <option value="standard">Standard</option>
-        <option value="flexiblePermanent">Flexible Permanent</option>
-      </select>
-      <label className="flex items-center gap-2">
+      {/* Row 1: Inputs */}
+      <div className="flex flex-wrap gap-4 items-center">
         <input
-          type="checkbox"
-          name="recurring"
-          checked={form.recurring}
+          type="text"
+          name="name"
+          value={form.name}
           onChange={handleChange}
+          placeholder="Holiday Name"
+          className="border border-[#82aaff] bg-[#1b2439] text-white placeholder-[#6c7897] rounded-lg p-3 w-52 focus:outline-none focus:ring-2 focus:ring-[#58a6ff] transition"
+          required
         />
-        Recurring
-      </label>
-      <label className="flex items-center gap-2">
+
         <input
-          type="checkbox"
-          name="optional"
-          checked={form.optional}
+          type="date"
+          name="date"
+          value={form.date}
           onChange={handleChange}
+          placeholder="dd-mm-yyyy"
+          className="border border-[#82aaff] bg-[#1b2439] text-white rounded-lg p-3 w-48 focus:outline-none focus:ring-2 focus:ring-[#58a6ff] transition"
+          required
         />
-        Optional
-      </label>
-      <button
-        type="submit"
-        className="bg-blue-600 text-white px-4 py-2 rounded"
-      >
-        Add Holiday
-      </button>
+
+        <select
+          name="type"
+          value={form.type}
+          onChange={handleChange}
+          className="border border-[#82aaff] bg-[#1b2439] text-white rounded-lg p-3 w-48 focus:outline-none focus:ring-2 focus:ring-[#58a6ff] transition"
+        >
+          <option value="NATIONAL">National</option>
+          <option value="COMPANY">Company</option>
+          <option value="RELIGIOUS">Religious</option>
+          <option value="FESTIVAL">Festival</option>
+        </select>
+
+        <select
+          name="shifts"
+          value={form.shifts}
+          onChange={handleShiftsChange}
+          className="border border-[#82aaff] bg-[#1b2439] text-white rounded-lg p-3 w-40 focus:outline-none focus:ring-2 focus:ring-[#58a6ff] transition"
+        >
+          <option value="ALL">All</option>
+          <option value="standard">Standard</option>
+          <option value="flexiblePermanent">Flexible Permanent</option>
+        </select>
+      </div>
+
+      {/* Row 2: Checkboxes + Button */}
+      <div className="flex flex-wrap gap-4 items-center justify-between mt-2">
+        <div className="flex gap-6">
+          <label className="flex items-center gap-2 text-white font-normal">
+            <input
+              type="checkbox"
+              name="optional"
+              checked={form.optional}
+              onChange={handleChange}
+              className="accent-[#58a6ff] scale-125"
+            />
+            Optional
+          </label>
+          <label className="flex items-center gap-2 text-white font-normal">
+            <input
+              type="checkbox"
+              name="recurring"
+              checked={form.recurring}
+              onChange={handleChange}
+              className="accent-[#58a6ff] scale-125"
+            />
+            Recurring
+          </label>
+        </div>
+        <button
+          type="submit"
+          className="bg-gradient-to-r from-[#58a6ff] to-[#485fc7] text-white font-semibold px-12 py-4 rounded-lg shadow-lg hover:scale-110 transition-transform duration-200"
+          style={{ minWidth: "170px" }}
+        >
+          Add Holiday
+        </button>
+      </div>
     </form>
   );
 };
