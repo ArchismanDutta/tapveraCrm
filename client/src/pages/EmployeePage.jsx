@@ -11,7 +11,7 @@ const API_BASE =
 const Card = ({ title, icon, children }) => (
   <section
     style={{
-      background: "rgba(31, 41, 55, 0.9)", // dark glass
+      background: "rgba(31, 41, 55, 0.9)",
       backdropFilter: "blur(12px)",
       borderRadius: 16,
       boxShadow: "0 8px 24px rgba(0, 0, 0, 0.5)",
@@ -77,6 +77,8 @@ const EmployeePage = ({ onLogout }) => {
         if (!res.ok) throw new Error("Failed to fetch employee details");
 
         const data = await res.json();
+        console.log("Fetched employee data:", data); // ✅ Debugging
+
         setSelectedEmployee({
           _id: data._id,
           name: data.fullName || data.name || "Unnamed Employee",
@@ -92,16 +94,19 @@ const EmployeePage = ({ onLogout }) => {
           status: data.status || "Inactive",
           startDate: data.doj ? new Date(data.doj).toLocaleDateString() : "N/A",
           salary: {
-            basic: data.salary?.basic || 0,
-            total: data.salary?.total || 0,
-            paymentMode: data.salary?.paymentMode || "bank",
+            basic: data.salary?.basic ?? 0,
+            total: data.salary?.total ?? 0,
+            paymentMode: data.salary?.paymentMode ?? "bank",
           },
           skills: Array.isArray(data.skills) ? data.skills : [],
-          qualifications: Array.isArray(data.qualifications) ? data.qualifications : [],
+          qualifications: Array.isArray(data.qualifications)
+            ? data.qualifications
+            : [],
           emergencyContact: data.emergencyContact || "N/A",
-          jobLevel: data.jobLevel || "N/A",
+          jobLevel: data.jobLevel || "N/A", // ✅ handled gracefully
         });
       } catch (err) {
+        console.error("Error fetching employee:", err);
         setSelectedEmployee(null);
       } finally {
         setLoading(false);
@@ -147,7 +152,6 @@ const EmployeePage = ({ onLogout }) => {
 
   return (
     <div style={{ display: "flex", height: "100vh", background: "#0f1523" }}>
-      {/* Fixed Sidebar */}
       <Sidebar
         collapsed={sidebarCollapsed}
         setCollapsed={setSidebarCollapsed}
@@ -164,7 +168,6 @@ const EmployeePage = ({ onLogout }) => {
         }}
       />
 
-      {/* Main Content */}
       <main
         style={{
           flex: 1,
@@ -176,7 +179,7 @@ const EmployeePage = ({ onLogout }) => {
           color: "#cbd5e1",
         }}
       >
-        {/* Profile Header */}
+        {/* Header Section */}
         <section
           style={{
             background: "rgba(255 255 255 / 0.05)",
@@ -222,7 +225,9 @@ const EmployeePage = ({ onLogout }) => {
           </h1>
           <p style={{ fontWeight: 500, fontSize: 18, color: "#94a3b8" }}>
             {selectedEmployee.jobTitle}
-            {selectedEmployee.department ? ` - ${selectedEmployee.department}` : ""}
+            {selectedEmployee.department
+              ? ` - ${selectedEmployee.department}`
+              : ""}
           </p>
           <button
             onClick={() => window.open(`mailto:${selectedEmployee.email}`)}
@@ -239,14 +244,18 @@ const EmployeePage = ({ onLogout }) => {
               boxShadow: "0 4px 14px rgb(37 99 235 / 0.39)",
               transition: "background-color 0.3s ease",
             }}
-            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#1e40af")}
-            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#2563eb")}
+            onMouseEnter={(e) =>
+              (e.currentTarget.style.backgroundColor = "#1e40af")
+            }
+            onMouseLeave={(e) =>
+              (e.currentTarget.style.backgroundColor = "#2563eb")
+            }
           >
             Contact Employee
           </button>
         </section>
 
-        {/* Info Grid */}
+        {/* Info Cards */}
         <section
           style={{
             display: "grid",
@@ -254,15 +263,18 @@ const EmployeePage = ({ onLogout }) => {
             gap: "2rem",
           }}
         >
+          {/* Contact Info */}
           <Card title="Contact Information" icon="📧">
             <div>
               <strong>Work Email:</strong> {selectedEmployee.email}
             </div>
             <div>
-              <strong>Work Phone:</strong> {selectedEmployee.contact || "N/A"}
+              <strong>Work Phone:</strong>{" "}
+              {selectedEmployee.contact || "N/A"}
             </div>
             <div>
-              <strong>Employee ID:</strong> {selectedEmployee.employeeId || "N/A"}
+              <strong>Employee ID:</strong>{" "}
+              {selectedEmployee.employeeId || "N/A"}
             </div>
             {selectedEmployee.manager && (
               <div>
@@ -271,6 +283,7 @@ const EmployeePage = ({ onLogout }) => {
             )}
           </Card>
 
+          {/* Personal Info */}
           <Card title="Personal Details" icon="📝">
             <div>
               <strong>Date of Birth:</strong> {selectedEmployee.dob}
@@ -280,11 +293,13 @@ const EmployeePage = ({ onLogout }) => {
             </div>
             {selectedEmployee.emergencyContact && (
               <div>
-                <strong>Emergency Contact:</strong> {selectedEmployee.emergencyContact}
+                <strong>Emergency Contact:</strong>{" "}
+                {selectedEmployee.emergencyContact}
               </div>
             )}
           </Card>
 
+          {/* Employment Info */}
           <Card title="Employment Details" icon="🏢">
             <div>
               <strong>Department:</strong> {selectedEmployee.department}
@@ -299,7 +314,8 @@ const EmployeePage = ({ onLogout }) => {
             )}
             {selectedEmployee.reportingTo && (
               <div>
-                <strong>Reporting To:</strong> {selectedEmployee.reportingTo}
+                <strong>Reporting To:</strong>{" "}
+                {selectedEmployee.reportingTo}
               </div>
             )}
             <div>
@@ -307,14 +323,25 @@ const EmployeePage = ({ onLogout }) => {
             </div>
           </Card>
 
+          {/* Skills & Qualifications */}
           <Card title="Skills & Qualifications" icon="🎓">
             <div style={{ marginBottom: 10 }}>
               <strong>Skills:</strong>
               <div style={{ marginTop: 5 }}>
                 {selectedEmployee.skills.length > 0 ? (
-                  selectedEmployee.skills.map((skill, idx) => <Pill key={idx}>{skill}</Pill>)
+                  selectedEmployee.skills.map((skill, idx) => (
+                    <Pill key={idx}>{skill}</Pill>
+                  ))
                 ) : (
-                  <span style={{ color: "#7c899d", fontStyle: "italic", marginLeft: 8 }}>N/A</span>
+                  <span
+                    style={{
+                      color: "#7c899d",
+                      fontStyle: "italic",
+                      marginLeft: 8,
+                    }}
+                  >
+                    N/A
+                  </span>
                 )}
               </div>
             </div>
@@ -322,9 +349,30 @@ const EmployeePage = ({ onLogout }) => {
               <strong>Qualifications:</strong>
               <div style={{ marginTop: 5 }}>
                 {selectedEmployee.qualifications.length > 0 ? (
-                  selectedEmployee.qualifications.map((q, idx) => <div key={idx}>{q}</div>)
+                  selectedEmployee.qualifications.map((q, idx) => (
+                    <div key={q._id || idx} style={{ marginBottom: 6 }}>
+                      <span>
+                        {q.degree || "N/A"} at {q.school || "N/A"} (
+                        {q.year || "N/A"})
+                      </span>
+                      {q.marks && (
+                        <span style={{ color: "#9ca3af" }}>
+                          {" "}
+                          - Marks: {q.marks}
+                        </span>
+                      )}
+                    </div>
+                  ))
                 ) : (
-                  <span style={{ color: "#7c899d", fontStyle: "italic", marginLeft: 8 }}>N/A</span>
+                  <span
+                    style={{
+                      color: "#7c899d",
+                      fontStyle: "italic",
+                      marginLeft: 8,
+                    }}
+                  >
+                    N/A
+                  </span>
                 )}
               </div>
             </div>
