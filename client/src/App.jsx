@@ -30,7 +30,8 @@ import ChatPage from "./pages/ChatPage";
 import EmployeeDirectory from "./pages/EmployeeDirectory";
 import EmployeePage from "./pages/EmployeePage";
 import HRDashboard from "./pages/HRDashboard";
-import AdminAttendancePage from "./pages/AdminAttendancePage"; // <-- Import new page
+import AdminAttendancePage from "./pages/AdminAttendancePage"; 
+import HolidayManagementPage from "./pages/HolidayManagementPage"; // <-- NEW IMPORT
 
 import { resetChat } from "./store/slices/chatSlice";
 import { useDispatch } from "react-redux";
@@ -126,7 +127,7 @@ const AppWrapper = () => {
           }
         />
 
-        {/* ChatPage / Messages - authenticated only */}
+        {/* ChatPage / Messages */}
         <Route
           path="/messages"
           element={
@@ -154,7 +155,7 @@ const AppWrapper = () => {
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password/:token" element={<ResetPassword />} />
 
-        {/* Employee Dashboard (non admin, non HR) */}
+        {/* Employee Dashboard */}
         <Route
           path="/dashboard"
           element={
@@ -175,7 +176,7 @@ const AppWrapper = () => {
           }
         />
 
-        {/* Profile - any authenticated user */}
+        {/* Profile */}
         <Route
           path="/profile"
           element={
@@ -187,7 +188,7 @@ const AppWrapper = () => {
           }
         />
 
-        {/* Employee Page - Admin/HR/Super Admin only */}
+        {/* Employee Page */}
         <Route
           path="/employee/:id"
           element={
@@ -240,8 +241,6 @@ const AppWrapper = () => {
             )
           }
         />
-
-        {/* New Admin Attendance Overview Page */}
         <Route
           path="/admin/attendance"
           element={
@@ -253,7 +252,19 @@ const AppWrapper = () => {
           }
         />
 
-        {/* Employee pages accessible to any authenticated user */}
+        {/* NEW: Holiday Management Page */}
+        <Route
+          path="/admin/holidays"
+          element={
+            isAuthenticated && (isAdmin || isHR) ? (
+              <HolidayManagementPage onLogout={handleLogout} />
+            ) : (
+              <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />
+            )
+          }
+        />
+
+        {/* Employee pages */}
         <Route
           path="/tasks"
           element={
