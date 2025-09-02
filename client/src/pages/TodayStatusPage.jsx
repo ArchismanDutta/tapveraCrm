@@ -87,7 +87,7 @@ const TodayStatusPage = ({ onLogout }) => {
   // --- Fetch Employee Flexible Requests ---
   const fetchFlexibleRequests = async () => {
     try {
-      const res = await axios.get(`${API_BASE}/api/flexible-shift/my-requests`, axiosConfig);
+      const res = await axios.get(`${API_BASE}/api/flexible-shifts/my-requests`, axiosConfig);
       setFlexibleRequests(res.data || []);
     } catch (err) {
       console.error("Failed to fetch flexible shift requests:", err);
@@ -254,7 +254,7 @@ const TodayStatusPage = ({ onLogout }) => {
     setIsSubmittingRequest(true);
     try {
       await axios.post(
-        `${API_BASE}/api/flexible-shift/request`,
+        `${API_BASE}/api/flexible-shifts/request`,
         {
           requestedDate: requestDate,
           requestedStartTime: requestStartTime,
