@@ -23,7 +23,7 @@ const FlexibleRequestsModal = ({ isOpen, onClose, requests = [], refresh }) => {
 
     try {
       await axios.put(
-        `${API_BASE}/api/flexible-shift/${id}/status`,
+        `${API_BASE}/api/flexible-shifts/${id}/status`,
         { status },
         { headers: { Authorization: `Bearer ${token}` } }
       );
