@@ -12,7 +12,7 @@ const breakSessionSchema = new mongoose.Schema({
 // Sub-schema: Shift for the day
 // ======================
 const shiftForDaySchema = new mongoose.Schema({
-  name: { type: String, trim: true, default: "" }, 
+  name: { type: String, trim: true, default: "" },
   start: {
     type: String,
     trim: true,
@@ -34,7 +34,7 @@ const shiftForDaySchema = new mongoose.Schema({
     },
     message: "Shift end time must be after start time",
   },
-  isFlexible: { type: Boolean, default: false },
+  isFlexible: { type: Boolean, default: false }, // true for flexibleRequest or flexiblePermanent
 });
 
 // ======================
@@ -44,24 +44,30 @@ const DailyWorkSchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
   date: { type: Date, required: true },
   arrivalTime: { type: Date, default: null },
-  expectedStartTime: { type: String, default: null }, // new field
+  expectedStartTime: { type: String, default: null }, // for flexible requests
   shift: { type: shiftForDaySchema, required: true },
-  shiftType: { 
-    type: String, 
-    enum: ["standard", "flexibleRequest", "flexible9", "flexiblePermanent"],
-    default: "standard" 
+
+  // Shift Type
+  shiftType: {
+    type: String,
+    enum: ["standard", "flexibleRequest", "flexiblePermanent"],
+    default: "standard",
   },
+
+  // Work / Break Tracking
   workDurationSeconds: { type: Number, default: 0 },
   breakDurationSeconds: { type: Number, default: 0 },
   breakSessions: [breakSessionSchema],
-  isLate: { type: Boolean, default: false },
-  isEarly: { type: Boolean, default: false },
-  isHalfDay: { type: Boolean, default: false },  // new
-  isAbsent: { type: Boolean, default: false },   // new
+
+  // Attendance Flags
+  isLate: { type: Boolean, default: false }, // only for standard shifts
+  isEarly: { type: Boolean, default: false }, // only for standard shifts
+  isHalfDay: { type: Boolean, default: false },
+  isAbsent: { type: Boolean, default: false },
 });
 
 // ======================
-// Index to avoid duplicates
+// Index to avoid duplicates per day
 // ======================
 DailyWorkSchema.index({ userId: 1, date: 1 }, { unique: true });
 

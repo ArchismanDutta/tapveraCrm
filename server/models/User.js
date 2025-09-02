@@ -25,7 +25,7 @@ const salarySchema = new mongoose.Schema({
 });
 
 // ======================
-// Sub-schema: Shift Timing
+// Sub-schema: Shift
 // ======================
 const shiftSchema = new mongoose.Schema({
   name: { type: String, trim: true, default: "Morning 9-6" },
@@ -53,7 +53,7 @@ const shiftSchema = new mongoose.Schema({
     },
   },
   durationHours: { type: Number, default: 9, min: 1, max: 24 },
-  isFlexible: { type: Boolean, default: false },
+  isFlexible: { type: Boolean, default: false }, // true if flexiblePermanent
 });
 
 // ======================
@@ -100,7 +100,7 @@ const userSchema = new mongoose.Schema(
     bloodGroup: { type: String, trim: true },
     permanentAddress: { type: String, trim: true },
     currentAddress: { type: String, trim: true },
-    emergencyContact: { type: String, trim: true }, // ✅ renamed (was emergencyNo)
+    emergencyContact: { type: String, trim: true },
     ps: { type: String, trim: true },
     doj: {
       type: Date,
@@ -110,7 +110,7 @@ const userSchema = new mongoose.Schema(
         message: "Date of joining cannot be in the future",
       },
     },
-    salary: { type: salarySchema, default: () => ({}) }, // ✅ changed from Number → Object
+    salary: { type: salarySchema, default: () => ({}) },
     ref: { type: String, trim: true },
     status: {
       type: String,
@@ -136,14 +136,11 @@ const userSchema = new mongoose.Schema(
       default: "",
     },
     designation: { type: String, trim: true, default: "" },
-
-    // ✅ NEW FIELD: Job Level
     jobLevel: {
       type: String,
       enum: ["intern", "junior", "mid", "senior", "lead", "director", "executive"],
       default: "junior",
     },
-
     employmentType: {
       type: String,
       enum: ["full-time", "part-time", "contract", "internship"],
@@ -156,6 +153,12 @@ const userSchema = new mongoose.Schema(
     location: { type: String, trim: true, default: "India" },
     avatar: { type: String, trim: true, default: "" },
 
+    /**
+     * Shift Type:
+     * - standard: fixed shift
+     * - flexiblePermanent: permanent flexible shift
+     * - flexible: semi-flexible (requires approved request)
+     */
     shiftType: {
       type: String,
       enum: ["standard", "flexible", "flexiblePermanent"],
@@ -163,6 +166,7 @@ const userSchema = new mongoose.Schema(
     },
     shift: { type: shiftSchema, default: () => ({}) },
 
+    // Semi-flexible shift requests (approved/reviewed later)
     flexibleShiftRequests: [
       {
         type: mongoose.Schema.Types.ObjectId,
@@ -173,7 +177,7 @@ const userSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// Remove sensitive fields
+// Remove sensitive fields on toJSON / toObject
 userSchema.set("toJSON", {
   transform: (doc, ret) => {
     delete ret.password;
@@ -189,4 +193,7 @@ userSchema.set("toObject", {
   },
 });
 
+// ======================
+// Export the Model
+// ======================
 module.exports = mongoose.model("User", userSchema);

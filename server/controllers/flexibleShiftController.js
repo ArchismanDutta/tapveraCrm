@@ -1,3 +1,5 @@
+// controllers/flexibleShiftController.js
+
 const FlexibleShiftRequest = require("../models/FlexibleShiftRequest");
 const User = require("../models/User");
 
@@ -13,26 +15,29 @@ exports.createFlexibleShiftRequest = async (req, res) => {
     const user = await User.findById(userId);
     if (!user) return res.status(404).json({ message: "User not found" });
 
-    // Only employees with flexible-type shifts can request changes
-    if (!user.shift?.isFlexible) {
+    // Only standard employees can submit semi-flexible requests
+    if (user.shiftType === "flexiblePermanent") {
       return res.status(400).json({
-        message: "Only employees with flexible shift can submit flexible shift requests",
+        message: "Permanent flexible shift employees do not submit requests",
       });
     }
 
     const { requestedDate, requestedStartTime, durationHours, reason } = req.body;
 
     if (!requestedDate || !requestedStartTime) {
-      return res.status(400).json({ message: "Requested date and start time are required" });
+      return res
+        .status(400)
+        .json({ message: "Requested date and start time are required" });
     }
 
     const request = new FlexibleShiftRequest({
       employee: userId,
       requestedDate,
       requestedStartTime,
-      durationHours: durationHours || 9, // default 9 hours for flexible 9-hour shift
+      durationHours: durationHours || 9, // default 9 hours
       reason: reason?.trim() || "",
       status: "pending",
+      shiftType: "flexibleRequest", // semi-flexible
     });
 
     await request.save();
@@ -50,7 +55,7 @@ exports.createFlexibleShiftRequest = async (req, res) => {
 exports.getFlexibleShiftRequests = async (req, res) => {
   try {
     const requests = await FlexibleShiftRequest.find()
-      .populate("employee", "_id name email employeeId shift")
+      .populate("employee", "_id name email employeeId shift shiftType")
       .sort({ createdAt: -1 });
 
     res.json(requests);
@@ -69,8 +74,9 @@ exports.getEmployeeFlexibleRequests = async (req, res) => {
     const userId = req.user?._id;
     if (!userId) return res.status(401).json({ message: "Unauthorized" });
 
-    const requests = await FlexibleShiftRequest.find({ employee: userId }).sort({ createdAt: -1 });
-
+    const requests = await FlexibleShiftRequest.find({ employee: userId }).sort({
+      createdAt: -1,
+    });
     res.json(requests);
   } catch (err) {
     console.error("Get employee flexible requests error:", err);
@@ -92,15 +98,16 @@ exports.updateFlexibleShiftStatus = async (req, res) => {
     }
 
     const request = await FlexibleShiftRequest.findById(requestId);
-    if (!request) return res.status(404).json({ message: "Flexible shift request not found" });
+    if (!request)
+      return res.status(404).json({ message: "Flexible shift request not found" });
 
     const user = await User.findById(request.employee);
     if (!user) return res.status(404).json({ message: "Employee not found" });
 
-    // Cannot approve a flexible shift request for standard-shift employee
-    if (!user.shift?.isFlexible && status === "approved") {
+    // Cannot approve a request for permanent flexible employees
+    if (user.shiftType === "flexiblePermanent" && status === "approved") {
       return res.status(400).json({
-        message: "Cannot approve flexible shift request for a standard shift employee",
+        message: "Permanent flexible shift employees cannot have requests approved",
       });
     }
 
@@ -109,20 +116,23 @@ exports.updateFlexibleShiftStatus = async (req, res) => {
     request.reviewedAt = new Date();
     await request.save();
 
-    // If approved, update user's shift for that day
+    // If approved, update user's shift for that day (semi-flexible override)
     if (status === "approved") {
       const duration = request.durationHours || 9;
       const [startH, startM] = request.requestedStartTime.split(":").map(Number);
       let endH = startH + Math.floor(duration);
       let endM = startM + Math.round((duration % 1) * 60);
-      if (endM >= 60) { endH += 1; endM -= 60; }
+      if (endM >= 60) {
+        endH += 1;
+        endM -= 60;
+      }
       if (endH >= 24) endH -= 24; // wrap around midnight
 
       const endTime = `${String(endH).padStart(2, "0")}:${String(endM).padStart(2, "0")}`;
 
-      // For flexible 9-hour shift employees, just store start/end/duration; no early/late logic
+      // Store shift override
       user.shiftOverrides = user.shiftOverrides || {};
-      user.shiftOverrides[request.requestedDate] = {
+      user.shiftOverrides[request.requestedDate.toISOString().slice(0, 10)] = {
         start: request.requestedStartTime,
         end: endTime,
         durationHours: duration,
