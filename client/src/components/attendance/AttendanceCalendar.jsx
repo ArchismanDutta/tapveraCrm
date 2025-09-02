@@ -5,6 +5,7 @@ const STATUS_COLOR = {
   absent: "bg-red-700 text-red-200 cursor-pointer",
   late: "bg-yellow-700 text-yellow-200 cursor-pointer",
   holiday: "bg-gray-700 text-gray-300 cursor-pointer",
+  leave: "bg-purple-500 text-purple-200 cursor-pointer",
   default: "bg-blue-700 text-blue-200 cursor-pointer",
 };
 
@@ -16,7 +17,7 @@ const AttendanceCalendar = ({ data }) => {
   const maxDays = new Date(data.year, monthIndex + 1, 0).getDate();
   const blanks = Array(data.startDayOfWeek).fill(null);
 
-  // Prepare days with fallback status default
+  // Prepare days array with fallback status 'default'
   const days = Array.from({ length: maxDays }, (_, i) => {
     const dayNum = i + 1;
     const dayObj = data.days.find((d) => d.day === dayNum);
@@ -32,6 +33,7 @@ const AttendanceCalendar = ({ data }) => {
           {data.month} {data.year}
         </h3>
       </div>
+
       <div className="grid grid-cols-7 gap-2 mb-2">
         {daysOfWeek.map((d) => (
           <div
@@ -42,20 +44,37 @@ const AttendanceCalendar = ({ data }) => {
           </div>
         ))}
       </div>
+
       <div className="grid grid-cols-7 gap-2">
+        {/* Blank days */}
         {blanks.map((_, idx) => (
           <div key={`blank-${idx}`} className="h-10 rounded-lg" />
         ))}
+
+        {/* Days */}
         {days.map(({ day, status, name }) => (
           <div
             key={day}
-            title={status === "holiday" && name ? name : undefined}
+            title={
+              status === "holiday" && name
+                ? name
+                : status === "leave"
+                ? "Approved Leave"
+                : undefined
+            }
             className={`h-10 rounded-lg flex justify-center items-center font-medium select-none cursor-default ${
               STATUS_COLOR[status] || STATUS_COLOR.default
             }`}
           >
             {day}
-            
+            {/* {(status === "holiday" || status === "leave") && (
+              <span
+                className="ml-1 text-xs font-normal text-current"
+                title={status === "holiday" ? name : "Approved Leave"}
+              >
+                ★
+              </span>
+            )} */}
           </div>
         ))}
       </div>

@@ -41,6 +41,34 @@ const AttendancePage = ({ onLogout }) => {
         )
       );
 
+      // 1.1 Fetch approved leaves
+      const leavesRes = await axios.get("/api/leaves/mine", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const approvedLeaves = leavesRes.data.filter(
+        (l) => l.status === "Approved"
+      );
+
+      // Prepare month/year info for filtering leave days
+      const month = monday.toLocaleString("default", { month: "long" });
+      const year = monday.getFullYear();
+      const monthIndex = monday.getUTCMonth();
+      const leaveDaysSet = new Set();
+
+      approvedLeaves.forEach((leave) => {
+        const start = new Date(leave.period.start || leave.startDate);
+        const end = new Date(leave.period.end || leave.endDate);
+        for (
+          let d = new Date(start);
+          d <= end;
+          d.setUTCDate(d.getUTCDate() + 1)
+        ) {
+          if (d.getUTCFullYear() === year && d.getUTCMonth() === monthIndex) {
+            leaveDaysSet.add(d.getUTCDate());
+          }
+        }
+      });
+
       // 2️⃣ Fetch weekly summary and daily attendance data
       const res = await axios.get("/api/summary/week", {
         headers: { Authorization: `Bearer ${token}` },
@@ -52,7 +80,7 @@ const AttendancePage = ({ onLogout }) => {
 
       const { dailyData = [], weeklySummary = {} } = res.data;
 
-      // 3️⃣ Parse work hours helpers
+      // 3️⃣ Work hours parsing helpers
       const parseHours = (timeStr) => {
         if (!timeStr) return 0;
         const parts = timeStr.split(" ");
@@ -62,7 +90,7 @@ const AttendancePage = ({ onLogout }) => {
       };
       const truncateTwoDecimals = (num) => Math.floor(num * 100) / 100;
 
-      // 4️⃣ Update stats
+      // 4️⃣ Update attendance stats
       setStats({
         attendanceRate: Math.round(
           weeklySummary.onTimeRate?.replace("%", "") || 0
@@ -75,15 +103,8 @@ const AttendancePage = ({ onLogout }) => {
         period: "This week",
       });
 
-      // 5️⃣ Prepare calendar data with holiday integration
-      const month = monday.toLocaleString("default", { month: "long" });
-      const year = monday.getFullYear();
-      const monthIndex = monday.getUTCMonth();
-
-      // Fetch holidays for the relevant shift ("standard")
+      // 5️⃣ Fetch holidays for the shift
       const holidaysRes = await axios.get(`/api/holidays?shift=standard`);
-
-      // Map holidays by day number for this month and year
       const holidayDaysMap = {};
       holidaysRes.data.forEach((h) => {
         const dateObj = new Date(h.date);
@@ -101,11 +122,10 @@ const AttendancePage = ({ onLogout }) => {
         }
       });
 
-      // Map attendance data by day for quick lookup
+      // 6️⃣ Map attendance days
       const attendanceDaysMap = {};
       dailyData.forEach((d) => {
         const dayNum = new Date(d.date).getUTCDate();
-
         const arrivalDate = d.arrivalTime ? new Date(d.arrivalTime) : null;
         const expectedStart =
           d.effectiveShift?.start || d.expectedStartTime || "09:00";
@@ -122,9 +142,10 @@ const AttendancePage = ({ onLogout }) => {
         attendanceDaysMap[dayNum] = { day: dayNum, status };
       });
 
-      // 6️⃣ Build full days array including weekends marked as holidays
+      // 7️⃣ Build full calendar days array: priority holidays > weekends > leaves > attendance > default
       const maxDays = new Date(year, monthIndex + 1, 0).getDate();
       const days = [];
+
       for (let i = 1; i <= maxDays; i++) {
         const dateObj = new Date(Date.UTC(year, monthIndex, i));
         const dayOfWeek = dateObj.getUTCDay();
@@ -134,6 +155,8 @@ const AttendancePage = ({ onLogout }) => {
           days.push(holidayDaysMap[i]);
         } else if (isWeekend) {
           days.push({ day: i, status: "holiday" });
+        } else if (leaveDaysSet.has(i)) {
+          days.push({ day: i, status: "leave" });
         } else if (attendanceDaysMap[i]) {
           days.push(attendanceDaysMap[i]);
         } else {
@@ -141,6 +164,7 @@ const AttendancePage = ({ onLogout }) => {
         }
       }
 
+      // 8️⃣ Start day of month for calendar alignment
       const firstDayOfMonth = new Date(Date.UTC(year, monthIndex, 1));
       const startDayOfWeek = firstDayOfMonth.getUTCDay();
 
@@ -151,14 +175,14 @@ const AttendancePage = ({ onLogout }) => {
         startDayOfWeek,
       });
 
-      // 7️⃣ Weekly hours chart setup
+      // 9️⃣ Weekly hours chart
       const hoursByWeekday = Array(7).fill(0);
       dailyData.forEach((d) => {
         const dt = new Date(d.date);
-        if (d.workDurationSeconds)
+        if (d.workDurationSeconds) {
           hoursByWeekday[dt.getUTCDay()] += d.workDurationSeconds / 3600;
+        }
       });
-
       const weekDays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
       setWeeklyHours(
         weekDays.map((label, idx) => ({
@@ -167,7 +191,7 @@ const AttendancePage = ({ onLogout }) => {
         }))
       );
 
-      // 8️⃣ Prepare recent activity table data
+      // 🔟 Recent activity data
       const recent = dailyData.slice(0, 10).map((d) => {
         const arrivalDate = d.arrivalTime ? new Date(d.arrivalTime) : null;
         const expectedStart =
@@ -177,7 +201,6 @@ const AttendancePage = ({ onLogout }) => {
           ? new Date(arrivalDate)
           : new Date(d.date);
         expectedDate.setUTCHours(expH, expM, 0, 0);
-
         const lastWorked =
           d.workedSessions?.[d.workedSessions.length - 1] || {};
         const punchOut = lastWorked.end ? new Date(lastWorked.end) : null;
@@ -210,14 +233,12 @@ const AttendancePage = ({ onLogout }) => {
     }
   }, [token]);
 
-  // Refresh every 1 minute
   useEffect(() => {
     fetchAttendanceData();
     const intervalId = setInterval(fetchAttendanceData, 60000);
     return () => clearInterval(intervalId);
   }, [fetchAttendanceData]);
 
-  // Listen for attendance updates
   useEffect(() => {
     const handleAttendanceUpdate = () => fetchAttendanceData();
     window.addEventListener("attendanceDataUpdate", handleAttendanceUpdate);
@@ -239,10 +260,10 @@ const AttendancePage = ({ onLogout }) => {
   return (
     <div className="flex min-h-screen bg-[#101525] text-gray-100">
       <Sidebar
-        onLogout={onLogout}
         collapsed={collapsed}
         setCollapsed={setCollapsed}
         userRole="employee"
+        onLogout={onLogout}
       />
       <main
         className={`flex-1 p-6 space-y-6 transition-all duration-300 ${
