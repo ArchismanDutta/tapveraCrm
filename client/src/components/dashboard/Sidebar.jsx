@@ -9,12 +9,13 @@ import {
   MessageCircle,
   FileText,
   Flag,
-  Send,
   Users,
+  Calendar,
 } from "lucide-react";
 import { FaChevronCircleRight } from "react-icons/fa";
 import { NavLink } from "react-router-dom";
 
+// Updated menu config with Holidays for admin, super-admin, and hr
 const menuConfig = {
   employee: [
     { to: "/dashboard", icon: <LayoutDashboard size={18} />, label: "Employee Dashboard" },
@@ -36,6 +37,7 @@ const menuConfig = {
     { to: "/attendance", icon: <ClipboardList size={18} />, label: "Attendance" },
     { to: "/directory", icon: <Users size={18} />, label: "Employee Details" },
     { to: "/admin/notices", icon: <Flag size={18} />, label: "Notice Board" },
+    { to: "/admin/holidays", icon: <Calendar size={18} />, label: "Holidays List" }, // new link
     { to: "/messages", icon: <MessageCircle size={18} />, label: "Messages" },
     { to: "/profile", icon: <User size={18} />, label: "My Profile" },
   ],
@@ -46,6 +48,7 @@ const menuConfig = {
     { to: "/tasks", icon: <ClipboardList size={18} />, label: "Tasks" },
     { to: "/leaves", icon: <FileText size={18} />, label: "My Leaves" },
     { to: "/messages", icon: <MessageCircle size={18} />, label: "Messages" },
+    { to: "/admin/holidays", icon: <Calendar size={18} />, label: "Holidays List" }, // new link
     { to: "/profile", icon: <User size={18} />, label: "My Profile" },
   ],
   "super-admin": [
@@ -55,6 +58,7 @@ const menuConfig = {
     { to: "/todo", icon: <ClipboardList size={18} />, label: "Todo" },
     { to: "/admin/notices", icon: <Flag size={18} />, label: "Notice Board" },
     { to: "/messages", icon: <MessageCircle size={18} />, label: "Messages" },
+    { to: "/admin/holidays", icon: <Calendar size={18} />, label: "Holidays List" }, // new link
     { to: "/profile", icon: <User size={18} />, label: "My Profile" },
   ],
 };
@@ -135,19 +139,18 @@ const Sidebar = ({ collapsed, setCollapsed, onLogout }) => {
 
         <div className="px-4 py-3 border-t border-[#232945]">
           <button
-  onClick={onLogout}
-  className="w-full rounded-lg bg-gradient-to-r from-red-600 to-red-400 text-white shadow-lg hover:brightness-110 transition flex items-center justify-center"
-  tabIndex={0}
->
-  {collapsed ? (
-    <span aria-label="Logout" role="img" style={{ fontSize: 20 }}>
-      ⏻
-    </span>
-  ) : (
-    "Logout"
-  )}
-</button>
-
+            onClick={onLogout}
+            className="w-full rounded-lg bg-gradient-to-r from-red-600 to-red-400 text-white shadow-lg hover:brightness-110 transition flex items-center justify-center"
+            tabIndex={0}
+          >
+            {collapsed ? (
+              <span aria-label="Logout" role="img" style={{ fontSize: 20 }}>
+                ⏻
+              </span>
+            ) : (
+              "Logout"
+            )}
+          </button>
         </div>
       </aside>
 
