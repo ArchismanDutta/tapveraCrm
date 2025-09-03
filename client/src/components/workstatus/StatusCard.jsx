@@ -1,5 +1,4 @@
 // File: StatusCard.jsx
-
 import React from "react";
 
 const StatusCard = ({
@@ -7,6 +6,8 @@ const StatusCard = ({
   breakTime,
   arrivalTime,
   currentlyWorking,
+  alreadyPunchedIn = false,   // New prop
+  alreadyPunchedOut = false,  // New prop
   onPunchIn,
   onPunchOut,
   onRequestFlexible, // new prop for flexible shift
@@ -46,9 +47,9 @@ const StatusCard = ({
         <div className="flex gap-3">
           <button
             onClick={onPunchIn}
-            disabled={currentlyWorking}
+            disabled={currentlyWorking || alreadyPunchedIn}
             className={`px-4 py-2 rounded-lg font-semibold transition-all shadow-md duration-200 ${
-              currentlyWorking
+              currentlyWorking || alreadyPunchedIn
                 ? "bg-green-500 opacity-50 cursor-not-allowed"
                 : "bg-green-500 hover:bg-green-600 text-gray-900"
             }`}
@@ -58,9 +59,9 @@ const StatusCard = ({
 
           <button
             onClick={onPunchOut}
-            disabled={!currentlyWorking}
+            disabled={!currentlyWorking || alreadyPunchedOut}
             className={`px-4 py-2 rounded-lg font-semibold transition-all shadow-md duration-200 ${
-              !currentlyWorking
+              !currentlyWorking || alreadyPunchedOut
                 ? "bg-orange-500 opacity-50 cursor-not-allowed"
                 : "bg-orange-500 hover:bg-orange-600 text-gray-900"
             }`}

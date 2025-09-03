@@ -4,8 +4,8 @@ const mongoose = require("mongoose");
 // Sub-schema: Break Session
 // ======================
 const breakSessionSchema = new mongoose.Schema({
-  start: { type: Date },
-  end: { type: Date },
+  start: { type: Date, required: true },
+  end: { type: Date, default: null },
 });
 
 // ======================
@@ -26,14 +26,24 @@ const shiftForDaySchema = new mongoose.Schema({
     type: String,
     trim: true,
     required: true,
-    validate: function (v) {
-      if (!this.start) return true;
-      const [startH, startM] = this.start.split(":").map(Number);
-      const [endH, endM] = v.split(":").map(Number);
-      return endH > startH || (endH === startH && endM > startM);
+    validate: {
+      validator: function (v) {
+        if (!this.start || !v) return true;
+
+        // Parse times
+        const [startH, startM] = this.start.split(":").map(Number);
+        const [endH, endM] = v.split(":").map(Number);
+        const startMinutes = startH * 60 + startM;
+        const endMinutes = endH * 60 + endM;
+
+        // Allow distinct start and end times (including overnight)
+        return endMinutes !== startMinutes;
+      },
+      message:
+        "Shift end time must be different from start time (same-day or overnight allowed)",
     },
-    message: "Shift end time must be after start time",
   },
+  durationHours: { type: Number, default: 9, min: 1, max: 24 },
   isFlexible: { type: Boolean, default: false }, // true for flexibleRequest or flexiblePermanent
 });
 
@@ -47,7 +57,7 @@ const DailyWorkSchema = new mongoose.Schema({
   expectedStartTime: { type: String, default: null }, // for flexible requests
   shift: { type: shiftForDaySchema, required: true },
 
-  // Shift Type
+  // Shift Type: standard | flexibleRequest | flexiblePermanent
   shiftType: {
     type: String,
     enum: ["standard", "flexibleRequest", "flexiblePermanent"],
@@ -55,8 +65,8 @@ const DailyWorkSchema = new mongoose.Schema({
   },
 
   // Work / Break Tracking
-  workDurationSeconds: { type: Number, default: 0 },
-  breakDurationSeconds: { type: Number, default: 0 },
+  workDurationSeconds: { type: Number, default: 0 }, // includes total work
+  breakDurationSeconds: { type: Number, default: 0 }, // includes total breaks
   breakSessions: [breakSessionSchema],
 
   // Attendance Flags
@@ -67,11 +77,34 @@ const DailyWorkSchema = new mongoose.Schema({
 });
 
 // ======================
-// Index to avoid duplicates per day
+// Helper methods
+// ======================
+
+// Compute attendance flags for flexiblePermanent employees based on hours worked + breaks (+1h break buffer)
+DailyWorkSchema.methods.evaluateFlexibleAttendance = function () {
+  if (this.shiftType !== "flexiblePermanent") return;
+
+  const totalWorkedHours = this.workDurationSeconds / 3600;
+  const totalWithBreak = totalWorkedHours + this.breakDurationSeconds / 3600 + 1;
+
+  if (totalWithBreak < 5) {
+    this.isAbsent = true;
+    this.isHalfDay = false;
+  } else if (totalWithBreak >= 5 && totalWithBreak < 9) {
+    this.isHalfDay = true;
+    this.isAbsent = false;
+  } else {
+    this.isHalfDay = false;
+    this.isAbsent = false;
+  }
+};
+
+// ======================
+// Index for uniqueness per user & day
 // ======================
 DailyWorkSchema.index({ userId: 1, date: 1 }, { unique: true });
 
 // ======================
-// Export the Model
+// Export Model
 // ======================
 module.exports = mongoose.model("DailyWork", DailyWorkSchema);
