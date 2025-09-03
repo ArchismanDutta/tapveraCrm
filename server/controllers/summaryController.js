@@ -25,7 +25,7 @@ exports.getWeeklySummary = async (req, res) => {
     if (!startDate || !endDate) {
       const now = new Date();
       const day = now.getDay(); // Sunday = 0
-      const diffToMonday = (day + 6) % 7;
+      const diffToMonday = (day + 6) % 7; // Adjust to Monday
 
       startDate = new Date(now);
       startDate.setDate(now.getDate() - diffToMonday);
@@ -78,7 +78,7 @@ exports.getWeeklySummary = async (req, res) => {
       let isHalfDay = false;
       let isAbsent = false;
 
-      // Determine absent / half-day
+      // Absent / half-day
       if (!day.arrivalTime || workSeconds < MIN_HALF_DAY_SECONDS) {
         isAbsent = true;
         absentDays++;
@@ -87,7 +87,7 @@ exports.getWeeklySummary = async (req, res) => {
         halfDays++;
       }
 
-      // Punctuality & perfect day logic
+      // Punctuality & perfect day
       if (!isAbsent) {
         if (effectiveShift.isFlexiblePermanent) {
           if (workSeconds >= MIN_FULL_DAY_SECONDS) {
@@ -128,8 +128,8 @@ exports.getWeeklySummary = async (req, res) => {
     }
 
     const onTimeRate = dailyData.length
-      ? `${Math.round((onTimeCount / dailyData.length) * 100)}%`
-      : "0%";
+      ? `${Math.round((onTimeCount / dailyData.length) * 100)}`
+      : "0";
 
     const avgDailyWork = Math.floor(totalWorkSeconds / daysCount);
     const avgDailyBreak = Math.floor(totalBreakSeconds / daysCount);
@@ -140,7 +140,7 @@ exports.getWeeklySummary = async (req, res) => {
       avgDailyWork: secToHM(avgDailyWork),
       avgDailyBreak: secToHM(avgDailyBreak),
       daysCount,
-      onTimeRate,
+      onTimeRate: `${onTimeRate}%`,
       breaksTaken,
       halfDays,
       absentDays,
@@ -153,7 +153,7 @@ exports.getWeeklySummary = async (req, res) => {
 
     res.json({ dailyData, weeklySummary });
   } catch (err) {
-    console.error("Error fetching weekly summary:", err);
-    res.status(500).json({ message: "Server error" });
+    console.error("❌ Error fetching weekly summary:", err);
+    res.status(500).json({ message: "Server error", error: err.message });
   }
 };

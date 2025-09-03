@@ -1,3 +1,4 @@
+// src/pages/TodayStatusPage.jsx
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 import Sidebar from "../components/dashboard/Sidebar";
@@ -18,7 +19,9 @@ const formatHMS = (seconds = 0) => {
   const h = Math.floor(seconds / 3600);
   const m = Math.floor((seconds % 3600) / 60);
   const s = seconds % 60;
-  return `${h}h ${m.toString().padStart(2, "0")}m ${s.toString().padStart(2, "0")}s`;
+  return `${h}h ${m.toString().padStart(2, "0")}m ${s
+    .toString()
+    .padStart(2, "0")}s`;
 };
 
 const SIDEBAR_WIDTH_EXPANDED = 288;
@@ -46,8 +49,10 @@ const TodayStatusPage = ({ onLogout }) => {
 
   const [flexibleRequests, setFlexibleRequests] = useState([]);
 
+  // --- Auth ---
   const token = localStorage.getItem("token");
   const axiosConfig = { headers: { Authorization: `Bearer ${token}` } };
+  const user = JSON.parse(localStorage.getItem("user"));
 
   // --- Fetch Status ---
   const fetchStatus = async () => {
@@ -55,7 +60,7 @@ const TodayStatusPage = ({ onLogout }) => {
       const res = await axios.get(`${API_BASE}/api/status`, axiosConfig);
       setStatus(res.data);
     } catch (err) {
-      console.error("Failed to fetch status:", err);
+      console.error("Failed to fetch status:", err.response?.data || err);
     }
   };
 
@@ -64,7 +69,7 @@ const TodayStatusPage = ({ onLogout }) => {
     try {
       const now = new Date();
       const day = now.getDay();
-      const diffToMonday = (day + 6) % 7;
+      const diffToMonday = (day + 6) % 7; // Monday as start of week
       const monday = new Date(now);
       monday.setDate(now.getDate() - diffToMonday);
       monday.setHours(0, 0, 0, 0);
@@ -74,44 +79,54 @@ const TodayStatusPage = ({ onLogout }) => {
 
       const res = await axios.get(`${API_BASE}/api/summary/week`, {
         ...axiosConfig,
-        params: { startDate: monday.toISOString(), endDate: sunday.toISOString() },
+        params: {
+          startDate: monday.toISOString(),
+          endDate: sunday.toISOString(),
+        },
       });
       setWeeklySummary(res.data?.weeklySummary || null);
       setDailyData(res.data?.dailyData || []);
     } catch (err) {
-      console.error("Failed to fetch weekly summary:", err);
+      console.error("Failed to fetch weekly summary:", err.response?.data || err);
     }
   };
 
   // --- Fetch Flexible Requests ---
   const fetchFlexibleRequests = async () => {
     try {
-      const res = await axios.get(`${API_BASE}/api/flexible-shifts/my-requests`, axiosConfig);
+      const res = await axios.get(
+        `${API_BASE}/api/flexible-shifts/my-requests`,
+        axiosConfig
+      );
       setFlexibleRequests(res.data || []);
     } catch (err) {
-      console.error("Failed to fetch flexible shift requests:", err);
+      console.error("Failed to fetch flexible shift requests:", err.response?.data || err);
     }
   };
 
   // --- Update Status ---
   const updateStatus = async (update) => {
-    if (!status) return;
+    if (!status && update?.currentlyWorking !== true) return;
     try {
       const payload = {
-        currentlyWorking: status.currentlyWorking,
-        onBreak: status.onBreak,
-        workDurationSeconds: status.workDurationSeconds || 0,
-        breakDurationSeconds: status.breakDurationSeconds || 0,
-        arrivalTime: status.arrivalTime || null,
+        userId: user?._id,
+        currentlyWorking: status?.currentlyWorking || false,
+        onBreak: status?.onBreak || false,
+        workDurationSeconds: status?.workDurationSeconds || 0,
+        breakDurationSeconds: status?.breakDurationSeconds || 0,
+        arrivalTime: status?.arrivalTime || null,
         ...update,
       };
+
+      console.log("📤 Sending status update:", payload);
+
       const res = await axios.put(`${API_BASE}/api/status`, payload, axiosConfig);
       setStatus(res.data);
       setSelectedBreakType("");
       fetchWeeklySummary();
       window.dispatchEvent(new Event("attendanceDataUpdate"));
     } catch (err) {
-      console.error("Failed to update status:", err);
+      console.error("❌ Failed to update status:", err.response?.data || err);
       toast.error(err?.response?.data?.message || "Failed to update status.");
     }
   };
@@ -162,10 +177,18 @@ const TodayStatusPage = ({ onLogout }) => {
   // --- Punch In/Out ---
   const handlePunchIn = () => {
     if (status?.currentlyWorking) return;
+
+    const alreadyPunchedIn = status?.timeline?.some((e) => e.type === "Punch In");
+    if (alreadyPunchedIn) {
+      toast.error("You have already punched in today.");
+      return;
+    }
+
     updateStatus({
       currentlyWorking: true,
       onBreak: false,
-      timelineEvent: { type: "Punch In", time: new Date().toLocaleTimeString() },
+      arrivalTime: new Date().toISOString(),
+      timelineEvent: { type: "Punch In", time: new Date().toISOString() },
     });
   };
 
@@ -192,6 +215,13 @@ const TodayStatusPage = ({ onLogout }) => {
 
   const handlePunchOutClick = async () => {
     if (!(status?.currentlyWorking) && !(status?.onBreak)) return;
+
+    const alreadyPunchedOut = status?.timeline?.some((e) => e.type === "Punch Out");
+    if (alreadyPunchedOut) {
+      toast.error("You have already punched out today.");
+      return;
+    }
+
     const canPunchOut = await checkTodoTasksBeforePunchOut();
     if (canPunchOut) setShowPunchOutConfirm(true);
   };
@@ -202,7 +232,7 @@ const TodayStatusPage = ({ onLogout }) => {
     updateStatus({
       currentlyWorking: false,
       onBreak: false,
-      timelineEvent: { type: "Punch Out", time: new Date().toLocaleTimeString() },
+      timelineEvent: { type: "Punch Out", time: new Date().toISOString() },
     });
   };
 
@@ -212,8 +242,11 @@ const TodayStatusPage = ({ onLogout }) => {
     updateStatus({
       currentlyWorking: false,
       onBreak: true,
-      breakStartTime: new Date(),
-      timelineEvent: { type: `Break Start (${breakType})`, time: new Date().toLocaleTimeString() },
+      breakStartTime: new Date().toISOString(),
+      timelineEvent: {
+        type: `Break Start (${breakType})`,
+        time: new Date().toISOString(),
+      },
     });
   };
 
@@ -223,7 +256,7 @@ const TodayStatusPage = ({ onLogout }) => {
       currentlyWorking: true,
       onBreak: false,
       breakStartTime: null,
-      timelineEvent: { type: "Resume Work", time: new Date().toLocaleTimeString() },
+      timelineEvent: { type: "Resume Work", time: new Date().toISOString() },
     });
   };
 
@@ -268,7 +301,8 @@ const TodayStatusPage = ({ onLogout }) => {
       fetchWeeklySummary();
       fetchFlexibleRequests();
     } catch (err) {
-      const msg = err?.response?.data?.message || "Failed to submit request.";
+      const msg =
+        err?.response?.data?.message || "Failed to submit request.";
       toast.error(msg);
       setIsSubmittingRequest(false);
     }
@@ -283,12 +317,19 @@ const TodayStatusPage = ({ onLogout }) => {
 
   return (
     <div className="bg-[#101525] min-h-screen text-gray-100">
-      <Sidebar collapsed={collapsed} setCollapsed={setCollapsed} userRole="employee" onLogout={onLogout} />
+      <Sidebar
+        collapsed={collapsed}
+        setCollapsed={setCollapsed}
+        userRole="employee"
+        onLogout={onLogout}
+      />
 
       <main
         className="transition-all duration-300 p-2 sm:p-6 overflow-auto"
         style={{
-          marginLeft: collapsed ? SIDEBAR_WIDTH_COLLAPSED : SIDEBAR_WIDTH_EXPANDED,
+          marginLeft: collapsed
+            ? SIDEBAR_WIDTH_COLLAPSED
+            : SIDEBAR_WIDTH_EXPANDED,
           minHeight: "100vh",
         }}
       >
@@ -316,7 +357,10 @@ const TodayStatusPage = ({ onLogout }) => {
           </div>
 
           <div className="space-y-4">
-            <SummaryCard weeklySummary={weeklySummary} dailyData={dailyData} />
+            <SummaryCard
+              weeklySummary={weeklySummary}
+              dailyData={dailyData}
+            />
           </div>
         </div>
 
@@ -356,7 +400,10 @@ const TodayStatusPage = ({ onLogout }) => {
         )}
 
         {showPunchOutConfirm && (
-          <PunchOutConfirmPopup onCancel={onCancelPunchOut} onConfirm={onConfirmPunchOut} />
+          <PunchOutConfirmPopup
+            onCancel={onCancelPunchOut}
+            onConfirm={onConfirmPunchOut}
+          />
         )}
 
         {/* --- Flexible Shift Modal --- */}
@@ -369,8 +416,13 @@ const TodayStatusPage = ({ onLogout }) => {
               className="bg-[#0f1724] text-gray-100 rounded-lg shadow-lg w-full max-w-md p-6 max-h-[80vh] overflow-auto"
               onClick={(e) => e.stopPropagation()}
             >
-              <h2 className="text-xl font-semibold mb-4">Request Flexible Shift</h2>
-              <form className="flex flex-col gap-4" onSubmit={submitFlexibleRequest}>
+              <h2 className="text-xl font-semibold mb-4">
+                Request Flexible Shift
+              </h2>
+              <form
+                className="flex flex-col gap-4"
+                onSubmit={submitFlexibleRequest}
+              >
                 <label className="flex flex-col gap-1">
                   Date:
                   <input
