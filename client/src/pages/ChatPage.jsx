@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import CreateGroupModal from "../components/chat/CreateGroupModal";
-import ChatWindow from "../components/chat/ChatWindow";
+import ChatWindow from "../components/chat/chatWindow";
 import useChatWebSocket from "../hooks/useChatWebSocket";
 import Sidebar from "../components/dashboard/Sidebar";
 

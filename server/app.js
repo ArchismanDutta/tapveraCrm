@@ -153,12 +153,50 @@ wss.on("connection", (ws) => {
           ws.send(JSON.stringify({ type: "authenticated", userId: user.id }));
           console.log(`User authenticated: ${user.id}`);
         } catch (err) {
-          ws.send(JSON.stringify({ type: "auth_failed", message: "Invalid Token" }));
+          ws.send(
+            JSON.stringify({ type: "auth_failed", message: "Invalid Token" })
+          );
           ws.close();
         }
       } else {
-        ws.send(JSON.stringify({ type: "auth_required", message: "Token Required" }));
+        ws.send(
+          JSON.stringify({ type: "auth_required", message: "Token Required" })
+        );
         ws.close();
+      }
+      return;
+    }
+
+    // --- HANDLE GROUP MESSAGES ---
+    if (data.type === "message" && data.conversationId && data.message) {
+      try {
+        // Save to DB
+        const savedMessage = await ChatController.saveMessage(
+          data.conversationId,
+          ws.user.id,
+          data.message
+        );
+
+        // Prepare payload for broadcast
+        const payload = {
+          type: "message",
+          _id: savedMessage._id,
+          conversationId: savedMessage.conversationId,
+          senderId: savedMessage.senderId,
+          message: savedMessage.message,
+          timestamp: savedMessage.timestamp,
+        };
+
+        // Broadcast to all sockets in this conversation
+        for (const userId of conversationMembersOnline[data.conversationId] ||
+          []) {
+          const recipientWs = users[userId];
+          if (recipientWs && recipientWs.readyState === WebSocket.OPEN) {
+            recipientWs.send(JSON.stringify(payload));
+          }
+        }
+      } catch (err) {
+        console.error("Failed to save/broadcast group message:", err);
       }
       return;
     }
@@ -166,11 +204,14 @@ wss.on("connection", (ws) => {
     // Handle private messages
     if (data.type === "private_message") {
       const senderId = data.senderId || data.senderid || data.senderID;
-      const recipientId = data.recipientId || data.recipientid || data.recipientID;
+      const recipientId =
+        data.recipientId || data.recipientid || data.recipientID;
       const msg = data.message || data.msg;
 
       if (!senderId || !recipientId || !msg) {
-        console.error("Missing senderId, recipientId, or message in private_message");
+        console.error(
+          "Missing senderId, recipientId, or message in private_message"
+        );
         return;
       }
 
