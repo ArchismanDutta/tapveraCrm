@@ -10,45 +10,59 @@ import {
   ResponsiveContainer,
 } from "recharts";
 
-const WorkHoursChart = ({ dailyData = [] }) => {
+const WorkHoursChart = ({
+  dailyData = [],
+  gradientColors = ["#f19ad2", "#ab4ee1", "#9743c8"],
+}) => {
   if (!dailyData || dailyData.length === 0) {
     return (
-      <p className="text-gray-400 italic">
-        No work hour data available for the selected period.
+      <p className="text-gray-400 italic text-center py-4">
+        No work hour data available.
       </p>
     );
   }
 
-  // Prepare chart data: day label and hours worked
+  // Prepare chart data
   const chartData = dailyData.map((day) => {
     const dateObj = day?.date ? new Date(day.date) : null;
     const dayLabel = dateObj ? dateObj.getDate() : "-";
-    const hours = ((day?.workDurationSeconds || 0) / 3600).toFixed(2);
+    const hours = ((day?.workDurationSeconds || 0) / 3600).toFixed(1); // smaller decimals
     return { day: dayLabel, hours: parseFloat(hours) };
   });
 
   return (
-    <div className="bg-gray-800 p-4 rounded-xl shadow mb-6">
-      <h3 className="text-white font-semibold mb-4">Daily Work Hours</h3>
-      <ResponsiveContainer width="100%" height={300}>
-        <BarChart
-          data={chartData}
-          margin={{ top: 20, right: 30, left: 10, bottom: 30 }}
-        >
-          <CartesianGrid strokeDasharray="3 3" stroke="#444" />
+    <div className="bg-gray-800 p-4 rounded-xl shadow-md mb-6">
+      <h3 className="text-white font-semibold mb-2 text-base">
+        Daily Work Hours
+      </h3>
+      <ResponsiveContainer width="100%" height={200}>
+        <BarChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 20 }}>
+          <defs>
+            <linearGradient id="workGradient" x1="0" y1="0" x2="0" y2="1">
+              {gradientColors.map((color, index) => (
+                <stop
+                  key={index}
+                  offset={`${(index / (gradientColors.length - 1)) * 100}%`}
+                  stopColor={color}
+                  stopOpacity={1}
+                />
+              ))}
+            </linearGradient>
+          </defs>
+          <CartesianGrid strokeDasharray="3 3" stroke="#444" vertical={false} />
           <XAxis
             dataKey="day"
-            label={{ value: "Day", position: "insideBottom", offset: -20, fill: "#fff" }}
             stroke="#ccc"
+            tick={{ fontSize: 12 }}
+            axisLine={false}
+            tickLine={false}
           />
           <YAxis
-            label={{
-              value: "Hours",
-              angle: -90,
-              position: "insideLeft",
-              fill: "#fff",
-            }}
             stroke="#ccc"
+            tick={{ fontSize: 12 }}
+            axisLine={false}
+            tickLine={false}
+            width={30}
           />
           <Tooltip
             contentStyle={{
@@ -59,21 +73,16 @@ const WorkHoursChart = ({ dailyData = [] }) => {
             }}
             formatter={(value) => `${value} hr`}
           />
-          <Bar
-            dataKey="hours"
-            fill="#ab4ee1"
-            radius={[4, 4, 0, 0]}
-            minPointSize={2}
-          />
+          <Bar dataKey="hours" fill="url(#workGradient)" radius={[4, 4, 0, 0]} />
         </BarChart>
       </ResponsiveContainer>
     </div>
   );
 };
 
-// Default props for safety
 WorkHoursChart.defaultProps = {
   dailyData: [],
+  gradientColors: ["#f19ad2", "#ab4ee1", "#9743c8"],
 };
 
 export default WorkHoursChart;
