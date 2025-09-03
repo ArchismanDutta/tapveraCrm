@@ -1,3 +1,4 @@
+// controllers/summaryController.js
 const DailyWork = require("../models/DailyWork");
 const { getEffectiveShift } = require("./statusController");
 
@@ -12,7 +13,6 @@ function secToHM(sec) {
 
 // ======================
 // GET /api/summary/week
-// Returns daily data + aggregated weekly stats
 // ======================
 exports.getWeeklySummary = async (req, res) => {
   try {
@@ -21,7 +21,7 @@ exports.getWeeklySummary = async (req, res) => {
 
     let { startDate, endDate } = req.query;
 
-    // Default: current week (Monday → Sunday)
+    // Default: current week (Mon → Sun)
     if (!startDate || !endDate) {
       const now = new Date();
       const day = now.getDay(); // Sunday = 0
@@ -78,7 +78,7 @@ exports.getWeeklySummary = async (req, res) => {
       let isHalfDay = false;
       let isAbsent = false;
 
-      // Determine absent / half-day
+      // Absent / Half Day logic
       if (!day.arrivalTime || workSeconds < MIN_HALF_DAY_SECONDS) {
         isAbsent = true;
         absentDays++;
@@ -87,9 +87,9 @@ exports.getWeeklySummary = async (req, res) => {
         halfDays++;
       }
 
-      // Punctuality & perfect day logic
+      // Punctuality & perfect day
       if (!isAbsent) {
-        if (effectiveShift.isFlexiblePermanent) {
+        if (effectiveShift.isFlexible) {
           if (workSeconds >= MIN_FULL_DAY_SECONDS) {
             perfectDays++;
             onTimeCount++;
@@ -153,7 +153,7 @@ exports.getWeeklySummary = async (req, res) => {
 
     res.json({ dailyData, weeklySummary });
   } catch (err) {
-    console.error("Error fetching weekly summary:", err);
-    res.status(500).json({ message: "Server error" });
+    console.error("❌ Error fetching weekly summary:", err);
+    res.status(500).json({ message: "Server error", error: err.message });
   }
 };
