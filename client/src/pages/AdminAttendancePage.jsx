@@ -1,7 +1,7 @@
 // File: pages/AdminAttendancePage.jsx
 import React, { useEffect, useState } from "react";
+import Sidebar from "../components/dashboard/Sidebar";
 import { fetchEmployees, fetchEmployeeSummary } from "../api/adminApi";
-// NOTE: corrected imports to components/dashboard (your files are under dashboard)
 import EmployeeSelector from "../components/adminattendance/EmployeeSelector";
 import DateRangePicker from "../components/adminattendance/DateRangePicker";
 import AttendanceSummaryCard from "../components/adminattendance/AttendanceSummaryCard";
@@ -10,6 +10,7 @@ import LeaveList from "../components/adminattendance/LeaveList";
 import WorkHoursChart from "../components/adminattendance/WorkHoursChart";
 
 const AdminAttendancePage = () => {
+  const [collapsed, setCollapsed] = useState(false);
   const [employees, setEmployees] = useState([]);
   const [selectedEmployee, setSelectedEmployee] = useState(null);
   const [dateRange, setDateRange] = useState(() => {
@@ -25,137 +26,232 @@ const AdminAttendancePage = () => {
   const [summaryData, setSummaryData] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  // Utility: normalise an _id which could be a string or an object { $oid: '...' }
-  const normaliseId = (id) => {
+  const userRole = localStorage.getItem("role") || "admin";
+
+  // Utility to normalize IDs
+  const normalizeId = (id) => {
     if (!id) return "";
     if (typeof id === "string") return id;
     if (typeof id === "object" && id.$oid) return id.$oid;
-    // fallback to string conversion
-    try {
-      return String(id);
-    } catch {
-      return "";
-    }
+    return String(id);
   };
 
-  // Load employees on mount (robust)
+  // Convert UTC date to IST
+  const toIST = (date) => {
+    if (!date) return null;
+    const istOffset = 5.5 * 60; // minutes
+    return new Date(new Date(date).getTime() + istOffset * 60000);
+  };
+
+  // Compute first punch-in and last punch-out
+  const computePunchTimes = (dailyData = []) => {
+    let firstPunchIn = null;
+    let lastPunchOut = null;
+
+    dailyData.forEach((day) => {
+      // Skip absent days
+      if (day.isAbsent) return;
+
+      // First punch-in
+      if (day.arrivalTime) {
+        const arrival = toIST(day.arrivalTime);
+        if (!firstPunchIn || arrival < firstPunchIn) firstPunchIn = arrival;
+      }
+
+      // Last punch-out
+      if (Array.isArray(day.workedSessions)) {
+        day.workedSessions.forEach((session) => {
+          if (session.end) {
+            const endTime = toIST(session.end);
+            if (!lastPunchOut || endTime > lastPunchOut) lastPunchOut = endTime;
+          }
+        });
+      }
+    });
+
+    // Format to HH:MM AM/PM
+    const formatTime = (date) => {
+      if (!date) return "-";
+      let hours = date.getHours();
+      const minutes = date.getMinutes();
+      const ampm = hours >= 12 ? "PM" : "AM";
+      hours = hours % 12 || 12;
+      return `${hours.toString().padStart(2, "0")}:${minutes
+        .toString()
+        .padStart(2, "0")} ${ampm}`;
+    };
+
+    return {
+      firstPunchIn: formatTime(firstPunchIn),
+      lastPunchOut: formatTime(lastPunchOut),
+    };
+  };
+
+  // Fetch employees
   useEffect(() => {
-    async function loadEmployees() {
+    const loadEmployees = async () => {
       try {
         const res = await fetchEmployees();
-        console.log("[AdminAttendancePage] fetchEmployees raw response:", res);
-
-        // Resolve array from common shapes
         let dataArray = [];
+
         if (Array.isArray(res)) dataArray = res;
         else if (Array.isArray(res.data)) dataArray = res.data;
         else if (Array.isArray(res.data?.data)) dataArray = res.data.data;
         else {
-          // Try to find any array inside the object
           const arr = Object.values(res || {}).find((v) => Array.isArray(v));
           if (arr) dataArray = arr;
         }
 
-        console.log("[AdminAttendancePage] resolved dataArray:", dataArray);
-
-        // Normalise role and id and filter employees only
         const employeeList = dataArray
           .map((emp) => ({
             ...emp,
-            _id: normaliseId(emp._id || emp.id),
+            _id: normalizeId(emp._id || emp.id),
             role: (emp.role || "").toString().trim().toLowerCase(),
           }))
           .filter((emp) => emp.role === "employee");
 
-        console.log("[AdminAttendancePage] filtered employeeList:", employeeList);
-
         setEmployees(employeeList);
-        setSelectedEmployee(employeeList.length > 0 ? employeeList[0] : null);
+        setSelectedEmployee(employeeList[0] || null);
       } catch (err) {
         console.error("[AdminAttendancePage] loadEmployees error:", err);
         setEmployees([]);
         setSelectedEmployee(null);
       }
-    }
+    };
 
     loadEmployees();
   }, []);
 
-  // Load employee summary when selectedEmployee or dateRange changes
+  // Fetch employee summary
   useEffect(() => {
     if (!selectedEmployee || !dateRange.startDate || !dateRange.endDate) {
       setSummaryData(null);
       return;
     }
 
-    setLoading(true);
-
-    async function loadSummary() {
+    const loadSummary = async () => {
+      setLoading(true);
       try {
         const res = await fetchEmployeeSummary(
           selectedEmployee._id,
           dateRange.startDate,
           dateRange.endDate
         );
-        console.log("[AdminAttendancePage] fetchEmployeeSummary:", res);
 
         if (res?.success) {
-          setSummaryData(res);
-        } else if (Array.isArray(res)) {
-          // if API returned array directly (rare), handle gracefully
-          setSummaryData({ summary: {}, attendanceRecords: res, leaves: [] });
+          const dailyData = res.dailyData || [];
+          const { firstPunchIn, lastPunchOut } = computePunchTimes(dailyData);
+
+          const summaryWithPunch = {
+            ...res.summary,
+            firstPunchIn,
+            lastPunchOut,
+          };
+
+          setSummaryData({
+            ...res,
+            summary: summaryWithPunch,
+            dailyData,
+            leaves: res.leaves || [],
+          });
         } else {
-          console.warn("No summary data or unexpected response:", res);
           setSummaryData(null);
+          console.warn("[AdminAttendancePage] Unexpected summary response:", res);
         }
       } catch (err) {
-        console.error("Failed to load summary", err);
+        console.error("[AdminAttendancePage] loadSummary error:", err);
         setSummaryData(null);
       } finally {
         setLoading(false);
       }
-    }
+    };
 
     loadSummary();
   }, [selectedEmployee, dateRange]);
 
   return (
-    <div className="p-6 bg-gray-900 min-h-screen text-white w-full">
-  <h1 className="text-3xl font-bold mb-6">Employee Attendance Overview</h1>
-
-  <div className="flex flex-col md:flex-row gap-6 mb-6">
-    <div className="flex-1">
-      <EmployeeSelector
-        employees={employees}
-        selected={selectedEmployee}
-        onSelect={setSelectedEmployee}
+    <div className="flex">
+      {/* Sidebar */}
+      <Sidebar
+        collapsed={collapsed}
+        setCollapsed={setCollapsed}
+        userRole={userRole}
+        onLogout={() => console.log("Logout clicked")}
       />
+
+      {/* Main content */}
+      <div
+        className={`flex-1 transition-all duration-300 ${
+          collapsed ? "ml-16" : "ml-56"
+        } p-6 bg-gray-900 min-h-screen text-white`}
+      >
+        <h1 className="text-3xl font-bold mb-6">Employee Attendance Overview</h1>
+
+        {/* Employee Selector + Date Range */}
+        <div className="flex flex-col md:flex-row gap-6 mb-6">
+          <div className="flex-1">
+            <EmployeeSelector
+              employees={employees}
+              selected={selectedEmployee}
+              onSelect={setSelectedEmployee}
+            />
+          </div>
+          <div className="flex-1">
+            <DateRangePicker value={dateRange} onChange={setDateRange} />
+          </div>
+        </div>
+
+        {/* Loading */}
+        {loading && (
+          <p className="text-center text-gray-300 my-6">Loading summary...</p>
+        )}
+
+        {/* Attendance Data */}
+        {!loading && summaryData ? (
+          <>
+            <AttendanceSummaryCard summary={summaryData.summary} />
+
+            {/* Calendar */}
+            <div className="my-6 border border-gray-700 rounded-lg p-4 shadow-lg bg-gray-800">
+              <h2 className="text-xl font-semibold mb-4">Attendance Calendar</h2>
+              <AttendanceCalendar
+                dailyData={summaryData.dailyData}
+                colorScheme={{
+                  work: "bg-gradient-to-r from-green-400 to-green-600",
+                  break: "bg-yellow-400",
+                  leave: "bg-red-500",
+                }}
+                showTooltip
+                rounded
+              />
+            </div>
+
+            {/* Leave List */}
+            <div className="my-6 border border-gray-700 rounded-lg p-4 shadow-lg bg-gray-800">
+              <h2 className="text-xl font-semibold mb-4">Leaves Taken</h2>
+              <LeaveList leaves={summaryData.leaves} />
+            </div>
+
+            {/* Work Hours Chart */}
+            <div className="my-6 border border-gray-700 rounded-lg p-4 shadow-lg bg-gray-800">
+              <h2 className="text-xl font-semibold mb-4">Work Hours Chart</h2>
+              <WorkHoursChart
+                dailyData={summaryData.dailyData}
+                gradientColors={["#f19ad2", "#ab4ee1", "#9743c8"]}
+                showTooltip
+                rounded
+              />
+            </div>
+          </>
+        ) : (
+          !loading && (
+            <p className="text-center text-gray-400 my-6">
+              No data to display. Please select an employee and date range.
+            </p>
+          )
+        )}
+      </div>
     </div>
-    <div className="flex-1">
-      <DateRangePicker value={dateRange} onChange={setDateRange} />
-    </div>
-  </div>
-
-  {loading && (
-    <p className="text-center text-gray-300 my-6">Loading summary...</p>
-  )}
-
-  {!loading && summaryData ? (
-    <>
-      <AttendanceSummaryCard summary={summaryData.summary} />
-      <AttendanceCalendar dailyData={summaryData.attendanceRecords} />
-      <LeaveList leaves={summaryData.leaves} />
-      <WorkHoursChart dailyData={summaryData.attendanceRecords} />
-    </>
-  ) : (
-    !loading && (
-      <p className="text-center text-gray-400 my-6">
-        No data to display. Please select an employee and date range.
-      </p>
-    )
-  )}
-</div>
-
   );
 };
 

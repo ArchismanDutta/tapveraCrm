@@ -16,13 +16,13 @@ const EmployeeSelector = ({
     <div className="flex flex-col w-full">
       <label
         htmlFor="employee-select"
-        className="text-gray-300 text-sm mb-1"
+        className="text-gray-300 text-sm mb-1 font-medium"
       >
         Select Employee
       </label>
       <select
         id="employee-select"
-        className="w-full p-2 rounded border border-gray-600 bg-gray-800 text-white focus:outline-none focus:ring-2 focus:ring-pink-500"
+        className="w-full p-2 rounded-lg border border-gray-600 bg-gray-800 text-white focus:outline-none focus:ring-2 focus:ring-pink-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
         value={selected?._id || ""}
         onChange={handleChange}
         disabled={employees.length === 0}
