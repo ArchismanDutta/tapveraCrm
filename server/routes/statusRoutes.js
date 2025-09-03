@@ -12,12 +12,12 @@ const {
 // User Status Routes
 // ======================
 
-// GET /api/status
+// GET /api/status/today
 // Fetch today's status for the logged-in user
-router.get("/", protect, getTodayStatus);
+router.get("/today", protect, getTodayStatus);
 
-// PUT /api/status
+// PUT /api/status/today
 // Update today's status (punch in/out, break start/end, work/resume)
-router.put("/", protect, updateTodayStatus);
+router.put("/today", protect, updateTodayStatus);
 
 module.exports = router;

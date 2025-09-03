@@ -31,17 +31,9 @@ const shiftSchema = new mongoose.Schema({
 // ======================
 // Main User Schema
 // ======================
-
 const userSchema = new mongoose.Schema(
   {
-    employeeId: {
-      type: String,
-      required: true,
-      unique: true,
-      trim: true,
-      uppercase: true,
-      index: true,
-    },
+    employeeId: { type: String, required: true, unique: true, trim: true, uppercase: true, index: true },
     name: { type: String, required: true, trim: true },
     email: {
       type: String,
@@ -51,64 +43,25 @@ const userSchema = new mongoose.Schema(
       trim: true,
       match: [/^\S+@\S+\.\S+$/, "Invalid email format"],
     },
-    contact: {
-      type: String,
-      required: true,
-      trim: true,
-      match: [/^\+?\d{7,15}$/, "Invalid contact number"],
-    },
-    dob: {
-      type: Date,
-      required: true,
-      validate: {
-        validator: v => v <= new Date(),
-        message: "DOB cannot be a future date",
-      },
-    },
-    gender: {
-      type: String,
-      enum: ["male", "female", "other"],
-      required: true,
-    },
+    contact: { type: String, required: true, trim: true, match: [/^\+?\d{7,15}$/, "Invalid contact number"] },
+    dob: { type: Date, required: true, validate: { validator: v => v <= new Date(), message: "DOB cannot be a future date" } },
+    gender: { type: String, enum: ["male", "female", "other"], required: true },
     bloodGroup: { type: String, trim: true },
     permanentAddress: { type: String, trim: true },
     currentAddress: { type: String, trim: true },
     emergencyContact: { type: String, trim: true },
     ps: { type: String, trim: true },
-    doj: {
-      type: Date,
-      required: true,
-      validate: {
-        validator: v => v <= new Date(),
-        message: "DOJ cannot be a future date",
-      },
-    },
+    doj: { type: Date, required: true, validate: { validator: v => v <= new Date(), message: "DOJ cannot be a future date" } },
     salary: { type: salarySchema, default: () => ({}) },
     ref: { type: String, trim: true },
     status: { type: String, enum: ["active", "inactive"], default: "active" },
     totalPl: { type: Number, default: 0, min: 0 },
     password: { type: String, required: true },
-    role: {
-      type: String,
-      enum: ["super-admin", "admin", "hr", "employee"],
-      default: "employee",
-    },
-    department: {
-      type: String,
-      enum: ["executives", "development", "marketingAndSales", "humanResource", ""],
-      default: "",
-    },
+    role: { type: String, enum: ["super-admin", "admin", "hr", "employee"], default: "employee" },
+    department: { type: String, enum: ["executives", "development", "marketingAndSales", "humanResource", ""], default: "" },
     designation: { type: String, trim: true, default: "" },
-    jobLevel: {
-      type: String,
-      enum: ["intern", "junior", "mid", "senior", "lead", "director", "executive"],
-      default: "junior",
-    },
-    employmentType: {
-      type: String,
-      enum: ["full-time", "part-time", "contract", "internship"],
-      default: "full-time",
-    },
+    jobLevel: { type: String, enum: ["intern", "junior", "mid", "senior", "lead", "director", "executive"], default: "junior" },
+    employmentType: { type: String, enum: ["full-time", "part-time", "contract", "internship"], default: "full-time" },
     skills: [{ type: String, trim: true }],
     qualifications: [qualificationSchema],
     outlookEmail: { type: String, lowercase: true, trim: true },
@@ -117,42 +70,31 @@ const userSchema = new mongoose.Schema(
     avatar: { type: String, trim: true, default: "" },
 
     // Shift Type
-    shiftType: {
-      type: String,
-      enum: ["standard", "flexiblePermanent"],
-      default: "standard",
-    },
+    shiftType: { type: String, enum: ["standard", "flexiblePermanent"], default: "standard" },
 
     // Shift sub-document
-    shift: {
-      type: shiftSchema,
-      default: () => ({}), // Will be set properly in pre-save hook
-    },
+    shift: { type: shiftSchema, default: () => ({}) },
 
-    // Flexible shift requests for standard employees
-    flexibleShiftRequests: [
-      { type: mongoose.Schema.Types.ObjectId, ref: "FlexibleShiftRequest" },
-    ],
+    // Flexible shift requests for standard employees (single-day flexibility)
+    flexibleShiftRequests: [{ type: mongoose.Schema.Types.ObjectId, ref: "FlexibleShiftRequest" }],
   },
   { timestamps: true }
 );
 
 // ======================
-// Pre-save hook to set shift properly
+// Pre-save hook to ensure default shift
 // ======================
 userSchema.pre("save", function (next) {
-  if (this.isNew) {
+  if (!this.shift || !this.shift.name) {
     if (this.shiftType === "flexiblePermanent") {
-      // Permanent flexible employee
       this.shift = {
         name: "Flexible 9h/day",
-        start: null,
-        end: null,
+        start: "09:00",
+        end: "18:00",
         durationHours: 9,
         isFlexible: true,
       };
     } else if (this.shiftType === "standard") {
-      // Standard employee gets default Morning shift
       this.shift = {
         name: "Morning 9-6",
         start: "09:00",
@@ -166,10 +108,40 @@ userSchema.pre("save", function (next) {
 });
 
 // ======================
+// Post-save hook to create today's UserStatus
+// ======================
+userSchema.post("save", async function (doc, next) {
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const UserStatus = require("./UserStatus");
+
+    // Check if today's status already exists
+    const existing = await UserStatus.findOne({ userId: doc._id, today });
+    if (!existing) {
+      await UserStatus.create({
+        userId: doc._id,
+        shiftType: doc.shiftType,
+        shift: {
+          name: doc.shift.name,
+          start: doc.shift.start,
+          end: doc.shift.end,
+          durationHours: doc.shift.durationHours,
+          isFlexible: doc.shift.isFlexible,
+        },
+        today,
+      });
+    }
+    next();
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ======================
 // Methods
 // ======================
-
-// Compute attendance for flexiblePermanent users
 userSchema.methods.computeFlexibleAttendance = function (workHours, breakHours = 0) {
   if (this.shiftType !== "flexiblePermanent") return null;
   const total = workHours + breakHours;
@@ -178,7 +150,9 @@ userSchema.methods.computeFlexibleAttendance = function (workHours, breakHours =
   return "full-day";
 };
 
-// Hide sensitive info in JSON output
+// ======================
+// Hide sensitive info
+// ======================
 userSchema.set("toJSON", {
   transform: (doc, ret) => {
     delete ret.password;

@@ -9,100 +9,85 @@ const breakSessionSchema = new mongoose.Schema({
 });
 
 // ======================
-// Sub-schema: Shift for the day
-// ======================
-const shiftForDaySchema = new mongoose.Schema({
-  name: { type: String, trim: true, default: "" },
-  start: {
-    type: String,
-    trim: true,
-    required: true,
-    validate: {
-      validator: (v) => /^\d{2}:\d{2}$/.test(v),
-      message: "Shift start must be in HH:MM format",
-    },
-  },
-  end: {
-    type: String,
-    trim: true,
-    required: true,
-    validate: {
-      validator: function (v) {
-        if (!this.start || !v) return true;
-
-        // Parse times
-        const [startH, startM] = this.start.split(":").map(Number);
-        const [endH, endM] = v.split(":").map(Number);
-        const startMinutes = startH * 60 + startM;
-        const endMinutes = endH * 60 + endM;
-
-        // Allow distinct start and end times (including overnight)
-        return endMinutes !== startMinutes;
-      },
-      message:
-        "Shift end time must be different from start time (same-day or overnight allowed)",
-    },
-  },
-  durationHours: { type: Number, default: 9, min: 1, max: 24 },
-  isFlexible: { type: Boolean, default: false }, // true for flexibleRequest or flexiblePermanent
-});
-
-// ======================
 // Main DailyWork Schema
 // ======================
 const DailyWorkSchema = new mongoose.Schema({
-  userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, index: true },
+  userStatusId: { type: mongoose.Schema.Types.ObjectId, ref: "UserStatus", required: true },
   date: { type: Date, required: true },
-  arrivalTime: { type: Date, default: null },
-  expectedStartTime: { type: String, default: null }, // for flexible requests
-  shift: { type: shiftForDaySchema, required: true },
 
-  // Shift Type: standard | flexibleRequest | flexiblePermanent
-  shiftType: {
-    type: String,
-    enum: ["standard", "flexibleRequest", "flexiblePermanent"],
-    default: "standard",
-  },
+  // Break sessions for this day
+  breakSessions: { type: [breakSessionSchema], default: [] },
 
-  // Work / Break Tracking
-  workDurationSeconds: { type: Number, default: 0 }, // includes total work
-  breakDurationSeconds: { type: Number, default: 0 }, // includes total breaks
-  breakSessions: [breakSessionSchema],
-
-  // Attendance Flags
-  isLate: { type: Boolean, default: false }, // only for standard shifts
-  isEarly: { type: Boolean, default: false }, // only for standard shifts
-  isHalfDay: { type: Boolean, default: false },
-  isAbsent: { type: Boolean, default: false },
+  // Computed daily durations
+  workDurationSeconds: { type: Number, default: 0 },
+  breakDurationSeconds: { type: Number, default: 0 },
 });
 
 // ======================
-// Helper methods
+// Virtuals for easier access
 // ======================
+DailyWorkSchema.virtual("totalWorkedMinutes").get(function () {
+  return Math.floor(this.workDurationSeconds / 60);
+});
 
-// Compute attendance flags for flexiblePermanent employees based on hours worked + breaks (+1h break buffer)
-DailyWorkSchema.methods.evaluateFlexibleAttendance = function () {
-  if (this.shiftType !== "flexiblePermanent") return;
+DailyWorkSchema.virtual("totalBreakMinutes").get(function () {
+  return Math.floor(this.breakDurationSeconds / 60);
+});
 
-  const totalWorkedHours = this.workDurationSeconds / 3600;
-  const totalWithBreak = totalWorkedHours + this.breakDurationSeconds / 3600 + 1;
+// ======================
+// Compute durations from UserStatus
+// ======================
+DailyWorkSchema.methods.computeDurations = function (userStatus) {
+  if (!userStatus) return;
 
-  if (totalWithBreak < 5) {
-    this.isAbsent = true;
-    this.isHalfDay = false;
-  } else if (totalWithBreak >= 5 && totalWithBreak < 9) {
-    this.isHalfDay = true;
-    this.isAbsent = false;
-  } else {
-    this.isHalfDay = false;
-    this.isAbsent = false;
+  // Work duration
+  const ws = userStatus.workedSessions || [];
+  let workSecs = ws.reduce((sum, s) => {
+    if (s.start && s.end) return sum + (new Date(s.end) - new Date(s.start)) / 1000;
+    return sum;
+  }, 0);
+  if (userStatus.currentlyWorking && ws.length && !ws[ws.length - 1].end) {
+    workSecs += (Date.now() - new Date(ws[ws.length - 1].start).getTime()) / 1000;
   }
+
+  // Break duration
+  const bs = userStatus.breakSessions || [];
+  let breakSecs = bs.reduce((sum, s) => {
+    if (s.start && s.end) return sum + (new Date(s.end) - new Date(s.start)) / 1000;
+    return sum;
+  }, 0);
+  if (userStatus.onBreak && userStatus.breakStartTime) {
+    breakSecs += (Date.now() - new Date(userStatus.breakStartTime).getTime()) / 1000;
+  }
+
+  this.workDurationSeconds = Math.floor(workSecs);
+  this.breakDurationSeconds = Math.floor(breakSecs);
 };
 
 // ======================
-// Index for uniqueness per user & day
+// Static helper: create DailyWork from UserStatus
 // ======================
-DailyWorkSchema.index({ userId: 1, date: 1 }, { unique: true });
+DailyWorkSchema.statics.createFromStatus = async function (userStatus) {
+  if (!userStatus || !userStatus.userId) throw new Error("Invalid UserStatus");
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  let existing = await this.findOne({ userId: userStatus.userId, date: today });
+  if (existing) return existing;
+
+  const dailyWork = new this({
+    userId: userStatus.userId,
+    userStatusId: userStatus._id,
+    date: today,
+    breakSessions: userStatus.breakSessions || [],
+  });
+
+  dailyWork.computeDurations(userStatus);
+  await dailyWork.save();
+  return dailyWork;
+};
 
 // ======================
 // Export Model
