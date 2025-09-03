@@ -1,3 +1,4 @@
+// controllers/statusController.js
 const UserStatus = require("../models/UserStatus");
 const DailyWork = require("../models/DailyWork");
 const User = require("../models/User");
@@ -6,7 +7,9 @@ const FlexibleShiftRequest = require("../models/FlexibleShiftRequest");
 const MIN_HALF_DAY_SECONDS = 5 * 3600; // 5 hours
 const MIN_FULL_DAY_SECONDS = 8 * 3600; // 8 hours
 
-// Calculate total worked time including ongoing session if any
+// -----------------------
+// Helpers
+// -----------------------
 function getWorkDurationSeconds(workedSessions, currentlyWorking) {
   if (!Array.isArray(workedSessions)) return 0;
 
@@ -15,14 +18,17 @@ function getWorkDurationSeconds(workedSessions, currentlyWorking) {
     return sum;
   }, 0);
 
-  if (currentlyWorking && workedSessions.length && !workedSessions[workedSessions.length - 1].end) {
-    total += (Date.now() - new Date(workedSessions[workedSessions.length - 1].start).getTime()) / 1000;
+  // handle ongoing session
+  if (currentlyWorking && workedSessions.length) {
+    const last = workedSessions[workedSessions.length - 1];
+    if (!last.end && last.start) {
+      total += (Date.now() - new Date(last.start).getTime()) / 1000;
+    }
   }
 
   return Math.floor(total);
 }
 
-// Calculate total break time including ongoing break if any
 function getBreakDurationSeconds(breakSessions, onBreak, breakStart) {
   if (!Array.isArray(breakSessions)) return 0;
 
@@ -31,14 +37,19 @@ function getBreakDurationSeconds(breakSessions, onBreak, breakStart) {
     return sum;
   }, 0);
 
-  if (onBreak && breakStart) {
-    total += (Date.now() - new Date(breakStart).getTime()) / 1000;
+  // handle ongoing break
+  if (onBreak) {
+    const last = breakSessions.length ? breakSessions[breakSessions.length - 1] : null;
+    if (last && !last.end && last.start) {
+      total += (Date.now() - new Date(last.start).getTime()) / 1000;
+    } else if (breakStart) {
+      total += (Date.now() - new Date(breakStart).getTime()) / 1000;
+    }
   }
 
   return Math.floor(total);
 }
 
-// Format seconds to 'HHh MMm SSs' string
 function secToHMS(sec) {
   const h = Math.floor(sec / 3600);
   const m = Math.floor((sec % 3600) / 60);
@@ -46,20 +57,20 @@ function secToHMS(sec) {
   return `${h}h ${m.toString().padStart(2, "0")}m ${s.toString().padStart(2, "0")}s`;
 }
 
-// Format seconds to 'HHh MMm' string
 function secToHM(sec) {
   const h = Math.floor(sec / 3600);
   const m = Math.floor((sec % 3600) / 60);
   return `${h}h ${m.toString().padStart(2, "0")}m`;
 }
 
-// Format Date to 'YYYY-MM-DD'
 function ymdKey(date) {
   const iso = new Date(date).toISOString();
   return iso.slice(0, 10);
 }
 
-// Determine effective shift for a user on a given date
+// -----------------------
+// Effective Shift
+// -----------------------
 async function getEffectiveShift(userId, date) {
   const targetDate = new Date(date);
   targetDate.setHours(0, 0, 0, 0);
@@ -69,7 +80,7 @@ async function getEffectiveShift(userId, date) {
 
   const key = ymdKey(targetDate);
 
-  // Day-specific override from shiftOverrides if exists
+  // Shift override
   if (user.shiftOverrides && user.shiftOverrides[key]) {
     const ov = user.shiftOverrides[key];
     return {
@@ -81,7 +92,7 @@ async function getEffectiveShift(userId, date) {
     };
   }
 
-  // Permanent flexible employee default full day shift
+  // Flexible permanent shift
   if (user.shiftType === "flexiblePermanent") {
     return {
       start: "00:00",
@@ -92,7 +103,7 @@ async function getEffectiveShift(userId, date) {
     };
   }
 
-  // Approved flexible shift request for that day (for standard users)
+  // Flexible shift requests
   const flexShift = await FlexibleShiftRequest.findOne({
     employee: userId,
     requestedDate: targetDate,
@@ -105,10 +116,7 @@ async function getEffectiveShift(userId, date) {
 
     let endH = startH + Math.floor(duration);
     let endM = startM + Math.round((duration % 1) * 60);
-    if (endM >= 60) {
-      endH += 1;
-      endM -= 60;
-    }
+    if (endM >= 60) { endH += 1; endM -= 60; }
     if (endH >= 24) endH -= 24;
 
     return {
@@ -120,7 +128,6 @@ async function getEffectiveShift(userId, date) {
     };
   }
 
-  // Default fixed shift for standard user
   return {
     start: user.shift?.start || "09:00",
     end: user.shift?.end || "18:00",
@@ -130,7 +137,9 @@ async function getEffectiveShift(userId, date) {
   };
 }
 
-// Sync or create DailyWork document with today’s attendance data
+// -----------------------
+// Sync DailyWork
+// -----------------------
 async function syncDailyWork(userId, todayStatus) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -142,6 +151,7 @@ async function syncDailyWork(userId, todayStatus) {
     start: effectiveShift.start || "00:00",
     end: effectiveShift.end || "23:59",
     isFlexible: Boolean(effectiveShift.isFlexible || effectiveShift.isFlexiblePermanent),
+    durationHours: effectiveShift.durationHours || 9,
   };
 
   let dailyWork = await DailyWork.findOne({ userId, date: today });
@@ -151,9 +161,9 @@ async function syncDailyWork(userId, todayStatus) {
   if (!dailyWork) {
     dailyWork = new DailyWork({
       userId,
+      userStatusId: todayStatus._id,
       date: today,
-      arrivalTime: todayStatus.arrivalTime || null,
-      expectedStartTime: effectiveShift.isFlexiblePermanent ? null : effectiveShift.start,
+      expectedStartTime: effectiveShift.isFlexiblePermanent || effectiveShift.isFlexible ? null : effectiveShift.start,
       shift: shiftObj,
       shiftType: computedShiftType,
       workDurationSeconds: 0,
@@ -162,51 +172,36 @@ async function syncDailyWork(userId, todayStatus) {
     });
   } else {
     dailyWork.shift = shiftObj;
-    dailyWork.expectedStartTime = effectiveShift.isFlexiblePermanent ? null : effectiveShift.start;
+    dailyWork.expectedStartTime = effectiveShift.isFlexiblePermanent || effectiveShift.isFlexible ? null : effectiveShift.start;
     dailyWork.shiftType = computedShiftType;
+    dailyWork.userStatusId = todayStatus._id;
   }
 
   dailyWork.workDurationSeconds = getWorkDurationSeconds(todayStatus.workedSessions, todayStatus.currentlyWorking);
   dailyWork.breakDurationSeconds = getBreakDurationSeconds(todayStatus.breakSessions, todayStatus.onBreak, todayStatus.breakStartTime);
-  dailyWork.breakSessions = todayStatus.breakSessions || [];
 
-  // Late / early flags only for fixed standard shifts
-  if (!effectiveShift.isFlexiblePermanent) {
-    if (!dailyWork.arrivalTime && todayStatus.arrivalTime) dailyWork.arrivalTime = todayStatus.arrivalTime;
-    if (dailyWork.arrivalTime && effectiveShift.start) {
-      const [expH, expM] = effectiveShift.start.split(":").map(Number);
-      const expectedArrival = new Date(dailyWork.arrivalTime);
-      expectedArrival.setHours(expH, expM, 0, 0);
-      dailyWork.isLate = dailyWork.arrivalTime > expectedArrival;
-      dailyWork.isEarly = dailyWork.arrivalTime < expectedArrival;
-    }
-  } else {
-    dailyWork.arrivalTime = todayStatus.arrivalTime || dailyWork.arrivalTime || null;
-    dailyWork.isLate = false;
-    dailyWork.isEarly = false;
-  }
-
-  // Half-day / absent evaluation
-  if (dailyWork.workDurationSeconds >= MIN_HALF_DAY_SECONDS) {
-    dailyWork.isHalfDay = dailyWork.workDurationSeconds < MIN_FULL_DAY_SECONDS;
-    dailyWork.isAbsent = false;
-  } else {
-    dailyWork.isHalfDay = false;
-    dailyWork.isAbsent = true;
-  }
+  dailyWork.breakSessions = (todayStatus.breakSessions || []).map(b => ({
+    start: b.start,
+    end: b.end || null,
+    type: b.type || undefined,
+  }));
 
   await dailyWork.save();
   return dailyWork;
 }
 
-// Retrieve today's user status with computed durations and formatted times
+// -----------------------
+// Get Today's Status
+// -----------------------
 async function getTodayStatus(req, res) {
   try {
     const userId = req.user._id;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const todayEnd = new Date();
+    todayEnd.setHours(23, 59, 59, 999);
 
-    let todayStatus = await UserStatus.findOne({ userId, today });
+    let todayStatus = await UserStatus.findOne({ userId, today: { $gte: todayStart, $lte: todayEnd } });
     if (!todayStatus) {
       todayStatus = await UserStatus.create({
         userId,
@@ -219,37 +214,41 @@ async function getTodayStatus(req, res) {
       });
     }
 
-    const effectiveShift = await getEffectiveShift(userId, today);
+    const effectiveShift = await getEffectiveShift(userId, todayStart);
     const workSecs = getWorkDurationSeconds(todayStatus.workedSessions, todayStatus.currentlyWorking);
     const breakSecs = getBreakDurationSeconds(todayStatus.breakSessions, todayStatus.onBreak, todayStatus.breakStartTime);
 
-    res.json({
+    const payload = {
       ...todayStatus.toObject(),
       effectiveShift,
       workDurationSeconds: workSecs,
       breakDurationSeconds: breakSecs,
       workDuration: secToHMS(workSecs),
       breakDuration: secToHMS(breakSecs),
-      arrivalTimeFormatted: todayStatus.arrivalTime
-        ? new Date(todayStatus.arrivalTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: true })
-        : null,
-    });
+      arrivalTimeFormatted: todayStatus.arrivalTime ? new Date(todayStatus.arrivalTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: true }) : null,
+    };
+
+    res.json(payload);
   } catch (err) {
     console.error("Error fetching today's status:", err);
     res.status(500).json({ message: "Server error", error: err.message });
   }
 }
 
-// Update user's attendance status for today with timeline events and durations
+// -----------------------
+// Update Today's Status
+// -----------------------
 async function updateTodayStatus(req, res) {
   try {
     const userId = req.user._id;
-    const { onBreak, currentlyWorking, timelineEvent, breakStartTime } = req.body;
+    const { timelineEvent } = req.body;
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const todayEnd = new Date();
+    todayEnd.setHours(23, 59, 59, 999);
 
-    let todayStatus = await UserStatus.findOne({ userId, today });
+    let todayStatus = await UserStatus.findOne({ userId, today: { $gte: todayStart, $lte: todayEnd } });
     if (!todayStatus) {
       todayStatus = await UserStatus.create({
         userId,
@@ -265,40 +264,67 @@ async function updateTodayStatus(req, res) {
     const ws = todayStatus.workedSessions || [];
     const bs = todayStatus.breakSessions || [];
 
-    switch (timelineEvent?.type) {
-      case "Punch In":
-        if (!todayStatus.arrivalTime) todayStatus.arrivalTime = new Date();
-        if (!ws.length || ws[ws.length - 1].end) ws.push({ start: new Date() });
-        await User.findByIdAndUpdate(userId, { status: "active" });
-        break;
-      case "Punch Out":
-        if (ws.length && !ws[ws.length - 1].end) ws[ws.length - 1].end = new Date();
-        if (bs.length && !bs[bs.length - 1].end) bs[bs.length - 1].end = new Date();
-        await User.findByIdAndUpdate(userId, { status: "inactive" });
-        break;
-      default:
-        if (timelineEvent?.type?.startsWith("Break")) {
-          if (timelineEvent.type === "Break Start" || timelineEvent.type.startsWith("Break Start")) {
-            if (!bs.length || bs[bs.length - 1].end) bs.push({ start: new Date() });
-            if (ws.length && !ws[ws.length - 1].end) ws[ws.length - 1].end = new Date();
-          } else if (timelineEvent.type === "Resume Work") {
-            if (bs.length && !bs[bs.length - 1].end) bs[bs.length - 1].end = new Date();
-            if (!ws.length || ws[ws.length - 1].end) ws.push({ start: new Date() });
-          }
+    if (timelineEvent && timelineEvent.type) {
+      const now = new Date();
+      const rawType = String(timelineEvent.type || "").trim();
+      const lower = rawType.toLowerCase();
+
+      const breakTypeMatch = rawType.match(/\(([^)]+)\)/);
+      const breakType = breakTypeMatch ? breakTypeMatch[1].trim() : undefined;
+
+      // ---------- punch in ----------
+      if (lower.includes("punch in")) {
+        if (!todayStatus.arrivalTime) todayStatus.arrivalTime = now;
+        if (!ws.length || ws[ws.length - 1].end) ws.push({ start: now });
+        todayStatus.currentlyWorking = true;
+        todayStatus.onBreak = false;
+        todayStatus.breakStartTime = null;
+        await User.findByIdAndUpdate(userId, { status: "active" }).catch(() => {});
+      }
+
+      // ---------- punch out ----------
+      else if (lower.includes("punch out")) {
+        if (ws.length && !ws[ws.length - 1].end) ws[ws.length - 1].end = now;
+        else if (!ws.length) ws.push({ start: now, end: now });
+
+        if (bs.length && !bs[bs.length - 1].end) bs[bs.length - 1].end = now;
+
+        todayStatus.currentlyWorking = false;
+        todayStatus.onBreak = false;
+        todayStatus.breakStartTime = null;
+        await User.findByIdAndUpdate(userId, { status: "inactive" }).catch(() => {});
+      }
+
+      // ---------- break start ----------
+      else if (lower.includes("break start")) {
+        if (!bs.length || bs[bs.length - 1].end) {
+          const newBreak = { start: now };
+          if (breakType) newBreak.type = breakType;
+          bs.push(newBreak);
         }
-        break;
-    }
+        if (ws.length && !ws[ws.length - 1].end) ws[ws.length - 1].end = now;
+        todayStatus.currentlyWorking = false;
+        todayStatus.onBreak = true;
+        todayStatus.breakStartTime = now;
+      }
 
-    if (onBreak !== undefined) todayStatus.onBreak = onBreak;
-    if (currentlyWorking !== undefined) todayStatus.currentlyWorking = currentlyWorking;
-    if (breakStartTime !== undefined) todayStatus.breakStartTime = breakStartTime;
+      // ---------- resume work ----------
+      else if (lower.includes("resume")) {
+        if (bs.length && !bs[bs.length - 1].end) bs[bs.length - 1].end = now;
+        if (!ws.length || ws[ws.length - 1].end) ws.push({ start: now });
+        todayStatus.currentlyWorking = true;
+        todayStatus.onBreak = false;
+        todayStatus.breakStartTime = null;
+      }
 
-    if (timelineEvent?.type && timelineEvent?.time) {
-      todayStatus.timeline.push(timelineEvent);
+      todayStatus.timeline = todayStatus.timeline || [];
+      todayStatus.timeline.push({ type: rawType, time: now });
+
+      todayStatus.recentActivities = todayStatus.recentActivities || [];
       todayStatus.recentActivities.unshift({
-        date: new Date().toLocaleDateString(),
-        activity: timelineEvent.type,
-        time: timelineEvent.time,
+        date: now.toLocaleDateString(),
+        activity: rawType,
+        time: now.toLocaleTimeString(),
       });
       if (todayStatus.recentActivities.length > 10) todayStatus.recentActivities.length = 10;
     }
@@ -307,24 +333,43 @@ async function updateTodayStatus(req, res) {
     todayStatus.breakDurationSeconds = getBreakDurationSeconds(bs, todayStatus.onBreak, todayStatus.breakStartTime);
     todayStatus.totalWorkMs = todayStatus.workDurationSeconds * 1000;
 
+    todayStatus.workedSessions = ws;
+    todayStatus.breakSessions = bs;
+
     await todayStatus.save();
 
-    const dailyWork = await syncDailyWork(userId, todayStatus);
-    const effectiveShift = await getEffectiveShift(userId, today);
+    // sync daily work (skip expectedStartTime for flexible employees)
+    const dailyWork = await syncDailyWork(userId, todayStatus).catch(e => {
+      console.error("syncDailyWork error:", e);
+      return null;
+    });
 
-    res.json({
+    const effectiveShift = await getEffectiveShift(userId, todayStart);
+
+    const payload = {
       ...todayStatus.toObject(),
       effectiveShift,
-      shiftType: dailyWork.shiftType,
+      shiftType: dailyWork ? dailyWork.shiftType : (todayStatus.shiftType || "standard"),
       workDurationSeconds: todayStatus.workDurationSeconds,
       breakDurationSeconds: todayStatus.breakDurationSeconds,
-      arrivalTimeFormatted: todayStatus.arrivalTime
-        ? new Date(todayStatus.arrivalTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: true })
-        : null,
-    });
+      workDuration: secToHMS(todayStatus.workDurationSeconds),
+      breakDuration: secToHMS(todayStatus.breakDurationSeconds),
+      arrivalTimeFormatted: todayStatus.arrivalTime ? new Date(todayStatus.arrivalTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: true }) : null,
+      dailyWork: dailyWork ? {
+        id: dailyWork._id,
+        date: dailyWork.date,
+        workDurationSeconds: dailyWork.workDurationSeconds,
+        breakDurationSeconds: dailyWork.breakDurationSeconds,
+        breakSessions: dailyWork.breakSessions || [],
+        shift: dailyWork.shift || {},
+        shiftType: dailyWork.shiftType || "standard",
+      } : null,
+    };
+
+    return res.json(payload);
   } catch (err) {
     console.error("Error updating today's status:", err);
-    res.status(500).json({ message: "Server error", error: err.message });
+    return res.status(500).json({ message: "Server error", error: err.message });
   }
 }
 

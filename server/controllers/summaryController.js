@@ -1,3 +1,4 @@
+// controllers/summaryController.js
 const DailyWork = require("../models/DailyWork");
 const { getEffectiveShift } = require("./statusController");
 
@@ -12,7 +13,6 @@ function secToHM(sec) {
 
 // ======================
 // GET /api/summary/week
-// Returns daily data + aggregated weekly stats
 // ======================
 exports.getWeeklySummary = async (req, res) => {
   try {
@@ -21,11 +21,11 @@ exports.getWeeklySummary = async (req, res) => {
 
     let { startDate, endDate } = req.query;
 
-    // Default: current week (Monday → Sunday)
+    // Default: current week (Mon → Sun)
     if (!startDate || !endDate) {
       const now = new Date();
       const day = now.getDay(); // Sunday = 0
-      const diffToMonday = (day + 6) % 7; // Adjust to Monday
+      const diffToMonday = (day + 6) % 7;
 
       startDate = new Date(now);
       startDate.setDate(now.getDate() - diffToMonday);
@@ -78,7 +78,7 @@ exports.getWeeklySummary = async (req, res) => {
       let isHalfDay = false;
       let isAbsent = false;
 
-      // Absent / half-day
+      // Absent / Half Day logic
       if (!day.arrivalTime || workSeconds < MIN_HALF_DAY_SECONDS) {
         isAbsent = true;
         absentDays++;
@@ -89,7 +89,7 @@ exports.getWeeklySummary = async (req, res) => {
 
       // Punctuality & perfect day
       if (!isAbsent) {
-        if (effectiveShift.isFlexiblePermanent) {
+        if (effectiveShift.isFlexible) {
           if (workSeconds >= MIN_FULL_DAY_SECONDS) {
             perfectDays++;
             onTimeCount++;
@@ -128,8 +128,8 @@ exports.getWeeklySummary = async (req, res) => {
     }
 
     const onTimeRate = dailyData.length
-      ? `${Math.round((onTimeCount / dailyData.length) * 100)}`
-      : "0";
+      ? `${Math.round((onTimeCount / dailyData.length) * 100)}%`
+      : "0%";
 
     const avgDailyWork = Math.floor(totalWorkSeconds / daysCount);
     const avgDailyBreak = Math.floor(totalBreakSeconds / daysCount);
@@ -140,7 +140,7 @@ exports.getWeeklySummary = async (req, res) => {
       avgDailyWork: secToHM(avgDailyWork),
       avgDailyBreak: secToHM(avgDailyBreak),
       daysCount,
-      onTimeRate: `${onTimeRate}%`,
+      onTimeRate,
       breaksTaken,
       halfDays,
       absentDays,
