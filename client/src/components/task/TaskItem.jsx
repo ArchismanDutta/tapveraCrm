@@ -19,13 +19,16 @@ const TaskItem = ({ task, onStatusUpdated }) => {
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState(task.status);
 
+  // API base URL with fallback
+  const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
+
   const handleStatusChange = async (newStatus) => {
     setStatus(newStatus);
     setLoading(true);
     try {
       const token = localStorage.getItem("token");
       const res = await axios.patch(
-        `http://localhost:5000/api/tasks/${task._id}/status`,
+        `${API_BASE}/api/tasks/${task._id}/status`,
         { status: newStatus },
         {
           headers: {

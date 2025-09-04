@@ -8,12 +8,18 @@ import Sidebar from "../components/dashboard/Sidebar";
 import { fetchLeavesForEmployee, submitLeaveRequest } from "../api/leaveApi";
 import axios from "axios";
 
+const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
+
 const MAX_REQUESTS = 4;
 const POLL_INTERVAL = 5000; // 5 seconds
 
 const HolidaysAndLeaves = ({ onLogout }) => {
   const [collapsed, setCollapsed] = useState(false);
-  const [leaveSummary, setLeaveSummary] = useState({ available: 18, taken: 0, pending: 0 });
+  const [leaveSummary, setLeaveSummary] = useState({
+    available: 18,
+    taken: 0,
+    pending: 0,
+  });
   const [leaveRequests, setLeaveRequests] = useState([]);
   const [loadingLeaves, setLoadingLeaves] = useState(true);
   const [errorLeaves, setErrorLeaves] = useState(null);
@@ -39,8 +45,12 @@ const HolidaysAndLeaves = ({ onLogout }) => {
       const data = await fetchLeavesForEmployee();
       const safeData = Array.isArray(data) ? data : [];
 
-      const takenLeaves = safeData.filter((r) => r.status === "Approved").length;
-      const pendingLeaves = safeData.filter((r) => r.status === "Pending").length;
+      const takenLeaves = safeData.filter(
+        (r) => r.status === "Approved"
+      ).length;
+      const pendingLeaves = safeData.filter(
+        (r) => r.status === "Pending"
+      ).length;
 
       setLeaveRequests(safeData.slice(0, MAX_REQUESTS));
       setLeaveSummary({
@@ -60,10 +70,14 @@ const HolidaysAndLeaves = ({ onLogout }) => {
   const loadHolidays = async () => {
     try {
       setLoadingHolidays(true);
-      const res = await axios.get("/api/holidays?shift=ALL");
+      const res = await axios.get(`${API_BASE}/api/holidays?shift=ALL`);
       const data = res.data.map((h) => ({
         name: h.name,
-        date: new Date(h.date).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }),
+        date: new Date(h.date).toLocaleDateString("en-GB", {
+          day: "numeric",
+          month: "short",
+          year: "numeric",
+        }),
         type: h.type,
       }));
       setHolidays(data);
@@ -121,14 +135,28 @@ const HolidaysAndLeaves = ({ onLogout }) => {
 
   return (
     <div className="flex bg-gradient-to-br from-[#141a29] via-[#181d2a] to-[#1b2233] min-h-screen font-sans text-blue-100">
-      <Sidebar collapsed={collapsed} setCollapsed={setCollapsed} userRole="employee" onLogout={onLogout} />
-      <main className={`flex-1 p-8 transition-all duration-300 overflow-y-auto ${collapsed ? "ml-24" : "ml-72"}`}>
+      <Sidebar
+        collapsed={collapsed}
+        setCollapsed={setCollapsed}
+        userRole="employee"
+        onLogout={onLogout}
+      />
+      <main
+        className={`flex-1 p-8 transition-all duration-300 overflow-y-auto ${
+          collapsed ? "ml-24" : "ml-72"
+        }`}
+      >
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Employee Leaves */}
           <section className="lg:col-span-2 space-y-6">
             <div>
-              <h2 className="text-2xl font-semibold text-blue-100 mb-4">Your Leaves</h2>
-              <LeaveSummary {...leaveSummary} importantNotices={importantNotices} />
+              <h2 className="text-2xl font-semibold text-blue-100 mb-4">
+                Your Leaves
+              </h2>
+              <LeaveSummary
+                {...leaveSummary}
+                importantNotices={importantNotices}
+              />
             </div>
             <div className="space-y-4">
               <RecentLeaveRequests requests={leaveRequests} />
@@ -138,7 +166,9 @@ const HolidaysAndLeaves = ({ onLogout }) => {
 
           {/* Team & Holidays */}
           <section className="space-y-6">
-            <h2 className="text-2xl font-semibold text-blue-100 mb-4">Team & Holidays</h2>
+            <h2 className="text-2xl font-semibold text-blue-100 mb-4">
+              Team & Holidays
+            </h2>
             <HolidayList holidays={holidays} />
             <TeamLeaveCalendar />
           </section>

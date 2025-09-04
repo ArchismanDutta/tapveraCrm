@@ -3,7 +3,7 @@ import axios from "axios";
 import Sidebar from "../components/dashboard/Sidebar";
 import TaskList from "../components/todo/TaskList";
 import TaskForm from "../components/todo/TaskForm";
-
+const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
 const TodoPage = ({ onLogout }) => {
   const token = localStorage.getItem("token");
   const [collapsed, setCollapsed] = useState(false);
@@ -22,12 +22,14 @@ const TodoPage = ({ onLogout }) => {
   const fetchTasks = async () => {
     try {
       const todayISO = normalizeDate(new Date());
-      const tomorrowISO = normalizeDate(new Date(new Date().getTime() + 24 * 3600000));
-      const todayRes = await axios.get("/api/todos", {
+      const tomorrowISO = normalizeDate(
+        new Date(new Date().getTime() + 24 * 3600000)
+      );
+      const todayRes = await axios.get(`${API_BASE}/api/todos`, {
         headers: { Authorization: `Bearer ${token}` },
         params: { date: todayISO },
       });
-      const upcomingRes = await axios.get("/api/todos/upcoming", {
+      const upcomingRes = await axios.get(`${API_BASE}/api/todos/upcoming`, {
         headers: { Authorization: `Bearer ${token}` },
         params: { startDate: tomorrowISO },
       });
@@ -39,7 +41,9 @@ const TodoPage = ({ onLogout }) => {
         arr.map((t) => ({
           ...t,
           date: t.date ? new Date(t.date).toISOString() : null,
-          completedAtStr: t.completedAt ? new Date(t.completedAt).toLocaleString() : null,
+          completedAtStr: t.completedAt
+            ? new Date(t.completedAt).toLocaleString()
+            : null,
         }));
       setTodayTasks(normalize(todayPending));
       setUpcomingTasks(normalize(upcomingPending));
@@ -56,14 +60,14 @@ const TodoPage = ({ onLogout }) => {
   const handleSaveTask = async (task) => {
     try {
       if (task._id) {
-        await axios.put(`/api/todos/${task._id}`, task, {
+        await axios.put(`${API_BASE}/api/todos/${task._id}`, task, {
           headers: { Authorization: `Bearer ${token}` },
         });
       } else {
         if (!task.date) {
           task.date = normalizeDate(new Date());
         }
-        await axios.post("/api/todos", task, {
+        await axios.post(`${API_BASE}/api/todos`, task, {
           headers: { Authorization: `Bearer ${token}` },
         });
       }
@@ -78,22 +82,30 @@ const TodoPage = ({ onLogout }) => {
   const handleMarkDone = async (task) => {
     try {
       const response = await axios.put(
-        `/api/todos/${task._id}`,
+        `${API_BASE}/api/todos/${task._id}`,
         { completed: !task.completed },
         { headers: { Authorization: `Bearer ${token}` } }
       );
       const updatedTaskRaw = response.data;
       const updatedTask = {
         ...updatedTaskRaw,
-        date: updatedTaskRaw.date ? new Date(updatedTaskRaw.date).toISOString() : null,
-        completedAtStr: updatedTaskRaw.completedAt ? new Date(updatedTaskRaw.completedAt).toLocaleString() : null,
+        date: updatedTaskRaw.date
+          ? new Date(updatedTaskRaw.date).toISOString()
+          : null,
+        completedAtStr: updatedTaskRaw.completedAt
+          ? new Date(updatedTaskRaw.completedAt).toLocaleString()
+          : null,
       };
       if (updatedTask.completed) {
         setTodayTasks((prev) => prev.filter((t) => t._id !== updatedTask._id));
-        setUpcomingTasks((prev) => prev.filter((t) => t._id !== updatedTask._id));
+        setUpcomingTasks((prev) =>
+          prev.filter((t) => t._id !== updatedTask._id)
+        );
         setCompletedTasks((prev) => [updatedTask, ...prev]);
       } else {
-        setCompletedTasks((prev) => prev.filter((t) => t._id !== updatedTask._id));
+        setCompletedTasks((prev) =>
+          prev.filter((t) => t._id !== updatedTask._id)
+        );
         const taskDate = new Date(updatedTask.date);
         const today = new Date();
         today.setHours(0, 0, 0, 0);
@@ -108,20 +120,34 @@ const TodoPage = ({ onLogout }) => {
     }
   };
 
-  const totalTasks = todayTasks.length + upcomingTasks.length + completedTasks.length;
+  const totalTasks =
+    todayTasks.length + upcomingTasks.length + completedTasks.length;
   const completedCount =
-    completedTasks.length + todayTasks.filter((t) => t.completed).length + upcomingTasks.filter((t) => t.completed).length;
-  const completionPercent = totalTasks ? (completedCount / totalTasks) * 100 : 0;
+    completedTasks.length +
+    todayTasks.filter((t) => t.completed).length +
+    upcomingTasks.filter((t) => t.completed).length;
+  const completionPercent = totalTasks
+    ? (completedCount / totalTasks) * 100
+    : 0;
 
   return (
     <div className="flex min-h-screen bg-gradient-to-br from-[#131720] via-[#161c2c] to-black text-gray-100">
-      <Sidebar onLogout={onLogout} collapsed={collapsed} setCollapsed={setCollapsed} userRole="employee" />
+      <Sidebar
+        onLogout={onLogout}
+        collapsed={collapsed}
+        setCollapsed={setCollapsed}
+        userRole="employee"
+      />
       <main className={`flex-1 pt-10 ${collapsed ? "ml-20" : "ml-64"}`}>
         <div className="max-w-3xl mx-auto">
           <header className="flex justify-between items-center mb-6">
             <div>
-              <h1 className="text-2xl font-bold tracking-tight text-gray-100">Tasks Overview</h1>
-              <p className="text-sm text-gray-500 mt-1">Personal productivity progress</p>
+              <h1 className="text-2xl font-bold tracking-tight text-gray-100">
+                Tasks Overview
+              </h1>
+              <p className="text-sm text-gray-500 mt-1">
+                Personal productivity progress
+              </p>
             </div>
             <button
               onClick={() => setShowForm(true)}
@@ -133,7 +159,9 @@ const TodoPage = ({ onLogout }) => {
           {/* Progress Bar */}
           <div className="mb-8 max-w-lg">
             <div className="flex items-center justify-between mb-1">
-              <span className="text-sm font-medium text-gray-400">Completion</span>
+              <span className="text-sm font-medium text-gray-400">
+                Completion
+              </span>
               <span className="text-xs text-gray-300">
                 {completedCount} / {totalTasks} tasks
               </span>

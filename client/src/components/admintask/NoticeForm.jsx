@@ -9,7 +9,7 @@ export default function NoticeForm({ onPublish }) {
     if (!message.trim()) return;
 
     try {
-      await API.post("/notices", { message });
+      await API.post("/api/notices", { message });
       onPublish?.("✅ Notice published successfully!");
       setMessage("");
     } catch (err) {
@@ -23,7 +23,9 @@ export default function NoticeForm({ onPublish }) {
       onSubmit={handleSubmit}
       className="bg-gray-800 rounded-xl shadow-md p-6 mb-8 text-gray-200"
     >
-      <h2 className="text-lg font-semibold text-gray-200 mb-4">📢 Publish Notice</h2>
+      <h2 className="text-lg font-semibold text-gray-200 mb-4">
+        📢 Publish Notice
+      </h2>
       <textarea
         className="border border-gray-600 bg-gray-700 rounded-lg p-3 w-full text-sm text-gray-200 placeholder-gray-400 focus:ring-2 focus:ring-orange-400 focus:border-orange-400"
         rows={4}

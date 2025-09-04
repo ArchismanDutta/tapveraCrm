@@ -4,6 +4,8 @@ import { Users, Calendar, AlertTriangle, Clock } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
+// import dotenv from "dotenv";
+
 
 import Sidebar from "../components/dashboard/Sidebar";
 import StatCard from "../components/humanResource/StatCard";
@@ -16,7 +18,8 @@ import FlexibleRequestsModal from "../components/humanResource/FlexibleRequestsM
 
 const SIDEBAR_WIDTH_EXPANDED = 288;
 const SIDEBAR_WIDTH_COLLAPSED = 80;
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
+const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
+
 
 const HRDashboard = ({ onLogout }) => {
   const [collapsed, setCollapsed] = useState(false);

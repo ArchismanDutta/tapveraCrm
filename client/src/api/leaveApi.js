@@ -26,15 +26,21 @@ export function formatDuration(type, period) {
   if (!period || !period.start || !period.end) return "";
   if (type === "halfDay") return "0.5 Day";
   const days =
-    Math.ceil((new Date(period.end) - new Date(period.start)) / (1000 * 60 * 60 * 24)) +
-    1;
+    Math.ceil(
+      (new Date(period.end) - new Date(period.start)) / (1000 * 60 * 60 * 24)
+    ) + 1;
   return `${days} Days`;
 }
 
 // Fetch leaves for logged-in employee
 export async function fetchLeavesForEmployee() {
-  const res = await fetch(`${API_BASE}/leaves/mine`, { headers: getAuthHeaders() });
-  if (!res.ok) throw new Error((await res.json()).message || "Failed to fetch leave requests");
+  const res = await fetch(`${API_BASE}/api/leaves/mine`, {
+    headers: getAuthHeaders(),
+  });
+  if (!res.ok)
+    throw new Error(
+      (await res.json()).message || "Failed to fetch leave requests"
+    );
   const data = await res.json();
   return data.map((r) => ({
     _id: r._id,
@@ -52,12 +58,15 @@ export async function fetchLeavesForEmployee() {
 
 // Submit a new leave request
 export async function submitLeaveRequest(formData) {
-  const res = await fetch(`${API_BASE}/leaves`, {
+  const res = await fetch(`${API_BASE}/api/leaves`, {
     method: "POST",
     headers: getAuthHeaders(false),
     body: formData,
   });
-  if (!res.ok) throw new Error((await res.json()).message || "Failed to submit leave request");
+  if (!res.ok)
+    throw new Error(
+      (await res.json()).message || "Failed to submit leave request"
+    );
   const r = await res.json();
   return {
     _id: r._id,
@@ -75,8 +84,13 @@ export async function submitLeaveRequest(formData) {
 
 // Admin: Fetch all leave requests
 export async function fetchAllLeaveRequests() {
-  const res = await fetch(`${API_BASE}/leaves`, { headers: getAuthHeaders() });
-  if (!res.ok) throw new Error((await res.json()).message || "Failed to fetch leave requests");
+  const res = await fetch(`${API_BASE}/api/leaves`, {
+    headers: getAuthHeaders(),
+  });
+  if (!res.ok)
+    throw new Error(
+      (await res.json()).message || "Failed to fetch leave requests"
+    );
   const data = await res.json();
   return data.map((r) => ({
     _id: r._id,
@@ -95,12 +109,15 @@ export async function fetchAllLeaveRequests() {
 // Admin: Update leave request status
 export async function updateLeaveRequestStatus(_id, status, adminRemarks = "") {
   if (!_id) throw new Error("Leave request ID is required");
-  const res = await fetch(`${API_BASE}/leaves/${_id}`, {
+  const res = await fetch(`${API_BASE}/api/leaves/${_id}`, {
     method: "PATCH",
     headers: getAuthHeaders(),
     body: JSON.stringify({ status, adminRemarks }),
   });
-  if (!res.ok) throw new Error((await res.json()).message || "Failed to update leave request status");
+  if (!res.ok)
+    throw new Error(
+      (await res.json()).message || "Failed to update leave request status"
+    );
   const r = await res.json();
   return {
     _id: r._id,
@@ -118,12 +135,15 @@ export async function updateLeaveRequestStatus(_id, status, adminRemarks = "") {
 // Fetch team leaves (same department, excluding logged-in user)
 export async function fetchTeamLeaves(department, excludeEmail) {
   const res = await fetch(
-    `${API_BASE}/leaves/team?department=${encodeURIComponent(department)}&excludeEmail=${encodeURIComponent(
-      excludeEmail
-    )}`,
+    `${API_BASE}/api/leaves/team?department=${encodeURIComponent(
+      department
+    )}&excludeEmail=${encodeURIComponent(excludeEmail)}`,
     { headers: getAuthHeaders() }
   );
-  if (!res.ok) throw new Error((await res.json()).message || "Failed to fetch team leaves");
+  if (!res.ok)
+    throw new Error(
+      (await res.json()).message || "Failed to fetch team leaves"
+    );
   const data = await res.json();
   return data.map((r) => ({
     _id: r._id,
