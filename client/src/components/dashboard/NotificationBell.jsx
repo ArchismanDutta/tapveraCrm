@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from "react";
 import { Bell, X, Volume2, VolumeX } from "lucide-react";
 import axios from "axios";
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
 const NotificationBell = () => {
   const [notifications, setNotifications] = useState([]);

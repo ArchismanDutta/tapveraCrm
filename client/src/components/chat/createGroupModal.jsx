@@ -5,16 +5,51 @@ const CreateGroupModal = ({ isOpen, onClose, onCreate, jwtToken }) => {
   const [users, setUsers] = useState([]);
   const [selectedMembers, setSelectedMembers] = useState([]);
 
+  // Use env variable with localhost fallback
+  const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
+
   useEffect(() => {
     if (!jwtToken) return;
 
-    fetch("http://localhost:5000/api/users", {
-      headers: { Authorization: `Bearer ${jwtToken}` },
-    })
-      .then((res) => res.json())
-      .then(setUsers)
-      .catch(console.error);
-  }, [jwtToken]);
+    const fetchUsers = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/users`, {
+          headers: { Authorization: `Bearer ${jwtToken}` },
+        });
+
+        // fallback if API_BASE is set but not reachable
+        if (!res.ok) {
+          console.warn(
+            "Primary API_BASE not reachable, falling back to localhost"
+          );
+          const fallbackRes = await fetch(`${API_BASE}/api/users`, {
+            headers: { Authorization: `Bearer ${jwtToken}` },
+          });
+          const data = await fallbackRes.json();
+          setUsers(data);
+          return;
+        }
+
+        const data = await res.json();
+        setUsers(data);
+      } catch (error) {
+        console.error("Error fetching users:", error);
+
+        // try localhost if API_BASE fails completely
+        try {
+          const fallbackRes = await fetch(`${API_BASE}/api/users`, {
+            headers: { Authorization: `Bearer ${jwtToken}` },
+          });
+          const data = await fallbackRes.json();
+          setUsers(data);
+        } catch (err) {
+          console.error("Fallback also failed:", err);
+        }
+      }
+    };
+
+    fetchUsers();
+  }, [jwtToken, API_BASE]);
 
   const toggleMember = (userId) => {
     setSelectedMembers((prev) =>

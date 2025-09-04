@@ -49,11 +49,15 @@ const EditTaskModal = ({ task, onSave, onCancel, users }) => {
         onSubmit={handleSubmit}
         className="bg-[rgba(22,28,48,0.75)] border border-[rgba(84,123,209,0.12)] rounded-3xl p-6 w-full max-w-md shadow-md text-blue-200 space-y-5 animate-fadeIn"
       >
-        <h2 className="text-lg font-bold text-[#bf6f2f] flex items-center gap-2">✏️ Edit Task</h2>
+        <h2 className="text-lg font-bold text-[#bf6f2f] flex items-center gap-2">
+          ✏️ Edit Task
+        </h2>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-semibold mb-1 text-blue-200">Task Title</label>
+            <label className="block text-sm font-semibold mb-1 text-blue-200">
+              Task Title
+            </label>
             <input
               type="text"
               className="bg-[#161c2c] border border-[rgba(84,123,209,0.12)] rounded-xl p-2 w-full text-sm text-blue-200 focus:ring-2 focus:ring-[#bf6f2f] outline-none"
@@ -64,12 +68,16 @@ const EditTaskModal = ({ task, onSave, onCancel, users }) => {
           </div>
 
           <div>
-            <label className="block text-sm font-semibold mb-1 text-blue-200">Assign To</label>
+            <label className="block text-sm font-semibold mb-1 text-blue-200">
+              Assign To
+            </label>
             <select
               className="bg-[#161c2c] border border-[rgba(84,123,209,0.12)] rounded-xl p-2 w-full text-sm text-blue-200 focus:ring-2 focus:ring-[#bf6f2f] outline-none cursor-pointer"
               value={
                 Array.isArray(editedTask.assignedTo)
-                  ? editedTask.assignedTo[0]?._id || editedTask.assignedTo[0] || ""
+                  ? editedTask.assignedTo[0]?._id ||
+                    editedTask.assignedTo[0] ||
+                    ""
                   : editedTask.assignedTo?._id || editedTask.assignedTo || ""
               }
               onChange={(e) => handleChange("assignedTo", e.target.value)}
@@ -85,7 +93,9 @@ const EditTaskModal = ({ task, onSave, onCancel, users }) => {
           </div>
 
           <div>
-            <label className="block text-sm font-semibold mb-1 text-blue-200">Due Date</label>
+            <label className="block text-sm font-semibold mb-1 text-blue-200">
+              Due Date
+            </label>
             <input
               type="date"
               className="bg-[#161c2c] border border-[rgba(84,123,209,0.12)] rounded-xl p-2 w-full text-sm text-blue-200 focus:ring-2 focus:ring-[#bf6f2f] outline-none"
@@ -96,7 +106,9 @@ const EditTaskModal = ({ task, onSave, onCancel, users }) => {
           </div>
 
           <div>
-            <label className="block text-sm font-semibold mb-1 text-blue-200">Priority</label>
+            <label className="block text-sm font-semibold mb-1 text-blue-200">
+              Priority
+            </label>
             <select
               className="bg-[#161c2c] border border-[rgba(84,123,209,0.12)] rounded-xl p-2 w-full text-sm text-blue-200 focus:ring-2 focus:ring-[#bf6f2f] outline-none cursor-pointer"
               value={editedTask.priority || ""}
@@ -112,7 +124,9 @@ const EditTaskModal = ({ task, onSave, onCancel, users }) => {
         </div>
 
         <div>
-          <label className="block text-sm font-semibold mb-1 text-blue-200">Description</label>
+          <label className="block text-sm font-semibold mb-1 text-blue-200">
+            Description
+          </label>
           <textarea
             className="bg-[#161c2c] border border-[rgba(84,123,209,0.12)] rounded-xl p-2 w-full text-sm text-blue-200 resize-none h-20 focus:ring-2 focus:ring-[#bf6f2f] outline-none"
             rows={3}
@@ -122,7 +136,9 @@ const EditTaskModal = ({ task, onSave, onCancel, users }) => {
         </div>
 
         <div>
-          <label className="block text-sm font-semibold mb-1 text-blue-200">Status</label>
+          <label className="block text-sm font-semibold mb-1 text-blue-200">
+            Status
+          </label>
           <select
             className="bg-[#161c2c] border border-[rgba(84,123,209,0.12)] rounded-xl p-2 w-full text-sm text-blue-200 focus:ring-2 focus:ring-[#bf6f2f] outline-none cursor-pointer"
             value={editedTask.status || "pending"}
@@ -181,7 +197,7 @@ export default function AdminTaskPage({ onLogout }) {
       return;
     }
     try {
-      const res = await API.get("/tasks", {
+      const res = await API.get("/api/tasks", {
         headers: { Authorization: `Bearer ${token}` },
       });
       const tasksArray = Array.isArray(res.data) ? res.data : [];
@@ -197,7 +213,7 @@ export default function AdminTaskPage({ onLogout }) {
     const token = localStorage.getItem("token");
     if (!token) return;
     try {
-      const res = await API.get("/users", {
+      const res = await API.get("/api/users", {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (Array.isArray(res.data)) setUsers(res.data);
@@ -216,7 +232,7 @@ export default function AdminTaskPage({ onLogout }) {
       return;
     }
     try {
-      const res = await API.get("/users/me", {
+      const res = await API.get("/api/users/me", {
         headers: { Authorization: `Bearer ${token}` },
       });
       setUserName(res.data?.name || "Admin");
@@ -250,14 +266,18 @@ export default function AdminTaskPage({ onLogout }) {
     const assigned = obj.assignedTo;
     return {
       ...obj,
-      assignedTo: Array.isArray(assigned) ? assigned : assigned ? [assigned] : [],
+      assignedTo: Array.isArray(assigned)
+        ? assigned
+        : assigned
+        ? [assigned]
+        : [],
     };
   };
 
   const handleCreateTask = async (newTask) => {
     try {
       const payload = ensureAssignedArray(newTask);
-      const res = await API.post("/tasks", payload);
+      const res = await API.post("/api/tasks", payload);
       setTasks((prev) => [res.data, ...prev]);
       showPopup("✅ Task created successfully!");
     } catch (err) {
@@ -270,8 +290,10 @@ export default function AdminTaskPage({ onLogout }) {
     try {
       const payload = ensureAssignedArray(updatedTask);
       const id = payload._id || payload.id;
-      const res = await API.put(`/tasks/${id}`, payload);
-      setTasks((prev) => prev.map((t) => ((t._id || t.id) === id ? res.data : t)));
+      const res = await API.put(`/api/tasks/${id}`, payload);
+      setTasks((prev) =>
+        prev.map((t) => ((t._id || t.id) === id ? res.data : t))
+      );
       setEditingTask(null);
       showPopup("✅ Task updated successfully!");
     } catch (err) {
@@ -282,7 +304,7 @@ export default function AdminTaskPage({ onLogout }) {
 
   const handleDeleteTask = async (id) => {
     try {
-      await API.delete(`/tasks/${id}`);
+      await API.delete(`/api/tasks/${id}`);
       setTasks((prev) => prev.filter((task) => (task._id || task.id) !== id));
       showPopup("🗑 Task deleted successfully!");
     } catch (err) {
@@ -292,7 +314,7 @@ export default function AdminTaskPage({ onLogout }) {
   };
 
   const today = dayjs().startOf("day");
-  const currentUserId = JSON.parse(localStorage.getItem("user"))?.id;
+  const currentUserId = JSON.parse(localStorage.getItem("user"))?._id;
 
   const filteredTasks = tasks.filter((t) => {
     switch (filterType) {
@@ -301,17 +323,28 @@ export default function AdminTaskPage({ onLogout }) {
       case "dueToday":
         return t.dueDate && dayjs(t.dueDate).isSame(today, "day");
       case "overdue":
-        return t.dueDate && dayjs(t.dueDate).isBefore(today, "day") && (t.status || "").toLowerCase() !== "completed";
+        return (
+          t.dueDate &&
+          dayjs(t.dueDate).isBefore(today, "day") &&
+          (t.status || "").toLowerCase() !== "completed"
+        );
       default:
         return true;
     }
   });
 
   const totalTasks = tasks.length;
-  const assignedByMeCount = tasks.filter((t) => t.assignedBy?._id === currentUserId).length;
-  const tasksDueTodayCount = tasks.filter((t) => t.dueDate && dayjs(t.dueDate).isSame(today, "day")).length;
+  const assignedByMeCount = tasks.filter(
+    (t) => t.assignedBy?._id === currentUserId
+  ).length;
+  const tasksDueTodayCount = tasks.filter(
+    (t) => t.dueDate && dayjs(t.dueDate).isSame(today, "day")
+  ).length;
   const overdueTasksCount = tasks.filter(
-    (t) => t.dueDate && dayjs(t.dueDate).isBefore(today, "day") && (t.status || "").toLowerCase() !== "completed"
+    (t) =>
+      t.dueDate &&
+      dayjs(t.dueDate).isBefore(today, "day") &&
+      (t.status || "").toLowerCase() !== "completed"
   ).length;
 
   const handleFilterAndScroll = (type) => {
@@ -323,8 +356,17 @@ export default function AdminTaskPage({ onLogout }) {
 
   return (
     <div className="flex bg-gradient-to-br from-[#161c2c] via-[#1f263b] to-[#282f47] min-h-screen text-white">
-      <Sidebar collapsed={collapsed} setCollapsed={setCollapsed} userRole="admin" onLogout={onLogout} />
-      <main className={`flex-1 transition-all duration-300 ${collapsed ? "ml-24" : "ml-72"} p-8`}>
+      <Sidebar
+        collapsed={collapsed}
+        setCollapsed={setCollapsed}
+        userRole="admin"
+        onLogout={onLogout}
+      />
+      <main
+        className={`flex-1 transition-all duration-300 ${
+          collapsed ? "ml-24" : "ml-72"
+        } p-8`}
+      >
         {popupMessage && (
           <div className="fixed top-6 right-6 bg-[#bf6f2f]/90 text-black px-4 py-2 rounded-xl shadow-lg z-50 animate-slideIn">
             {popupMessage}
@@ -387,21 +429,37 @@ export default function AdminTaskPage({ onLogout }) {
         </div>
 
         <section className="bg-[rgba(22,28,48,0.7)] border border-[rgba(84,123,209,0.12)] rounded-3xl p-6 shadow-[0_8px_32px_0_rgba(10,40,100,0.1)] backdrop-blur-[12px] mb-8">
-          <h2 className="text-lg font-semibold text-blue-200 mb-4">Create New Task</h2>
+          <h2 className="text-lg font-semibold text-blue-200 mb-4">
+            Create New Task
+          </h2>
           <TaskForm onCreate={handleCreateTask} users={users} />
         </section>
 
-        <section ref={tableRef} className="bg-[rgba(22,28,48,0.7)] border border-[rgba(84,123,209,0.12)] rounded-3xl p-6 shadow-[0_8px_32px_0_rgba(10,40,100,0.1)] backdrop-blur-[12px]">
-          <h2 className="text-lg font-semibold text-blue-200 mb-4">📋 Task List</h2>
-          <TaskTable tasks={filteredTasks} onViewTask={setSelectedTask} onEditTask={setEditingTask} onDeleteTask={handleDeleteTask} />
+        <section
+          ref={tableRef}
+          className="bg-[rgba(22,28,48,0.7)] border border-[rgba(84,123,209,0.12)] rounded-3xl p-6 shadow-[0_8px_32px_0_rgba(10,40,100,0.1)] backdrop-blur-[12px]"
+        >
+          <h2 className="text-lg font-semibold text-blue-200 mb-4">
+            📋 Task List
+          </h2>
+          <TaskTable
+            tasks={filteredTasks}
+            onViewTask={setSelectedTask}
+            onEditTask={setEditingTask}
+            onDeleteTask={handleDeleteTask}
+          />
         </section>
 
         {selectedTask && (
           <div className="fixed inset-0 flex items-center justify-center z-50 bg-[rgba(22,28,48,0.75)] backdrop-blur-md">
             <div className="relative max-w-md w-full bg-[rgba(22,28,48,0.9)] rounded-3xl shadow-2xl flex flex-col items-center pt-9 pb-7 px-8 text-blue-200">
               <img src={tapveraLogo} alt="Tapvera" className="h-12 w-12 mb-4" />
-              <h2 className="font-bold text-xl text-[#bf6f2f] mb-2">{selectedTask.title}</h2>
-              <p className="mb-4 text-center text-blue-400">{selectedTask.description}</p>
+              <h2 className="font-bold text-xl text-[#bf6f2f] mb-2">
+                {selectedTask.title}
+              </h2>
+              <p className="mb-4 text-center text-blue-400">
+                {selectedTask.description}
+              </p>
               <button
                 onClick={() => setSelectedTask(null)}
                 className="mt-2 px-5 py-2 rounded-2xl bg-[#bf6f2f] text-black hover:bg-[#a26328]"

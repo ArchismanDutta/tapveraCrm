@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import axios from "axios";
 import { toast } from "react-toastify";
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
 const FlexibleRequestsModal = ({ isOpen, onClose, requests = [], refresh }) => {
   const [updatingIds, setUpdatingIds] = useState([]);

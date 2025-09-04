@@ -3,7 +3,7 @@ const Notice = require("../models/Notice");
 // Create notice (only admin/super-admin)(24h expiry)
 exports.createNotice = async (req, res) => {
   try {
-    if (!["admin", "super-admin"].includes(req.user.role)) {
+    if (!["admin", "super-admin", "hr"].includes(req.user.role)) {
       return res.status(403).json({ message: "Not authorized" });
     }
 
@@ -21,7 +21,6 @@ exports.createNotice = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
-
 
 // Get latest active notice (only unexpired ones)
 exports.getActiveNotice = async (req, res) => {
@@ -41,7 +40,6 @@ exports.getActiveNotice = async (req, res) => {
   }
 };
 
-
 // Deactivate notice (manual override by admin if needed)
 exports.deactivateNotice = async (req, res) => {
   try {
@@ -56,4 +54,3 @@ exports.deactivateNotice = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
-

@@ -19,14 +19,17 @@ const DailyEmailSender = ({ onClose }) => {
 
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch("http://localhost:5000/api/email/send", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: token ? `Bearer ${token}` : "",
-        },
-        body: JSON.stringify({ template, task }),
-      });
+      const res = await fetch(
+        "http://crm-be.eba-nt49vbgx.ap-south-1.elasticbeanstalk.com/api/email/send",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: token ? `Bearer ${token}` : "",
+          },
+          body: JSON.stringify({ template, task }),
+        }
+      );
 
       const data = await res.json();
       if (res.ok) {

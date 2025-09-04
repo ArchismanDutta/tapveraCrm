@@ -5,7 +5,7 @@ import TaskStats from "../components/task/TaskStats";
 import TaskList from "../components/task/TaskList";
 import SubmitRequirement from "../components/task/SubmitRequirement";
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
+const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
 
 const Tasks = ({ onLogout }) => {
   const [collapsed, setCollapsed] = useState(false);
@@ -60,9 +60,17 @@ const Tasks = ({ onLogout }) => {
 
   return (
     <div className="flex bg-gradient-to-br from-[#141a29] via-[#181d2a] to-[#1b2233] min-h-screen text-blue-100">
-      <Sidebar collapsed={collapsed} setCollapsed={setCollapsed} onLogout={onLogout} />
+      <Sidebar
+        collapsed={collapsed}
+        setCollapsed={setCollapsed}
+        onLogout={onLogout}
+      />
 
-      <div className={`flex-1 transition-all duration-300 ${collapsed ? "ml-20" : "ml-72"} p-6`}>
+      <div
+        className={`flex-1 transition-all duration-300 ${
+          collapsed ? "ml-20" : "ml-72"
+        } p-6`}
+      >
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Left Side - Tasks */}
           <div className="lg:col-span-2 space-y-6">

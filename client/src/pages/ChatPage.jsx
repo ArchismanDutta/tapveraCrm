@@ -19,6 +19,8 @@ const ChatPage = ({ onLogout }) => {
   const [showCreateGroup, setShowCreateGroup] = useState(false);
   const [initialMessages, setInitialMessages] = useState([]);
 
+  const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
+
   useEffect(() => {
     const storedUser = localStorage.getItem("user");
     const storedRole = localStorage.getItem("role");
@@ -37,7 +39,7 @@ const ChatPage = ({ onLogout }) => {
     const fetchMessages = async () => {
       try {
         const res = await fetch(
-          `http://localhost:5000/api/chat/messages/${selectedConversation._id}`,
+          `${API_BASE}/api/chat/messages/${selectedConversation._id}`,
           {
             headers: { Authorization: `Bearer ${jwtToken}` },
           }
@@ -62,7 +64,7 @@ const ChatPage = ({ onLogout }) => {
 
   const fetchConversations = async (token) => {
     try {
-      const res = await fetch("http://localhost:5000/api/chat/groups", {
+      const res = await fetch(`${API_BASE}/api/chat/groups`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) throw new Error("Failed to fetch conversations");
@@ -76,7 +78,7 @@ const ChatPage = ({ onLogout }) => {
 
   const handleCreateGroup = async (name, memberIds) => {
     try {
-      const res = await fetch("http://localhost:5000/api/chat/groups", {
+      const res = await fetch(`${API_BASE}/api/chat/groups`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -99,7 +101,7 @@ const ChatPage = ({ onLogout }) => {
 
     try {
       const res = await fetch(
-        `http://localhost:5000/api/chat/conversations/${conversationId}`,
+        `${API_BASE}/api/chat/conversations/${conversationId}`,
         {
           method: "DELETE",
           headers: { Authorization: `Bearer ${jwtToken}` },

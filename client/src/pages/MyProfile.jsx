@@ -16,7 +16,8 @@ import {
 } from "react-icons/fa";
 import { MdWork, MdAdminPanelSettings } from "react-icons/md";
 
-const capitalize = (str) => (str ? str.charAt(0).toUpperCase() + str.slice(1) : "N/A");
+const capitalize = (str) =>
+  str ? str.charAt(0).toUpperCase() + str.slice(1) : "N/A";
 
 const MyProfile = ({ userType = "employee", onLogout }) => {
   const [profileData, setProfileData] = useState(null);
@@ -24,6 +25,8 @@ const MyProfile = ({ userType = "employee", onLogout }) => {
   const [loading, setLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
   const [editData, setEditData] = useState(null);
+
+  const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
 
   const fetchProfile = async () => {
     try {
@@ -33,7 +36,7 @@ const MyProfile = ({ userType = "employee", onLogout }) => {
         alert("You must be logged in to view this page.");
         return;
       }
-      const res = await axios.get("/api/users/me", {
+      const res = await axios.get(`${API_BASE}/api/users/me`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const user = res.data;
@@ -56,15 +59,43 @@ const MyProfile = ({ userType = "employee", onLogout }) => {
           attendancePercent: user.attendancePercent || 0,
         },
         personalInfo: [
-          { label: "Email", value: user.email, icon: <FaEnvelope className="text-[#ff8000]" /> },
-          { label: "Phone", value: user.contact || "N/A", icon: <FaPhone className="text-[#ff8000]" /> },
-          { label: "Location", value: capitalize(user.location), icon: <FaMapMarkerAlt className="text-[#ff8000]" /> },
-          { label: "DOB", value: user.dob || "N/A", icon: <FaBirthdayCake className="text-[#ff8000]" /> },
+          {
+            label: "Email",
+            value: user.email,
+            icon: <FaEnvelope className="text-[#ff8000]" />,
+          },
+          {
+            label: "Phone",
+            value: user.contact || "N/A",
+            icon: <FaPhone className="text-[#ff8000]" />,
+          },
+          {
+            label: "Location",
+            value: capitalize(user.location),
+            icon: <FaMapMarkerAlt className="text-[#ff8000]" />,
+          },
+          {
+            label: "DOB",
+            value: user.dob || "N/A",
+            icon: <FaBirthdayCake className="text-[#ff8000]" />,
+          },
         ],
         workInfo: [
-          { label: "Department", value: capitalize(user.department), icon: <MdWork className="text-[#ff8000]" /> },
-          { label: "Role", value: capitalize(userType), icon: <MdAdminPanelSettings className="text-[#ff8000]" /> },
-          { label: "Designation", value: capitalize(user.designation), icon: <MdWork className="text-[#ff8000]" /> },
+          {
+            label: "Department",
+            value: capitalize(user.department),
+            icon: <MdWork className="text-[#ff8000]" />,
+          },
+          {
+            label: "Role",
+            value: capitalize(userType),
+            icon: <MdAdminPanelSettings className="text-[#ff8000]" />,
+          },
+          {
+            label: "Designation",
+            value: capitalize(user.designation),
+            icon: <MdWork className="text-[#ff8000]" />,
+          },
         ],
         activities: [],
       });
@@ -101,7 +132,8 @@ const MyProfile = ({ userType = "employee", onLogout }) => {
     const file = e.target.files[0];
     if (file) {
       const reader = new FileReader();
-      reader.onloadend = () => setEditData((prev) => ({ ...prev, avatar: reader.result }));
+      reader.onloadend = () =>
+        setEditData((prev) => ({ ...prev, avatar: reader.result }));
       reader.readAsDataURL(file);
     }
   };
@@ -110,7 +142,7 @@ const MyProfile = ({ userType = "employee", onLogout }) => {
     try {
       const token = localStorage.getItem("token");
       await axios.put(
-        "/api/users/me",
+        `${API_BASE}/api/users/me`,
         {
           avatar: editData.avatar,
           name: editData.name,
@@ -134,15 +166,25 @@ const MyProfile = ({ userType = "employee", onLogout }) => {
   if (loading || !profileData) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#141a29] via-[#181d2a] to-[#1b2233]">
-        <div className="text-blue-200 font-medium text-lg">Loading profile...</div>
+        <div className="text-blue-200 font-medium text-lg">
+          Loading profile...
+        </div>
       </div>
     );
   }
 
   return (
     <div className="flex bg-gradient-to-br from-[#141a29] via-[#181d2a] to-[#1b2233] min-h-screen font-sans text-blue-100">
-      <Sidebar onLogout={onLogout} collapsed={collapsed} setCollapsed={setCollapsed} />
-      <main className={`flex-1 p-8 transition-all duration-300 ${collapsed ? "ml-24" : "ml-72"}`}>
+      <Sidebar
+        onLogout={onLogout}
+        collapsed={collapsed}
+        setCollapsed={setCollapsed}
+      />
+      <main
+        className={`flex-1 p-8 transition-all duration-300 ${
+          collapsed ? "ml-24" : "ml-72"
+        }`}
+      >
         <ProfileHeader
           avatar={profileData.avatar}
           name={profileData.name}
@@ -152,7 +194,9 @@ const MyProfile = ({ userType = "employee", onLogout }) => {
         />
         {isEditing ? (
           <div className="bg-[#141a29]/80 backdrop-blur-xl p-10 rounded-3xl shadow-2xl mx-auto mt-8 w-full max-w-2xl border border-[#262e4a]">
-            <h2 className="text-3xl font-bold mb-8 text-blue-100">Edit Profile</h2>
+            <h2 className="text-3xl font-bold mb-8 text-blue-100">
+              Edit Profile
+            </h2>
             <form
               onSubmit={(e) => {
                 e.preventDefault();
@@ -170,7 +214,9 @@ const MyProfile = ({ userType = "employee", onLogout }) => {
                   />
                 </div>
                 <div className="flex-1">
-                  <label className="block mb-2 font-semibold text-blue-100">Profile Picture</label>
+                  <label className="block mb-2 font-semibold text-blue-100">
+                    Profile Picture
+                  </label>
                   <input
                     type="file"
                     accept="image/*"
@@ -182,22 +228,30 @@ const MyProfile = ({ userType = "employee", onLogout }) => {
 
               {/* Fields */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-10">
-                {["name", "email", "phone", "location", "designation"].map((field) => (
-                  <div key={field}>
-                    <label className="block mb-2 font-medium text-blue-100">
-                      {field.charAt(0).toUpperCase() + field.slice(1)}
-                    </label>
-                    <input
-                      id={field}
-                      name={field}
-                      type={field === "email" ? "email" : field === "phone" ? "tel" : "text"}
-                      value={editData[field]}
-                      onChange={handleInputChange}
-                      className="w-full bg-[#141a29] border border-[#262e4a] rounded-2xl px-4 py-2 text-blue-100 placeholder-gray-400 shadow focus:outline-none focus:ring-2 focus:ring-[#ff8000] focus:border-[#ff8000]"
-                      required={field !== "location"}
-                    />
-                  </div>
-                ))}
+                {["name", "email", "phone", "location", "designation"].map(
+                  (field) => (
+                    <div key={field}>
+                      <label className="block mb-2 font-medium text-blue-100">
+                        {field.charAt(0).toUpperCase() + field.slice(1)}
+                      </label>
+                      <input
+                        id={field}
+                        name={field}
+                        type={
+                          field === "email"
+                            ? "email"
+                            : field === "phone"
+                            ? "tel"
+                            : "text"
+                        }
+                        value={editData[field]}
+                        onChange={handleInputChange}
+                        className="w-full bg-[#141a29] border border-[#262e4a] rounded-2xl px-4 py-2 text-blue-100 placeholder-gray-400 shadow focus:outline-none focus:ring-2 focus:ring-[#ff8000] focus:border-[#ff8000]"
+                        required={field !== "location"}
+                      />
+                    </div>
+                  )
+                )}
               </div>
 
               {/* Buttons */}
@@ -241,13 +295,18 @@ const MyProfile = ({ userType = "employee", onLogout }) => {
               />
             </div>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 mt-10">
-              <InfoCard title="Personal Information" data={profileData.personalInfo} />
+              <InfoCard
+                title="Personal Information"
+                data={profileData.personalInfo}
+              />
               <InfoCard title="Work Information" data={profileData.workInfo} />
             </div>
             <div className="mt-12 flex items-center justify-between">
               <div className="text-base text-blue-400">
                 Last updated:{" "}
-                <span className="font-semibold text-[#ff8000]">{new Date().toLocaleDateString()}</span>
+                <span className="font-semibold text-[#ff8000]">
+                  {new Date().toLocaleDateString()}
+                </span>
               </div>
               <div className="flex items-center gap-2">
                 <button

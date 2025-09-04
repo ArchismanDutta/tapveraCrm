@@ -14,6 +14,8 @@ const AttendancePage = ({ onLogout }) => {
   const [recentActivity, setRecentActivity] = useState([]);
   const token = localStorage.getItem("token");
 
+  const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
+
   const fetchAttendanceData = useCallback(async () => {
     try {
       // 1️⃣ Calculate current week range (Monday → Sunday) in UTC
@@ -42,11 +44,12 @@ const AttendancePage = ({ onLogout }) => {
       );
 
       // 1.1 Fetch approved leaves
-      const leavesRes = await axios.get("/api/leaves/mine", {
+      const leavesRes = await axios.get(`${API_BASE}/api/leaves/mine`, {
         headers: { Authorization: `Bearer ${token}` },
       });
+
       const approvedLeaves = leavesRes.data.filter(
-        (l) => l.status === "Approved"
+        (l) => l.status.toLowerCase() === "approved"
       );
 
       // Prepare month/year info for filtering leave days
@@ -70,7 +73,7 @@ const AttendancePage = ({ onLogout }) => {
       });
 
       // 2️⃣ Fetch weekly summary and daily attendance data
-      const res = await axios.get("/api/summary/week", {
+      const res = await axios.get(`${API_BASE}/api/summary/week`, {
         headers: { Authorization: `Bearer ${token}` },
         params: {
           startDate: monday.toISOString(),
@@ -104,7 +107,9 @@ const AttendancePage = ({ onLogout }) => {
       });
 
       // 5️⃣ Fetch holidays for the shift
-      const holidaysRes = await axios.get(`/api/holidays?shift=standard`);
+      const holidaysRes = await axios.get(
+        `${API_BASE}/api/holidays?shift=standard`
+      );
       const holidayDaysMap = {};
       holidaysRes.data.forEach((h) => {
         const dateObj = new Date(h.date);

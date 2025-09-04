@@ -7,11 +7,12 @@ const HolidayList = ({ shift = "ALL" }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
   // Fetch holidays from backend
   const fetchHolidays = async () => {
     try {
       setLoading(true);
-      const res = await axios.get(`/api/holidays?shift=${shift}`);
+      const res = await axios.get(`${API_BASE}/api/holidays?shift=${shift}`);
       const data = res.data.map((h) => ({
         name: h.name,
         date: new Date(h.date).toLocaleDateString("en-GB", {
@@ -37,10 +38,10 @@ const HolidayList = ({ shift = "ALL" }) => {
   }, [shift]);
 
   return (
-    <div
-      className="bg-[rgba(22,28,48,0.68)] border border-[rgba(84,123,209,0.13)] rounded-3xl p-6 shadow-[0_8px_32px_0_rgba(10,40,100,0.14),_inset_0_1.5px_10px_0_rgba(84,123,209,0.08)] backdrop-blur-[10px]"
-    >
-      <h3 className="text-xl font-semibold mb-5 text-blue-100">Holidays This Month</h3>
+    <div className="bg-[rgba(22,28,48,0.68)] border border-[rgba(84,123,209,0.13)] rounded-3xl p-6 shadow-[0_8px_32px_0_rgba(10,40,100,0.14),_inset_0_1.5px_10px_0_rgba(84,123,209,0.08)] backdrop-blur-[10px]">
+      <h3 className="text-xl font-semibold mb-5 text-blue-100">
+        Holidays This Month
+      </h3>
 
       {loading ? (
         <p className="text-blue-100">Loading holidays...</p>
