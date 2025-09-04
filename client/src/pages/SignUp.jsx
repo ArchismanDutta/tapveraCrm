@@ -89,19 +89,25 @@ const Signup = () => {
     setForm((prev) => ({ ...prev, shift: { ...prev.shift, [field]: value } }));
   };
 
+  // Validation to accept overnight shifts correctly
   const validateTimeOrder = (start, end) => {
     if (!start || !end) return false;
-    // "HH:MM" -> compare strings or convert to minutes
+
     const [sh, sm] = start.split(":").map(Number);
     const [eh, em] = end.split(":").map(Number);
-    return eh > sh || (eh === sh && em > sm);
+
+    // Return false if start and end are exactly the same time (invalid)
+    if (sh === eh && sm === em) return false;
+
+    // All other cases including overnight shifts allowed
+    return true;
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
 
-    // Required basic fields
+    // Required basic fields for all users
     const requiredFields = ["employeeId", "name", "email", "contact", "dob", "gender", "password", "doj"];
     const isIncomplete = requiredFields.some((field) => !String(form[field] || "").trim());
     if (isIncomplete) {
@@ -110,7 +116,7 @@ const Signup = () => {
       return;
     }
 
-    // If standard shift, require valid start and end times
+    // For standard shift, validate shift times
     if (form.shiftType === "standard") {
       if (!form.shift?.start || !form.shift?.end) {
         toast.error("Please provide both shift start and end times for Standard shift.");
@@ -118,13 +124,13 @@ const Signup = () => {
         return;
       }
       if (!validateTimeOrder(form.shift.start, form.shift.end)) {
-        toast.error("Shift end time must be after start time.");
+        toast.error("Shift end time must not be the same as start time.");
         setLoading(false);
         return;
       }
     }
 
-    // Skills array
+    // Skills parsing
     const skillsArray = skillsInput
       .split(",")
       .map((s) => s.trim())
@@ -132,10 +138,10 @@ const Signup = () => {
 
     // Filter out empty qualification entries
     const validQualifications = form.qualifications.filter(
-      (q) => (q.school || q.degree || q.marks || q.year)
+      (q) => q.school || q.degree || q.marks || q.year
     );
 
-    // Build payload
+    // Build payload for API
     const payload = {
       employeeId: String(form.employeeId).trim(),
       name: String(form.name).trim(),
@@ -166,7 +172,7 @@ const Signup = () => {
       shiftType: form.shiftType || "standard",
     };
 
-    // Only attach shift when standard (backend expects shift for standard)
+    // Attach shift details if standard type only
     if (form.shiftType === "standard") {
       payload.shift = {
         start: form.shift.start,
@@ -175,7 +181,7 @@ const Signup = () => {
           const [sh, sm] = form.shift.start.split(":").map(Number);
           const [eh, em] = form.shift.end.split(":").map(Number);
           let diffMinutes = (eh * 60 + em) - (sh * 60 + sm);
-          if (diffMinutes <= 0) diffMinutes += 24 * 60; // wrap-around safety
+          if (diffMinutes <= 0) diffMinutes += 24 * 60; // handle wrap-around for overnight
           return Math.round(diffMinutes / 60);
         })(),
       };
@@ -201,7 +207,7 @@ const Signup = () => {
 
       const data = await res.json();
       if (!res.ok) {
-        // Prefer human-friendly messages
+        // Show specific error message if available
         const msg = data?.message || (data?.errors && data.errors[0]?.msg) || "Something went wrong.";
         toast.error(msg);
         setLoading(false);

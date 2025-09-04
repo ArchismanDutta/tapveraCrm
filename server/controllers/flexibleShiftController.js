@@ -15,7 +15,7 @@ exports.createFlexibleShiftRequest = async (req, res) => {
     const user = await User.findById(userId);
     if (!user) return res.status(404).json({ message: "User not found" });
 
-    // Only standard employees can submit semi-flexible requests
+    // Only standard employees can submit flexible requests
     if (user.shiftType === "flexiblePermanent") {
       return res.status(400).json({
         message: "Permanent flexible shift employees do not submit requests",
@@ -116,7 +116,7 @@ exports.updateFlexibleShiftStatus = async (req, res) => {
     request.reviewedAt = new Date();
     await request.save();
 
-    // If approved, update user's shift for that day (semi-flexible override)
+    // If approved, compute and update user's shiftOverride for the requested date
     if (status === "approved") {
       const duration = request.durationHours || 9;
       const [startH, startM] = request.requestedStartTime.split(":").map(Number);
@@ -130,7 +130,6 @@ exports.updateFlexibleShiftStatus = async (req, res) => {
 
       const endTime = `${String(endH).padStart(2, "0")}:${String(endM).padStart(2, "0")}`;
 
-      // Store shift override
       user.shiftOverrides = user.shiftOverrides || {};
       user.shiftOverrides[request.requestedDate.toISOString().slice(0, 10)] = {
         start: request.requestedStartTime,

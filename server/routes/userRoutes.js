@@ -1,4 +1,5 @@
 // File: routes/userRoutes.js
+
 const express = require("express");
 const router = express.Router();
 
@@ -15,30 +16,16 @@ const {
   updateEmployeeStatus,
 } = require("../controllers/userController");
 
-// ======================
-// Employee Directory
-// Accessible by all logged-in users
-// Supports filters & search
-// ======================
+// Employee Directory - accessible to all logged-in users, with filters & search
 router.get("/directory", protect, getEmployeeDirectory);
 
-// ======================
 // Current logged-in user info
-// Includes shift info
-// ======================
 router.get("/me", protect, getMe);
 
-// ======================
-// Get all users (full info for admin/hr/super-admin)
-// For assigning tasks or management purposes
-// ======================
+// Get all users - full info, for admin, hr, super-admin only
 router.get("/", protect, authorize("admin", "hr", "super-admin"), getAllUsers);
 
-// ======================
-// Get all users (minimal info + shift)
-// Accessible only by admin/hr/super-admin
-// Must be before '/:id' to avoid route conflicts
-// ======================
+// Get all users - minimal info (id, name, email, role, shift), for admin/hr/super-admin
 router.get("/all", protect, authorize("admin", "hr", "super-admin"), async (req, res) => {
   try {
     const users = await User.find({}, "_id name email role shift");
@@ -49,29 +36,13 @@ router.get("/all", protect, authorize("admin", "hr", "super-admin"), async (req,
   }
 });
 
-// ======================
-// Create new employee
-// Optional shift: { start, end, isFlexible }
-// Accessible by admin/hr/super-admin
-// ======================
-router.post(
-  "/create",
-  protect,
-  authorize("admin", "hr", "super-admin"),
-  createEmployee
-);
+// Create new employee - accessible to admin, hr, super-admin only
+router.post("/create", protect, authorize("admin", "hr", "super-admin"), createEmployee);
 
-// ======================
-// Get single employee by ID
-// Includes shift info
-// Accessible by admin/hr/super-admin
-// ======================
+// Get single employee by ID - admin, hr, super-admin only
 router.get("/:id", protect, authorize("admin", "hr", "super-admin"), getEmployeeById);
 
-// ======================
-// Update employee status
-// Accessible by admin/hr/super-admin
-// ======================
+// Update employee status (active/inactive) - admin, hr, super-admin only
 router.patch("/:id/status", protect, authorize("admin", "hr", "super-admin"), updateEmployeeStatus);
 
 module.exports = router;

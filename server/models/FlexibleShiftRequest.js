@@ -24,7 +24,7 @@ const flexibleShiftRequestSchema = new mongoose.Schema(
     requestedStartTime: {
       type: String,
       required: [true, "Requested start time is required"],
-      match: /^([01]\d|2[0-3]):([0-5]\d)$/,
+      match: [/^([01]\d|2[0-3]):([0-5]\d)$/, "Start time must be in HH:mm format"],
     },
 
     // Duration of shift in hours (default 9)
@@ -40,12 +40,13 @@ const flexibleShiftRequestSchema = new mongoose.Schema(
       type: String,
       trim: true,
       maxlength: [500, "Reason cannot exceed 500 characters"],
+      default: "",
     },
 
     // Status of the request
     status: {
       type: String,
-      enum: ["pending", "approved", "rejected", "Pending", "Approved", "Rejected"],
+      enum: ["pending", "approved", "rejected"],
       default: "pending",
     },
 

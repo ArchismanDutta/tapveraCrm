@@ -1,7 +1,7 @@
-// File: controllers/adminController.js
 const User = require("../models/User");
 const DailyWork = require("../models/DailyWork");
 const LeaveRequest = require("../models/LeaveRequest");
+const Holiday = require("../models/Holiday");
 
 /**
  * GET /api/admin/employees
@@ -12,23 +12,21 @@ exports.getEmployeeList = async (req, res) => {
     const { department, status } = req.query;
     const filter = {};
 
-    // Apply filters only if provided
-    if (department && department !== "all") {
-      filter.department = department.trim();
-    }
-    if (status && status !== "all") {
-      filter.status = status.trim().toLowerCase();
-    }
+    if (department && department !== "all") filter.department = department.trim();
+    if (status && status !== "all") filter.status = status.trim().toLowerCase();
 
-    // Fetch employees with selected fields
-    const employees = await User.find(filter, "employeeId name department role status").lean();
+    const employees = await User.find(
+      filter,
+      "employeeId name department role status avatar"
+    ).lean();
 
     return res.json({ success: true, data: employees });
   } catch (err) {
     console.error("Error fetching employee list:", err);
-    return res
-      .status(500)
-      .json({ success: false, message: "Server error while fetching employees" });
+    return res.status(500).json({
+      success: false,
+      message: "Server error while fetching employees",
+    });
   }
 };
 
@@ -49,39 +47,45 @@ exports.getEmployeeSummary = async (req, res) => {
 
     const start = new Date(startDate);
     const end = new Date(endDate);
-    end.setHours(23, 59, 59, 999); // Include the whole end date
+    end.setHours(23, 59, 59, 999);
 
-    // Fetch attendance records for the employee in the given range
-    const attendanceRecords = await DailyWork.find({
+    // Fetch DailyWork records
+    const dailyData = await DailyWork.find({
       userId: employeeId,
       date: { $gte: start, $lte: end },
     })
       .sort({ date: 1 })
       .lean();
 
-    // Fetch leave records overlapping the same period
+    // Fetch approved leave requests
     const leaves = await LeaveRequest.find({
       "employee._id": employeeId,
+      status: "Approved",
       "period.start": { $lte: end },
       "period.end": { $gte: start },
     })
       .sort({ "period.start": 1 })
       .lean();
 
-    // Calculate summary statistics
-    const totalWorkSeconds = attendanceRecords.reduce(
+    // Fetch holidays
+    const holidays = await Holiday.find({
+      date: { $gte: start, $lte: end },
+      shifts: { $in: ["ALL", "standard"] },
+    }).lean();
+
+    // Compute totals
+    const totalWorkSeconds = dailyData.reduce(
       (sum, record) => sum + (record.workDurationSeconds || 0),
       0
     );
-
-    const totalBreakSeconds = attendanceRecords.reduce(
+    const totalBreakSeconds = dailyData.reduce(
       (sum, record) => sum + (record.breakDurationSeconds || 0),
       0
     );
 
-    const totalDays = attendanceRecords.length;
-    const lateDays = attendanceRecords.filter((r) => r.isLate).length;
-    const absentDays = attendanceRecords.filter((r) => r.isAbsent).length;
+    const totalDays = dailyData.length;
+    const lateDays = dailyData.filter((r) => r.isLate).length;
+    const absentDays = dailyData.filter((r) => r.isAbsent).length;
 
     const summary = {
       totalWorkHours: (totalWorkSeconds / 3600).toFixed(2),
@@ -90,13 +94,15 @@ exports.getEmployeeSummary = async (req, res) => {
       lateDays,
       absentDays,
       leavesTaken: leaves.length,
+      holidays: holidays.length,
     };
 
-    return res.json({ success: true, attendanceRecords, leaves, summary });
+    return res.json({ success: true, dailyData, leaves, holidays, summary });
   } catch (err) {
     console.error("Error fetching employee summary:", err);
-    return res
-      .status(500)
-      .json({ success: false, message: "Server error while fetching employee summary" });
+    return res.status(500).json({
+      success: false,
+      message: "Server error while fetching employee summary",
+    });
   }
 };
