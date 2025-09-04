@@ -21,7 +21,7 @@ const menuConfig = {
     { to: "/dashboard", icon: <LayoutDashboard size={18} />, label: "Employee Dashboard" },
     { to: "/profile", icon: <User size={18} />, label: "My Profile" },
     { to: "/today-status", icon: <ClipboardList size={18} />, label: "Today's Work" },
-    { to: "/attendance", icon: <ClipboardList size={18} />, label: "Attendance" },
+    { to: "/attendance", icon: <ClipboardList size={18} />, label: "My Attendance" },
     { to: "/todo", icon: <ClipboardList size={18} />, label: "Todo" },
     { to: "/messages", icon: <MessageCircle size={18} />, label: "Messages" },
     { to: "/leaves", icon: <FileText size={18} />, label: "Leave Requests" },
@@ -34,12 +34,13 @@ const menuConfig = {
     { to: "/todo", icon: <ClipboardList size={18} />, label: "Todo" },
     { to: "/admin/leaves", icon: <FileText size={18} />, label: "Leave Requests" },
     { to: "/leaves", icon: <FileText size={18} />, label: "My Leaves" },
-    { to: "/attendance", icon: <ClipboardList size={18} />, label: "Attendance" },
+    { to: "/attendance", icon: <ClipboardList size={18} />, label: "My Attendance" },
     { to: "/directory", icon: <Users size={18} />, label: "Employee Details" },
     { to: "/admin/notices", icon: <Flag size={18} />, label: "Notice Board" },
     { to: "/admin/holidays", icon: <Calendar size={18} />, label: "Holidays List" },
     { to: "/messages", icon: <MessageCircle size={18} />, label: "Messages" },
     { to: "/profile", icon: <User size={18} />, label: "My Profile" },
+    { to: "/admin-attendance", icon: <ClipboardList size={18} />, label: "Employee Attendance" },
   ],
   admin: [
     { to: "/dashboard", icon: <LayoutDashboard size={18} />, label: "Admin Dashboard" },
@@ -49,7 +50,10 @@ const menuConfig = {
     { to: "/leaves", icon: <FileText size={18} />, label: "My Leaves" },
     { to: "/messages", icon: <MessageCircle size={18} />, label: "Messages" },
     { to: "/admin/holidays", icon: <Calendar size={18} />, label: "Holidays List" },
+    { to: "/attendance", icon: <ClipboardList size={18} />, label: "My Attendance" },
     { to: "/profile", icon: <User size={18} />, label: "My Profile" },
+    { to: "/admin/notices", icon: <Flag size={18} />, label: "Notice Board" },
+    { to: "/admin-attendance", icon: <ClipboardList size={18} />, label: "Employee Attendance" },
   ],
   "super-admin": [
     { to: "/dashboard", icon: <LayoutDashboard size={18} />, label: "Super Admin Dashboard" },
@@ -60,6 +64,7 @@ const menuConfig = {
     { to: "/messages", icon: <MessageCircle size={18} />, label: "Messages" },
     { to: "/admin/holidays", icon: <Calendar size={18} />, label: "Holidays List" },
     { to: "/profile", icon: <User size={18} />, label: "My Profile" },
+    { to: "/admin-attendance", icon: <ClipboardList size={18} />, label: "Employee Attendance" },
   ],
 };
 

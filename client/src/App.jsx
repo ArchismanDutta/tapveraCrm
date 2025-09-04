@@ -31,7 +31,7 @@ import EmployeeDirectory from "./pages/EmployeeDirectory";
 import EmployeePage from "./pages/EmployeePage";
 import HRDashboard from "./pages/HRDashboard";
 import AdminAttendancePage from "./pages/AdminAttendancePage";
-import HolidayManagementPage from "./pages/HolidayManagementPage"; // <-- NEW IMPORT
+import HolidayManagementPage from "./pages/HolidayManagementPage"; 
 
 import { resetChat } from "./store/slices/chatSlice";
 import { useDispatch } from "react-redux";
@@ -141,7 +141,7 @@ const AppWrapper = () => {
           }
         />
 
-        {/* Signup - Admin/HR/Super Admin only */}
+        {/* Signup */}
         <Route
           path="/signup"
           element={
@@ -165,13 +165,7 @@ const AppWrapper = () => {
               <EmployeeDashboardPage onLogout={handleLogout} role={role} />
             ) : (
               <Navigate
-                to={
-                  isAuthenticated
-                    ? isAdmin
-                      ? "/admin/tasks"
-                      : "/login"
-                    : "/login"
-                }
+                to={isAuthenticated ? (isAdmin ? "/admin/tasks" : "/login") : "/login"}
                 replace
               />
             )
@@ -208,11 +202,11 @@ const AppWrapper = () => {
           }
         />
 
-        {/* Admin routes */}
+        {/* Admin/HR/Super Admin Routes */}
         <Route
           path="/admin/tasks"
           element={
-            isAuthenticated && isAdmin ? (
+            isAuthenticated && (isAdmin || isHR) ? (
               <AdminTaskPage onLogout={handleLogout} />
             ) : (
               <Navigate
@@ -225,7 +219,7 @@ const AppWrapper = () => {
         <Route
           path="/admin/employees"
           element={
-            isAuthenticated && isAdmin ? (
+            isAuthenticated && (isAdmin || isHR) ? (
               <EmployeeManagementPage onLogout={handleLogout} />
             ) : (
               <Navigate
@@ -262,9 +256,9 @@ const AppWrapper = () => {
           }
         />
         <Route
-          path="/admin/attendance"
+          path="/admin-attendance"
           element={
-            isAuthenticated && isAdmin ? (
+            isAuthenticated && (isAdmin || isHR) ? (
               <AdminAttendancePage onLogout={handleLogout} />
             ) : (
               <Navigate
@@ -274,8 +268,6 @@ const AppWrapper = () => {
             )
           }
         />
-
-        {/* NEW: Holiday Management Page */}
         <Route
           path="/admin/holidays"
           element={

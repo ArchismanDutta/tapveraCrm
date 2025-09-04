@@ -1,42 +1,27 @@
-// File: models/UserStatus.js
 const mongoose = require("mongoose");
 
 // ======================
 // Sub-schemas
 // ======================
-
-// Timeline event for punch-in/out or custom events
 const TimelineEventSchema = new mongoose.Schema({
-  type: { type: String, required: true }, // e.g., "Punch In", "Punch Out", "Break Start"
-  time: { type: String, required: true }, // "HH:mm" format or descriptive
+  type: { type: String, required: true },
+  time: { type: Date, required: true },
 });
 
-// Worked session
 const WorkedSessionSchema = new mongoose.Schema({
   start: { type: Date, required: true },
   end: { type: Date, default: null },
 });
 
-// Break session
 const BreakSessionSchema = new mongoose.Schema({
   start: { type: Date, required: true },
   end: { type: Date, default: null },
 });
 
-// Quick weekly stats
 const QuickStatsSchema = new mongoose.Schema({
   earlyArrivals: { type: Number, default: 0 },
   lateArrivals: { type: Number, default: 0 },
   perfectDays: { type: Number, default: 0 },
-});
-
-// Shift sub-schema
-const ShiftSchema = new mongoose.Schema({
-  name: { type: String, trim: true, default: "Morning 9-6" },
-  start: { type: String, trim: true, default: "09:00" },
-  end: { type: String, trim: true, default: "18:00" },
-  durationHours: { type: Number, default: 9 },
-  isFlexible: { type: Boolean, default: false },
 });
 
 // ======================
@@ -46,13 +31,13 @@ const UserStatusSchema = new mongoose.Schema(
   {
     userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, index: true },
 
-    // Effective shift for the day
-    shift: { type: ShiftSchema, default: () => ({}) },
+    // Flag for single-day flexible request for standard employees
+    flexibleRequest: { type: Boolean, default: false },
 
     // Daily durations
-    workDuration: { type: String, default: "0h 0m" }, // formatted string
-    workDurationSeconds: { type: Number, default: 0 }, // numeric
-    totalWorkMs: { type: Number, default: 0 }, // for precise calculations
+    workDuration: { type: String, default: "0h 0m" },
+    workDurationSeconds: { type: Number, default: 0 },
+    totalWorkMs: { type: Number, default: 0 },
     breakDuration: { type: String, default: "0h 0m" },
     breakDurationSeconds: { type: Number, default: 0 },
 
@@ -76,19 +61,8 @@ const UserStatusSchema = new mongoose.Schema(
       quickStats: { type: QuickStatsSchema, default: () => ({}) },
     },
 
-    // Optional recent activities (for dashboard)
-    recentActivities: {
-      type: [
-        {
-          date: { type: String, default: "" },
-          activity: { type: String, default: "" },
-          time: { type: String, default: "" },
-        },
-      ],
-      default: [],
-    },
+    recentActivities: { type: [{ date: Date, activity: String, time: String }], default: [] },
 
-    // Reference day
     today: {
       type: Date,
       default: () => {
@@ -98,13 +72,103 @@ const UserStatusSchema = new mongoose.Schema(
       },
       index: true,
     },
+
+    // Attendance flags
+    isLate: { type: Boolean, default: false },
+    isHalfDay: { type: Boolean, default: false },
+    isAbsent: { type: Boolean, default: false },
   },
   { timestamps: true }
 );
 
-// ======================
-// Compound index: quick lookup for user/day
-// ======================
+// Compound index: unique per user per day
 UserStatusSchema.index({ userId: 1, today: 1 }, { unique: true });
+
+// ======================
+// Pre-save hook: ensure timeline entries are Date objects
+// ======================
+UserStatusSchema.pre("save", function (next) {
+  if (this.timeline && this.timeline.length > 0) {
+    this.timeline = this.timeline.map((e) => ({
+      type: e.type,
+      time: e.time instanceof Date ? e.time : new Date(e.time),
+    }));
+  }
+  next();
+});
+
+// ======================
+// Static helper: create or fetch today's status
+// ======================
+UserStatusSchema.statics.createOrFetchToday = async function (userId, applyFlexibleRequest = false) {
+  const startOfDay = new Date();
+  startOfDay.setHours(0, 0, 0, 0);
+
+  const endOfDay = new Date();
+  endOfDay.setHours(23, 59, 59, 999);
+
+  let status = await this.findOne({
+    userId,
+    today: { $gte: startOfDay, $lte: endOfDay },
+  });
+
+  if (!status) {
+    status = new this({ userId, flexibleRequest: applyFlexibleRequest });
+    await status.save();
+  } else if (applyFlexibleRequest) {
+    status.flexibleRequest = true;
+    await status.save();
+  }
+
+  return status;
+};
+
+// ======================
+// Instance helper: punch in
+// ======================
+UserStatusSchema.methods.punchIn = async function () {
+  if (this.currentlyWorking) throw new Error("Already punched in");
+
+  const now = new Date();
+  this.arrivalTime = now;
+  this.currentlyWorking = true;
+  this.timeline.push({ type: "punchIn", time: now });
+  this.workedSessions.push({ start: now });
+  await this.save();
+};
+
+// ======================
+// Instance helper: punch out
+// ======================
+UserStatusSchema.methods.punchOut = async function () {
+  const now = new Date();
+
+  if (!this.currentlyWorking) throw new Error("Not currently working");
+
+  // Close last worked session
+  if (this.workedSessions.length > 0) {
+    const lastSession = this.workedSessions[this.workedSessions.length - 1];
+    if (!lastSession.end) lastSession.end = now;
+  } else {
+    this.workedSessions.push({ start: now, end: now });
+  }
+
+  // Calculate total worked seconds
+  const totalSeconds = this.workedSessions.reduce((acc, session) => {
+    const start = session.start instanceof Date ? session.start : new Date(session.start);
+    const end = session.end instanceof Date ? session.end : now;
+    return acc + Math.max(0, Math.floor((end - start) / 1000));
+  }, 0);
+
+  this.workDurationSeconds = totalSeconds;
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  this.workDuration = `${hours}h ${minutes}m`;
+
+  this.currentlyWorking = false;
+  this.timeline.push({ type: "punchOut", time: now });
+
+  await this.save();
+};
 
 module.exports = mongoose.model("UserStatus", UserStatusSchema);
