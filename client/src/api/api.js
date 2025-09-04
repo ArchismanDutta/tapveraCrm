@@ -10,7 +10,7 @@ const getAuthHeaders = () => {
 // -------------------- USERS --------------------
 export const fetchUsers = async () => {
   try {
-    const res = await axios.get(`${API_BASE}/chat/users`, { headers: getAuthHeaders() });
+    const res = await axios.get(`${API_BASE}api/chat/users`, { headers: getAuthHeaders() });
     return res.data;
   } catch (err) {
     console.error("fetchUsers error:", err.response?.data || err.message);
@@ -23,7 +23,7 @@ export const fetchUsers = async () => {
 // Fetch all conversations for the logged-in user
 export const fetchConversations = async () => {
   try {
-    const res = await axios.get(`${API_BASE}/chat/conversations`, { headers: getAuthHeaders() });
+    const res = await axios.get(`${API_BASE}api/chat/conversations`, { headers: getAuthHeaders() });
     return res.data;
   } catch (err) {
     console.error("fetchConversations error:", err.response?.data || err.message);

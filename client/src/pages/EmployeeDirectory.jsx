@@ -6,8 +6,8 @@ import EmployeeTable from "../components/employeedetails/EmployeeTable";
 
 const API_BASE =
   import.meta.env.VITE_API_BASE ||
-  `${window.location.origin.replace(/\/$/, "")}/api` ||
-  "http://localhost:5000/api";
+  `${window.location.origin.replace(/\/$/, "")}` ||
+  "http://localhost:5000";
 
 const EmployeeDirectory = ({onLogout}) => {
   const navigate = useNavigate();
@@ -47,7 +47,7 @@ const EmployeeDirectory = ({onLogout}) => {
       setCurrentUser(user);
 
       const query = buildQueryParams();
-      const url = `${API_BASE}/users/directory${query ? `?${query}` : ""}`;
+      const url = `${API_BASE}/api/users/directory${query ? `?${query}` : ""}`;
 
       const res = await fetch(url, {
         headers: {

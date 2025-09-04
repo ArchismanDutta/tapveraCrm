@@ -4,6 +4,8 @@ import HolidayTable from "../components/manageholiday/HolidayTable";
 import HolidayForm from "../components/manageholiday/HolidayForm";
 import Sidebar from "../components/dashboard/Sidebar";
 
+const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
+
 const HolidayManagementPage = () => {
   const [holidays, setHolidays] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -12,7 +14,7 @@ const HolidayManagementPage = () => {
   const fetchHolidays = async () => {
     try {
       setLoading(true);
-      const res = await axios.get("/api/holidays");
+      const res = await axios.get(`${API_BASE}/api/holidays`);
       setHolidays(res.data);
     } catch (err) {
       console.error("Error fetching holidays:", err);
@@ -23,7 +25,7 @@ const HolidayManagementPage = () => {
 
   const addHoliday = async (holidayData) => {
     try {
-      const res = await axios.post("/api/holidays", holidayData, {
+      const res = await axios.post(`${API_BASE}/api/holidays`, holidayData, {
         headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
       });
       setHolidays((prev) => [...prev, res.data]);
@@ -34,7 +36,7 @@ const HolidayManagementPage = () => {
 
   const deleteHoliday = async (id) => {
     try {
-      await axios.delete(`/api/holidays/${id}`, {
+      await axios.delete(`${API_BASE}/api/holidays/${id}`, {
         headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
       });
       setHolidays((prev) => prev.filter((h) => h._id !== id));

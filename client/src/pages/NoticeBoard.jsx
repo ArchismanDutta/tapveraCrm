@@ -11,7 +11,7 @@ const NoticeBoard = ({ onLogout }) => {
   // Fetch notices
   const fetchNotices = async () => {
     try {
-      const res = await API.get("/notices");
+      const res = await API.get("/api/notices");
       setNotices(res.data);
     } catch (err) {
       console.error("Error fetching notices:", err.message);
@@ -30,7 +30,7 @@ const NoticeBoard = ({ onLogout }) => {
   // Deactivate notice
   const handleDeactivate = async (id) => {
     try {
-      await API.patch(`/notices/${id}/deactivate`, { isActive: false });
+      await API.patch(`/api/notices/${id}/deactivate`, { isActive: false });
       fetchNotices();
     } catch (err) {
       console.error("Error deactivating notice:", err.message);
@@ -43,7 +43,11 @@ const NoticeBoard = ({ onLogout }) => {
   return (
     <div className="flex min-h-screen bg-gray-900 text-gray-200">
       {/* Sidebar */}
-      <Sidebar collapsed={collapsed} setCollapsed={setCollapsed} onLogout={onLogout} />
+      <Sidebar
+        collapsed={collapsed}
+        setCollapsed={setCollapsed}
+        onLogout={onLogout}
+      />
 
       {/* Main Content */}
       <div

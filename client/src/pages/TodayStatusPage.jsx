@@ -11,7 +11,10 @@ import PunchOutConfirmPopup from "../components/workstatus/PunchOutConfirmPopup"
 import { toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
+
+// --- Backend URL ---
+const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
+
 
 const formatHMS = (seconds = 0) => {
   const h = Math.floor(seconds / 3600);
@@ -102,12 +105,9 @@ const TodayStatusPage = ({ onLogout }) => {
         `${API_BASE}/api/flexible-shifts/my-requests`,
         axiosConfig
       );
-      const requests = res.data || [];
-      setFlexibleRequests(
-        requests
-          .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-          .slice(0, 5)
-      );
+
+      setFlexibleRequests(res.data || []);
+
     } catch (err) {
       console.error(
         "Failed to fetch flexible shift requests:",
@@ -127,12 +127,15 @@ const TodayStatusPage = ({ onLogout }) => {
         onBreak: status?.onBreak || false,
         ...update,
       };
+      const res = await axios.put(
+        `${API_BASE}/api/status`,
       if (payload.timelineEvent?.time) {
         payload.timelineEvent.time = new Date(payload.timelineEvent.time);
       }
 
       const res = await axios.put(
         `${API_BASE}/api/status/today`,
+
         payload,
         axiosConfig
       );
@@ -220,8 +223,10 @@ const TodayStatusPage = ({ onLogout }) => {
     updateStatus({
       currentlyWorking: true,
       onBreak: false,
-      punchInTime: new Date(),
-      timelineEvent: { type: "Punch In", time: new Date() },
+      timelineEvent: {
+        type: "Punch In",
+        time: new Date().toLocaleTimeString(),
+      },
     });
   };
 
@@ -252,7 +257,12 @@ const TodayStatusPage = ({ onLogout }) => {
       console.error("Error fetching todo tasks:", err);
     }
 
-    setShowPunchOutConfirm(true);
+
+  const handlePunchOutClick = async () => {
+    if (!status?.currentlyWorking && !status?.onBreak) return;
+    const canPunchOut = await checkTodoTasksBeforePunchOut();
+    if (canPunchOut) setShowPunchOutConfirm(true);
+
   };
 
   const onCancelPunchOut = () => setShowPunchOutConfirm(false);
@@ -262,8 +272,12 @@ const TodayStatusPage = ({ onLogout }) => {
     updateStatus({
       currentlyWorking: false,
       onBreak: false,
-      punchOutTime: new Date(),
-      timelineEvent: { type: "Punch Out", time: new Date() },
+
+      timelineEvent: {
+        type: "Punch Out",
+        time: new Date().toLocaleTimeString(),
+      },
+
     });
   };
 
@@ -279,7 +293,12 @@ const TodayStatusPage = ({ onLogout }) => {
       currentlyWorking: false,
       onBreak: true,
       breakStartTime: new Date(),
-      timelineEvent: { type: `Break Start (${breakType})`, time: new Date() },
+
+      timelineEvent: {
+        type: `Break Start (${breakType})`,
+        time: new Date().toLocaleTimeString(),
+      },
+
     });
   };
 
@@ -292,7 +311,11 @@ const TodayStatusPage = ({ onLogout }) => {
       currentlyWorking: true,
       onBreak: false,
       breakStartTime: null,
-      timelineEvent: { type: "Resume Work", time: new Date() },
+      timelineEvent: {
+        type: "Resume Work",
+        time: new Date().toLocaleTimeString(),
+      },
+
     });
   };
 
@@ -363,6 +386,7 @@ const TodayStatusPage = ({ onLogout }) => {
         userRole="employee"
         onLogout={onLogout}
       />
+
       <main
         className="transition-all duration-300 p-2 sm:p-6 overflow-auto"
         style={{
@@ -448,12 +472,25 @@ const TodayStatusPage = ({ onLogout }) => {
 
         {/* Flexible Shift Modal */}
         {showFlexibleModal && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-            <div className="bg-[#101525] p-6 rounded-2xl w-full max-w-md text-gray-100">
-              <h2 className="text-xl font-bold mb-4">Request Flexible Shift</h2>
-              <form onSubmit={submitFlexibleRequest} className="flex flex-col gap-3">
-                <label className="flex flex-col">
-                  Date
+
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 overflow-auto"
+            onClick={closeFlexibleModal}
+          >
+            <div
+              className="bg-[#0f1724] text-gray-100 rounded-lg shadow-lg w-full max-w-md p-6 max-h-[80vh] overflow-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h2 className="text-xl font-semibold mb-4">
+                Request Flexible Shift
+              </h2>
+              <form
+                className="flex flex-col gap-4"
+                onSubmit={submitFlexibleRequest}
+              >
+                <label className="flex flex-col gap-1">
+                  Date:
+
                   <input
                     type="date"
                     value={requestDate}

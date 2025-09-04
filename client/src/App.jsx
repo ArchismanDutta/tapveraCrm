@@ -30,8 +30,8 @@ import ChatPage from "./pages/ChatPage";
 import EmployeeDirectory from "./pages/EmployeeDirectory";
 import EmployeePage from "./pages/EmployeePage";
 import HRDashboard from "./pages/HRDashboard";
-import AdminAttendancePage from "./pages/AdminAttendancePage"; 
-import HolidayManagementPage from "./pages/HolidayManagementPage";
+import AdminAttendancePage from "./pages/AdminAttendancePage";
+import HolidayManagementPage from "./pages/HolidayManagementPage"; 
 
 import { resetChat } from "./store/slices/chatSlice";
 import { useDispatch } from "react-redux";
@@ -89,7 +89,9 @@ const AppWrapper = () => {
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-screen">Loading...</div>
+      <div className="flex justify-center items-center h-screen">
+        Loading...
+      </div>
     );
   }
 
@@ -175,7 +177,10 @@ const AppWrapper = () => {
           path="/profile"
           element={
             isAuthenticated ? (
-              <MyProfile onLogout={handleLogout} userType={role || "employee"} />
+              <MyProfile
+                onLogout={handleLogout}
+                userType={role || "employee"}
+              />
             ) : (
               <Navigate to="/login" replace />
             )
@@ -189,7 +194,10 @@ const AppWrapper = () => {
             isAuthenticated && (isAdmin || isHR) ? (
               <EmployeePage userRole={role} onLogout={handleLogout} />
             ) : (
-              <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />
+              <Navigate
+                to={isAuthenticated ? "/dashboard" : "/login"}
+                replace
+              />
             )
           }
         />
@@ -201,7 +209,10 @@ const AppWrapper = () => {
             isAuthenticated && (isAdmin || isHR) ? (
               <AdminTaskPage onLogout={handleLogout} />
             ) : (
-              <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />
+              <Navigate
+                to={isAuthenticated ? "/dashboard" : "/login"}
+                replace
+              />
             )
           }
         />
@@ -211,7 +222,10 @@ const AppWrapper = () => {
             isAuthenticated && (isAdmin || isHR) ? (
               <EmployeeManagementPage onLogout={handleLogout} />
             ) : (
-              <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />
+              <Navigate
+                to={isAuthenticated ? "/dashboard" : "/login"}
+                replace
+              />
             )
           }
         />
@@ -221,7 +235,10 @@ const AppWrapper = () => {
             isAuthenticated && (isAdmin || isHR) ? (
               <AdminLeaveRequests onLogout={handleLogout} />
             ) : (
-              <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />
+              <Navigate
+                to={isAuthenticated ? "/dashboard" : "/login"}
+                replace
+              />
             )
           }
         />
@@ -231,7 +248,10 @@ const AppWrapper = () => {
             isAuthenticated && (isAdmin || isHR) ? (
               <NoticeBoard onLogout={handleLogout} />
             ) : (
-              <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />
+              <Navigate
+                to={isAuthenticated ? "/dashboard" : "/login"}
+                replace
+              />
             )
           }
         />
@@ -241,7 +261,10 @@ const AppWrapper = () => {
             isAuthenticated && (isAdmin || isHR) ? (
               <AdminAttendancePage onLogout={handleLogout} />
             ) : (
-              <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />
+              <Navigate
+                to={isAuthenticated ? "/dashboard" : "/login"}
+                replace
+              />
             )
           }
         />
@@ -251,7 +274,10 @@ const AppWrapper = () => {
             isAuthenticated && (isAdmin || isHR) ? (
               <HolidayManagementPage onLogout={handleLogout} />
             ) : (
-              <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />
+              <Navigate
+                to={isAuthenticated ? "/dashboard" : "/login"}
+                replace
+              />
             )
           }
         />
