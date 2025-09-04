@@ -5,7 +5,7 @@ import AuthInput from "../components/AuthInput";
 import tapveraLogo from "../assets/tapvera.png";
 import { FaEnvelope, FaLock } from "react-icons/fa";
 
-const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000/api";
+const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
 
 const Login = ({ onLoginSuccess }) => {
   const navigate = useNavigate();
@@ -30,7 +30,7 @@ const Login = ({ onLoginSuccess }) => {
     }
 
     try {
-      const res = await fetch(`${API_BASE}/auth/login`, {
+      const res = await fetch(`${API_BASE}/api/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(form),

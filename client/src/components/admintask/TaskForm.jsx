@@ -23,7 +23,7 @@ const TaskForm = ({ onCreate }) => {
   useEffect(() => {
     const fetchUsers = async () => {
       try {
-        const res = await API.get("/users");
+        const res = await API.get("/api/users");
         if (Array.isArray(res.data)) setUsers(res.data);
       } catch (err) {
         console.error("Failed to fetch users", err);
@@ -50,7 +50,9 @@ const TaskForm = ({ onCreate }) => {
       const alreadySelected = prev.assignedTo.includes(userId);
       return {
         ...prev,
-        assignedTo: alreadySelected ? prev.assignedTo.filter((id) => id !== userId) : [...prev.assignedTo, userId],
+        assignedTo: alreadySelected
+          ? prev.assignedTo.filter((id) => id !== userId)
+          : [...prev.assignedTo, userId],
       };
     });
   };
@@ -79,7 +81,9 @@ const TaskForm = ({ onCreate }) => {
     setSearchTerm("");
   };
 
-  const filteredUsers = users.filter((u) => u.name.toLowerCase().includes(searchTerm.toLowerCase()));
+  const filteredUsers = users.filter((u) =>
+    u.name.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   const generateTimeSlots = () => {
     const slots = [];
@@ -115,9 +119,16 @@ const TaskForm = ({ onCreate }) => {
 
       {/* Assign To */}
       <div className="relative" ref={dropdownRef}>
-        <label className="block text-sm font-medium mb-1">Assign To (Multiple)</label>
-        <div className={commonInputClasses} onClick={() => setDropdownOpen((prev) => !prev)}>
-          {task.assignedTo.length > 0 ? `${task.assignedTo.length} user(s) selected` : "Select users..."}
+        <label className="block text-sm font-medium mb-1">
+          Assign To (Multiple)
+        </label>
+        <div
+          className={commonInputClasses}
+          onClick={() => setDropdownOpen((prev) => !prev)}
+        >
+          {task.assignedTo.length > 0
+            ? `${task.assignedTo.length} user(s) selected`
+            : "Select users..."}
         </div>
 
         {dropdownOpen && (
@@ -148,7 +159,9 @@ const TaskForm = ({ onCreate }) => {
                 </label>
               ))
             ) : (
-              <div className="px-3 py-2 text-sm text-blue-300">No users found</div>
+              <div className="px-3 py-2 text-sm text-blue-300">
+                No users found
+              </div>
             )}
           </div>
         )}
@@ -157,15 +170,14 @@ const TaskForm = ({ onCreate }) => {
       {/* Date + Time Picker */}
       <div className="flex gap-3">
         {/* Date */}
-<input
-  type="date"
-  className={commonInputClasses}
-  value={task.dueDate}
-  onChange={(e) => setTask({ ...task, dueDate: e.target.value })}
-  required
-  min={new Date().toISOString().split("T")[0]} // <-- Prevent past dates
-/>
-
+        <input
+          type="date"
+          className={commonInputClasses}
+          value={task.dueDate}
+          onChange={(e) => setTask({ ...task, dueDate: e.target.value })}
+          required
+          min={new Date().toISOString().split("T")[0]} // <-- Prevent past dates
+        />
 
         {/* Time */}
         <div className="relative w-full" ref={timeRef}>

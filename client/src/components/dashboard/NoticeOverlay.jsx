@@ -13,7 +13,7 @@ export default function NoticeOverlay() {
 
   const fetchNotices = async () => {
     try {
-      const res = await API.get("/notices/active"); // your endpoint
+      const res = await API.get("/api/notices/active"); // your endpoint
       setNotices(res.data || []);
     } catch (err) {
       console.error("Error fetching notices:", err);

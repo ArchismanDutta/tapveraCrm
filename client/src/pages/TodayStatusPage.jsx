@@ -11,14 +11,16 @@ import { toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 
 // --- Backend URL ---
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
+const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
 
 // --- Helpers ---
 const formatHMS = (seconds = 0) => {
   const h = Math.floor(seconds / 3600);
   const m = Math.floor((seconds % 3600) / 60);
   const s = seconds % 60;
-  return `${h}h ${m.toString().padStart(2, "0")}m ${s.toString().padStart(2, "0")}s`;
+  return `${h}h ${m.toString().padStart(2, "0")}m ${s
+    .toString()
+    .padStart(2, "0")}s`;
 };
 
 const SIDEBAR_WIDTH_EXPANDED = 288;
@@ -74,7 +76,10 @@ const TodayStatusPage = ({ onLogout }) => {
 
       const res = await axios.get(`${API_BASE}/api/summary/week`, {
         ...axiosConfig,
-        params: { startDate: monday.toISOString(), endDate: sunday.toISOString() },
+        params: {
+          startDate: monday.toISOString(),
+          endDate: sunday.toISOString(),
+        },
       });
       setWeeklySummary(res.data?.weeklySummary || null);
       setDailyData(res.data?.dailyData || []);
@@ -86,7 +91,10 @@ const TodayStatusPage = ({ onLogout }) => {
   // --- Fetch Flexible Requests ---
   const fetchFlexibleRequests = async () => {
     try {
-      const res = await axios.get(`${API_BASE}/api/flexible-shifts/my-requests`, axiosConfig);
+      const res = await axios.get(
+        `${API_BASE}/api/flexible-shifts/my-requests`,
+        axiosConfig
+      );
       setFlexibleRequests(res.data || []);
     } catch (err) {
       console.error("Failed to fetch flexible shift requests:", err);
@@ -105,7 +113,11 @@ const TodayStatusPage = ({ onLogout }) => {
         arrivalTime: status.arrivalTime || null,
         ...update,
       };
-      const res = await axios.put(`${API_BASE}/api/status`, payload, axiosConfig);
+      const res = await axios.put(
+        `${API_BASE}/api/status`,
+        payload,
+        axiosConfig
+      );
       setStatus(res.data);
       setSelectedBreakType("");
       fetchWeeklySummary();
@@ -165,7 +177,10 @@ const TodayStatusPage = ({ onLogout }) => {
     updateStatus({
       currentlyWorking: true,
       onBreak: false,
-      timelineEvent: { type: "Punch In", time: new Date().toLocaleTimeString() },
+      timelineEvent: {
+        type: "Punch In",
+        time: new Date().toLocaleTimeString(),
+      },
     });
   };
 
@@ -191,7 +206,7 @@ const TodayStatusPage = ({ onLogout }) => {
   };
 
   const handlePunchOutClick = async () => {
-    if (!(status?.currentlyWorking) && !(status?.onBreak)) return;
+    if (!status?.currentlyWorking && !status?.onBreak) return;
     const canPunchOut = await checkTodoTasksBeforePunchOut();
     if (canPunchOut) setShowPunchOutConfirm(true);
   };
@@ -202,7 +217,10 @@ const TodayStatusPage = ({ onLogout }) => {
     updateStatus({
       currentlyWorking: false,
       onBreak: false,
-      timelineEvent: { type: "Punch Out", time: new Date().toLocaleTimeString() },
+      timelineEvent: {
+        type: "Punch Out",
+        time: new Date().toLocaleTimeString(),
+      },
     });
   };
 
@@ -213,7 +231,10 @@ const TodayStatusPage = ({ onLogout }) => {
       currentlyWorking: false,
       onBreak: true,
       breakStartTime: new Date(),
-      timelineEvent: { type: `Break Start (${breakType})`, time: new Date().toLocaleTimeString() },
+      timelineEvent: {
+        type: `Break Start (${breakType})`,
+        time: new Date().toLocaleTimeString(),
+      },
     });
   };
 
@@ -223,7 +244,10 @@ const TodayStatusPage = ({ onLogout }) => {
       currentlyWorking: true,
       onBreak: false,
       breakStartTime: null,
-      timelineEvent: { type: "Resume Work", time: new Date().toLocaleTimeString() },
+      timelineEvent: {
+        type: "Resume Work",
+        time: new Date().toLocaleTimeString(),
+      },
     });
   };
 
@@ -283,12 +307,19 @@ const TodayStatusPage = ({ onLogout }) => {
 
   return (
     <div className="bg-[#101525] min-h-screen text-gray-100">
-      <Sidebar collapsed={collapsed} setCollapsed={setCollapsed} userRole="employee" onLogout={onLogout} />
+      <Sidebar
+        collapsed={collapsed}
+        setCollapsed={setCollapsed}
+        userRole="employee"
+        onLogout={onLogout}
+      />
 
       <main
         className="transition-all duration-300 p-2 sm:p-6 overflow-auto"
         style={{
-          marginLeft: collapsed ? SIDEBAR_WIDTH_COLLAPSED : SIDEBAR_WIDTH_EXPANDED,
+          marginLeft: collapsed
+            ? SIDEBAR_WIDTH_COLLAPSED
+            : SIDEBAR_WIDTH_EXPANDED,
           minHeight: "100vh",
         }}
       >
@@ -356,7 +387,10 @@ const TodayStatusPage = ({ onLogout }) => {
         )}
 
         {showPunchOutConfirm && (
-          <PunchOutConfirmPopup onCancel={onCancelPunchOut} onConfirm={onConfirmPunchOut} />
+          <PunchOutConfirmPopup
+            onCancel={onCancelPunchOut}
+            onConfirm={onConfirmPunchOut}
+          />
         )}
 
         {/* --- Flexible Shift Modal --- */}
@@ -369,8 +403,13 @@ const TodayStatusPage = ({ onLogout }) => {
               className="bg-[#0f1724] text-gray-100 rounded-lg shadow-lg w-full max-w-md p-6 max-h-[80vh] overflow-auto"
               onClick={(e) => e.stopPropagation()}
             >
-              <h2 className="text-xl font-semibold mb-4">Request Flexible Shift</h2>
-              <form className="flex flex-col gap-4" onSubmit={submitFlexibleRequest}>
+              <h2 className="text-xl font-semibold mb-4">
+                Request Flexible Shift
+              </h2>
+              <form
+                className="flex flex-col gap-4"
+                onSubmit={submitFlexibleRequest}
+              >
                 <label className="flex flex-col gap-1">
                   Date:
                   <input

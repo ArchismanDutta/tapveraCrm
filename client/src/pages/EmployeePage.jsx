@@ -11,6 +11,7 @@ import ShiftDetails from "../components/employeeinfo/ShiftDetails";
 
 const SIDEBAR_WIDTH = 250; // Adjust according to your sidebar width
 
+const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
 const EmployeePage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -27,7 +28,7 @@ const EmployeePage = () => {
         return;
       }
       try {
-        const res = await fetch(`/api/users/${id}`, {
+        const res = await fetch(`${API_BASE}/api/users/${id}`, {
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${token}`,
@@ -52,7 +53,9 @@ const EmployeePage = () => {
         const data = await res.json();
         setSelectedEmployee(data);
       } catch (err) {
-        setError(err.message || "An error occurred while fetching employee data.");
+        setError(
+          err.message || "An error occurred while fetching employee data."
+        );
       } finally {
         setLoading(false);
       }
@@ -100,13 +103,21 @@ const EmployeePage = () => {
         {/* Header */}
         <header className="flex flex-col sm:flex-row gap-6 items-center bg-[#202944] border border-[#283255] shadow-md rounded-2xl px-10 py-6">
           <img
-            src={selectedEmployee.photo || selectedEmployee.avatar || "https://via.placeholder.com/120"}
+            src={
+              selectedEmployee.photo ||
+              selectedEmployee.avatar ||
+              "https://via.placeholder.com/120"
+            }
             alt={selectedEmployee.name}
             className="w-28 h-28 rounded-full border-4 border-blue-400 bg-[#1c223a] shadow"
           />
           <div>
-            <h1 className="text-3xl font-bold text-blue-100 mb-1">{selectedEmployee.name}</h1>
-            <p className="text-blue-400 text-lg">{selectedEmployee.designation || selectedEmployee.jobTitle}</p>
+            <h1 className="text-3xl font-bold text-blue-100 mb-1">
+              {selectedEmployee.name}
+            </h1>
+            <p className="text-blue-400 text-lg">
+              {selectedEmployee.designation || selectedEmployee.jobTitle}
+            </p>
           </div>
         </header>
 
@@ -135,9 +146,11 @@ const EmployeePage = () => {
           <EmploymentDetails
             info={{
               employeeId: selectedEmployee.employeeId,
-              designation: selectedEmployee.designation || selectedEmployee.jobTitle,
+              designation:
+                selectedEmployee.designation || selectedEmployee.jobTitle,
               department: selectedEmployee.department,
-              dateOfJoining: selectedEmployee.doj || selectedEmployee.dateOfJoining,
+              dateOfJoining:
+                selectedEmployee.doj || selectedEmployee.dateOfJoining,
               status: selectedEmployee.status,
               jobLevel: selectedEmployee.jobLevel,
             }}
@@ -154,7 +167,10 @@ const EmployeePage = () => {
         />
 
         {/* Shift Details */}
-        <ShiftDetails shift={selectedEmployee.shift} shiftType={selectedEmployee.shiftType} />
+        <ShiftDetails
+          shift={selectedEmployee.shift}
+          shiftType={selectedEmployee.shiftType}
+        />
       </main>
     </div>
   );
