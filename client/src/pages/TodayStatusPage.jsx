@@ -9,12 +9,11 @@ import SummaryCard from "../components/workstatus/SummaryCard";
 import PunchOutTodoPopup from "../components/todo/PunchOutTodoPopup";
 import PunchOutConfirmPopup from "../components/workstatus/PunchOutConfirmPopup";
 import { toast } from "react-toastify";
+import { formatLocalTime } from "../components/workstatus/Timeline";
 import "react-toastify/dist/ReactToastify.css";
-
 
 // --- Backend URL ---
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
-
 
 const formatHMS = (seconds = 0) => {
   const h = Math.floor(seconds / 3600);
@@ -35,7 +34,9 @@ const safeParseDate = (v) => {
 };
 
 const normalizeEventType = (t) =>
-  String(t || "").toLowerCase().replace(/[\s_-]+/g, "");
+  String(t || "")
+    .toLowerCase()
+    .replace(/[\s_-]+/g, "");
 
 const TodayStatusPage = ({ onLogout }) => {
   const [collapsed, setCollapsed] = useState(false);
@@ -67,7 +68,10 @@ const TodayStatusPage = ({ onLogout }) => {
       const res = await axios.get(`${API_BASE}/api/status/today`, axiosConfig);
       setStatus(res.data);
     } catch (err) {
-      console.error("Failed to fetch today's status:", err.response?.data || err);
+      console.error(
+        "Failed to fetch today's status:",
+        err.response?.data || err
+      );
       toast.error("Failed to load today's status.");
     }
   }, []);
@@ -95,7 +99,10 @@ const TodayStatusPage = ({ onLogout }) => {
       setWeeklySummary(res.data?.weeklySummary || null);
       setDailyData(res.data?.dailyData || []);
     } catch (err) {
-      console.error("Failed to fetch weekly summary:", err.response?.data || err);
+      console.error(
+        "Failed to fetch weekly summary:",
+        err.response?.data || err
+      );
     }
   }, []);
 
@@ -105,9 +112,7 @@ const TodayStatusPage = ({ onLogout }) => {
         `${API_BASE}/api/flexible-shifts/my-requests`,
         axiosConfig
       );
-
       setFlexibleRequests(res.data || []);
-
     } catch (err) {
       console.error(
         "Failed to fetch flexible shift requests:",
@@ -127,18 +132,17 @@ const TodayStatusPage = ({ onLogout }) => {
         onBreak: status?.onBreak || false,
         ...update,
       };
-      const res = await axios.put(
-        `${API_BASE}/api/status`,
+
       if (payload.timelineEvent?.time) {
         payload.timelineEvent.time = new Date(payload.timelineEvent.time);
       }
 
       const res = await axios.put(
         `${API_BASE}/api/status/today`,
-
         payload,
         axiosConfig
       );
+
       setStatus(res.data);
       setSelectedBreakType("");
       fetchWeeklySummary();
@@ -200,7 +204,7 @@ const TodayStatusPage = ({ onLogout }) => {
   }, [fetchStatus, fetchWeeklySummary, fetchFlexibleRequests]);
 
   // -------------------
-  // Punch logic
+  // Punch logic (unified and fixed)
   // -------------------
   const todayKey = new Date().toISOString().slice(0, 10);
   const timelineToday = (status?.timeline || []).filter((e) =>
@@ -230,7 +234,9 @@ const TodayStatusPage = ({ onLogout }) => {
     });
   };
 
+  // FIXED: SINGLE DEFINITION (merged logic)
   const handlePunchOutClick = async () => {
+    // must be working or on break to punch out
     if (!currentlyWorkingToday && !status?.onBreak) {
       toast.info("You are not currently working.");
       return;
@@ -253,16 +259,12 @@ const TodayStatusPage = ({ onLogout }) => {
         setShowTodoPopup(true);
         return;
       }
+      // If no incomplete todo, show punch out confirmation
+      setShowPunchOutConfirm(true);
     } catch (err) {
       console.error("Error fetching todo tasks:", err);
+      toast.error("Error fetching todo tasks before punch out.");
     }
-
-
-  const handlePunchOutClick = async () => {
-    if (!status?.currentlyWorking && !status?.onBreak) return;
-    const canPunchOut = await checkTodoTasksBeforePunchOut();
-    if (canPunchOut) setShowPunchOutConfirm(true);
-
   };
 
   const onCancelPunchOut = () => setShowPunchOutConfirm(false);
@@ -272,12 +274,10 @@ const TodayStatusPage = ({ onLogout }) => {
     updateStatus({
       currentlyWorking: false,
       onBreak: false,
-
       timelineEvent: {
         type: "Punch Out",
         time: new Date().toLocaleTimeString(),
       },
-
     });
   };
 
@@ -293,12 +293,10 @@ const TodayStatusPage = ({ onLogout }) => {
       currentlyWorking: false,
       onBreak: true,
       breakStartTime: new Date(),
-
       timelineEvent: {
         type: `Break Start (${breakType})`,
         time: new Date().toLocaleTimeString(),
       },
-
     });
   };
 
@@ -315,7 +313,6 @@ const TodayStatusPage = ({ onLogout }) => {
         type: "Resume Work",
         time: new Date().toLocaleTimeString(),
       },
-
     });
   };
 
@@ -401,7 +398,7 @@ const TodayStatusPage = ({ onLogout }) => {
             <StatusCard
               workDuration={formatHMS(liveWork)}
               breakTime={formatHMS(liveBreak)}
-              arrivalTime={status.arrivalTimeFormatted || "--"}
+              arrivalTime={formatLocalTime(status.arrivalTime) || "--"}
               currentlyWorking={currentlyWorkingToday}
               alreadyPunchedIn={alreadyPunchedIn}
               alreadyPunchedOut={alreadyPunchedOut}
@@ -409,6 +406,7 @@ const TodayStatusPage = ({ onLogout }) => {
               onPunchOut={handlePunchOutClick}
               onRequestFlexible={openFlexibleModal}
             />
+
             <BreakManagement
               breakDuration={formatHMS(liveBreak)}
               onBreak={status.onBreak}
@@ -421,10 +419,7 @@ const TodayStatusPage = ({ onLogout }) => {
             <Timeline timeline={status.timeline || []} />
           </div>
           <div className="space-y-4">
-            <SummaryCard
-              weeklySummary={weeklySummary}
-              dailyData={dailyData}
-            />
+            <SummaryCard weeklySummary={weeklySummary} dailyData={dailyData} />
           </div>
         </div>
 
@@ -472,7 +467,6 @@ const TodayStatusPage = ({ onLogout }) => {
 
         {/* Flexible Shift Modal */}
         {showFlexibleModal && (
-
           <div
             className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 overflow-auto"
             onClick={closeFlexibleModal}
@@ -490,7 +484,6 @@ const TodayStatusPage = ({ onLogout }) => {
               >
                 <label className="flex flex-col gap-1">
                   Date:
-
                   <input
                     type="date"
                     value={requestDate}
