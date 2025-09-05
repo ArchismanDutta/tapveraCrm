@@ -8,7 +8,7 @@ const { protect, authorize } = require("../middlewares/authMiddleware");
 router.post(
   "/",
   protect,
-  authorize("admin", "super-admin"),
+  authorize("admin", "super-admin", "hr"),
   noticeController.createNotice
 );
 
@@ -19,7 +19,7 @@ router.get("/", protect, noticeController.getActiveNotice);
 router.patch(
   "/:id/deactivate",
   protect,
-  authorize("admin", "super-admin"),
+  authorize("admin", "super-admin", "hr"),
   noticeController.deactivateNotice
 );
 
