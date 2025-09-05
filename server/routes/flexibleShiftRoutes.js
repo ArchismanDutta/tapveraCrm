@@ -20,7 +20,7 @@ const { protect, authorize } = require("../middlewares/authMiddleware");
 router.get(
   "/",
   protect,
-  authorize("hr", "admin"),
+  authorize("hr", "admin", "super-admin"),
   getFlexibleShiftRequests
 );
 

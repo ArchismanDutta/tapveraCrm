@@ -1,8 +1,7 @@
-// File: src/components/workstatus/Timeline.jsx
 import React from "react";
 
-// Helper: format ISO timestamp to "hh:mm AM/PM"
-const formatTime = (isoString) => {
+// Helper: format ISO timestamp to "hh:mm AM/PM" in local time
+export const formatLocalTime = (isoString) => {
   if (!isoString) return "--";
   const date = new Date(isoString);
   let hours = date.getHours();
@@ -32,7 +31,7 @@ const Timeline = ({ timeline = [] }) => {
             >
               <span className="font-medium text-gray-200">{item.type}</span>
               <span className="text-orange-400 font-semibold text-sm">
-                {formatTime(item.time)}
+                {formatLocalTime(item.time)}
               </span>
             </li>
           ))}

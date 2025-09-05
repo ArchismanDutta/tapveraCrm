@@ -1,7 +1,10 @@
 import axios from "axios";
 
+// Pick API base URL from env or fallback to localhost
+const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
+
 const api = axios.create({
-  baseURL: "/api/admin",
+  baseURL: API_BASE,
   headers: {
     "Content-Type": "application/json",
   },
@@ -26,7 +29,7 @@ api.interceptors.request.use(
  */
 export const fetchEmployees = async (filters = {}) => {
   try {
-    const response = await api.get("/employees", { params: filters });
+    const response = await api.get("/api/admin/employees", { params: filters });
     // Backend sends { success: true, data: [...] }
     if (response.data.success) {
       return response.data.data;
@@ -49,7 +52,7 @@ export const fetchEmployees = async (filters = {}) => {
  */
 export const fetchEmployeeSummary = async (employeeId, startDate, endDate) => {
   try {
-    const response = await api.get("/employee-summary", {
+    const response = await api.get("/api/admin/employee-summary", {
       params: { employeeId, startDate, endDate },
     });
     if (response.data.success) {
