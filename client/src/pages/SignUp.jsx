@@ -21,7 +21,7 @@ const Signup = () => {
     gender: "",
     department: "",
     designation: "",
-    jobLevel: "junior", // backend enum: intern|junior|mid|senior|lead|director|executive
+    jobLevel: "junior",
     location: "India",
     password: "",
     bloodGroup: "",
@@ -38,8 +38,6 @@ const Signup = () => {
     outlookAppPassword: "",
     employmentType: "full-time",
     qualifications: [{ school: "", degree: "", marks: "", year: "" }],
-    // Only two choices presented to the user:
-    // "standard" (fixed shift) and "flexiblePermanent" (permanent flexible)
     shiftType: "standard",
     shift: { start: "09:00", end: "18:00" },
   });
@@ -50,14 +48,17 @@ const Signup = () => {
 
   useEffect(() => {
     const savedRole =
-      JSON.parse(localStorage.getItem("user"))?.role || localStorage.getItem("role");
+      JSON.parse(localStorage.getItem("user"))?.role ||
+      localStorage.getItem("role");
     if (savedRole) setRole(savedRole.toLowerCase());
     else navigate("/login");
   }, [navigate]);
 
   useEffect(() => {
     if (role && !["hr", "admin", "super-admin"].includes(role)) {
-      toast.error("Access denied. Only HR/Admin/Super Admin can register employees.");
+      toast.error(
+        "Access denied. Only HR/Admin/Super Admin can register employees."
+      );
       navigate("/login");
     }
   }, [role, navigate]);
@@ -76,7 +77,10 @@ const Signup = () => {
   const addQualification = () => {
     setForm((prev) => ({
       ...prev,
-      qualifications: [...prev.qualifications, { school: "", degree: "", marks: "", year: "" }],
+      qualifications: [
+        ...prev.qualifications,
+        { school: "", degree: "", marks: "", year: "" },
+      ],
     }));
   };
 
@@ -89,17 +93,14 @@ const Signup = () => {
     setForm((prev) => ({ ...prev, shift: { ...prev.shift, [field]: value } }));
   };
 
-  // Validation to accept overnight shifts correctly
   const validateTimeOrder = (start, end) => {
     if (!start || !end) return false;
 
     const [sh, sm] = start.split(":").map(Number);
     const [eh, em] = end.split(":").map(Number);
 
-    // Return false if start and end are exactly the same time (invalid)
     if (sh === eh && sm === em) return false;
 
-    // All other cases including overnight shifts allowed
     return true;
   };
 
@@ -107,19 +108,30 @@ const Signup = () => {
     e.preventDefault();
     setLoading(true);
 
-    // Required basic fields for all users
-    const requiredFields = ["employeeId", "name", "email", "contact", "dob", "gender", "password", "doj"];
-    const isIncomplete = requiredFields.some((field) => !String(form[field] || "").trim());
+    const requiredFields = [
+      "employeeId",
+      "name",
+      "email",
+      "contact",
+      "dob",
+      "gender",
+      "password",
+      "doj",
+    ];
+    const isIncomplete = requiredFields.some(
+      (field) => !String(form[field] || "").trim()
+    );
     if (isIncomplete) {
       toast.error("⚠️ Please fill in all required fields.");
       setLoading(false);
       return;
     }
 
-    // For standard shift, validate shift times
     if (form.shiftType === "standard") {
       if (!form.shift?.start || !form.shift?.end) {
-        toast.error("Please provide both shift start and end times for Standard shift.");
+        toast.error(
+          "Please provide both shift start and end times for Standard shift."
+        );
         setLoading(false);
         return;
       }
@@ -130,18 +142,15 @@ const Signup = () => {
       }
     }
 
-    // Skills parsing
     const skillsArray = skillsInput
       .split(",")
       .map((s) => s.trim())
       .filter(Boolean);
 
-    // Filter out empty qualification entries
     const validQualifications = form.qualifications.filter(
       (q) => q.school || q.degree || q.marks || q.year
     );
 
-    // Build payload for API
     const payload = {
       employeeId: String(form.employeeId).trim(),
       name: String(form.name).trim(),
@@ -172,7 +181,6 @@ const Signup = () => {
       shiftType: form.shiftType || "standard",
     };
 
-    // Attach shift details if standard type only
     if (form.shiftType === "standard") {
       payload.shift = {
         start: form.shift.start,
@@ -180,8 +188,8 @@ const Signup = () => {
         durationHours: (() => {
           const [sh, sm] = form.shift.start.split(":").map(Number);
           const [eh, em] = form.shift.end.split(":").map(Number);
-          let diffMinutes = (eh * 60 + em) - (sh * 60 + sm);
-          if (diffMinutes <= 0) diffMinutes += 24 * 60; // handle wrap-around for overnight
+          let diffMinutes = eh * 60 + em - (sh * 60 + sm);
+          if (diffMinutes <= 0) diffMinutes += 24 * 60;
           return Math.round(diffMinutes / 60);
         })(),
       };
@@ -207,8 +215,10 @@ const Signup = () => {
 
       const data = await res.json();
       if (!res.ok) {
-        // Show specific error message if available
-        const msg = data?.message || (data?.errors && data.errors[0]?.msg) || "Something went wrong.";
+        const msg =
+          data?.message ||
+          (data?.errors && data.errors[0]?.msg) ||
+          "Something went wrong.";
         toast.error(msg);
         setLoading(false);
         return;
@@ -228,15 +238,20 @@ const Signup = () => {
 
   if (!["hr", "admin", "super-admin"].includes(role)) return null;
 
+  // DARK THEME CLASSES - update ONLY UI theme
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-background px-4 py-6">
-      <img src={tapveraLogo} alt="Tapvera Logo" className="h-20 w-auto mb-6" />
-      <div className="bg-surface rounded-xl shadow-lg border border-border p-6 w-full max-w-lg space-y-6">
-        <h2 className="text-2xl font-bold text-textMain mb-4 text-center">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-[#151a22] px-4 py-6">
+      <img
+        src={tapveraLogo}
+        alt="Tapvera Logo"
+        className="h-20 w-auto mb-6 mx-auto"
+      />
+      <div className="bg-[#222731] rounded-2xl shadow-lg border border-[#222531] p-8 w-full max-w-lg space-y-7">
+        <h2 className="text-3xl font-bold text-white mb-4 text-center">
           Employee Registration
         </h2>
 
-        <form onSubmit={handleSubmit} className="space-y-5" noValidate>
+        <form onSubmit={handleSubmit} className="space-y-6" noValidate>
           {/* Basic Info */}
           <div className="space-y-3">
             <AuthInput
@@ -248,6 +263,8 @@ const Signup = () => {
               placeholder="Enter employee ID"
               required
               icon={FaUser}
+              className="bg-[#232831] text-[#f7f9fa] border-[#31353c] focus:border-orange-500"
+              labelClass="text-gray-300"
             />
             <AuthInput
               label="Full Name *"
@@ -258,6 +275,8 @@ const Signup = () => {
               placeholder="Enter full name"
               required
               icon={FaUser}
+              className="bg-[#232831] text-[#f7f9fa] border-[#31353c] focus:border-orange-500"
+              labelClass="text-gray-300"
             />
             <AuthInput
               label="Email Address *"
@@ -268,6 +287,8 @@ const Signup = () => {
               placeholder="Enter email"
               required
               icon={FaEnvelope}
+              className="bg-[#232831] text-[#f7f9fa] border-[#31353c] focus:border-orange-500"
+              labelClass="text-gray-300"
             />
             <AuthInput
               label="Contact Number *"
@@ -278,13 +299,15 @@ const Signup = () => {
               placeholder="Enter contact number"
               required
               icon={FaPhone}
+              className="bg-[#232831] text-[#f7f9fa] border-[#31353c] focus:border-orange-500"
+              labelClass="text-gray-300"
             />
           </div>
 
           {/* DOB & Gender */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm text-textMuted mb-1">
+              <label className="block text-sm text-gray-400 mb-1">
                 Date of Birth *
               </label>
               <input
@@ -293,19 +316,19 @@ const Signup = () => {
                 value={form.dob}
                 max={todayISO}
                 onChange={handleChange}
-                className="w-full px-4 py-2 border border-border rounded-md"
+                className="w-full px-4 py-2 bg-[#232831] text-[#f7f9fa] border border-[#31353c] rounded-md"
                 required
               />
             </div>
             <div>
-              <label className="block text-sm text-textMuted mb-1">
+              <label className="block text-sm text-gray-400 mb-1">
                 Gender *
               </label>
               <select
                 name="gender"
                 value={form.gender}
                 onChange={handleChange}
-                className="w-full px-4 py-2 border border-border rounded-md"
+                className="w-full px-4 py-2 bg-[#232831] text-[#f7f9fa] border border-[#31353c] rounded-md"
                 required
               >
                 <option value="">Select gender</option>
@@ -319,14 +342,14 @@ const Signup = () => {
           {/* Department / Designation / Job Level */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
-              <label className="block text-sm text-textMuted mb-1">
+              <label className="block text-sm text-gray-400 mb-1">
                 Department
               </label>
               <select
                 name="department"
                 value={form.department}
                 onChange={handleChange}
-                className="w-full px-4 py-2 border border-border rounded-md"
+                className="w-full px-4 py-2 bg-[#232831] text-[#f7f9fa] border border-[#31353c] rounded-md"
               >
                 <option value="">Select a department</option>
                 <option value="development">Development</option>
@@ -334,7 +357,6 @@ const Signup = () => {
                 <option value="humanResource">Human Resource</option>
               </select>
             </div>
-
             <AuthInput
               label="Designation"
               type="text"
@@ -342,17 +364,18 @@ const Signup = () => {
               value={form.designation}
               onChange={handleChange}
               placeholder="Enter designation"
+              className="bg-[#232831] text-[#f7f9fa] border-[#31353c] focus:border-orange-500"
+              labelClass="text-gray-300"
             />
-
             <div>
-              <label className="block text-sm text-textMuted mb-1">
+              <label className="block text-sm text-gray-400 mb-1">
                 Job Level
               </label>
               <select
                 name="jobLevel"
                 value={form.jobLevel}
                 onChange={handleChange}
-                className="w-full px-4 py-2 border border-border rounded-md"
+                className="w-full px-4 py-2 bg-[#232831] text-[#f7f9fa] border border-[#31353c] rounded-md"
               >
                 <option value="intern">Intern</option>
                 <option value="junior">Junior</option>
@@ -372,6 +395,8 @@ const Signup = () => {
             value={form.location}
             onChange={handleChange}
             placeholder="Enter location"
+            className="bg-[#232831] text-[#f7f9fa] border-[#31353c] focus:border-orange-500"
+            labelClass="text-gray-300"
           />
 
           {/* Optional Personal Info */}
@@ -382,6 +407,8 @@ const Signup = () => {
               name="bloodGroup"
               value={form.bloodGroup}
               onChange={handleChange}
+              className="bg-[#232831] text-[#f7f9fa] border-[#31353c]"
+              labelClass="text-gray-300"
             />
             <AuthInput
               label="Permanent Address"
@@ -389,6 +416,8 @@ const Signup = () => {
               name="permanentAddress"
               value={form.permanentAddress}
               onChange={handleChange}
+              className="bg-[#232831] text-[#f7f9fa] border-[#31353c]"
+              labelClass="text-gray-300"
             />
             <AuthInput
               label="Current Address"
@@ -396,6 +425,8 @@ const Signup = () => {
               name="currentAddress"
               value={form.currentAddress}
               onChange={handleChange}
+              className="bg-[#232831] text-[#f7f9fa] border-[#31353c]"
+              labelClass="text-gray-300"
             />
             <AuthInput
               label="Emergency Number"
@@ -403,6 +434,8 @@ const Signup = () => {
               name="emergencyNo"
               value={form.emergencyNo}
               onChange={handleChange}
+              className="bg-[#232831] text-[#f7f9fa] border-[#31353c]"
+              labelClass="text-gray-300"
             />
             <AuthInput
               label="P.S."
@@ -410,22 +443,23 @@ const Signup = () => {
               name="ps"
               value={form.ps}
               onChange={handleChange}
+              className="bg-[#232831] text-[#f7f9fa] border-[#31353c]"
+              labelClass="text-gray-300"
             />
           </div>
 
           {/* Joining & Salary */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm text-textMuted mb-1">
+              <label className="block text-sm text-gray-400 mb-1">
                 Date of Joining *
               </label>
               <input
                 type="date"
                 name="doj"
                 value={form.doj}
-                max={todayISO}
                 onChange={handleChange}
-                className="w-full px-4 py-2 border border-border rounded-md"
+                className="w-full px-4 py-2 bg-[#232831] text-[#f7f9fa] border border-[#31353c] rounded-md"
                 required
               />
             </div>
@@ -435,6 +469,8 @@ const Signup = () => {
               name="salary"
               value={form.salary}
               onChange={handleChange}
+              className="bg-[#232831] text-[#f7f9fa] border-[#31353c]"
+              labelClass="text-gray-300"
             />
           </div>
 
@@ -444,19 +480,19 @@ const Signup = () => {
             name="ref"
             value={form.ref}
             onChange={handleChange}
+            className="bg-[#232831] text-[#f7f9fa] border-[#31353c]"
+            labelClass="text-gray-300"
           />
 
           {/* Status & Total PL */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm text-textMuted mb-1">
-                Status
-              </label>
+              <label className="block text-sm text-gray-400 mb-1">Status</label>
               <select
                 name="status"
                 value={form.status}
                 onChange={handleChange}
-                className="w-full px-4 py-2 border border-border rounded-md"
+                className="w-full px-4 py-2 bg-[#232831] text-[#f7f9fa] border border-[#31353c] rounded-md"
               >
                 <option value="active">Active</option>
                 <option value="inactive">Inactive</option>
@@ -468,6 +504,8 @@ const Signup = () => {
               name="totalPl"
               value={form.totalPl}
               onChange={handleChange}
+              className="bg-[#232831] text-[#f7f9fa] border-[#31353c]"
+              labelClass="text-gray-300"
             />
           </div>
 
@@ -482,19 +520,21 @@ const Signup = () => {
             required
             showTogglePassword
             icon={FaLock}
+            className="bg-[#232831] text-[#f7f9fa] border-[#31353c] focus:border-orange-500"
+            labelClass="text-gray-300"
           />
 
           {/* Employment Type & Skills */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm text-textMuted mb-1">
+              <label className="block text-sm text-gray-400 mb-1">
                 Employment Type
               </label>
               <select
                 name="employmentType"
                 value={form.employmentType}
                 onChange={handleChange}
-                className="w-full px-4 py-2 border border-border rounded-md"
+                className="w-full px-4 py-2 bg-[#232831] text-[#f7f9fa] border border-[#31353c] rounded-md"
               >
                 <option value="full-time">Full-Time</option>
                 <option value="part-time">Part-Time</option>
@@ -503,7 +543,7 @@ const Signup = () => {
               </select>
             </div>
             <div>
-              <label className="block text-sm text-textMuted mb-1">
+              <label className="block text-sm text-gray-400 mb-1">
                 Skills (comma separated)
               </label>
               <input
@@ -512,21 +552,21 @@ const Signup = () => {
                 value={skillsInput}
                 onChange={(e) => setSkillsInput(e.target.value)}
                 placeholder="e.g. JavaScript, React, Node.js"
-                className="w-full px-4 py-2 border border-border rounded-md"
+                className="w-full px-4 py-2 bg-[#232831] text-[#f7f9fa] border border-[#31353c] rounded-md"
               />
             </div>
           </div>
 
           {/* SHIFT: only two choices */}
           <div>
-            <label className="block text-sm text-textMuted mb-1">
+            <label className="block text-sm text-gray-400 mb-1">
               Shift Type
             </label>
             <select
               name="shiftType"
               value={form.shiftType}
               onChange={handleChange}
-              className="w-full px-4 py-2 border border-border rounded-md"
+              className="w-full px-4 py-2 bg-[#232831] text-[#f7f9fa] border border-[#31353c] rounded-md"
             >
               <option value="standard">Standard Shift</option>
               <option value="flexiblePermanent">
@@ -539,25 +579,25 @@ const Signup = () => {
           {form.shiftType === "standard" && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
               <div>
-                <label className="block text-sm text-textMuted mb-1">
+                <label className="block text-sm text-gray-400 mb-1">
                   Shift Start
                 </label>
                 <input
                   type="time"
                   value={form.shift.start}
                   onChange={(e) => handleShiftChange("start", e.target.value)}
-                  className="w-full px-4 py-2 border border-border rounded-md"
+                  className="w-full px-4 py-2 bg-[#232831] text-[#f7f9fa] border border-[#31353c] rounded-md"
                 />
               </div>
               <div>
-                <label className="block text-sm text-textMuted mb-1">
+                <label className="block text-sm text-gray-400 mb-1">
                   Shift End
                 </label>
                 <input
                   type="time"
                   value={form.shift.end}
                   onChange={(e) => handleShiftChange("end", e.target.value)}
-                  className="w-full px-4 py-2 border border-border rounded-md"
+                  className="w-full px-4 py-2 bg-[#232831] text-[#f7f9fa] border border-[#31353c] rounded-md"
                 />
               </div>
             </div>
@@ -565,16 +605,18 @@ const Signup = () => {
 
           {/* Qualifications */}
           <div className="space-y-4">
-            <h3 className="text-lg font-semibold text-textMain">
+            <h3 className="text-lg font-semibold text-white">
               Qualification Details
             </h3>
             {form.qualifications.map((q, index) => (
               <div
                 key={index}
-                className="border border-border rounded-lg p-4 bg-backgroundAlt space-y-3 relative"
+                className="border border-[#31353c] rounded-lg p-4 bg-[#1b1f26] space-y-3 relative"
               >
                 <div className="flex justify-between items-center mb-2">
-                  <span className="font-medium">Qualification {index + 1}</span>
+                  <span className="font-medium text-gray-200">
+                    Qualification {index + 1}
+                  </span>
                   {form.qualifications.length > 1 && (
                     <button
                       type="button"
@@ -593,7 +635,7 @@ const Signup = () => {
                       handleQualificationChange(index, "school", e.target.value)
                     }
                     placeholder="School/University"
-                    className="w-full px-3 py-2 border border-border rounded-md"
+                    className="w-full px-3 py-2 bg-[#232831] text-[#f7f9fa] border border-[#31353c] rounded-md"
                   />
                   <input
                     type="text"
@@ -602,7 +644,7 @@ const Signup = () => {
                       handleQualificationChange(index, "degree", e.target.value)
                     }
                     placeholder="Degree/Certification"
-                    className="w-full px-3 py-2 border border-border rounded-md"
+                    className="w-full px-3 py-2 bg-[#232831] text-[#f7f9fa] border border-[#31353c] rounded-md"
                   />
                   <input
                     type="text"
@@ -611,7 +653,7 @@ const Signup = () => {
                       handleQualificationChange(index, "marks", e.target.value)
                     }
                     placeholder="Marks/Percentage"
-                    className="w-full px-3 py-2 border border-border rounded-md"
+                    className="w-full px-3 py-2 bg-[#232831] text-[#f7f9fa] border border-[#31353c] rounded-md"
                   />
                   <input
                     type="number"
@@ -620,7 +662,7 @@ const Signup = () => {
                       handleQualificationChange(index, "year", e.target.value)
                     }
                     placeholder="Year of Passing"
-                    className="w-full px-3 py-2 border border-border rounded-md"
+                    className="w-full px-3 py-2 bg-[#232831] text-[#f7f9fa] border border-[#31353c] rounded-md"
                   />
                 </div>
               </div>
@@ -628,15 +670,15 @@ const Signup = () => {
             <button
               type="button"
               onClick={addQualification}
-              className="text-primary underline text-sm"
+              className="text-orange-400 hover:underline text-sm"
             >
               + Add Qualification
             </button>
           </div>
 
           {/* Optional Email Setup */}
-          <div className="mt-6 pt-4 border-t border-border space-y-3">
-            <h3 className="text-lg font-semibold text-textMain">
+          <div className="mt-6 pt-4 border-t border-[#31353c] space-y-3">
+            <h3 className="text-lg font-semibold text-white">
               Optional: Email Setup
             </h3>
             <AuthInput
@@ -646,6 +688,8 @@ const Signup = () => {
               value={form.outlookEmail}
               onChange={handleChange}
               icon={FaEnvelope}
+              className="bg-[#232831] text-[#f7f9fa] border-[#31353c]"
+              labelClass="text-gray-300"
             />
             <AuthInput
               label="Email App Password"
@@ -655,14 +699,15 @@ const Signup = () => {
               onChange={handleChange}
               showTogglePassword
               icon={FaLock}
+              className="bg-[#232831] text-[#f7f9fa] border-[#31353c]"
+              labelClass="text-gray-300"
             />
           </div>
 
           <button
-            type="button"
-            onClick={handleSubmit}
+            type="submit"
             disabled={loading}
-            className="w-full py-2 rounded-md bg-yellow-300 hover:bg-orange-500 hover:text-white transition text-background font-semibold shadow disabled:opacity-50"
+            className="w-full py-2 rounded-md bg-[#ff9800] hover:bg-[#ffa726] hover:text-white transition text-[#232831] font-semibold shadow disabled:opacity-50"
           >
             {loading ? "Creating Account..." : "Register Employee"}
           </button>

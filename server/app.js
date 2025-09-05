@@ -69,8 +69,8 @@ app.use(
 // =====================
 // Health check
 // =====================
-app.get("/api/health", (req, res) => {
-  res.json({ status: "ok", timestamp: Date.now() });
+app.get("/", (req, res) => {
+  res.json({ status: "ok", message:"your server is up and running", timestamp: Date.now() });
 });
 
 // =====================
