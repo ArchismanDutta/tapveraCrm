@@ -1,16 +1,22 @@
+// File: src/pages/AdminTaskPage.jsx
 import React, { useState, useEffect, useRef } from "react";
+import dayjs from "dayjs";
+import { useNavigate } from "react-router-dom";
+
+import Sidebar from "../components/dashboard/Sidebar";
 import StatsCard from "../components/admintask/StatsCard";
 import TaskForm from "../components/admintask/TaskForm";
 import TaskTable from "../components/admintask/TaskTable";
 import tapveraLogo from "../assets/tapvera.png";
-import Sidebar from "../components/dashboard/Sidebar";
 import API from "../api";
-import dayjs from "dayjs";
-import { useNavigate } from "react-router-dom";
 
+// ----------------- Edit Task Modal -----------------
 const EditTaskModal = ({ task, onSave, onCancel, users }) => {
   const [editedTask, setEditedTask] = useState(task || {});
-  useEffect(() => setEditedTask(task ? { ...task } : {}), [task]);
+
+  useEffect(() => {
+    setEditedTask(task ? { ...task } : {});
+  }, [task]);
 
   const handleChange = (field, value) => {
     setEditedTask((prev) => ({
@@ -37,7 +43,7 @@ const EditTaskModal = ({ task, onSave, onCancel, users }) => {
   };
 
   const dueDateValue =
-    typeof editedTask.dueDate === "string"
+    editedTask?.dueDate && typeof editedTask.dueDate === "string"
       ? editedTask.dueDate.slice(0, 10)
       : editedTask?.dueDate
       ? dayjs(editedTask.dueDate).format("YYYY-MM-DD")
@@ -54,33 +60,33 @@ const EditTaskModal = ({ task, onSave, onCancel, users }) => {
         </h2>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Task Title */}
           <div>
             <label className="block text-sm font-semibold mb-1 text-blue-200">
               Task Title
             </label>
             <input
               type="text"
-              className="bg-[#161c2c] border border-[rgba(84,123,209,0.12)] rounded-xl p-2 w-full text-sm text-blue-200 focus:ring-2 focus:ring-[#bf6f2f] outline-none"
               value={editedTask.title || ""}
               onChange={(e) => handleChange("title", e.target.value)}
+              className="bg-[#161c2c] border border-[rgba(84,123,209,0.12)] rounded-xl p-2 w-full text-sm text-blue-200 focus:ring-2 focus:ring-[#bf6f2f] outline-none"
               required
             />
           </div>
 
+          {/* Assign To */}
           <div>
             <label className="block text-sm font-semibold mb-1 text-blue-200">
               Assign To
             </label>
             <select
-              className="bg-[#161c2c] border border-[rgba(84,123,209,0.12)] rounded-xl p-2 w-full text-sm text-blue-200 focus:ring-2 focus:ring-[#bf6f2f] outline-none cursor-pointer"
               value={
                 Array.isArray(editedTask.assignedTo)
-                  ? editedTask.assignedTo[0]?._id ||
-                    editedTask.assignedTo[0] ||
-                    ""
+                  ? editedTask.assignedTo[0]?._id || editedTask.assignedTo[0] || ""
                   : editedTask.assignedTo?._id || editedTask.assignedTo || ""
               }
               onChange={(e) => handleChange("assignedTo", e.target.value)}
+              className="bg-[#161c2c] border border-[rgba(84,123,209,0.12)] rounded-xl p-2 w-full text-sm text-blue-200 focus:ring-2 focus:ring-[#bf6f2f] outline-none cursor-pointer"
               required
             >
               <option value="">Select employee</option>
@@ -92,27 +98,29 @@ const EditTaskModal = ({ task, onSave, onCancel, users }) => {
             </select>
           </div>
 
+          {/* Due Date */}
           <div>
             <label className="block text-sm font-semibold mb-1 text-blue-200">
               Due Date
             </label>
             <input
               type="date"
-              className="bg-[#161c2c] border border-[rgba(84,123,209,0.12)] rounded-xl p-2 w-full text-sm text-blue-200 focus:ring-2 focus:ring-[#bf6f2f] outline-none"
               value={dueDateValue}
               onChange={(e) => handleChange("dueDate", e.target.value)}
+              className="bg-[#161c2c] border border-[rgba(84,123,209,0.12)] rounded-xl p-2 w-full text-sm text-blue-200 focus:ring-2 focus:ring-[#bf6f2f] outline-none"
               required
             />
           </div>
 
+          {/* Priority */}
           <div>
             <label className="block text-sm font-semibold mb-1 text-blue-200">
               Priority
             </label>
             <select
-              className="bg-[#161c2c] border border-[rgba(84,123,209,0.12)] rounded-xl p-2 w-full text-sm text-blue-200 focus:ring-2 focus:ring-[#bf6f2f] outline-none cursor-pointer"
               value={editedTask.priority || ""}
               onChange={(e) => handleChange("priority", e.target.value)}
+              className="bg-[#161c2c] border border-[rgba(84,123,209,0.12)] rounded-xl p-2 w-full text-sm text-blue-200 focus:ring-2 focus:ring-[#bf6f2f] outline-none cursor-pointer"
               required
             >
               <option value="">Select priority</option>
@@ -123,26 +131,28 @@ const EditTaskModal = ({ task, onSave, onCancel, users }) => {
           </div>
         </div>
 
+        {/* Description */}
         <div>
           <label className="block text-sm font-semibold mb-1 text-blue-200">
             Description
           </label>
           <textarea
-            className="bg-[#161c2c] border border-[rgba(84,123,209,0.12)] rounded-xl p-2 w-full text-sm text-blue-200 resize-none h-20 focus:ring-2 focus:ring-[#bf6f2f] outline-none"
-            rows={3}
             value={editedTask.description || ""}
             onChange={(e) => handleChange("description", e.target.value)}
+            rows={3}
+            className="bg-[#161c2c] border border-[rgba(84,123,209,0.12)] rounded-xl p-2 w-full text-sm text-blue-200 resize-none h-20 focus:ring-2 focus:ring-[#bf6f2f] outline-none"
           />
         </div>
 
+        {/* Status */}
         <div>
           <label className="block text-sm font-semibold mb-1 text-blue-200">
             Status
           </label>
           <select
-            className="bg-[#161c2c] border border-[rgba(84,123,209,0.12)] rounded-xl p-2 w-full text-sm text-blue-200 focus:ring-2 focus:ring-[#bf6f2f] outline-none cursor-pointer"
             value={editedTask.status || "pending"}
             onChange={(e) => handleChange("status", e.target.value)}
+            className="bg-[#161c2c] border border-[rgba(84,123,209,0.12)] rounded-xl p-2 w-full text-sm text-blue-200 focus:ring-2 focus:ring-[#bf6f2f] outline-none cursor-pointer"
             required
           >
             <option value="pending">Pending</option>
@@ -171,12 +181,13 @@ const EditTaskModal = ({ task, onSave, onCancel, users }) => {
   );
 };
 
+// ----------------- Admin Task Page -----------------
 export default function AdminTaskPage({ onLogout }) {
   const [collapsed, setCollapsed] = useState(false);
   const [tasks, setTasks] = useState([]);
   const [users, setUsers] = useState([]);
   const [popupMessage, setPopupMessage] = useState("");
-  const [selectedTask, setSelectedTask] = useState(null);
+  const [selectedTaskView, setSelectedTaskView] = useState(null); // For general view modal
   const [editingTask, setEditingTask] = useState(null);
   const [filterType, setFilterType] = useState("all");
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -185,26 +196,23 @@ export default function AdminTaskPage({ onLogout }) {
   const navigate = useNavigate();
   const tableRef = useRef(null);
 
+  // Popup helper
   const showPopup = (message) => {
     setPopupMessage(message);
     setTimeout(() => setPopupMessage(""), 3000);
   };
 
+  // Fetch functions
   const fetchTasks = async () => {
     const token = localStorage.getItem("token");
-    if (!token) {
-      navigate("/login", { replace: true });
-      return;
-    }
+    if (!token) return navigate("/login", { replace: true });
     try {
-      const res = await API.get("/api/tasks", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await API.get("/api/tasks", { headers: { Authorization: `Bearer ${token}` } });
       const tasksArray = Array.isArray(res.data) ? res.data : [];
       tasksArray.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
       setTasks(tasksArray);
     } catch (err) {
-      console.error("fetchTasks error:", err);
+      console.error(err);
       showPopup("❌ Failed to fetch tasks");
     }
   };
@@ -213,48 +221,34 @@ export default function AdminTaskPage({ onLogout }) {
     const token = localStorage.getItem("token");
     if (!token) return;
     try {
-      const res = await API.get("/api/users", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await API.get("/api/users", { headers: { Authorization: `Bearer ${token}` } });
       if (Array.isArray(res.data)) setUsers(res.data);
       else if (Array.isArray(res.data?.data)) setUsers(res.data.data);
       else setUsers([]);
     } catch (err) {
-      console.error("fetchUsers error:", err);
+      console.error(err);
       showPopup("❌ Failed to fetch users");
     }
   };
 
   const fetchUser = async () => {
     const token = localStorage.getItem("token");
-    if (!token) {
-      navigate("/login", { replace: true });
-      return;
-    }
+    if (!token) return navigate("/login", { replace: true });
     try {
-      const res = await API.get("/api/users/me", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await API.get("/api/users/me", { headers: { Authorization: `Bearer ${token}` } });
       setUserName(res.data?.name || "Admin");
     } catch (err) {
-      console.error("Error fetching user:", err.message);
+      console.error(err);
     }
   };
 
+  // Initial Load
   useEffect(() => {
-    let intervalId;
-
-    const loadTasks = async () => {
-      await fetchTasks();
-    };
-
     fetchUsers();
     fetchUser();
-    loadTasks();
-
-    intervalId = setInterval(loadTasks, 30000);
+    fetchTasks();
+    const intervalId = setInterval(fetchTasks, 30000);
     const clockInterval = setInterval(() => setCurrentTime(new Date()), 1000);
-
     return () => {
       clearInterval(intervalId);
       clearInterval(clockInterval);
@@ -266,14 +260,11 @@ export default function AdminTaskPage({ onLogout }) {
     const assigned = obj.assignedTo;
     return {
       ...obj,
-      assignedTo: Array.isArray(assigned)
-        ? assigned
-        : assigned
-        ? [assigned]
-        : [],
+      assignedTo: Array.isArray(assigned) ? assigned : assigned ? [assigned] : [],
     };
   };
 
+  // CRUD Handlers
   const handleCreateTask = async (newTask) => {
     try {
       const payload = ensureAssignedArray(newTask);
@@ -281,7 +272,7 @@ export default function AdminTaskPage({ onLogout }) {
       setTasks((prev) => [res.data, ...prev]);
       showPopup("✅ Task created successfully!");
     } catch (err) {
-      console.error("createTask error:", err);
+      console.error(err);
       showPopup("❌ Failed to create task");
     }
   };
@@ -291,13 +282,11 @@ export default function AdminTaskPage({ onLogout }) {
       const payload = ensureAssignedArray(updatedTask);
       const id = payload._id || payload.id;
       const res = await API.put(`/api/tasks/${id}`, payload);
-      setTasks((prev) =>
-        prev.map((t) => ((t._id || t.id) === id ? res.data : t))
-      );
+      setTasks((prev) => prev.map((t) => (t._id === id ? res.data : t)));
       setEditingTask(null);
       showPopup("✅ Task updated successfully!");
     } catch (err) {
-      console.error("updateTask error:", err);
+      console.error(err);
       showPopup("❌ Failed to update task");
     }
   };
@@ -305,14 +294,15 @@ export default function AdminTaskPage({ onLogout }) {
   const handleDeleteTask = async (id) => {
     try {
       await API.delete(`/api/tasks/${id}`);
-      setTasks((prev) => prev.filter((task) => (task._id || task.id) !== id));
+      setTasks((prev) => prev.filter((t) => t._id !== id));
       showPopup("🗑 Task deleted successfully!");
     } catch (err) {
-      console.error("deleteTask error:", err);
+      console.error(err);
       showPopup("❌ Failed to delete task");
     }
   };
 
+  // Filtered Tasks
   const today = dayjs().startOf("day");
   const currentUserId = JSON.parse(localStorage.getItem("user"))?._id;
 
@@ -323,145 +313,82 @@ export default function AdminTaskPage({ onLogout }) {
       case "dueToday":
         return t.dueDate && dayjs(t.dueDate).isSame(today, "day");
       case "overdue":
-        return (
-          t.dueDate &&
-          dayjs(t.dueDate).isBefore(today, "day") &&
-          (t.status || "").toLowerCase() !== "completed"
-        );
+        return t.dueDate && dayjs(t.dueDate).isBefore(today, "day") && (t.status || "").toLowerCase() !== "completed";
       default:
         return true;
     }
   });
 
   const totalTasks = tasks.length;
-  const assignedByMeCount = tasks.filter(
-    (t) => t.assignedBy?._id === currentUserId
-  ).length;
-  const tasksDueTodayCount = tasks.filter(
-    (t) => t.dueDate && dayjs(t.dueDate).isSame(today, "day")
-  ).length;
-  const overdueTasksCount = tasks.filter(
-    (t) =>
-      t.dueDate &&
-      dayjs(t.dueDate).isBefore(today, "day") &&
-      (t.status || "").toLowerCase() !== "completed"
-  ).length;
+  const assignedByMeCount = tasks.filter((t) => t.assignedBy?._id === currentUserId).length;
+  const tasksDueTodayCount = tasks.filter((t) => t.dueDate && dayjs(t.dueDate).isSame(today, "day")).length;
+  const overdueTasksCount = tasks.filter((t) => t.dueDate && dayjs(t.dueDate).isBefore(today, "day") && (t.status || "").toLowerCase() !== "completed").length;
 
   const handleFilterAndScroll = (type) => {
     setFilterType(type);
-    setTimeout(() => {
-      tableRef.current?.scrollIntoView({ behavior: "smooth" });
-    }, 100);
+    setTimeout(() => tableRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
   };
+
+  // NOTE: Use separate state selectedTaskView for view modal,
+  // The remarks modal is handled inside TaskTable & its own state.
 
   return (
     <div className="flex bg-gradient-to-br from-[#161c2c] via-[#1f263b] to-[#282f47] min-h-screen text-white">
-      <Sidebar
-        collapsed={collapsed}
-        setCollapsed={setCollapsed}
-        userRole="admin"
-        onLogout={onLogout}
-      />
-      <main
-        className={`flex-1 transition-all duration-300 ${
-          collapsed ? "ml-24" : "ml-72"
-        } p-8`}
-      >
+      <Sidebar collapsed={collapsed} setCollapsed={setCollapsed} userRole="admin" onLogout={onLogout} />
+      <main className={`flex-1 transition-all duration-300 ${collapsed ? "ml-24" : "ml-72"} p-8`}>
         {popupMessage && (
           <div className="fixed top-6 right-6 bg-[#bf6f2f]/90 text-black px-4 py-2 rounded-xl shadow-lg z-50 animate-slideIn">
             {popupMessage}
           </div>
         )}
 
+        {/* Greeting */}
         <div className="flex justify-between items-center mb-8">
           <div>
             <h1 className="text-3xl font-semibold mb-1">
-              Good{" "}
-              {currentTime.getHours() < 12
-                ? "Morning"
-                : currentTime.getHours() < 18
-                ? "Afternoon"
-                : "Evening"}
-              , {userName}
+              Good {currentTime.getHours() < 12 ? "Morning" : currentTime.getHours() < 18 ? "Afternoon" : "Evening"}, {userName}
             </h1>
             <p className="text-sm text-blue-400">
-              {currentTime.toLocaleDateString("en-US", {
-                weekday: "long",
-                year: "numeric",
-                month: "long",
-                day: "numeric",
-              })}{" "}
-              •{" "}
-              {currentTime.toLocaleTimeString("en-US", {
-                hour: "2-digit",
-                minute: "2-digit",
-                second: "2-digit",
-              })}
+              {currentTime.toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })} •{" "}
+              {currentTime.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
             </p>
           </div>
         </div>
 
+        {/* Stats Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <StatsCard
-            title="Total Tasks"
-            value={totalTasks}
-            colorScheme="blue"
-            onClick={() => handleFilterAndScroll("all")}
-          />
-          <StatsCard
-            title="Assigned by Me"
-            value={assignedByMeCount}
-            colorScheme="yellow"
-            onClick={() => handleFilterAndScroll("assignedByMe")}
-          />
-          <StatsCard
-            title="Tasks Due Today"
-            value={tasksDueTodayCount}
-            colorScheme="green"
-            onClick={() => handleFilterAndScroll("dueToday")}
-          />
-          <StatsCard
-            title="Overdue Tasks"
-            value={overdueTasksCount}
-            colorScheme="purple"
-            onClick={() => handleFilterAndScroll("overdue")}
-          />
+          <StatsCard title="Total Tasks" value={totalTasks} colorScheme="blue" onClick={() => handleFilterAndScroll("all")} />
+          <StatsCard title="Assigned by Me" value={assignedByMeCount} colorScheme="yellow" onClick={() => handleFilterAndScroll("assignedByMe")} />
+          <StatsCard title="Tasks Due Today" value={tasksDueTodayCount} colorScheme="green" onClick={() => handleFilterAndScroll("dueToday")} />
+          <StatsCard title="Overdue Tasks" value={overdueTasksCount} colorScheme="purple" onClick={() => handleFilterAndScroll("overdue")} />
         </div>
 
+        {/* Task Form */}
         <section className="bg-[rgba(22,28,48,0.7)] border border-[rgba(84,123,209,0.12)] rounded-3xl p-6 shadow-[0_8px_32px_0_rgba(10,40,100,0.1)] backdrop-blur-[12px] mb-8">
-          <h2 className="text-lg font-semibold text-blue-200 mb-4">
-            Create New Task
-          </h2>
+          <h2 className="text-lg font-semibold text-blue-200 mb-4">Create New Task</h2>
           <TaskForm onCreate={handleCreateTask} users={users} />
         </section>
 
-        <section
-          ref={tableRef}
-          className="bg-[rgba(22,28,48,0.7)] border border-[rgba(84,123,209,0.12)] rounded-3xl p-6 shadow-[0_8px_32px_0_rgba(10,40,100,0.1)] backdrop-blur-[12px]"
-        >
-          <h2 className="text-lg font-semibold text-blue-200 mb-4">
-            📋 Task List
-          </h2>
+        {/* Task Table */}
+        <section ref={tableRef} className="bg-[rgba(22,28,48,0.7)] border border-[rgba(84,123,209,0.12)] rounded-3xl p-6 shadow-[0_8px_32px_0_rgba(10,40,100,0.1)] backdrop-blur-[12px]">
+          <h2 className="text-lg font-semibold text-blue-200 mb-4">📋 Task List</h2>
           <TaskTable
             tasks={filteredTasks}
-            onViewTask={setSelectedTask}
+            onViewTask={setSelectedTaskView} // separate state for viewing
             onEditTask={setEditingTask}
             onDeleteTask={handleDeleteTask}
           />
         </section>
 
-        {selectedTask && (
+        {/* Selected Task View Modal */}
+        {selectedTaskView && (
           <div className="fixed inset-0 flex items-center justify-center z-50 bg-[rgba(22,28,48,0.75)] backdrop-blur-md">
             <div className="relative max-w-md w-full bg-[rgba(22,28,48,0.9)] rounded-3xl shadow-2xl flex flex-col items-center pt-9 pb-7 px-8 text-blue-200">
               <img src={tapveraLogo} alt="Tapvera" className="h-12 w-12 mb-4" />
-              <h2 className="font-bold text-xl text-[#bf6f2f] mb-2">
-                {selectedTask.title}
-              </h2>
-              <p className="mb-4 text-center text-blue-400">
-                {selectedTask.description}
-              </p>
+              <h2 className="font-bold text-xl text-[#bf6f2f] mb-2">{selectedTaskView.title}</h2>
+              <p className="mb-4 text-center text-blue-400">{selectedTaskView.description}</p>
               <button
-                onClick={() => setSelectedTask(null)}
+                onClick={() => setSelectedTaskView(null)}
                 className="mt-2 px-5 py-2 rounded-2xl bg-[#bf6f2f] text-black hover:bg-[#a26328]"
               >
                 Close
@@ -470,14 +397,8 @@ export default function AdminTaskPage({ onLogout }) {
           </div>
         )}
 
-        {editingTask && (
-          <EditTaskModal
-            task={editingTask}
-            onSave={handleUpdateTask}
-            onCancel={() => setEditingTask(null)}
-            users={users}
-          />
-        )}
+        {/* Edit Task Modal */}
+        {editingTask && <EditTaskModal task={editingTask} onSave={handleUpdateTask} onCancel={() => setEditingTask(null)} users={users} />}
       </main>
     </div>
   );

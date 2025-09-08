@@ -4,11 +4,15 @@ const taskSchema = new mongoose.Schema(
   {
     title: { type: String, required: true },
     description: { type: String },
+
+    // Who created/assigned the task
     assignedBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true,
     },
+
+    // Users assigned to the task
     assignedTo: [
       {
         type: mongoose.Schema.Types.ObjectId,
@@ -16,17 +20,32 @@ const taskSchema = new mongoose.Schema(
         required: true,
       },
     ],
+
+    // Status of the task
     status: {
       type: String,
       enum: ["pending", "in-progress", "completed"],
       default: "pending",
     },
+
+    // Task due date
     dueDate: { type: Date },
+
+    // Task priority
     priority: {
       type: String,
       enum: ["High", "Medium", "Low"],
       default: "Medium",
     },
+
+    // ------------------ NEW: Remarks ------------------
+    remarks: [
+      {
+        user: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+        comment: { type: String, required: true },
+        createdAt: { type: Date, default: Date.now },
+      },
+    ],
   },
   { timestamps: true }
 );
