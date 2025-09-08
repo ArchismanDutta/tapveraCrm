@@ -1,36 +1,87 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
+import axios from "axios";
 import TaskRow from "./TaskRow";
+import TaskRemarksModal from "../task/TaskRemarksModal";
 
 const TaskTable = ({ tasks = [], onViewTask, onEditTask, onDeleteTask }) => {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("All Status");
+  const [selectedTask, setSelectedTask] = useState(null);
+  const [loadingRemarks, setLoadingRemarks] = useState(false);
 
+  const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
   const safeTasks = Array.isArray(tasks) ? tasks : [];
 
-  const filteredTasks = safeTasks.filter((task) => {
-    const titleMatch = task?.title?.toLowerCase().includes(search.toLowerCase()) ?? false;
-    const statusMatch = filter === "All Status" || task?.status === filter;
-    return titleMatch && statusMatch;
-  });
+  const filteredTasks = useMemo(() => {
+    return safeTasks.filter((task) => {
+      const titleMatch = task?.title?.toLowerCase().includes(search.toLowerCase()) ?? false;
+      const statusMatch = filter === "All Status" || task?.status === filter;
+      return titleMatch && statusMatch;
+    });
+  }, [safeTasks, search, filter]);
 
   const formatDueDateTime = (dateValue) => {
     if (!dateValue) return "No due date";
     const dateObj = new Date(dateValue);
     if (isNaN(dateObj.getTime())) return "Invalid date";
-    return `${dateObj.toLocaleDateString()} ${dateObj.toLocaleTimeString([], {
-      hour: "2-digit",
-      minute: "2-digit",
-    })}`;
+    return `${dateObj.toLocaleDateString()} ${dateObj.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
+  };
+
+  const openRemarksModal = async (task) => {
+    setLoadingRemarks(true);
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) throw new Error("No auth token found");
+
+      const res = await axios.get(`${API_BASE}/api/tasks/${task._id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (res.data) {
+        setSelectedTask(res.data);
+      } else {
+        alert("Could not fetch latest remarks.");
+      }
+    } catch (err) {
+      console.error("Failed to fetch task remarks:", err);
+      alert("Could not fetch latest remarks.");
+    } finally {
+      setLoadingRemarks(false);
+    }
+  };
+
+  const handleAddRemark = async (comment) => {
+    if (!selectedTask || !comment.trim()) return;
+
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) throw new Error("No auth token found");
+
+      const res = await axios.post(
+        `${API_BASE}/api/tasks/${selectedTask._id}/remarks`,
+        { comment },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      if (res.data && res.data.remarks) {
+        setSelectedTask((prev) => ({ ...prev, remarks: res.data.remarks }));
+      } else {
+        alert("Failed to update remarks.");
+      }
+    } catch (err) {
+      console.error("Failed to add remark:", err);
+      alert("Could not add remark.");
+    }
   };
 
   return (
-    <div className="rounded-3xl overflow-hidden">
+    <div className="rounded-3xl relative">
       {/* Filters */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6 gap-4">
         <input
           type="text"
           placeholder="🔍 Search tasks..."
-          className="bg-[rgba(22,28,48,0.8)] border border-[rgba(84,123,209,0.4)] rounded-2xl px-4 py-2 w-full md:w-1/3 text-sm text-blue-100 placeholder-blue-400 focus:outline-none focus:ring-2 focus:ring-[#bf6f2f] duration-200 cursor-pointer"
+          className="bg-[rgba(22,28,48,0.8)] border border-[rgba(84,123,209,0.4)] rounded-2xl px-4 py-2 w-full md:w-1/3 text-sm text-blue-100 placeholder-blue-400 focus:outline-none focus:ring-2 focus:ring-[#bf6f2f] transition duration-200"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
@@ -72,6 +123,7 @@ const TaskTable = ({ tasks = [], onViewTask, onEditTask, onDeleteTask }) => {
                   onView={() => onViewTask(task)}
                   onEdit={() => onEditTask(task)}
                   onDelete={() => onDeleteTask(task._id)}
+                  onRemarks={openRemarksModal}
                 />
               ))
             ) : (
@@ -84,6 +136,15 @@ const TaskTable = ({ tasks = [], onViewTask, onEditTask, onDeleteTask }) => {
           </tbody>
         </table>
       </div>
+
+      {/* Remarks Modal */}
+      {selectedTask && (
+        <TaskRemarksModal
+          task={selectedTask}
+          onClose={() => setSelectedTask(null)}
+          onAddRemark={handleAddRemark}
+        />
+      )}
     </div>
   );
 };
