@@ -1,5 +1,3 @@
-// controllers/flexibleShiftController.js
-
 const FlexibleShiftRequest = require("../models/FlexibleShiftRequest");
 const User = require("../models/User");
 
@@ -15,7 +13,6 @@ exports.createFlexibleShiftRequest = async (req, res) => {
     const user = await User.findById(userId);
     if (!user) return res.status(404).json({ message: "User not found" });
 
-    // Only standard employees can submit flexible requests
     if (user.shiftType === "flexiblePermanent") {
       return res.status(400).json({
         message: "Permanent flexible shift employees do not submit requests",
@@ -32,12 +29,12 @@ exports.createFlexibleShiftRequest = async (req, res) => {
 
     const request = new FlexibleShiftRequest({
       employee: userId,
-      requestedDate,
+      requestedDate: new Date(requestedDate),
       requestedStartTime,
-      durationHours: durationHours || 9, // default 9 hours
+      durationHours: durationHours || 9,
       reason: reason?.trim() || "",
       status: "pending",
-      shiftType: "flexibleRequest", // semi-flexible
+      shiftType: "flexibleRequest",
     });
 
     await request.save();
@@ -104,43 +101,50 @@ exports.updateFlexibleShiftStatus = async (req, res) => {
     const user = await User.findById(request.employee);
     if (!user) return res.status(404).json({ message: "Employee not found" });
 
-    // Cannot approve a request for permanent flexible employees
     if (user.shiftType === "flexiblePermanent" && status === "approved") {
       return res.status(400).json({
         message: "Permanent flexible shift employees cannot have requests approved",
       });
     }
 
+    // Update request status
     request.status = status;
     request.reviewedBy = req.user?._id;
     request.reviewedAt = new Date();
     await request.save();
 
-    // If approved, compute and update user's shiftOverride for the requested date
+    // Only update shiftOverrides for approved requests
     if (status === "approved") {
       const duration = request.durationHours || 9;
       const [startH, startM] = request.requestedStartTime.split(":").map(Number);
+
       let endH = startH + Math.floor(duration);
       let endM = startM + Math.round((duration % 1) * 60);
       if (endM >= 60) {
         endH += 1;
         endM -= 60;
       }
-      if (endH >= 24) endH -= 24; // wrap around midnight
+      if (endH >= 24) endH -= 24;
 
       const endTime = `${String(endH).padStart(2, "0")}:${String(endM).padStart(2, "0")}`;
+      const key = new Date(request.requestedDate).toISOString().slice(0, 10);
 
-      user.shiftOverrides = user.shiftOverrides || {};
-      user.shiftOverrides[request.requestedDate.toISOString().slice(0, 10)] = {
-        start: request.requestedStartTime,
-        end: endTime,
-        durationHours: duration,
-      };
-
-      await user.save();
+      // ⚠️ Strictly update only shiftOverrides
+      await User.updateOne(
+        { _id: user._id },
+        {
+          $set: {
+            [`shiftOverrides.${key}`]: {
+              start: request.requestedStartTime,
+              end: endTime,
+              durationHours: duration,
+            },
+          },
+        }
+      );
     }
 
-    res.json({ message: "Flexible shift status updated", request });
+    res.json({ message: `Request ${status}`, request });
   } catch (err) {
     console.error("Error updating flexible shift status:", err);
     if (err.name === "ValidationError") {

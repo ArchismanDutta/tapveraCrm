@@ -38,6 +38,12 @@ const normalizeEventType = (t) =>
     .toLowerCase()
     .replace(/[\s_-]+/g, "");
 
+const statusColors = {
+  approved: "bg-green-600 text-white",
+  rejected: "bg-red-600 text-white",
+  pending: "bg-yellow-500 text-black",
+};
+
 const TodayStatusPage = ({ onLogout }) => {
   const [collapsed, setCollapsed] = useState(false);
   const [status, setStatus] = useState(null);
@@ -74,7 +80,7 @@ const TodayStatusPage = ({ onLogout }) => {
       );
       toast.error("Failed to load today's status.");
     }
-  }, []);
+  }, [token]);
 
   const fetchWeeklySummary = useCallback(async () => {
     try {
@@ -104,10 +110,11 @@ const TodayStatusPage = ({ onLogout }) => {
         err.response?.data || err
       );
     }
-  }, []);
+  }, [token]);
 
   const fetchFlexibleRequests = useCallback(async () => {
     try {
+      // endpoint returning current user's requests
       const res = await axios.get(
         `${API_BASE}/api/flexible-shifts/my-requests`,
         axiosConfig
@@ -119,7 +126,7 @@ const TodayStatusPage = ({ onLogout }) => {
         err.response?.data || err
       );
     }
-  }, []);
+  }, [token]);
 
   // -------------------
   // Update Status
@@ -325,12 +332,21 @@ const TodayStatusPage = ({ onLogout }) => {
     setRequestDurationHours(9);
     setRequestReason("");
     setShowFlexibleModal(true);
+    // ensure list is up to date when opening
+    fetchFlexibleRequests();
   };
 
   const closeFlexibleModal = () => {
     setShowFlexibleModal(false);
     setIsSubmittingRequest(false);
   };
+
+  const formatDate = (dateStr) =>
+    new Date(dateStr).toLocaleDateString("en-GB", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    });
 
   const submitFlexibleRequest = async (e) => {
     e.preventDefault();
@@ -351,16 +367,24 @@ const TodayStatusPage = ({ onLogout }) => {
         axiosConfig
       );
       toast.success("Flexible shift request submitted.");
-      closeFlexibleModal();
+
+      // clear form but keep modal open so employee can immediately see their request
+      setRequestDate(new Date().toISOString().split("T")[0]);
+      setRequestStartTime("");
+      setRequestDurationHours(9);
+      setRequestReason("");
+
+      // refresh all relevant data shown
       fetchStatus();
       fetchWeeklySummary();
-      fetchFlexibleRequests();
+      await fetchFlexibleRequests();
     } catch (err) {
       console.error(
         "Failed to submit flexible request:",
         err.response?.data || err
       );
       toast.error(err?.response?.data?.message || "Failed to submit request.");
+    } finally {
       setIsSubmittingRequest(false);
     }
   };
@@ -374,6 +398,11 @@ const TodayStatusPage = ({ onLogout }) => {
         Loading...
       </div>
     );
+
+  // split requests for display (optional: pending first)
+  const sortedFlexibleRequests = (flexibleRequests || [])
+    .slice()
+    .sort((a, b) => new Date(b.requestedDate) - new Date(a.requestedDate));
 
   return (
     <div className="bg-[#101525] min-h-screen text-gray-100">
@@ -398,7 +427,7 @@ const TodayStatusPage = ({ onLogout }) => {
             <StatusCard
               workDuration={formatHMS(liveWork)}
               breakTime={formatHMS(liveBreak)}
-              arrivalTime={formatLocalTime(status.arrivalTime) || "--"}
+              arrivalTime={status.arrivalTime || "--"}
               currentlyWorking={currentlyWorkingToday}
               alreadyPunchedIn={alreadyPunchedIn}
               alreadyPunchedOut={alreadyPunchedOut}
@@ -467,83 +496,130 @@ const TodayStatusPage = ({ onLogout }) => {
 
         {/* Flexible Shift Modal */}
         {showFlexibleModal && (
-          <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 overflow-auto"
+  <div
+    className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 overflow-auto p-4"
+    onClick={closeFlexibleModal}
+  >
+    <div
+      className="bg-[#0f1724] text-white rounded-2xl shadow-xl w-full max-w-3xl p-6 max-h-[85vh] overflow-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-800"
+      onClick={(e) => e.stopPropagation()}
+    >
+      <h2 className="text-2xl font-semibold mb-6 text-white">Request Flexible Shift</h2>
+
+      {/* Request Form */}
+      <form
+        className="flex flex-col gap-4 mb-6"
+        onSubmit={submitFlexibleRequest}
+      >
+        <label className="flex flex-col gap-1">
+          Date:
+          <input
+            type="date"
+            value={requestDate}
+            onChange={(e) => setRequestDate(e.target.value)}
+            className="rounded-md p-2 bg-gray-800 text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-pinkAccent"
+            required
+          />
+        </label>
+        <label className="flex flex-col gap-1">
+          Start Time:
+          <input
+            type="time"
+            value={requestStartTime}
+            onChange={(e) => setRequestStartTime(e.target.value)}
+            className="rounded-md p-2 bg-gray-800 text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-pinkAccent"
+            required
+          />
+        </label>
+        <label className="flex flex-col gap-1">
+          Duration (hours):
+          <input
+            type="number"
+            value={requestDurationHours}
+            onChange={(e) => setRequestDurationHours(e.target.value)}
+            min={1}
+            max={24}
+            className="rounded-md p-2 bg-gray-800 text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-pinkAccent"
+            required
+          />
+        </label>
+        <label className="flex flex-col gap-1">
+          Reason:
+          <textarea
+            value={requestReason}
+            onChange={(e) => setRequestReason(e.target.value)}
+            className="rounded-md p-2 bg-gray-800 text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-pinkAccent"
+          />
+        </label>
+        <div className="flex justify-end gap-2 mt-2">
+          <button
+            type="button"
+            className="px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 transition"
             onClick={closeFlexibleModal}
           >
-            <div
-              className="bg-[#0f1724] text-gray-100 rounded-lg shadow-lg w-full max-w-md p-6 max-h-[80vh] overflow-auto"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <h2 className="text-xl font-semibold mb-4">
-                Request Flexible Shift
-              </h2>
-              <form
-                className="flex flex-col gap-4"
-                onSubmit={submitFlexibleRequest}
-              >
-                <label className="flex flex-col gap-1">
-                  Date:
-                  <input
-                    type="date"
-                    value={requestDate}
-                    onChange={(e) => setRequestDate(e.target.value)}
-                    className="rounded-md p-2 text-black"
-                    required
-                  />
-                </label>
-                <label className="flex flex-col">
-                  Start Time
-                  <input
-                    type="time"
-                    value={requestStartTime}
-                    onChange={(e) => setRequestStartTime(e.target.value)}
-                    className="rounded-md p-2 text-black"
-                    required
-                  />
-                </label>
-                <label className="flex flex-col">
-                  Duration (hours)
-                  <input
-                    type="number"
-                    value={requestDurationHours}
-                    onChange={(e) => setRequestDurationHours(e.target.value)}
-                    min={1}
-                    max={24}
-                    className="rounded-md p-2 text-black"
-                    required
-                  />
-                </label>
-                <label className="flex flex-col">
-                  Reason
-                  <textarea
-                    value={requestReason}
-                    onChange={(e) => setRequestReason(e.target.value)}
-                    className="rounded-md p-2 text-black"
-                  />
-                </label>
-                <div className="flex justify-end gap-2 mt-2">
-                  <button
-                    type="button"
-                    className="px-4 py-2 rounded-lg bg-gray-600 hover:bg-gray-700"
-                    onClick={closeFlexibleModal}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className={`px-4 py-2 rounded-lg bg-pinkAccent text-white hover:opacity-90 ${
-                      isSubmittingRequest ? "opacity-50 cursor-not-allowed" : ""
-                    }`}
-                    disabled={isSubmittingRequest}
-                  >
-                    Submit
-                  </button>
-                </div>
-              </form>
-            </div>
+            Close
+          </button>
+          <button
+            type="submit"
+            className={`px-4 py-2 rounded-lg bg-pinkAccent text-white hover:opacity-90 transition ${
+              isSubmittingRequest ? "opacity-50 cursor-not-allowed" : ""
+            }`}
+            disabled={isSubmittingRequest}
+          >
+            {isSubmittingRequest ? "Submitting..." : "Submit"}
+          </button>
+        </div>
+      </form>
+
+      {/* My Requests / Status List */}
+      <div className="mt-6">
+        <h3 className="text-xl font-semibold mb-3">My Requests</h3>
+        {sortedFlexibleRequests.length === 0 ? (
+          <p className="text-gray-400">No requests found.</p>
+        ) : (
+          <div className="overflow-auto max-h-80 rounded-lg border border-gray-700">
+            <table className="w-full min-w-max border-collapse text-gray-100">
+              <thead className="bg-gray-800 sticky top-0 z-10">
+                <tr>
+                  <th className="p-2 border-b border-gray-700">Date</th>
+                  <th className="p-2 border-b border-gray-700">Start Time</th>
+                  <th className="p-2 border-b border-gray-700">Duration</th>
+                  <th className="p-2 border-b border-gray-700">Reason</th>
+                  <th className="p-2 border-b border-gray-700">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sortedFlexibleRequests.map((r, idx) => {
+                  const statusLower = (r.status || "pending").toLowerCase();
+                  return (
+                    <tr
+                      key={r._id || `${r.requestedDate}-${r.requestedStartTime}`}
+                      className={`hover:bg-gray-700 transition ${
+                        idx % 2 === 0 ? "bg-gray-900" : "bg-gray-800"
+                      }`}
+                    >
+                      <td className="p-2">{formatDate(r.requestedDate)}</td>
+                      <td className="p-2">{r.requestedStartTime || "-"}</td>
+                      <td className="p-2">{r.durationHours ? `${r.durationHours}h` : "-"}</td>
+                      <td className="p-2">{r.reason || "-"}</td>
+                      <td className="p-2">
+                        <span
+                          className={`px-2 py-1 rounded text-sm ${statusColors[statusLower]}`}
+                        >
+                          {r.status || "Pending"}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         )}
+      </div>
+    </div>
+  </div>
+)}
       </main>
     </div>
   );
