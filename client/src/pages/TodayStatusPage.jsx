@@ -1,5 +1,5 @@
 // src/pages/TodayStatusPage.jsx
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import axios from "axios";
 import Sidebar from "../components/dashboard/Sidebar";
 import StatusCard from "../components/workstatus/StatusCard";
@@ -9,11 +9,11 @@ import SummaryCard from "../components/workstatus/SummaryCard";
 import PunchOutTodoPopup from "../components/todo/PunchOutTodoPopup";
 import PunchOutConfirmPopup from "../components/workstatus/PunchOutConfirmPopup";
 import { toast } from "react-toastify";
-import { formatLocalTime } from "../components/workstatus/Timeline";
 import "react-toastify/dist/ReactToastify.css";
 
-// --- Backend URL ---
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
+const SIDEBAR_WIDTH_EXPANDED = 288;
+const SIDEBAR_WIDTH_COLLAPSED = 80;
 
 const formatHMS = (seconds = 0) => {
   const h = Math.floor(seconds / 3600);
@@ -23,9 +23,6 @@ const formatHMS = (seconds = 0) => {
     .toString()
     .padStart(2, "0")}s`;
 };
-
-const SIDEBAR_WIDTH_EXPANDED = 288;
-const SIDEBAR_WIDTH_COLLAPSED = 80;
 
 const safeParseDate = (v) => {
   if (!v && v !== 0) return null;
@@ -66,9 +63,7 @@ const TodayStatusPage = ({ onLogout }) => {
   const token = localStorage.getItem("token");
   const axiosConfig = { headers: { Authorization: `Bearer ${token}` } };
 
-  // -------------------
-  // Fetch Data
-  // -------------------
+  // Fetch today's status
   const fetchStatus = useCallback(async () => {
     try {
       const res = await axios.get(`${API_BASE}/api/status/today`, axiosConfig);
@@ -82,6 +77,7 @@ const TodayStatusPage = ({ onLogout }) => {
     }
   }, [token]);
 
+  // Fetch weekly summary and daily data
   const fetchWeeklySummary = useCallback(async () => {
     try {
       const now = new Date();
@@ -112,9 +108,9 @@ const TodayStatusPage = ({ onLogout }) => {
     }
   }, [token]);
 
+  // Fetch flexible shift requests
   const fetchFlexibleRequests = useCallback(async () => {
     try {
-      // endpoint returning current user's requests
       const res = await axios.get(
         `${API_BASE}/api/flexible-shifts/my-requests`,
         axiosConfig
@@ -128,9 +124,7 @@ const TodayStatusPage = ({ onLogout }) => {
     }
   }, [token]);
 
-  // -------------------
-  // Update Status
-  // -------------------
+  // Update status helper
   const updateStatus = async (update) => {
     if (!status && update?.currentlyWorking !== true) return;
     try {
@@ -139,17 +133,14 @@ const TodayStatusPage = ({ onLogout }) => {
         onBreak: status?.onBreak || false,
         ...update,
       };
-
       if (payload.timelineEvent?.time) {
         payload.timelineEvent.time = new Date(payload.timelineEvent.time);
       }
-
       const res = await axios.put(
         `${API_BASE}/api/status/today`,
         payload,
         axiosConfig
       );
-
       setStatus(res.data);
       setSelectedBreakType("");
       fetchWeeklySummary();
@@ -163,28 +154,22 @@ const TodayStatusPage = ({ onLogout }) => {
     }
   };
 
-  // -------------------
-  // Live Timers
-  // -------------------
+  // Live timers update
   useEffect(() => {
     if (!status) return;
     setLiveWork(status.workDurationSeconds || 0);
     setLiveBreak(status.breakDurationSeconds || 0);
 
     const timers = [];
-    if (status.currentlyWorking) {
+    if (status.currentlyWorking)
       timers.push(setInterval(() => setLiveWork((prev) => prev + 1), 1000));
-    }
-    if (status.onBreak) {
+    if (status.onBreak)
       timers.push(setInterval(() => setLiveBreak((prev) => prev + 1), 1000));
-    }
 
     return () => timers.forEach(clearInterval);
   }, [status]);
 
-  // -------------------
-  // Initial + periodic refresh
-  // -------------------
+  // Initial and periodic data fetch
   useEffect(() => {
     fetchStatus();
     fetchWeeklySummary();
@@ -197,9 +182,7 @@ const TodayStatusPage = ({ onLogout }) => {
     return () => clearInterval(interval);
   }, [fetchStatus, fetchWeeklySummary, fetchFlexibleRequests]);
 
-  // -------------------
-  // External updates
-  // -------------------
+  // External update listener
   useEffect(() => {
     const handler = () => {
       fetchStatus();
@@ -210,9 +193,7 @@ const TodayStatusPage = ({ onLogout }) => {
     return () => window.removeEventListener("attendanceDataUpdate", handler);
   }, [fetchStatus, fetchWeeklySummary, fetchFlexibleRequests]);
 
-  // -------------------
-  // Punch logic (unified and fixed)
-  // -------------------
+  // Punch related logic
   const todayKey = new Date().toISOString().slice(0, 10);
   const timelineToday = (status?.timeline || []).filter((e) =>
     safeParseDate(e.time)?.toISOString().startsWith(todayKey)
@@ -241,9 +222,7 @@ const TodayStatusPage = ({ onLogout }) => {
     });
   };
 
-  // FIXED: SINGLE DEFINITION (merged logic)
   const handlePunchOutClick = async () => {
-    // must be working or on break to punch out
     if (!currentlyWorkingToday && !status?.onBreak) {
       toast.info("You are not currently working.");
       return;
@@ -266,7 +245,6 @@ const TodayStatusPage = ({ onLogout }) => {
         setShowTodoPopup(true);
         return;
       }
-      // If no incomplete todo, show punch out confirmation
       setShowPunchOutConfirm(true);
     } catch (err) {
       console.error("Error fetching todo tasks:", err);
@@ -275,7 +253,6 @@ const TodayStatusPage = ({ onLogout }) => {
   };
 
   const onCancelPunchOut = () => setShowPunchOutConfirm(false);
-
   const onConfirmPunchOut = () => {
     setShowPunchOutConfirm(false);
     updateStatus({
@@ -288,9 +265,7 @@ const TodayStatusPage = ({ onLogout }) => {
     });
   };
 
-  // -------------------
-  // Break logic
-  // -------------------
+  // Break management
   const handleStartBreak = (breakType) => {
     if (!breakType || !currentlyWorkingToday || status?.onBreak) {
       toast.info("Cannot start break right now.");
@@ -323,16 +298,13 @@ const TodayStatusPage = ({ onLogout }) => {
     });
   };
 
-  // -------------------
-  // Flexible Shift Modal
-  // -------------------
+  // Flexible shift modal
   const openFlexibleModal = () => {
     setRequestDate(new Date().toISOString().split("T")[0]);
     setRequestStartTime("");
     setRequestDurationHours(9);
     setRequestReason("");
     setShowFlexibleModal(true);
-    // ensure list is up to date when opening
     fetchFlexibleRequests();
   };
 
@@ -368,13 +340,12 @@ const TodayStatusPage = ({ onLogout }) => {
       );
       toast.success("Flexible shift request submitted.");
 
-      // clear form but keep modal open so employee can immediately see their request
+      // Clear form but keep modal open
       setRequestDate(new Date().toISOString().split("T")[0]);
       setRequestStartTime("");
       setRequestDurationHours(9);
       setRequestReason("");
 
-      // refresh all relevant data shown
       fetchStatus();
       fetchWeeklySummary();
       await fetchFlexibleRequests();
@@ -383,26 +354,75 @@ const TodayStatusPage = ({ onLogout }) => {
         "Failed to submit flexible request:",
         err.response?.data || err
       );
-      toast.error(err?.response?.data?.message || "Failed to submit request.");
+      toast.error(err.response?.data?.message || "Failed to submit request.");
     } finally {
       setIsSubmittingRequest(false);
     }
   };
 
-  // -------------------
-  // Render
-  // -------------------
+  // Sort flexible requests by requestedDate desc
+  const sortedFlexibleRequests = (flexibleRequests || [])
+    .slice()
+    .sort((a, b) => new Date(b.requestedDate) - new Date(a.requestedDate));
+
+  // Calculate quickStats combining backend and workedSessions dynamically
+  const combinedQuickStats = useMemo(() => {
+    if (!weeklySummary || !status) return null;
+
+    const backendQuickStats = weeklySummary.quickStats || {};
+    const workedSessions = status.workedSessions || [];
+    const shiftStart = status.effectiveShift?.start || "09:00";
+
+    let earlyArrivals = 0;
+    let lateArrivals = 0;
+    let perfectDays = 0;
+
+    const [shiftH, shiftM] = shiftStart.split(":").map(Number);
+
+    workedSessions.forEach((session) => {
+      const punchInTime = new Date(session.start);
+      if (isNaN(punchInTime.getTime())) return;
+
+      const expectedShift = new Date(punchInTime);
+      expectedShift.setHours(shiftH, shiftM, 0, 0);
+
+      if (punchInTime <= expectedShift) {
+        earlyArrivals++;
+      } else {
+        lateArrivals++;
+      }
+    });
+
+    return {
+      earlyArrivals:
+        backendQuickStats.earlyArrivals > 0
+          ? backendQuickStats.earlyArrivals
+          : earlyArrivals,
+      lateArrivals:
+        backendQuickStats.lateArrivals > 0
+          ? backendQuickStats.lateArrivals
+          : lateArrivals,
+      perfectDays:
+        backendQuickStats.perfectDays > 0
+          ? backendQuickStats.perfectDays
+          : perfectDays,
+    };
+  }, [weeklySummary, status]);
+
+  const weeklySummaryWithQuickStats = useMemo(() => {
+    if (!weeklySummary) return null;
+    return {
+      ...weeklySummary,
+      quickStats: combinedQuickStats || weeklySummary.quickStats,
+    };
+  }, [weeklySummary, combinedQuickStats]);
+
   if (!status)
     return (
       <div className="text-gray-100 bg-[#101525] min-h-screen flex items-center justify-center">
         Loading...
       </div>
     );
-
-  // split requests for display (optional: pending first)
-  const sortedFlexibleRequests = (flexibleRequests || [])
-    .slice()
-    .sort((a, b) => new Date(b.requestedDate) - new Date(a.requestedDate));
 
   return (
     <div className="bg-[#101525] min-h-screen text-gray-100">
@@ -428,14 +448,13 @@ const TodayStatusPage = ({ onLogout }) => {
               workDuration={formatHMS(liveWork)}
               breakTime={formatHMS(liveBreak)}
               arrivalTime={status.arrivalTime || "--"}
-              currentlyWorking={currentlyWorkingToday}
+              currentlyWorking={status.currentlyWorking}
               alreadyPunchedIn={alreadyPunchedIn}
               alreadyPunchedOut={alreadyPunchedOut}
               onPunchIn={handlePunchIn}
               onPunchOut={handlePunchOutClick}
               onRequestFlexible={openFlexibleModal}
             />
-
             <BreakManagement
               breakDuration={formatHMS(liveBreak)}
               onBreak={status.onBreak}
@@ -443,16 +462,18 @@ const TodayStatusPage = ({ onLogout }) => {
               onResumeWork={handleResumeWork}
               selectedBreakType={selectedBreakType}
               onSelectBreakType={setSelectedBreakType}
-              currentlyWorking={currentlyWorkingToday}
+              currentlyWorking={status.currentlyWorking}
             />
             <Timeline timeline={status.timeline || []} />
           </div>
           <div className="space-y-4">
-            <SummaryCard weeklySummary={weeklySummary} dailyData={dailyData} />
+            <SummaryCard
+              weeklySummary={weeklySummaryWithQuickStats}
+              dailyData={dailyData}
+            />
           </div>
         </div>
 
-        {/* Punch Out Todo Popup */}
         {showTodoPopup && (
           <PunchOutTodoPopup
             tasks={pendingTodoTasks}
@@ -486,7 +507,6 @@ const TodayStatusPage = ({ onLogout }) => {
           />
         )}
 
-        {/* Punch Out Confirm Popup */}
         {showPunchOutConfirm && (
           <PunchOutConfirmPopup
             onCancel={onCancelPunchOut}
@@ -494,132 +514,150 @@ const TodayStatusPage = ({ onLogout }) => {
           />
         )}
 
-        {/* Flexible Shift Modal */}
         {showFlexibleModal && (
-  <div
-    className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 overflow-auto p-4"
-    onClick={closeFlexibleModal}
-  >
-    <div
-      className="bg-[#0f1724] text-white rounded-2xl shadow-xl w-full max-w-3xl p-6 max-h-[85vh] overflow-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-800"
-      onClick={(e) => e.stopPropagation()}
-    >
-      <h2 className="text-2xl font-semibold mb-6 text-white">Request Flexible Shift</h2>
-
-      {/* Request Form */}
-      <form
-        className="flex flex-col gap-4 mb-6"
-        onSubmit={submitFlexibleRequest}
-      >
-        <label className="flex flex-col gap-1">
-          Date:
-          <input
-            type="date"
-            value={requestDate}
-            onChange={(e) => setRequestDate(e.target.value)}
-            className="rounded-md p-2 bg-gray-800 text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-pinkAccent"
-            required
-          />
-        </label>
-        <label className="flex flex-col gap-1">
-          Start Time:
-          <input
-            type="time"
-            value={requestStartTime}
-            onChange={(e) => setRequestStartTime(e.target.value)}
-            className="rounded-md p-2 bg-gray-800 text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-pinkAccent"
-            required
-          />
-        </label>
-        <label className="flex flex-col gap-1">
-          Duration (hours):
-          <input
-            type="number"
-            value={requestDurationHours}
-            onChange={(e) => setRequestDurationHours(e.target.value)}
-            min={1}
-            max={24}
-            className="rounded-md p-2 bg-gray-800 text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-pinkAccent"
-            required
-          />
-        </label>
-        <label className="flex flex-col gap-1">
-          Reason:
-          <textarea
-            value={requestReason}
-            onChange={(e) => setRequestReason(e.target.value)}
-            className="rounded-md p-2 bg-gray-800 text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-pinkAccent"
-          />
-        </label>
-        <div className="flex justify-end gap-2 mt-2">
-          <button
-            type="button"
-            className="px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 transition"
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 overflow-auto p-4"
             onClick={closeFlexibleModal}
           >
-            Close
-          </button>
-          <button
-            type="submit"
-            className={`px-4 py-2 rounded-lg bg-pinkAccent text-white hover:opacity-90 transition ${
-              isSubmittingRequest ? "opacity-50 cursor-not-allowed" : ""
-            }`}
-            disabled={isSubmittingRequest}
-          >
-            {isSubmittingRequest ? "Submitting..." : "Submit"}
-          </button>
-        </div>
-      </form>
+            <div
+              className="bg-[#0f1724] text-white rounded-2xl shadow-xl w-full max-w-3xl p-6 max-h-[85vh] overflow-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-800"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h2 className="text-2xl font-semibold mb-6 text-white">
+                Request Flexible Shift
+              </h2>
 
-      {/* My Requests / Status List */}
-      <div className="mt-6">
-        <h3 className="text-xl font-semibold mb-3">My Requests</h3>
-        {sortedFlexibleRequests.length === 0 ? (
-          <p className="text-gray-400">No requests found.</p>
-        ) : (
-          <div className="overflow-auto max-h-80 rounded-lg border border-gray-700">
-            <table className="w-full min-w-max border-collapse text-gray-100">
-              <thead className="bg-gray-800 sticky top-0 z-10">
-                <tr>
-                  <th className="p-2 border-b border-gray-700">Date</th>
-                  <th className="p-2 border-b border-gray-700">Start Time</th>
-                  <th className="p-2 border-b border-gray-700">Duration</th>
-                  <th className="p-2 border-b border-gray-700">Reason</th>
-                  <th className="p-2 border-b border-gray-700">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {sortedFlexibleRequests.map((r, idx) => {
-                  const statusLower = (r.status || "pending").toLowerCase();
-                  return (
-                    <tr
-                      key={r._id || `${r.requestedDate}-${r.requestedStartTime}`}
-                      className={`hover:bg-gray-700 transition ${
-                        idx % 2 === 0 ? "bg-gray-900" : "bg-gray-800"
-                      }`}
-                    >
-                      <td className="p-2">{formatDate(r.requestedDate)}</td>
-                      <td className="p-2">{r.requestedStartTime || "-"}</td>
-                      <td className="p-2">{r.durationHours ? `${r.durationHours}h` : "-"}</td>
-                      <td className="p-2">{r.reason || "-"}</td>
-                      <td className="p-2">
-                        <span
-                          className={`px-2 py-1 rounded text-sm ${statusColors[statusLower]}`}
-                        >
-                          {r.status || "Pending"}
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+              <form
+                className="flex flex-col gap-4 mb-6"
+                onSubmit={submitFlexibleRequest}
+              >
+                <label className="flex flex-col gap-1">
+                  Date:
+                  <input
+                    type="date"
+                    value={requestDate}
+                    onChange={(e) => setRequestDate(e.target.value)}
+                    className="rounded-md p-2 bg-gray-800 text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-pinkAccent"
+                    required
+                  />
+                </label>
+                <label className="flex flex-col gap-1">
+                  Start Time:
+                  <input
+                    type="time"
+                    value={requestStartTime}
+                    onChange={(e) => setRequestStartTime(e.target.value)}
+                    className="rounded-md p-2 bg-gray-800 text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-pinkAccent"
+                    required
+                  />
+                </label>
+                <label className="flex flex-col gap-1">
+                  Duration (hours):
+                  <input
+                    type="number"
+                    value={requestDurationHours}
+                    onChange={(e) => setRequestDurationHours(e.target.value)}
+                    min={1}
+                    max={24}
+                    className="rounded-md p-2 bg-gray-800 text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-pinkAccent"
+                    required
+                  />
+                </label>
+                <label className="flex flex-col gap-1">
+                  Reason:
+                  <textarea
+                    value={requestReason}
+                    onChange={(e) => setRequestReason(e.target.value)}
+                    className="rounded-md p-2 bg-gray-800 text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-pinkAccent"
+                  />
+                </label>
+                <div className="flex justify-end gap-2 mt-2">
+                  <button
+                    type="button"
+                    className="px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 transition"
+                    onClick={closeFlexibleModal}
+                  >
+                    Close
+                  </button>
+                  <button
+                    type="submit"
+                    className={`px-4 py-2 rounded-lg bg-pinkAccent text-white hover:opacity-90 transition ${
+                      isSubmittingRequest ? "opacity-50 cursor-not-allowed" : ""
+                    }`}
+                    disabled={isSubmittingRequest}
+                  >
+                    {isSubmittingRequest ? "Submitting..." : "Submit"}
+                  </button>
+                </div>
+              </form>
+
+              <div className="mt-6">
+                <h3 className="text-xl font-semibold mb-3">My Requests</h3>
+                {sortedFlexibleRequests.length === 0 ? (
+                  <p className="text-gray-400">No requests found.</p>
+                ) : (
+                  <div className="overflow-auto max-h-80 rounded-lg border border-gray-700">
+                    <table className="w-full min-w-max border-collapse text-gray-100">
+                      <thead className="bg-gray-800 sticky top-0 z-10">
+                        <tr>
+                          <th className="p-2 border-b border-gray-700">Date</th>
+                          <th className="p-2 border-b border-gray-700">
+                            Start Time
+                          </th>
+                          <th className="p-2 border-b border-gray-700">
+                            Duration
+                          </th>
+                          <th className="p-2 border-b border-gray-700">
+                            Reason
+                          </th>
+                          <th className="p-2 border-b border-gray-700">
+                            Status
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {sortedFlexibleRequests.map((r, idx) => {
+                          const statusLower = (
+                            r.status || "pending"
+                          ).toLowerCase();
+                          return (
+                            <tr
+                              key={
+                                r._id ||
+                                `${r.requestedDate}-${r.requestedStartTime}`
+                              }
+                              className={`hover:bg-gray-700 transition ${
+                                idx % 2 === 0 ? "bg-gray-900" : "bg-gray-800"
+                              }`}
+                            >
+                              <td className="p-2">
+                                {formatDate(r.requestedDate)}
+                              </td>
+                              <td className="p-2">
+                                {r.requestedStartTime || "-"}
+                              </td>
+                              <td className="p-2">
+                                {r.durationHours ? `${r.durationHours}h` : "-"}
+                              </td>
+                              <td className="p-2">{r.reason || "-"}</td>
+                              <td className="p-2">
+                                <span
+                                  className={`px-2 py-1 rounded text-sm ${statusColors[statusLower]}`}
+                                >
+                                  {r.status || "Pending"}
+                                </span>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         )}
-      </div>
-    </div>
-  </div>
-)}
       </main>
     </div>
   );
