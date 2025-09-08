@@ -11,7 +11,11 @@ const useChatWebSocket = (jwtToken, activeConversationId) => {
     }
 
     console.log("[WebSocket] Connecting...");
-    ws.current = new WebSocket("ws://localhost:5000");
+
+    const WS_BASE = import.meta.env.VITE_WS_BASE || "ws://localhost:5000/ws";
+
+    console.log("[WebSocket] Connecting to:", WS_BASE);
+    ws.current = new WebSocket(WS_BASE);
 
     ws.current.onopen = () => {
       console.log("[WebSocket] Connected.");
