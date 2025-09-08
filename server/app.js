@@ -93,6 +93,8 @@ app.use("/api/holidays", holidayRoutes);
 app.use("/api/flexible-shifts", flexibleShiftRoutes);
 app.use("/api/admin", adminAttendanceRoutes);
 
+
+
 // =====================
 // Serve frontend in production
 // =====================

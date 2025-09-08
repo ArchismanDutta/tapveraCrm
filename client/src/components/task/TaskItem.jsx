@@ -1,7 +1,8 @@
 import React, { useState } from "react";
-import { FaClock, FaUserTie } from "react-icons/fa";
+import { FaClock, FaUserTie, FaCommentDots } from "react-icons/fa";
 import axios from "axios";
 import dayjs from "dayjs";
+import TaskRemarksModal from "./TaskRemarksModal";
 
 const priorityColors = {
   High: "bg-red-700 text-red-200 border border-red-600",
@@ -10,18 +11,20 @@ const priorityColors = {
 };
 
 const statusColors = {
-  pending: "bg-gray-700 text-white-300 border border-gray-600",
-  "in-progress": "bg-blue-700 text-white-300 border border-blue-600",
-  completed: "bg-green-700 text-white-300 border border-green-600",
+  pending: "bg-gray-700 text-gray-200 border border-gray-600",
+  "in-progress": "bg-blue-700 text-blue-200 border border-blue-600",
+  completed: "bg-green-700 text-green-200 border border-green-600",
 };
 
 const TaskItem = ({ task, onStatusUpdated }) => {
-  const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState(task.status);
+  const [loading, setLoading] = useState(false);
+  const [showRemarks, setShowRemarks] = useState(false);
+  const [remarks, setRemarks] = useState(task.remarks || []);
 
-  // API base URL with fallback
   const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
 
+  // ---------------- Update Task Status ----------------
   const handleStatusChange = async (newStatus) => {
     setStatus(newStatus);
     setLoading(true);
@@ -30,28 +33,38 @@ const TaskItem = ({ task, onStatusUpdated }) => {
       const res = await axios.patch(
         `${API_BASE}/api/tasks/${task._id}/status`,
         { status: newStatus },
-        {
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-        }
+        { headers: { Authorization: `Bearer ${token}` } }
       );
-      if (onStatusUpdated) {
-        onStatusUpdated(res.data);
-      }
+      setStatus(res.data.status);
+      if (onStatusUpdated) onStatusUpdated(res.data);
     } catch (err) {
-      console.error(err);
+      console.error("Status update failed:", err);
       alert("Failed to update status.");
-      setStatus(task.status);
+      setStatus(task.status); // revert
     } finally {
       setLoading(false);
     }
   };
 
+  // ---------------- Add Remark ----------------
+  const handleAddRemark = async (comment) => {
+    try {
+      const token = localStorage.getItem("token");
+      const res = await axios.post(
+        `${API_BASE}/api/tasks/${task._id}/remarks`,
+        { comment },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setRemarks(res.data.remarks || []);
+    } catch (err) {
+      console.error("Failed to add remark:", err);
+      alert("Could not add remark.");
+    }
+  };
+
   return (
     <div className="border rounded-xl p-5 bg-[#181d2a] shadow-md hover:shadow-lg transition-all duration-200 border-blue-950">
-      {/* Header */}
+      {/* -------- Header -------- */}
       <div className="flex justify-between items-center mb-3">
         <h4 className="font-semibold text-blue-100 text-lg">{task.title}</h4>
         <span
@@ -63,7 +76,7 @@ const TaskItem = ({ task, onStatusUpdated }) => {
         </span>
       </div>
 
-      {/* Assigned By */}
+      {/* -------- Assigned By -------- */}
       <div className="flex items-center text-blue-400 text-sm mb-2">
         <FaUserTie className="mr-2" />
         <span>
@@ -71,24 +84,32 @@ const TaskItem = ({ task, onStatusUpdated }) => {
         </span>
       </div>
 
-      {/* Time & Due Date */}
+      {/* -------- Due Date -------- */}
       <div className="flex items-center text-blue-400 text-sm mb-3">
         <FaClock className="mr-2" />
-        Due: {dayjs(task.dueDate).format("DD MMM YYYY, hh:mm A")}
+        Due:{" "}
+        {task.dueDate
+          ? dayjs(task.dueDate).format("DD MMM YYYY, hh:mm A")
+          : "No due date"}
       </div>
 
-      {/* Description */}
+      {/* -------- Description -------- */}
       <p className="text-blue-300 text-sm mb-4 leading-relaxed">
         {task.description}
       </p>
 
-      {/* Status Selector */}
-      <div className="flex justify-between items-center">
+      {/* -------- Status + Actions -------- */}
+      <div className="flex justify-between items-center gap-2">
+        {/* Status pill */}
         <span
-          className={`px-3 py-1 text-xs font-medium rounded-full ${statusColors[status]}`}
+          className={`px-3 py-1 text-xs font-medium rounded-full ${
+            statusColors[status]
+          }`}
         >
           {status.replace("-", " ").toUpperCase()}
         </span>
+
+        {/* Status dropdown */}
         <select
           value={status}
           onChange={(e) => handleStatusChange(e.target.value)}
@@ -99,7 +120,24 @@ const TaskItem = ({ task, onStatusUpdated }) => {
           <option value="in-progress">In Progress</option>
           <option value="completed">Completed</option>
         </select>
+
+        {/* Remarks button */}
+        <button
+          onClick={() => setShowRemarks(true)}
+          className="flex items-center gap-1 px-3 py-1.5 rounded bg-[#bf6f2f] hover:bg-[#a65e28] text-white text-sm transition"
+        >
+          <FaCommentDots /> Remarks ({remarks.length})
+        </button>
       </div>
+
+      {/* -------- Remarks Modal -------- */}
+      {showRemarks && (
+        <TaskRemarksModal
+          task={{ ...task, remarks }}
+          onClose={() => setShowRemarks(false)}
+          onAddRemark={handleAddRemark}
+        />
+      )}
     </div>
   );
 };
