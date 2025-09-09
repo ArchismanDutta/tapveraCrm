@@ -199,9 +199,6 @@ export default function AdminTaskPage({ onLogout }) {
   const userStr = localStorage.getItem("user");
   const userRole = userStr ? JSON.parse(userStr).role : "employee";
 
-  const userStr = localStorage.getItem("user");
-  const userRole = userStr ? JSON.parse(userStr).role : "employee";
-
   // Popup helper
   const showPopup = (message) => {
     setPopupMessage(message);
