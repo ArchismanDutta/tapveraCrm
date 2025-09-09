@@ -182,18 +182,33 @@ const Signup = () => {
     };
 
     if (form.shiftType === "standard") {
-      payload.shift = {
-        start: form.shift.start,
-        end: form.shift.end,
-        durationHours: (() => {
-          const [sh, sm] = form.shift.start.split(":").map(Number);
-          const [eh, em] = form.shift.end.split(":").map(Number);
-          let diffMinutes = eh * 60 + em - (sh * 60 + sm);
-          if (diffMinutes <= 0) diffMinutes += 24 * 60;
-          return Math.round(diffMinutes / 60);
-        })(),
-      };
-    }
+  // Use Date of Joining as base date (or any reference date)
+  const baseDate = form.doj ? new Date(form.doj) : new Date();
+
+  const [sh, sm] = form.shift.start.split(":").map(Number);
+  const [eh, em] = form.shift.end.split(":").map(Number);
+
+  // Create ISO timestamps
+  const arrivalDate = new Date(baseDate);
+  arrivalDate.setHours(sh, sm, 0, 0); // set start time
+
+  const departureDate = new Date(baseDate);
+  departureDate.setHours(eh, em, 0, 0); // set end time
+
+  // If end is before start, assume next day
+  if (departureDate <= arrivalDate) {
+    departureDate.setDate(departureDate.getDate() + 1);
+  }
+
+  payload.shift = {
+    arrivalTime: arrivalDate.toISOString(),
+    departureTime: departureDate.toISOString(),
+    durationHours: Math.round(
+      (departureDate - arrivalDate) / (1000 * 60 * 60)
+    ),
+  };
+}
+
 
     try {
       const token = localStorage.getItem("token");

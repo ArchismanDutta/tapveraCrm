@@ -77,6 +77,20 @@ const userSchema = new mongoose.Schema(
 
     // Flexible shift requests for standard employees (single-day flexibility)
     flexibleShiftRequests: [{ type: mongoose.Schema.Types.ObjectId, ref: "FlexibleShiftRequest" }],
+
+    // ✅ NEW: Flexible shift overrides for specific dates
+    shiftOverrides: {
+      type: Map,
+      of: new mongoose.Schema(
+        {
+          start: { type: String },
+          end: { type: String },
+          durationHours: { type: Number, min: 1, max: 24 },
+        },
+        { _id: false }
+      ),
+      default: {},
+    },
   },
   { timestamps: true }
 );
