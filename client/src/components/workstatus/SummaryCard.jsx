@@ -177,7 +177,7 @@ const SummaryCard = ({ weeklySummary, dailyData }) => {
         </div>
       </div>
 
-      <div className="mt-4">
+      {/* <div className="mt-4">
         <h4 className="text-gray-200 font-semibold mb-2">Quick Stats</h4>
         <div className="grid grid-cols-3 gap-4 text-sm font-semibold text-gray-300">
           <div className="bg-[#232945] p-3 rounded-lg flex flex-col items-center gap-1 hover:bg-[#2a3050] transition-colors">
@@ -199,7 +199,7 @@ const SummaryCard = ({ weeklySummary, dailyData }) => {
             <span className="text-gray-400 text-xs">Perfect Days</span>
           </div>
         </div>
-      </div>
+      </div> */}
     </div>
   );
 };
