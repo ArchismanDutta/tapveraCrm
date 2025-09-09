@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useRef } from "react";
 import API from "../../api";
+import ReactDatePicker from "react-datepicker";
+import "react-datepicker/dist/react-datepicker.css";
 
 const TaskForm = ({ onCreate }) => {
   const [task, setTask] = useState({
     title: "",
     assignedTo: [],
-    dueDate: "",
+    dueDate: null, // use Date object here, not string
     dueTime: "",
     priority: "",
     status: "pending",
@@ -61,10 +63,16 @@ const TaskForm = ({ onCreate }) => {
     e.preventDefault();
     if (!task.title || task.assignedTo.length === 0 || !task.dueDate) return;
 
-    const combinedDueDate =
-      task.dueDate && task.dueTime
-        ? new Date(`${task.dueDate}T${task.dueTime}:00`)
-        : new Date(`${task.dueDate}T00:00:00`);
+    const dueDateOnly = task.dueDate;
+    // Combine dueDate date part with dueTime string part into one Date object
+    let combinedDueDate;
+    if (task.dueTime) {
+      const [hours, minutes] = task.dueTime.split(":");
+      combinedDueDate = new Date(dueDateOnly);
+      combinedDueDate.setHours(parseInt(hours, 10), parseInt(minutes, 10), 0, 0);
+    } else {
+      combinedDueDate = dueDateOnly;
+    }
 
     const formattedTask = { ...task, dueDate: combinedDueDate };
     onCreate(formattedTask);
@@ -72,7 +80,7 @@ const TaskForm = ({ onCreate }) => {
     setTask({
       title: "",
       assignedTo: [],
-      dueDate: "",
+      dueDate: null,
       dueTime: "",
       priority: "",
       status: "pending",
@@ -100,7 +108,7 @@ const TaskForm = ({ onCreate }) => {
   const timeSlots = generateTimeSlots();
 
   const commonInputClasses =
-    "bg-[#141a29] border border-[rgba(84,123,209,0.4)] p-2 rounded-lg shadow-sm text-sm text-blue-100 w-full focus:ring-2 focus:ring-[#ff8000] outline-none cursor-pointer";
+    "bg-[#141a29] border border-[rgba(84,123,209,0.4)] p-2 rounded-lg shadow-sm text-sm text-blue-100 w-full focus:ring-2 focus:ring-[#ff8000] outline-none";
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
@@ -119,11 +127,9 @@ const TaskForm = ({ onCreate }) => {
 
       {/* Assign To */}
       <div className="relative" ref={dropdownRef}>
-        <label className="block text-sm font-medium mb-1">
-          Assign To (Multiple)
-        </label>
+        <label className="block text-sm font-medium mb-1">Assign To (Multiple)</label>
         <div
-          className={commonInputClasses}
+          className={`${commonInputClasses} cursor-pointer`}
           onClick={() => setDropdownOpen((prev) => !prev)}
         >
           {task.assignedTo.length > 0
@@ -159,9 +165,7 @@ const TaskForm = ({ onCreate }) => {
                 </label>
               ))
             ) : (
-              <div className="px-3 py-2 text-sm text-blue-300">
-                No users found
-              </div>
+              <div className="px-3 py-2 text-sm text-blue-300">No users found</div>
             )}
           </div>
         )}
@@ -169,25 +173,31 @@ const TaskForm = ({ onCreate }) => {
 
       {/* Date + Time Picker */}
       <div className="flex gap-3">
-        {/* Date */}
-        <input
-          type="date"
-          className={commonInputClasses}
-          value={task.dueDate}
-          onChange={(e) => setTask({ ...task, dueDate: e.target.value })}
-          required
-          min={new Date().toISOString().split("T")[0]} // <-- Prevent past dates
-        />
+        {/* Custom Date Picker */}
+        <div className="w-full">
+          <label className="block text-sm font-medium mb-1 text-blue-100">Due Date</label>
+          <ReactDatePicker
+            selected={task.dueDate}
+            onChange={(date) => setTask({ ...task, dueDate: date })}
+            className={commonInputClasses}
+            placeholderText="Select due date"
+            minDate={new Date()}
+            dateFormat="yyyy-MM-dd"
+            isClearable
+            wrapperClassName="w-full"
+          />
+        </div>
 
         {/* Time */}
         <div className="relative w-full" ref={timeRef}>
+          <label className="block text-sm font-medium mb-1 text-blue-100">Due Time</label>
           <input
             type="text"
             readOnly
             placeholder="Select Time"
-            className={commonInputClasses}
+            className={`${commonInputClasses} cursor-pointer`}
             value={task.dueTime}
-            onClick={() => setTimeOpen(!timeOpen)}
+            onClick={() => setTimeOpen((prev) => !prev)}
           />
           {timeOpen && (
             <div className="absolute top-full mt-1 bg-[#141a29] border border-[rgba(84,123,209,0.4)] rounded-2xl shadow-lg max-h-60 overflow-y-auto w-full z-50 text-blue-100">

@@ -1,3 +1,4 @@
+// src/App.jsx
 import React, { useEffect, useState } from "react";
 import {
   BrowserRouter as Router,
@@ -12,7 +13,7 @@ import "./styles/toastify-custom.css";
 
 // Pages
 import Login from "./pages/LoginPage";
-import Signup from "./pages/SignUp"; // Admin/HR/Super Admin only
+import Signup from "./pages/SignUp";
 import EmployeeDashboardPage from "./pages/EmployeeDashboard";
 import MyProfile from "./pages/MyProfile";
 import Tasks from "./pages/Tasks";
@@ -31,10 +32,21 @@ import EmployeeDirectory from "./pages/EmployeeDirectory";
 import EmployeePage from "./pages/EmployeePage";
 import HRDashboard from "./pages/HRDashboard";
 import AdminAttendancePage from "./pages/AdminAttendancePage";
-import HolidayManagementPage from "./pages/HolidayManagementPage"; 
+import HolidayManagementPage from "./pages/HolidayManagementPage";
+
+// New Super Admin Page
+import SuperAdminDashboard from "./pages/SuperAdminDashboard";
 
 import { resetChat } from "./store/slices/chatSlice";
 import { useDispatch } from "react-redux";
+
+// Unified role normalization function
+const normalizeRole = (role) => {
+  if (!role) return "employee";
+  const r = role.toLowerCase().replace(/\s+/g, "-");
+  if (r === "superadmin" || r === "super-admin") return "super-admin";
+  return r;
+};
 
 const AppWrapper = () => {
   const navigate = useNavigate();
@@ -49,13 +61,11 @@ const AppWrapper = () => {
     if (userStr) setCurrentUser(JSON.parse(userStr));
   }, []);
 
-  // Load auth state and role on mount
   useEffect(() => {
     const token = localStorage.getItem("token");
     const userStr = localStorage.getItem("user");
-    let storedRole = JSON.parse(userStr)?.role || localStorage.getItem("role");
-    if (storedRole) storedRole = storedRole.toLowerCase();
-
+    let storedRole = userStr ? JSON.parse(userStr)?.role : null;
+    storedRole = normalizeRole(storedRole);
     if (token && token.trim() !== "") {
       setIsAuthenticated(true);
       setRole(storedRole);
@@ -70,7 +80,7 @@ const AppWrapper = () => {
     const savedUser = JSON.parse(localStorage.getItem("user"));
     setCurrentUser(savedUser);
     setIsAuthenticated(true);
-    setRole(savedUser?.role?.toLowerCase() || null);
+    setRole(normalizeRole(savedUser?.role));
     toast.success("✅ Login successful!");
   };
 
@@ -95,8 +105,10 @@ const AppWrapper = () => {
     );
   }
 
-  const isAdmin = role === "admin" || role === "super-admin";
-  const isHR = role === "hr";
+  const roleNorm = normalizeRole(role);
+  const isSuperAdmin = roleNorm === "super-admin";
+  const isAdmin = roleNorm === "admin" || isSuperAdmin;
+  const isHR = roleNorm === "hr";
 
   return (
     <>
@@ -107,6 +119,8 @@ const AppWrapper = () => {
           element={
             !isAuthenticated ? (
               <Login onLoginSuccess={handleLoginSuccess} />
+            ) : isSuperAdmin ? (
+              <Navigate to="/super-admin" replace />
             ) : isHR ? (
               <Navigate to="/hrdashboard" replace />
             ) : isAdmin ? (
@@ -117,11 +131,23 @@ const AppWrapper = () => {
           }
         />
 
+        {/* Super Admin Dashboard */}
+        <Route
+          path="/super-admin"
+          element={
+            isAuthenticated && isSuperAdmin ? (
+              <SuperAdminDashboard onLogout={handleLogout} />
+            ) : (
+              <Navigate to="/login" replace />
+            )
+          }
+        />
+
         {/* HR Dashboard */}
         <Route
           path="/hrdashboard"
           element={
-            isAuthenticated && isHR ? (
+            isAuthenticated && (isHR || isSuperAdmin) ? (
               <HRDashboard onLogout={handleLogout} currentUser={currentUser} />
             ) : (
               <Navigate to="/login" replace />
@@ -165,7 +191,9 @@ const AppWrapper = () => {
               <EmployeeDashboardPage onLogout={handleLogout} role={role} />
             ) : (
               <Navigate
-                to={isAuthenticated ? (isAdmin ? "/admin/tasks" : "/login") : "/login"}
+                to={
+                  isAuthenticated ? (isAdmin ? "/admin/tasks" : "/login") : "/login"
+                }
                 replace
               />
             )
@@ -177,10 +205,7 @@ const AppWrapper = () => {
           path="/profile"
           element={
             isAuthenticated ? (
-              <MyProfile
-                onLogout={handleLogout}
-                userType={role || "employee"}
-              />
+              <MyProfile onLogout={handleLogout} userType={role || "employee"} />
             ) : (
               <Navigate to="/login" replace />
             )
@@ -194,10 +219,7 @@ const AppWrapper = () => {
             isAuthenticated && (isAdmin || isHR) ? (
               <EmployeePage userRole={role} onLogout={handleLogout} />
             ) : (
-              <Navigate
-                to={isAuthenticated ? "/dashboard" : "/login"}
-                replace
-              />
+              <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />
             )
           }
         />
@@ -209,10 +231,7 @@ const AppWrapper = () => {
             isAuthenticated && (isAdmin || isHR) ? (
               <AdminTaskPage onLogout={handleLogout} />
             ) : (
-              <Navigate
-                to={isAuthenticated ? "/dashboard" : "/login"}
-                replace
-              />
+              <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />
             )
           }
         />
@@ -222,10 +241,7 @@ const AppWrapper = () => {
             isAuthenticated && (isAdmin || isHR) ? (
               <EmployeeManagementPage onLogout={handleLogout} />
             ) : (
-              <Navigate
-                to={isAuthenticated ? "/dashboard" : "/login"}
-                replace
-              />
+              <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />
             )
           }
         />
@@ -235,10 +251,7 @@ const AppWrapper = () => {
             isAuthenticated && (isAdmin || isHR) ? (
               <AdminLeaveRequests onLogout={handleLogout} />
             ) : (
-              <Navigate
-                to={isAuthenticated ? "/dashboard" : "/login"}
-                replace
-              />
+              <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />
             )
           }
         />
@@ -248,10 +261,7 @@ const AppWrapper = () => {
             isAuthenticated && (isAdmin || isHR) ? (
               <NoticeBoard onLogout={handleLogout} />
             ) : (
-              <Navigate
-                to={isAuthenticated ? "/dashboard" : "/login"}
-                replace
-              />
+              <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />
             )
           }
         />
@@ -261,10 +271,7 @@ const AppWrapper = () => {
             isAuthenticated && (isAdmin || isHR) ? (
               <AdminAttendancePage onLogout={handleLogout} />
             ) : (
-              <Navigate
-                to={isAuthenticated ? "/dashboard" : "/login"}
-                replace
-              />
+              <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />
             )
           }
         />
@@ -274,10 +281,7 @@ const AppWrapper = () => {
             isAuthenticated && (isAdmin || isHR) ? (
               <HolidayManagementPage onLogout={handleLogout} />
             ) : (
-              <Navigate
-                to={isAuthenticated ? "/dashboard" : "/login"}
-                replace
-              />
+              <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />
             )
           }
         />
@@ -351,7 +355,9 @@ const AppWrapper = () => {
             <Navigate
               to={
                 isAuthenticated
-                  ? isHR
+                  ? isSuperAdmin
+                    ? "/super-admin"
+                    : isHR
                     ? "/hrdashboard"
                     : isAdmin
                     ? "/admin/tasks"

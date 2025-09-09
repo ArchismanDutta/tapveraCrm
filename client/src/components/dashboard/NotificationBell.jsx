@@ -1,147 +1,78 @@
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import React, { useEffect, useRef, useState, useCallback } from "react";
 import { Bell, X, Volume2, VolumeX } from "lucide-react";
-import axios from "axios";
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
-
-const NotificationBell = () => {
-  const [notifications, setNotifications] = useState([]);
+const NotificationBell = ({ notifications = [], onDismiss }) => {
   const [open, setOpen] = useState(false);
   const [isRinging, setIsRinging] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
-  const [audioUnlocked, setAudioUnlocked] = useState(false); // track unlock state
-  const bellRef = useRef(null);
+  const [audioUnlocked, setAudioUnlocked] = useState(false);
   const audioRef = useRef(null);
   const prevCount = useRef(0);
-  const intervalRef = useRef(null);
 
-  const decodeToken = (token) => {
-    try {
-      return JSON.parse(atob(token.split(".")[1]));
-    } catch {
-      return null;
-    }
-  };
-
+  // Attempt to unlock audio on first user interaction
   const attemptAudioUnlock = useCallback(() => {
     if (audioUnlocked) return;
     if (audioRef.current) {
-      audioRef.current.play()
+      audioRef.current
+        .play()
         .then(() => {
           audioRef.current.pause();
           audioRef.current.currentTime = 0;
           setAudioUnlocked(true);
           console.log("Audio unlocked successfully");
         })
-        .catch((err) => {
-          console.warn("Audio unlock failed, will retry on next user interaction:", err);
+        .catch(() => {
+          console.log("Audio unlock blocked, waiting for user interaction...");
         });
     }
   }, [audioUnlocked]);
 
-  const fetchNotifications = useCallback(async () => {
-    try {
-      const token = localStorage.getItem("token");
-      if (!token) return;
-      const userData = decodeToken(token);
-      if (!userData?.id) return;
-
-      const config = { headers: { Authorization: `Bearer ${token}` } };
-      const res = await axios.get(`${API_BASE}/api/tasks`, config);
-
-      const dismissed = JSON.parse(sessionStorage.getItem("dismissedNotifications") || "[]");
-
-      const assignedTasks = res.data.filter(
-        (task) =>
-          Array.isArray(task.assignedTo) &&
-          task.assignedTo.some((u) => u._id === userData.id) &&
-          (task.status === "pending" || task.status === "in-progress") &&
-          !dismissed.includes(task._id)
-      );
-
-      const notifArray = assignedTasks.map((task) => ({
-        id: task._id,
-        message: `Task: ${task.title} (Due: ${
-          task.dueDate ? new Date(task.dueDate).toLocaleDateString() : "No date"
-        })`,
-      })).reverse();
-
-      if (notifArray.length > prevCount.current) {
-        setIsRinging(true);
-        if (soundEnabled && audioUnlocked && audioRef.current) {
-          audioRef.current.currentTime = 0;
-          audioRef.current.play().catch((err) => {
-            console.warn("Audio play blocked:", err);
-          });
-        }
-        setTimeout(() => setIsRinging(false), 1000);
-      }
-      prevCount.current = notifArray.length;
-      setNotifications(notifArray);
-    } catch (err) {
-      console.error("Error fetching notifications", err);
-    }
-  }, [soundEnabled, audioUnlocked]);
-
   useEffect(() => {
-    fetchNotifications();
-    intervalRef.current = setInterval(fetchNotifications, 10000);
-    return () => clearInterval(intervalRef.current);
-  }, [fetchNotifications]);
-
-  useEffect(() => {
-    const handleDocumentClick = () => {
-      attemptAudioUnlock();
-      document.removeEventListener("click", handleDocumentClick);
-      document.removeEventListener("keydown", handleDocumentClick);
-    };
-    document.addEventListener("click", handleDocumentClick);
-    document.addEventListener("keydown", handleDocumentClick);
-
+    document.addEventListener("click", attemptAudioUnlock, { once: true });
+    document.addEventListener("keydown", attemptAudioUnlock, { once: true });
     return () => {
-      document.removeEventListener("click", handleDocumentClick);
-      document.removeEventListener("keydown", handleDocumentClick);
+      document.removeEventListener("click", attemptAudioUnlock);
+      document.removeEventListener("keydown", attemptAudioUnlock);
     };
   }, [attemptAudioUnlock]);
 
+  // Trigger bell ring on new notifications
   useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (bellRef.current && !bellRef.current.contains(event.target)) {
-        setOpen(false);
+    if (notifications.length > prevCount.current) {
+      setIsRinging(true);
+      if (soundEnabled && audioUnlocked && audioRef.current) {
+        audioRef.current.currentTime = 0;
+        audioRef.current.play().catch((err) => console.warn("Audio blocked:", err));
       }
-    };
+      setTimeout(() => setIsRinging(false), 1000);
+    }
+    prevCount.current = notifications.length;
+  }, [notifications, soundEnabled, audioUnlocked]);
+
+  const toggleSound = () => setSoundEnabled((prev) => !prev);
+
+  const handleClickOutside = (e) => {
+    if (!e.target.closest(".notification-bell-container")) {
+      setOpen(false);
+    }
+  };
+
+  useEffect(() => {
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const toggleSound = () => {
-    setSoundEnabled((prev) => !prev);
-  };
-
-  const removeNotification = (id) => {
-    setNotifications((prev) => prev.filter((n) => n.id !== id));
-    const dismissed = JSON.parse(sessionStorage.getItem("dismissedNotifications") || "[]");
-    sessionStorage.setItem("dismissedNotifications", JSON.stringify([...dismissed, id]));
-    prevCount.current = prevCount.current - 1;
-  };
-
   return (
-    <div className="relative" ref={bellRef}>
-      {/* Audio element */}
+    <div className="relative notification-bell-container">
       <audio
-  ref={audioRef}
-  src="https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg"
-  preload="auto"
-/>
+        ref={audioRef}
+        src="https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg"
+        preload="auto"
+      />
 
       <button
-        className={`relative p-2 rounded-full bg-gradient-to-r from-[#232945] via-[#17171c] to-[#181b2b] hover:from-orange-400 hover:to-orange-500 shadow-lg transition`}
-        onClick={(e) => {
-          e.stopPropagation();
-          setOpen((prev) => !prev);
-          attemptAudioUnlock();
-        }}
-        aria-label="Toggle notifications"
+        className="relative p-2 rounded-full bg-gradient-to-r from-[#232945] via-[#17171c] to-[#181b2b] hover:from-orange-400 hover:to-orange-500 shadow-lg transition"
+        onClick={() => setOpen((prev) => !prev)}
       >
         <Bell className={`w-6 h-6 text-orange-400 ${isRinging ? "animate-shake" : ""}`} />
         {notifications.length > 0 && (
@@ -168,17 +99,19 @@ const NotificationBell = () => {
             <ul className="max-h-60 overflow-y-auto no-scrollbar divide-y divide-[#232945]">
               {notifications.map((n) => (
                 <li
-                  key={n.id}
+                  key={n.id || n.message}
                   className="flex items-center justify-between px-3 py-2 hover:bg-[#1a1f2a] cursor-pointer text-white transition"
                 >
-                  <span>{n.message}</span>
-                  <button
-                    onClick={() => removeNotification(n.id)}
-                    className="p-1 rounded hover:bg-red-700/40 focus:bg-red-800 transition"
-                    aria-label="Dismiss notification"
-                  >
-                    <X className="text-red-500" />
-                  </button>
+                  <span>{n.message || n}</span>
+                  {onDismiss && (
+                    <button
+                      onClick={() => onDismiss(n.id)}
+                      className="p-1 rounded hover:bg-red-700/40 focus:bg-red-800 transition"
+                      aria-label="Dismiss notification"
+                    >
+                      <X className="text-red-500" />
+                    </button>
+                  )}
                 </li>
               ))}
             </ul>

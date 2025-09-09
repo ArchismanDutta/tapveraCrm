@@ -1,7 +1,6 @@
-import React, { useState } from "react";
-import Modal from "../modal";
-import DailyEmailSender from "../DailyEmailSender";
-import tapveraLogo from "../../assets/tapvera.png";
+// src/components/dashboard/Sidebar.jsx
+import React, { useState, useEffect } from "react";
+import { NavLink } from "react-router-dom";
 import {
   LayoutDashboard,
   User,
@@ -13,14 +12,17 @@ import {
   Calendar,
 } from "lucide-react";
 import { FaChevronCircleRight } from "react-icons/fa";
-import { NavLink } from "react-router-dom";
 
-// Menu configuration
+import Modal from "../modal";
+import DailyEmailSender from "../DailyEmailSender";
+import tapveraLogo from "../../assets/tapvera.png";
+
+// Role → Menu mapping
 const menuConfig = {
   employee: [
     { to: "/dashboard", icon: <LayoutDashboard size={18} />, label: "Employee Dashboard" },
     { to: "/profile", icon: <User size={18} />, label: "My Profile" },
-    { to: "/today-status", icon: <ClipboardList size={18} />, label: "Today's Work" },
+    { to: "/today-status", icon: <ClipboardList size={18} />, label: "Punch In/Out" },
     { to: "/attendance", icon: <ClipboardList size={18} />, label: "My Attendance" },
     { to: "/todo", icon: <ClipboardList size={18} />, label: "Todo" },
     { to: "/messages", icon: <MessageCircle size={18} />, label: "Messages" },
@@ -40,7 +42,7 @@ const menuConfig = {
     { to: "/admin/holidays", icon: <Calendar size={18} />, label: "Holidays List" },
     { to: "/messages", icon: <MessageCircle size={18} />, label: "Messages" },
     { to: "/profile", icon: <User size={18} />, label: "My Profile" },
-    { to: "/admin-attendance", icon: <ClipboardList size={18} />, label: "Employee Attendance" },
+    { to: "/super-admin", icon: <ClipboardList size={18} />, label: "Employees Current Status" },
   ],
   admin: [
     { to: "/dashboard", icon: <LayoutDashboard size={18} />, label: "Admin Dashboard" },
@@ -53,10 +55,11 @@ const menuConfig = {
     { to: "/attendance", icon: <ClipboardList size={18} />, label: "My Attendance" },
     { to: "/profile", icon: <User size={18} />, label: "My Profile" },
     { to: "/admin/notices", icon: <Flag size={18} />, label: "Notice Board" },
-    { to: "/admin-attendance", icon: <ClipboardList size={18} />, label: "Employee Attendance" },
+    { to: "/super-admin", icon: <ClipboardList size={18} />, label: "Employees Current Status" },
   ],
   "super-admin": [
-    { to: "/dashboard", icon: <LayoutDashboard size={18} />, label: "Super Admin Dashboard" },
+    { to: "/hrdashboard", icon: <LayoutDashboard size={18} />, label: "Dashboard" },
+    { to: "/admin/tasks", icon: <LayoutDashboard size={18} />, label: "Assign Task" },
     { to: "/admin/leaves", icon: <FileText size={18} />, label: "Leave Requests" },
     { to: "/directory", icon: <Users size={18} />, label: "Employee Details" },
     { to: "/todo", icon: <ClipboardList size={18} />, label: "Todo" },
@@ -64,48 +67,70 @@ const menuConfig = {
     { to: "/messages", icon: <MessageCircle size={18} />, label: "Messages" },
     { to: "/admin/holidays", icon: <Calendar size={18} />, label: "Holidays List" },
     { to: "/profile", icon: <User size={18} />, label: "My Profile" },
-    { to: "/admin-attendance", icon: <ClipboardList size={18} />, label: "Employee Attendance" },
+    { to: "/super-admin", icon: <ClipboardList size={18} />, label: "Employees Current Status" },
   ],
+};
+
+// Convert backend role strings into something Sidebar can handle
+const normalizeRole = (role) => {
+  if (!role) return "employee";
+  const normalized = role.toLowerCase().trim();
+  if (normalized === "superadmin") return "super-admin";
+  return normalized;
 };
 
 const Sidebar = ({ collapsed, setCollapsed, onLogout, userRole }) => {
   const [showEmailModal, setShowEmailModal] = useState(false);
+  const [role, setRole] = useState("employee");
 
-  // Determine role from prop or JWT
-  let role = userRole || "employee";
-  const token = localStorage.getItem("token");
-  if (token) {
+  useEffect(() => {
+    let resolvedRole = normalizeRole(userRole || "employee");
     try {
-      const payload = JSON.parse(atob(token.split(".")[1]));
-      role = payload.role ? payload.role.toLowerCase() : role;
-    } catch {
-      // invalid token
+      const userStr = localStorage.getItem("user");
+      if (userStr) {
+        const parsed = JSON.parse(userStr);
+        if (parsed.role) {
+          resolvedRole = normalizeRole(parsed.role);
+        }
+      }
+    } catch (e) {
+      // fallback silently
     }
-  }
+    setRole(resolvedRole);
+  }, [userRole]);
 
   const menuItems = menuConfig[role] || menuConfig["employee"];
 
   return (
     <>
       <aside
-        className={`fixed top-0 left-0 h-full z-40 flex flex-col bg-gradient-to-br from-[#13161c]/90 via-[#181a25]/95 to-[#191a27]/95 text-blue-100 shadow-2xl border-r border-[#232945] transition-width duration-300 ease-in-out overflow-hidden ${
-          collapsed ? "w-16" : "w-56"
-        }`}
+        className={`fixed top-0 left-0 h-full z-40 flex flex-col
+          bg-gradient-to-br from-[#13161c]/90 via-[#181a25]/95 to-[#191a27]/95
+          text-blue-100 shadow-2xl border-r border-[#232945]
+          transition-all duration-300 ease-in-out overflow-hidden
+          ${collapsed ? "w-16" : "w-56"}`}
       >
         {/* Logo & Toggle */}
-        <div className={`flex items-center p-4 ${collapsed ? "justify-center" : "justify-between"}`}>
+        <div
+          className={`flex items-center p-4 ${
+            collapsed ? "justify-center" : "justify-between"
+          }`}
+        >
           {!collapsed && (
             <NavLink to="/dashboard" tabIndex={collapsed ? -1 : 0}>
-              <img src={tapveraLogo} alt="Tapvera" className="h-10 w-auto drop-shadow-lg" />
+              <img
+                src={tapveraLogo}
+                alt="Tapvera"
+                className="h-10 w-auto drop-shadow-lg"
+              />
             </NavLink>
           )}
           <button
             aria-label="Toggle Sidebar"
-            className={`p-2 rounded-full transition transform bg-[#232945] hover:bg-white/20 ${
-              collapsed ? "rotate-0" : "rotate-180"
-            }`}
+            className={`p-2 rounded-full bg-[#232945] hover:bg-white/20
+              transition-transform duration-300
+              ${collapsed ? "rotate-0" : "rotate-180"}`}
             onClick={() => setCollapsed(!collapsed)}
-            tabIndex={0}
           >
             <FaChevronCircleRight size={22} />
           </button>
@@ -118,11 +143,14 @@ const Sidebar = ({ collapsed, setCollapsed, onLogout, userRole }) => {
               to={item.to}
               key={item.to}
               className={({ isActive }) =>
-                `group flex items-center gap-4 rounded-lg px-4 py-3 text-sm font-semibold transition-colors duration-150 ${
+                `group flex items-center gap-4 rounded-lg px-4 py-3 text-sm font-semibold
+                transition-colors duration-150
+                ${
                   isActive
                     ? "bg-gradient-to-r from-blue-600 to-blue-400 text-white shadow-md"
                     : "text-blue-100 hover:text-blue-300"
-                } ${collapsed ? "justify-center" : "justify-start"}`
+                }
+                ${collapsed ? "justify-center" : "justify-start"}`
               }
               tabIndex={collapsed ? -1 : 0}
             >
@@ -132,13 +160,13 @@ const Sidebar = ({ collapsed, setCollapsed, onLogout, userRole }) => {
           ))}
         </nav>
 
-        {/* Daily Updates Button */}
+        {/* Daily Updates Button (Employee only) */}
         {role === "employee" && !collapsed && (
           <div className="px-4 py-2 border-t border-[#232945]">
             <button
               onClick={() => setShowEmailModal(true)}
-              className="w-full rounded-lg bg-gradient-to-r from-blue-600 to-blue-400 text-white py-2 font-semibold shadow-lg hover:brightness-110 transition"
-              tabIndex={0}
+              className="w-full rounded-lg bg-gradient-to-r from-blue-600 to-blue-400
+              text-white py-2 font-semibold shadow-lg hover:brightness-110 transition"
             >
               Send Daily Updates
             </button>
@@ -149,8 +177,8 @@ const Sidebar = ({ collapsed, setCollapsed, onLogout, userRole }) => {
         <div className="px-4 py-3 border-t border-[#232945]">
           <button
             onClick={onLogout}
-            className="w-full rounded-lg bg-gradient-to-r from-red-600 to-red-400 text-white shadow-lg hover:brightness-110 transition flex items-center justify-center"
-            tabIndex={0}
+            className="w-full rounded-lg bg-gradient-to-r from-red-600 to-red-400
+              text-white shadow-lg hover:brightness-110 transition flex items-center justify-center"
           >
             {collapsed ? (
               <span aria-label="Logout" role="img" style={{ fontSize: 20 }}>

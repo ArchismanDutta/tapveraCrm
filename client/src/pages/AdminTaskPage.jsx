@@ -185,6 +185,9 @@ export default function AdminTaskPage({ onLogout }) {
   const navigate = useNavigate();
   const tableRef = useRef(null);
 
+  const userStr = localStorage.getItem("user");
+  const userRole = userStr ? JSON.parse(userStr).role : "employee";
+
   const showPopup = (message) => {
     setPopupMessage(message);
     setTimeout(() => setPopupMessage(""), 3000);
@@ -359,7 +362,7 @@ export default function AdminTaskPage({ onLogout }) {
       <Sidebar
         collapsed={collapsed}
         setCollapsed={setCollapsed}
-        userRole="admin"
+        userRole={userRole} // pass dynamic role here, not hardcoded
         onLogout={onLogout}
       />
       <main
