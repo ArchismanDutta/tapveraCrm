@@ -1,6 +1,7 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect }, { useState, useRef } from "react";
 import ReactDOM from "react-dom";
-import { Eye, Trash2, Edit3 } from "lucide-react";
+import { Eye, Trash2, Edit3, MessageCircle } from "lucide-react";
+import axios from "axios";
 
 const priorityColors = {
   High: "bg-red-700 text-red-100 border border-red-600",
@@ -25,191 +26,125 @@ const truncateWords = (text, limit = 30) => {
 };
 
 const TaskRow = ({ task, onView, onEdit, onDelete }) => {
-  const [showTooltip, setShowTooltip] = useState(false);
-  const [tooltipPosition, setTooltipPosition] = useState({ top: 0, left: 0 });
-  const titleRef = useRef(null);
+  const [remarksOpen, setRemarksOpen] = useState(false);
+  const [remarks, setRemarks] = useState(task.remarks || []);
+  const [comment, setComment] = useState("");
+  const [loading, setLoading] = useState(false);
+  const rowRef = useRef(null);
 
-  const normalizedStatus = (task.status || "pending")
-    .toLowerCase()
-    .replace(/\s+/g, "-");
+  const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
 
-  const formatStatusText = (status) =>
-    status.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-
-  // Show tooltip with smart positioning
-  const handleMouseEnter = () => {
-    if (titleRef.current) {
-      const rect = titleRef.current.getBoundingClientRect();
-      const tooltipWidth = 280; // estimated tooltip width
-      let left = rect.left + window.scrollX;
-
-      if (left + tooltipWidth > window.innerWidth - 20) {
-        left = window.innerWidth - tooltipWidth - 20;
+  const toggleRemarks = async () => {
+    if (!remarksOpen) {
+      // fetch latest remarks
+      try {
+        const token = localStorage.getItem("token");
+        const res = await axios.get(`${API_BASE}/api/tasks/${task._id}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        setRemarks(res.data.remarks || []);
+      } catch (err) {
+        console.error(err);
+        alert("Failed to fetch remarks");
       }
-
-      setTooltipPosition({
-        top: rect.bottom + window.scrollY + 10,
-        left,
-      });
     }
-    setShowTooltip(true);
+    setRemarksOpen(!remarksOpen);
   };
 
-  const handleMouseLeave = () => setShowTooltip(false);
+  const handleAddRemark = async () => {
+    if (!comment.trim()) return;
+    setLoading(true);
+    try {
+      const token = localStorage.getItem("token");
+      const res = await axios.post(
+        `${API_BASE}/api/tasks/${task._id}/remarks`,
+        { comment },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setRemarks(res.data.remarks || []);
+      setComment("");
+    } catch (err) {
+      console.error(err);
+      alert("Failed to add remark");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // close remarks if clicked outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (rowRef.current && !rowRef.current.contains(event.target)) {
+        setRemarksOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   return (
-    <tr className="hover:bg-[rgba(255,128,0,0.06)] text-xs">
-      {/* Task Title with tooltip */}
-      <td className="p-2 font-medium max-w-[220px] truncate cursor-pointer relative">
-        <div
-          ref={titleRef}
-          onMouseEnter={handleMouseEnter}
-          onMouseLeave={handleMouseLeave}
-        >
-          {task.title}
-
-          {showTooltip &&
-            task.description &&
-            ReactDOM.createPortal(
-              <div
-                className="absolute z-50"
-                style={{
-                  top: tooltipPosition.top + "px",
-                  left: tooltipPosition.left + "px",
-                  maxWidth: "280px",
-                }}
-              >
-                <div
-                  className="relative p-3 rounded-2xl shadow-lg border border-white/30 
-                             bg-white/20 backdrop-blur-md text-black font-medium text-sm"
-                  style={{
-                    wordWrap: "break-word",
-                    overflowWrap: "break-word",
-                    whiteSpace: "normal",
-                    boxShadow: "0 4px 20px rgba(255,165,0,0.3)", // warm glow
-                  }}
-                >
-                  {/* Tooltip Header */}
-                  <div className="flex items-center gap-2 mb-1">
-                    <span role="img" aria-label="info" className="text-xl">
-                      💡
-                    </span>
-                    <span className="font-bold text-orange-600">
-                      Task Description
-                    </span>
-                  </div>
-
-                  {/* Tooltip Content (limited to 30 words) */}
-                  <div className="leading-snug italic">
-                    {truncateWords(task.description, 30)}
-                  </div>
-                </div>
-              </div>,
-              document.body
-            )}
-        </div>
-      </td>
-
-      {/* Assigned To */}
-      <td className="p-2 max-w-[140px]">
-        <div className="flex flex-col gap-1">
-          {Array.isArray(task.assignedTo) && task.assignedTo.length > 0 ? (
-            task.assignedTo.slice(0, 3).map((user, idx) => (
-              <div key={idx} className="flex items-center gap-2">
-                <img
-                  src={`https://i.pravatar.cc/32?u=${user._id || user}`}
-                  alt={user.name || "User"}
-                  className={avatarSmall}
-                  onError={(e) => {
-                    e.target.onerror = null;
-                    e.target.src = "https://i.pravatar.cc/32";
-                  }}
-                />
-                <span>{user.name || user.email || "Unknown"}</span>
-              </div>
-            ))
-          ) : (
-            <span className="text-blue-400">Unassigned</span>
-          )}
-          {task.assignedTo.length > 3 && (
-            <span className="text-xs text-blue-300">
-              +{task.assignedTo.length - 3} more
-            </span>
-          )}
-        </div>
-      </td>
-
-      {/* Assigned By */}
-      <td className="p-2 max-w-[140px]">
-        {task.assignedBy ? (
-          <div className="flex items-center gap-2">
-            <img
-              src={`https://i.pravatar.cc/32?u=${task.assignedBy._id}`}
-              alt={task.assignedBy.name || "User"}
-              className={avatarSmall}
-              onError={(e) => {
-                e.target.onerror = null;
-                e.target.src = "https://i.pravatar.cc/32";
-              }}
-            />
-            <span>
-              {task.assignedBy.name || task.assignedBy.email || "Unknown"}
-            </span>
-          </div>
+    <tr ref={rowRef} className="border-b text-sm hover:bg-[rgba(255,128,0,0.1)] transition-colors duration-200 text-blue-100 relative">
+      <td className="p-3 font-medium">{task.title || "Untitled Task"}</td>
+      <td className="p-3 flex flex-wrap items-center gap-2">
+        {Array.isArray(task.assignedTo) && task.assignedTo.length > 0 ? (
+          task.assignedTo.map((user, idx) => (
+            <div key={user._id || idx} className="flex items-center gap-1">
+              <img
+                src={`https://i.pravatar.cc/40?u=${user._id || idx}`}
+                alt={user.name || "User"}
+                className="w-7 h-7 rounded-full border-2 border-yellow-400 object-cover"
+              />
+              <span className="text-xs sm:text-sm">{user.name || user.email || "Unknown"}</span>
+            </div>
+          ))
         ) : (
-          <span className="text-blue-400 italic">Unknown</span>
+          <span className="text-blue-400 text-xs sm:text-sm">Unassigned</span>
         )}
       </td>
-
-      {/* Due Date & Time */}
-      <td className="p-2 whitespace-nowrap max-w-[110px]">{task.dueDate}</td>
-
-      {/* Priority */}
-      <td className="p-2">
-        <span
-          className={`px-2 py-0.5 rounded text-xs font-semibold ${
-            priorityColors[task.priority] ||
-            "bg-gray-600 text-gray-100 border border-gray-500"
-          }`}
-        >
-          {task.priority}
+      <td className="p-3 text-blue-300 text-xs sm:text-sm">{task.dueDate || "No due date"}</td>
+      <td className="p-3">
+        <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${priorityColors[task.priority] || "bg-gray-500 text-gray-100"}`}>
+          {task.priority || "N/A"}
         </span>
       </td>
-
-      {/* Status */}
-      <td className="p-2">
-        <span
-          className={`px-2 py-0.5 rounded text-xs font-semibold whitespace-nowrap ${
-            statusColors[normalizedStatus] ||
-            "bg-gray-600 text-gray-100 border border-gray-500"
-          }`}
-          title={formatStatusText(normalizedStatus)}
-        >
-          {formatStatusText(normalizedStatus)}
+      <td className="p-3">
+        <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${statusColors[task.status] || "bg-gray-500 text-gray-100"}`}>
+          {task.status || "N/A"}
         </span>
       </td>
-
-      {/* Actions */}
-      <td className="p-2 flex gap-1 justify-center">
-        <button
-          onClick={onView}
-          className="p-1 rounded text-blue-400 hover:bg-blue-900"
-        >
-          <Eye size={14} />
-        </button>
-        <button
-          onClick={onEdit}
-          className="p-1 rounded text-green-400 hover:bg-green-900"
-        >
-          <Edit3 size={14} />
-        </button>
-        <button
-          onClick={onDelete}
-          className="p-1 rounded text-red-500 hover:bg-red-900"
-        >
-          <Trash2 size={14} />
-        </button>
+      <td className="p-3 flex gap-2 justify-center">
+        <button onClick={onView} className="p-1.5 rounded-lg text-blue-400 hover:bg-blue-900" title="View Task"><Eye size={16} /></button>
+        <button onClick={onEdit} className="p-1.5 rounded-lg text-green-400 hover:bg-green-900" title="Edit Task"><Edit3 size={16} /></button>
+        <button onClick={onDelete} className="p-1.5 rounded-lg text-red-500 hover:bg-red-900" title="Delete Task"><Trash2 size={16} /></button>
+        <button onClick={toggleRemarks} className="p-1.5 rounded-lg text-yellow-400 hover:bg-yellow-900" title="Remarks"><MessageCircle size={16} /></button>
       </td>
+
+      {remarksOpen && (
+        <tr className="absolute left-0 top-full w-full bg-[#161c2c] border border-[rgba(191,111,47,0.2)] rounded-xl z-20">
+          <td colSpan={6} className="p-3">
+            <div className="max-h-40 overflow-y-auto mb-2">
+              {remarks.length > 0 ? remarks.map((r, i) => (
+                <div key={i} className="border-b border-gray-700 py-1 text-sm">
+                  <span className="font-semibold">{r.user?.name || r.user?.email || "Unknown"}:</span> {r.comment}
+                </div>
+              )) : <p className="text-gray-400 text-sm italic">No remarks yet.</p>}
+            </div>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                className="flex-1 px-2 py-1 rounded bg-[#1b2233] text-blue-100 focus:outline-none focus:ring-2 focus:ring-[#bf6f2f]"
+                placeholder="Add a remark..."
+                value={comment}
+                onChange={(e) => setComment(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleAddRemark()}
+              />
+              <button onClick={handleAddRemark} disabled={loading} className="px-3 py-1 rounded bg-[#bf6f2f] hover:bg-[#bf6f2f]/90">
+                {loading ? "Adding..." : "Add"}
+              </button>
+            </div>
+          </td>
+        </tr>
+      )}
     </tr>
   );
 };

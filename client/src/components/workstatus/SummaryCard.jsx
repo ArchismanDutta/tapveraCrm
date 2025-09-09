@@ -1,10 +1,12 @@
-// File: src/components/workstatus/SummaryCard.jsx
+// src/components/workstatus/SummaryCard.jsx
 import React from "react";
 
 // Helper: parse "Hh Mm" to total minutes
 const parseTimeStrToMinutes = (timeStr) => {
   if (!timeStr) return 0;
-  const [h, m] = timeStr.split(" ").map((t) => parseInt(t.replace(/[hm]/, ""), 10));
+  const [h, m] = timeStr
+    .split(" ")
+    .map((t) => parseInt(t.replace(/[hm]/g, ""), 10));
   return (h || 0) * 60 + (m || 0);
 };
 
@@ -57,9 +59,7 @@ const SummaryCard = ({ weeklySummary, dailyData }) => {
     quickStats: backendQuickStats,
   } = weeklySummary;
 
-  // -------------------------
-  // Recalculate quick stats dynamically if backend not available
-  // -------------------------
+  // Recalculate quick stats dynamically if backend not available or zero
   let earlyArrivals = 0;
   let lateArrivals = 0;
   let perfectDays = 0;
@@ -69,7 +69,8 @@ const SummaryCard = ({ weeklySummary, dailyData }) => {
       if (!day.arrivalTime) return;
 
       const arrival = parseArrivalTime(day.arrivalTime);
-      const expectedStart = day.effectiveShift?.start || day.expectedStartTime || "09:00";
+      const expectedStart =
+        day.effectiveShift?.start || day.expectedStartTime || "09:00";
       const expected = parseArrivalTime(expectedStart);
 
       if (!arrival || !expected) return;
@@ -77,7 +78,6 @@ const SummaryCard = ({ weeklySummary, dailyData }) => {
       if (arrival <= expected) earlyArrivals++;
       else lateArrivals++;
 
-      // Work duration in minutes
       let workMins = 0;
       if (day.workDurationSeconds != null) {
         workMins = Math.floor(day.workDurationSeconds / 60);
@@ -85,16 +85,29 @@ const SummaryCard = ({ weeklySummary, dailyData }) => {
         workMins = parseTimeStrToMinutes(day.workDuration);
       }
 
-      // Perfect day: >= 8h work & arrived before/at shift start
       if (workMins >= 480 && arrival <= expected) {
         perfectDays++;
       }
     });
   }
 
-  const quickStats = backendQuickStats || { earlyArrivals, lateArrivals, perfectDays };
+  // Merge backend quick stats with recalculated stats, preferring backend if > 0
+  const quickStats = {
+    earlyArrivals:
+      backendQuickStats?.earlyArrivals > 0
+        ? backendQuickStats.earlyArrivals
+        : earlyArrivals,
+    lateArrivals:
+      backendQuickStats?.lateArrivals > 0
+        ? backendQuickStats.lateArrivals
+        : lateArrivals,
+    perfectDays:
+      backendQuickStats?.perfectDays > 0
+        ? backendQuickStats.perfectDays
+        : perfectDays,
+  };
 
-  // Clean onTimeRate formatting (avoid 0%% issue)
+  // Format onTimeRate cleanly
   const formattedOnTimeRate =
     typeof onTimeRate === "string"
       ? onTimeRate.replace(/%+$/, "") + "%"
@@ -104,58 +117,85 @@ const SummaryCard = ({ weeklySummary, dailyData }) => {
 
   return (
     <div className="bg-[#161c2c] border border-[#232945] rounded-2xl shadow-lg p-6 w-full space-y-6 transition-all hover:shadow-xl">
-      {/* Header */}
       <h3 className="text-lg font-semibold text-gray-100 border-b border-[#232945] pb-2 mb-4">
         Week Summary
       </h3>
 
-      {/* Main Stats Grid */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
         <div className="bg-[#232945] p-4 rounded-lg flex flex-col items-center hover:bg-[#2a3050] transition-colors">
-          <p className="text-gray-400 text-xs uppercase tracking-wider">Total Hours</p>
-          <p className="text-orange-400 text-xl font-bold">{totalWork || "0h 0m"}</p>
+          <p className="text-gray-400 text-xs uppercase tracking-wider">
+            Total Hours
+          </p>
+          <p className="text-orange-400 text-xl font-bold">
+            {totalWork || "0h 0m"}
+          </p>
         </div>
 
         <div className="bg-[#232945] p-4 rounded-lg flex flex-col items-center hover:bg-[#2a3050] transition-colors">
-          <p className="text-gray-400 text-xs uppercase tracking-wider">Avg. Daily Work</p>
-          <p className="text-orange-400 text-xl font-bold">{avgDailyWork || "0h 0m"}</p>
+          <p className="text-gray-400 text-xs uppercase tracking-wider">
+            Avg. Daily Work
+          </p>
+          <p className="text-orange-400 text-xl font-bold">
+            {avgDailyWork || "0h 0m"}
+          </p>
         </div>
 
         <div className="bg-[#232945] p-4 rounded-lg flex flex-col items-center hover:bg-[#2a3050] transition-colors">
-          <p className="text-gray-400 text-xs uppercase tracking-wider">Total Break</p>
-          <p className="text-orange-400 text-xl font-bold">{totalBreak || "0h 0m"}</p>
+          <p className="text-gray-400 text-xs uppercase tracking-wider">
+            Total Break
+          </p>
+          <p className="text-orange-400 text-xl font-bold">
+            {totalBreak || "0h 0m"}
+          </p>
         </div>
 
         <div className="bg-[#232945] p-4 rounded-lg flex flex-col items-center hover:bg-[#2a3050] transition-colors">
-          <p className="text-gray-400 text-xs uppercase tracking-wider">Avg. Daily Break</p>
-          <p className="text-orange-400 text-xl font-bold">{avgDailyBreak || "0h 0m"}</p>
+          <p className="text-gray-400 text-xs uppercase tracking-wider">
+            Avg. Daily Break
+          </p>
+          <p className="text-orange-400 text-xl font-bold">
+            {avgDailyBreak || "0h 0m"}
+          </p>
         </div>
 
         <div className="bg-[#232945] p-4 rounded-lg flex flex-col items-center hover:bg-[#2a3050] transition-colors">
-          <p className="text-gray-400 text-xs uppercase tracking-wider">On-Time Rate</p>
-          <p className="text-orange-400 text-xl font-bold">{formattedOnTimeRate}</p>
+          <p className="text-gray-400 text-xs uppercase tracking-wider">
+            On-Time Rate
+          </p>
+          <p className="text-orange-400 text-xl font-bold">
+            {formattedOnTimeRate}
+          </p>
         </div>
 
         <div className="bg-[#232945] p-4 rounded-lg flex flex-col items-center hover:bg-[#2a3050] transition-colors">
-          <p className="text-gray-400 text-xs uppercase tracking-wider">Breaks Taken</p>
-          <p className="text-orange-400 text-xl font-bold">{breaksTaken ?? 0}</p>
+          <p className="text-gray-400 text-xs uppercase tracking-wider">
+            Breaks Taken
+          </p>
+          <p className="text-orange-400 text-xl font-bold">
+            {breaksTaken ?? 0}
+          </p>
         </div>
       </div>
 
-      {/* Quick Stats Section */}
       <div className="mt-4">
         <h4 className="text-gray-200 font-semibold mb-2">Quick Stats</h4>
         <div className="grid grid-cols-3 gap-4 text-sm font-semibold text-gray-300">
           <div className="bg-[#232945] p-3 rounded-lg flex flex-col items-center gap-1 hover:bg-[#2a3050] transition-colors">
-            <p className="text-purple-400 text-2xl font-bold">{quickStats.earlyArrivals}</p>
+            <p className="text-purple-400 text-2xl font-bold">
+              {quickStats.earlyArrivals}
+            </p>
             <span className="text-gray-400 text-xs">Early Arrivals</span>
           </div>
           <div className="bg-[#232945] p-3 rounded-lg flex flex-col items-center gap-1 hover:bg-[#2a3050] transition-colors">
-            <p className="text-yellow-400 text-2xl font-bold">{quickStats.lateArrivals}</p>
+            <p className="text-yellow-400 text-2xl font-bold">
+              {quickStats.lateArrivals}
+            </p>
             <span className="text-gray-400 text-xs">Late Arrivals</span>
           </div>
           <div className="bg-[#232945] p-3 rounded-lg flex flex-col items-center gap-1 hover:bg-[#2a3050] transition-colors">
-            <p className="text-green-400 text-2xl font-bold">{quickStats.perfectDays}</p>
+            <p className="text-green-400 text-2xl font-bold">
+              {quickStats.perfectDays}
+            </p>
             <span className="text-gray-400 text-xs">Perfect Days</span>
           </div>
         </div>
