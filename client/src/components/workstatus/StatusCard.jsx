@@ -1,4 +1,4 @@
-// File: src/components/workstatus/StatusCard.jsx
+// src/components/workstatus/StatusCard.jsx
 import React from "react";
 
 const StatusCard = ({
@@ -35,11 +35,11 @@ const StatusCard = ({
         {/* Status Badge */}
         <div className="mt-3 sm:mt-0">
           {currentlyWorking ? (
-            <span className="bg-green-500/90 text-black px-4 py-1.5 rounded-full font-semibold shadow">
+            <span className="inline-flex items-center whitespace-nowrap bg-green-500/90 text-black px-3 py-1 rounded-full font-semibold shadow transition-all text-sm">
               Currently Working
             </span>
           ) : (
-            <span className="bg-[#232945] text-gray-400 px-4 py-1.5 rounded-full font-semibold shadow">
+            <span className="inline-flex items-center whitespace-nowrap bg-[#232945] text-gray-400 px-3 py-1 rounded-full font-semibold shadow transition-all text-sm">
               Not Working
             </span>
           )}

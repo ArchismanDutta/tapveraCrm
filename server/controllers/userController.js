@@ -1,8 +1,12 @@
+// File: controllers/userController.js
+
 const User = require("../models/User");
 const Task = require("../models/Task");
 const LeaveRequest = require("../models/LeaveRequest");
 
+// =========================
 // Create employee
+// =========================
 exports.createEmployee = async (req, res) => {
   try {
     const {
@@ -13,7 +17,7 @@ exports.createEmployee = async (req, res) => {
       skills, jobLevel
     } = req.body;
 
-    // Required field validation
+    // Required fields
     if (!employeeId || !name || !email || !contact || !dob || !gender || !doj) {
       return res.status(400).json({ message: "Required fields are missing." });
     }
@@ -21,7 +25,6 @@ exports.createEmployee = async (req, res) => {
     const normalizedEmail = String(email).toLowerCase().trim();
     const trimmedEmployeeId = String(employeeId).trim();
 
-    // Check uniqueness
     if (await User.findOne({ email: normalizedEmail })) {
       return res.status(400).json({ message: "Email already in use." });
     }
@@ -29,14 +32,13 @@ exports.createEmployee = async (req, res) => {
       return res.status(400).json({ message: "Employee ID already in use." });
     }
 
-    // Normalize skills
+    // Normalize arrays
     const skillsArray = Array.isArray(skills)
       ? skills.map(s => s.trim()).filter(Boolean)
       : typeof skills === "string"
         ? skills.split(",").map(s => s.trim()).filter(Boolean)
         : [];
 
-    // Normalize qualifications
     const qualificationsArray = Array.isArray(qualifications)
       ? qualifications.map(q => ({
           school: q.school?.trim() || "",
@@ -46,7 +48,6 @@ exports.createEmployee = async (req, res) => {
         }))
       : [];
 
-    // Compose user data
     const userData = {
       employeeId: trimmedEmployeeId,
       name: name.trim(),
@@ -84,8 +85,6 @@ exports.createEmployee = async (req, res) => {
         end: shift.end,
         durationHours: shift.durationHours || 9,
       };
-    } else if (shiftType === "flexiblePermanent") {
-      delete userData.shift; // remove shift to avoid conflicting data
     }
 
     const user = new User(userData);
@@ -98,7 +97,9 @@ exports.createEmployee = async (req, res) => {
   }
 };
 
-// Employee directory with filters
+// =========================
+// Employee directory
+// =========================
 exports.getEmployeeDirectory = async (req, res) => {
   try {
     const { department, designation, status, jobLevel, search } = req.query;
@@ -136,7 +137,9 @@ exports.getEmployeeDirectory = async (req, res) => {
   }
 };
 
-// Get all users minimal info, limited to admin/hr/super-admin (you can customize as needed)
+// =========================
+// Get all users
+// =========================
 exports.getAllUsers = async (req, res) => {
   try {
     const users = await User.find()
@@ -148,7 +151,9 @@ exports.getAllUsers = async (req, res) => {
   }
 };
 
-// Get logged-in user info + stats
+// =========================
+// Get logged-in user info
+// =========================
 exports.getMe = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -212,7 +217,9 @@ exports.getMe = async (req, res) => {
   }
 };
 
-// Get single employee by ID
+// =========================
+// Get employee by ID
+// =========================
 exports.getEmployeeById = async (req, res) => {
   try {
     const userId = req.params.id;
@@ -253,7 +260,80 @@ exports.getEmployeeById = async (req, res) => {
   }
 };
 
+// =========================
+// Update employee details
+// =========================
+exports.updateEmployee = async (req, res) => {
+  try {
+    const userId = req.params.id;
+
+    const allowedFields = [
+      "name",
+      "email",        // <- Added email
+      "contact",
+      "dob",
+      "gender",
+      "bloodGroup",
+      "permanentAddress",
+      "currentAddress",
+      "emergencyContact",
+      "ps",
+      "department",
+      "designation",
+      "jobLevel",
+      "employmentType",
+      "skills",
+      "qualifications",
+      "salary",
+      "shiftType",
+      "shift",
+      "status",
+      "location"
+    ];
+
+    const updateData = {};
+    for (const field of allowedFields) {
+      if (req.body[field] !== undefined) {
+        updateData[field] = req.body[field];
+      }
+    }
+
+    // Normalize arrays
+    if (updateData.skills && typeof updateData.skills === "string") {
+      updateData.skills = updateData.skills.split(",").map(s => s.trim());
+    }
+    if (updateData.qualifications && Array.isArray(updateData.qualifications)) {
+      updateData.qualifications = updateData.qualifications.map(q => ({
+        school: q.school?.trim() || "",
+        degree: q.degree?.trim() || "",
+        year: Number(q.year) || null,
+        marks: q.marks?.trim() || "",
+      }));
+    }
+
+    // Ensure shift object is properly formatted
+    if (updateData.shift) {
+      const { start, end, durationHours } = updateData.shift;
+      updateData.shift = {
+        start: start || null,
+        end: end || null,
+        durationHours: Number(durationHours) || 9,
+      };
+    }
+
+    const user = await User.findByIdAndUpdate(userId, updateData, { new: true });
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    res.json({ message: "Employee updated successfully", user });
+  } catch (err) {
+    console.error("Update Employee Error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+// =========================
 // Update employee status
+// =========================
 exports.updateEmployeeStatus = async (req, res) => {
   try {
     const userId = req.params.id;

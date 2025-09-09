@@ -29,6 +29,7 @@ const wishRoutes = require("./routes/wishRoutes");
 const flexibleShiftRoutes = require("./routes/flexibleShiftRoutes");
 const adminAttendanceRoutes = require("./routes/adminAttendanceRoutes");
 const holidayRoutes = require("./routes/holidayRoutes");
+const superAdminRoutes = require("./routes/superAdminRoutes"); // Make sure this file exists
 
 // Controllers
 const ChatController = require("./controllers/chatController");
@@ -70,7 +71,11 @@ app.use(
 // Health check
 // =====================
 app.get("/", (req, res) => {
-  res.json({ status: "ok", message:"your server is up and running", timestamp: Date.now() });
+  res.json({
+    status: "ok",
+    message: "Your server is up and running",
+    timestamp: Date.now(),
+  });
 });
 
 // =====================
@@ -92,6 +97,7 @@ app.use("/api/wishes", wishRoutes);
 app.use("/api/holidays", holidayRoutes);
 app.use("/api/flexible-shifts", flexibleShiftRoutes);
 app.use("/api/admin", adminAttendanceRoutes);
+app.use("/api/super-admin", superAdminRoutes); // Super admin route added
 
 // =====================
 // Serve frontend in production
@@ -153,15 +159,11 @@ wss.on("connection", (ws) => {
           ws.send(JSON.stringify({ type: "authenticated", userId: user.id }));
           console.log(`User authenticated: ${user.id}`);
         } catch (err) {
-          ws.send(
-            JSON.stringify({ type: "auth_failed", message: "Invalid Token" })
-          );
+          ws.send(JSON.stringify({ type: "auth_failed", message: "Invalid Token" }));
           ws.close();
         }
       } else {
-        ws.send(
-          JSON.stringify({ type: "auth_required", message: "Token Required" })
-        );
+        ws.send(JSON.stringify({ type: "auth_required", message: "Token Required" }));
         ws.close();
       }
       return;
@@ -170,14 +172,12 @@ wss.on("connection", (ws) => {
     // --- HANDLE GROUP MESSAGES ---
     if (data.type === "message" && data.conversationId && data.message) {
       try {
-        // Save to DB
         const savedMessage = await ChatController.saveMessage(
           data.conversationId,
           ws.user.id,
           data.message
         );
 
-        // Prepare payload for broadcast
         const payload = {
           type: "message",
           _id: savedMessage._id,
@@ -187,9 +187,7 @@ wss.on("connection", (ws) => {
           timestamp: savedMessage.timestamp,
         };
 
-        // Broadcast to all sockets in this conversation
-        for (const userId of conversationMembersOnline[data.conversationId] ||
-          []) {
+        for (const userId of conversationMembersOnline[data.conversationId] || []) {
           const recipientWs = users[userId];
           if (recipientWs && recipientWs.readyState === WebSocket.OPEN) {
             recipientWs.send(JSON.stringify(payload));
@@ -204,14 +202,11 @@ wss.on("connection", (ws) => {
     // Handle private messages
     if (data.type === "private_message") {
       const senderId = data.senderId || data.senderid || data.senderID;
-      const recipientId =
-        data.recipientId || data.recipientid || data.recipientID;
+      const recipientId = data.recipientId || data.recipientid || data.recipientID;
       const msg = data.message || data.msg;
 
       if (!senderId || !recipientId || !msg) {
-        console.error(
-          "Missing senderId, recipientId, or message in private_message"
-        );
+        console.error("Missing senderId, recipientId, or message in private_message");
         return;
       }
 
@@ -229,7 +224,6 @@ wss.on("connection", (ws) => {
       console.log(`User disconnected: ${ws.user.id}`);
       delete users[ws.user.id];
 
-      // Remove from conversation tracking
       for (const convId in conversationMembersOnline) {
         conversationMembersOnline[convId].delete(ws.user.id);
         if (conversationMembersOnline[convId].size === 0) {

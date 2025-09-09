@@ -20,7 +20,6 @@ const EmployeeDashboard = ({ onLogout }) => {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [userName, setUserName] = useState("");
   const [summaryData, setSummaryData] = useState([]);
-  const [pendingCount, setPendingCount] = useState(0);
   const [notifications, setNotifications] = useState([]);
   const [wishes, setWishes] = useState([]);
   const [showWishPopup, setShowWishPopup] = useState(false);
@@ -82,21 +81,18 @@ const EmployeeDashboard = ({ onLogout }) => {
     ]);
   }, [tasks, currentTime]);
 
-  // Update notifications
+  // Update notifications based on tasks
   const updateNotifications = useCallback(() => {
-    const newPendingTasks = tasks.filter(
-      (t) => t.status?.toLowerCase() !== "completed"
-    );
-    if (newPendingTasks.length > pendingCount) {
-      setNotifications((prev) => [
-        ...newPendingTasks
-          .slice(pendingCount)
-          .map((t) => `New Task: ${t.label}`),
-        ...prev,
-      ]);
-    }
-    setPendingCount(newPendingTasks.length);
-  }, [tasks, pendingCount]);
+    const newNotifications = tasks
+      .filter((t) => t.status?.toLowerCase() !== "completed")
+      .map((t) => ({
+        id: t.id,
+        message: `Task: ${t.label} (Due: ${
+          t.dueDateTime || "No date"
+        })`,
+      }));
+    setNotifications(newNotifications);
+  }, [tasks]);
 
   // Fetch tasks from API
   const fetchTasks = useCallback(async () => {

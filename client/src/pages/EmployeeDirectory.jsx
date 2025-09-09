@@ -9,7 +9,7 @@ const API_BASE =
   `${window.location.origin.replace(/\/$/, "")}` ||
   "http://localhost:5000";
 
-const EmployeeDirectory = ({onLogout}) => {
+const EmployeeDirectory = ({ onLogout }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
@@ -22,9 +22,8 @@ const EmployeeDirectory = ({onLogout}) => {
   });
   const [currentUser, setCurrentUser] = useState(null);
 
-  const sidebarWidth = collapsed ? 80 : 288; // px (matches your Sidebar w-20/w-72)
+  const sidebarWidth = collapsed ? 80 : 288;
 
-  // Build query string from filters
   const buildQueryParams = () => {
     const params = new URLSearchParams();
     if (filters.search.trim() !== "") params.append("search", filters.search.trim());
@@ -37,12 +36,11 @@ const EmployeeDirectory = ({onLogout}) => {
     setLoading(true);
     try {
       const token = localStorage.getItem("token");
-      const userData = localStorage.getItem("user"); // Logged-in user info
+      const userData = localStorage.getItem("user");
       if (!token || !userData) {
         navigate("/login", { replace: true });
         return;
       }
-
       const user = JSON.parse(userData);
       setCurrentUser(user);
 
@@ -75,7 +73,6 @@ const EmployeeDirectory = ({onLogout}) => {
           }))
         : [];
 
-      // Ensure current user is included at the top
       if (!mappedEmployees.find((e) => e._id === String(user._id))) {
         mappedEmployees = [
           {
@@ -112,8 +109,7 @@ const EmployeeDirectory = ({onLogout}) => {
   }, [location.state]);
 
   return (
-    <div className="flex bg-gray-900 min-h-screen text-gray-200">
-      {/* Sidebar */}
+    <div className="flex bg-[#101425] min-h-screen text-gray-200">
       <Sidebar
         onLogout={onLogout}
         collapsed={collapsed}
@@ -121,21 +117,16 @@ const EmployeeDirectory = ({onLogout}) => {
         userRole="admin"
       />
 
-      {/* Main content */}
       <main
-        className="flex-1 p-6 transition-all duration-300 min-h-screen overflow-y-auto"
+        className="flex-1 px-4 py-5 transition-all duration-300 min-h-screen overflow-y-auto"
         style={{ marginLeft: `${sidebarWidth}px` }}
       >
-        <h1 className="text-2xl font-semibold mb-4 text-gray-100">
+        <h1 className="text-3xl font-bold tracking-wide mb-4 text-gray-100 drop-shadow">
           Employee Directory
         </h1>
-
         <EmployeeFilters filters={filters} setFilters={setFilters} />
-
         {loading ? (
-          <div className="text-center py-8 text-gray-300">
-            Loading employees...
-          </div>
+          <div className="text-center py-10 text-gray-300">Loading employees…</div>
         ) : (
           <EmployeeTable employees={employees} currentUser={currentUser} />
         )}

@@ -2,11 +2,20 @@ import React from "react";
 
 const PersonalInfo = ({ info }) => (
   <div className="p-6 rounded-2xl shadow border border-[#283255] bg-[#181f34] text-blue-100">
-    <h3 className="text-xl font-semibold text-blue-300 mb-3">🧍 Personal Info</h3>
-    <p><strong>Date of Birth:</strong> {info.dob ? new Date(info.dob).toLocaleDateString() : "N/A"}</p>
-    <p><strong>Gender:</strong> {info.gender || "N/A"}</p>
-    <p><strong>Location:</strong> {info.location || "N/A"}</p>
-    <p><strong>Blood Group:</strong> {info.bloodGroup || "N/A"}</p>
+    <h3 className="text-2xl font-semibold text-blue-300 mb-4">🧍 Personal Info</h3>
+    <p className="mb-2">
+      <strong>Date of Birth:</strong>{" "}
+      <span className="text-blue-200">{info.dob ? new Date(info.dob).toLocaleDateString() : "N/A"}</span>
+    </p>
+    <p className="mb-2">
+      <strong>Gender:</strong> <span className="text-blue-200">{info.gender || "N/A"}</span>
+    </p>
+    <p className="mb-2">
+      <strong>Location:</strong> <span className="text-blue-200">{info.location || "N/A"}</span>
+    </p>
+    <p>
+      <strong>Blood Group:</strong> <span className="text-blue-200">{info.bloodGroup || "N/A"}</span>
+    </p>
   </div>
 );
 
