@@ -14,7 +14,8 @@ const TaskTable = ({ tasks = [], onViewTask, onEditTask, onDeleteTask }) => {
 
   const filteredTasks = useMemo(() => {
     return safeTasks.filter((task) => {
-      const titleMatch = task?.title?.toLowerCase().includes(search.toLowerCase()) ?? false;
+      const titleMatch =
+        task?.title?.toLowerCase().includes(search.toLowerCase()) ?? false;
       const statusMatch = filter === "All Status" || task?.status === filter;
       return titleMatch && statusMatch;
     });
@@ -24,7 +25,10 @@ const TaskTable = ({ tasks = [], onViewTask, onEditTask, onDeleteTask }) => {
     if (!dateValue) return "No due date";
     const dateObj = new Date(dateValue);
     if (isNaN(dateObj.getTime())) return "Invalid date";
-    return `${dateObj.toLocaleDateString()} ${dateObj.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
+    return `${dateObj.toLocaleDateString()} ${dateObj.toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    })}`;
   };
 
   const openRemarksModal = async (task) => {
@@ -75,7 +79,7 @@ const TaskTable = ({ tasks = [], onViewTask, onEditTask, onDeleteTask }) => {
   };
 
   return (
-    <div className="rounded-3xl relative">
+    <div className="rounded-xl relative">
       {/* Filters */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-4 gap-2">
         <input
@@ -98,17 +102,17 @@ const TaskTable = ({ tasks = [], onViewTask, onEditTask, onDeleteTask }) => {
       </div>
 
       {/* Table */}
-      <div className="rounded-xl border border-[rgba(84,123,209,0.4)] shadow-lg overflow-x-auto">
+      <div className="rounded-s border border-[rgba(84,123,209,0.4)] shadow-lg overflow-hidden">
         <table className="w-full border-collapse text-blue-100 table-fixed">
           <thead className="bg-[rgba(191,111,47,0.15)]">
             <tr className="text-left text-xs uppercase tracking-wide text-[#bf6f2f]">
-              <th className="p-2 w-[180px] max-w-[180px]">Task Title</th>
-              <th className="p-2 w-[110px] max-w-[110px]">Assigned To</th>
-              <th className="p-2 w-[110px] max-w-[110px]">Assigned By</th>
-              <th className="p-2 w-[95px] max-w-[95px]">Due Date & Time</th>
-              <th className="p-2 w-[55px] max-w-[60px]">Priority</th>
-              <th className="p-2 w-[60px] max-w-[70px]">Status</th>
-              <th className="p-2 w-[65px] max-w-[70px] text-center">Actions</th>
+              <th className="p-2 w-[130px] max-w-[130px]">Task Title</th>
+              <th className="p-2 w-[100px] max-w-[100px]">Assigned To</th>
+              <th className="p-2 w-[100px] max-w-[100px]">Assigned By</th>
+              <th className="p-2 w-[90px] max-w-[90px]">Due Date & Time</th>
+              <th className="p-2 w-[50px] max-w-[50px]">Priority</th>
+              <th className="p-2 w-[60px] max-w-[60px]">Status</th>
+              <th className="p-2 w-[80px] max-w-[80px] text-center">Actions</th>
             </tr>
           </thead>
           <tbody className="text-xs">
@@ -118,7 +122,9 @@ const TaskTable = ({ tasks = [], onViewTask, onEditTask, onDeleteTask }) => {
                   key={task._id || index}
                   task={{
                     ...task,
-                    assignedTo: Array.isArray(task.assignedTo) ? task.assignedTo : [],
+                    assignedTo: Array.isArray(task.assignedTo)
+                      ? task.assignedTo
+                      : [],
                     assignedBy: task.assignedBy || null,
                     dueDate: formatDueDateTime(task?.dueDate),
                   }}
@@ -130,7 +136,10 @@ const TaskTable = ({ tasks = [], onViewTask, onEditTask, onDeleteTask }) => {
               ))
             ) : (
               <tr>
-                <td colSpan={7} className="p-4 text-center text-blue-400 italic">
+                <td
+                  colSpan={7}
+                  className="p-4 text-center text-blue-400 italic"
+                >
                   No tasks found.
                 </td>
               </tr>
