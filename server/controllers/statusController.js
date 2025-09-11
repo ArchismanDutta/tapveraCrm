@@ -1,10 +1,102 @@
 // controllers/statusController.js
-const { utcToZonedTime, zonedTimeToUtc } = require("date-fns-tz");
+// Removed import of date-fns-tz and replaced with native TZ conversion functions
 const UserStatus = require("../models/UserStatus");
 const DailyWork = require("../models/DailyWork");
 const User = require("../models/User");
 const FlexibleShiftRequest = require("../models/FlexibleShiftRequest");
 
+// -----------------------
+// Native timezone conversion helpers (replaces date-fns-tz)
+// -----------------------
+function zonedTimeToUtc(date, timeZone) {
+  const dtf = new Intl.DateTimeFormat("en-US", {
+    hour12: false,
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+  const parts = dtf.formatToParts(date);
+  const map = {};
+  parts.forEach(({ type, value }) => {
+    map[type] = value;
+  });
+
+  const asLocalString = `${map.year}-${map.month}-${map.day}T${map.hour}:${map.minute}:${map.second}`;
+  const localDate = new Date(asLocalString);
+
+  const utcTimestamp =
+    localDate.getTime() - getTimeZoneOffsetMilliseconds(date, timeZone);
+  return new Date(utcTimestamp);
+}
+
+function utcToZonedTime(date, timeZone) {
+  const dtf = new Intl.DateTimeFormat("en-US", {
+    hour12: false,
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+  const parts = dtf.formatToParts(date);
+  const map = {};
+  parts.forEach(({ type, value }) => {
+    map[type] = value;
+  });
+
+  return new Date(
+    `${map.year}-${map.month}-${map.day}T${map.hour}:${map.minute}:${map.second}`
+  );
+}
+
+function getTimeZoneOffsetMilliseconds(date, timeZone) {
+  const dtfUTC = new Intl.DateTimeFormat("en-US", {
+    timeZone: "UTC",
+    hour12: false,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+  const dtfTZ = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    hour12: false,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+
+  const partsUTC = dtfUTC.formatToParts(date);
+  const partsTZ = dtfTZ.formatToParts(date);
+
+  function partsToDate(parts) {
+    const map = {};
+    parts.forEach(({ type, value }) => {
+      map[type] = value;
+    });
+    return new Date(
+      `${map.year}-${map.month}-${map.day}T${map.hour}:${map.minute}:${map.second}Z`
+    );
+  }
+
+  const dateUTC = partsToDate(partsUTC);
+  const dateTZ = partsToDate(partsTZ);
+
+  return dateTZ.getTime() - dateUTC.getTime();
+}
+
+// -----------------------
 const MIN_HALF_DAY_SECONDS = 5 * 3600; // 5 hours
 const MIN_FULL_DAY_SECONDS = 8 * 3600; // 8 hours
 
@@ -15,7 +107,8 @@ function getWorkDurationSeconds(workedSessions, currentlyWorking) {
   if (!Array.isArray(workedSessions)) return 0;
 
   let total = workedSessions.reduce((sum, s) => {
-    if (s.start && s.end) return sum + (new Date(s.end) - new Date(s.start)) / 1000;
+    if (s.start && s.end)
+      return sum + (new Date(s.end) - new Date(s.start)) / 1000;
     return sum;
   }, 0);
 
@@ -33,12 +126,15 @@ function getBreakDurationSeconds(breakSessions, onBreak, breakStart) {
   if (!Array.isArray(breakSessions)) return 0;
 
   let total = breakSessions.reduce((sum, s) => {
-    if (s.start && s.end) return sum + (new Date(s.end) - new Date(s.start)) / 1000;
+    if (s.start && s.end)
+      return sum + (new Date(s.end) - new Date(s.start)) / 1000;
     return sum;
   }, 0);
 
   if (onBreak) {
-    const last = breakSessions.length ? breakSessions[breakSessions.length - 1] : null;
+    const last = breakSessions.length
+      ? breakSessions[breakSessions.length - 1]
+      : null;
     if (last && last.start && !last.end) {
       total += (Date.now() - new Date(last.start).getTime()) / 1000;
     } else if (breakStart) {
@@ -53,7 +149,9 @@ function secToHMS(sec) {
   const h = Math.floor(sec / 3600);
   const m = Math.floor((sec % 3600) / 60);
   const s = sec % 60;
-  return `${h}h ${m.toString().padStart(2, "0")}m ${s.toString().padStart(2, "0")}s`;
+  return `${h}h ${m.toString().padStart(2, "0")}m ${s
+    .toString()
+    .padStart(2, "0")}s`;
 }
 
 function secToHM(sec) {
@@ -64,13 +162,21 @@ function secToHM(sec) {
 
 function ymdKey(date) {
   const d = new Date(date);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(
+    2,
+    "0"
+  )}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
 // -----------------------
 // Timezone-safe late/half-day/absent calculation
 // -----------------------
-function calculateLateAndHalfDay(workedSecs, shiftStartTime, arrivalTimeUTC, userTimeZone = "UTC") {
+function calculateLateAndHalfDay(
+  workedSecs,
+  shiftStartTime,
+  arrivalTimeUTC,
+  userTimeZone = "UTC"
+) {
   const result = { isLate: false, isHalfDay: false, isAbsent: false };
 
   if (!arrivalTimeUTC) {
@@ -137,16 +243,24 @@ async function getEffectiveShift(userId, date) {
   }).lean();
 
   if (flexShift) {
-    const [startH, startM] = String(flexShift.requestedStartTime || "09:00").split(":").map(Number);
+    const [startH, startM] = String(flexShift.requestedStartTime || "09:00")
+      .split(":")
+      .map(Number);
     const duration = flexShift.durationHours || 9;
 
     let endH = startH + Math.floor(duration);
     let endM = startM + Math.round((duration % 1) * 60);
-    if (endM >= 60) { endH += 1; endM -= 60; }
+    if (endM >= 60) {
+      endH += 1;
+      endM -= 60;
+    }
     if (endH >= 24) endH -= 24;
 
     return {
-      start: `${String(startH).padStart(2, "0")}:${String(startM).padStart(2, "0")}`,
+      start: `${String(startH).padStart(2, "0")}:${String(startM).padStart(
+        2,
+        "0"
+      )}`,
       end: `${String(endH).padStart(2, "0")}:${String(endM).padStart(2, "0")}`,
       isFlexible: true,
       isFlexiblePermanent: false,
@@ -177,19 +291,26 @@ async function syncDailyWork(userId, todayStatus, userTimeZone = "UTC") {
     name: "",
     start: effectiveShift.start || "00:00",
     end: effectiveShift.end || "23:59",
-    isFlexible: Boolean(effectiveShift.isFlexible || effectiveShift.isFlexiblePermanent),
+    isFlexible: Boolean(
+      effectiveShift.isFlexible || effectiveShift.isFlexiblePermanent
+    ),
     durationHours: effectiveShift.durationHours || 9,
   };
 
   let dailyWork = await DailyWork.findOne({ userId, date: todayUTC });
-  const computedShiftType = effectiveShift.isFlexiblePermanent ? "flexiblePermanent" : "standard";
+  const computedShiftType = effectiveShift.isFlexiblePermanent
+    ? "flexiblePermanent"
+    : "standard";
 
   if (!dailyWork) {
     dailyWork = new DailyWork({
       userId,
       userStatusId: todayStatus._id,
       date: todayUTC,
-      expectedStartTime: effectiveShift.isFlexiblePermanent || effectiveShift.isFlexible ? null : effectiveShift.start,
+      expectedStartTime:
+        effectiveShift.isFlexiblePermanent || effectiveShift.isFlexible
+          ? null
+          : effectiveShift.start,
       shift: shiftObj,
       shiftType: computedShiftType,
       workDurationSeconds: todayStatus.workDurationSeconds || 0,
@@ -200,7 +321,10 @@ async function syncDailyWork(userId, todayStatus, userTimeZone = "UTC") {
     });
   } else {
     dailyWork.shift = shiftObj;
-    dailyWork.expectedStartTime = effectiveShift.isFlexiblePermanent || effectiveShift.isFlexible ? null : effectiveShift.start;
+    dailyWork.expectedStartTime =
+      effectiveShift.isFlexiblePermanent || effectiveShift.isFlexible
+        ? null
+        : effectiveShift.start;
     dailyWork.shiftType = computedShiftType;
     dailyWork.userStatusId = todayStatus._id;
     dailyWork.workDurationSeconds = todayStatus.workDurationSeconds || 0;
@@ -236,7 +360,10 @@ async function getTodayStatus(req, res) {
     todayLocal.setHours(0, 0, 0, 0);
     const todayUTC = zonedTimeToUtc(todayLocal, userTimeZone);
 
-    let todayStatus = await UserStatus.findOne({ userId, today: { $gte: todayUTC } });
+    let todayStatus = await UserStatus.findOne({
+      userId,
+      today: { $gte: todayUTC },
+    });
     if (!todayStatus) {
       todayStatus = await UserStatus.create({
         userId,
@@ -250,10 +377,22 @@ async function getTodayStatus(req, res) {
     }
 
     const effectiveShift = await getEffectiveShift(userId, todayUTC);
-    const workSecs = getWorkDurationSeconds(todayStatus.workedSessions, todayStatus.currentlyWorking);
-    const breakSecs = getBreakDurationSeconds(todayStatus.breakSessions, todayStatus.onBreak, todayStatus.breakStartTime);
+    const workSecs = getWorkDurationSeconds(
+      todayStatus.workedSessions,
+      todayStatus.currentlyWorking
+    );
+    const breakSecs = getBreakDurationSeconds(
+      todayStatus.breakSessions,
+      todayStatus.onBreak,
+      todayStatus.breakStartTime
+    );
 
-    const { isLate, isHalfDay, isAbsent } = calculateLateAndHalfDay(workSecs, effectiveShift.start, todayStatus.arrivalTime, userTimeZone);
+    const { isLate, isHalfDay, isAbsent } = calculateLateAndHalfDay(
+      workSecs,
+      effectiveShift.start,
+      todayStatus.arrivalTime,
+      userTimeZone
+    );
 
     const payload = {
       ...todayStatus.toObject(),
@@ -265,7 +404,16 @@ async function getTodayStatus(req, res) {
       isLate,
       isHalfDay,
       isAbsent,
-      arrivalTimeFormatted: todayStatus.arrivalTime ? utcToZonedTime(todayStatus.arrivalTime, userTimeZone).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: true }) : null,
+      arrivalTimeFormatted: todayStatus.arrivalTime
+        ? utcToZonedTime(
+            todayStatus.arrivalTime,
+            userTimeZone
+          ).toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+            hour12: true,
+          })
+        : null,
     };
 
     res.json(payload);
@@ -289,7 +437,10 @@ async function updateTodayStatus(req, res) {
     todayLocal.setHours(0, 0, 0, 0);
     const todayUTC = zonedTimeToUtc(todayLocal, userTimeZone);
 
-    let todayStatus = await UserStatus.findOne({ userId, today: { $gte: todayUTC } });
+    let todayStatus = await UserStatus.findOne({
+      userId,
+      today: { $gte: todayUTC },
+    });
     if (!todayStatus) {
       todayStatus = await UserStatus.create({
         userId,
@@ -318,7 +469,9 @@ async function updateTodayStatus(req, res) {
         todayStatus.currentlyWorking = true;
         todayStatus.onBreak = false;
         todayStatus.breakStartTime = null;
-        await User.findByIdAndUpdate(userId, { status: "active" }).catch(() => {});
+        await User.findByIdAndUpdate(userId, { status: "active" }).catch(
+          () => {}
+        );
       } else if (lower.includes("punch out")) {
         if (ws.length && !ws[ws.length - 1].end) ws[ws.length - 1].end = now;
         else if (!ws.length) ws.push({ start: now, end: now });
@@ -326,7 +479,9 @@ async function updateTodayStatus(req, res) {
         todayStatus.currentlyWorking = false;
         todayStatus.onBreak = false;
         todayStatus.breakStartTime = null;
-        await User.findByIdAndUpdate(userId, { status: "inactive" }).catch(() => {});
+        await User.findByIdAndUpdate(userId, { status: "inactive" }).catch(
+          () => {}
+        );
       } else if (lower.includes("break start")) {
         if (!bs.length || bs[bs.length - 1].end) {
           const newBreak = { start: now };
@@ -352,20 +507,36 @@ async function updateTodayStatus(req, res) {
       todayStatus.recentActivities.unshift({
         date: now.toLocaleDateString(),
         activity: rawType,
-        time: now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: true }),
+        time: now.toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: true,
+        }),
       });
-      if (todayStatus.recentActivities.length > 10) todayStatus.recentActivities.length = 10;
+      if (todayStatus.recentActivities.length > 10)
+        todayStatus.recentActivities.length = 10;
     }
 
-    todayStatus.workDurationSeconds = getWorkDurationSeconds(ws, todayStatus.currentlyWorking);
-    todayStatus.breakDurationSeconds = getBreakDurationSeconds(bs, todayStatus.onBreak, todayStatus.breakStartTime);
+    todayStatus.workDurationSeconds = getWorkDurationSeconds(
+      ws,
+      todayStatus.currentlyWorking
+    );
+    todayStatus.breakDurationSeconds = getBreakDurationSeconds(
+      bs,
+      todayStatus.onBreak,
+      todayStatus.breakStartTime
+    );
     todayStatus.totalWorkMs = todayStatus.workDurationSeconds * 1000;
     todayStatus.workedSessions = ws;
     todayStatus.breakSessions = bs;
 
     await todayStatus.save();
 
-    const dailyWork = await syncDailyWork(userId, todayStatus, userTimeZone).catch(e => {
+    const dailyWork = await syncDailyWork(
+      userId,
+      todayStatus,
+      userTimeZone
+    ).catch((e) => {
       console.error("syncDailyWork error:", e);
       return null;
     });
@@ -375,33 +546,48 @@ async function updateTodayStatus(req, res) {
     const payload = {
       ...todayStatus.toObject(),
       effectiveShift,
-      shiftType: dailyWork ? dailyWork.shiftType : (todayStatus.shiftType || "standard"),
+      shiftType: dailyWork
+        ? dailyWork.shiftType
+        : todayStatus.shiftType || "standard",
       workDurationSeconds: todayStatus.workDurationSeconds,
       breakDurationSeconds: todayStatus.breakDurationSeconds,
       workDuration: secToHMS(todayStatus.workDurationSeconds),
       breakDuration: secToHMS(todayStatus.breakDurationSeconds),
-      arrivalTimeFormatted: todayStatus.arrivalTime ? utcToZonedTime(todayStatus.arrivalTime, userTimeZone).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: true }) : null,
+      arrivalTimeFormatted: todayStatus.arrivalTime
+        ? utcToZonedTime(
+            todayStatus.arrivalTime,
+            userTimeZone
+          ).toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+            hour12: true,
+          })
+        : null,
       isLate: dailyWork?.isLate || false,
       isHalfDay: dailyWork?.isHalfDay || false,
       isAbsent: dailyWork?.isAbsent || false,
-      dailyWork: dailyWork ? {
-        id: dailyWork._id,
-        date: dailyWork.date,
-        workDurationSeconds: dailyWork.workDurationSeconds,
-        breakDurationSeconds: dailyWork.breakDurationSeconds,
-        breakSessions: dailyWork.breakSessions || [],
-        shift: dailyWork.shift || {},
-        shiftType: dailyWork.shiftType || "standard",
-        isLate: dailyWork.isLate,
-        isHalfDay: dailyWork.isHalfDay,
-        isAbsent: dailyWork.isAbsent,
-      } : null,
+      dailyWork: dailyWork
+        ? {
+            id: dailyWork._1d || dailyWork._id,
+            date: dailyWork.date,
+            workDurationSeconds: dailyWork.workDurationSeconds,
+            breakDurationSeconds: dailyWork.breakDurationSeconds,
+            breakSessions: dailyWork.breakSessions || [],
+            shift: dailyWork.shift || {},
+            shiftType: dailyWork.shiftType || "standard",
+            isLate: dailyWork.isLate,
+            isHalfDay: dailyWork.isHalfDay,
+            isAbsent: dailyWork.isAbsent,
+          }
+        : null,
     };
 
     return res.json(payload);
   } catch (err) {
     console.error("Error updating today's status:", err);
-    return res.status(500).json({ message: "Server error", error: err.message });
+    return res
+      .status(500)
+      .json({ message: "Server error", error: err.message });
   }
 }
 
