@@ -38,7 +38,10 @@ const taskSchema = new mongoose.Schema(
       default: "Medium",
     },
 
-    // ------------------ NEW: Remarks ------------------
+    // ✅ New field: When the task was marked completed
+    completedAt: { type: Date, default: null },
+
+    // Remarks on the task
     remarks: [
       {
         user: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
