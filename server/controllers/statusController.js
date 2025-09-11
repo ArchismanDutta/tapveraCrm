@@ -6,6 +6,11 @@ const User = require("../models/User");
 const FlexibleShiftRequest = require("../models/FlexibleShiftRequest");
 
 // -----------------------
+// Configurable grace / early punch
+// -----------------------
+const EARLY_PUNCH_MINUTES = 60; // allow punch-in up to 60 min before shift start
+
+// -----------------------
 // Native timezone conversion helpers (replaces date-fns-tz)
 // -----------------------
 function zonedTimeToUtc(date, timeZone) {
@@ -424,7 +429,7 @@ async function getTodayStatus(req, res) {
 }
 
 // -----------------------
-// Update Today's Status
+// Update Today's Status with Early Punch Allowance
 // -----------------------
 async function updateTodayStatus(req, res) {
   try {
@@ -464,6 +469,24 @@ async function updateTodayStatus(req, res) {
       const breakType = breakTypeMatch ? breakTypeMatch[1].trim() : undefined;
 
       if (lower.includes("punch in")) {
+        // --- Early punch check ---
+        const effectiveShift = await getEffectiveShift(userId, todayUTC);
+        if (effectiveShift.start) {
+          const [h, m] = effectiveShift.start.split(":").map(Number);
+          const shiftStartLocal = new Date(
+            utcToZonedTime(now, userTimeZone)
+          );
+          shiftStartLocal.setHours(h, m, 0, 0);
+          const earliestAllowed = new Date(shiftStartLocal);
+          earliestAllowed.setMinutes(earliestAllowed.getMinutes() - EARLY_PUNCH_MINUTES);
+
+          if (now < earliestAllowed) {
+            return res.status(400).json({
+              message: `Cannot punch in earlier than ${EARLY_PUNCH_MINUTES} minutes before shift start`
+            });
+          }
+        }
+
         if (!todayStatus.arrivalTime) todayStatus.arrivalTime = now;
         if (!ws.length || ws[ws.length - 1].end) ws.push({ start: now });
         todayStatus.currentlyWorking = true;
