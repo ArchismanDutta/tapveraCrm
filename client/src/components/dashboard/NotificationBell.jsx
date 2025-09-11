@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import { Bell, X, Volume2, VolumeX } from "lucide-react";
+import notiSound from "../../assets/notisound.wav"; // <-- import your local audio
 
 const NotificationBell = ({ notifications = [], onDismiss }) => {
   const [open, setOpen] = useState(false);
@@ -66,7 +67,7 @@ const NotificationBell = ({ notifications = [], onDismiss }) => {
     <div className="relative notification-bell-container">
       <audio
         ref={audioRef}
-        src="https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg"
+        src={notiSound} // <-- use imported local audio
         preload="auto"
       />
 
