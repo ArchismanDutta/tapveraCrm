@@ -1,5 +1,3 @@
-// controllers/todoTaskController.js
-
 const TodoTask = require("../models/TodoTask");
 
 // Normalize date to start of day (00:00:00)
@@ -103,6 +101,22 @@ exports.updateTodoTask = async (req, res) => {
     res.json(task);
   } catch (err) {
     console.error("Error updating todo task:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+// DELETE /api/todos/:id (Delete a task)
+exports.deleteTodoTask = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const taskId = req.params.id;
+
+    const task = await TodoTask.findOneAndDelete({ _id: taskId, userId });
+    if (!task) return res.status(404).json({ message: "Task not found" });
+
+    res.json({ message: "Task deleted successfully" });
+  } catch (err) {
+    console.error("Error deleting task:", err);
     res.status(500).json({ message: "Server error" });
   }
 };

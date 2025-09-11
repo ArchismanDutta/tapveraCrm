@@ -1,8 +1,5 @@
 import React, { useState, useEffect } from "react";
 
-const gradientBorder =
-  "border border-transparent bg-clip-padding bg-origin-border bg-gradient-to-r from-orange-400 to-yellow-500 p-1";
-
 const TaskForm = ({ task, onSave, onClose }) => {
   const [title, setTitle] = useState(task?.title || "");
   const [label, setLabel] = useState(task?.label || "");
@@ -41,38 +38,25 @@ const TaskForm = ({ task, onSave, onClose }) => {
 
   return (
     <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        backgroundColor: "rgba(19,23,32,0.93)",
-        backdropFilter: "blur(8px)",
-        WebkitBackdropFilter: "blur(8px)",
-        display: "flex",
-        justifyContent: "center",
-        alignItems: "center",
-        zIndex: 9999,
-        padding: "1rem"
-      }}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="taskFormTitle"
     >
       <form
         onSubmit={handleSubmit}
-        className={`max-w-lg w-full p-9 rounded-[1rem] shadow-2xl ${gradientBorder} bg-[#161c2c] flex flex-col space-y-6`}
-        style={{ fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif" }}
+        className="w-full max-w-md p-8 rounded-3xl bg-gradient-to-br from-blue-900/80 to-blue-800/70 backdrop-blur-sm shadow-2xl flex flex-col gap-6"
       >
         <h3
           id="taskFormTitle"
-          className="text-2xl font-extrabold text-yellow-400 border-b border-yellow-500 pb-3 mb-2 select-none"
+          className="text-2xl font-extrabold text-white border-b border-white/20 pb-3 mb-4 select-none"
         >
           {task ? "Edit Task" : "Add New Task"}
         </h3>
-        <div className="flex flex-col space-y-2">
-          <label
-            htmlFor="task-title"
-            className="text-gray-200 font-semibold cursor-pointer"
-          >
+
+        {/* Title */}
+        <div className="flex flex-col gap-2">
+          <label htmlFor="task-title" className="text-gray-200 font-semibold">
             Title <span className="text-red-500">*</span>
           </label>
           <input
@@ -80,36 +64,36 @@ const TaskForm = ({ task, onSave, onClose }) => {
             type="text"
             placeholder="Enter task title"
             required
+            autoFocus
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            autoFocus
-            className="border border-[#232945] rounded-md px-4 py-3 text-lg placeholder-gray-500 bg-[#181c28] text-gray-100 focus:outline-none focus:ring-4 focus:ring-yellow-400 focus:border-yellow-400 transition"
+            className="rounded-lg px-4 py-3 bg-blue-950/20 border border-blue-700 text-white placeholder-blue-200/50 focus:outline-none focus:ring-2 focus:ring-blue-400 transition"
           />
         </div>
-        <div className="flex flex-col space-y-2">
-          <label
-            htmlFor="task-label"
-            className="text-gray-200 font-semibold cursor-pointer"
-          >
+
+        {/* Priority */}
+        <div className="flex flex-col gap-2">
+          <label htmlFor="task-label" className="text-gray-200 font-semibold">
             Priority
           </label>
           <select
             id="task-label"
             value={label}
             onChange={(e) => setLabel(e.target.value)}
-            className="border border-[#232945] rounded-md px-4 py-3 text-lg bg-[#181c28] text-gray-100 focus:outline-none focus:ring-4 focus:ring-yellow-400 focus:border-yellow-400 transition"
+            className="rounded-lg px-4 py-3 bg-blue-950/20 border border-blue-700 text-black focus:outline-none focus:ring-2 focus:ring-blue-400 transition cursor-pointer"
           >
-            <option value="">Select priority</option>
+            <option value="" className="text-gray/70">
+              Select priority
+            </option>
             <option value="High">🔥 High</option>
             <option value="Medium">⚠️ Medium</option>
             <option value="Low">🌿 Low</option>
           </select>
         </div>
-        <div className="flex flex-col space-y-2">
-          <label
-            htmlFor="task-time"
-            className="text-gray-200 font-semibold cursor-pointer"
-          >
+
+        {/* Due Time */}
+        <div className="flex flex-col gap-2">
+          <label htmlFor="task-time" className="text-gray-200 font-semibold">
             Due Time
           </label>
           <input
@@ -117,14 +101,13 @@ const TaskForm = ({ task, onSave, onClose }) => {
             type="time"
             value={time}
             onChange={(e) => setTime(e.target.value)}
-            className="border border-[#232945] rounded-md px-4 py-3 text-lg bg-[#181c28] text-gray-100 focus:outline-none focus:ring-4 focus:ring-yellow-400 focus:border-yellow-400 transition"
+            className="rounded-lg px-4 py-3 bg-blue-950/20 border border-blue-700 text-white focus:outline-none focus:ring-2 focus:ring-blue-400 transition"
           />
         </div>
-        <div className="flex flex-col space-y-2">
-          <label
-            htmlFor="task-desc"
-            className="text-gray-200 font-semibold cursor-pointer"
-          >
+
+        {/* Description */}
+        <div className="flex flex-col gap-2">
+          <label htmlFor="task-desc" className="text-gray-200 font-semibold">
             Description
           </label>
           <textarea
@@ -133,20 +116,22 @@ const TaskForm = ({ task, onSave, onClose }) => {
             placeholder="Details about the task"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            className="border border-[#232945] rounded-md px-4 py-3 resize-none text-lg bg-[#181c28] text-gray-100 focus:outline-none focus:ring-4 focus:ring-yellow-400 focus:border-yellow-400 transition"
+            className="rounded-lg px-4 py-3 bg-blue-950/20 border border-blue-700 text-white placeholder-blue-200/50 resize-none focus:outline-none focus:ring-2 focus:ring-blue-400 transition"
           />
         </div>
-        <div className="flex justify-end space-x-6">
+
+        {/* Buttons */}
+        <div className="flex justify-end gap-4 pt-2">
           <button
             type="button"
             onClick={onClose}
-            className="px-6 py-3 rounded-md bg-[#232945] text-gray-300 font-semibold hover:bg-[#444c6a] transition"
+            className="px-6 py-3 rounded-lg bg-blue-800/40 text-white font-semibold hover:bg-blue-800/70 transition"
           >
             Cancel
           </button>
           <button
             type="submit"
-            className="px-6 py-3 rounded-md bg-gradient-to-r from-yellow-400 via-amber-500 to-orange-500 text-gray-900 font-bold shadow hover:from-yellow-500 hover:via-amber-600 hover:to-orange-600 transition"
+            className="px-6 py-3 rounded-lg bg-gradient-to-r from-blue-400 to-blue-600 text-black font-bold shadow-lg hover:from-blue-500 hover:to-blue-700 transition"
           >
             Save
           </button>
