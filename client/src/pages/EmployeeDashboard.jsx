@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import axios from "axios";
 import { Link, useNavigate } from "react-router-dom";
 import dayjs from "dayjs";
@@ -12,6 +12,7 @@ import WishPopup from "../components/dashboard/WishPopup";
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
 const TASK_POLL_INTERVAL_MS = 10000;
 const USER_POLL_INTERVAL_MS = 25000;
+const DISMISSED_NOTI_KEY = "dismissedNotifications";
 
 const EmployeeDashboard = ({ onLogout }) => {
   const [collapsed, setCollapsed] = useState(false);
@@ -21,9 +22,13 @@ const EmployeeDashboard = ({ onLogout }) => {
   const [userName, setUserName] = useState("");
   const [summaryData, setSummaryData] = useState([]);
   const [notifications, setNotifications] = useState([]);
+  const [dismissedNotificationIds, setDismissedNotificationIds] = useState(
+    JSON.parse(localStorage.getItem(DISMISSED_NOTI_KEY)) || []
+  );
   const [wishes, setWishes] = useState([]);
   const [showWishPopup, setShowWishPopup] = useState(false);
 
+  const prevTaskIdsRef = useRef(new Set()); // Track previous task IDs for new notifications
   const navigate = useNavigate();
 
   // Format task data
@@ -81,20 +86,23 @@ const EmployeeDashboard = ({ onLogout }) => {
     ]);
   }, [tasks, currentTime]);
 
-  // Update notifications based on tasks
+  // Update notifications based on tasks & dismissed IDs
   const updateNotifications = useCallback(() => {
+    const currentTaskIds = new Set(tasks.map((t) => t.id));
     const newNotifications = tasks
       .filter((t) => t.status?.toLowerCase() !== "completed")
       .map((t) => ({
         id: t.id,
-        message: `Task: ${t.label} (Due: ${
-          t.dueDateTime || "No date"
-        })`,
-      }));
-    setNotifications(newNotifications);
-  }, [tasks]);
+        message: `Task: ${t.label} (Due: ${t.dueDateTime || "No date"})`,
+        isNew: !prevTaskIdsRef.current.has(t.id),
+      }))
+      .filter((n) => !dismissedNotificationIds.includes(n.id));
 
-  // Fetch tasks from API
+    prevTaskIdsRef.current = currentTaskIds;
+    setNotifications(newNotifications);
+  }, [tasks, dismissedNotificationIds]);
+
+  // Fetch tasks
   const fetchTasks = useCallback(async () => {
     const token = localStorage.getItem("token");
     if (!token) return navigate("/login", { replace: true });
@@ -156,13 +164,21 @@ const EmployeeDashboard = ({ onLogout }) => {
     return () => clearInterval(interval);
   }, []);
 
-  // Compute summary & notifications on tasks/time change
+  // Compute summary & notifications when tasks/time/dismissed change
   useEffect(() => {
     computeSummary();
     updateNotifications();
   }, [computeSummary, updateNotifications]);
 
-  // Mark wishes as read
+  // Persist dismissed notifications
+  useEffect(() => {
+    localStorage.setItem(
+      DISMISSED_NOTI_KEY,
+      JSON.stringify(dismissedNotificationIds)
+    );
+  }, [dismissedNotificationIds]);
+
+  // Handle wishes popup
   const handleCloseWishPopup = async () => {
     setShowWishPopup(false);
     try {
@@ -181,6 +197,19 @@ const EmployeeDashboard = ({ onLogout }) => {
         err.response?.data || err.message
       );
     }
+  };
+
+  // Dismiss a single notification
+  const handleDismissNotification = (id) => {
+    setDismissedNotificationIds((prev) => [...prev, id]);
+  };
+
+  // Clear all notifications
+  const handleClearAllNotifications = () => {
+    setDismissedNotificationIds((prev) => [
+      ...prev,
+      ...notifications.map((n) => n.id),
+    ]);
   };
 
   return (
@@ -225,7 +254,11 @@ const EmployeeDashboard = ({ onLogout }) => {
             </p>
           </div>
           <div className="flex items-center gap-4 relative">
-            <NotificationBell notifications={notifications} />
+            <NotificationBell
+              notifications={notifications}
+              onDismiss={handleDismissNotification}
+              onClearAll={handleClearAllNotifications}
+            />
             <Link to="/profile">
               <img
                 src="https://i.pravatar.cc/40?img=3"
