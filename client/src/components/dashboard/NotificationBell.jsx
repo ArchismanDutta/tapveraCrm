@@ -1,16 +1,18 @@
 import React, { useEffect, useRef, useState, useCallback } from "react";
-import { Bell, X, Volume2, VolumeX } from "lucide-react";
-import notiSound from "../../assets/notisound.wav"; // <-- import your local audio
+import { Bell, X, Volume2, VolumeX, Trash2 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import notiSound from "../../assets/notisound.wav";
 
-const NotificationBell = ({ notifications = [], onDismiss }) => {
+const NotificationBell = ({ notifications = [], onDismiss, onClearAll }) => {
   const [open, setOpen] = useState(false);
   const [isRinging, setIsRinging] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [audioUnlocked, setAudioUnlocked] = useState(false);
   const audioRef = useRef(null);
-  const prevCount = useRef(0);
+  const prevNotificationIds = useRef(new Set()); 
+  const navigate = useNavigate();
 
-  // Attempt to unlock audio on first user interaction
+  // Unlock audio on first user interaction
   const attemptAudioUnlock = useCallback(() => {
     if (audioUnlocked) return;
     if (audioRef.current) {
@@ -20,7 +22,6 @@ const NotificationBell = ({ notifications = [], onDismiss }) => {
           audioRef.current.pause();
           audioRef.current.currentTime = 0;
           setAudioUnlocked(true);
-          console.log("Audio unlocked successfully");
         })
         .catch(() => {
           console.log("Audio unlock blocked, waiting for user interaction...");
@@ -37,9 +38,12 @@ const NotificationBell = ({ notifications = [], onDismiss }) => {
     };
   }, [attemptAudioUnlock]);
 
-  // Trigger bell ring on new notifications
+  // Play sound & animate bell on new notifications
   useEffect(() => {
-    if (notifications.length > prevCount.current) {
+    const currentIds = new Set(notifications.map((n) => n.id));
+    const hasNew = [...currentIds].some((id) => !prevNotificationIds.current.has(id));
+
+    if (hasNew && notifications.length > 0) {
       setIsRinging(true);
       if (soundEnabled && audioUnlocked && audioRef.current) {
         audioRef.current.currentTime = 0;
@@ -47,7 +51,8 @@ const NotificationBell = ({ notifications = [], onDismiss }) => {
       }
       setTimeout(() => setIsRinging(false), 1000);
     }
-    prevCount.current = notifications.length;
+
+    prevNotificationIds.current = currentIds;
   }, [notifications, soundEnabled, audioUnlocked]);
 
   const toggleSound = () => setSoundEnabled((prev) => !prev);
@@ -65,11 +70,7 @@ const NotificationBell = ({ notifications = [], onDismiss }) => {
 
   return (
     <div className="relative notification-bell-container">
-      <audio
-        ref={audioRef}
-        src={notiSound} // <-- use imported local audio
-        preload="auto"
-      />
+      <audio ref={audioRef} src={notiSound} preload="auto" />
 
       <button
         className="relative p-2 rounded-full bg-gradient-to-r from-[#232945] via-[#17171c] to-[#181b2b] hover:from-orange-400 hover:to-orange-500 shadow-lg transition"
@@ -87,13 +88,16 @@ const NotificationBell = ({ notifications = [], onDismiss }) => {
         <div className="absolute right-0 mt-2 w-80 rounded-2xl shadow-2xl z-50 border border-[#232945] bg-gradient-to-b from-[#1c1f26]/95 to-[#232945]/90 backdrop-blur-lg">
           <div className="p-3 border-b border-[#232945] text-orange-400 font-bold text-base flex justify-between items-center">
             <span>Notifications</span>
-            <button
-              onClick={toggleSound}
-              className="p-1 rounded hover:bg-[#232945]/50"
-              title={soundEnabled ? "Mute" : "Unmute"}
-            >
-              {soundEnabled ? <Volume2 className="text-orange-400" /> : <VolumeX className="text-orange-400" />}
-            </button>
+            <div className="flex items-center gap-2">
+              <button onClick={toggleSound} className="p-1 rounded hover:bg-[#232945]/50" title={soundEnabled ? "Mute" : "Unmute"}>
+                {soundEnabled ? <Volume2 className="text-orange-400" /> : <VolumeX className="text-orange-400" />}
+              </button>
+              {notifications.length > 0 && (
+                <button onClick={onClearAll} className="p-1 rounded hover:bg-[#232945]/50" title="Clear All">
+                  <Trash2 className="text-red-500" />
+                </button>
+              )}
+            </div>
           </div>
 
           {notifications.length > 0 ? (
@@ -103,7 +107,15 @@ const NotificationBell = ({ notifications = [], onDismiss }) => {
                   key={n.id || n.message}
                   className="flex items-center justify-between px-3 py-2 hover:bg-[#1a1f2a] cursor-pointer text-white transition"
                 >
-                  <span>{n.message || n}</span>
+                  <span
+                    className="flex-1"
+                    onClick={() => {
+                      navigate("/tasks");
+                      setOpen(false);
+                    }}
+                  >
+                    {n.message || n}
+                  </span>
                   {onDismiss && (
                     <button
                       onClick={() => onDismiss(n.id)}
@@ -133,13 +145,8 @@ const NotificationBell = ({ notifications = [], onDismiss }) => {
           75% { transform: rotate(-10deg);}
           100% { transform: rotate(0deg);}
         }
-        .no-scrollbar::-webkit-scrollbar {
-          display: none;
-        }
-        .no-scrollbar {
-          -ms-overflow-style: none;
-          scrollbar-width: none;
-        }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
       `}</style>
     </div>
   );
