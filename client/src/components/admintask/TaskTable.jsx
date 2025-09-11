@@ -1,3 +1,4 @@
+// File: src/components/admintask/TaskTable.jsx
 import React, { useState, useMemo } from "react";
 import axios from "axios";
 import TaskRow from "./TaskRow";
@@ -12,19 +13,21 @@ const TaskTable = ({ tasks = [], onViewTask, onEditTask, onDeleteTask }) => {
   const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
   const safeTasks = Array.isArray(tasks) ? tasks : [];
 
+  // Apply search + local status filter
   const filteredTasks = useMemo(() => {
     return safeTasks.filter((task) => {
       const titleMatch =
-        task?.title?.toLowerCase().includes(search.toLowerCase()) ?? false;
-      const statusMatch = filter === "All Status" || task?.status === filter;
+        (task?.title || "").toLowerCase().includes(search.toLowerCase());
+      const statusMatch =
+        filter === "All Status" || (task?.status || "") === filter;
       return titleMatch && statusMatch;
     });
   }, [safeTasks, search, filter]);
 
-  const formatDueDateTime = (dateValue) => {
-    if (!dateValue) return "No due date";
+  const formatDateTime = (dateValue) => {
+    if (!dateValue) return null;
     const dateObj = new Date(dateValue);
-    if (isNaN(dateObj.getTime())) return "Invalid date";
+    if (isNaN(dateObj.getTime())) return null;
     return `${dateObj.toLocaleDateString()} ${dateObj.toLocaleTimeString([], {
       hour: "2-digit",
       minute: "2-digit",
@@ -110,6 +113,7 @@ const TaskTable = ({ tasks = [], onViewTask, onEditTask, onDeleteTask }) => {
               <th className="p-2 w-[100px] max-w-[100px]">Assigned To</th>
               <th className="p-2 w-[100px] max-w-[100px]">Assigned By</th>
               <th className="p-2 w-[90px] max-w-[90px]">Due Date & Time</th>
+              <th className="p-2 w-[90px] max-w-[90px]">Completed At</th>
               <th className="p-2 w-[50px] max-w-[50px]">Priority</th>
               <th className="p-2 w-[60px] max-w-[60px]">Status</th>
               <th className="p-2 w-[80px] max-w-[80px] text-center">Actions</th>
@@ -126,7 +130,8 @@ const TaskTable = ({ tasks = [], onViewTask, onEditTask, onDeleteTask }) => {
                       ? task.assignedTo
                       : [],
                     assignedBy: task.assignedBy || null,
-                    dueDate: formatDueDateTime(task?.dueDate),
+                    dueDate: formatDateTime(task?.dueDate),
+                    completedAt: formatDateTime(task?.completedAt),
                   }}
                   onView={() => onViewTask(task)}
                   onEdit={() => onEditTask(task)}
@@ -137,7 +142,7 @@ const TaskTable = ({ tasks = [], onViewTask, onEditTask, onDeleteTask }) => {
             ) : (
               <tr>
                 <td
-                  colSpan={7}
+                  colSpan={8}
                   className="p-4 text-center text-blue-400 italic"
                 >
                   No tasks found.
