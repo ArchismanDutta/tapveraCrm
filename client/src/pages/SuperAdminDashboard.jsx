@@ -7,7 +7,7 @@ import Sidebar from "../components/dashboard/Sidebar";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
 
-const SuperAdminDashboard = () => {
+const SuperAdminDashboard = ({ onLogout }) => {
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -46,9 +46,7 @@ const SuperAdminDashboard = () => {
     fetchEmployees(selectedDate);
   }, [selectedDate]);
 
-  const handleLogout = () => {
-    console.log("Logout clicked");
-  };
+
 
   return (
     <div className="flex h-screen bg-[#181C2F]">
@@ -56,16 +54,15 @@ const SuperAdminDashboard = () => {
       <Sidebar
         collapsed={sidebarCollapsed}
         setCollapsed={setSidebarCollapsed}
-        onLogout={handleLogout}
+        onLogout={onLogout}
         userRole="superadmin"
         className="border-r border-[#2e3151] shadow-md"
       />
 
       {/* Main Content */}
       <main
-        className={`flex-1 transition-all duration-300 ease-in-out p-4 overflow-auto ${
-          sidebarCollapsed ? "ml-16" : "ml-56"
-        }`}
+        className={`flex-1 transition-all duration-300 ease-in-out p-4 overflow-auto ${sidebarCollapsed ? "ml-16" : "ml-56"
+          }`}
       >
         <div className="bg-[#232848] rounded-2xl shadow-lg p-4 border border-slate-700/40 max-w-full">
           <div className="flex justify-between items-center mb-4">

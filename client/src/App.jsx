@@ -33,8 +33,6 @@ import EmployeePage from "./pages/EmployeePage";
 import HRDashboard from "./pages/HRDashboard";
 import AdminAttendancePage from "./pages/AdminAttendancePage";
 import HolidayManagementPage from "./pages/HolidayManagementPage";
-
-// New Super Admin Page
 import SuperAdminDashboard from "./pages/SuperAdminDashboard";
 
 import { resetChat } from "./store/slices/chatSlice";
@@ -135,7 +133,7 @@ const AppWrapper = () => {
         <Route
           path="/super-admin"
           element={
-            isAuthenticated && isSuperAdmin ? (
+            isAuthenticated && (isHR || isSuperAdmin) ? (
               <SuperAdminDashboard onLogout={handleLogout} />
             ) : (
               <Navigate to="/login" replace />
