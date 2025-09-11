@@ -37,6 +37,14 @@ const TaskRow = ({ task, onView, onEdit, onDelete }) => {
   const rowRef = useRef(null);
   const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
 
+  // ✅ Truncate description helper
+  const truncateDescription = (text, maxWords = 25) => {
+    if (!text) return "No description available";
+    const words = text.trim().split(/\s+/);
+    if (words.length <= maxWords) return text;
+    return words.slice(0, maxWords).join(" ") + "...";
+  };
+
   const handleIconMouseEnter = (idx, e) => {
     const rect = e.currentTarget.getBoundingClientRect();
     setTooltipPos({
@@ -121,7 +129,7 @@ const TaskRow = ({ task, onView, onEdit, onDelete }) => {
             className="absolute z-50 bg-[#161c2c] text-blue-100 text-xs rounded px-2 py-1 shadow-lg whitespace-normal w-60 -translate-x-1/2"
             style={{ top: titleTooltipPos.top, left: titleTooltipPos.left }}
           >
-            {task.description || "No description available"}
+            {truncateDescription(task.description)}
           </div>
         )}
       </td>

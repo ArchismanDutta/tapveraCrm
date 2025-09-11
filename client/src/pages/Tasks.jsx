@@ -31,7 +31,14 @@ const Tasks = ({ onLogout }) => {
       const config = { headers: { Authorization: `Bearer ${token}` } };
       const res = await axios.get(`${API_BASE}/api/tasks`, config);
 
-      // Format and sort newest tasks first
+      // Define status hierarchy
+      const statusOrder = {
+        "in-progress": 1,
+        pending: 2,
+        completed: 3,
+      };
+
+      // Format and sort
       const formattedTasks = res.data
         .map((task) => ({
           _id: task._id,
@@ -42,8 +49,17 @@ const Tasks = ({ onLogout }) => {
           status: task.status,
           assignedTo: Array.isArray(task.assignedTo) ? task.assignedTo : [],
           assignedBy: task.assignedBy || {},
+          completedAt: task.completedAt || null, // ✅ include completedAt
         }))
-        .sort((a, b) => new Date(b.dueDate) - new Date(a.dueDate)); // Newest first
+        .sort((a, b) => {
+          // First by status hierarchy
+          const statusDiff =
+            (statusOrder[a.status] || 99) - (statusOrder[b.status] || 99);
+          if (statusDiff !== 0) return statusDiff;
+
+          // Then by due date (earliest first)
+          return new Date(a.dueDate) - new Date(b.dueDate);
+        });
 
       setTasks(formattedTasks);
       setLoading(false);
@@ -56,15 +72,32 @@ const Tasks = ({ onLogout }) => {
   // Polling: fetch tasks on mount and every 30s
   useEffect(() => {
     fetchTasks();
-    const interval = setInterval(fetchTasks, 10000); // every 30 seconds
-    return () => clearInterval(interval); // cleanup on unmount
+    const interval = setInterval(fetchTasks, 30000); // every 30 seconds
+    return () => clearInterval(interval);
   }, []);
 
-  // Update task status locally
+  // Update task status locally and re-sort immediately
   const handleStatusChange = (taskId, newStatus) => {
-    setTasks((prev) =>
-      prev.map((t) => (t._id === taskId ? { ...t, status: newStatus } : t))
-    );
+    setTasks((prev) => {
+      const updated = prev.map((t) =>
+        t._id === taskId
+          ? {
+              ...t,
+              status: newStatus,
+              completedAt: newStatus === "completed" ? new Date() : null,
+            }
+          : t
+      );
+
+      // re-apply sorting
+      const statusOrder = { "in-progress": 1, pending: 2, completed: 3 };
+      return updated.sort((a, b) => {
+        const statusDiff =
+          (statusOrder[a.status] || 99) - (statusOrder[b.status] || 99);
+        if (statusDiff !== 0) return statusDiff;
+        return new Date(a.dueDate) - new Date(b.dueDate);
+      });
+    });
   };
 
   // Handle requirement form submission
