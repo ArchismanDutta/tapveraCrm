@@ -12,6 +12,18 @@ const StatusCard = ({
   onPunchOut,
   onRequestFlexible,          // Flexible shift request
 }) => {
+  // Convert arrivalTime ISO to local time string
+  const formattedArrivalTime = arrivalTime
+    ? (() => {
+        const date = new Date(arrivalTime); // Convert ISO to Date
+        return date.toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: true,
+        });
+      })()
+    : "--";
+
   return (
     <div className="bg-[#161c2c] border border-[#232945] rounded-2xl shadow-lg p-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6 w-full transition-all">
       
@@ -28,7 +40,7 @@ const StatusCard = ({
           </p>
           <p className="text-gray-300 font-medium">
             Arrival Time:{" "}
-            <span className="text-orange-400 font-bold">{arrivalTime || "--"}</span>
+            <span className="text-orange-400 font-bold">{formattedArrivalTime}</span>
           </p>
         </div>
 
