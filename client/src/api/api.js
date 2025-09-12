@@ -51,7 +51,7 @@ export const createConversation = async (memberIds, groupName = null) => {
 // Fetch messages for a conversation
 export const fetchMessages = async (conversationId) => {
   try {
-    const res = await axios.get(`${API_BASE}/chat/messages/${conversationId}`, { headers: getAuthHeaders() });
+    const res = await axios.get(`${API_BASE}/api/chat/messages/${conversationId}`, { headers: getAuthHeaders() });
     return res.data;
   } catch (err) {
     console.error("fetchMessages error:", err.response?.data || err.message);
