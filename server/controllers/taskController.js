@@ -62,8 +62,10 @@ exports.editTask = async (req, res) => {
     if (!task) return res.status(404).json({ message: "Task not found." });
 
     // Only admin/super-admin or creator can edit
-    if (!["admin", "super-admin"].includes(req.user.role) &&
-        task.assignedBy.toString() !== req.user._id.toString()) {
+    if (
+      !["admin", "super-admin"].includes(req.user.role) &&
+      task.assignedBy.toString() !== req.user._id.toString()
+    ) {
       return res.status(403).json({ message: "Not authorized" });
     }
 
@@ -71,7 +73,17 @@ exports.editTask = async (req, res) => {
     if (description) task.description = description;
     if (Array.isArray(assignedTo) && assignedTo.length) task.assignedTo = assignedTo;
     if (dueDate) task.dueDate = dueDate;
-    if (status && ["pending", "in-progress", "completed"].includes(status)) task.status = status;
+
+    if (status && ["pending", "in-progress", "completed"].includes(status)) {
+      // ✅ handle completedAt field
+      if (status === "completed" && task.status !== "completed") {
+        task.completedAt = new Date();
+      } else if (task.status === "completed" && status !== "completed") {
+        task.completedAt = null;
+      }
+      task.status = status;
+    }
+
     if (priority && ["High", "Medium", "Low"].includes(priority)) task.priority = priority;
 
     await task.save();
@@ -109,6 +121,13 @@ exports.updateTaskStatus = async (req, res) => {
       !task.assignedTo.some((id) => id.toString() === req.user._id.toString())
     ) {
       return res.status(403).json({ message: "Unauthorized" });
+    }
+
+    // ✅ set/unset completedAt
+    if (status === "completed" && !task.completedAt) {
+      task.completedAt = new Date();
+    } else if (status !== "completed" && task.completedAt) {
+      task.completedAt = null;
     }
 
     task.status = status;
@@ -170,8 +189,10 @@ exports.deleteTask = async (req, res) => {
     const task = await Task.findById(req.params.taskId);
     if (!task) return res.status(404).json({ message: "Task not found." });
 
-    if (!["admin", "super-admin"].includes(req.user.role) &&
-        task.assignedBy.toString() !== req.user._id.toString()) {
+    if (
+      !["admin", "super-admin"].includes(req.user.role) &&
+      task.assignedBy.toString() !== req.user._id.toString()
+    ) {
       return res.status(403).json({ message: "Unauthorized" });
     }
 
