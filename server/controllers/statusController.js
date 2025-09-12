@@ -287,7 +287,7 @@ async function getEffectiveShift(userId, date) {
 }
 
 // -----------------------
-// Sync DailyWork
+// Sync DailyWork with enhanced timeline data
 // -----------------------
 async function syncDailyWork(userId, todayStatus, userTimeZone = "UTC") {
   const todayLocal = new Date();
@@ -325,6 +325,9 @@ async function syncDailyWork(userId, todayStatus, userTimeZone = "UTC") {
       workDurationSeconds: todayStatus.workDurationSeconds || 0,
       breakDurationSeconds: todayStatus.breakDurationSeconds || 0,
       breakSessions: todayStatus.breakSessions || [],
+      workedSessions: todayStatus.workedSessions || [],
+      timeline: todayStatus.timeline || [],
+      arrivalTime: arrivalTime,
       weekSummary: todayStatus.weekSummary || {},
       quickStats: todayStatus.quickStats || {},
     });
@@ -339,12 +342,15 @@ async function syncDailyWork(userId, todayStatus, userTimeZone = "UTC") {
     dailyWork.workDurationSeconds = todayStatus.workDurationSeconds || 0;
     dailyWork.breakDurationSeconds = todayStatus.breakDurationSeconds || 0;
     dailyWork.breakSessions = todayStatus.breakSessions || [];
+    dailyWork.workedSessions = todayStatus.workedSessions || [];
+    dailyWork.timeline = todayStatus.timeline || [];
+    dailyWork.arrivalTime = arrivalTime;
   }
 
   const { isLate, isHalfDay, isAbsent } = calculateLateAndHalfDay(
     todayStatus.workDurationSeconds || 0,
     effectiveShift.start,
-    todayStatus.arrivalTime,
+    arrivalTime,
     userTimeZone
   );
 
@@ -433,7 +439,7 @@ async function getTodayStatus(req, res) {
 }
 
 // -----------------------
-// Update Today's Status
+// Update Today's Status with enhanced timeline tracking
 // -----------------------
 async function updateTodayStatus(req, res) {
   try {
@@ -473,7 +479,10 @@ async function updateTodayStatus(req, res) {
       const breakType = breakTypeMatch ? breakTypeMatch[1].trim() : undefined;
 
       if (lower.includes("punch in")) {
-        if (!todayStatus.arrivalTime) todayStatus.arrivalTime = now;
+        // Set arrival time if this is the first punch in of the day
+        if (!todayStatus.arrivalTime) {
+          todayStatus.arrivalTime = now;
+        }
         if (!ws.length || ws[ws.length - 1].end) ws.push({ start: now });
         todayStatus.currentlyWorking = true;
         todayStatus.onBreak = false;
@@ -509,8 +518,13 @@ async function updateTodayStatus(req, res) {
         todayStatus.breakStartTime = null;
       }
 
+      // Enhanced timeline tracking with proper event structure
       todayStatus.timeline = todayStatus.timeline || [];
-      todayStatus.timeline.push({ type: rawType, time: now });
+      todayStatus.timeline.push({ 
+        type: rawType, 
+        time: now,
+        _id: require('mongoose').Types.ObjectId() // Ensure proper _id for timeline events
+      });
 
       todayStatus.recentActivities = todayStatus.recentActivities || [];
       todayStatus.recentActivities.unshift({
@@ -551,6 +565,15 @@ async function updateTodayStatus(req, res) {
     });
 
     const effectiveShift = await getEffectiveShift(userId, todayUTC);
+
+    // Enhanced arrival time logic
+    let arrivalTime = todayStatus.arrivalTime;
+    if (!arrivalTime && todayStatus.timeline) {
+      const timelineArrival = getFirstPunchInTime(todayStatus.timeline);
+      if (timelineArrival) {
+        arrivalTime = timelineArrival;
+      }
+    }
 
     const payload = {
       ...todayStatus.toObject(),
@@ -605,6 +628,8 @@ module.exports = {
   updateTodayStatus,
   syncDailyWork,
   getEffectiveShift,
+  getFirstPunchInTime,
+  getLastPunchOutTime,
   secToHMS,
   secToHM,
 };
