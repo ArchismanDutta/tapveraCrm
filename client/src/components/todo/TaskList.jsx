@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 
 const labelColor = {
   High: "bg-red-900 text-red-300",
@@ -8,6 +8,7 @@ const labelColor = {
 
 const Section = ({ title, tasks, emptyLabel, children }) => {
   const [collapsed, setCollapsed] = useState(false);
+
   return (
     <section className="mb-8">
       <div
@@ -24,12 +25,8 @@ const Section = ({ title, tasks, emptyLabel, children }) => {
         <span className="ml-2 text-sm text-gray-400">{collapsed ? "▲" : "▼"}</span>
       </div>
       <div className={`${collapsed ? "hidden" : ""} mt-2`}>
-        {!tasks.length && (
-          <p className="text-sm text-gray-500">{emptyLabel}</p>
-        )}
-        <ul className="space-y-2">
-          {children}
-        </ul>
+        {!tasks.length && <p className="text-sm text-gray-500">{emptyLabel}</p>}
+        <ul className="space-y-2">{children}</ul>
       </div>
     </section>
   );
@@ -41,121 +38,108 @@ const TaskList = ({
   completedTasks = [],
   onEdit,
   onMarkDone,
-}) => (
-  <div>
-    <Section title="Today's Tasks" tasks={todayTasks} emptyLabel="No tasks for today">
-      {todayTasks.map((task) => (
-        <li
-          key={task._id}
-          className="bg-[#181c28] px-4 py-3 rounded-xl flex items-center justify-between shadow border border-[#232945] hover:bg-[#232945] transition"
+  onDelete,
+  onUndoDelete,
+  recentlyDeletedTask,
+}) => {
+  const [showUndo, setShowUndo] = useState(false);
+
+  useEffect(() => {
+    if (recentlyDeletedTask) {
+      setShowUndo(true);
+      const timer = setTimeout(() => setShowUndo(false), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [recentlyDeletedTask]);
+
+  const renderTask = (task) => (
+    <li
+      key={task._id}
+      className={`px-4 py-3 rounded-xl flex items-center justify-between shadow border transition ${
+        task.completed
+          ? "bg-green-900 bg-opacity-35 border-green-700"
+          : "bg-[#181c28] border-[#232945] hover:bg-[#232945]"
+      }`}
+    >
+      <div className="flex items-center gap-3">
+        <input
+          type="checkbox"
+          checked={task.completed}
+          onChange={() => onMarkDone(task)}
+          className="cursor-pointer h-5 w-5 accent-yellow-400"
+          aria-label={`Mark ${task.title} as ${task.completed ? "incomplete" : "completed"}`}
+        />
+        <span
+          className={`font-medium ${
+            task.completed ? "line-through text-green-300" : "text-gray-200"
+          }`}
         >
-          <div className="flex items-center gap-3">
-            <input
-              type="checkbox"
-              checked={task.completed}
-              onChange={() => onMarkDone(task)}
-              className="cursor-pointer h-5 w-5 accent-yellow-400"
-              aria-label={`Mark ${task.title} as completed`}
-            />
-            <span
-              className={`font-medium ${
-                task.completed ? "line-through text-gray-500" : "text-gray-200"
-              }`}
-            >
-              {task.title}
-            </span>
-            {task.label && (
-              <span
-                className={`ml-2 px-2 py-1 rounded text-xs font-semibold ${
-                  labelColor[task.label] || ""
-                }`}
-              >
-                {task.label}
-              </span>
-            )}
-            {task.time && (
-              <span className="ml-2 text-xs text-gray-500 whitespace-nowrap">
-                {task.time}
-              </span>
-            )}
-          </div>
-          <button
-            className="text-gray-400 px-2 py-1 rounded hover:bg-[#232945]"
-            onClick={() => onEdit(task)}
-            aria-label={`Edit ${task.title}`}
+          {task.title}
+        </span>
+        {task.label && (
+          <span
+            className={`ml-2 px-2 py-1 rounded text-xs font-semibold ${
+              labelColor[task.label] || ""
+            }`}
           >
-            ⋯
-          </button>
-        </li>
-      ))}
-    </Section>
-    <Section title="Upcoming Tasks" tasks={upcomingTasks} emptyLabel="No upcoming tasks">
-      {upcomingTasks.map((task) => (
-        <li
-          key={task._id}
-          className="bg-[#181c28] px-4 py-3 rounded-xl shadow border border-[#232945] flex items-center justify-between hover:bg-[#232945] transition"
+            {task.label}
+          </span>
+        )}
+        {task.time && !task.completed && (
+          <span className="ml-2 text-xs text-gray-500 whitespace-nowrap">{task.time}</span>
+        )}
+        {task.completed && task.completedAtStr && (
+          <span className="ml-2 text-xs text-green-400 whitespace-nowrap">
+            ✔ Completed at {task.completedAtStr}
+          </span>
+        )}
+      </div>
+      <div className="flex gap-2">
+        <button
+          className="text-gray-400 px-2 py-1 rounded hover:bg-[#232945]"
+          onClick={() => onEdit(task)}
+          aria-label={`Edit ${task.title}`}
         >
-          <div className="flex items-center gap-3">
-            <input
-              type="checkbox"
-              checked={task.completed}
-              onChange={() => onMarkDone(task)}
-              className="cursor-pointer h-5 w-5 accent-yellow-400"
-              aria-label={`Mark ${task.title} as completed`}
-            />
-            <span className="font-medium text-gray-200">{task.title}</span>
-            {task.label && (
-              <span
-                className={`ml-2 px-2 py-1 rounded text-xs font-semibold ${
-                  labelColor[task.label] || ""
-                }`}
-              >
-                {task.label}
-              </span>
-            )}
-            <span className="ml-2 text-xs text-gray-500 whitespace-nowrap">
-              {task.time
-                ? task.time
-                : task.date
-                ? `Due: ${new Date(task.date).toLocaleDateString()}`
-                : ""}
-            </span>
-          </div>
-          <button
-            className="text-gray-400 px-2 py-1 rounded hover:bg-[#232945]"
-            onClick={() => onEdit(task)}
-            aria-label={`Edit ${task.title}`}
-          >
-            ⋯
-          </button>
-        </li>
-      ))}
-    </Section>
-    <Section title="Completed Tasks" tasks={completedTasks} emptyLabel="No completed tasks yet">
-      {completedTasks.map((task) => (
-        <li
-          key={task._id}
-          className="bg-green-900 bg-opacity-35 px-4 py-3 rounded-xl shadow border border-green-700 flex items-center justify-between"
+          ⋯
+        </button>
+        <button
+          className="text-red-400 px-2 py-1 rounded hover:bg-[#232945]"
+          onClick={() => onDelete(task._id)}
+          aria-label={`Delete ${task.title}`}
         >
-          <div>
-            <span className="font-medium text-green-300 line-through">
-              {task.title}
-            </span>
-            <span className="ml-2 text-xs text-green-400">
-              ✔ Completed at {task.completedAtStr || "--"}
-            </span>
-          </div>
+          🗑
+        </button>
+      </div>
+    </li>
+  );
+
+  return (
+    <div>
+      <Section title="Today's Tasks" tasks={todayTasks} emptyLabel="No tasks for today">
+        {todayTasks.map(renderTask)}
+      </Section>
+
+      <Section title="Upcoming Tasks" tasks={upcomingTasks} emptyLabel="No upcoming tasks">
+        {upcomingTasks.map(renderTask)}
+      </Section>
+
+      <Section title="Completed Tasks" tasks={completedTasks} emptyLabel="No completed tasks yet">
+        {completedTasks.map(renderTask)}
+      </Section>
+
+      {showUndo && recentlyDeletedTask && (
+        <div className="fixed bottom-6 right-6 bg-blue-800/90 text-white px-4 py-3 rounded-lg shadow-lg flex items-center gap-4">
+          <span>Task "{recentlyDeletedTask.title}" deleted</span>
           <button
-            className="text-gray-400 px-2 py-1 rounded hover:bg-[#232945]"
-            onClick={() => onEdit(task)}
-            aria-label={`Edit ${task.title}`}
+            onClick={() => onUndoDelete()}
+            className="px-3 py-1 bg-blue-500 rounded hover:bg-blue-600 transition"
           >
-            ⋯
+            Undo
           </button>
-        </li>
-      ))}
-    </Section>
-  </div>
-);
+        </div>
+      )}
+    </div>
+  );
+};
 
 export default TaskList;

@@ -3,7 +3,9 @@ import axios from "axios";
 import Sidebar from "../components/dashboard/Sidebar";
 import TaskList from "../components/todo/TaskList";
 import TaskForm from "../components/todo/TaskForm";
+
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
+
 const TodoPage = ({ onLogout }) => {
   const token = localStorage.getItem("token");
   const [collapsed, setCollapsed] = useState(false);
@@ -12,6 +14,7 @@ const TodoPage = ({ onLogout }) => {
   const [completedTasks, setCompletedTasks] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [editTask, setEditTask] = useState(null);
+  const [recentlyDeletedTask, setRecentlyDeletedTask] = useState(null);
 
   const normalizeDate = (date) => {
     const d = new Date(date);
@@ -19,24 +22,29 @@ const TodoPage = ({ onLogout }) => {
     return d.toISOString();
   };
 
+  // Fetch tasks from API
   const fetchTasks = async () => {
     try {
       const todayISO = normalizeDate(new Date());
       const tomorrowISO = normalizeDate(
         new Date(new Date().getTime() + 24 * 3600000)
       );
+
       const todayRes = await axios.get(`${API_BASE}/api/todos`, {
         headers: { Authorization: `Bearer ${token}` },
         params: { date: todayISO },
       });
+
       const upcomingRes = await axios.get(`${API_BASE}/api/todos/upcoming`, {
         headers: { Authorization: `Bearer ${token}` },
         params: { startDate: tomorrowISO },
       });
+
       const allTasks = [...todayRes.data, ...upcomingRes.data];
       const completed = allTasks.filter((t) => t.completed);
       const todayPending = todayRes.data.filter((t) => !t.completed);
       const upcomingPending = upcomingRes.data.filter((t) => !t.completed);
+
       const normalize = (arr) =>
         arr.map((t) => ({
           ...t,
@@ -45,6 +53,7 @@ const TodoPage = ({ onLogout }) => {
             ? new Date(t.completedAt).toLocaleString()
             : null,
         }));
+
       setTodayTasks(normalize(todayPending));
       setUpcomingTasks(normalize(upcomingPending));
       setCompletedTasks(normalize(completed));
@@ -57,6 +66,7 @@ const TodoPage = ({ onLogout }) => {
     fetchTasks();
   }, []);
 
+  // Save or update task
   const handleSaveTask = async (task) => {
     try {
       if (task._id) {
@@ -64,9 +74,7 @@ const TodoPage = ({ onLogout }) => {
           headers: { Authorization: `Bearer ${token}` },
         });
       } else {
-        if (!task.date) {
-          task.date = normalizeDate(new Date());
-        }
+        if (!task.date) task.date = normalizeDate(new Date());
         await axios.post(`${API_BASE}/api/todos`, task, {
           headers: { Authorization: `Bearer ${token}` },
         });
@@ -79,6 +87,7 @@ const TodoPage = ({ onLogout }) => {
     }
   };
 
+  // Toggle completed status
   const handleMarkDone = async (task) => {
     try {
       const response = await axios.put(
@@ -86,6 +95,7 @@ const TodoPage = ({ onLogout }) => {
         { completed: !task.completed },
         { headers: { Authorization: `Bearer ${token}` } }
       );
+
       const updatedTaskRaw = response.data;
       const updatedTask = {
         ...updatedTaskRaw,
@@ -96,16 +106,20 @@ const TodoPage = ({ onLogout }) => {
           ? new Date(updatedTaskRaw.completedAt).toLocaleString()
           : null,
       };
+
       if (updatedTask.completed) {
+        // Remove from pending lists and add to completed
         setTodayTasks((prev) => prev.filter((t) => t._id !== updatedTask._id));
         setUpcomingTasks((prev) =>
           prev.filter((t) => t._id !== updatedTask._id)
         );
         setCompletedTasks((prev) => [updatedTask, ...prev]);
       } else {
+        // Remove from completed list
         setCompletedTasks((prev) =>
           prev.filter((t) => t._id !== updatedTask._id)
         );
+        // Move back to correct list based on date
         const taskDate = new Date(updatedTask.date);
         const today = new Date();
         today.setHours(0, 0, 0, 0);
@@ -117,6 +131,45 @@ const TodoPage = ({ onLogout }) => {
       }
     } catch (err) {
       console.error("Failed to toggle completed:", err);
+    }
+  };
+
+  // Delete a task
+  const handleDeleteTask = async (taskId) => {
+    try {
+      const taskToDelete =
+        todayTasks.find((t) => t._id === taskId) ||
+        upcomingTasks.find((t) => t._id === taskId) ||
+        completedTasks.find((t) => t._id === taskId);
+
+      await axios.delete(`${API_BASE}/api/todos/${taskId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      setRecentlyDeletedTask(taskToDelete); // Save for undo
+      setTodayTasks((prev) => prev.filter((t) => t._id !== taskId));
+      setUpcomingTasks((prev) => prev.filter((t) => t._id !== taskId));
+      setCompletedTasks((prev) => prev.filter((t) => t._id !== taskId));
+    } catch (err) {
+      console.error("Failed to delete task:", err);
+    }
+  };
+
+  // Undo deletion
+  const handleUndoDelete = async () => {
+    if (!recentlyDeletedTask) return;
+
+    try {
+      const { _id, ...taskData } = recentlyDeletedTask;
+      const response = await axios.post(`${API_BASE}/api/todos`, taskData, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      // Refetch tasks to update lists
+      await fetchTasks();
+      setRecentlyDeletedTask(null);
+    } catch (err) {
+      console.error("Failed to undo deletion:", err);
     }
   };
 
@@ -156,8 +209,9 @@ const TodoPage = ({ onLogout }) => {
               + Add New Task
             </button>
           </header>
+
           {/* Progress Bar */}
-          <div className="mb-8 max-w-lg">
+          <div className="mb-8 w-full">
             <div className="flex items-center justify-between mb-1">
               <span className="text-sm font-medium text-gray-400">
                 Completion
@@ -173,6 +227,7 @@ const TodoPage = ({ onLogout }) => {
               />
             </div>
           </div>
+
           <TaskList
             todayTasks={todayTasks}
             upcomingTasks={upcomingTasks}
@@ -182,8 +237,12 @@ const TodoPage = ({ onLogout }) => {
               setShowForm(true);
             }}
             onMarkDone={handleMarkDone}
+            onDelete={handleDeleteTask}
+            recentlyDeletedTask={recentlyDeletedTask}
+            onUndoDelete={handleUndoDelete}
           />
         </div>
+
         {showForm && (
           <TaskForm
             task={editTask}

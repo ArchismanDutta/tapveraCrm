@@ -55,7 +55,7 @@ const menuConfig = {
     { to: "/attendance", icon: <ClipboardList size={18} />, label: "My Attendance" },
     { to: "/profile", icon: <User size={18} />, label: "My Profile" },
     { to: "/admin/notices", icon: <Flag size={18} />, label: "Notice Board" },
-    { to: "/super-admin", icon: <ClipboardList size={18} />, label: "Employees Current Status" },
+  //   { to: "/super-admin", icon: <ClipboardList size={18} />, label: "Employees Current Status" },
   ],
   "super-admin": [
     { to: "/hrdashboard", icon: <LayoutDashboard size={18} />, label: "Dashboard" },

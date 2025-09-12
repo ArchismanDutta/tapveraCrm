@@ -82,7 +82,9 @@ const EditTaskModal = ({ task, onSave, onCancel, users }) => {
             <select
               value={
                 Array.isArray(editedTask.assignedTo)
-                  ? editedTask.assignedTo[0]?._id || editedTask.assignedTo[0] || ""
+                  ? editedTask.assignedTo[0]?._id ||
+                    editedTask.assignedTo[0] ||
+                    ""
                   : editedTask.assignedTo?._id || editedTask.assignedTo || ""
               }
               onChange={(e) => handleChange("assignedTo", e.target.value)}
@@ -210,7 +212,9 @@ export default function AdminTaskPage({ onLogout }) {
     const token = localStorage.getItem("token");
     if (!token) return navigate("/login", { replace: true });
     try {
-      const res = await API.get("/api/tasks", { headers: { Authorization: `Bearer ${token}` } });
+      const res = await API.get("/api/tasks", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       const tasksArray = Array.isArray(res.data) ? res.data : [];
       tasksArray.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
       setTasks(tasksArray);
@@ -224,7 +228,9 @@ export default function AdminTaskPage({ onLogout }) {
     const token = localStorage.getItem("token");
     if (!token) return;
     try {
-      const res = await API.get("/api/users", { headers: { Authorization: `Bearer ${token}` } });
+      const res = await API.get("/api/users", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       if (Array.isArray(res.data)) setUsers(res.data);
       else if (Array.isArray(res.data?.data)) setUsers(res.data.data);
       else setUsers([]);
@@ -238,7 +244,9 @@ export default function AdminTaskPage({ onLogout }) {
     const token = localStorage.getItem("token");
     if (!token) return navigate("/login", { replace: true });
     try {
-      const res = await API.get("/api/users/me", { headers: { Authorization: `Bearer ${token}` } });
+      const res = await API.get("/api/users/me", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       setUserName(res.data?.name || "Admin");
     } catch (err) {
       console.error(err);
@@ -316,29 +324,55 @@ export default function AdminTaskPage({ onLogout }) {
       case "dueToday":
         return t.dueDate && dayjs(t.dueDate).isSame(today, "day");
       case "overdue":
-        return t.dueDate && dayjs(t.dueDate).isBefore(today, "day") && (t.status || "").toLowerCase() !== "completed";
+        return (
+          t.dueDate &&
+          dayjs(t.dueDate).isBefore(today, "day") &&
+          (t.status || "").toLowerCase() !== "completed"
+        );
+      case "completed":
+        return (t.status || "").toLowerCase() === "completed";
       default:
         return true;
     }
   });
 
   const totalTasks = tasks.length;
-  const assignedByMeCount = tasks.filter((t) => t.assignedBy?._id === currentUserId).length;
-  const tasksDueTodayCount = tasks.filter((t) => t.dueDate && dayjs(t.dueDate).isSame(today, "day")).length;
-  const overdueTasksCount = tasks.filter((t) => t.dueDate && dayjs(t.dueDate).isBefore(today, "day") && (t.status || "").toLowerCase() !== "completed").length;
+  const assignedByMeCount = tasks.filter(
+    (t) => t.assignedBy?._id === currentUserId
+  ).length;
+  const tasksDueTodayCount = tasks.filter(
+    (t) => t.dueDate && dayjs(t.dueDate).isSame(today, "day")
+  ).length;
+  const overdueTasksCount = tasks.filter(
+    (t) =>
+      t.dueDate &&
+      dayjs(t.dueDate).isBefore(today, "day") &&
+      (t.status || "").toLowerCase() !== "completed"
+  ).length;
+  const completedTasksCount = tasks.filter(
+    (t) => (t.status || "").toLowerCase() === "completed"
+  ).length;
 
+  // toggle behavior: clicking the same filter again will reset to 'all'
   const handleFilterAndScroll = (type) => {
-    setFilterType(type);
+    const newType = type === filterType ? "all" : type;
+    setFilterType(newType);
     setTimeout(() => tableRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
   };
 
-  // NOTE: Use separate state selectedTaskView for view modal,
-  // The remarks modal is handled inside TaskTable & its own state.
-
   return (
     <div className="flex bg-gradient-to-br from-[#161c2c] via-[#1f263b] to-[#282f47] min-h-screen text-white">
-      <Sidebar collapsed={collapsed} setCollapsed={setCollapsed} userRole="admin" onLogout={onLogout} />
-      <main className={`flex-1 transition-all duration-300 ${collapsed ? "ml-24" : "ml-72"} p-8`}>
+      <Sidebar
+        collapsed={collapsed}
+        setCollapsed={setCollapsed}
+        userRole="admin"
+        onLogout={onLogout}
+      />
+      <main
+        className={`flex-1 transition-all duration-300 ${
+          collapsed ? "ml-24" : "ml-72"
+        } p-8`}
+      >
         {popupMessage && (
           <div className="fixed top-6 right-6 bg-[#bf6f2f]/90 text-black px-4 py-2 rounded-xl shadow-lg z-50 animate-slideIn">
             {popupMessage}
@@ -349,31 +383,78 @@ export default function AdminTaskPage({ onLogout }) {
         <div className="flex justify-between items-center mb-8">
           <div>
             <h1 className="text-3xl font-semibold mb-1">
-              Good {currentTime.getHours() < 12 ? "Morning" : currentTime.getHours() < 18 ? "Afternoon" : "Evening"}, {userName}
+              Good{" "}
+              {currentTime.getHours() < 12
+                ? "Morning"
+                : currentTime.getHours() < 18
+                ? "Afternoon"
+                : "Evening"}
+              , {userName}
             </h1>
             <p className="text-sm text-blue-400">
-              {currentTime.toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })} •{" "}
-              {currentTime.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+              {currentTime.toLocaleDateString("en-US", {
+                weekday: "long",
+                year: "numeric",
+                month: "long",
+                day: "numeric",
+              })}{" "}
+              •{" "}
+              {currentTime.toLocaleTimeString("en-US", {
+                hour: "2-digit",
+                minute: "2-digit",
+                second: "2-digit",
+              })}
             </p>
           </div>
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <StatsCard title="Total Tasks" value={totalTasks} colorScheme="blue" onClick={() => handleFilterAndScroll("all")} />
-          <StatsCard title="Assigned by Me" value={assignedByMeCount} colorScheme="yellow" onClick={() => handleFilterAndScroll("assignedByMe")} />
-          <StatsCard title="Tasks Due Today" value={tasksDueTodayCount} colorScheme="green" onClick={() => handleFilterAndScroll("dueToday")} />
-          <StatsCard title="Overdue Tasks" value={overdueTasksCount} colorScheme="purple" onClick={() => handleFilterAndScroll("overdue")} />
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
+          <StatsCard
+            title="Total Tasks"
+            value={totalTasks}
+            colorScheme="blue"
+            onClick={() => handleFilterAndScroll("all")}
+          />
+          <StatsCard
+            title="Assigned by Me"
+            value={assignedByMeCount}
+            colorScheme="yellow"
+            onClick={() => handleFilterAndScroll("assignedByMe")}
+          />
+          <StatsCard
+            title="Tasks Due Today"
+            value={tasksDueTodayCount}
+            colorScheme="green"
+            onClick={() => handleFilterAndScroll("dueToday")}
+          />
+          <StatsCard
+            title="Overdue Tasks"
+            value={overdueTasksCount}
+            colorScheme="purple"
+            onClick={() => handleFilterAndScroll("overdue")}
+          />
+          <StatsCard
+            title="Completed Tasks"
+            value={completedTasksCount}
+            colorScheme="teal"
+            onClick={() => handleFilterAndScroll("completed")}
+          />
         </div>
 
         {/* Task Form */}
         <section className="bg-[rgba(22,28,48,0.7)] border border-[rgba(84,123,209,0.12)] rounded-3xl p-6 shadow-[0_8px_32px_0_rgba(10,40,100,0.1)] backdrop-blur-[12px] mb-8">
-          <h2 className="text-lg font-semibold text-blue-200 mb-4">Create New Task</h2>
+          <h2 className="text-lg font-semibold text-blue-200 mb-4">
+            Create New Task
+          </h2>
           <TaskForm onCreate={handleCreateTask} users={users} />
         </section>
 
         {/* Task Table */}
-        <section ref={tableRef} className="bg-[rgba(22,28,48,0.7)] border border-[rgba(84,123,209,0.12)] rounded-3xl p-6 shadow-[0_8px_32px_0_rgba(10,40,100,0.1)] backdrop-blur-[12px]">
+        <section
+          ref={tableRef}
+          className="bg-[rgba(22,28,48,0.7)] border border-[rgba(84,123,209,0.12)] rounded-3xl p-6 shadow-[0_8px_32px_0_rgba(10,40,100,0.1)] backdrop-blur-[12px]"
+        >
           <h2 className="text-lg font-semibold text-blue-200 mb-4">📋 Task List</h2>
           <TaskTable
             tasks={filteredTasks}
@@ -401,7 +482,14 @@ export default function AdminTaskPage({ onLogout }) {
         )}
 
         {/* Edit Task Modal */}
-        {editingTask && <EditTaskModal task={editingTask} onSave={handleUpdateTask} onCancel={() => setEditingTask(null)} users={users} />}
+        {editingTask && (
+          <EditTaskModal
+            task={editingTask}
+            onSave={handleUpdateTask}
+            onCancel={() => setEditingTask(null)}
+            users={users}
+          />
+        )}
       </main>
     </div>
   );

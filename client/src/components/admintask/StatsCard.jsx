@@ -1,3 +1,4 @@
+// File: src/components/admintask/StatsCard.jsx
 import React from "react";
 import { motion } from "framer-motion";
 
@@ -10,13 +11,14 @@ const StatsCard = ({ title, value, colorScheme = "orange", onClick }) => {
     yellow: "bg-gradient-to-br from-[#b89c57] via-[#a2864c] to-[#7f6835] border border-[#a2864c] text-yellow-900",
     orange:
       "bg-gradient-to-br from-[#bf6f2f] via-[#af632a] to-[#8c4f1f] border border-[#af632a] text-yellow-900",
+    teal: "bg-gradient-to-br from-[#2a9d8f] via-[#238f82] to-[#1f7a6e] border border-[#238f82] text-teal-50",
   };
 
   return (
     <motion.div
       whileHover={{
         scale: 1.03,
-        boxShadow: "0 8px 24px rgba(191, 111, 47, 0.25)", // softened orange glow
+        boxShadow: "0 8px 24px rgba(191, 111, 47, 0.18)",
       }}
       transition={{ type: "spring", stiffness: 260, damping: 22 }}
       onClick={onClick}
