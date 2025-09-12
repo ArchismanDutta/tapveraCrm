@@ -1,19 +1,14 @@
 // controllers/statusController.js
-// Removed import of date-fns-tz and replaced with native TZ conversion functions
+// Replaced date-fns-tz with native Intl-based TZ conversion helpers
 const UserStatus = require("../models/UserStatus");
 const DailyWork = require("../models/DailyWork");
 const User = require("../models/User");
 const FlexibleShiftRequest = require("../models/FlexibleShiftRequest");
 
 // -----------------------
-// Configurable grace / early punch
-// -----------------------
-const EARLY_PUNCH_MINUTES = 60; // allow punch-in up to 60 min before shift start
-
-// -----------------------
 // Native timezone conversion helpers (replaces date-fns-tz)
 // -----------------------
-function zonedTimeToUtc(date, timeZone) {
+function formatPartsFor(date, timeZone) {
   const dtf = new Intl.DateTimeFormat("en-US", {
     hour12: false,
     timeZone,
@@ -29,76 +24,81 @@ function zonedTimeToUtc(date, timeZone) {
   parts.forEach(({ type, value }) => {
     map[type] = value;
   });
-
-  const asLocalString = `${map.year}-${map.month}-${map.day}T${map.hour}:${map.minute}:${map.second}`;
-  const localDate = new Date(asLocalString);
-
-  const utcTimestamp =
-    localDate.getTime() - getTimeZoneOffsetMilliseconds(date, timeZone);
-  return new Date(utcTimestamp);
+  return map;
 }
 
-function utcToZonedTime(date, timeZone) {
-  const dtf = new Intl.DateTimeFormat("en-US", {
-    hour12: false,
-    timeZone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  });
-  const parts = dtf.formatToParts(date);
-  const map = {};
-  parts.forEach(({ type, value }) => {
-    map[type] = value;
-  });
+/**
+ * Returns the signed difference (in ms) between the given timezone and UTC
+ * at the moment represented by `date`.
+ * i.e. offsetMs = dateInTZ - dateInUTC
+ */
+function getTimeZoneOffsetMilliseconds(dateInput, timeZone) {
+  const date = new Date(dateInput);
+  const partsUTC = formatPartsFor(date, "UTC");
+  const partsTZ = formatPartsFor(date, timeZone);
 
-  return new Date(
-    `${map.year}-${map.month}-${map.day}T${map.hour}:${map.minute}:${map.second}`
+  const utcMs = Date.UTC(
+    Number(partsUTC.year),
+    Number(partsUTC.month) - 1,
+    Number(partsUTC.day),
+    Number(partsUTC.hour),
+    Number(partsUTC.minute),
+    Number(partsUTC.second)
   );
+
+  const tzMs = Date.UTC(
+    Number(partsTZ.year),
+    Number(partsTZ.month) - 1,
+    Number(partsTZ.day),
+    Number(partsTZ.hour),
+    Number(partsTZ.minute),
+    Number(partsTZ.second)
+  );
+
+  return tzMs - utcMs;
 }
 
-function getTimeZoneOffsetMilliseconds(date, timeZone) {
-  const dtfUTC = new Intl.DateTimeFormat("en-US", {
-    timeZone: "UTC",
-    hour12: false,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  });
-  const dtfTZ = new Intl.DateTimeFormat("en-US", {
-    timeZone,
-    hour12: false,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  });
+/**
+ * Interpret the wall-clock time of `dateInput` in `timeZone` and return the
+ * corresponding UTC Date object.
+ *
+ * Example: zonedTimeToUtc("2025-09-12T09:00:00", "Asia/Kolkata") -> Date object at UTC equivalent.
+ */
+function zonedTimeToUtc(dateInput, timeZone) {
+  const date = new Date(dateInput);
+  const parts = formatPartsFor(date, timeZone);
 
-  const partsUTC = dtfUTC.formatToParts(date);
-  const partsTZ = dtfTZ.formatToParts(date);
+  // Build UTC timestamp for the wall clock fields (treat them as if they were UTC)
+  const localAsUtcMs = Date.UTC(
+    Number(parts.year),
+    Number(parts.month) - 1,
+    Number(parts.day),
+    Number(parts.hour),
+    Number(parts.minute),
+    Number(parts.second)
+  );
 
-  function partsToDate(parts) {
-    const map = {};
-    parts.forEach(({ type, value }) => {
-      map[type] = value;
-    });
-    return new Date(
-      `${map.year}-${map.month}-${map.day}T${map.hour}:${map.minute}:${map.second}Z`
-    );
-  }
+  // offset (tz - utc) in ms at that instant
+  const tzOffsetMs = getTimeZoneOffsetMilliseconds(date, timeZone);
 
-  const dateUTC = partsToDate(partsUTC);
-  const dateTZ = partsToDate(partsTZ);
+  // The real UTC instant for that wall-clock is: localAsUtcMs - tzOffsetMs
+  return new Date(localAsUtcMs - tzOffsetMs);
+}
 
-  return dateTZ.getTime() - dateUTC.getTime();
+/**
+ * Convert a UTC (or any instant) Date to a Date representing the wall-clock time
+ * in the provided timezone. Implementation returns a Date whose timestamp is
+ * shifted so that its fields correspond to the target timezone's local time.
+ *
+ * NOTE: This returns a Date object you can use for comparisons of "local" times
+ * (e.g. comparing arrivalLocal.setHours(...) etc.)
+ */
+function utcToZonedTime(dateInput, timeZone) {
+  const date = new Date(dateInput);
+  const tzOffsetMs = getTimeZoneOffsetMilliseconds(date, timeZone);
+  // Shift the instant by offset (tz - utc). Adding offset moves the UTC instant
+  // to the timezone's wall-clock representation.
+  return new Date(date.getTime() + tzOffsetMs);
 }
 
 // -----------------------
@@ -112,8 +112,10 @@ function getWorkDurationSeconds(workedSessions, currentlyWorking) {
   if (!Array.isArray(workedSessions)) return 0;
 
   let total = workedSessions.reduce((sum, s) => {
-    if (s.start && s.end)
-      return sum + (new Date(s.end) - new Date(s.start)) / 1000;
+    if (s && s.start && s.end)
+      return (
+        sum + (new Date(s.end).getTime() - new Date(s.start).getTime()) / 1000
+      );
     return sum;
   }, 0);
 
@@ -131,8 +133,10 @@ function getBreakDurationSeconds(breakSessions, onBreak, breakStart) {
   if (!Array.isArray(breakSessions)) return 0;
 
   let total = breakSessions.reduce((sum, s) => {
-    if (s.start && s.end)
-      return sum + (new Date(s.end) - new Date(s.start)) / 1000;
+    if (s && s.start && s.end)
+      return (
+        sum + (new Date(s.end).getTime() - new Date(s.start).getTime()) / 1000
+      );
     return sum;
   }, 0);
 
@@ -165,8 +169,8 @@ function secToHM(sec) {
   return `${h}h ${m.toString().padStart(2, "0")}m`;
 }
 
-function ymdKey(date) {
-  const d = new Date(date);
+function ymdKey(dateInput) {
+  const d = new Date(dateInput);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(
     2,
     "0"
@@ -192,7 +196,7 @@ function calculateLateAndHalfDay(
   const arrivalLocal = utcToZonedTime(new Date(arrivalTimeUTC), userTimeZone);
 
   if (shiftStartTime) {
-    const [h, m] = shiftStartTime.split(":").map(Number);
+    const [h, m] = String(shiftStartTime).split(":").map(Number);
     const shiftStartLocal = new Date(arrivalLocal);
     shiftStartLocal.setHours(h || 0, m || 0, 0, 0);
 
@@ -429,7 +433,7 @@ async function getTodayStatus(req, res) {
 }
 
 // -----------------------
-// Update Today's Status with Early Punch Allowance
+// Update Today's Status
 // -----------------------
 async function updateTodayStatus(req, res) {
   try {
@@ -469,24 +473,6 @@ async function updateTodayStatus(req, res) {
       const breakType = breakTypeMatch ? breakTypeMatch[1].trim() : undefined;
 
       if (lower.includes("punch in")) {
-        // --- Early punch check ---
-        const effectiveShift = await getEffectiveShift(userId, todayUTC);
-        if (effectiveShift.start) {
-          const [h, m] = effectiveShift.start.split(":").map(Number);
-          const shiftStartLocal = new Date(
-            utcToZonedTime(now, userTimeZone)
-          );
-          shiftStartLocal.setHours(h, m, 0, 0);
-          const earliestAllowed = new Date(shiftStartLocal);
-          earliestAllowed.setMinutes(earliestAllowed.getMinutes() - EARLY_PUNCH_MINUTES);
-
-          if (now < earliestAllowed) {
-            return res.status(400).json({
-              message: `Cannot punch in earlier than ${EARLY_PUNCH_MINUTES} minutes before shift start`
-            });
-          }
-        }
-
         if (!todayStatus.arrivalTime) todayStatus.arrivalTime = now;
         if (!ws.length || ws[ws.length - 1].end) ws.push({ start: now });
         todayStatus.currentlyWorking = true;
@@ -591,7 +577,7 @@ async function updateTodayStatus(req, res) {
       isAbsent: dailyWork?.isAbsent || false,
       dailyWork: dailyWork
         ? {
-            id: dailyWork._1d || dailyWork._id,
+            id: dailyWork._id,
             date: dailyWork.date,
             workDurationSeconds: dailyWork.workDurationSeconds,
             breakDurationSeconds: dailyWork.breakDurationSeconds,
