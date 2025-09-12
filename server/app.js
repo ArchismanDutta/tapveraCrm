@@ -29,6 +29,7 @@ const wishRoutes = require("./routes/wishRoutes");
 const flexibleShiftRoutes = require("./routes/flexibleShiftRoutes");
 const adminAttendanceRoutes = require("./routes/adminAttendanceRoutes");
 const holidayRoutes = require("./routes/holidayRoutes");
+const shiftRoutes = require("./routes/shifts");
 const superAdminRoutes = require("./routes/superAdminRoutes"); // Make sure this file exists
 
 // Controllers
@@ -97,6 +98,7 @@ app.use("/api/wishes", wishRoutes);
 app.use("/api/holidays", holidayRoutes);
 app.use("/api/flexible-shifts", flexibleShiftRoutes);
 app.use("/api/admin", adminAttendanceRoutes);
+app.use("/api/shifts", shiftRoutes);
 app.use("/api/super-admin", superAdminRoutes); // Super admin route added
 
 
