@@ -12,30 +12,26 @@ import {
   Download
 } from "lucide-react";
 
-
 const STATUS_STYLES = {
   Present: "text-green-400 bg-green-900/30 border-green-700",
-  // Late: "text-orange-400 bg-orange-900/30 border-orange-700", // removed
+  Late: "text-orange-400 bg-orange-900/30 border-orange-700",
   Absent: "text-red-400 bg-red-900/30 border-red-700",
   "Half Day": "text-yellow-400 bg-yellow-900/30 border-yellow-700",
   default: "text-gray-400 bg-gray-900/30 border-gray-700",
 };
 
-
 const STATUS_ICONS = {
   Present: CheckCircle,
-  // Late: Clock, // removed
+  Late: Clock,
   Absent: XCircle,
   "Half Day": Timer,
   default: Activity,
 };
 
-
 const RecentActivityTable = ({ activities = [] }) => {
   const [filter, setFilter] = useState("all");
   const [sortBy, setSortBy] = useState("date");
   const [sortOrder, setSortOrder] = useState("desc");
-
 
   if (!activities || activities.length === 0) {
     return (
@@ -53,17 +49,15 @@ const RecentActivityTable = ({ activities = [] }) => {
     );
   }
 
-
   // Filter activities based on status
   const filteredActivities = activities.filter(activity => {
     if (filter === "all") return true;
     if (filter === "present") return activity.status === "Present";
-    // if (filter === "late") return activity.status.includes("Late"); // removed
+    if (filter === "late") return activity.status.includes("Late");
     if (filter === "absent") return activity.status === "Absent";
     if (filter === "halfday") return activity.status === "Half Day";
     return true;
   });
-
 
   // Sort activities
   const sortedActivities = [...filteredActivities].sort((a, b) => {
@@ -89,7 +83,6 @@ const RecentActivityTable = ({ activities = [] }) => {
     return sortOrder === "desc" ? -comparison : comparison;
   });
 
-
   const handleSort = (column) => {
     if (sortBy === column) {
       setSortOrder(sortOrder === "asc" ? "desc" : "asc");
@@ -99,18 +92,16 @@ const RecentActivityTable = ({ activities = [] }) => {
     }
   };
 
-
   // Calculate summary statistics
   const summary = {
     totalDays: filteredActivities.length,
     presentDays: filteredActivities.filter(a => a.status === "Present").length,
-    // lateDays: filteredActivities.filter(a => a.status.includes("Late")).length, // removed
+    lateDays: filteredActivities.filter(a => a.status.includes("Late")).length,
     absentDays: filteredActivities.filter(a => a.status === "Absent").length,
     totalHours: filteredActivities.reduce((sum, a) => sum + parseFloat(a.workingHours || 0), 0),
     averageHours: filteredActivities.length > 0 ? 
       (filteredActivities.reduce((sum, a) => sum + parseFloat(a.workingHours || 0), 0) / filteredActivities.length).toFixed(1) : 0
   };
-
 
   const exportToCSV = () => {
     const headers = ["Date", "Time In", "Time Out", "Status", "Working Hours", "Break Time", "Efficiency"];
@@ -127,7 +118,6 @@ const RecentActivityTable = ({ activities = [] }) => {
       ].join(","))
     ].join("\n");
 
-
     const blob = new Blob([csvContent], { type: "text/csv" });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -136,7 +126,6 @@ const RecentActivityTable = ({ activities = [] }) => {
     a.click();
     window.URL.revokeObjectURL(url);
   };
-
 
   return (
     <div className="bg-[#161c2c] rounded-xl shadow-md p-4 w-full border border-[#232945]">
@@ -158,7 +147,7 @@ const RecentActivityTable = ({ activities = [] }) => {
             >
               <option value="all">All Status</option>
               <option value="present">Present</option>
-              {/* <option value="late">Late</option> removed */}
+              <option value="late">Late</option>
               <option value="absent">Absent</option>
               <option value="halfday">Half Day</option>
             </select>
@@ -177,7 +166,7 @@ const RecentActivityTable = ({ activities = [] }) => {
       </div>
 
       {/* Summary cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
         <div className="bg-[#232945] rounded-lg p-3 text-center">
           <div className="text-blue-400 font-bold text-lg">{summary.totalDays}</div>
           <div className="text-xs text-gray-400">Total Days</div>
@@ -186,12 +175,11 @@ const RecentActivityTable = ({ activities = [] }) => {
           <div className="text-green-400 font-bold text-lg">{summary.presentDays}</div>
           <div className="text-xs text-gray-400">Present</div>
         </div>
-        {/* Removed Late summary card */}
         <div className="bg-[#232945] rounded-lg p-3 text-center">
-          <div className="text-red-400 font-bold text-lg">{summary.absentDays}</div>
-          <div className="text-xs text-gray-400">Absent</div>
+          <div className="text-orange-400 font-bold text-lg">{summary.lateDays}</div>
+          <div className="text-xs text-gray-400">Late</div>
         </div>
-        <div className="bg-[#232945] rounded-lg p-3 text-center col-span-1 sm:col-span-1">
+        <div className="bg-[#232945] rounded-lg p-3 text-center">
           <div className="text-purple-400 font-bold text-lg">{summary.totalHours.toFixed(1)}h</div>
           <div className="text-xs text-gray-400">Total Hours</div>
         </div>
@@ -202,7 +190,7 @@ const RecentActivityTable = ({ activities = [] }) => {
         <table className="w-full text-sm text-gray-300">
           <thead>
             <tr className="border-b border-[#232945] text-left">
-              <th
+              <th 
                 className="py-3 px-3 cursor-pointer hover:text-blue-400 transition-colors"
                 onClick={() => handleSort("date")}
               >
@@ -213,7 +201,7 @@ const RecentActivityTable = ({ activities = [] }) => {
                   }`} />
                 </div>
               </th>
-              <th
+              <th 
                 className="py-3 px-3 cursor-pointer hover:text-blue-400 transition-colors"
                 onClick={() => handleSort("timeIn")}
               >
@@ -225,7 +213,7 @@ const RecentActivityTable = ({ activities = [] }) => {
                 </div>
               </th>
               <th className="py-3 px-3">Time Out</th>
-              <th
+              <th 
                 className="py-3 px-3 cursor-pointer hover:text-blue-400 transition-colors"
                 onClick={() => handleSort("status")}
               >
@@ -236,7 +224,7 @@ const RecentActivityTable = ({ activities = [] }) => {
                   }`} />
                 </div>
               </th>
-              <th
+              <th 
                 className="py-3 px-3 cursor-pointer hover:text-blue-400 transition-colors"
                 onClick={() => handleSort("workingHours")}
               >
@@ -347,8 +335,8 @@ const RecentActivityTable = ({ activities = [] }) => {
         <div className="flex items-center justify-between text-xs text-gray-400">
           <div className="flex gap-4">
             <span>Avg: {summary.averageHours}h/day</span>
-            <span>Attendance: {((summary.presentDays) / Math.max(summary.totalDays, 1) * 100).toFixed(1)}%</span>
-            {/* Removed On-time rate */}
+            <span>Attendance: {((summary.presentDays + summary.lateDays) / Math.max(summary.totalDays, 1) * 100).toFixed(1)}%</span>
+            <span>On-time: {(summary.presentDays / Math.max(summary.presentDays + summary.lateDays, 1) * 100).toFixed(1)}%</span>
           </div>
           <span>Last updated: {new Date().toLocaleTimeString()}</span>
         </div>
@@ -356,6 +344,5 @@ const RecentActivityTable = ({ activities = [] }) => {
     </div>
   );
 };
-
 
 export default RecentActivityTable;

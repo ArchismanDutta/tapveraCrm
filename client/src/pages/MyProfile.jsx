@@ -5,6 +5,7 @@ import StatCard from "../components/profile/StatCard";
 import ProfileHeader from "../components/profile/ProfileHeader";
 import axios from "axios";
 
+
 import {
   FaCheckCircle,
   FaProjectDiagram,
@@ -39,9 +40,11 @@ const MyProfile = ({ userType = "employee", onLogout }) => {
       const res = await axios.get(`${API_BASE}/api/users/me`, {
         headers: { Authorization: `Bearer ${token}` },
       });
+      const tapveraImg = "/favicon.png"; // no import needed
+
       const user = res.data;
       setProfileData({
-        avatar: user.avatar || "https://i.pravatar.cc/150?img=32",
+        avatar: tapveraImg, // Always use tapvera logo
         name: capitalize(user.name),
         role: capitalize(userType),
         team: capitalize(user.team || user.designation),
@@ -210,7 +213,7 @@ const MyProfile = ({ userType = "employee", onLogout }) => {
                   <img
                     src={editData.avatar}
                     alt="Avatar Preview"
-                    className="w-32 h-32 rounded-full object-cover border-4 border-[#262e4a] shadow-lg"
+                    className="w-32 h-32 rounded-full object-contain bg-[#1b2233] border-4 border-[#262e4a] shadow-lg"
                   />
                 </div>
                 <div className="flex-1">
