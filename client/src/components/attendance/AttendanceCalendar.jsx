@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
+import { Calendar, Clock, AlertTriangle, CheckCircle } from "lucide-react";
 
 const STATUS_COLOR = {
   present: "bg-green-700 text-green-200 cursor-pointer hover:bg-green-600",
@@ -6,12 +7,15 @@ const STATUS_COLOR = {
   holiday: "bg-blue-700 text-blue-200 cursor-pointer hover:bg-blue-600",
   weekend: "bg-gray-700 text-gray-300 cursor-pointer hover:bg-gray-600",
   leave: "bg-purple-500 text-purple-200 cursor-pointer hover:bg-purple-400",
+  late: "bg-orange-700 text-orange-200 cursor-pointer hover:bg-orange-600",
+  "half-day": "bg-yellow-700 text-yellow-200 cursor-pointer hover:bg-yellow-600",
   default: "bg-slate-600 text-slate-300 cursor-pointer hover:bg-slate-500",
 };
 
 const AttendanceCalendar = ({ data }) => {
   const [hoveredDay, setHoveredDay] = useState(null);
   const [tooltipStyle, setTooltipStyle] = useState({});
+  const [selectedDay, setSelectedDay] = useState(null);
   const containerRef = useRef(null);
 
   if (!data) return null;
@@ -45,12 +49,12 @@ const AttendanceCalendar = ({ data }) => {
         const rect = dayCell.getBoundingClientRect();
         const containerRect = containerRef.current.getBoundingClientRect();
 
-        const tooltipWidth = 200;
+        const tooltipWidth = 280;
         let left = rect.left - containerRect.left + rect.width / 2 - tooltipWidth / 2;
         if (left < 5) left = 5;
         if (left + tooltipWidth > containerRect.width - 5) left = containerRect.width - tooltipWidth - 5;
 
-        const top = rect.top - containerRect.top - 80; // More space for detailed tooltip
+        const top = rect.top - containerRect.top - 100; // More space for detailed tooltip
 
         setTooltipStyle({
           left,
@@ -67,49 +71,109 @@ const AttendanceCalendar = ({ data }) => {
   const getTooltipContent = (day) => {
     const content = [];
     
+    // Date header
+    const dateStr = new Date(data.year, monthIndex, day.day).toLocaleDateString('en-US', {
+      weekday: 'long',
+      month: 'long',
+      day: 'numeric'
+    });
+    content.push({ type: 'header', text: dateStr });
+    
     // Main status or holiday name
     if (day.status === "holiday" && day.name) {
-      content.push(`🎉 ${day.name}`);
+      content.push({ type: 'status', text: `🎉 ${day.name}`, color: 'text-blue-400' });
     } else if (day.status === "weekend") {
-      content.push("🏠 Weekend");
+      content.push({ type: 'status', text: "🏠 Weekend", color: 'text-gray-400' });
     } else if (day.status === "leave") {
-      content.push(`🌴 ${day.name || 'Approved Leave'}`);
+      content.push({ type: 'status', text: `🌴 ${day.name || 'Approved Leave'}`, color: 'text-purple-400' });
     } else {
       // Working day details
       const statusEmoji = {
         present: "✅",
+        late: "⏰",
         absent: "❌",
+        "half-day": "🕐",
         default: "📅"
       };
       
-      content.push(`${statusEmoji[day.status] || "📅"} ${day.status.charAt(0).toUpperCase() + day.status.slice(1)}`);
+      const statusColors = {
+        present: "text-green-400",
+        late: "text-orange-400",
+        absent: "text-red-400",
+        "half-day": "text-yellow-400",
+        default: "text-gray-400"
+      };
+      
+      content.push({ 
+        type: 'status', 
+        text: `${statusEmoji[day.status] || "📅"} ${day.status.charAt(0).toUpperCase() + day.status.slice(1)}`,
+        color: statusColors[day.status] || "text-gray-400"
+      });
     }
     
     // Working hours (for all statuses)
     if (parseFloat(day.workingHours) > 0) {
-      content.push(`⏱️ ${day.workingHours}h worked`);
+      content.push({ 
+        type: 'info', 
+        text: `⏱️ ${day.workingHours}h worked`,
+        color: 'text-blue-400'
+      });
     }
     
     // Time details for working days
-    if (day.status === "present") {
+    if (day.status === "present" || day.status === "late" || day.status === "half-day") {
       if (day.arrivalTime) {
         const arrivalTime = new Date(day.arrivalTime);
-        content.push(`🚪 In: ${arrivalTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`);
+        content.push({ 
+          type: 'info', 
+          text: `🚪 In: ${arrivalTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`,
+          color: 'text-gray-300'
+        });
       }
       
       if (day.departureTime) {
         const departureTime = new Date(day.departureTime);
-        content.push(`🚪 Out: ${departureTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`);
+        content.push({ 
+          type: 'info', 
+          text: `🚪 Out: ${departureTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`,
+          color: 'text-gray-300'
+        });
       }
       
       // Break information
       if (day.metadata?.totalBreakTime && parseFloat(day.metadata.totalBreakTime) > 0) {
-        content.push(`☕ Break: ${day.metadata.totalBreakTime}h`);
+        content.push({ 
+          type: 'info', 
+          text: `☕ Break: ${day.metadata.totalBreakTime}h`,
+          color: 'text-yellow-400'
+        });
+      }
+      
+      // Late information
+      if (day.metadata?.lateMinutes && day.metadata.lateMinutes > 0) {
+        content.push({ 
+          type: 'warning', 
+          text: `⏰ Late by ${day.metadata.lateMinutes} minutes`,
+          color: 'text-orange-400'
+        });
       }
       
       // Flexible shift indicator
       if (day.metadata?.isFlexible) {
-        content.push("🔄 Flexible shift");
+        content.push({ 
+          type: 'info', 
+          text: "🔄 Flexible shift",
+          color: 'text-cyan-400'
+        });
+      }
+
+      // Break sessions count
+      if (day.metadata?.breakSessions > 0) {
+        content.push({ 
+          type: 'info', 
+          text: `🔢 ${day.metadata.breakSessions} break session${day.metadata.breakSessions !== 1 ? 's' : ''}`,
+          color: 'text-gray-400'
+        });
       }
     }
     
@@ -120,7 +184,9 @@ const AttendanceCalendar = ({ data }) => {
   const getStatusIndicator = (status) => {
     const indicators = {
       present: "●",
+      late: "◐",
       absent: "○",
+      "half-day": "◑",
       holiday: "★",
       weekend: "▪",
       leave: "▲",
@@ -129,21 +195,39 @@ const AttendanceCalendar = ({ data }) => {
     return indicators[status] || "○";
   };
 
+  // Handle day click for detailed view
+  const handleDayClick = (day) => {
+    if (day.status !== "default" && day.status !== "weekend") {
+      setSelectedDay(day);
+    }
+  };
+
   return (
     <div
       ref={containerRef}
       className="relative bg-[#161c2c] rounded-xl shadow-md p-4 w-full border border-[#232945]"
     >
       <div className="flex justify-between items-center mb-4">
-        <h3 className="font-semibold text-lg text-gray-100">
-          {data.month} {data.year}
-        </h3>
+        <div className="flex items-center gap-2">
+          <Calendar className="w-5 h-5 text-blue-400" />
+          <h3 className="font-semibold text-lg text-gray-100">
+            {data.month} {data.year}
+          </h3>
+        </div>
         
-        {/* Legend */}
-        <div className="flex items-center gap-4 text-xs">
+        {/* Enhanced Legend */}
+        <div className="flex items-center gap-3 text-xs">
           <div className="flex items-center gap-1">
             <span className="w-2 h-2 rounded-full bg-green-500"></span>
             <span className="text-gray-400">Present</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <span className="w-2 h-2 rounded-full bg-orange-500"></span>
+            <span className="text-gray-400">Late</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <span className="w-2 h-2 rounded-full bg-yellow-500"></span>
+            <span className="text-gray-400">Half Day</span>
           </div>
           <div className="flex items-center gap-1">
             <span className="w-2 h-2 rounded-full bg-red-500"></span>
@@ -171,7 +255,7 @@ const AttendanceCalendar = ({ data }) => {
       <div className="grid grid-cols-7 gap-2">
         {/* Blank days */}
         {blanks.map((_, idx) => (
-          <div key={`blank-${idx}`} className="h-12 rounded-lg" />
+          <div key={`blank-${idx}`} className="h-14 rounded-lg" />
         ))}
 
         {/* Days */}
@@ -181,6 +265,7 @@ const AttendanceCalendar = ({ data }) => {
           const isToday = new Date().getDate() === day.day && 
                            new Date().getMonth() === monthIndex && 
                            new Date().getFullYear() === data.year;
+          const isSelected = selectedDay?.day === day.day;
 
           return (
             <div
@@ -188,23 +273,38 @@ const AttendanceCalendar = ({ data }) => {
               data-day={day.day}
               onMouseEnter={() => setHoveredDay(day)}
               onMouseLeave={() => setHoveredDay(null)}
-              className={`h-12 rounded-lg flex flex-col justify-center items-center font-medium select-none transition-all duration-200 relative ${statusColor} ${
+              onClick={() => handleDayClick(day)}
+              className={`h-14 rounded-lg flex flex-col justify-center items-center font-medium select-none transition-all duration-200 relative ${statusColor} ${
                 isToday ? "ring-2 ring-blue-400 ring-offset-1 ring-offset-[#161c2c]" : ""
-              }`}
+              } ${isSelected ? "ring-2 ring-purple-400 ring-offset-1 ring-offset-[#161c2c]" : ""}`}
             >
               <div className="text-sm font-semibold">{day.day}</div>
               <div className="text-xs opacity-75">{indicator}</div>
               
               {/* Working hours indicator for present days */}
-              {day.status === "present" && parseFloat(day.workingHours) > 0 && (
-                <div className="absolute -bottom-1 -right-1 bg-blue-600 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center font-bold">
+              {(day.status === "present" || day.status === "late" || day.status === "half-day") && parseFloat(day.workingHours) > 0 && (
+                <div className="absolute -bottom-1 -right-1 bg-blue-600 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold">
                   {Math.round(parseFloat(day.workingHours))}
+                </div>
+              )}
+              
+              {/* Late indicator */}
+              {day.status === "late" && day.metadata?.lateMinutes > 0 && (
+                <div className="absolute -top-1 -left-1 bg-orange-500 rounded-full w-3 h-3 flex items-center justify-center">
+                  <Clock className="w-2 h-2 text-white" />
                 </div>
               )}
               
               {/* Today indicator */}
               {isToday && (
-                <div className="absolute -top-1 -right-1 bg-blue-500 rounded-full w-2 h-2"></div>
+                <div className="absolute -top-1 -right-1 bg-blue-500 rounded-full w-2 h-2 animate-pulse"></div>
+              )}
+
+              {/* Break sessions indicator */}
+              {day.metadata?.breakSessions > 0 && (
+                <div className="absolute top-0 left-0 text-xs text-yellow-400">
+                  ●
+                </div>
               )}
             </div>
           );
@@ -214,7 +314,7 @@ const AttendanceCalendar = ({ data }) => {
       {/* Enhanced frosted glass tooltip */}
       {hoveredDay && (
         <div
-          className="absolute z-50 pointer-events-none text-xs rounded-xl px-4 py-3 select-none transition-all duration-300 transform"
+          className="absolute z-50 pointer-events-none text-sm rounded-xl px-4 py-3 select-none transition-all duration-300 transform"
           style={{
             position: "absolute",
             left: tooltipStyle.left,
@@ -234,10 +334,15 @@ const AttendanceCalendar = ({ data }) => {
             lineHeight: "1.4",
           }}
         >
-          <div className="space-y-1">
-            {getTooltipContent(hoveredDay).map((line, idx) => (
-              <div key={idx} className="text-sm">
-                {line}
+          <div className="space-y-2">
+            {getTooltipContent(hoveredDay).map((item, idx) => (
+              <div key={idx} className={`${
+                item.type === 'header' ? 'text-base font-semibold text-white border-b border-gray-600 pb-1' :
+                item.type === 'status' ? `text-sm font-medium ${item.color}` :
+                item.type === 'warning' ? `text-sm ${item.color}` :
+                `text-sm ${item.color || 'text-gray-300'}`
+              }`}>
+                {item.text}
               </div>
             ))}
           </div>
@@ -260,34 +365,66 @@ const AttendanceCalendar = ({ data }) => {
         </div>
       )}
       
-      {/* Monthly summary at the bottom */}
+      {/* Enhanced Monthly summary with performance insights */}
       <div className="mt-4 pt-3 border-t border-[#232945]">
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs text-gray-400">
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 text-xs">
           <div className="text-center">
-            <div className="text-green-400 font-semibold text-sm">
-              {days.filter(d => d.status === "present").length}
+            <div className="flex items-center justify-center gap-1 mb-1">
+              <CheckCircle className="w-3 h-3 text-green-400" />
+              <span className="text-green-400 font-semibold text-sm">
+                {days.filter(d => d.status === "present").length}
+              </span>
             </div>
-            <div>Present</div>
+            <div className="text-gray-400">Present</div>
           </div>
           <div className="text-center">
-            <div className="text-red-400 font-semibold text-sm">
-              {days.filter(d => d.status === "absent").length}
+            <div className="flex items-center justify-center gap-1 mb-1">
+              <Clock className="w-3 h-3 text-orange-400" />
+              <span className="text-orange-400 font-semibold text-sm">
+                {days.filter(d => d.status === "late").length}
+              </span>
             </div>
-            <div>Absent</div>
+            <div className="text-gray-400">Late</div>
+          </div>
+          <div className="text-center">
+            <div className="flex items-center justify-center gap-1 mb-1">
+              <AlertTriangle className="w-3 h-3 text-red-400" />
+              <span className="text-red-400 font-semibold text-sm">
+                {days.filter(d => d.status === "absent").length}
+              </span>
+            </div>
+            <div className="text-gray-400">Absent</div>
           </div>
           <div className="text-center">
             <div className="text-purple-400 font-semibold text-sm">
               {days.filter(d => d.status === "leave").length}
             </div>
-            <div>On Leave</div>
+            <div className="text-gray-400">On Leave</div>
           </div>
           <div className="text-center">
             <div className="text-blue-400 font-semibold text-sm">
               {days.filter(d => d.status === "holiday").length}
             </div>
-            <div>Holidays</div>
+            <div className="text-gray-400">Holidays</div>
           </div>
         </div>
+        
+        {/* Monthly performance summary */}
+        {data.monthlyStats && (
+          <div className="mt-3 pt-3 border-t border-[#232945] text-xs text-gray-400">
+            <div className="flex justify-between items-center">
+              <span>Monthly Performance:</span>
+              <div className="flex gap-4">
+                <span className="text-blue-400">
+                  {((data.monthlyStats.totalPresent / (data.monthlyStats.totalPresent + data.monthlyStats.totalAbsent)) * 100 || 0).toFixed(1)}% attendance
+                </span>
+                <span className="text-green-400">
+                  {days.reduce((sum, d) => sum + parseFloat(d.workingHours || 0), 0).toFixed(1)}h total
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
