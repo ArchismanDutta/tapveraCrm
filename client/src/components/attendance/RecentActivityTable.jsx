@@ -1,181 +1,191 @@
 import React, { useState } from "react";
-import { Clock, Calendar, AlertCircle, CheckCircle, XCircle, Info } from "lucide-react";
+import { 
+  Clock, 
+  CheckCircle, 
+  AlertTriangle, 
+  XCircle, 
+  Timer,
+  Activity,
+  TrendingUp,
+  Calendar,
+  Filter,
+  Download
+} from "lucide-react";
 
 const STATUS_STYLES = {
   Present: "text-green-400 bg-green-900/30 border-green-700",
-  "Present": "text-green-400 bg-green-900/30 border-green-700",
-  Late: "text-yellow-400 bg-yellow-900/30 border-yellow-700",
-  "Late": "text-yellow-400 bg-yellow-900/30 border-yellow-700",
+  Late: "text-orange-400 bg-orange-900/30 border-orange-700",
   Absent: "text-red-400 bg-red-900/30 border-red-700",
-  "Absent": "text-red-400 bg-red-900/30 border-red-700",
+  "Half Day": "text-yellow-400 bg-yellow-900/30 border-yellow-700",
   default: "text-gray-400 bg-gray-900/30 border-gray-700",
 };
 
 const STATUS_ICONS = {
   Present: CheckCircle,
-  Late: AlertCircle,
+  Late: Clock,
   Absent: XCircle,
-  default: Info,
+  "Half Day": Timer,
+  default: Activity,
 };
 
 const RecentActivityTable = ({ activities = [] }) => {
-  const [sortField, setSortField] = useState("date");
-  const [sortDirection, setSortDirection] = useState("desc");
-  const [showDetails, setShowDetails] = useState({});
+  const [filter, setFilter] = useState("all");
+  const [sortBy, setSortBy] = useState("date");
+  const [sortOrder, setSortOrder] = useState("desc");
 
-  // Enhanced sorting function
-  const handleSort = (field) => {
-    if (sortField === field) {
-      setSortDirection(sortDirection === "asc" ? "desc" : "asc");
-    } else {
-      setSortField(field);
-      setSortDirection("desc");
-    }
-  };
-
-  // Sort activities
-  const sortedActivities = [...activities].sort((a, b) => {
-    let aValue = a[sortField];
-    let bValue = b[sortField];
-
-    // Handle date sorting
-    if (sortField === "date") {
-      aValue = new Date(a.date);
-      bValue = new Date(b.date);
-    }
-    
-    // Handle time sorting
-    if (sortField === "timeIn" || sortField === "timeOut") {
-      // Convert time strings to comparable format
-      const parseTime = (timeStr) => {
-        if (timeStr === "--" || !timeStr) return new Date(0);
-        const [time, period] = timeStr.split(" ");
-        const [hours, minutes] = time.split(":");
-        let hour24 = parseInt(hours);
-        if (period === "PM" && hour24 !== 12) hour24 += 12;
-        if (period === "AM" && hour24 === 12) hour24 = 0;
-        return new Date(2000, 0, 1, hour24, parseInt(minutes));
-      };
-      aValue = parseTime(aValue);
-      bValue = parseTime(bValue);
-    }
-
-    if (sortDirection === "asc") {
-      return aValue < bValue ? -1 : aValue > bValue ? 1 : 0;
-    } else {
-      return aValue > bValue ? -1 : aValue < bValue ? 1 : 0;
-    }
-  });
-
-  // Get status color and icon
-  const getStatusInfo = (status) => {
-    // Handle dynamic late status with minutes
-    if (typeof status === "string" && status.includes("Late")) {
-      return {
-        style: STATUS_STYLES.Late,
-        Icon: STATUS_ICONS.Late,
-        text: status
-      };
-    }
-    
-    const baseStatus = status?.split(" ")[0] || "default";
-    return {
-      style: STATUS_STYLES[baseStatus] || STATUS_STYLES.default,
-      Icon: STATUS_ICONS[baseStatus] || STATUS_ICONS.default,
-      text: status
-    };
-  };
-
-  // Toggle row details
-  const toggleDetails = (index) => {
-    setShowDetails(prev => ({
-      ...prev,
-      [index]: !prev[index]
-    }));
-  };
-
-  // Format date for display
-  const formatDate = (dateStr) => {
-    const date = new Date(dateStr);
-    const today = new Date();
-    const yesterday = new Date(today);
-    yesterday.setDate(yesterday.getDate() - 1);
-
-    if (date.toDateString() === today.toDateString()) {
-      return "Today";
-    } else if (date.toDateString() === yesterday.toDateString()) {
-      return "Yesterday";
-    } else {
-      return date.toLocaleDateString('en-US', { 
-        month: 'short', 
-        day: 'numeric',
-        weekday: 'short'
-      });
-    }
-  };
-
-  // Calculate work duration
-  const calculateWorkDuration = (timeIn, timeOut) => {
-    if (timeIn === "--" || timeOut === "--") return "--";
-    
-    try {
-      const parseTime = (timeStr) => {
-        const [time, period] = timeStr.split(" ");
-        const [hours, minutes] = time.split(":");
-        let hour24 = parseInt(hours);
-        if (period === "PM" && hour24 !== 12) hour24 += 12;
-        if (period === "AM" && hour24 === 12) hour24 = 0;
-        return { hours: hour24, minutes: parseInt(minutes) };
-      };
-
-      const inTime = parseTime(timeIn);
-      const outTime = parseTime(timeOut);
-      
-      const inMinutes = inTime.hours * 60 + inTime.minutes;
-      let outMinutes = outTime.hours * 60 + outTime.minutes;
-      
-      // Handle overnight shifts
-      if (outMinutes < inMinutes) {
-        outMinutes += 24 * 60;
-      }
-      
-      const diffMinutes = outMinutes - inMinutes;
-      const hours = Math.floor(diffMinutes / 60);
-      const minutes = diffMinutes % 60;
-      
-      return `${hours}h ${minutes}m`;
-    } catch (error) {
-      return "--";
-    }
-  };
-
-  if (activities.length === 0) {
+  if (!activities || activities.length === 0) {
     return (
-      <div className="bg-[#161c2c] rounded-xl shadow-md p-8 w-full border border-[#232945]">
-        <h3 className="font-semibold text-lg mb-4 text-gray-100 flex items-center gap-2">
-          <Clock className="w-5 h-5" />
-          Recent Activity
-        </h3>
+      <div className="bg-[#161c2c] rounded-xl shadow-md p-6 w-full border border-[#232945]">
+        <div className="flex items-center gap-2 mb-4">
+          <Activity className="w-5 h-5 text-blue-400" />
+          <h3 className="font-semibold text-lg text-gray-100">Recent Activity</h3>
+        </div>
         <div className="text-center py-8">
-          <Calendar className="w-12 h-12 text-gray-600 mx-auto mb-3" />
-          <p className="text-gray-400">No recent activity to display</p>
+          <Calendar className="w-16 h-16 text-gray-600 mx-auto mb-4" />
+          <p className="text-gray-400 text-lg mb-2">No activity data available</p>
+          <p className="text-gray-500 text-sm">Your recent attendance records will appear here.</p>
         </div>
       </div>
     );
   }
 
+  // Filter activities based on status
+  const filteredActivities = activities.filter(activity => {
+    if (filter === "all") return true;
+    if (filter === "present") return activity.status === "Present";
+    if (filter === "late") return activity.status.includes("Late");
+    if (filter === "absent") return activity.status === "Absent";
+    if (filter === "halfday") return activity.status === "Half Day";
+    return true;
+  });
+
+  // Sort activities
+  const sortedActivities = [...filteredActivities].sort((a, b) => {
+    let comparison = 0;
+    
+    switch (sortBy) {
+      case "date":
+        comparison = new Date(a.date) - new Date(b.date);
+        break;
+      case "timeIn":
+        comparison = (a.timeIn || "").localeCompare(b.timeIn || "");
+        break;
+      case "workingHours":
+        comparison = parseFloat(a.workingHours) - parseFloat(b.workingHours);
+        break;
+      case "status":
+        comparison = a.status.localeCompare(b.status);
+        break;
+      default:
+        comparison = 0;
+    }
+    
+    return sortOrder === "desc" ? -comparison : comparison;
+  });
+
+  const handleSort = (column) => {
+    if (sortBy === column) {
+      setSortOrder(sortOrder === "asc" ? "desc" : "asc");
+    } else {
+      setSortBy(column);
+      setSortOrder("desc");
+    }
+  };
+
+  // Calculate summary statistics
+  const summary = {
+    totalDays: filteredActivities.length,
+    presentDays: filteredActivities.filter(a => a.status === "Present").length,
+    lateDays: filteredActivities.filter(a => a.status.includes("Late")).length,
+    absentDays: filteredActivities.filter(a => a.status === "Absent").length,
+    totalHours: filteredActivities.reduce((sum, a) => sum + parseFloat(a.workingHours || 0), 0),
+    averageHours: filteredActivities.length > 0 ? 
+      (filteredActivities.reduce((sum, a) => sum + parseFloat(a.workingHours || 0), 0) / filteredActivities.length).toFixed(1) : 0
+  };
+
+  const exportToCSV = () => {
+    const headers = ["Date", "Time In", "Time Out", "Status", "Working Hours", "Break Time", "Efficiency"];
+    const csvContent = [
+      headers.join(","),
+      ...sortedActivities.map(activity => [
+        activity.date,
+        activity.timeIn,
+        activity.timeOut,
+        `"${activity.status}"`,
+        activity.workingHours,
+        activity.breakTime,
+        activity.efficiency
+      ].join(","))
+    ].join("\n");
+
+    const blob = new Blob([csvContent], { type: "text/csv" });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `attendance_report_${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    window.URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="bg-[#161c2c] rounded-xl shadow-md p-4 w-full border border-[#232945]">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="font-semibold text-lg text-gray-100 flex items-center gap-2">
-          <Clock className="w-5 h-5" />
-          Recent Activity
-        </h3>
-        <span className="text-sm text-gray-400">
-          Last {activities.length} days
-        </span>
+      {/* Header with controls */}
+      <div className="flex justify-between items-center mb-4">
+        <div className="flex items-center gap-2">
+          <Activity className="w-5 h-5 text-blue-400" />
+          <h3 className="font-semibold text-lg text-gray-100">Recent Activity</h3>
+          <span className="text-sm text-gray-400">({sortedActivities.length} records)</span>
+        </div>
+        
+        <div className="flex items-center gap-3">
+          {/* Filter dropdown */}
+          <div className="relative">
+            <select
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
+              className="bg-[#232945] border border-[#3a3f4e] rounded-lg px-3 py-1 text-sm text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="all">All Status</option>
+              <option value="present">Present</option>
+              <option value="late">Late</option>
+              <option value="absent">Absent</option>
+              <option value="halfday">Half Day</option>
+            </select>
+            <Filter className="w-3 h-3 text-gray-500 absolute right-2 top-2 pointer-events-none" />
+          </div>
+          
+          {/* Export button */}
+          <button
+            onClick={exportToCSV}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-lg text-sm font-medium flex items-center gap-1 transition-colors"
+          >
+            <Download className="w-3 h-3" />
+            Export
+          </button>
+        </div>
       </div>
-      
+
+      {/* Summary cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+        <div className="bg-[#232945] rounded-lg p-3 text-center">
+          <div className="text-blue-400 font-bold text-lg">{summary.totalDays}</div>
+          <div className="text-xs text-gray-400">Total Days</div>
+        </div>
+        <div className="bg-[#232945] rounded-lg p-3 text-center">
+          <div className="text-green-400 font-bold text-lg">{summary.presentDays}</div>
+          <div className="text-xs text-gray-400">Present</div>
+        </div>
+        <div className="bg-[#232945] rounded-lg p-3 text-center">
+          <div className="text-orange-400 font-bold text-lg">{summary.lateDays}</div>
+          <div className="text-xs text-gray-400">Late</div>
+        </div>
+        <div className="bg-[#232945] rounded-lg p-3 text-center">
+          <div className="text-purple-400 font-bold text-lg">{summary.totalHours.toFixed(1)}h</div>
+          <div className="text-xs text-gray-400">Total Hours</div>
+        </div>
+      </div>
+
+      {/* Table */}
       <div className="overflow-x-auto">
         <table className="w-full text-sm text-gray-300">
           <thead>
@@ -186,9 +196,9 @@ const RecentActivityTable = ({ activities = [] }) => {
               >
                 <div className="flex items-center gap-1">
                   Date
-                  <span className="text-xs">
-                    {sortField === "date" && (sortDirection === "asc" ? "↑" : "↓")}
-                  </span>
+                  <TrendingUp className={`w-3 h-3 transform transition-transform ${
+                    sortBy === "date" ? (sortOrder === "desc" ? "rotate-180" : "") : "opacity-50"
+                  }`} />
                 </div>
               </th>
               <th 
@@ -197,127 +207,140 @@ const RecentActivityTable = ({ activities = [] }) => {
               >
                 <div className="flex items-center gap-1">
                   Time In
-                  <span className="text-xs">
-                    {sortField === "timeIn" && (sortDirection === "asc" ? "↑" : "↓")}
-                  </span>
+                  <TrendingUp className={`w-3 h-3 transform transition-transform ${
+                    sortBy === "timeIn" ? (sortOrder === "desc" ? "rotate-180" : "") : "opacity-50"
+                  }`} />
                 </div>
               </th>
-              <th 
-                className="py-3 px-3 cursor-pointer hover:text-blue-400 transition-colors"
-                onClick={() => handleSort("timeOut")}
-              >
-                <div className="flex items-center gap-1">
-                  Time Out
-                  <span className="text-xs">
-                    {sortField === "timeOut" && (sortDirection === "asc" ? "↑" : "↓")}
-                  </span>
-                </div>
-              </th>
-              <th className="py-3 px-3">Duration</th>
+              <th className="py-3 px-3">Time Out</th>
               <th 
                 className="py-3 px-3 cursor-pointer hover:text-blue-400 transition-colors"
                 onClick={() => handleSort("status")}
               >
                 <div className="flex items-center gap-1">
                   Status
-                  <span className="text-xs">
-                    {sortField === "status" && (sortDirection === "asc" ? "↑" : "↓")}
-                  </span>
+                  <TrendingUp className={`w-3 h-3 transform transition-transform ${
+                    sortBy === "status" ? (sortOrder === "desc" ? "rotate-180" : "") : "opacity-50"
+                  }`} />
                 </div>
               </th>
-              <th className="py-3 px-3 w-8"></th>
+              <th 
+                className="py-3 px-3 cursor-pointer hover:text-blue-400 transition-colors"
+                onClick={() => handleSort("workingHours")}
+              >
+                <div className="flex items-center gap-1">
+                  Hours
+                  <TrendingUp className={`w-3 h-3 transform transition-transform ${
+                    sortBy === "workingHours" ? (sortOrder === "desc" ? "rotate-180" : "") : "opacity-50"
+                  }`} />
+                </div>
+              </th>
+              <th className="py-3 px-3 hidden sm:table-cell">Break</th>
+              <th className="py-3 px-3 hidden md:table-cell">Efficiency</th>
             </tr>
           </thead>
           <tbody>
             {sortedActivities.map((activity, idx) => {
-              const { date, timeIn, timeOut, status, workingHours, breakTime } = activity;
-              const statusInfo = getStatusInfo(status);
-              const StatusIcon = statusInfo.Icon;
-              const workDuration = calculateWorkDuration(timeIn, timeOut);
-              const isExpanded = showDetails[idx];
-
+              const StatusIcon = STATUS_ICONS[activity.status] || STATUS_ICONS.default;
+              const statusStyle = STATUS_STYLES[activity.status] || STATUS_STYLES.default;
+              const isToday = activity.date === new Date().toISOString().split('T')[0];
+              
               return (
-                <React.Fragment key={idx}>
-                  <tr className="border-b border-[#232945] last:border-none hover:bg-[#232945] transition-colors group">
-                    <td className="py-3 px-3">
-                      <div className="font-medium">
-                        {formatDate(date)}
-                      </div>
-                      <div className="text-xs text-gray-500 mt-1">
-                        {new Date(date).toLocaleDateString()}
-                      </div>
-                    </td>
-                    <td className="py-3 px-3">
-                      <span className={`${timeIn === "--" ? "text-gray-500" : "text-gray-300"}`}>
-                        {timeIn}
+                <tr
+                  key={idx}
+                  className={`border-b border-[#232945] last:border-none hover:bg-[#232945]/50 transition-colors ${
+                    isToday ? 'bg-blue-900/20 border-blue-700/50' : ''
+                  }`}
+                >
+                  <td className="py-3 px-3">
+                    <div className="flex items-center gap-2">
+                      <span className={isToday ? 'text-blue-400 font-medium' : ''}>
+                        {new Date(activity.date).toLocaleDateString('en-US', { 
+                          month: 'short', 
+                          day: 'numeric',
+                          weekday: 'short'
+                        })}
                       </span>
-                    </td>
-                    <td className="py-3 px-3">
-                      <span className={`${timeOut === "--" ? "text-gray-500" : "text-gray-300"}`}>
-                        {timeOut}
-                      </span>
-                    </td>
-                    <td className="py-3 px-3">
-                      <span className="text-blue-400 font-medium">
-                        {workingHours || workDuration}
-                      </span>
-                    </td>
-                    <td className="py-3 px-3">
-                      <span
-                        className={`px-3 py-1.5 rounded-full font-semibold text-xs border flex items-center gap-1.5 w-fit ${statusInfo.style}`}
-                      >
-                        <StatusIcon className="w-3 h-3" />
-                        {statusInfo.text}
-                      </span>
-                    </td>
-                    <td className="py-3 px-3">
-                      {(workingHours || breakTime) && (
-                        <button
-                          onClick={() => toggleDetails(idx)}
-                          className="text-gray-400 hover:text-blue-400 transition-colors opacity-0 group-hover:opacity-100"
-                        >
-                          <Info className={`w-4 h-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
-                        </button>
+                      {isToday && (
+                        <span className="text-xs bg-blue-600 text-white px-1 rounded">TODAY</span>
                       )}
-                    </td>
-                  </tr>
-                  
-                  {isExpanded && (workingHours || breakTime) && (
-                    <tr className="border-b border-[#232945] bg-[#1a2332]">
-                      <td colSpan="6" className="py-3 px-3">
-                        <div className="flex gap-6 text-xs">
-                          {workingHours && (
-                            <div className="flex items-center gap-2">
-                              <Clock className="w-3 h-3 text-blue-400" />
-                              <span className="text-gray-400">Work:</span>
-                              <span className="text-blue-400 font-medium">{workingHours}</span>
-                            </div>
-                          )}
-                          {breakTime && breakTime !== "0.00h" && (
-                            <div className="flex items-center gap-2">
-                              <AlertCircle className="w-3 h-3 text-orange-400" />
-                              <span className="text-gray-400">Break:</span>
-                              <span className="text-orange-400 font-medium">{breakTime}</span>
-                            </div>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  )}
-                </React.Fragment>
+                    </div>
+                  </td>
+                  <td className="py-3 px-3">
+                    <div className="flex items-center gap-1">
+                      <Clock className="w-3 h-3 text-gray-500" />
+                      <span>{activity.timeIn}</span>
+                    </div>
+                  </td>
+                  <td className="py-3 px-3">
+                    <div className="flex items-center gap-1">
+                      <Clock className="w-3 h-3 text-gray-500" />
+                      <span>{activity.timeOut}</span>
+                    </div>
+                  </td>
+                  <td className="py-3 px-3">
+                    <div
+                      className={`inline-flex items-center gap-1 px-3 py-1 rounded-full font-medium text-xs border ${statusStyle}`}
+                    >
+                      <StatusIcon className="w-3 h-3" />
+                      <span>{activity.status}</span>
+                    </div>
+                  </td>
+                  <td className="py-3 px-3">
+                    <div className="flex items-center gap-1">
+                      <Timer className="w-3 h-3 text-blue-400" />
+                      <span className="font-medium">{activity.workingHours}</span>
+                    </div>
+                  </td>
+                  <td className="py-3 px-3 hidden sm:table-cell">
+                    <span className="text-yellow-400">{activity.breakTime}</span>
+                  </td>
+                  <td className="py-3 px-3 hidden md:table-cell">
+                    <div className="flex items-center gap-1">
+                      <div className="w-12 bg-gray-700 rounded-full h-2">
+                        <div 
+                          className={`h-2 rounded-full transition-all duration-300 ${
+                            parseFloat(activity.efficiency) >= 80 ? 'bg-green-500' :
+                            parseFloat(activity.efficiency) >= 60 ? 'bg-yellow-500' : 'bg-red-500'
+                          }`}
+                          style={{ width: activity.efficiency }}
+                        ></div>
+                      </div>
+                      <span className="text-xs">{activity.efficiency}</span>
+                    </div>
+                  </td>
+                </tr>
               );
             })}
           </tbody>
         </table>
       </div>
-      
-      {activities.length > 10 && (
-        <div className="text-center pt-4 border-t border-[#232945] mt-4">
-          <button className="text-blue-400 hover:text-blue-300 text-sm font-medium transition-colors">
-            View All Activity
+
+      {/* Empty state for filtered results */}
+      {filteredActivities.length === 0 && activities.length > 0 && (
+        <div className="text-center py-8">
+          <Filter className="w-12 h-12 text-gray-600 mx-auto mb-3" />
+          <p className="text-gray-400">No records match the current filter</p>
+          <button
+            onClick={() => setFilter("all")}
+            className="text-blue-400 hover:text-blue-300 text-sm mt-2"
+          >
+            Clear filter
           </button>
         </div>
       )}
+
+      {/* Performance insights */}
+      <div className="mt-4 pt-4 border-t border-[#232945]">
+        <div className="flex items-center justify-between text-xs text-gray-400">
+          <div className="flex gap-4">
+            <span>Avg: {summary.averageHours}h/day</span>
+            <span>Attendance: {((summary.presentDays + summary.lateDays) / Math.max(summary.totalDays, 1) * 100).toFixed(1)}%</span>
+            <span>On-time: {(summary.presentDays / Math.max(summary.presentDays + summary.lateDays, 1) * 100).toFixed(1)}%</span>
+          </div>
+          <span>Last updated: {new Date().toLocaleTimeString()}</span>
+        </div>
+      </div>
     </div>
   );
 };
