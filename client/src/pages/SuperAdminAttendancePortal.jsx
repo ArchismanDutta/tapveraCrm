@@ -5,7 +5,7 @@ import AttendanceCalendar from "../components/attendance/AttendanceCalendar";
 import WeeklyHoursChart from "../components/attendance/WeeklyHoursChart";
 import RecentActivityTable from "../components/attendance/RecentActivityTable";
 import Sidebar from "../components/dashboard/Sidebar";
-import { RefreshCw, AlertCircle, Clock, Users, Calendar as CalendarIcon, User, Search } from "lucide-react";
+import { RefreshCw, AlertCircle, Clock, Users, Calendar as CalendarIcon, User, Search, UserCheck, Activity, Building2, ChevronDown } from "lucide-react";
 
 const SuperAdminAttendancePortal = ({ onLogout }) => {
   const [collapsed, setCollapsed] = useState(false);
@@ -23,6 +23,7 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
   const [employeeCache, setEmployeeCache] = useState(new Map());
+  const [showDropdown, setShowDropdown] = useState(false);
 
   const token = localStorage.getItem("token");
   const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
@@ -491,6 +492,7 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
     // Only reset if selecting a different employee
     if (selectedEmployee?._id !== employee._id) {
       setSelectedEmployee(employee);
+      setShowDropdown(false);
       // Don't reset stats immediately - let the loading state handle the UI
       // The fetchAttendanceData will be called by useEffect and will show loading
     }
@@ -510,7 +512,7 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
     // Ensure employees is always an array
     if (!Array.isArray(employees)) return [];
     
-    if (!debouncedSearchTerm.trim()) return employees;
+    if (!debouncedSearchTerm.trim()) return employees.slice(0, 10); // Limit to 10 for better performance
     
     const searchLower = debouncedSearchTerm.toLowerCase();
     return employees.filter(emp => {
@@ -524,18 +526,20 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
         console.warn('Error filtering employee:', emp, error);
         return false;
       }
-    });
+    }).slice(0, 8); // Limit results for better UX
   }, [employees, debouncedSearchTerm]);
 
-  // Debug effect to track search state
+  // Handle click outside dropdown
   useEffect(() => {
-    console.log('Search state:', { 
-      searchTerm, 
-      debouncedSearchTerm, 
-      employeesLength: employees.length, 
-      filteredLength: filteredEmployees.length 
-    });
-  }, [searchTerm, debouncedSearchTerm, employees.length, filteredEmployees.length]);
+    const handleClickOutside = (event) => {
+      if (!event.target.closest('.employee-selector')) {
+        setShowDropdown(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // Only show loading screen if we're loading employees AND have no employees yet
   if (loading && employees.length === 0) {
