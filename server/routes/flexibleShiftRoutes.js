@@ -47,3 +47,4 @@ router.put(
 router.delete("/:requestId", protect, deleteFlexibleShiftRequest);
 
 module.exports = router;
+
