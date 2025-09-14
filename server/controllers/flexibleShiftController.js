@@ -13,34 +13,84 @@ exports.createFlexibleShiftRequest = async (req, res) => {
     const user = await User.findById(userId);
     if (!user) return res.status(404).json({ message: "User not found" });
 
+    // Prevent flexible permanent shift employees from submitting requests
     if (user.shiftType === "flexiblePermanent") {
       return res.status(400).json({
-        message: "Permanent flexible shift employees do not submit requests",
+        message: "Permanent flexible shift employees do not need to submit shift requests",
       });
     }
 
     const { requestedDate, requestedStartTime, durationHours, reason } = req.body;
 
     if (!requestedDate || !requestedStartTime) {
-      return res
-        .status(400)
-        .json({ message: "Requested date and start time are required" });
+      return res.status(400).json({ 
+        message: "Requested date and start time are required" 
+      });
+    }
+
+    // Validate the date is not in the past
+    const reqDate = new Date(requestedDate);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    if (reqDate < today) {
+      return res.status(400).json({
+        message: "Cannot request flexible shift for past dates"
+      });
+    }
+
+    // Check if request already exists for this date
+    const existingRequest = await FlexibleShiftRequest.findOne({
+      employee: userId,
+      requestedDate: reqDate
+    });
+
+    if (existingRequest) {
+      return res.status(400).json({
+        message: "A flexible shift request already exists for this date"
+      });
+    }
+
+    // Validate time format
+    if (!/^([01]\d|2[0-3]):([0-5]\d)$/.test(requestedStartTime)) {
+      return res.status(400).json({
+        message: "Invalid time format. Use HH:MM format"
+      });
+    }
+
+    // Validate duration
+    const duration = durationHours || 9;
+    if (duration < 1 || duration > 24) {
+      return res.status(400).json({
+        message: "Duration must be between 1 and 24 hours"
+      });
     }
 
     const request = new FlexibleShiftRequest({
       employee: userId,
-      requestedDate: new Date(requestedDate),
+      requestedDate: reqDate,
       requestedStartTime,
-      durationHours: durationHours || 9,
+      durationHours: duration,
       reason: reason?.trim() || "",
-      status: "pending",
-      shiftType: "flexibleRequest",
+      status: "pending"
     });
 
     await request.save();
-    res.status(201).json({ message: "Flexible shift request submitted", request });
+    
+    // Populate employee details for response
+    await request.populate('employee', 'name email employeeId department');
+    
+    res.status(201).json({ 
+      message: "Flexible shift request submitted successfully", 
+      request 
+    });
   } catch (err) {
     console.error("Create flexible shift request error:", err);
+    if (err.code === 11000) {
+      return res.status(400).json({
+        message: "A request for this date already exists"
+      });
+    }
     res.status(500).json({ message: "Server error" });
   }
 };
@@ -51,8 +101,25 @@ exports.createFlexibleShiftRequest = async (req, res) => {
 // ======================
 exports.getFlexibleShiftRequests = async (req, res) => {
   try {
-    const requests = await FlexibleShiftRequest.find()
-      .populate("employee", "_id name email employeeId shift shiftType")
+    const { status, startDate, endDate } = req.query;
+    
+    let filter = {};
+    
+    // Filter by status if provided
+    if (status && ["pending", "approved", "rejected"].includes(status)) {
+      filter.status = status;
+    }
+    
+    // Filter by date range if provided
+    if (startDate || endDate) {
+      filter.requestedDate = {};
+      if (startDate) filter.requestedDate.$gte = new Date(startDate);
+      if (endDate) filter.requestedDate.$lte = new Date(endDate);
+    }
+
+    const requests = await FlexibleShiftRequest.find(filter)
+      .populate("employee", "name email employeeId department designation shiftType")
+      .populate("reviewedBy", "name email")
       .sort({ createdAt: -1 });
 
     res.json(requests);
@@ -71,9 +138,10 @@ exports.getEmployeeFlexibleRequests = async (req, res) => {
     const userId = req.user?._id;
     if (!userId) return res.status(401).json({ message: "Unauthorized" });
 
-    const requests = await FlexibleShiftRequest.find({ employee: userId }).sort({
-      createdAt: -1,
-    });
+    const requests = await FlexibleShiftRequest.find({ employee: userId })
+      .populate("reviewedBy", "name email")
+      .sort({ createdAt: -1 });
+      
     res.json(requests);
   } catch (err) {
     console.error("Get employee flexible requests error:", err);
@@ -88,68 +156,148 @@ exports.getEmployeeFlexibleRequests = async (req, res) => {
 exports.updateFlexibleShiftStatus = async (req, res) => {
   try {
     const { requestId } = req.params;
-    const { status } = req.body;
+    const { status, remarks } = req.body;
 
     if (!["approved", "rejected", "pending"].includes(status)) {
       return res.status(400).json({ message: "Invalid status value" });
     }
 
-    const request = await FlexibleShiftRequest.findById(requestId);
-    if (!request)
+    const request = await FlexibleShiftRequest.findById(requestId)
+      .populate('employee', 'shiftType');
+    
+    if (!request) {
       return res.status(404).json({ message: "Flexible shift request not found" });
+    }
 
-    const user = await User.findById(request.employee);
-    if (!user) return res.status(404).json({ message: "Employee not found" });
+    const user = await User.findById(request.employee._id);
+    if (!user) {
+      return res.status(404).json({ message: "Employee not found" });
+    }
 
-    if (user.shiftType === "flexiblePermanent" && status === "approved") {
+    // Prevent approving requests for flexible permanent employees
+    if (user.shiftType === "flexiblePermanent") {
       return res.status(400).json({
-        message: "Permanent flexible shift employees cannot have requests approved",
+        message: "Cannot approve flexible shift requests for permanent flexible employees"
+      });
+    }
+
+    // Check if the request date has passed
+    const requestDate = new Date(request.requestedDate);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    if (requestDate < today && status === "approved") {
+      return res.status(400).json({
+        message: "Cannot approve requests for past dates"
       });
     }
 
     // Update request status
     request.status = status;
-    request.reviewedBy = req.user?._id;
+    request.reviewedBy = req.user._id;
     request.reviewedAt = new Date();
+    if (remarks) request.remarks = remarks;
+    
     await request.save();
 
-    // Only update shiftOverrides for approved requests
+    // Only create shift override for approved requests
     if (status === "approved") {
       const duration = request.durationHours || 9;
       const [startH, startM] = request.requestedStartTime.split(":").map(Number);
 
+      // Calculate end time
       let endH = startH + Math.floor(duration);
       let endM = startM + Math.round((duration % 1) * 60);
+      
+      // Handle minute overflow
       if (endM >= 60) {
-        endH += 1;
-        endM -= 60;
+        endH += Math.floor(endM / 60);
+        endM = endM % 60;
       }
-      if (endH >= 24) endH -= 24;
+      
+      // Handle hour overflow (next day)
+      if (endH >= 24) {
+        endH = endH % 24;
+      }
 
       const endTime = `${String(endH).padStart(2, "0")}:${String(endM).padStart(2, "0")}`;
-      const key = new Date(request.requestedDate).toISOString().slice(0, 10);
+      
+      // Create date key for shift override
+      const dateKey = request.requestedDate.toISOString().slice(0, 10);
 
-      // ⚠️ Strictly update only shiftOverrides
-      await User.updateOne(
-        { _id: user._id },
+      // Update user's shift overrides
+      await User.findByIdAndUpdate(
+        user._id,
         {
           $set: {
-            [`shiftOverrides.${key}`]: {
+            [`shiftOverrides.${dateKey}`]: {
               start: request.requestedStartTime,
               end: endTime,
               durationHours: duration,
-            },
-          },
+              type: "flexible",
+              approvedBy: req.user._id,
+              approvedAt: new Date()
+            }
+          }
         }
       );
     }
 
-    res.json({ message: `Request ${status}`, request });
+    // Populate the response
+    await request.populate([
+      { path: 'employee', select: 'name email employeeId department' },
+      { path: 'reviewedBy', select: 'name email' }
+    ]);
+
+    res.json({ 
+      message: `Request ${status} successfully`, 
+      request 
+    });
   } catch (err) {
     console.error("Error updating flexible shift status:", err);
-    if (err.name === "ValidationError") {
-      return res.status(400).json({ message: "Validation error", errors: err.errors });
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+// ======================
+// Delete Flexible Shift Request
+// DELETE /api/flexible-shifts/:requestId
+// ======================
+exports.deleteFlexibleShiftRequest = async (req, res) => {
+  try {
+    const { requestId } = req.params;
+    const userId = req.user._id;
+    
+    const request = await FlexibleShiftRequest.findById(requestId);
+    if (!request) {
+      return res.status(404).json({ message: "Request not found" });
     }
+    
+    // Only allow deletion by the employee who created it or HR/Admin
+    const isOwner = request.employee.toString() === userId.toString();
+    const isAuthorized = ["hr", "admin", "super-admin"].includes(req.user.role);
+    
+    if (!isOwner && !isAuthorized) {
+      return res.status(403).json({ message: "Not authorized to delete this request" });
+    }
+    
+    // Don't allow deletion of approved requests on the same day or past dates
+    if (request.status === "approved") {
+      const requestDate = new Date(request.requestedDate);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      if (requestDate <= today) {
+        return res.status(400).json({
+          message: "Cannot delete approved requests for today or past dates"
+        });
+      }
+    }
+    
+    await FlexibleShiftRequest.findByIdAndDelete(requestId);
+    res.json({ message: "Request deleted successfully" });
+  } catch (err) {
+    console.error("Delete flexible shift request error:", err);
     res.status(500).json({ message: "Server error" });
   }
 };

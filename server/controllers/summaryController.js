@@ -67,6 +67,11 @@ exports.getWeeklySummary = async (req, res) => {
     for (const day of rawDailyData) {
       const effectiveShift = await getEffectiveShift(userId, day.date);
 
+      // Skip days where no shift is assigned
+      if (!effectiveShift) {
+        continue;
+      }
+
       const workSeconds = day.workDurationSeconds || 0;
       const breakSeconds = day.breakDurationSeconds || 0;
 
