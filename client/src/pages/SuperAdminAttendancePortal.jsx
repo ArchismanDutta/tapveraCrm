@@ -5,7 +5,7 @@ import AttendanceCalendar from "../components/attendance/AttendanceCalendar";
 import WeeklyHoursChart from "../components/attendance/WeeklyHoursChart";
 import RecentActivityTable from "../components/attendance/RecentActivityTable";
 import Sidebar from "../components/dashboard/Sidebar";
-import { RefreshCw, AlertCircle, Clock, Users, Calendar as CalendarIcon, User, Search } from "lucide-react";
+import { RefreshCw, AlertCircle, Clock, Users, Calendar as CalendarIcon, User, Search, UserCheck, Activity, Building2, ChevronDown } from "lucide-react";
 
 const SuperAdminAttendancePortal = ({ onLogout }) => {
   const [collapsed, setCollapsed] = useState(false);
@@ -23,10 +23,13 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
   const [employeeCache, setEmployeeCache] = useState(new Map());
+  const [showDropdown, setShowDropdown] = useState(false);
 
   const token = localStorage.getItem("token");
   const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
   const MIN_PRESENT_SECONDS = 5 * 3600; // 5 hours minimum for present status
+  const SIDEBAR_WIDTH_EXPANDED = 288;
+  const SIDEBAR_WIDTH_COLLAPSED = 80;
 
   // Enhanced axios configuration with proper error handling
   const apiClient = axios.create({
@@ -491,6 +494,7 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
     // Only reset if selecting a different employee
     if (selectedEmployee?._id !== employee._id) {
       setSelectedEmployee(employee);
+      setShowDropdown(false);
       // Don't reset stats immediately - let the loading state handle the UI
       // The fetchAttendanceData will be called by useEffect and will show loading
     }
@@ -510,7 +514,7 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
     // Ensure employees is always an array
     if (!Array.isArray(employees)) return [];
     
-    if (!debouncedSearchTerm.trim()) return employees;
+    if (!debouncedSearchTerm.trim()) return employees.slice(0, 10); // Limit to 10 for better performance
     
     const searchLower = debouncedSearchTerm.toLowerCase();
     return employees.filter(emp => {
@@ -524,201 +528,357 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
         console.warn('Error filtering employee:', emp, error);
         return false;
       }
-    });
+    }).slice(0, 8); // Limit results for better UX
   }, [employees, debouncedSearchTerm]);
 
-  // Debug effect to track search state
+  // Handle click outside dropdown
   useEffect(() => {
-    console.log('Search state:', { 
-      searchTerm, 
-      debouncedSearchTerm, 
-      employeesLength: employees.length, 
-      filteredLength: filteredEmployees.length 
-    });
-  }, [searchTerm, debouncedSearchTerm, employees.length, filteredEmployees.length]);
+    const handleClickOutside = (event) => {
+      if (!event.target.closest('.employee-selector')) {
+        setShowDropdown(false);
+      }
+    };
 
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Calculate aggregate stats
+  const totalEmployees = employees.length;
+  const currentlyWorking = employees.filter(emp => emp.currentStatus?.currentlyWorking).length || 0;
+  
   // Only show loading screen if we're loading employees AND have no employees yet
   if (loading && employees.length === 0) {
     return (
-      <div className="p-4 text-gray-100 bg-[#0f1419] min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
-          <p className="text-lg">Loading employees...</p>
-          <p className="text-sm text-gray-400 mt-2">Please wait while we fetch the employee list</p>
+      <div className="bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 min-h-screen flex items-center justify-center">
+        <div className="flex flex-col items-center space-y-4">
+          <div className="relative">
+            <div className="w-16 h-16 border-4 border-purple-200 border-t-purple-600 rounded-full animate-spin"></div>
+            <Users className="w-6 h-6 text-purple-400 absolute inset-0 m-auto" />
+          </div>
+          <p className="text-purple-200 text-lg font-medium">Loading Employee Portal...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="flex min-h-screen bg-[#0f1419] text-gray-100">
+    <div className="bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-gray-100 min-h-screen flex">
       <Sidebar
         collapsed={collapsed}
         setCollapsed={setCollapsed}
         userRole="superadmin"
         onLogout={onLogout}
       />
-      <main className={`flex-1 p-6 space-y-6 transition-all duration-300 ${collapsed ? "ml-20" : "ml-72"}`}>
-        {/* Header */}
-        <div className="flex justify-between items-start">
-          <div className="flex-1">
-            <h1 className="text-3xl font-bold text-gray-100 mb-2">Employee Attendance Portal</h1>
-            <p className="text-gray-400 mb-3">View detailed attendance information for any employee</p>
+      
+      <main
+        className="flex-1 p-8 space-y-8 overflow-auto transition-all duration-300"
+        style={{ marginLeft: collapsed ? SIDEBAR_WIDTH_COLLAPSED : SIDEBAR_WIDTH_EXPANDED }}
+      >
+        {/* Header Section */}
+        <div className="flex justify-between items-center">
+          <div className="space-y-2">
+            <h1 className="text-4xl font-bold bg-gradient-to-r from-purple-400 to-cyan-400 bg-clip-text text-transparent">
+              Employee Attendance Portal
+            </h1>
+            <p className="text-gray-400 text-lg">Monitor and analyze employee attendance patterns</p>
           </div>
           
-          <div className="flex items-center gap-3">
+          <div className="flex gap-3">
             <button
               onClick={() => fetchEmployees()}
               disabled={loading}
-              className="bg-gray-600 hover:bg-gray-700 disabled:opacity-50 text-white px-4 py-2 rounded-lg transition-colors text-sm font-medium flex items-center gap-2"
+              className="px-6 py-3 bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-500 hover:to-red-500 rounded-xl transition-all duration-300 flex items-center gap-2 shadow-lg hover:shadow-orange-500/25 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-              {loading ? 'Loading...' : 'Refresh Employees'}
+              Refresh Employees
             </button>
             <button
               onClick={handleRefresh}
               disabled={refreshing || !selectedEmployee}
-              className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-4 py-2 rounded-lg transition-colors text-sm font-medium flex items-center gap-2"
+              className="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 rounded-xl transition-all duration-300 flex items-center gap-2 shadow-lg hover:shadow-blue-500/25 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
-              {refreshing ? 'Refreshing...' : 'Refresh Data'}
+              Refresh Data
             </button>
           </div>
         </div>
 
         {/* Error Display */}
         {error && (
-          <div className="bg-red-500/20 border border-red-500 rounded-lg p-4 mb-6">
-            <div className="flex items-center gap-2">
-              <AlertCircle className="w-5 h-5 text-red-400" />
-              <span className="text-red-400 font-medium">Error</span>
+          <div className="bg-gradient-to-br from-red-600/20 to-red-800/20 backdrop-blur-sm border border-red-500/20 rounded-2xl p-6 hover:border-red-400/40 transition-all duration-300">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-3 bg-red-500/20 rounded-xl">
+                <AlertCircle className="w-6 h-6 text-red-400" />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-white">Error Loading Data</h3>
+                <p className="text-red-200 mt-1">{error}</p>
+              </div>
             </div>
-            <p className="text-gray-300 mt-2">{error}</p>
             <button
               onClick={() => fetchEmployees()}
-              className="mt-3 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition-colors text-sm font-medium"
+              className="px-6 py-3 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 rounded-xl transition-all duration-300 font-medium shadow-lg hover:shadow-red-500/25 transform hover:scale-105"
             >
               Retry
             </button>
           </div>
         )}
 
-        {/* Employee Selection */}
-        <div className="bg-[#161c2c] rounded-xl shadow-md p-4 border border-[#232945]">
-          <div className="flex items-center gap-2 mb-3">
-            <User className="w-4 h-4 text-blue-400" />
-            <h2 className="font-semibold text-gray-100">Select Employee</h2>
-            {employees.length > 0 && (
-              <span className="text-xs text-gray-400 ml-auto">
-                {employees.length} available
-              </span>
-            )}
-          </div>
-          
-          {/* Search Input */}
-          <div className="relative mb-3">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-            <input
-              type="text"
-              placeholder="Search employees..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 bg-[#232945] border border-[#3C3F6B] rounded-lg text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-            />
-          </div>
-
-          {/* Employee List - Compact Table Style */}
-          <div className="max-h-64 overflow-y-auto border border-[#3C3F6B] rounded-lg">
-            <table className="w-full">
-              <thead className="bg-[#232945] sticky top-0">
-                <tr>
-                  <th className="text-left py-2 px-3 text-xs font-medium text-gray-300">Name</th>
-                  <th className="text-left py-2 px-3 text-xs font-medium text-gray-300">ID</th>
-                  <th className="text-left py-2 px-3 text-xs font-medium text-gray-300">Department</th>
-                  <th className="text-left py-2 px-3 text-xs font-medium text-gray-300">Role</th>
-                </tr>
-              </thead>
-              <tbody>
-                {Array.isArray(filteredEmployees) && filteredEmployees.length > 0 ? (
-                  filteredEmployees.map((employee) => {
-                    const isSelected = selectedEmployee?._id === employee._id;
-                    return (
-                      <tr
-                        key={employee._id}
-                        onClick={() => handleEmployeeSelect(employee)}
-                        className={`cursor-pointer transition-colors hover:bg-[#2a2f4a] ${
-                          isSelected
-                            ? 'bg-blue-600/20 border-l-4 border-blue-500'
-                            : 'border-l-4 border-transparent'
-                        } ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
-                      >
-                        <td className="py-2 px-3 text-sm text-gray-100 font-medium">{employee.name || 'N/A'}</td>
-                        <td className="py-2 px-3 text-xs text-gray-400">{employee.employeeId || 'N/A'}</td>
-                        <td className="py-2 px-3 text-xs text-gray-400">{employee.department || 'N/A'}</td>
-                        <td className="py-2 px-3 text-xs text-gray-400 capitalize">{employee.role || 'N/A'}</td>
-                      </tr>
-                    );
-                  })
-                ) : (
-                  <tr>
-                    <td colSpan="4" className="py-4 px-3 text-center text-gray-400">
-                      {loading ? 'Loading employees...' : 'No employees found'}
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          {Array.isArray(filteredEmployees) && filteredEmployees.length === 0 && !loading && debouncedSearchTerm.trim() && (
-            <div className="text-center py-6 text-gray-400">
-              <User className="w-8 h-8 mx-auto mb-2 opacity-50" />
-              <p className="text-sm">No employees found matching "{debouncedSearchTerm}"</p>
-              <p className="text-xs mt-1">Try a different search term</p>
+        {/* Statistics Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="bg-gradient-to-br from-blue-600/20 to-blue-800/20 backdrop-blur-sm border border-blue-500/20 rounded-2xl p-6 hover:border-blue-400/40 transition-all duration-300">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-blue-200 text-sm font-medium">Total Employees</p>
+                <p className="text-3xl font-bold text-white mt-1">{totalEmployees}</p>
+              </div>
+              <div className="p-3 bg-blue-500/20 rounded-xl">
+                <Users className="w-6 h-6 text-blue-400" />
+              </div>
             </div>
-          )}
+          </div>
+
+          <div className="bg-gradient-to-br from-green-600/20 to-green-800/20 backdrop-blur-sm border border-green-500/20 rounded-2xl p-6 hover:border-green-400/40 transition-all duration-300">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-green-200 text-sm font-medium">Selected Employee</p>
+                <p className="text-lg font-bold text-white truncate max-w-32 mt-1">
+                  {selectedEmployee ? selectedEmployee.name : 'None'}
+                </p>
+              </div>
+              <div className="p-3 bg-green-500/20 rounded-xl">
+                <UserCheck className="w-6 h-6 text-green-400" />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-gradient-to-br from-orange-600/20 to-orange-800/20 backdrop-blur-sm border border-orange-500/20 rounded-2xl p-6 hover:border-orange-400/40 transition-all duration-300">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-orange-200 text-sm font-medium">Current Status</p>
+                <p className="text-lg font-bold text-white mt-1">
+                  {currentStatus ? (currentStatus.currentlyWorking ? 'Working' : 'Offline') : 'Unknown'}
+                </p>
+              </div>
+              <div className="p-3 bg-orange-500/20 rounded-xl">
+                <Clock className="w-6 h-6 text-orange-400" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Employee Selection Section - Fixed z-index and overflow issues */}
+        <div className="space-y-6 relative z-50">
+          <div className="flex justify-between items-center">
+            <h2 className="text-2xl font-semibold text-white flex items-center gap-3">
+              <User className="w-6 h-6 text-cyan-400" />
+              Employee Selection
+            </h2>
+          </div>
+
+          <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 backdrop-blur-sm border border-slate-600/30 rounded-2xl p-6 hover:border-cyan-400/40 transition-all duration-300 overflow-visible">
+            {/* Enhanced Search and Selection Interface */}
+            <div className="space-y-6">
+              {/* Search Input with Dropdown - Fixed z-index and positioning */}
+              <div className="employee-selector relative z-50">
+                <div className="relative">
+                  <Search className="w-5 h-5 text-gray-400 absolute left-4 top-1/2 transform -translate-y-1/2 z-10" />
+                  <input
+                    type="text"
+                    placeholder="Search employees by name, ID, or department..."
+                    value={searchTerm}
+                    onChange={(e) => {
+                      setSearchTerm(e.target.value);
+                      setShowDropdown(true);
+                    }}
+                    onFocus={() => setShowDropdown(true)}
+                    className="w-full pl-12 pr-12 py-4 bg-slate-700/50 border border-slate-600/50 rounded-xl text-white text-lg placeholder-gray-400 focus:border-cyan-400/50 focus:outline-none transition-all duration-300 hover:border-slate-500/50"
+                  />
+                  <ChevronDown className={`w-5 h-5 text-gray-400 absolute right-4 top-1/2 transform -translate-y-1/2 transition-transform duration-200 z-10 ${showDropdown ? 'rotate-180' : ''}`} />
+                </div>
+
+                {/* Dropdown Portal - Fixed z-index issue completely */}
+                {showDropdown && (searchTerm.trim() || filteredEmployees.length > 0) && (
+                  <>
+                    {/* Backdrop overlay to ensure dropdown is on top */}
+                    <div 
+                      className="fixed inset-0 bg-transparent z-40"
+                      onClick={() => setShowDropdown(false)}
+                    />
+                    {/* Actual dropdown with very high z-index */}
+                    <div 
+                      className="absolute w-full bg-slate-800/98 backdrop-blur-xl border border-slate-600/50 rounded-xl shadow-2xl max-h-72 overflow-y-auto mt-2 z-50"
+                      style={{
+                        position: 'absolute',
+                        zIndex: 9999,
+                      }}
+                    >
+                      {filteredEmployees.length > 0 ? (
+                        <div className="py-2">
+                          {filteredEmployees.map((employee) => {
+                            const isSelected = selectedEmployee?._id === employee._id;
+                            return (
+                              <div
+                                key={employee._id}
+                                onClick={() => handleEmployeeSelect(employee)}
+                                className={`px-4 py-3 cursor-pointer transition-all duration-200 hover:bg-slate-700/50 border-l-4 ${
+                                  isSelected
+                                    ? 'border-cyan-400 bg-cyan-500/10'
+                                    : 'border-transparent hover:border-slate-500'
+                                }`}
+                              >
+                                <div className="flex items-center gap-3">
+                                  <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold ${
+                                    isSelected
+                                      ? 'bg-gradient-to-br from-cyan-500 to-blue-600'
+                                      : 'bg-gradient-to-br from-purple-500 to-pink-600'
+                                  }`}>
+                                    {employee.name?.charAt(0)?.toUpperCase() || '?'}
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <h4 className={`font-semibold text-sm truncate ${
+                                      isSelected ? 'text-cyan-400' : 'text-white'
+                                    }`}>
+                                      {employee.name || 'N/A'}
+                                    </h4>
+                                    <div className="flex items-center gap-2 text-xs text-gray-400 mt-1">
+                                      <span>ID: {employee.employeeId || 'N/A'}</span>
+                                      <span className="w-1 h-1 bg-gray-500 rounded-full"></span>
+                                      <Building2 className="w-3 h-3" />
+                                      <span className="truncate">{employee.department || 'N/A'}</span>
+                                    </div>
+                                  </div>
+                                  {isSelected && (
+                                    <div className="w-2 h-2 bg-cyan-400 rounded-full animate-pulse"></div>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : searchTerm.trim() ? (
+                        <div className="py-8 text-center">
+                          <div className="w-12 h-12 bg-gradient-to-br from-gray-600/20 to-gray-800/20 rounded-full flex items-center justify-center mx-auto mb-3">
+                            <Search className="w-6 h-6 text-gray-500" />
+                          </div>
+                          <h4 className="text-white font-medium">No employees found</h4>
+                          <p className="text-gray-400 text-sm mt-1">
+                            No employees match "{searchTerm}"
+                          </p>
+                        </div>
+                      ) : null}
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* Selected Employee Display */}
+              {selectedEmployee && (
+                <div className="bg-gradient-to-br from-slate-700/50 to-slate-800/50 backdrop-blur-sm border border-slate-600/30 rounded-xl p-4">
+                  <div className="flex items-center gap-4">
+                    <div className="w-16 h-16 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-xl flex items-center justify-center text-white font-bold text-xl shadow-lg">
+                      {selectedEmployee.name.charAt(0).toUpperCase()}
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="text-xl font-bold text-white">{selectedEmployee.name}</h3>
+                      <div className="flex items-center gap-3 text-gray-400 mt-1">
+                        <span className="text-sm">ID: {selectedEmployee.employeeId}</span>
+                        <span className="w-1 h-1 bg-gray-500 rounded-full"></span>
+                        <div className="flex items-center gap-1">
+                          <Building2 className="w-4 h-4" />
+                          <span className="text-sm">{selectedEmployee.department}</span>
+                        </div>
+                        <span className="w-1 h-1 bg-gray-500 rounded-full"></span>
+                        <span className="inline-block px-2 py-1 bg-gradient-to-r from-purple-600/30 to-pink-600/30 text-purple-300 rounded-md text-xs font-medium capitalize">
+                          {selectedEmployee.role}
+                        </span>
+                      </div>
+                    </div>
+                    {currentStatus && (
+                      <div className="text-right">
+                        <div className="flex items-center gap-2 justify-end mb-1">
+                          <div className={`w-3 h-3 rounded-full ${
+                            currentStatus.currentlyWorking ? 'bg-green-400 animate-pulse' : 
+                            currentStatus.onBreak ? 'bg-yellow-400 animate-pulse' : 'bg-gray-500'
+                          }`}></div>
+                          <span className="text-sm font-medium text-white">
+                            {currentStatus.currentlyWorking ? 'Working' : 
+                             currentStatus.onBreak ? 'On Break' : 'Offline'}
+                          </span>
+                        </div>
+                        {currentStatus.arrivalTime && (
+                          <p className="text-xs text-gray-400">
+                            Arrived: {currentStatus.arrivalTime}
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Quick Stats for All Employees (when no employee is selected) */}
+              {!selectedEmployee && !searchTerm.trim() && employees.length > 0 && (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="bg-slate-700/30 rounded-lg p-4 text-center">
+                    <div className="text-2xl font-bold text-white mb-1">{employees.length}</div>
+                    <div className="text-sm text-gray-400">Total Employees</div>
+                  </div>
+                  <div className="bg-slate-700/30 rounded-lg p-4 text-center">
+                    <div className="text-2xl font-bold text-green-400 mb-1">{currentlyWorking}</div>
+                    <div className="text-sm text-gray-400">Currently Working</div>
+                  </div>
+                  <div className="bg-slate-700/30 rounded-lg p-4 text-center">
+                    <div className="text-2xl font-bold text-blue-400 mb-1">
+                      {employees.filter(emp => emp.department).length}
+                    </div>
+                    <div className="text-sm text-gray-400">With Departments</div>
+                  </div>
+                  <div className="bg-slate-700/30 rounded-lg p-4 text-center">
+                    <div className="text-2xl font-bold text-purple-400 mb-1">
+                      {[...new Set(employees.map(emp => emp.department).filter(Boolean))].length}
+                    </div>
+                    <div className="text-sm text-gray-400">Departments</div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
 
         {/* Attendance Data Display */}
         {selectedEmployee && (
           <>
-            {/* Selected Employee Info */}
-            <div className="bg-[#161c2c] rounded-lg shadow-md p-3 border border-[#232945]">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold text-sm">
-                  {selectedEmployee.name.charAt(0).toUpperCase()}
-                </div>
-                <div>
-                  <h3 className="font-semibold text-gray-100">{selectedEmployee.name}</h3>
-                  <p className="text-xs text-gray-400">{selectedEmployee.employeeId} • {selectedEmployee.department}</p>
-                </div>
-                <div className="ml-auto">
-                  <span className="text-xs px-2 py-1 bg-blue-600/20 text-blue-400 rounded-full capitalize">
-                    {selectedEmployee.role}
-                  </span>
-                </div>
-              </div>
-            </div>
-
             {loadingEmployeeData && (
-              <div className="bg-[#161c2c] rounded-lg p-4 border border-[#232945]">
-                <div className="flex items-center gap-3">
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
-                  <p className="text-sm text-gray-300">Loading attendance data for {selectedEmployee.name}...</p>
+              <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 backdrop-blur-sm border border-slate-600/30 rounded-2xl p-8 text-center">
+                <div className="flex flex-col items-center space-y-4">
+                  <div className="relative">
+                    <div className="w-12 h-12 border-4 border-purple-200 border-t-purple-600 rounded-full animate-spin"></div>
+                    <Activity className="w-5 h-5 text-purple-400 absolute inset-0 m-auto" />
+                  </div>
+                  <div className="space-y-2">
+                    <h3 className="text-xl font-semibold text-white">Loading Attendance Data</h3>
+                    <p className="text-gray-400">Fetching data for {selectedEmployee.name}...</p>
+                  </div>
                 </div>
               </div>
             )}
 
-            {error && (
-              <div className="bg-red-500/20 border border-red-500 rounded-lg p-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <AlertCircle className="w-4 h-4 text-red-400" />
-                  <span className="text-red-400 font-medium text-sm">Error Loading Data</span>
+            {error && !loadingEmployeeData && (
+              <div className="bg-gradient-to-br from-red-600/20 to-red-800/20 backdrop-blur-sm border border-red-500/20 rounded-2xl p-6 hover:border-red-400/40 transition-all duration-300">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="p-3 bg-red-500/20 rounded-xl">
+                    <AlertCircle className="w-6 h-6 text-red-400" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-white">Error Loading Data</h3>
+                    <p className="text-red-200 mt-1">{error}</p>
+                  </div>
                 </div>
-                <p className="text-gray-300 text-sm mb-3">{error}</p>
                 <button 
                   onClick={() => fetchAttendanceData(selectedEmployee._id)}
-                  className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition-colors text-sm font-medium"
+                  className="px-6 py-3 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 rounded-xl transition-all duration-300 font-medium shadow-lg hover:shadow-red-500/25 transform hover:scale-105"
                 >
                   Retry
                 </button>
@@ -729,74 +889,91 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
               <>
                 {/* Current Status Bar */}
                 {currentStatus && (
-                  <div className="flex items-center gap-4 bg-[#161c2c] rounded-lg px-4 py-2 border border-[#232945]">
-                    <div className="flex items-center gap-2">
-                      <div className={`w-2 h-2 rounded-full ${
-                        currentStatus.currentlyWorking ? 'bg-green-500 animate-pulse' : 
-                        currentStatus.onBreak ? 'bg-yellow-500 animate-pulse' : 'bg-gray-500'
-                      }`}></div>
-                      <span className="text-sm font-medium">
-                        {currentStatus.currentlyWorking ? 'Working' : 
-                         currentStatus.onBreak ? 'On Break' : 'Offline'}
-                      </span>
-                    </div>
-                    {currentStatus.arrivalTime && (
-                      <div className="flex items-center gap-2 text-sm text-gray-400">
-                        <Clock className="w-3 h-3" />
-                        <span>Arrived: {currentStatus.arrivalTime}</span>
+                  <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 backdrop-blur-sm border border-slate-600/30 rounded-2xl p-4 hover:border-cyan-400/40 transition-all duration-300">
+                    <div className="flex items-center gap-6 flex-wrap">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-4 h-4 rounded-full ${
+                          currentStatus.currentlyWorking ? 'bg-green-400 animate-pulse' : 
+                          currentStatus.onBreak ? 'bg-yellow-400 animate-pulse' : 'bg-gray-500'
+                        }`}></div>
+                        <span className="text-white font-semibold">
+                          {currentStatus.currentlyWorking ? 'Working' : 
+                           currentStatus.onBreak ? 'On Break' : 'Offline'}
+                        </span>
                       </div>
-                    )}
-                    <div className="text-sm text-blue-400">
-                      Today: {stats.currentStatus?.todayHours || '0.0'}h
+                      {currentStatus.arrivalTime && (
+                        <div className="flex items-center gap-2 text-gray-400">
+                          <Clock className="w-4 h-4" />
+                          <span>Arrived: {currentStatus.arrivalTime}</span>
+                        </div>
+                      )}
+                      <div className="flex items-center gap-2 text-gray-400">
+                        <Activity className="w-4 h-4" />
+                        <span className="font-semibold text-white">Today: </span>
+                        <span className="text-cyan-400 font-bold">{stats.currentStatus?.todayHours || '0.0'}h</span>
+                      </div>
                     </div>
                   </div>
                 )}
                 
-                <AttendanceStats stats={stats} />
+                {/* Attendance Stats */}
+                <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 backdrop-blur-sm border border-slate-600/30 rounded-2xl overflow-hidden hover:border-cyan-400/40 transition-all duration-300">
+                  <AttendanceStats stats={stats} />
+                </div>
                 
                 <div className="grid lg:grid-cols-3 grid-cols-1 gap-6">
                   <div className="lg:col-span-2 flex flex-col space-y-6">
-                    {calendarData ? (
-                      <AttendanceCalendar data={calendarData} />
-                    ) : (
-                      <div className="bg-[#161c2c] rounded-xl shadow-md p-6 border border-[#232945]">
-                        <div className="animate-pulse">
-                          <div className="h-6 bg-gray-700 rounded w-1/3 mb-4"></div>
-                          <div className="grid grid-cols-7 gap-2">
-                            {Array.from({ length: 35 }).map((_, i) => (
-                              <div key={i} className="h-8 bg-gray-700 rounded"></div>
-                            ))}
+                    {/* Calendar */}
+                    <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 backdrop-blur-sm border border-slate-600/30 rounded-2xl overflow-hidden hover:border-cyan-400/40 transition-all duration-300">
+                      {calendarData ? (
+                        <AttendanceCalendar data={calendarData} />
+                      ) : (
+                        <div className="p-8">
+                          <div className="animate-pulse">
+                            <div className="h-8 bg-slate-700/50 rounded-xl w-1/3 mb-6"></div>
+                            <div className="grid grid-cols-7 gap-3">
+                              {Array.from({ length: 35 }).map((_, i) => (
+                                <div key={i} className="h-12 bg-slate-700/50 rounded-lg"></div>
+                              ))}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    )}
+                      )}
+                    </div>
                     
-                    {recentActivity.length > 0 ? (
-                      <RecentActivityTable activities={recentActivity} />
-                    ) : (
-                      <div className="bg-[#161c2c] rounded-xl shadow-md p-6 border border-[#232945]">
-                        <div className="animate-pulse">
-                          <div className="h-6 bg-gray-700 rounded w-1/3 mb-4"></div>
-                          <div className="space-y-3">
-                            {Array.from({ length: 5 }).map((_, i) => (
-                              <div key={i} className="h-4 bg-gray-700 rounded"></div>
-                            ))}
+                    {/* Recent Activity */}
+                    <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 backdrop-blur-sm border border-slate-600/30 rounded-2xl overflow-hidden hover:border-cyan-400/40 transition-all duration-300">
+                      {recentActivity.length > 0 ? (
+                        <RecentActivityTable activities={recentActivity} />
+                      ) : (
+                        <div className="p-8">
+                          <div className="animate-pulse">
+                            <div className="h-8 bg-slate-700/50 rounded-xl w-1/3 mb-6"></div>
+                            <div className="space-y-4">
+                              {Array.from({ length: 5 }).map((_, i) => (
+                                <div key={i} className="h-6 bg-slate-700/50 rounded-lg"></div>
+                              ))}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </div>
+                  
                   <div className="space-y-6">
-                    {weeklyHours.length > 0 ? (
-                      <WeeklyHoursChart weeklyHours={weeklyHours} targetHours={8} />
-                    ) : (
-                      <div className="bg-[#161c2c] rounded-xl shadow-md p-6 border border-[#232945]">
-                        <div className="animate-pulse">
-                          <div className="h-6 bg-gray-700 rounded w-1/3 mb-4"></div>
-                          <div className="h-32 bg-gray-700 rounded"></div>
+                    {/* Weekly Hours Chart */}
+                    <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 backdrop-blur-sm border border-slate-600/30 rounded-2xl overflow-hidden hover:border-cyan-400/40 transition-all duration-300">
+                      {weeklyHours.length > 0 ? (
+                        <WeeklyHoursChart weeklyHours={weeklyHours} targetHours={8} />
+                      ) : (
+                        <div className="p-8">
+                          <div className="animate-pulse">
+                            <div className="h-8 bg-slate-700/50 rounded-xl w-1/3 mb-6"></div>
+                            <div className="h-48 bg-slate-700/50 rounded-xl"></div>
+                          </div>
                         </div>
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </div>
                 </div>
               </>
@@ -804,11 +981,19 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
           </>
         )}
 
-        {!selectedEmployee && (
-          <div className="text-center py-12 text-gray-400">
-            <CalendarIcon className="w-16 h-16 mx-auto mb-4 opacity-50" />
-            <h3 className="text-xl font-semibold mb-2">No Employee Selected</h3>
-            <p>Please select an employee from the list above to view their attendance details</p>
+        {!selectedEmployee && !loading && (
+          <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 backdrop-blur-sm border border-slate-600/30 rounded-2xl p-12 text-center hover:border-cyan-400/40 transition-all duration-300">
+            <div className="flex flex-col items-center space-y-6">
+              <div className="p-6 bg-gradient-to-br from-blue-600/20 to-purple-600/20 rounded-2xl">
+                <CalendarIcon className="w-12 h-12 text-blue-400" />
+              </div>
+              <div className="space-y-3">
+                <h3 className="text-3xl font-bold text-white">Select an Employee</h3>
+                <p className="text-gray-400 text-lg max-w-md mx-auto">
+                  Use the search bar above to find and select an employee to view their detailed attendance information and analytics
+                </p>
+              </div>
+            </div>
           </div>
         )}
       </main>
