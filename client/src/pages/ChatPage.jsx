@@ -6,20 +6,32 @@ import Sidebar from "../components/dashboard/Sidebar";
 
 const ChatPage = ({ onLogout }) => {
   const [collapsed, setCollapsed] = useState(false);
-
   const [userRole, setUserRole] = useState(null);
   const [jwtToken, setJwtToken] = useState(null);
   const [conversations, setConversations] = useState([]);
   const [selectedConversation, setSelectedConversation] = useState(null);
-  const { messages: liveMessages, sendMessage } = useChatWebSocket(
-    jwtToken,
-    selectedConversation?._id
-  );
-
   const [showCreateGroup, setShowCreateGroup] = useState(false);
   const [initialMessages, setInitialMessages] = useState([]);
 
+  // New state for tracking unread messages
+  const [unreadMessages, setUnreadMessages] = useState({}); // { conversationId: count }
+
+  // Updated WebSocket hook call - make sure your hook supports these parameters
+  const webSocketResult = useChatWebSocket(
+    jwtToken,
+    selectedConversation?._id,
+    conversations // Pass conversations array if your updated hook supports it
+  );
+
+  // Destructure with fallback for backward compatibility
+  const {
+    messages: liveMessages,
+    allMessages = [], // Default to empty array if not available
+    sendMessage,
+  } = webSocketResult;
+
   const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
+  const currentUserId = JSON.parse(localStorage.getItem("user"))?._id;
 
   useEffect(() => {
     const storedUser = localStorage.getItem("user");
@@ -55,6 +67,48 @@ const ChatPage = ({ onLogout }) => {
     fetchMessages();
   }, [selectedConversation, jwtToken]);
 
+  // Track new live messages for unread counts
+  useEffect(() => {
+    // Only proceed if we have allMessages (from updated WebSocket hook)
+    if (allMessages && allMessages.length > 0) {
+      // Get the latest message
+      const latestMessage = allMessages[allMessages.length - 1];
+      const messageFromCurrentUser =
+        String(latestMessage.senderId || latestMessage.sender?._id) ===
+        String(currentUserId);
+      const isSelectedConversation =
+        selectedConversation?._id === latestMessage.conversationId;
+
+      // Don't count messages from current user or messages in currently selected conversation
+      if (!messageFromCurrentUser && !isSelectedConversation) {
+        setUnreadMessages((prev) => ({
+          ...prev,
+          [latestMessage.conversationId]:
+            (prev[latestMessage.conversationId] || 0) + 1,
+        }));
+      }
+    } else if (liveMessages && liveMessages.length > 0) {
+      // Fallback: use liveMessages for basic unread tracking if allMessages isn't available
+      const latestMessage = liveMessages[liveMessages.length - 1];
+      const messageFromCurrentUser =
+        String(latestMessage.senderId || latestMessage.sender?._id) ===
+        String(currentUserId);
+
+      // For messages in non-selected conversations, increment unread count
+      if (
+        !messageFromCurrentUser &&
+        latestMessage.conversationId &&
+        latestMessage.conversationId !== selectedConversation?._id
+      ) {
+        setUnreadMessages((prev) => ({
+          ...prev,
+          [latestMessage.conversationId]:
+            (prev[latestMessage.conversationId] || 0) + 1,
+        }));
+      }
+    }
+  }, [allMessages, liveMessages, selectedConversation, currentUserId]);
+
   const combinedMessages = [
     ...initialMessages,
     ...liveMessages.filter(
@@ -70,7 +124,6 @@ const ChatPage = ({ onLogout }) => {
       if (!res.ok) throw new Error("Failed to fetch conversations");
       const data = await res.json();
       setConversations(data);
-      // if (data.length > 0) setSelectedConversation(data[0]);
     } catch (error) {
       console.error(error);
     }
@@ -124,12 +177,35 @@ const ChatPage = ({ onLogout }) => {
         setInitialMessages([]);
       }
 
+      // Clean up unread messages tracking
+      setUnreadMessages((prev) => {
+        const updated = { ...prev };
+        delete updated[conversationId];
+        return updated;
+      });
+
       alert("Conversation deleted successfully");
     } catch (error) {
       alert(error.message);
     }
   };
 
+  // Handle conversation selection and clear unread count
+  const handleSelectConversation = (conv) => {
+    setSelectedConversation(conv);
+
+    // Clear unread count for selected conversation
+    setUnreadMessages((prev) => {
+      const updated = { ...prev };
+      delete updated[conv._id];
+      return updated;
+    });
+  };
+
+  // Get unread count for a conversation
+  const getUnreadCount = (conversationId) => {
+    return unreadMessages[conversationId] || 0;
+  };
 
   return (
     <div className="flex h-screen bg-[#101525] text-gray-100">
@@ -154,19 +230,38 @@ const ChatPage = ({ onLogout }) => {
           </h3>
           <div className="flex-1 overflow-y-auto px-4 pb-2">
             <ul className="list-none p-0 space-y-2">
-              {conversations.map((conv) => (
-                <li
-                  key={conv._id}
-                  className={`cursor-pointer px-3 py-2 rounded transition-colors ${
-                    selectedConversation?._id === conv._id
-                      ? "bg-gray-700 text-white"
-                      : "hover:bg-gray-600"
-                  }`}
-                  onClick={() => setSelectedConversation(conv)}
-                >
-                  {conv.name || "Unnamed Group"}
-                </li>
-              ))}
+              {conversations.map((conv) => {
+                const unreadCount = getUnreadCount(conv._id);
+                const hasUnread = unreadCount > 0;
+
+                return (
+                  <li
+                    key={conv._id}
+                    className={`cursor-pointer px-3 py-2 rounded transition-colors relative ${
+                      selectedConversation?._id === conv._id
+                        ? "bg-gray-700 text-white"
+                        : hasUnread
+                        ? "bg-blue-900/30 border border-blue-500/50 hover:bg-blue-800/40"
+                        : "hover:bg-gray-600"
+                    }`}
+                    onClick={() => handleSelectConversation(conv)}
+                  >
+                    <div className="flex justify-between items-center">
+                      <span className={`${hasUnread ? "font-semibold" : ""}`}>
+                        {conv.name || "Unnamed Group"}
+                      </span>
+                      {hasUnread && (
+                        <span className="bg-blue-500 text-white text-xs rounded-full px-2 py-1 min-w-[20px] text-center">
+                          {unreadCount > 99 ? "99+" : unreadCount}
+                        </span>
+                      )}
+                    </div>
+                    {hasUnread && (
+                      <div className="absolute left-0 top-1/2 transform -translate-y-1/2 w-1 h-8 bg-blue-500 rounded-r"></div>
+                    )}
+                  </li>
+                );
+              })}
             </ul>
           </div>
           {(userRole === "admin" || userRole === "super-admin") && (
@@ -220,7 +315,7 @@ const ChatPage = ({ onLogout }) => {
                   messages={combinedMessages}
                   sendMessage={sendMessage}
                   conversationId={selectedConversation._id}
-                  currentUserId={JSON.parse(localStorage.getItem("user"))?._id}
+                  currentUserId={currentUserId}
                   conversationMembers={selectedConversation.members || []}
                 />
               </div>

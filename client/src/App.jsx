@@ -191,7 +191,11 @@ const AppWrapper = () => {
             ) : (
               <Navigate
                 to={
-                  isAuthenticated ? (isAdmin ? "/admin/tasks" : "/login") : "/login"
+                  isAuthenticated
+                    ? isAdmin
+                      ? "/admin/tasks"
+                      : "/login"
+                    : "/login"
                 }
                 replace
               />
@@ -204,7 +208,10 @@ const AppWrapper = () => {
           path="/profile"
           element={
             isAuthenticated ? (
-              <MyProfile onLogout={handleLogout} userType={role || "employee"} />
+              <MyProfile
+                onLogout={handleLogout}
+                userType={role || "employee"}
+              />
             ) : (
               <Navigate to="/login" replace />
             )
@@ -218,7 +225,10 @@ const AppWrapper = () => {
             isAuthenticated && (isAdmin || isHR) ? (
               <EmployeePage userRole={role} onLogout={handleLogout} />
             ) : (
-              <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />
+              <Navigate
+                to={isAuthenticated ? "/dashboard" : "/login"}
+                replace
+              />
             )
           }
         />
@@ -230,7 +240,23 @@ const AppWrapper = () => {
             isAuthenticated && (isAdmin || isHR) ? (
               <AdminTaskPage onLogout={handleLogout} />
             ) : (
-              <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />
+              <Navigate
+                to={isAuthenticated ? "/dashboard" : "/login"}
+                replace
+              />
+            )
+          }
+        />
+        <Route
+          path="/admin/shift"
+          element={
+            isAuthenticated && (isAdmin || isHR) ? (
+              <ShiftManagement onLogout={handleLogout} />
+            ) : (
+              <Navigate
+                to={isAuthenticated ? "/dashboard" : "/login"}
+                replace
+              />
             )
           }
         />
@@ -240,7 +266,10 @@ const AppWrapper = () => {
             isAuthenticated && (isAdmin || isHR) ? (
               <EmployeeManagementPage onLogout={handleLogout} />
             ) : (
-              <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />
+              <Navigate
+                to={isAuthenticated ? "/dashboard" : "/login"}
+                replace
+              />
             )
           }
         />
@@ -250,7 +279,10 @@ const AppWrapper = () => {
             isAuthenticated && (isAdmin || isHR) ? (
               <AdminLeaveRequests onLogout={handleLogout} />
             ) : (
-              <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />
+              <Navigate
+                to={isAuthenticated ? "/dashboard" : "/login"}
+                replace
+              />
             )
           }
         />
@@ -260,7 +292,10 @@ const AppWrapper = () => {
             isAuthenticated && (isAdmin || isHR) ? (
               <NoticeBoard onLogout={handleLogout} />
             ) : (
-              <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />
+              <Navigate
+                to={isAuthenticated ? "/dashboard" : "/login"}
+                replace
+              />
             )
           }
         />
@@ -270,7 +305,10 @@ const AppWrapper = () => {
             isAuthenticated && (isAdmin || isHR) ? (
               <AdminAttendancePage onLogout={handleLogout} />
             ) : (
-              <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />
+              <Navigate
+                to={isAuthenticated ? "/dashboard" : "/login"}
+                replace
+              />
             )
           }
         />
@@ -280,7 +318,23 @@ const AppWrapper = () => {
             isAuthenticated && (isAdmin || isHR) ? (
               <HolidayManagementPage onLogout={handleLogout} />
             ) : (
-              <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />
+              <Navigate
+                to={isAuthenticated ? "/dashboard" : "/login"}
+                replace
+              />
+            )
+          }
+        />
+        <Route
+          path="/admin/shifts"
+          element={
+            isAuthenticated && (isAdmin || isHR) ? (
+              <ShiftManagement onLogout={handleLogout} />
+            ) : (
+              <Navigate
+                to={isAuthenticated ? "/dashboard" : "/login"}
+                replace
+              />
             )
           }
         />
