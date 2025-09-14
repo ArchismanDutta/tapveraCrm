@@ -1,6 +1,6 @@
 import axios from "axios";
 
-const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000/api";
+const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
 
 const getAuthHeaders = () => {
   const token = localStorage.getItem("token");
@@ -10,7 +10,7 @@ const getAuthHeaders = () => {
 // -------------------- USERS --------------------
 export const fetchUsers = async () => {
   try {
-    const res = await axios.get(`${API_BASE}api/chat/users`, { headers: getAuthHeaders() });
+    const res = await axios.get(`${API_BASE}/api/chat/users`, { headers: getAuthHeaders() });
     return res.data;
   } catch (err) {
     console.error("fetchUsers error:", err.response?.data || err.message);
@@ -23,7 +23,7 @@ export const fetchUsers = async () => {
 // Fetch all conversations for the logged-in user
 export const fetchConversations = async () => {
   try {
-    const res = await axios.get(`${API_BASE}api/chat/conversations`, { headers: getAuthHeaders() });
+    const res = await axios.get(`${API_BASE}/api/chat/conversations`, { headers: getAuthHeaders() });
     return res.data;
   } catch (err) {
     console.error("fetchConversations error:", err.response?.data || err.message);
@@ -51,7 +51,7 @@ export const createConversation = async (memberIds, groupName = null) => {
 // Fetch messages for a conversation
 export const fetchMessages = async (conversationId) => {
   try {
-    const res = await axios.get(`${API_BASE}/chat/messages/${conversationId}`, { headers: getAuthHeaders() });
+    const res = await axios.get(`${API_BASE}/api/chat/messages/${conversationId}`, { headers: getAuthHeaders() });
     return res.data;
   } catch (err) {
     console.error("fetchMessages error:", err.response?.data || err.message);

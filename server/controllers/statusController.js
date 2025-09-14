@@ -1,5 +1,5 @@
 // controllers/statusController.js
-// Removed import of date-fns-tz and replaced with native TZ conversion functions
+// Replaced date-fns-tz with native Intl-based TZ conversion helpers
 const UserStatus = require("../models/UserStatus");
 const DailyWork = require("../models/DailyWork");
 const User = require("../models/User");
@@ -13,7 +13,7 @@ const EARLY_PUNCH_MINUTES = 40; // allow punch-in up to 40 min before shift star
 // -----------------------
 // Native timezone conversion helpers (replaces date-fns-tz)
 // -----------------------
-function zonedTimeToUtc(date, timeZone) {
+function formatPartsFor(date, timeZone) {
   const dtf = new Intl.DateTimeFormat("en-US", {
     hour12: false,
     timeZone,
@@ -29,31 +29,36 @@ function zonedTimeToUtc(date, timeZone) {
   parts.forEach(({ type, value }) => {
     map[type] = value;
   });
-
-  const asLocalString = `${map.year}-${map.month}-${map.day}T${map.hour}:${map.minute}:${map.second}`;
-  const localDate = new Date(asLocalString);
-
-  const utcTimestamp =
-    localDate.getTime() - getTimeZoneOffsetMilliseconds(date, timeZone);
-  return new Date(utcTimestamp);
+  return map;
 }
 
-function utcToZonedTime(date, timeZone) {
-  const dtf = new Intl.DateTimeFormat("en-US", {
-    hour12: false,
-    timeZone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  });
-  const parts = dtf.formatToParts(date);
-  const map = {};
-  parts.forEach(({ type, value }) => {
-    map[type] = value;
-  });
+/**
+ * Returns the signed difference (in ms) between the given timezone and UTC
+ * at the moment represented by `date`.
+ * i.e. offsetMs = dateInTZ - dateInUTC
+ */
+function getTimeZoneOffsetMilliseconds(dateInput, timeZone) {
+  const date = new Date(dateInput);
+  const partsUTC = formatPartsFor(date, "UTC");
+  const partsTZ = formatPartsFor(date, timeZone);
+
+  const utcMs = Date.UTC(
+    Number(partsUTC.year),
+    Number(partsUTC.month) - 1,
+    Number(partsUTC.day),
+    Number(partsUTC.hour),
+    Number(partsUTC.minute),
+    Number(partsUTC.second)
+  );
+
+  const tzMs = Date.UTC(
+    Number(partsTZ.year),
+    Number(partsTZ.month) - 1,
+    Number(partsTZ.day),
+    Number(partsTZ.hour),
+    Number(partsTZ.minute),
+    Number(partsTZ.second)
+  );
 
   return new Date(
     `${map.year}-${map.month}-${map.day}T${map.hour}:${map.minute}:${map.second}`
@@ -129,8 +134,10 @@ function getWorkDurationSeconds(workedSessions, currentlyWorking) {
   if (!Array.isArray(workedSessions)) return 0;
 
   let total = workedSessions.reduce((sum, s) => {
-    if (s.start && s.end)
-      return sum + (new Date(s.end) - new Date(s.start)) / 1000;
+    if (s && s.start && s.end)
+      return (
+        sum + (new Date(s.end).getTime() - new Date(s.start).getTime()) / 1000
+      );
     return sum;
   }, 0);
 
@@ -148,8 +155,10 @@ function getBreakDurationSeconds(breakSessions, onBreak, breakStart) {
   if (!Array.isArray(breakSessions)) return 0;
 
   let total = breakSessions.reduce((sum, s) => {
-    if (s.start && s.end)
-      return sum + (new Date(s.end) - new Date(s.start)) / 1000;
+    if (s && s.start && s.end)
+      return (
+        sum + (new Date(s.end).getTime() - new Date(s.start).getTime()) / 1000
+      );
     return sum;
   }, 0);
 
@@ -199,7 +208,7 @@ function calculateLateAndHalfDay(
   const arrivalLocal = utcToZonedTime(new Date(arrivalTimeUTC), userTimeZone);
 
   if (shiftStartTime) {
-    const [h, m] = shiftStartTime.split(":").map(Number);
+    const [h, m] = String(shiftStartTime).split(":").map(Number);
     const shiftStartLocal = new Date(arrivalLocal);
     shiftStartLocal.setHours(h || 0, m || 0, 0, 0);
 
@@ -345,7 +354,7 @@ async function getEffectiveShift(userId, date) {
 }
 
 // -----------------------
-// Sync DailyWork
+// Sync DailyWork with enhanced timeline data
 // -----------------------
 async function syncDailyWork(userId, todayStatus, userTimeZone = "UTC") {
   const todayLocal = new Date();
@@ -389,6 +398,9 @@ async function syncDailyWork(userId, todayStatus, userTimeZone = "UTC") {
       workDurationSeconds: todayStatus.workDurationSeconds || 0,
       breakDurationSeconds: todayStatus.breakDurationSeconds || 0,
       breakSessions: todayStatus.breakSessions || [],
+      workedSessions: todayStatus.workedSessions || [],
+      timeline: todayStatus.timeline || [],
+      arrivalTime: arrivalTime,
       weekSummary: todayStatus.weekSummary || {},
       quickStats: todayStatus.quickStats || {},
     });
@@ -403,12 +415,15 @@ async function syncDailyWork(userId, todayStatus, userTimeZone = "UTC") {
     dailyWork.workDurationSeconds = todayStatus.workDurationSeconds || 0;
     dailyWork.breakDurationSeconds = todayStatus.breakDurationSeconds || 0;
     dailyWork.breakSessions = todayStatus.breakSessions || [];
+    dailyWork.workedSessions = todayStatus.workedSessions || [];
+    dailyWork.timeline = todayStatus.timeline || [];
+    dailyWork.arrivalTime = arrivalTime;
   }
 
   const { isLate, isHalfDay, isAbsent } = calculateLateAndHalfDay(
     todayStatus.workDurationSeconds || 0,
     effectiveShift.start,
-    todayStatus.arrivalTime,
+    arrivalTime,
     userTimeZone
   );
 
@@ -505,7 +520,7 @@ async function getTodayStatus(req, res) {
 }
 
 // -----------------------
-// Update Today's Status with Early Punch Allowance
+// Update Today's Status with enhanced timeline tracking
 // -----------------------
 async function updateTodayStatus(req, res) {
   try {
@@ -600,8 +615,13 @@ async function updateTodayStatus(req, res) {
         todayStatus.breakStartTime = null;
       }
 
+      // Enhanced timeline tracking with proper event structure
       todayStatus.timeline = todayStatus.timeline || [];
-      todayStatus.timeline.push({ type: rawType, time: now });
+      todayStatus.timeline.push({ 
+        type: rawType, 
+        time: now,
+        _id: require('mongoose').Types.ObjectId() // Ensure proper _id for timeline events
+      });
 
       todayStatus.recentActivities = todayStatus.recentActivities || [];
       todayStatus.recentActivities.unshift({
@@ -643,6 +663,15 @@ async function updateTodayStatus(req, res) {
 
     const effectiveShift = await getEffectiveShift(userId, todayUTC);
 
+    // Enhanced arrival time logic
+    let arrivalTime = todayStatus.arrivalTime;
+    if (!arrivalTime && todayStatus.timeline) {
+      const timelineArrival = getFirstPunchInTime(todayStatus.timeline);
+      if (timelineArrival) {
+        arrivalTime = timelineArrival;
+      }
+    }
+
     const payload = {
       ...todayStatus.toObject(),
       effectiveShift: effectiveShift || { message: "No shift assigned" },
@@ -666,6 +695,7 @@ async function updateTodayStatus(req, res) {
       isAbsent: dailyWork?.isAbsent || false,
       dailyWork: dailyWork
         ? {
+            id: dailyWork._id,
             id: dailyWork._id,
             date: dailyWork.date,
             workDurationSeconds: dailyWork.workDurationSeconds,
@@ -692,6 +722,8 @@ module.exports = {
   updateTodayStatus,
   syncDailyWork,
   getEffectiveShift,
+  getFirstPunchInTime,
+  getLastPunchOutTime,
   secToHMS,
   secToHM,
 };

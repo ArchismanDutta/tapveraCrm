@@ -17,6 +17,7 @@ import { FaChevronCircleRight } from "react-icons/fa";
 import Modal from "../modal";
 import DailyEmailSender from "../DailyEmailSender";
 import tapveraLogo from "../../assets/tapvera.png";
+import { ShiftsManager } from "../Shift";
 
 // Role → Menu mapping
 const menuConfig = {
@@ -34,6 +35,7 @@ const menuConfig = {
     { to: "/hrdashboard", icon: <LayoutDashboard size={18} />, label: "HR Dashboard" },
     { to: "/today-status", icon: <ClipboardList size={18} />, label: "Punch In/Out" },
     { to: "/tasks", icon: <ClipboardList size={18} />, label: "Tasks" },
+    { to: "/admin/shift", icon: <ClipboardList size={18} />, label: "Manage Shifts" },
     { to: "/todo", icon: <ClipboardList size={18} />, label: "Todo" },
     { to: "/admin/leaves", icon: <FileText size={18} />, label: "Leave Requests" },
     { to: "/leaves", icon: <FileText size={18} />, label: "My Leaves" },
