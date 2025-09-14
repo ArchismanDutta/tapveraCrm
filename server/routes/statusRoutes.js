@@ -13,6 +13,10 @@ const statusController = require("../controllers/statusController")
 // Fetch today's status for the logged-in user
 router.get("/today", protect, statusController.getTodayStatus);
 
+// GET /api/status/today/:employeeId
+// Fetch today's status for a specific employee (admin/super-admin only)
+router.get("/today/:employeeId", protect, statusController.getEmployeeTodayStatus);
+
 // PUT /api/status/today
 // Update today's status (punch in/out, break start/end, work/resume)
 router.put("/today", protect, statusController.updateTodayStatus);

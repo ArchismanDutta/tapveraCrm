@@ -231,7 +231,7 @@ const AttendancePage = ({ onLogout }) => {
       // Calculate present days (5+ hours of work)
       const presentDaysCount = dailyData.filter(d => (d.workDurationSeconds || 0) >= MIN_PRESENT_SECONDS).length;
 
-      // Calculate working days for the week
+      // Calculate working days for the week (excluding weekends, holidays, and approved leaves)
       const weekWorkingDays = calculateWorkingDays(monday, sunday, holidays, approvedLeaves);
 
       // Calculate total work hours for the week
@@ -243,9 +243,12 @@ const AttendancePage = ({ onLogout }) => {
       const attendanceRate = weekWorkingDays > 0 ? 
         Math.round((presentDaysCount / weekWorkingDays) * 100) : 0;
 
-      // Calculate on-time rate
+      // Calculate on-time rate (only for standard shift employees)
       const onTimeDays = dailyData.filter(d => {
         if ((d.workDurationSeconds || 0) < MIN_PRESENT_SECONDS) return false;
+        
+        // Only calculate late/early for standard shift employees
+        if (d.effectiveShift?.isFlexible) return true; // Flexible shift = always on-time if present
         
         const arrivalTime = getArrivalTime(d);
         if (!arrivalTime) return false;
@@ -328,7 +331,8 @@ const AttendancePage = ({ onLogout }) => {
         let status = "absent";
         if ((d.workDurationSeconds || 0) >= MIN_PRESENT_SECONDS) {
           status = "present";
-          if (arrivalTime && arrivalTime > expectedDate) {
+          // Only check for late status for standard shift employees
+          if (!d.effectiveShift?.isFlexible && arrivalTime && arrivalTime > expectedDate) {
             status = "late";
           }
         } else if ((d.workDurationSeconds || 0) > 0) {
@@ -345,7 +349,7 @@ const AttendancePage = ({ onLogout }) => {
             totalBreakTime: calculateHoursFromSeconds(d.breakDurationSeconds || 0).toFixed(1),
             breakSessions: d.breakSessions?.length || 0,
             isFlexible: d.effectiveShift?.isFlexible || false,
-            lateMinutes: arrivalTime && arrivalTime > expectedDate ? 
+            lateMinutes: (!d.effectiveShift?.isFlexible && arrivalTime && arrivalTime > expectedDate) ? 
               Math.floor((arrivalTime - expectedDate) / (1000 * 60)) : 0
           }
         };

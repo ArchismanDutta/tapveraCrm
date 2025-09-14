@@ -32,39 +32,6 @@ function formatPartsFor(date, timeZone) {
   return map;
 }
 
-/**
- * Returns the signed difference (in ms) between the given timezone and UTC
- * at the moment represented by `date`.
- * i.e. offsetMs = dateInTZ - dateInUTC
- */
-function getTimeZoneOffsetMilliseconds(dateInput, timeZone) {
-  const date = new Date(dateInput);
-  const partsUTC = formatPartsFor(date, "UTC");
-  const partsTZ = formatPartsFor(date, timeZone);
-
-  const utcMs = Date.UTC(
-    Number(partsUTC.year),
-    Number(partsUTC.month) - 1,
-    Number(partsUTC.day),
-    Number(partsUTC.hour),
-    Number(partsUTC.minute),
-    Number(partsUTC.second)
-  );
-
-  const tzMs = Date.UTC(
-    Number(partsTZ.year),
-    Number(partsTZ.month) - 1,
-    Number(partsTZ.day),
-    Number(partsTZ.hour),
-    Number(partsTZ.minute),
-    Number(partsTZ.second)
-  );
-
-  return new Date(
-    `${map.year}-${map.month}-${map.day}T${map.hour}:${map.minute}:${map.second}`
-  );
-}
-
 function getTimeZoneOffsetMilliseconds(date, timeZone) {
   const dtfUTC = new Intl.DateTimeFormat("en-US", {
     timeZone: "UTC",
@@ -104,6 +71,33 @@ function getTimeZoneOffsetMilliseconds(date, timeZone) {
   const dateTZ = partsToDate(partsTZ);
 
   return dateTZ.getTime() - dateUTC.getTime();
+}
+
+/**
+ * Convert a local date in a specific timezone to UTC
+ */
+function zonedTimeToUtc(date, timeZone) {
+  const localParts = formatPartsFor(date, timeZone);
+  
+  // Create UTC date from the local parts
+  const utcDate = new Date(Date.UTC(
+    parseInt(localParts.year),
+    parseInt(localParts.month) - 1, // Month is 0-indexed
+    parseInt(localParts.day),
+    parseInt(localParts.hour),
+    parseInt(localParts.minute),
+    parseInt(localParts.second)
+  ));
+  
+  return utcDate;
+}
+
+/**
+ * Convert a UTC date to a local date in a specific timezone
+ */
+function utcToZonedTime(utcDate, timeZone) {
+  const offsetMs = getTimeZoneOffsetMilliseconds(utcDate, timeZone);
+  return new Date(utcDate.getTime() + offsetMs);
 }
 
 // -----------------------
@@ -187,6 +181,25 @@ function secToHM(sec) {
   const h = Math.floor(sec / 3600);
   const m = Math.floor((sec % 3600) / 60);
   return `${h}h ${m.toString().padStart(2, "0")}m`;
+}
+
+// -----------------------
+// NEW HELPERS: Punch in/out time extractors
+// -----------------------
+function getFirstPunchInTime(timeline = []) {
+  if (!Array.isArray(timeline)) return null;
+  const punchIn = timeline.find(ev =>
+    typeof ev.type === "string" && ev.type.toLowerCase().includes("punch in")
+  );
+  return punchIn ? punchIn.time : null;
+}
+
+function getLastPunchOutTime(timeline = []) {
+  if (!Array.isArray(timeline)) return null;
+  const punchOuts = timeline.filter(ev =>
+    typeof ev.type === "string" && ev.type.toLowerCase().includes("punch out")
+  );
+  return punchOuts.length ? punchOuts[punchOuts.length - 1].time : null;
 }
 
 // -----------------------
@@ -379,6 +392,15 @@ async function syncDailyWork(userId, todayStatus, userTimeZone = "UTC") {
     durationHours: effectiveShift.durationHours || 9,
   };
 
+  // Get arrival time from todayStatus or timeline
+  let arrivalTime = todayStatus.arrivalTime;
+  if (!arrivalTime && todayStatus.timeline) {
+    const timelineArrival = getFirstPunchInTime(todayStatus.timeline);
+    if (timelineArrival) {
+      arrivalTime = timelineArrival;
+    }
+  }
+
   let dailyWork = await DailyWork.findOne({ userId, date: todayUTC });
   const computedShiftType = effectiveShift.isFlexiblePermanent
     ? "flexiblePermanent"
@@ -448,21 +470,22 @@ async function getTodayStatus(req, res) {
     todayLocal.setHours(0, 0, 0, 0);
     const todayUTC = zonedTimeToUtc(todayLocal, userTimeZone);
 
-    let todayStatus = await UserStatus.findOne({
-      userId,
-      today: { $gte: todayUTC },
-    });
-    if (!todayStatus) {
-      todayStatus = await UserStatus.create({
-        userId,
-        currentlyWorking: false,
-        onBreak: false,
-        workedSessions: [],
-        breakSessions: [],
-        timeline: [],
-        recentActivities: [],
-      });
-    }
+    let todayStatus = await UserStatus.findOneAndUpdate(
+      { userId, today: { $gte: todayUTC } },
+      {
+        $setOnInsert: {
+          userId,
+          today: new Date(),
+          currentlyWorking: false,
+          onBreak: false,
+          workedSessions: [],
+          breakSessions: [],
+          timeline: [],
+          recentActivities: [],
+        }
+      },
+      { upsert: true, new: true }
+    );
 
     const effectiveShift = await getEffectiveShift(userId, todayUTC);
     
@@ -619,13 +642,12 @@ async function updateTodayStatus(req, res) {
       todayStatus.timeline = todayStatus.timeline || [];
       todayStatus.timeline.push({ 
         type: rawType, 
-        time: now,
-        _id: require('mongoose').Types.ObjectId() // Ensure proper _id for timeline events
+        time: now
       });
 
       todayStatus.recentActivities = todayStatus.recentActivities || [];
       todayStatus.recentActivities.unshift({
-        date: now.toLocaleDateString(),
+        date: now, // Use Date object instead of string
         activity: rawType,
         time: now.toLocaleTimeString([], {
           hour: "2-digit",
@@ -696,7 +718,6 @@ async function updateTodayStatus(req, res) {
       dailyWork: dailyWork
         ? {
             id: dailyWork._id,
-            id: dailyWork._id,
             date: dailyWork.date,
             workDurationSeconds: dailyWork.workDurationSeconds,
             breakDurationSeconds: dailyWork.breakDurationSeconds,
@@ -717,8 +738,111 @@ async function updateTodayStatus(req, res) {
   }
 }
 
+// Get today's status for a specific employee (admin/super-admin only)
+async function getEmployeeTodayStatus(req, res) {
+  try {
+    const { employeeId } = req.params;
+    
+    if (!employeeId) {
+      return res.status(400).json({ message: "Employee ID is required" });
+    }
+
+    // Check if the requesting user has admin privileges
+    const requestingUser = req.user;
+    if (!["admin", "super-admin", "hr"].includes(requestingUser.role)) {
+      return res.status(403).json({ message: "Access denied. Admin privileges required." });
+    }
+
+    const user = await User.findById(employeeId).lean();
+    if (!user) {
+      return res.status(404).json({ message: "Employee not found" });
+    }
+
+    const userTimeZone = user?.timeZone || "UTC";
+
+    const todayLocal = new Date();
+    todayLocal.setHours(0, 0, 0, 0);
+    const todayUTC = zonedTimeToUtc(todayLocal, userTimeZone);
+
+    let todayStatus = await UserStatus.findOne({
+      userId: employeeId,
+      today: { $gte: todayUTC },
+    });
+
+    if (!todayStatus) {
+      // Return default status if no status found
+      return res.json({
+        userId: employeeId,
+        currentlyWorking: false,
+        onBreak: false,
+        workedSessions: [],
+        breakSessions: [],
+        timeline: [],
+        recentActivities: [],
+        workDurationSeconds: 0,
+        breakDurationSeconds: 0,
+        workDuration: "0h 00m 00s",
+        breakDuration: "0h 00m 00s",
+        arrivalTime: null,
+        arrivalTimeFormatted: null,
+        isLate: false,
+        isHalfDay: false,
+        isAbsent: true,
+        effectiveShift: null
+      });
+    }
+
+    const effectiveShift = await getEffectiveShift(employeeId, todayUTC);
+    
+    const workSecs = getWorkDurationSeconds(
+      todayStatus.workedSessions,
+      todayStatus.currentlyWorking
+    );
+    const breakSecs = getBreakDurationSeconds(
+      todayStatus.breakSessions,
+      todayStatus.onBreak,
+      todayStatus.breakStartTime
+    );
+
+    const { isLate, isHalfDay, isAbsent } = calculateLateAndHalfDay(
+      workSecs,
+      effectiveShift?.start,
+      todayStatus.arrivalTime,
+      userTimeZone
+    );
+
+    const payload = {
+      ...todayStatus.toObject(),
+      effectiveShift,
+      workDurationSeconds: workSecs,
+      breakDurationSeconds: breakSecs,
+      workDuration: secToHMS(workSecs),
+      breakDuration: secToHMS(breakSecs),
+      isLate,
+      isHalfDay,
+      isAbsent,
+      arrivalTimeFormatted: todayStatus.arrivalTime
+        ? utcToZonedTime(todayStatus.arrivalTime, userTimeZone).toLocaleTimeString(
+            [],
+            {
+              hour: "2-digit",
+              minute: "2-digit",
+              hour12: true,
+            }
+          )
+        : null,
+    };
+
+    res.json(payload);
+  } catch (err) {
+    console.error("Error fetching employee's today status:", err);
+    res.status(500).json({ message: "Server error", error: err.message });
+  }
+}
+
 module.exports = {
   getTodayStatus,
+  getEmployeeTodayStatus,
   updateTodayStatus,
   syncDailyWork,
   getEffectiveShift,

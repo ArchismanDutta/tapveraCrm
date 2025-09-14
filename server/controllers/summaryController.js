@@ -16,7 +16,13 @@ function secToHM(sec) {
 // ======================
 exports.getWeeklySummary = async (req, res) => {
   try {
-    const userId = req.user?._id;
+    let userId = req.user?._id;
+    
+    // Check if admin is requesting data for a specific employee
+    if (req.query.userId && ["admin", "super-admin", "hr"].includes(req.user.role)) {
+      userId = req.query.userId;
+    }
+    
     if (!userId) return res.status(401).json({ message: "Unauthorized" });
 
     let { startDate, endDate } = req.query;
