@@ -7,6 +7,7 @@ const {
   createFlexibleShiftRequest,
   updateFlexibleShiftStatus,
   getEmployeeFlexibleRequests,
+  deleteFlexibleShiftRequest
 } = require("../controllers/flexibleShiftController");
 
 const { protect, authorize } = require("../middlewares/authMiddleware");
@@ -15,8 +16,8 @@ const { protect, authorize } = require("../middlewares/authMiddleware");
 // Flexible Shift Routes
 // ======================
 
-// HR/Admin: Fetch all flexible shift requests
-// GET /api/flexible-shifts
+// HR/Admin: Fetch all flexible shift requests with optional filters
+// GET /api/flexible-shifts?status=pending&startDate=2024-01-01&endDate=2024-01-31
 router.get(
   "/",
   protect,
@@ -37,8 +38,12 @@ router.post("/request", protect, createFlexibleShiftRequest);
 router.put(
   "/:requestId/status",
   protect,
-  authorize("hr", "admin"),
+  authorize("hr", "admin", "super-admin"),
   updateFlexibleShiftStatus
 );
+
+// Employee/HR/Admin: Delete a flexible shift request
+// DELETE /api/flexible-shifts/:requestId
+router.delete("/:requestId", protect, deleteFlexibleShiftRequest);
 
 module.exports = router;
