@@ -22,6 +22,7 @@ router.get("/team", protect, authorize("employee", "admin", "super-admin", "hr")
 
 // Admin routes
 router.get("/", protect, authorize("admin", "super-admin", "hr"), leaveController.getAllLeaves);
+router.get("/employee/:employeeId", protect, authorize("admin", "super-admin", "hr"), leaveController.getEmployeeLeaves);
 router.patch("/:id", protect, authorize("admin", "super-admin", "hr"), leaveController.updateLeaveStatus);
 
 // Delete leave request
