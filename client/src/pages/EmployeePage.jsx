@@ -205,6 +205,7 @@ const EmployeePage = () => {
         <ShiftDetails
           shift={selectedEmployee.shift}
           shiftType={selectedEmployee.shiftType}
+          employeeId={selectedEmployee._id}
         />
       </main>
 

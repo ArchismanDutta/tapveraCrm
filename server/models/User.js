@@ -19,14 +19,16 @@ const salarySchema = new mongoose.Schema({
   paymentMode: { type: String, enum: ["bank", "cash"], default: "bank" },
 });
 
-// Shift
-const shiftSchema = new mongoose.Schema({
-  name: { type: String, trim: true },
-  start: { type: String, trim: true },
-  end: { type: String, trim: true },
-  durationHours: { type: Number, default: 9, min: 1, max: 24 },
-  isFlexible: { type: Boolean, default: false },
-});
+// Shift Override Schema (for temporary flexible shifts)
+const shiftOverrideSchema = new mongoose.Schema({
+  start: { type: String, required: true },
+  end: { type: String, required: true },
+  durationHours: { type: Number, min: 1, max: 24, required: true },
+  type: { type: String, enum: ["flexible", "standard"], default: "flexible" },
+  name: { type: String, default: "" },
+  approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+  approvedAt: { type: Date }
+}, { _id: false });
 
 // ======================
 // Main User Schema
@@ -68,99 +70,230 @@ const userSchema = new mongoose.Schema(
     outlookAppPassword: { type: String, trim: true },
     location: { type: String, trim: true, default: "India" },
     avatar: { type: String, trim: true, default: "" },
+    timeZone: { type: String, default: "Asia/Kolkata" }, // Added timezone support
 
-    // Shift Type
-    shiftType: { type: String, enum: ["standard", "flexiblePermanent"], default: "standard" },
+    // ====== SHIFT MANAGEMENT ======
+    
+    // Primary shift type
+    shiftType: { 
+      type: String, 
+      enum: ["standard", "flexiblePermanent"], 
+      default: "standard" 
+    },
 
-    // Shift sub-document
-    shift: { type: shiftSchema, default: () => ({}) },
+    // For standard shifts - reference to predefined shifts
+    assignedShift: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Shift",
+      default: null
+    },
 
-    // Flexible shift requests for standard employees (single-day flexibility)
-    flexibleShiftRequests: [{ type: mongoose.Schema.Types.ObjectId, ref: "FlexibleShiftRequest" }],
+    // Standard shift type enum (for predefined shifts)
+    standardShiftType: {
+      type: String,
+      enum: ["morning", "evening", "night"],
+      default: null
+    },
 
-    // ✅ NEW: Flexible shift overrides for specific dates
+    // Flexible shift overrides for specific dates (YYYY-MM-DD format as keys)
     shiftOverrides: {
       type: Map,
-      of: new mongoose.Schema(
-        {
-          start: { type: String },
-          end: { type: String },
-          durationHours: { type: Number, min: 1, max: 24 },
-        },
-        { _id: false }
-      ),
-      default: {},
+      of: shiftOverrideSchema,
+      default: new Map()
     },
+
+    // Flexible shift requests (references)
+    flexibleShiftRequests: [{ 
+      type: mongoose.Schema.Types.ObjectId, 
+      ref: "FlexibleShiftRequest" 
+    }],
+
+    // Legacy shift field (kept for backward compatibility)
+    shift: {
+      name: { type: String, trim: true },
+      start: { type: String, trim: true },
+      end: { type: String, trim: true },
+      durationHours: { type: Number, default: 9, min: 1, max: 24 },
+      isFlexible: { type: Boolean, default: false },
+      shiftId: { type: mongoose.Schema.Types.ObjectId, ref: "Shift" },
+    }
   },
   { timestamps: true }
 );
 
 // ======================
-// Pre-save hook to ensure default shift
+// Indexes for better performance
+// ======================
+userSchema.index({ shiftType: 1, assignedShift: 1 });
+userSchema.index({ department: 1, designation: 1 });
+userSchema.index({ status: 1 });
+
+// ======================
+// Pre-save hook to ensure consistent shift data
 // ======================
 userSchema.pre("save", function (next) {
-  if (!this.shift || !this.shift.name) {
-    if (this.shiftType === "flexiblePermanent") {
-      this.shift = {
-        name: "Flexible 9h/day",
-        start: "09:00",
-        end: "18:00",
-        durationHours: 9,
-        isFlexible: true,
-      };
-    } else if (this.shiftType === "standard") {
-      this.shift = {
-        name: "Morning 9-6",
-        start: "09:00",
-        end: "18:00",
-        durationHours: 9,
-        isFlexible: false,
-      };
-    }
+  // Ensure shift consistency based on shiftType
+  if (this.shiftType === "flexiblePermanent") {
+    // For flexible permanent employees
+    this.assignedShift = null;
+    this.standardShiftType = null;
+    this.shift = {
+      name: "Flexible 9h/day",
+      start: "00:00",
+      end: "23:59",
+      durationHours: 9,
+      isFlexible: true,
+      shiftId: null
+    };
+  } else if (this.shiftType === "standard" && this.assignedShift) {
+    // For standard shift employees, ensure legacy shift field is updated
+    // This will be populated by the shift assignment controller
+    // Don't set default values here - let the assignment controller handle it
   }
+
   next();
-});
-
-// ======================
-// Post-save hook to create today's UserStatus
-// ======================
-userSchema.post("save", async function (doc, next) {
-  try {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    const UserStatus = require("./UserStatus");
-
-    // Check if today's status already exists
-    const existing = await UserStatus.findOne({ userId: doc._id, today });
-    if (!existing) {
-      await UserStatus.create({
-        userId: doc._id,
-        shiftType: doc.shiftType,
-        shift: {
-          name: doc.shift.name,
-          start: doc.shift.start,
-          end: doc.shift.end,
-          durationHours: doc.shift.durationHours,
-          isFlexible: doc.shift.isFlexible,
-        },
-        today,
-      });
-    }
-    next();
-  } catch (err) {
-    next(err);
-  }
 });
 
 // ======================
 // Methods
 // ======================
+
+// Get effective shift for a specific date
+userSchema.methods.getEffectiveShift = async function(date) {
+  const dateKey = new Date(date).toISOString().slice(0, 10); // YYYY-MM-DD
+  
+  // 1. Check for shift overrides first (highest priority)
+  if (this.shiftOverrides && this.shiftOverrides.has(dateKey)) {
+    const override = this.shiftOverrides.get(dateKey);
+    return {
+      start: override.start,
+      end: override.end,
+      durationHours: override.durationHours,
+      isFlexible: override.type === "flexible",
+      source: "override",
+      name: override.name || "Shift Override"
+    };
+  }
+
+  // 2. Check if user has flexible permanent shift
+  if (this.shiftType === "flexiblePermanent") {
+    return {
+      start: "00:00",
+      end: "23:59",
+      durationHours: 9,
+      isFlexible: true,
+      source: "flexiblePermanent",
+      name: "Flexible Permanent"
+    };
+  }
+
+  // 3. Check for approved flexible shift requests for this date
+  const FlexibleShiftRequest = require("./FlexibleShiftRequest");
+  const flexRequest = await FlexibleShiftRequest.findOne({
+    employee: this._id,
+    requestedDate: new Date(date),
+    status: "approved"
+  }).lean();
+
+  if (flexRequest) {
+    const duration = flexRequest.durationHours || 9;
+    const [startH, startM] = flexRequest.requestedStartTime.split(":").map(Number);
+
+    // Calculate end time
+    let endH = startH + Math.floor(duration);
+    let endM = startM + Math.round((duration % 1) * 60);
+
+    if (endM >= 60) {
+      endH += Math.floor(endM / 60);
+      endM = endM % 60;
+    }
+
+    if (endH >= 24) {
+      endH = endH % 24;
+    }
+
+    const endTime = `${String(endH).padStart(2, "0")}:${String(endM).padStart(2, "0")}`;
+
+    return {
+      start: flexRequest.requestedStartTime,
+      end: endTime,
+      durationHours: duration,
+      isFlexible: true,
+      source: "flexibleRequest",
+      name: "Flexible Request"
+    };
+  }
+
+  // 4. Default to assigned standard shift
+  if (this.assignedShift) {
+    const Shift = require("./Shift");
+    const assignedShift = await Shift.findById(this.assignedShift).lean();
+    if (assignedShift) {
+      return {
+        start: assignedShift.start,
+        end: assignedShift.end,
+        durationHours: assignedShift.durationHours,
+        isFlexible: false,
+        source: "assigned",
+        name: assignedShift.name
+      };
+    }
+  }
+
+    // 5. Fallback to legacy shift or default
+  if (this.shift && this.shift.start && this.shift.end) {
+    return {
+      start: this.shift.start,
+      end: this.shift.end,
+      durationHours: this.shift.durationHours || 9,
+      isFlexible: this.shift.isFlexible || false,
+      source: "legacy",
+      name: this.shift.name || "Legacy Shift"
+    };
+  }
+
+  // 6. Ultimate fallback - return null to indicate no shift assigned
+  return null;
+};
+
+// Check if user can work flexible hours on a specific date
+userSchema.methods.canWorkFlexible = async function(date) {
+  // Permanent flexible employees can always work flexible
+  if (this.shiftType === "flexiblePermanent") {
+    return { canWork: true, reason: "permanent_flexible" };
+  }
+
+  // Check for approved flexible requests
+  const FlexibleShiftRequest = require("./FlexibleShiftRequest");
+  const approvedRequest = await FlexibleShiftRequest.findOne({
+    employee: this._id,
+    requestedDate: new Date(date),
+    status: "approved"
+  });
+
+  if (approvedRequest) {
+    return { canWork: true, reason: "approved_request" };
+  }
+
+  // Check shift overrides
+  const dateKey = new Date(date).toISOString().slice(0, 10);
+  if (this.shiftOverrides && this.shiftOverrides.has(dateKey)) {
+    const override = this.shiftOverrides.get(dateKey);
+    return { 
+      canWork: override.type === "flexible", 
+      reason: override.type === "flexible" ? "override" : "standard_override" 
+    };
+  }
+
+  return { canWork: false, reason: "standard_shift_only" };
+};
+
+// Compute flexible attendance
 userSchema.methods.computeFlexibleAttendance = function (workHours, breakHours = 0) {
   if (this.shiftType !== "flexiblePermanent") return null;
   const total = workHours + breakHours;
   if (total < 5) return "absent";
-  if (total < 9) return "half-day";
+  if (total < 8) return "half-day";
   return "full-day";
 };
 
@@ -174,6 +307,7 @@ userSchema.set("toJSON", {
     return ret;
   },
 });
+
 userSchema.set("toObject", {
   transform: (doc, ret) => {
     delete ret.password;

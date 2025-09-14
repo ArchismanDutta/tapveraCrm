@@ -6,6 +6,11 @@ const User = require("../models/User");
 const FlexibleShiftRequest = require("../models/FlexibleShiftRequest");
 
 // -----------------------
+// Configurable grace / early punch
+// -----------------------
+const EARLY_PUNCH_MINUTES = 40; // allow punch-in up to 40 min before shift start
+
+// -----------------------
 // Native timezone conversion helpers (replaces date-fns-tz)
 // -----------------------
 function formatPartsFor(date, timeZone) {
@@ -55,52 +60,69 @@ function getTimeZoneOffsetMilliseconds(dateInput, timeZone) {
     Number(partsTZ.second)
   );
 
-  return tzMs - utcMs;
-}
-
-/**
- * Interpret the wall-clock time of `dateInput` in `timeZone` and return the
- * corresponding UTC Date object.
- *
- * Example: zonedTimeToUtc("2025-09-12T09:00:00", "Asia/Kolkata") -> Date object at UTC equivalent.
- */
-function zonedTimeToUtc(dateInput, timeZone) {
-  const date = new Date(dateInput);
-  const parts = formatPartsFor(date, timeZone);
-
-  // Build UTC timestamp for the wall clock fields (treat them as if they were UTC)
-  const localAsUtcMs = Date.UTC(
-    Number(parts.year),
-    Number(parts.month) - 1,
-    Number(parts.day),
-    Number(parts.hour),
-    Number(parts.minute),
-    Number(parts.second)
+  return new Date(
+    `${map.year}-${map.month}-${map.day}T${map.hour}:${map.minute}:${map.second}`
   );
-
-  // offset (tz - utc) in ms at that instant
-  const tzOffsetMs = getTimeZoneOffsetMilliseconds(date, timeZone);
-
-  // The real UTC instant for that wall-clock is: localAsUtcMs - tzOffsetMs
-  return new Date(localAsUtcMs - tzOffsetMs);
 }
 
-/**
- * Convert a UTC (or any instant) Date to a Date representing the wall-clock time
- * in the provided timezone. Implementation returns a Date whose timestamp is
- * shifted so that its fields correspond to the target timezone's local time.
- *
- * NOTE: This returns a Date object you can use for comparisons of "local" times
- * (e.g. comparing arrivalLocal.setHours(...) etc.)
- */
-function utcToZonedTime(dateInput, timeZone) {
-  const date = new Date(dateInput);
-  const tzOffsetMs = getTimeZoneOffsetMilliseconds(date, timeZone);
-  // Shift the instant by offset (tz - utc). Adding offset moves the UTC instant
-  // to the timezone's wall-clock representation.
-  return new Date(date.getTime() + tzOffsetMs);
+function getTimeZoneOffsetMilliseconds(date, timeZone) {
+  const dtfUTC = new Intl.DateTimeFormat("en-US", {
+    timeZone: "UTC",
+    hour12: false,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+  const dtfTZ = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    hour12: false,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+
+  const partsUTC = dtfUTC.formatToParts(date);
+  const partsTZ = dtfTZ.formatToParts(date);
+
+  function partsToDate(parts) {
+    const map = {};
+    parts.forEach(({ type, value }) => {
+      map[type] = value;
+    });
+    return new Date(
+      `${map.year}-${map.month}-${map.day}T${map.hour}:${map.minute}:${map.second}Z`
+    );
+  }
+
+  const dateUTC = partsToDate(partsUTC);
+  const dateTZ = partsToDate(partsTZ);
+
+  return dateTZ.getTime() - dateUTC.getTime();
 }
 
+// -----------------------
+// Standard shift definitions (should match the User model)
+const STANDARD_SHIFTS = {
+  MORNING: { name: "Morning", start: "09:00", end: "18:00", durationHours: 9 },
+  NIGHT: { name: "Night", start: "20:00", end: "05:00", durationHours: 9 },
+  EARLY: { name: "Early", start: "05:30", end: "14:20", durationHours: 8.83 }
+};
+
+function ymdKey(date) {
+  const d = new Date(date);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+    d.getDate()
+  ).padStart(2, "0")}`;
+}
+
+// -----------------------
+// Time constants
 // -----------------------
 const MIN_HALF_DAY_SECONDS = 5 * 3600; // 5 hours
 const MIN_FULL_DAY_SECONDS = 8 * 3600; // 8 hours
@@ -141,9 +163,7 @@ function getBreakDurationSeconds(breakSessions, onBreak, breakStart) {
   }, 0);
 
   if (onBreak) {
-    const last = breakSessions.length
-      ? breakSessions[breakSessions.length - 1]
-      : null;
+    const last = breakSessions.length ? breakSessions[breakSessions.length - 1] : null;
     if (last && last.start && !last.end) {
       total += (Date.now() - new Date(last.start).getTime()) / 1000;
     } else if (breakStart) {
@@ -167,14 +187,6 @@ function secToHM(sec) {
   const h = Math.floor(sec / 3600);
   const m = Math.floor((sec % 3600) / 60);
   return `${h}h ${m.toString().padStart(2, "0")}m`;
-}
-
-function ymdKey(dateInput) {
-  const d = new Date(dateInput);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(
-    2,
-    "0"
-  )}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
 // -----------------------
@@ -210,80 +222,135 @@ function calculateLateAndHalfDay(
 }
 
 // -----------------------
-// Effective Shift
+// Updated getEffectiveShift function integrated here
 // -----------------------
 async function getEffectiveShift(userId, date) {
-  const targetDate = new Date(date);
-  targetDate.setHours(0, 0, 0, 0);
+  try {
+    const targetDate = new Date(date);
+    targetDate.setHours(0, 0, 0, 0);
+    const dateKey = ymdKey(targetDate);
 
-  const user = await User.findById(userId).lean();
-  if (!user) throw new Error("User not found");
+    const user = await User.findById(userId).lean();
+    if (!user) throw new Error("User not found");
 
-  const key = ymdKey(targetDate);
-
-  // Shift override
-  if (user.shiftOverrides && user.shiftOverrides[key]) {
-    const ov = user.shiftOverrides[key];
-    return {
-      start: ov.start || user.shift?.start || "09:00",
-      end: ov.end || user.shift?.end || "18:00",
-      isFlexible: true,
-      isFlexiblePermanent: false,
-      durationHours: ov.durationHours || user.shift?.durationHours || 9,
-    };
-  }
-
-  // Flexible permanent shift
-  if (user.shiftType === "flexiblePermanent") {
-    return {
-      start: "00:00",
-      end: "23:59",
-      isFlexible: true,
-      isFlexiblePermanent: true,
-      durationHours: user.shift?.durationHours || 9,
-    };
-  }
-
-  // Flexible shift requests
-  const flexShift = await FlexibleShiftRequest.findOne({
-    employee: userId,
-    requestedDate: targetDate,
-    status: "approved",
-  }).lean();
-
-  if (flexShift) {
-    const [startH, startM] = String(flexShift.requestedStartTime || "09:00")
-      .split(":")
-      .map(Number);
-    const duration = flexShift.durationHours || 9;
-
-    let endH = startH + Math.floor(duration);
-    let endM = startM + Math.round((duration % 1) * 60);
-    if (endM >= 60) {
-      endH += 1;
-      endM -= 60;
+    // 1. Check for shift overrides first (highest priority)
+    if (user.shiftOverrides && user.shiftOverrides.has && user.shiftOverrides.has(dateKey)) {
+      const override = user.shiftOverrides.get(dateKey);
+      return {
+        start: override.start,
+        end: override.end,
+        durationHours: override.durationHours,
+        isFlexible: override.type === "flexible",
+        isFlexiblePermanent: false,
+        source: "override",
+        type: override.type,
+        shiftName: override.name || ""
+      };
     }
-    if (endH >= 24) endH -= 24;
+    // Handle Map stored as plain object (common with MongoDB)
+    if (user.shiftOverrides && typeof user.shiftOverrides === 'object' && user.shiftOverrides[dateKey]) {
+      const override = user.shiftOverrides[dateKey];
+      return {
+        start: override.start || user.shift?.start || "09:00",
+        end: override.end || user.shift?.end || "18:00",
+        durationHours: override.durationHours || user.shift?.durationHours || 9,
+        isFlexible: override.type === "flexible",
+        isFlexiblePermanent: false,
+        source: "override",
+        type: override.type,
+        shiftName: override.name || ""
+      };
+    }
 
-    return {
-      start: `${String(startH).padStart(2, "0")}:${String(startM).padStart(
-        2,
-        "0"
-      )}`,
-      end: `${String(endH).padStart(2, "0")}:${String(endM).padStart(2, "0")}`,
-      isFlexible: true,
-      isFlexiblePermanent: false,
-      durationHours: duration,
-    };
+    // 2. Check if user has flexible permanent shift
+    if (user.shiftType === "flexiblePermanent") {
+      return {
+        start: "00:00",
+        end: "23:59",
+        durationHours: 9,
+        isFlexible: true,
+        isFlexiblePermanent: true,
+        source: "flexiblePermanent",
+        type: "flexible",
+        shiftName: "Flexible Permanent"
+      };
+    }
+
+    // 3. Check for approved flexible shift requests for this date
+    const flexRequest = await FlexibleShiftRequest.findOne({
+      employee: userId,
+      requestedDate: targetDate,
+      status: "approved"
+    }).lean();
+
+    if (flexRequest) {
+      const duration = flexRequest.durationHours || 9;
+      const [startH, startM] = flexRequest.requestedStartTime.split(":").map(Number);
+
+      // Calculate end time
+      let endH = startH + Math.floor(duration);
+      let endM = startM + Math.round((duration % 1) * 60);
+
+      if (endM >= 60) {
+        endH += Math.floor(endM / 60);
+        endM = endM % 60;
+      }
+
+      if (endH >= 24) {
+        endH = endH % 24;
+      }
+      const endTime = `${String(endH).padStart(2, "0")}:${String(endM).padStart(2, "0")}`;
+
+      return {
+        start: flexRequest.requestedStartTime,
+        end: endTime,
+        durationHours: duration,
+        isFlexible: true,
+        isFlexiblePermanent: false,
+        source: "flexibleRequest",
+        type: "flexible",
+        shiftName: "Flexible Request"
+      };
+    }
+
+    // 4. Default to user's standard shift if exists (updated as requested)
+    if (user.shiftType === "standard") {
+      // Use the standardShiftType to get predefined shift
+      if (user.standardShiftType && STANDARD_SHIFTS[user.standardShiftType.toUpperCase()]) {
+        const standardShift = STANDARD_SHIFTS[user.standardShiftType.toUpperCase()];
+        return {
+          start: standardShift.start,
+          end: standardShift.end,
+          durationHours: standardShift.durationHours,
+          isFlexible: false,
+          isFlexiblePermanent: false,
+          source: "standard",
+          type: "standard",
+          shiftName: standardShift.name
+        };
+      }
+      // Fallback to user.shift if standardShiftType is not set
+      if (user.shift) {
+        return {
+          start: user.shift.start,
+          end: user.shift.end,
+          durationHours: user.shift.durationHours,
+          isFlexible: false,
+          isFlexiblePermanent: false,
+          source: "standard_fallback",
+          type: "standard",
+          shiftName: user.shift.name || "Standard"
+        };
+      }
+    }
+
+    // 5. Ultimate fallback - return null to indicate no shift assigned
+    return null;
+  } catch (error) {
+    console.error("Error in getEffectiveShift:", error);
+    // Return null to indicate error - let calling code handle it
+    return null;
   }
-
-  return {
-    start: user.shift?.start || "09:00",
-    end: user.shift?.end || "18:00",
-    isFlexible: false,
-    isFlexiblePermanent: false,
-    durationHours: user.shift?.durationHours || 9,
-  };
 }
 
 // -----------------------
@@ -296,8 +363,14 @@ async function syncDailyWork(userId, todayStatus, userTimeZone = "UTC") {
 
   const effectiveShift = await getEffectiveShift(userId, todayUTC);
 
+  // Handle case where no shift is assigned
+  if (!effectiveShift) {
+    console.warn(`No shift assigned for user ${userId} on ${todayUTC}`);
+    return; // Skip sync if no shift is assigned
+  }
+
   const shiftObj = {
-    name: "",
+    name: effectiveShift.shiftName || "",
     start: effectiveShift.start || "00:00",
     end: effectiveShift.end || "23:59",
     isFlexible: Boolean(
@@ -392,6 +465,14 @@ async function getTodayStatus(req, res) {
     }
 
     const effectiveShift = await getEffectiveShift(userId, todayUTC);
+    
+    // Handle case where no shift is assigned
+    if (!effectiveShift) {
+      return res.status(400).json({ 
+        message: "No shift assigned to this employee. Please assign a shift first." 
+      });
+    }
+    
     const workSecs = getWorkDurationSeconds(
       todayStatus.workedSessions,
       todayStatus.currentlyWorking
@@ -420,14 +501,14 @@ async function getTodayStatus(req, res) {
       isHalfDay,
       isAbsent,
       arrivalTimeFormatted: todayStatus.arrivalTime
-        ? utcToZonedTime(
-            todayStatus.arrivalTime,
-            userTimeZone
-          ).toLocaleTimeString([], {
-            hour: "2-digit",
-            minute: "2-digit",
-            hour12: true,
-          })
+        ? utcToZonedTime(todayStatus.arrivalTime, userTimeZone).toLocaleTimeString(
+            [],
+            {
+              hour: "2-digit",
+              minute: "2-digit",
+              hour12: true,
+            }
+          )
         : null,
     };
 
@@ -479,17 +560,35 @@ async function updateTodayStatus(req, res) {
       const breakType = breakTypeMatch ? breakTypeMatch[1].trim() : undefined;
 
       if (lower.includes("punch in")) {
-        // Set arrival time if this is the first punch in of the day
-        if (!todayStatus.arrivalTime) {
-          todayStatus.arrivalTime = now;
+        // --- Early punch check ---
+        const effectiveShift = await getEffectiveShift(userId, todayUTC);
+        
+        // Handle case where no shift is assigned
+        if (!effectiveShift) {
+          return res.status(400).json({ 
+            message: "No shift assigned to this employee. Please assign a shift first." 
+          });
         }
+        if (effectiveShift.start) {
+          const [h, m] = effectiveShift.start.split(":").map(Number);
+          const shiftStartLocal = new Date(utcToZonedTime(now, userTimeZone));
+          shiftStartLocal.setHours(h, m, 0, 0);
+          const earliestAllowed = new Date(shiftStartLocal);
+          earliestAllowed.setMinutes(earliestAllowed.getMinutes() - EARLY_PUNCH_MINUTES);
+
+          if (now < earliestAllowed) {
+            return res.status(400).json({
+              message: `Cannot punch in earlier than ${EARLY_PUNCH_MINUTES} minutes before shift start`
+            });
+          }
+        }
+
+        if (!todayStatus.arrivalTime) todayStatus.arrivalTime = now;
         if (!ws.length || ws[ws.length - 1].end) ws.push({ start: now });
         todayStatus.currentlyWorking = true;
         todayStatus.onBreak = false;
         todayStatus.breakStartTime = null;
-        await User.findByIdAndUpdate(userId, { status: "active" }).catch(
-          () => {}
-        );
+        await User.findByIdAndUpdate(userId, { status: "active" }).catch(() => {});
       } else if (lower.includes("punch out")) {
         if (ws.length && !ws[ws.length - 1].end) ws[ws.length - 1].end = now;
         else if (!ws.length) ws.push({ start: now, end: now });
@@ -497,9 +596,7 @@ async function updateTodayStatus(req, res) {
         todayStatus.currentlyWorking = false;
         todayStatus.onBreak = false;
         todayStatus.breakStartTime = null;
-        await User.findByIdAndUpdate(userId, { status: "inactive" }).catch(
-          () => {}
-        );
+        await User.findByIdAndUpdate(userId, { status: "inactive" }).catch(() => {});
       } else if (lower.includes("break start")) {
         if (!bs.length || bs[bs.length - 1].end) {
           const newBreak = { start: now };
@@ -577,29 +674,28 @@ async function updateTodayStatus(req, res) {
 
     const payload = {
       ...todayStatus.toObject(),
-      effectiveShift,
-      shiftType: dailyWork
-        ? dailyWork.shiftType
-        : todayStatus.shiftType || "standard",
+      effectiveShift: effectiveShift || { message: "No shift assigned" },
+      shiftType: dailyWork ? dailyWork.shiftType : todayStatus.shiftType || "standard",
       workDurationSeconds: todayStatus.workDurationSeconds,
       breakDurationSeconds: todayStatus.breakDurationSeconds,
       workDuration: secToHMS(todayStatus.workDurationSeconds),
       breakDuration: secToHMS(todayStatus.breakDurationSeconds),
       arrivalTimeFormatted: todayStatus.arrivalTime
-        ? utcToZonedTime(
-            todayStatus.arrivalTime,
-            userTimeZone
-          ).toLocaleTimeString([], {
-            hour: "2-digit",
-            minute: "2-digit",
-            hour12: true,
-          })
+        ? utcToZonedTime(todayStatus.arrivalTime, userTimeZone).toLocaleTimeString(
+            [],
+            {
+              hour: "2-digit",
+              minute: "2-digit",
+              hour12: true,
+            }
+          )
         : null,
       isLate: dailyWork?.isLate || false,
       isHalfDay: dailyWork?.isHalfDay || false,
       isAbsent: dailyWork?.isAbsent || false,
       dailyWork: dailyWork
         ? {
+            id: dailyWork._id,
             id: dailyWork._id,
             date: dailyWork.date,
             workDurationSeconds: dailyWork.workDurationSeconds,
@@ -617,9 +713,7 @@ async function updateTodayStatus(req, res) {
     return res.json(payload);
   } catch (err) {
     console.error("Error updating today's status:", err);
-    return res
-      .status(500)
-      .json({ message: "Server error", error: err.message });
+    return res.status(500).json({ message: "Server error", error: err.message });
   }
 }
 
