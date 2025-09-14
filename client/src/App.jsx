@@ -34,7 +34,7 @@ import HRDashboard from "./pages/HRDashboard";
 import AdminAttendancePage from "./pages/AdminAttendancePage";
 import HolidayManagementPage from "./pages/HolidayManagementPage";
 import SuperAdminDashboard from "./pages/SuperAdminDashboard";
-import ShiftManagement from "./pages/ShiftManagement";
+import ShiftManagement from "./components/humanResource/ShiftManagement";
 
 import { resetChat } from "./store/slices/chatSlice";
 import { useDispatch } from "react-redux";
@@ -322,6 +322,29 @@ const AppWrapper = () => {
                 to={isAuthenticated ? "/dashboard" : "/login"}
                 replace
               />
+            )
+          }
+        />
+        <Route
+          path="/admin/shifts"
+          element={
+            isAuthenticated && (isAdmin || isHR) ? (
+              <ShiftManagement onLogout={handleLogout} />
+            ) : (
+              <Navigate
+                to={isAuthenticated ? "/dashboard" : "/login"}
+                replace
+              />
+            )
+          }
+        />
+        <Route
+          path="/admin/shifts"
+          element={
+            isAuthenticated && (isAdmin || isHR) ? (
+              <ShiftManagement onLogout={handleLogout} />
+            ) : (
+              <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />
             )
           }
         />
