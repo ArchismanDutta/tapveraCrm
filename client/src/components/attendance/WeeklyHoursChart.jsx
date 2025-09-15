@@ -62,13 +62,13 @@ const WeeklyHoursChart = ({ weeklyHours = [], targetHours = 8, showTarget = true
     const secondHalf = weekdayData.slice(2).reduce((sum, d) => sum + (d.hours || 0), 0);
     const trend = secondHalf > firstHalf ? "up" : secondHalf < firstHalf ? "down" : "neutral";
 
-    // Average daily hours for working days only
-    const avgDailyHours = workingDaysWithHours > 0 ? 
-      (totalHours / workingDaysWithHours).toFixed(1) : "0.0";
+    // Average daily hours for ALL weekdays (including zero-hour days)
+    const avgDailyHours = totalWeekdays > 0 ? 
+      (totalHours / totalWeekdays).toFixed(1) : "0.0";
 
     // Week progress (how much of ideal week is completed)
-    const idealWeekHours = weekdayData.length * targetHours;
-    const weekProgress = Math.min((totalHours / idealWeekHours) * 100, 100);
+    const idealWeekHours = totalWeekdays * targetHours;
+    const weekProgress = idealWeekHours > 0 ? Math.min((totalHours / idealWeekHours) * 100, 100) : 0;
 
     return {
       totalHours: totalHours.toFixed(1),
@@ -82,12 +82,12 @@ const WeeklyHoursChart = ({ weeklyHours = [], targetHours = 8, showTarget = true
     };
   }, [weeklyHours, targetHours]);
 
-  // Chart dimensions and scales
-  const chartHeight = 300;
-  const barWidth = 40;
-  const barGap = 20;
-  const padding = { top: 40, right: 30, bottom: 60, left: 50 };
-  const svgWidth = Math.max(weeklyHours.length * (barWidth + barGap) + padding.left + padding.right, 500);
+  // Chart dimensions and scales - responsive design
+  const chartHeight = 280;
+  const barWidth = 35;
+  const barGap = 15;
+  const padding = { top: 40, right: 40, bottom: 80, left: 60 };
+  const svgWidth = Math.max(weeklyHours.length * (barWidth + barGap) + padding.left + padding.right, 400);
   const svgHeight = chartHeight + padding.top + padding.bottom;
   const maxScale = Math.max(...weeklyHours.map(d => d.hours || 0), targetHours, 8) + 2;
 
@@ -203,10 +203,10 @@ const WeeklyHoursChart = ({ weeklyHours = [], targetHours = 8, showTarget = true
             <Clock className="w-4 h-4 text-blue-400" />
             <span className="text-xs text-gray-400">Total Hours</span>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="text-xl font-bold text-blue-400">{metrics.totalHours}h</span>
+          <div className="flex items-center gap-1.5">
+            <span className="text-base font-bold text-blue-400">{metrics.totalHours}h</span>
             <div className="text-xs text-gray-500">
-              of {(targetHours * 5).toFixed(0)}h expected
+              of {(targetHours * 5).toFixed(0)}h
             </div>
           </div>
           <div className="w-full bg-gray-700 rounded-full h-1.5 mt-2">
@@ -222,8 +222,8 @@ const WeeklyHoursChart = ({ weeklyHours = [], targetHours = 8, showTarget = true
             <Target className="w-4 h-4 text-green-400" />
             <span className="text-xs text-gray-400">Target Met</span>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="text-xl font-bold text-green-400">
+          <div className="flex items-center gap-1.5">
+            <span className="text-base font-bold text-green-400">
               {metrics.targetMet}/{metrics.workingDays}
             </span>
             <div className="text-xs text-gray-500">days</div>
@@ -235,9 +235,9 @@ const WeeklyHoursChart = ({ weeklyHours = [], targetHours = 8, showTarget = true
             <TrendingUp className="w-4 h-4 text-purple-400" />
             <span className="text-xs text-gray-400">Efficiency</span>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="text-xl font-bold text-purple-400">{metrics.efficiency}%</span>
-            <div className="text-xs text-gray-500">target rate</div>
+          <div className="flex items-center gap-1.5">
+            <span className="text-base font-bold text-purple-400">{metrics.efficiency}%</span>
+            <div className="text-xs text-gray-500">rate</div>
           </div>
         </div>
 
@@ -247,8 +247,8 @@ const WeeklyHoursChart = ({ weeklyHours = [], targetHours = 8, showTarget = true
               <Activity className="w-4 h-4 text-cyan-400" />
               <span className="text-xs text-gray-400">Daily Avg</span>
             </div>
-            <div className="flex items-center gap-2">
-              <span className="text-xl font-bold text-cyan-400">{metrics.avgDailyHours}h</span>
+            <div className="flex items-center gap-1.5">
+              <span className="text-base font-bold text-cyan-400">{metrics.avgDailyHours}h</span>
               <div className="text-xs text-gray-500">per day</div>
             </div>
           </div>
@@ -261,7 +261,8 @@ const WeeklyHoursChart = ({ weeklyHours = [], targetHours = 8, showTarget = true
           <svg
             viewBox={`0 0 ${svgWidth} ${svgHeight}`}
             preserveAspectRatio="xMidYMid meet"
-            className="w-full h-auto min-h-[350px]"
+            className="w-full h-auto min-h-[320px] max-w-full"
+            style={{ minWidth: `${svgWidth}px` }}
           >
             {/* Definitions for enhanced visuals */}
             <defs>
@@ -298,10 +299,10 @@ const WeeklyHoursChart = ({ weeklyHours = [], targetHours = 8, showTarget = true
                     opacity="0.3"
                   />
                   <text
-                    x={padding.left - 10}
-                    y={y + 4}
+                    x={padding.left - 15}
+                    y={y + 3}
                     textAnchor="end"
-                    fontSize="11"
+                    fontSize="10"
                     fill="#6b7280"
                   >
                     {label}h
@@ -324,10 +325,10 @@ const WeeklyHoursChart = ({ weeklyHours = [], targetHours = 8, showTarget = true
                   opacity="0.8"
                 />
                 <text
-                  x={svgWidth - padding.right - 5}
-                  y={padding.top + chartHeight - (targetHours / maxScale) * chartHeight - 8}
+                  x={svgWidth - padding.right - 10}
+                  y={padding.top + chartHeight - (targetHours / maxScale) * chartHeight - 5}
                   textAnchor="end"
-                  fontSize="12"
+                  fontSize="10"
                   fill="#f59e0b"
                   fontWeight="bold"
                 >
@@ -451,9 +452,9 @@ const WeeklyHoursChart = ({ weeklyHours = [], targetHours = 8, showTarget = true
                       {/* Day label with performance indicator */}
                       <text
                         x={x + barWidth / 2}
-                        y={padding.top + chartHeight + 25}
+                        y={padding.top + chartHeight + 20}
                         textAnchor="middle"
-                        fontSize="12"
+                        fontSize="11"
                         fill={isHovered ? "#ffffff" : getPerformanceColor(hours)}
                         fontWeight={isHovered ? "bold" : "normal"}
                       >
@@ -463,9 +464,9 @@ const WeeklyHoursChart = ({ weeklyHours = [], targetHours = 8, showTarget = true
                       {/* Hours label */}
                       <text 
                         x={x + barWidth / 2} 
-                        y={padding.top + chartHeight + 40} 
+                        y={padding.top + chartHeight + 35} 
                         textAnchor="middle" 
-                        fontSize="10" 
+                        fontSize="9" 
                         fill="#6b7280"
                       >
                         {hours.toFixed(1)}h
@@ -577,9 +578,9 @@ const WeeklyHoursChart = ({ weeklyHours = [], targetHours = 8, showTarget = true
                         {/* Day label for line chart */}
                         <text 
                           x={x} 
-                          y={padding.top + chartHeight + 25} 
+                          y={padding.top + chartHeight + 20} 
                           textAnchor="middle" 
-                          fontSize="12" 
+                          fontSize="11" 
                           fill={isHovered ? "#ffffff" : getPerformanceColor(hours)}
                         >
                           {data.label}
@@ -588,9 +589,9 @@ const WeeklyHoursChart = ({ weeklyHours = [], targetHours = 8, showTarget = true
                         {/* Hours label for line chart */}
                         <text 
                           x={x} 
-                          y={padding.top + chartHeight + 40} 
+                          y={padding.top + chartHeight + 35} 
                           textAnchor="middle" 
-                          fontSize="10" 
+                          fontSize="9" 
                           fill="#6b7280"
                         >
                           {hours.toFixed(1)}h

@@ -176,3 +176,23 @@ exports.getTeamLeaves = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
+// Get leaves for a specific employee (admin/super-admin only)
+exports.getEmployeeLeaves = async (req, res) => {
+  try {
+    const { employeeId } = req.params;
+    
+    if (!employeeId) {
+      return res.status(400).json({ message: "Employee ID is required" });
+    }
+
+    const leaves = await LeaveRequest.find({ 
+      "employee._id": employeeId 
+    }).sort({ createdAt: -1 });
+
+    res.json(leaves);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: error.message });
+  }
+};

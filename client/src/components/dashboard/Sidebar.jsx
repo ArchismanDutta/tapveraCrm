@@ -1,4 +1,3 @@
-// src/components/dashboard/Sidebar.jsx
 import React, { useState, useEffect } from "react";
 import { NavLink } from "react-router-dom";
 import {
@@ -10,13 +9,13 @@ import {
   Flag,
   Users,
   Calendar,
+  Clock,
 } from "lucide-react";
 import { FaChevronCircleRight } from "react-icons/fa";
 
 import Modal from "../modal";
 import DailyEmailSender from "../DailyEmailSender";
 import tapveraLogo from "../../assets/tapvera.png";
-import { ShiftsManager } from "../Shift";
 
 // Role → Menu mapping
 const menuConfig = {
@@ -34,12 +33,12 @@ const menuConfig = {
     { to: "/hrdashboard", icon: <LayoutDashboard size={18} />, label: "HR Dashboard" },
     { to: "/today-status", icon: <ClipboardList size={18} />, label: "Punch In/Out" },
     { to: "/tasks", icon: <ClipboardList size={18} />, label: "Tasks" },
-    { to: "/admin/shift", icon: <ClipboardList size={18} />, label: "Manage Shifts" },
     { to: "/todo", icon: <ClipboardList size={18} />, label: "Todo" },
     { to: "/admin/leaves", icon: <FileText size={18} />, label: "Leave Requests" },
     { to: "/leaves", icon: <FileText size={18} />, label: "My Leaves" },
     { to: "/attendance", icon: <ClipboardList size={18} />, label: "My Attendance" },
     { to: "/directory", icon: <Users size={18} />, label: "Employee Details" },
+    { to: "/admin/shifts", icon: <Clock size={18} />, label: "Shift Management" },
     { to: "/admin/notices", icon: <Flag size={18} />, label: "Notice Board" },
     { to: "/admin/holidays", icon: <Calendar size={18} />, label: "Holidays List" },
     { to: "/messages", icon: <MessageCircle size={18} />, label: "Messages" },
@@ -53,6 +52,7 @@ const menuConfig = {
     { to: "/tasks", icon: <ClipboardList size={18} />, label: "Tasks" },
     { to: "/leaves", icon: <FileText size={18} />, label: "My Leaves" },
     { to: "/messages", icon: <MessageCircle size={18} />, label: "Messages" },
+    { to: "/admin/shifts", icon: <Clock size={18} />, label: "Shift Management" },
     { to: "/admin/holidays", icon: <Calendar size={18} />, label: "Holidays List" },
     { to: "/attendance", icon: <ClipboardList size={18} />, label: "My Attendance" },
     { to: "/profile", icon: <User size={18} />, label: "My Profile" },
@@ -64,12 +64,14 @@ const menuConfig = {
     { to: "/admin/tasks", icon: <LayoutDashboard size={18} />, label: "Assign Task" },
     { to: "/admin/leaves", icon: <FileText size={18} />, label: "Leave Requests" },
     { to: "/directory", icon: <Users size={18} />, label: "Employee Details" },
+    { to: "/admin/shifts", icon: <Clock size={18} />, label: "Shift Management" },
     { to: "/todo", icon: <ClipboardList size={18} />, label: "Todo" },
     { to: "/admin/notices", icon: <Flag size={18} />, label: "Notice Board" },
     { to: "/messages", icon: <MessageCircle size={18} />, label: "Messages" },
     { to: "/admin/holidays", icon: <Calendar size={18} />, label: "Holidays List" },
     { to: "/profile", icon: <User size={18} />, label: "My Profile" },
     { to: "/super-admin", icon: <ClipboardList size={18} />, label: "Employees Current Status" },
+    { to: "/super-admin/attendance", icon: <Calendar size={18} />, label: "Employee Attendance Portal" },
   ],
 };
 
@@ -144,7 +146,7 @@ const Sidebar = ({ collapsed, setCollapsed, onLogout, userRole }) => {
             <NavLink
               to={item.to}
               key={item.to}
-              className={({ isActive }) =>
+              className={({ isActive, isPending }) =>
                 `group flex items-center gap-4 rounded-lg px-4 py-3 text-sm font-semibold
                 transition-colors duration-150
                 ${
@@ -154,6 +156,7 @@ const Sidebar = ({ collapsed, setCollapsed, onLogout, userRole }) => {
                 }
                 ${collapsed ? "justify-center" : "justify-start"}`
               }
+              end={item.to === "/super-admin"}
               tabIndex={collapsed ? -1 : 0}
             >
               <span className="flex items-center justify-center">{item.icon}</span>

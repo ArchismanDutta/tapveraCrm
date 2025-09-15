@@ -27,9 +27,9 @@ const statusRoutes = require("./routes/statusRoutes");
 const summaryRoutes = require("./routes/summaryRoutes");
 const wishRoutes = require("./routes/wishRoutes");
 const flexibleShiftRoutes = require("./routes/flexibleShiftRoutes");
+const shiftRoutes = require("./routes/shiftRoutes");
 const adminAttendanceRoutes = require("./routes/adminAttendanceRoutes");
 const holidayRoutes = require("./routes/holidayRoutes");
-const shiftRoutes = require("./routes/shifts");
 const superAdminRoutes = require("./routes/superAdminRoutes"); // Make sure this file exists
 
 // Controllers
@@ -63,7 +63,7 @@ app.use(
   cors({
     origin: frontendOrigins,
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
+    allowedHeaders: ["Content-Type", "Authorization", "Cache-Control", "Pragma"],
     credentials: true,
   })
 );
@@ -97,8 +97,8 @@ app.use("/api/chat", chatRoutes);
 app.use("/api/wishes", wishRoutes);
 app.use("/api/holidays", holidayRoutes);
 app.use("/api/flexible-shifts", flexibleShiftRoutes);
-app.use("/api/admin", adminAttendanceRoutes);
 app.use("/api/shifts", shiftRoutes);
+app.use("/api/admin", adminAttendanceRoutes);
 app.use("/api/super-admin", superAdminRoutes); // Super admin route added
 
 
@@ -259,3 +259,5 @@ mongoose
     console.error("❌ MongoDB connection error:", err.message);
     process.exit(1);
   });
+
+

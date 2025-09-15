@@ -16,7 +16,13 @@ function secToHM(sec) {
 // ======================
 exports.getWeeklySummary = async (req, res) => {
   try {
-    const userId = req.user?._id;
+    let userId = req.user?._id;
+    
+    // Check if admin is requesting data for a specific employee
+    if (req.query.userId && ["admin", "super-admin", "hr"].includes(req.user.role)) {
+      userId = req.query.userId;
+    }
+    
     if (!userId) return res.status(401).json({ message: "Unauthorized" });
 
     let { startDate, endDate } = req.query;
@@ -66,6 +72,11 @@ exports.getWeeklySummary = async (req, res) => {
 
     for (const day of rawDailyData) {
       const effectiveShift = await getEffectiveShift(userId, day.date);
+
+      // Skip days where no shift is assigned
+      if (!effectiveShift) {
+        continue;
+      }
 
       const workSeconds = day.workDurationSeconds || 0;
       const breakSeconds = day.breakDurationSeconds || 0;
