@@ -12,17 +12,23 @@ const StatusCard = ({
   onPunchOut,
   onRequestFlexible,
 }) => {
-  // Convert arrivalTime ISO to local time string
-  const formattedArrivalTime = arrivalTime
-    ? (() => {
-        const date = new Date(arrivalTime);
-        return date.toLocaleTimeString([], {
-          hour: "2-digit",
-          minute: "2-digit",
-          hour12: true,
-        });
-      })()
-    : "--";
+  // Convert arrivalTime to local time string; handle ISO Date, Date object, or already-formatted string
+  const formattedArrivalTime = (() => {
+    if (!arrivalTime) return "--";
+    // If it's already a string that isn't parseable as date, show as-is
+    if (typeof arrivalTime === "string") {
+      const parsed = new Date(arrivalTime);
+      if (isNaN(parsed.getTime())) return arrivalTime;
+      return parsed.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: true });
+    }
+    if (arrivalTime instanceof Date) {
+      return arrivalTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: true });
+    }
+    // Fallback: try to convert
+    const parsed = new Date(arrivalTime);
+    if (isNaN(parsed.getTime())) return "--";
+    return parsed.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: true });
+  })();
 
   return (
     <div className="bg-slate-800/50 backdrop-blur-sm border border-slate-700/50 rounded-2xl shadow-xl p-8 transition-all hover:shadow-2xl hover:border-slate-600/50">

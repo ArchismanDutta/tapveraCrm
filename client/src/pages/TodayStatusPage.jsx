@@ -217,7 +217,7 @@ const TodayStatusPage = ({ onLogout }) => {
       onBreak: false,
       timelineEvent: {
         type: "Punch In",
-        time: new Date().toLocaleTimeString(),
+        time: new Date().toISOString(),
       },
     });
   };
@@ -260,7 +260,7 @@ const TodayStatusPage = ({ onLogout }) => {
       onBreak: false,
       timelineEvent: {
         type: "Punch Out",
-        time: new Date().toLocaleTimeString(),
+        time: new Date().toISOString(),
       },
     });
   };
@@ -274,10 +274,10 @@ const TodayStatusPage = ({ onLogout }) => {
     updateStatus({
       currentlyWorking: false,
       onBreak: true,
-      breakStartTime: new Date(),
+      breakStartTime: new Date().toISOString(),
       timelineEvent: {
         type: `Break Start (${breakType})`,
-        time: new Date().toLocaleTimeString(),
+        time: new Date().toISOString(),
       },
     });
   };
@@ -293,7 +293,7 @@ const TodayStatusPage = ({ onLogout }) => {
       breakStartTime: null,
       timelineEvent: {
         type: "Resume Work",
-        time: new Date().toLocaleTimeString(),
+        time: new Date().toISOString(),
       },
     });
   };
@@ -417,6 +417,22 @@ const TodayStatusPage = ({ onLogout }) => {
     };
   }, [weeklySummary, combinedQuickStats]);
 
+  // Keep SummaryCard in sync with live timers by overriding today's entry
+  const adjustedDailyData = useMemo(() => {
+    if (!Array.isArray(dailyData) || !status) return dailyData;
+    const todayStr = new Date().toISOString().slice(0, 10);
+    return dailyData.map((d) => {
+      const dKey = new Date(d.date).toISOString().slice(0, 10);
+      if (dKey !== todayStr) return d;
+      return {
+        ...d,
+        workDurationSeconds: typeof liveWork === 'number' ? liveWork : (d.workDurationSeconds || 0),
+        breakDurationSeconds: typeof liveBreak === 'number' ? liveBreak : (d.breakDurationSeconds || 0),
+        arrivalTime: status.arrivalTime || d.arrivalTime,
+      };
+    });
+  }, [dailyData, status, liveWork, liveBreak]);
+
   if (!status)
     return (
       <div className="min-h-screen bg-[#101525] flex items-center justify-center">
@@ -488,7 +504,7 @@ const TodayStatusPage = ({ onLogout }) => {
           <div className="xl:col-span-1">
             <SummaryCard
               weeklySummary={weeklySummaryWithQuickStats}
-              dailyData={dailyData}
+              dailyData={adjustedDailyData}
             />
           </div>
         </div>
