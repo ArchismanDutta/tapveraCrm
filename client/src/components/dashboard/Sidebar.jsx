@@ -86,6 +86,7 @@ const normalizeRole = (role) => {
 const Sidebar = ({ collapsed, setCollapsed, onLogout, userRole }) => {
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [role, setRole] = useState("employee");
+  const [chatUnread, setChatUnread] = useState(0);
 
   useEffect(() => {
     let resolvedRole = normalizeRole(userRole || "employee");
@@ -102,6 +103,27 @@ const Sidebar = ({ collapsed, setCollapsed, onLogout, userRole }) => {
     }
     setRole(resolvedRole);
   }, [userRole]);
+
+  // Listen for chat unread total to show badge on Messages item
+  useEffect(() => {
+    const updateFromStorage = () => {
+      try {
+        const stored = Number(sessionStorage.getItem("chat_unread_total") || 0);
+        setChatUnread(isNaN(stored) ? 0 : stored);
+      } catch {
+        setChatUnread(0);
+      }
+    };
+    updateFromStorage();
+    const handler = (e) => {
+      const total = Number(e.detail?.total || 0);
+      setChatUnread(isNaN(total) ? 0 : total);
+    };
+    window.addEventListener("chat-unread-total", handler);
+    // Also poll storage every 3s as a fallback in case an event is missed
+    const interval = setInterval(updateFromStorage, 3000);
+    return () => window.removeEventListener("chat-unread-total", handler);
+  }, []);
 
   const menuItems = menuConfig[role] || menuConfig["employee"];
 
@@ -159,8 +181,24 @@ const Sidebar = ({ collapsed, setCollapsed, onLogout, userRole }) => {
               end={item.to === "/super-admin"}
               tabIndex={collapsed ? -1 : 0}
             >
-              <span className="flex items-center justify-center">{item.icon}</span>
-              {!collapsed && <span>{item.label}</span>}
+              <span className="flex items-center justify-center relative">
+                {item.icon}
+                {item.to === "/messages" && chatUnread > 0 && (
+                  <span className="absolute -top-1 -right-2 bg-red-500 text-white text-[10px] px-1.5 py-[1px] rounded-full min-w-[16px] text-center">
+                    {chatUnread > 99 ? "99+" : chatUnread}
+                  </span>
+                )}
+              </span>
+              {!collapsed && (
+                <span className="flex-1 flex items-center justify-between">
+                  {item.label}
+                  {item.to === "/messages" && chatUnread > 0 && (
+                    <span className="ml-2 bg-red-500 text-white text-[10px] px-1.5 py-[1px] rounded-full min-w-[18px] text-center">
+                      {chatUnread > 99 ? "99+" : chatUnread}
+                    </span>
+                  )}
+                </span>
+              )}
             </NavLink>
           ))}
         </nav>

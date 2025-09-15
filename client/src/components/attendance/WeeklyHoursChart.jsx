@@ -40,6 +40,9 @@ const WeeklyHoursChart = ({ weeklyHours = [], targetHours = 8, showTarget = true
       return weekdayIndices.includes(dayOfWeek);
     });
 
+    // Number of weekdays in provided data (fallback to 5 if empty)
+    const totalWeekdays = weekdayData.length || 5;
+
     const workingDaysWithHours = weekdayData.filter(d => (d.hours || 0) > 0).length;
     const targetMetDays = weekdayData.filter(d => (d.hours || 0) >= targetHours).length;
 
@@ -86,7 +89,7 @@ const WeeklyHoursChart = ({ weeklyHours = [], targetHours = 8, showTarget = true
   const chartHeight = 280;
   const barWidth = 35;
   const barGap = 15;
-  const padding = { top: 40, right: 40, bottom: 80, left: 60 };
+  const padding = { top: 40, right: 40, bottom: 110, left: 60 };
   const svgWidth = Math.max(weeklyHours.length * (barWidth + barGap) + padding.left + padding.right, 400);
   const svgHeight = chartHeight + padding.top + padding.bottom;
   const maxScale = Math.max(...weeklyHours.map(d => d.hours || 0), targetHours, 8) + 2;
@@ -137,22 +140,22 @@ const WeeklyHoursChart = ({ weeklyHours = [], targetHours = 8, showTarget = true
   return (
     <div className="bg-[#161c2c] rounded-xl shadow-md p-6 w-full border border-[#232945]">
       {/* Header with enhanced controls */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-2">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+        <div className="flex flex-wrap items-center gap-2">
           <BarChart3 className="w-5 h-5 text-blue-400" />
           <h3 className="font-semibold text-lg text-gray-100">Weekly Hours</h3>
-          <div className="flex items-center gap-1 ml-2">
+          <div className="flex flex-wrap items-center gap-1 ml-2">
             {metrics.trend === "up" && <TrendingUp className="w-4 h-4 text-green-400" />}
             {metrics.trend === "down" && <TrendingUp className="w-4 h-4 text-red-400 transform rotate-180" />}
             {metrics.streak > 0 && (
-              <div className="flex items-center gap-1 text-xs bg-green-900/30 text-green-400 px-2 py-1 rounded">
+              <div className="flex items-center gap-1 text-xs bg-green-900/30 text-green-400 px-2 py-1 rounded whitespace-nowrap">
                 <Award className="w-3 h-3" />
                 {metrics.streak} day streak
               </div>
             )}
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 self-start sm:self-auto">
           <button
             onClick={() => setShowDetails(!showDetails)}
             className={`p-2 rounded-md transition-colors ${

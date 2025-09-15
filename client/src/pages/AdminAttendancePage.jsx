@@ -142,8 +142,19 @@ const AdminAttendancePage = () => {
           const dailyData = res.dailyData || [];
           const { firstPunchIn, lastPunchOut } = computePunchTimes(dailyData);
 
+          // Format hours like "Xh Ym" for display
+          const formatHoursHM = (hoursStrOrNum) => {
+            const hoursNum = parseFloat(hoursStrOrNum || 0);
+            const totalMinutes = Math.round(hoursNum * 60);
+            const h = Math.floor(totalMinutes / 60);
+            const m = totalMinutes % 60;
+            return `${h}h ${m.toString().padStart(2, "0")}m`;
+          };
+
           const summaryWithPunch = {
             ...res.summary,
+            totalWorkHours: formatHoursHM(res.summary?.totalWorkHours),
+            totalBreakHours: formatHoursHM(res.summary?.totalBreakHours),
             firstPunchIn,
             lastPunchOut,
           };

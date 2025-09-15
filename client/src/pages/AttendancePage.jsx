@@ -196,27 +196,18 @@ const AttendancePage = ({ onLogout }) => {
 
       const now = new Date();
       
-      // Calculate current week range (Monday to Sunday)
-      const day = now.getDay();
-      const diffToMonday = (day + 6) % 7;
-      const monday = new Date(now);
-      monday.setDate(now.getDate() - diffToMonday);
-      monday.setHours(0, 0, 0, 0);
-      
-      const sunday = new Date(monday);
-      sunday.setDate(monday.getDate() + 6);
-      sunday.setHours(23, 59, 59, 999);
-
-      // Calculate month range for calendar
+      // Calculate month range for calendar and summary
       const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      monthStart.setHours(0, 0, 0, 0);
       const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+      monthEnd.setHours(23, 59, 59, 999);
 
       // Fetch all required data in parallel
       const [weeklyRes, leavesRes, holidaysRes, statusRes] = await Promise.all([
         apiClient.get('/api/summary/week', {
           params: {
-            startDate: monday.toISOString(),
-            endDate: sunday.toISOString(),
+            startDate: monthStart.toISOString(),
+            endDate: monthEnd.toISOString(),
           },
         }),
         apiClient.get('/api/leaves/mine'),
@@ -231,8 +222,8 @@ const AttendancePage = ({ onLogout }) => {
       // Calculate present days (5+ hours of work)
       const presentDaysCount = dailyData.filter(d => (d.workDurationSeconds || 0) >= MIN_PRESENT_SECONDS).length;
 
-      // Calculate working days for the week (excluding weekends, holidays, and approved leaves)
-      const weekWorkingDays = calculateWorkingDays(monday, sunday, holidays, approvedLeaves);
+      // Calculate working days for the month (excluding weekends, holidays, and approved leaves)
+      const weekWorkingDays = calculateWorkingDays(monthStart, monthEnd, holidays, approvedLeaves);
 
       // Calculate total work hours for the week
       const totalWorkHours = dailyData.reduce((sum, d) => 
@@ -272,7 +263,7 @@ const AttendancePage = ({ onLogout }) => {
         workingHours: totalWorkHours.toFixed(1),
         onTimeRate,
         lastUpdated: new Date().toLocaleString(),
-        period: "This week",
+        period: "This month",
         averageHoursPerDay: presentDaysCount > 0 ? (totalWorkHours / presentDaysCount).toFixed(1) : "0.0",
         lateDays: presentDaysCount - onTimeDays,
         currentStatus: statusRes ? {
@@ -329,6 +320,7 @@ const AttendancePage = ({ onLogout }) => {
         expectedDate.setHours(expH, expM, 0, 0);
 
         let status = "absent";
+
         if ((d.workDurationSeconds || 0) >= MIN_PRESENT_SECONDS) {
           status = "present";
           // Only check for late status for standard shift employees
