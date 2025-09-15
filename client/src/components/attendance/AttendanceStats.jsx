@@ -209,3 +209,4 @@ const AttendanceStats = ({ stats }) => {
 };
 
 export default AttendanceStats;
+

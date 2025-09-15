@@ -7,7 +7,14 @@ import { FaUser, FaEnvelope, FaPhone, FaLock } from "react-icons/fa";
 import { toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 
-const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
+const API_BASE = import.meta.env.VITE_API_BASE || "http://crm-be.eba-nt49vbgx.ap-south-1.elasticbeanstalk.com";
+
+// Predefined standard shifts
+const STANDARD_SHIFTS = {
+  MORNING: { name: "Morning Shift", start: "09:00", end: "18:00", description: "9:00 AM - 6:00 PM" },
+  NIGHT: { name: "Night Shift", start: "20:00", end: "05:00", description: "8:00 PM - 5:00 AM (next day)" },
+  EARLY: { name: "Early Shift", start: "05:30", end: "14:20", description: "5:30 AM - 2:20 PM" }
+};
 
 const Signup = () => {
   const navigate = useNavigate();
@@ -39,7 +46,7 @@ const Signup = () => {
     employmentType: "full-time",
     qualifications: [{ school: "", degree: "", marks: "", year: "" }],
     shiftType: "standard",
-    shift: { start: "09:00", end: "18:00" },
+    standardShiftType: "MORNING", // New predefined shift selector
   });
 
   const [skillsInput, setSkillsInput] = useState("");
@@ -89,20 +96,9 @@ const Signup = () => {
     setForm((prev) => ({ ...prev, qualifications: updated }));
   };
 
-  const handleShiftChange = (field, value) => {
-    setForm((prev) => ({ ...prev, shift: { ...prev.shift, [field]: value } }));
-  };
+  const todayISO = new Date().toISOString().split("T")[0];
 
-  const validateTimeOrder = (start, end) => {
-    if (!start || !end) return false;
-
-    const [sh, sm] = start.split(":").map(Number);
-    const [eh, em] = end.split(":").map(Number);
-
-    if (sh === eh && sm === em) return false;
-
-    return true;
-  };
+  if (!["hr", "admin", "super-admin"].includes(role)) return null;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -127,21 +123,6 @@ const Signup = () => {
       return;
     }
 
-    if (form.shiftType === "standard") {
-      if (!form.shift?.start || !form.shift?.end) {
-        toast.error(
-          "Please provide both shift start and end times for Standard shift."
-        );
-        setLoading(false);
-        return;
-      }
-      if (!validateTimeOrder(form.shift.start, form.shift.end)) {
-        toast.error("Shift end time must not be the same as start time.");
-        setLoading(false);
-        return;
-      }
-    }
-
     const skillsArray = skillsInput
       .split(",")
       .map((s) => s.trim())
@@ -151,6 +132,7 @@ const Signup = () => {
       (q) => q.school || q.degree || q.marks || q.year
     );
 
+    // Construct payload with new shift structure
     const payload = {
       employeeId: String(form.employeeId).trim(),
       name: String(form.name).trim(),
@@ -179,36 +161,9 @@ const Signup = () => {
       qualifications: validQualifications,
       skills: skillsArray,
       shiftType: form.shiftType || "standard",
+      // Only include standardShiftType for standard shifts
+      ...(form.shiftType === "standard" && { standardShiftType: form.standardShiftType }),
     };
-
-    if (form.shiftType === "standard") {
-  // Use Date of Joining as base date (or any reference date)
-  const baseDate = form.doj ? new Date(form.doj) : new Date();
-
-  const [sh, sm] = form.shift.start.split(":").map(Number);
-  const [eh, em] = form.shift.end.split(":").map(Number);
-
-  // Create ISO timestamps
-  const arrivalDate = new Date(baseDate);
-  arrivalDate.setHours(sh, sm, 0, 0); // set start time
-
-  const departureDate = new Date(baseDate);
-  departureDate.setHours(eh, em, 0, 0); // set end time
-
-  // If end is before start, assume next day
-  if (departureDate <= arrivalDate) {
-    departureDate.setDate(departureDate.getDate() + 1);
-  }
-
-  payload.shift = {
-    arrivalTime: arrivalDate.toISOString(),
-    departureTime: departureDate.toISOString(),
-    durationHours: Math.round(
-      (departureDate - arrivalDate) / (1000 * 60 * 60)
-    ),
-  };
-}
-
 
     try {
       const token = localStorage.getItem("token");
@@ -248,10 +203,6 @@ const Signup = () => {
       setLoading(false);
     }
   };
-
-  const todayISO = new Date().toISOString().split("T")[0];
-
-  if (!["hr", "admin", "super-admin"].includes(role)) return null;
 
   // DARK THEME CLASSES - update ONLY UI theme
   return (
@@ -572,51 +523,51 @@ const Signup = () => {
             </div>
           </div>
 
-          {/* SHIFT: only two choices */}
-          <div>
-            <label className="block text-sm text-gray-400 mb-1">
-              Shift Type
-            </label>
-            <select
-              name="shiftType"
-              value={form.shiftType}
-              onChange={handleChange}
-              className="w-full px-4 py-2 bg-[#232831] text-[#f7f9fa] border border-[#31353c] rounded-md"
-            >
-              <option value="standard">Standard Shift</option>
-              <option value="flexiblePermanent">
-                Permanent Flexible Shift
-              </option>
-            </select>
-          </div>
-
-          {/* Shift Timing only if Standard */}
-          {form.shiftType === "standard" && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
-              <div>
-                <label className="block text-sm text-gray-400 mb-1">
-                  Shift Start
-                </label>
-                <input
-                  type="time"
-                  value={form.shift.start}
-                  onChange={(e) => handleShiftChange("start", e.target.value)}
-                  className="w-full px-4 py-2 bg-[#232831] text-[#f7f9fa] border border-[#31353c] rounded-md"
-                />
-              </div>
-              <div>
-                <label className="block text-sm text-gray-400 mb-1">
-                  Shift End
-                </label>
-                <input
-                  type="time"
-                  value={form.shift.end}
-                  onChange={(e) => handleShiftChange("end", e.target.value)}
-                  className="w-full px-4 py-2 bg-[#232831] text-[#f7f9fa] border border-[#31353c] rounded-md"
-                />
-              </div>
+          {/* SHIFT CONFIGURATION */}
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold text-white">Shift Configuration</h3>
+            <div>
+              <label className="block text-sm text-gray-400 mb-1">Shift Type</label>
+              <select
+                name="shiftType"
+                value={form.shiftType}
+                onChange={handleChange}
+                className="w-full px-4 py-2 bg-[#232831] text-[#f7f9fa] border border-[#31353c] rounded-md"
+              >
+                <option value="standard">Standard Shift</option>
+                <option value="flexiblePermanent">Permanent Flexible Shift</option>
+              </select>
             </div>
-          )}
+
+            {/* Show standard shift options only for standard shift type */}
+            {form.shiftType === "standard" && (
+              <div>
+                <label className="block text-sm text-gray-400 mb-1">Standard Shift</label>
+                <select
+                  name="standardShiftType"
+                  value={form.standardShiftType}
+                  onChange={handleChange}
+                  className="w-full px-4 py-2 bg-[#232831] text-[#f7f9fa] border border-[#31353c] rounded-md"
+                >
+                  {Object.entries(STANDARD_SHIFTS).map(([key, shift]) => (
+                    <option key={key} value={key}>
+                      {shift.name} - {shift.description}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* Show info for flexible permanent */}
+            {form.shiftType === "flexiblePermanent" && (
+              <div className="bg-blue-900/20 border border-blue-500/30 rounded-lg p-3">
+                <p className="text-blue-300 text-sm">
+                  <strong>Flexible Permanent Shift:</strong> Employee can work any 9 hours within a 24-hour period. 
+                  No fixed timing required.
+                </p>
+              </div>
+            )}
+          </div>
 
           {/* Qualifications */}
           <div className="space-y-4">

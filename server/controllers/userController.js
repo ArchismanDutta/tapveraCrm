@@ -4,6 +4,14 @@ const User = require("../models/User");
 const Task = require("../models/Task");
 const LeaveRequest = require("../models/LeaveRequest");
 
+// Predefined standard shifts constant
+const STANDARD_SHIFTS = {
+  MORNING: { name: "Morning Shift", start: "09:00", end: "18:00", durationHours: 9 },
+  NIGHT: { name: "Night Shift", start: "20:00", end: "05:00", durationHours: 9 },
+  EARLY: { name: "Early Shift", start: "05:30", end: "14:20", durationHours: 8.83 }
+};
+
+
 // =========================
 // Create employee
 // =========================
@@ -14,7 +22,8 @@ exports.createEmployee = async (req, res) => {
       qualifications, permanentAddress, currentAddress, emergencyContact,
       ps, doj, salary, ref, status, totalPl,
       department, designation, password, shift, shiftType,
-      skills, jobLevel
+      skills, jobLevel,
+      standardShiftType,
     } = req.body;
 
     // Required fields
@@ -75,16 +84,49 @@ exports.createEmployee = async (req, res) => {
       department: department || "",
       designation: designation?.trim() || "",
       role: "employee",
-      shiftType: shiftType || "standard",
       jobLevel: jobLevel || "junior",
     };
 
-    if (shiftType === "standard" && shift?.start && shift?.end) {
+    // Updated shift handling based on shiftType
+    if (shiftType === "flexiblePermanent") {
+      userData.shiftType = "flexiblePermanent";
+      userData.assignedShift = null;
+      userData.standardShiftType = null;
       userData.shift = {
+        name: "Flexible 9h/day",
+        start: "00:00",
+        end: "23:59",
+        durationHours: 9,
+        isFlexible: true,
+        shiftId: null
+      };
+    } else if (shiftType === "standard") {
+      userData.shiftType = "standard";
+      // Use standardShiftType if provided, otherwise default to MORNING
+      const shiftKey = (standardShiftType || "MORNING").toUpperCase();
+      const predefinedShift = STANDARD_SHIFTS[shiftKey] || STANDARD_SHIFTS.MORNING;
+
+      userData.standardShiftType = shiftKey.toLowerCase();
+      userData.shift = {
+        name: predefinedShift.name,
+        start: predefinedShift.start,
+        end: predefinedShift.end,
+        durationHours: predefinedShift.durationHours,
+        isFlexible: false,
+        shiftId: null
+      };
+    } else if (shiftType === "standard" && shift?.start && shift?.end) {
+      // Fallback if custom shift object is sent with standard shift type
+      userData.shift = {
+        name: shift.name || `Custom Shift ${shift.start}-${shift.end}`,
         start: shift.start,
         end: shift.end,
         durationHours: shift.durationHours || 9,
+        isFlexible: false,
+        shiftId: shift.shiftId || null
       };
+      userData.shiftType = "standard";
+      userData.standardShiftType = null;
     }
 
     const user = new User(userData);
@@ -96,6 +138,7 @@ exports.createEmployee = async (req, res) => {
     return res.status(500).json({ message: "Server error" });
   }
 };
+
 
 // =========================
 // Employee directory
@@ -137,6 +180,7 @@ exports.getEmployeeDirectory = async (req, res) => {
   }
 };
 
+
 // =========================
 // Get all users
 // =========================
@@ -150,6 +194,7 @@ exports.getAllUsers = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+
 
 // =========================
 // Get logged-in user info
@@ -217,6 +262,7 @@ exports.getMe = async (req, res) => {
   }
 };
 
+
 // =========================
 // Get employee by ID
 // =========================
@@ -260,6 +306,7 @@ exports.getEmployeeById = async (req, res) => {
   }
 };
 
+
 // =========================
 // Update employee details
 // =========================
@@ -269,7 +316,7 @@ exports.updateEmployee = async (req, res) => {
 
     const allowedFields = [
       "name",
-      "email",        // <- Added email
+      "email",         // <- Included email field
       "contact",
       "dob",
       "gender",
@@ -330,6 +377,7 @@ exports.updateEmployee = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+
 
 // =========================
 // Update employee status

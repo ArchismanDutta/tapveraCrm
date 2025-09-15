@@ -1,39 +1,93 @@
-import axios from "axios";
+import axios from 'axios';
 
-const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE || "http://localhost:5000/api",
-  headers: {
-    "Content-Type": "application/json",
-  },
-});
+const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
 
-// Add auth token if available
-api.interceptors.request.use((config) => {
+const getAuthHeaders = () => {
   const token = localStorage.getItem("token");
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
-
-// Shift API functions
-export const shiftApi = {
-  // Get all shifts
-  getShifts: () => api.get("/shifts/shifts"),
-
-  // Create new shift
-  createShift: (data) => api.post("/shifts/shifts", data),
-
-  // Assign shift to employee
-  assignEmployeeShift: (data) => api.post("/shifts/employee-shift", data),
-
-  // Submit shift change request
-  submitShiftChangeRequest: (data) =>
-    api.post("/shifts/shift-change-request", data),
-
-  // Get effective shift for date
-  getEffectiveShift: (date) =>
-    api.get(`/shifts/employee-shift/effective/${date}`),
+  return {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+  };
 };
 
-export default api;
+// ======================
+// Shift Management API
+// ======================
+
+export const shiftApi = {
+  // Get all shifts
+  getAllShifts: async () => {
+    const response = await axios.get(`${API_BASE}/api/shifts`, getAuthHeaders());
+    return response.data;
+  },
+
+  // Create new shift
+  createShift: async (shiftData) => {
+    const response = await axios.post(`${API_BASE}/api/shifts`, shiftData, getAuthHeaders());
+    return response.data;
+  },
+
+  // Update shift
+  updateShift: async (shiftId, shiftData) => {
+    const response = await axios.put(`${API_BASE}/api/shifts/${shiftId}`, shiftData, getAuthHeaders());
+    return response.data;
+  },
+
+  // Delete shift
+  deleteShift: async (shiftId) => {
+    const response = await axios.delete(`${API_BASE}/api/shifts/${shiftId}`, getAuthHeaders());
+    return response.data;
+  },
+
+  // Assign shift to employee
+  assignShiftToEmployee: async (userId, shiftData) => {
+    const response = await axios.put(`${API_BASE}/api/shifts/assign/${userId}`, shiftData, getAuthHeaders());
+    return response.data;
+  },
+
+  // Get employees by shift
+  getEmployeesByShift: async (shiftId) => {
+    const response = await axios.get(`${API_BASE}/api/shifts/${shiftId}/employees`, getAuthHeaders());
+    return response.data;
+  },
+
+  // Initialize default shifts
+  initializeDefaultShifts: async () => {
+    const response = await axios.post(`${API_BASE}/api/shifts/initialize`, {}, getAuthHeaders());
+    return response.data;
+  },
+};
+
+// ======================
+// Flexible Shift Request API
+// ======================
+
+export const flexibleShiftApi = {
+  // Get all flexible shift requests (HR/Admin)
+  getAllRequests: async () => {
+    const response = await axios.get(`${API_BASE}/api/flexible-shifts`, getAuthHeaders());
+    return response.data;
+  },
+
+  // Get employee's own requests
+  getMyRequests: async () => {
+    const response = await axios.get(`${API_BASE}/api/flexible-shifts/my-requests`, getAuthHeaders());
+    return response.data;
+  },
+
+  // Create flexible shift request
+  createRequest: async (requestData) => {
+    const response = await axios.post(`${API_BASE}/api/flexible-shifts/request`, requestData, getAuthHeaders());
+    return response.data;
+  },
+
+  // Update request status (HR/Admin)
+  updateRequestStatus: async (requestId, status) => {
+    const response = await axios.put(`${API_BASE}/api/flexible-shifts/${requestId}/status`, { status }, getAuthHeaders());
+    return response.data;
+  },
+};
+
+export default { shiftApi, flexibleShiftApi };
