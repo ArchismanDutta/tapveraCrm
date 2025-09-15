@@ -276,14 +276,10 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
         timeoutPromise
       ]);
 
-      // Set basic stats immediately for faster UI response
+      // Unpack and prepare base data
       const { dailyData = [] } = weeklyRes.data;
       const presentDaysCount = dailyData.filter(d => (d.workDurationSeconds || 0) >= MIN_PRESENT_SECONDS).length;
-      const totalWorkHours = dailyData.reduce((sum, d) => 
-        sum + calculateHoursFromSeconds(d.workDurationSeconds || 0), 0
-      );
-
-      // Don't set stats yet - wait for complete data
+      const totalWorkHours = dailyData.reduce((sum, d) => sum + calculateHoursFromSeconds(d.workDurationSeconds || 0), 0);
 
       // Fetch additional data in parallel with shorter timeouts
       const [statusRes, leavesRes, holidaysRes] = await Promise.allSettled([
@@ -294,31 +290,11 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
 
       // Process the additional data results
       const statusData = statusRes.status === 'fulfilled' ? statusRes.value : null;
-      const approvedLeaves = leavesRes.status === 'fulfilled' ? 
-        leavesRes.value.data.filter(l => l.status.toLowerCase() === "approved") : [];
-      const holidays = holidaysRes.status === 'fulfilled' ? holidaysRes.value.data || [] : [];
+      const approvedLeaves = leavesRes.status === 'fulfilled' ? (leavesRes.value.data || []).filter(l => String(l.status).toLowerCase() === "approved") : [];
+      const holidays = holidaysRes.status === 'fulfilled' ? (holidaysRes.value.data || []) : [];
 
       // Calculate working days for accurate stats
       const weekWorkingDays = calculateWorkingDays(monday, sunday, holidays, approvedLeaves);
-      
-      // Set complete stats with all accurate calculations
-      setStats({
-        attendanceRate: weekWorkingDays > 0 ? Math.round((presentDaysCount / weekWorkingDays) * 100) : 0,
-        presentDays: presentDaysCount,
-        totalDays: weekWorkingDays,
-        workingHours: totalWorkHours.toFixed(1),
-        onTimeRate: 0, // Will be calculated below
-        lastUpdated: new Date().toLocaleString(),
-        period: "This week",
-        averageHoursPerDay: presentDaysCount > 0 ? (totalWorkHours / presentDaysCount).toFixed(1) : "0.0",
-        lateDays: 0, // Will be calculated below
-        currentStatus: statusData ? {
-          isWorking: statusData.currentlyWorking,
-          onBreak: statusData.onBreak,
-          todayHours: calculateHoursFromSeconds(statusData.workDurationSeconds || 0).toFixed(1),
-          arrivalTime: statusData.arrivalTimeFormatted
-        } : null
-      });
 
       // Calculate on-time rate (only for standard shift employees)
       const onTimeDays = dailyData.filter(d => {
@@ -338,15 +314,27 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
         return arrivalTime <= expectedDate;
       }).length;
 
-      const onTimeRate = presentDaysCount > 0 ? 
-        Math.round((onTimeDays / presentDaysCount) * 100) : 0;
+      const onTimeRate = presentDaysCount > 0 ? Math.round((onTimeDays / presentDaysCount) * 100) : 0;
 
-      // Final stats update with complete data
-      setStats(prev => ({
-        ...prev,
+      // Compose final stats object once for consistency and caching
+      const newStats = {
+        attendanceRate: weekWorkingDays > 0 ? Math.round((presentDaysCount / weekWorkingDays) * 100) : 0,
+        presentDays: presentDaysCount,
+        totalDays: weekWorkingDays,
+        workingHours: totalWorkHours.toFixed(1),
         onTimeRate,
-        lateDays: presentDaysCount - onTimeDays
-      }));
+        lastUpdated: new Date().toLocaleString(),
+        period: "This week",
+        averageHoursPerDay: presentDaysCount > 0 ? (totalWorkHours / presentDaysCount).toFixed(1) : "0.0",
+        lateDays: presentDaysCount - onTimeDays,
+        currentStatus: statusData ? {
+          isWorking: statusData.currentlyWorking,
+          onBreak: statusData.onBreak,
+          todayHours: calculateHoursFromSeconds(statusData.workDurationSeconds || 0).toFixed(1),
+          arrivalTime: statusData.arrivalTimeFormatted
+        } : null
+      };
+      setStats(newStats);
 
       // Simplified calendar data processing for faster loading
       const nowMonth = now.toLocaleString("default", { month: "long" });
@@ -354,39 +342,85 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
       const monthIndex = now.getMonth();
       const maxDays = new Date(year, monthIndex + 1, 0).getDate();
       
-      // Create a simple calendar with basic data
+      // Prepare holiday and leave date sets for current month
+      const holidayDateSet = new Set((holidays || []).map(h => new Date(h.date).toDateString()));
+      const leaveDateSet = new Set();
+      approvedLeaves.forEach(leave => {
+        const ls = new Date(leave.period?.start || leave.startDate);
+        const le = new Date(leave.period?.end || leave.endDate || leave.startDate);
+        for (let d = new Date(ls); d <= le; d.setDate(d.getDate() + 1)) {
+          if (d.getFullYear() === year && d.getMonth() === monthIndex) {
+            leaveDateSet.add(d.toDateString());
+          }
+        }
+      });
+
+      // Create a detailed calendar with late/holiday/leave handling
       const days = Array.from({ length: maxDays }, (_, i) => {
         const dayNum = i + 1;
         const dateObj = new Date(year, monthIndex, dayNum);
         const dayOfWeek = dateObj.getDay();
         const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-        
-        // Find matching attendance data
+
         const attendanceData = dailyData.find(d => {
           const dDate = new Date(d.date);
-          return dDate.getDate() === dayNum && dDate.getMonth() === monthIndex;
+          return dDate.getDate() === dayNum && dDate.getMonth() === monthIndex && dDate.getFullYear() === year;
         });
-        
+
         let status = "absent";
         let workingHours = "0.0";
-        
+        let arrivalTime = null;
+        let departureTime = null;
+        const metadata = {};
+
         if (attendanceData) {
           const workSeconds = attendanceData.workDurationSeconds || 0;
+          const breakSeconds = attendanceData.breakDurationSeconds || 0;
           workingHours = calculateHoursFromSeconds(workSeconds).toFixed(1);
-          
+          arrivalTime = getArrivalTime(attendanceData);
+          departureTime = getPunchTimeFromTimeline(attendanceData.timeline, "punch out");
+
+          // Late calculation based on effective shift when present
           if (workSeconds >= MIN_PRESENT_SECONDS) {
-            status = "present";
+            let isLate = false;
+            if (!attendanceData.effectiveShift?.isFlexible) {
+              const expectedStart = attendanceData.effectiveShift?.start || attendanceData.expectedStartTime || "09:00";
+              if (arrivalTime && expectedStart) {
+                const [h, m] = expectedStart.split(":").map(Number);
+                const expectedDate = new Date(arrivalTime);
+                expectedDate.setHours(h || 0, m || 0, 0, 0);
+                isLate = arrivalTime > expectedDate;
+                if (isLate) {
+                  metadata.lateMinutes = Math.max(0, Math.round((arrivalTime - expectedDate) / 60000));
+                }
+              }
+            }
+            status = isLate ? "late" : "present";
           } else if (workSeconds > 0) {
             status = "half-day";
           }
-        } else if (isWeekend) {
-          status = "weekend";
+
+          metadata.totalBreakTime = calculateHoursFromSeconds(breakSeconds).toFixed(1);
+          metadata.breakSessions = Array.isArray(attendanceData.breakSessions) ? attendanceData.breakSessions.length : 0;
+          metadata.isFlexible = Boolean(attendanceData.effectiveShift?.isFlexible);
+        } else {
+          const dateKey = dateObj.toDateString();
+          if (leaveDateSet.has(dateKey)) {
+            status = "leave";
+          } else if (holidayDateSet.has(dateKey)) {
+            status = "holiday";
+          } else if (isWeekend) {
+            status = "weekend";
+          }
         }
-        
-        return { 
-          day: dayNum, 
-          status, 
-          workingHours
+
+        return {
+          day: dayNum,
+          status,
+          workingHours,
+          arrivalTime,
+          departureTime,
+          metadata
         };
       });
 
@@ -403,8 +437,8 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
           totalPresent: days.filter(d => d.status === "present").length,
           totalLate: days.filter(d => d.status === "late").length,
           totalAbsent: days.filter(d => d.status === "absent").length,
-          totalLeave: 0, // Simplified for speed
-          totalHolidays: 0 // Simplified for speed
+          totalLeave: days.filter(d => d.status === "leave").length,
+          totalHolidays: days.filter(d => d.status === "holiday").length
         }
       });
 
@@ -419,8 +453,11 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
         }
       });
 
-      // Simplified recent activity processing
-      const recent = dailyData.slice(0, 5).map(d => {
+      // Recent activity: latest 5 records by date
+      const recent = [...dailyData]
+        .sort((a, b) => new Date(b.date) - new Date(a.date))
+        .slice(0, 5)
+        .map(d => {
         const workSeconds = d.workDurationSeconds || 0;
         const breakSeconds = d.breakDurationSeconds || 0;
         
@@ -443,8 +480,7 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
           statusColor,
           workingHours: calculateHoursFromSeconds(workSeconds).toFixed(1) + "h",
           breakTime: calculateHoursFromSeconds(breakSeconds).toFixed(1) + "h",
-          efficiency: workSeconds > 0 ? 
-            Math.round((workSeconds / (8 * 3600)) * 100) + "%" : "0%"
+          efficiency: workSeconds > 0 ? Math.round((workSeconds / (8 * 3600)) * 100) + "%" : "0%"
         };
       });
 
@@ -453,15 +489,27 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
       setRecentActivity(recent);
       setCurrentStatus(statusData);
 
-      // Cache the data for future use
+      // Cache the data for future use (use freshly computed values)
       setEmployeeCache(prev => {
         const newCache = new Map(prev);
         newCache.set(employeeId, {
-          stats,
-          calendarData,
-          weeklyHours,
-          recentActivity,
-          currentStatus: statusRes,
+          stats: newStats,
+          calendarData: {
+            month: nowMonth,
+            year,
+            days,
+            startDayOfWeek,
+            monthlyStats: {
+              totalPresent: days.filter(d => d.status === "present").length,
+              totalLate: days.filter(d => d.status === "late").length,
+              totalAbsent: days.filter(d => d.status === "absent").length,
+              totalLeave: days.filter(d => d.status === "leave").length,
+              totalHolidays: days.filter(d => d.status === "holiday").length
+            }
+          },
+          weeklyHours: weeklyHoursData,
+          recentActivity: recent,
+          currentStatus: statusData,
           timestamp: Date.now()
         });
         return newCache;
@@ -577,7 +625,8 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
 
   // Calculate aggregate stats
   const totalEmployees = employees.length;
-  const currentlyWorking = employees.filter(emp => emp.currentStatus?.currentlyWorking).length || 0;
+  // Use user status field returned by /api/admin/employees (active/inactive) for aggregate
+  const currentlyWorking = employees.filter(emp => String(emp.status || '').toLowerCase() === 'active').length || 0;
   
   // Only show loading screen if we're loading employees AND have no employees yet
   if (loading && employees.length === 0) {
