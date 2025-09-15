@@ -12,6 +12,7 @@ import {
   Download
 } from "lucide-react";
 
+
 const STATUS_STYLES = {
   Present: "text-green-400 bg-green-900/30 border-green-700",
   Late: "text-orange-400 bg-orange-900/30 border-orange-700",
@@ -19,6 +20,7 @@ const STATUS_STYLES = {
   "Half Day": "text-yellow-400 bg-yellow-900/30 border-yellow-700",
   default: "text-gray-400 bg-gray-900/30 border-gray-700",
 };
+
 
 const STATUS_ICONS = {
   Present: CheckCircle,
@@ -28,10 +30,12 @@ const STATUS_ICONS = {
   default: Activity,
 };
 
+
 const RecentActivityTable = ({ activities = [] }) => {
   const [filter, setFilter] = useState("all");
   const [sortBy, setSortBy] = useState("date");
   const [sortOrder, setSortOrder] = useState("desc");
+
 
   if (!activities || activities.length === 0) {
     return (
@@ -49,6 +53,7 @@ const RecentActivityTable = ({ activities = [] }) => {
     );
   }
 
+
   // Filter activities based on status
   const filteredActivities = activities.filter(activity => {
     if (filter === "all") return true;
@@ -58,6 +63,7 @@ const RecentActivityTable = ({ activities = [] }) => {
     if (filter === "halfday") return activity.status === "Half Day";
     return true;
   });
+
 
   // Sort activities
   const sortedActivities = [...filteredActivities].sort((a, b) => {
@@ -83,6 +89,7 @@ const RecentActivityTable = ({ activities = [] }) => {
     return sortOrder === "desc" ? -comparison : comparison;
   });
 
+
   const handleSort = (column) => {
     if (sortBy === column) {
       setSortOrder(sortOrder === "asc" ? "desc" : "asc");
@@ -91,6 +98,7 @@ const RecentActivityTable = ({ activities = [] }) => {
       setSortOrder("desc");
     }
   };
+
 
   // Calculate summary statistics
   const summary = {
@@ -102,6 +110,7 @@ const RecentActivityTable = ({ activities = [] }) => {
     averageHours: filteredActivities.length > 0 ? 
       (filteredActivities.reduce((sum, a) => sum + parseFloat(a.workingHours || 0), 0) / filteredActivities.length).toFixed(1) : 0
   };
+
 
   const exportToCSV = () => {
     const headers = ["Date", "Time In", "Time Out", "Status", "Working Hours", "Break Time", "Efficiency"];
@@ -118,6 +127,7 @@ const RecentActivityTable = ({ activities = [] }) => {
       ].join(","))
     ].join("\n");
 
+
     const blob = new Blob([csvContent], { type: "text/csv" });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -126,6 +136,7 @@ const RecentActivityTable = ({ activities = [] }) => {
     a.click();
     window.URL.revokeObjectURL(url);
   };
+
 
   return (
     <div className="bg-[#161c2c] rounded-xl shadow-md p-4 w-full border border-[#232945]">
@@ -147,7 +158,7 @@ const RecentActivityTable = ({ activities = [] }) => {
             >
               <option value="all">All Status</option>
               <option value="present">Present</option>
-              <option value="late">Late</option>
+              {/* <option value="late">Late</option> */}
               <option value="absent">Absent</option>
               <option value="halfday">Half Day</option>
             </select>
@@ -164,6 +175,7 @@ const RecentActivityTable = ({ activities = [] }) => {
           </button>
         </div>
       </div>
+
 
       {/* Summary cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
@@ -184,6 +196,7 @@ const RecentActivityTable = ({ activities = [] }) => {
           <div className="text-xs text-gray-400">Total Hours</div>
         </div>
       </div>
+
 
       {/* Table */}
       <div className="overflow-x-auto">
@@ -316,6 +329,7 @@ const RecentActivityTable = ({ activities = [] }) => {
         </table>
       </div>
 
+
       {/* Empty state for filtered results */}
       {filteredActivities.length === 0 && activities.length > 0 && (
         <div className="text-center py-8">
@@ -330,13 +344,12 @@ const RecentActivityTable = ({ activities = [] }) => {
         </div>
       )}
 
+
       {/* Performance insights */}
       <div className="mt-4 pt-4 border-t border-[#232945]">
         <div className="flex items-center justify-between text-xs text-gray-400">
           <div className="flex gap-4">
             <span>Avg: {summary.averageHours}h/day</span>
-            <span>Attendance: {((summary.presentDays + summary.lateDays) / Math.max(summary.totalDays, 1) * 100).toFixed(1)}%</span>
-            <span>On-time: {(summary.presentDays / Math.max(summary.presentDays + summary.lateDays, 1) * 100).toFixed(1)}%</span>
           </div>
           <span>Last updated: {new Date().toLocaleTimeString()}</span>
         </div>
@@ -344,5 +357,6 @@ const RecentActivityTable = ({ activities = [] }) => {
     </div>
   );
 };
+
 
 export default RecentActivityTable;
