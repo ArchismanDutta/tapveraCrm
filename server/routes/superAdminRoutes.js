@@ -34,32 +34,44 @@ router.get("/employees-today", async (req, res) => {
           date: { $gte: startOfDay, $lte: endOfDay },
         });
 
-        // Work duration string
+        // Work duration string from DailyWork or compute from sessions
         let workDurationStr = "0h 0m";
-        if (dailyWork?.workDurationSeconds) {
-          const hours = Math.floor(dailyWork.workDurationSeconds / 3600);
-          const minutes = Math.floor((dailyWork.workDurationSeconds % 3600) / 60);
+        const workSeconds = dailyWork?.workDurationSeconds || 0;
+        if (workSeconds > 0) {
+          const hours = Math.floor(workSeconds / 3600);
+          const minutes = Math.floor((workSeconds % 3600) / 60);
           workDurationStr = `${hours}h ${minutes}m`;
         }
 
-        const breakMinutes = dailyWork?.totalBreakMinutes || 0;
+        // Break minutes from DailyWork.breakDurationSeconds or compute
+        let breakMinutes = 0;
+        const breakSeconds = dailyWork?.breakDurationSeconds || 0;
+        if (breakSeconds > 0) {
+          breakMinutes = Math.round(breakSeconds / 60);
+        } else if (Array.isArray(dailyWork?.breakSessions)) {
+          const totalBreakMs = dailyWork.breakSessions.reduce((sum, s) => {
+            if (s.start && s.end) return sum + (new Date(s.end) - new Date(s.start));
+            return sum;
+          }, 0);
+          breakMinutes = Math.round(totalBreakMs / 60000);
+        }
 
-        // Get latest punch out time from timeline
-        let punchOutTime = null;
-        if (status?.timeline?.length > 0) {
+        // Derive punch out time; prefer DailyWork.departureTime fallback to timeline
+        let punchOutTime = dailyWork?.departureTime || null;
+        if (!punchOutTime && status?.timeline?.length > 0) {
           const punchOutEntry = [...status.timeline]
             .reverse()
-            .find((e) => e.type.toLowerCase() === "punch out");
+            .find((e) => typeof e.type === 'string' && e.type.toLowerCase().includes("punch out"));
           if (punchOutEntry) punchOutTime = punchOutEntry.time;
         }
 
-        // Get latest break type from timeline
+        // Break type from latest break start event
         let breakType = null;
         if (status?.timeline?.length > 0) {
           const breakEntry = [...status.timeline]
             .reverse()
-            .find((e) => e.type.toLowerCase().includes("break"));
-          if (breakEntry) breakType = breakEntry.type; // e.g. "Break Start (Personal)"
+            .find((e) => typeof e.type === 'string' && e.type.toLowerCase().includes("break start"));
+          if (breakEntry) breakType = breakEntry.type;
         }
 
         return {
@@ -67,7 +79,7 @@ router.get("/employees-today", async (req, res) => {
           employeeId: user.employeeId,
           name: user.name,
           role: user.role,
-          arrivalTime: status?.arrivalTime || null,
+          arrivalTime: status?.arrivalTime || dailyWork?.arrivalTime || null,
           punchOutTime,
           onBreak: status?.onBreak || false,
           breakDurationMinutes: breakMinutes,

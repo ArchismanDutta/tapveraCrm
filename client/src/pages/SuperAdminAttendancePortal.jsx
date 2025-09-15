@@ -159,6 +159,25 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
     return null;
   };
 
+  // Derive robust departure time: prefer direct field, otherwise last punch out, else last session end
+  const getDepartureTime = (dailyData) => {
+    if (!dailyData) return null;
+    if (dailyData.departureTime) {
+      try { return new Date(dailyData.departureTime); } catch {}
+    }
+    if (Array.isArray(dailyData.timeline)) {
+      const po = getPunchTimeFromTimeline(dailyData.timeline, "punch out");
+      if (po) return po;
+    }
+    if (Array.isArray(dailyData.workedSessions) && dailyData.workedSessions.length > 0) {
+      const last = dailyData.workedSessions[dailyData.workedSessions.length - 1];
+      if (last?.end) {
+        try { return new Date(last.end); } catch {}
+      }
+    }
+    return null;
+  };
+
   // Position dropdown right under the selector using a Portal
   const updateDropdownPosition = useCallback(() => {
     if (!selectorRef.current) return;
@@ -247,17 +266,11 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
       setError(null);
 
       const now = new Date();
-      
-      // Calculate current week range (Monday to Sunday)
-      const day = now.getDay();
-      const diffToMonday = (day + 6) % 7;
-      const monday = new Date(now);
-      monday.setDate(now.getDate() - diffToMonday);
-      monday.setHours(0, 0, 0, 0);
-      
-      const sunday = new Date(monday);
-      sunday.setDate(monday.getDate() + 6);
-      sunday.setHours(23, 59, 59, 999);
+      // Use full current month range so the calendar has complete data
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      monthStart.setHours(0, 0, 0, 0);
+      const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+      monthEnd.setHours(23, 59, 59, 999);
 
       // Create a timeout promise for the main API call
       const timeoutPromise = new Promise((_, reject) => 
@@ -269,8 +282,8 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
         apiClient.get('/api/summary/week', {
           params: {
             userId: employeeId,
-            startDate: monday.toISOString(),
-            endDate: sunday.toISOString(),
+            startDate: monthStart.toISOString(),
+            endDate: monthEnd.toISOString(),
           },
         }),
         timeoutPromise
@@ -298,8 +311,8 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
         leavesRes.value.data.filter(l => l.status.toLowerCase() === "approved") : [];
       const holidays = holidaysRes.status === 'fulfilled' ? holidaysRes.value.data || [] : [];
 
-      // Calculate working days for accurate stats
-      const weekWorkingDays = calculateWorkingDays(monday, sunday, holidays, approvedLeaves);
+      // Calculate working days for accurate stats over the month
+      const weekWorkingDays = calculateWorkingDays(monthStart, monthEnd, holidays, approvedLeaves);
       
       // Set complete stats with all accurate calculations
       setStats({
@@ -309,7 +322,7 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
         workingHours: totalWorkHours.toFixed(1),
         onTimeRate: 0, // Will be calculated below
         lastUpdated: new Date().toLocaleString(),
-        period: "This week",
+        period: "This month",
         averageHoursPerDay: presentDaysCount > 0 ? (totalWorkHours / presentDaysCount).toFixed(1) : "0.0",
         lateDays: 0, // Will be calculated below
         currentStatus: statusData ? {
@@ -438,7 +451,7 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
         return {
           date: new Date(d.date).toISOString().split("T")[0],
           timeIn: formatTime(getArrivalTime(d)),
-          timeOut: formatTime(getPunchTimeFromTimeline(d.timeline, "punch out")),
+          timeOut: formatTime(getDepartureTime(d)),
           status,
           statusColor,
           workingHours: calculateHoursFromSeconds(workSeconds).toFixed(1) + "h",
@@ -453,15 +466,51 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
       setRecentActivity(recent);
       setCurrentStatus(statusData);
 
-      // Cache the data for future use
+      // Cache the data for future use (use freshly computed values, not stale state)
+      const cachedStats = {
+        attendanceRate: weekWorkingDays > 0 ? Math.round((presentDaysCount / weekWorkingDays) * 100) : 0,
+        presentDays: presentDaysCount,
+        totalDays: weekWorkingDays,
+        workingHours: totalWorkHours.toFixed(1),
+        onTimeRate,
+        lastUpdated: new Date().toLocaleString(),
+        period: "This week",
+        averageHoursPerDay: presentDaysCount > 0 ? (totalWorkHours / presentDaysCount).toFixed(1) : "0.0",
+        lateDays: presentDaysCount - onTimeDays,
+        currentStatus: statusData ? {
+          isWorking: statusData.currentlyWorking,
+          onBreak: statusData.onBreak,
+          todayHours: calculateHoursFromSeconds(statusData.workDurationSeconds || 0).toFixed(1),
+          arrivalTime: statusData.arrivalTimeFormatted
+        } : null
+      };
+
+      const cachedCalendarData = {
+        month: nowMonth,
+        year,
+        days,
+        startDayOfWeek,
+        monthlyStats: {
+          totalPresent: days.filter(d => d.status === "present").length,
+          totalLate: days.filter(d => d.status === "late").length,
+          totalAbsent: days.filter(d => d.status === "absent").length,
+          totalLeave: 0,
+          totalHolidays: 0
+        }
+      };
+
+      const cachedWeeklyHours = weeklyHoursData;
+      const cachedRecentActivity = recent;
+      const cachedCurrentStatus = statusData;
+
       setEmployeeCache(prev => {
         const newCache = new Map(prev);
         newCache.set(employeeId, {
-          stats,
-          calendarData,
-          weeklyHours,
-          recentActivity,
-          currentStatus: statusRes,
+          stats: cachedStats,
+          calendarData: cachedCalendarData,
+          weeklyHours: cachedWeeklyHours,
+          recentActivity: cachedRecentActivity,
+          currentStatus: cachedCurrentStatus,
           timestamp: Date.now()
         });
         return newCache;
@@ -582,7 +631,8 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
   // Only show loading screen if we're loading employees AND have no employees yet
   if (loading && employees.length === 0) {
     return (
-      <div className="bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 min-h-screen flex items-center justify-center">
+      <div className="bg-[#101525] min-h-screen flex items-center justify-center">
+
         <div className="flex flex-col items-center space-y-4">
           <div className="relative">
             <div className="w-16 h-16 border-4 border-purple-200 border-t-purple-600 rounded-full animate-spin"></div>
@@ -595,7 +645,8 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
   }
 
   return (
-    <div className="bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-gray-100 min-h-screen flex">
+    <div className="bg-[#101525] text-gray-100 min-h-screen flex">
+
       <Sidebar
         collapsed={collapsed}
         setCollapsed={setCollapsed}

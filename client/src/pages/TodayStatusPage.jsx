@@ -36,9 +36,9 @@ const normalizeEventType = (t) =>
     .replace(/[\s_-]+/g, "");
 
 const statusColors = {
-  approved: "bg-green-600 text-white",
-  rejected: "bg-red-600 text-white",
-  pending: "bg-yellow-500 text-black",
+  approved: "bg-green-500 text-white",
+  rejected: "bg-red-500 text-white",
+  pending: "bg-orange-500 text-white",
 };
 
 const TodayStatusPage = ({ onLogout }) => {
@@ -419,13 +419,15 @@ const TodayStatusPage = ({ onLogout }) => {
 
   if (!status)
     return (
-      <div className="text-gray-100 bg-[#101525] min-h-screen flex items-center justify-center">
-        Loading...
+      <div className="min-h-screen bg-[#101525] flex items-center justify-center">
+
+        <div className="text-white text-xl font-medium">Loading...</div>
       </div>
     );
 
   return (
-    <div className="bg-[#101525] min-h-screen text-gray-100">
+    <div className="min-h-screen bg-[#101525]">
+
       <Sidebar
         collapsed={collapsed}
         setCollapsed={setCollapsed}
@@ -434,7 +436,7 @@ const TodayStatusPage = ({ onLogout }) => {
       />
 
       <main
-        className="transition-all duration-300 p-2 sm:p-6 overflow-auto"
+        className="transition-all duration-300 p-4 sm:p-8 max-w-7xl mx-auto"
         style={{
           marginLeft: collapsed
             ? SIDEBAR_WIDTH_COLLAPSED
@@ -442,8 +444,20 @@ const TodayStatusPage = ({ onLogout }) => {
           minHeight: "100vh",
         }}
       >
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 h-full min-h-screen">
-          <div className="col-span-2 flex flex-col gap-4">
+        {/* Header */}
+        <div className="mb-8">
+          <h1 className="text-4xl font-bold text-white mb-2">
+            Today Work Status
+          </h1>
+          <p className="text-gray-300">
+            Manage employee shifts and schedules efficiently
+          </p>
+        </div>
+
+        {/* Main Grid Layout */}
+        <div className="grid grid-cols-1 xl:grid-cols-4 gap-6 mb-8">
+          {/* Left Column - Status & Break Management */}
+          <div className="xl:col-span-3 space-y-6">
             <StatusCard
               workDuration={formatHMS(liveWork)}
               breakTime={formatHMS(liveBreak)}
@@ -455,6 +469,8 @@ const TodayStatusPage = ({ onLogout }) => {
               onPunchOut={handlePunchOutClick}
               onRequestFlexible={openFlexibleModal}
             />
+            
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <BreakManagement
               breakDuration={formatHMS(liveBreak)}
               onBreak={status.onBreak}
@@ -466,7 +482,10 @@ const TodayStatusPage = ({ onLogout }) => {
             />
             <Timeline timeline={status.timeline || []} />
           </div>
-          <div className="space-y-4">
+          </div>
+
+          {/* Right Column - Summary */}
+          <div className="xl:col-span-1">
             <SummaryCard
               weeklySummary={weeklySummaryWithQuickStats}
               dailyData={dailyData}
@@ -516,101 +535,119 @@ const TodayStatusPage = ({ onLogout }) => {
 
         {showFlexibleModal && (
           <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 overflow-auto p-4"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm overflow-auto p-4"
             onClick={closeFlexibleModal}
           >
             <div
-              className="bg-[#0f1724] text-white rounded-2xl shadow-xl w-full max-w-3xl p-6 max-h-[85vh] overflow-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-800"
+              className="bg-slate-900 text-white rounded-2xl shadow-2xl w-full max-w-4xl p-8 max-h-[85vh] overflow-auto border border-slate-700"
               onClick={(e) => e.stopPropagation()}
             >
-              <h2 className="text-2xl font-semibold mb-6 text-white">
+              <h2 className="text-3xl font-bold mb-6 text-white">
                 Request Flexible Shift
               </h2>
 
               <form
-                className="flex flex-col gap-4 mb-6"
+                className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8"
                 onSubmit={submitFlexibleRequest}
               >
-                <label className="flex flex-col gap-1">
-                  Date:
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-300">
+                    Date
+                  </label>
                   <input
                     type="date"
                     value={requestDate}
                     onChange={(e) => setRequestDate(e.target.value)}
-                    className="rounded-md p-2 bg-gray-800 text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-pinkAccent"
+                    className="w-full rounded-xl p-3 bg-slate-800 text-white border border-slate-600 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                     required
                   />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-300">
+                    Start Time
                 </label>
-                <label className="flex flex-col gap-1">
-                  Start Time:
                   <input
                     type="time"
                     value={requestStartTime}
                     onChange={(e) => setRequestStartTime(e.target.value)}
-                    className="rounded-md p-2 bg-gray-800 text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-pinkAccent"
+                    className="w-full rounded-xl p-3 bg-slate-800 text-white border border-slate-600 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                     required
                   />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-300">
+                    Duration (hours)
                 </label>
-                <label className="flex flex-col gap-1">
-                  Duration (hours):
                   <input
                     type="number"
                     value={requestDurationHours}
                     onChange={(e) => setRequestDurationHours(e.target.value)}
                     min={1}
                     max={24}
-                    className="rounded-md p-2 bg-gray-800 text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-pinkAccent"
+                    className="w-full rounded-xl p-3 bg-slate-800 text-white border border-slate-600 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                     required
                   />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-300">
+                    Reason
                 </label>
-                <label className="flex flex-col gap-1">
-                  Reason:
                   <textarea
                     value={requestReason}
                     onChange={(e) => setRequestReason(e.target.value)}
-                    className="rounded-md p-2 bg-gray-800 text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-pinkAccent"
+                    className="w-full rounded-xl p-3 bg-slate-800 text-white border border-slate-600 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent h-24 resize-none"
+                    placeholder="Optional reason for flexible shift request..."
                   />
-                </label>
-                <div className="flex justify-end gap-2 mt-2">
+                </div>
+
+                <div className="md:col-span-2 flex justify-end gap-4 mt-4">
                   <button
                     type="button"
-                    className="px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 transition"
+                    className="px-6 py-3 rounded-xl bg-slate-700 hover:bg-slate-600 transition font-medium"
                     onClick={closeFlexibleModal}
                   >
                     Close
                   </button>
                   <button
                     type="submit"
-                    className={`px-4 py-2 rounded-lg bg-pinkAccent text-white hover:opacity-90 transition ${
+                    className={`px-6 py-3 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 text-white hover:from-purple-700 hover:to-pink-700 transition font-semibold ${
                       isSubmittingRequest ? "opacity-50 cursor-not-allowed" : ""
                     }`}
                     disabled={isSubmittingRequest}
                   >
-                    {isSubmittingRequest ? "Submitting..." : "Submit"}
+                    {isSubmittingRequest ? "Submitting..." : "Submit Request"}
                   </button>
                 </div>
               </form>
 
-              <div className="mt-6">
-                <h3 className="text-xl font-semibold mb-3">My Requests</h3>
+              {/* Requests Table */}
+              <div className="mt-8">
+                <h3 className="text-2xl font-bold mb-6">My Requests</h3>
                 {sortedFlexibleRequests.length === 0 ? (
-                  <p className="text-gray-400">No requests found.</p>
+                  <div className="text-center py-12">
+                    <p className="text-gray-400 text-lg">No requests found.</p>
+                  </div>
                 ) : (
-                  <div className="overflow-auto max-h-80 rounded-lg border border-gray-700">
-                    <table className="w-full min-w-max border-collapse text-gray-100">
-                      <thead className="bg-gray-800 sticky top-0 z-10">
+                  <div className="overflow-x-auto rounded-xl border border-slate-700">
+                    <table className="w-full border-collapse">
+                      <thead className="bg-slate-800">
                         <tr>
-                          <th className="p-2 border-b border-gray-700">Date</th>
-                          <th className="p-2 border-b border-gray-700">
+                          <th className="p-4 text-left font-semibold text-gray-300 border-b border-slate-700">
+                            Date
+                          </th>
+                          <th className="p-4 text-left font-semibold text-gray-300 border-b border-slate-700">
                             Start Time
                           </th>
-                          <th className="p-2 border-b border-gray-700">
+                          <th className="p-4 text-left font-semibold text-gray-300 border-b border-slate-700">
                             Duration
                           </th>
-                          <th className="p-2 border-b border-gray-700">
+                          <th className="p-4 text-left font-semibold text-gray-300 border-b border-slate-700">
                             Reason
                           </th>
-                          <th className="p-2 border-b border-gray-700">
+                          <th className="p-4 text-left font-semibold text-gray-300 border-b border-slate-700">
                             Status
                           </th>
                         </tr>
@@ -626,23 +663,25 @@ const TodayStatusPage = ({ onLogout }) => {
                                 r._id ||
                                 `${r.requestedDate}-${r.requestedStartTime}`
                               }
-                              className={`hover:bg-gray-700 transition ${
-                                idx % 2 === 0 ? "bg-gray-900" : "bg-gray-800"
+                              className={`hover:bg-slate-800/50 transition ${
+                                idx % 2 === 0 ? "bg-slate-900/30" : ""
                               }`}
                             >
-                              <td className="p-2">
+                              <td className="p-4 border-b border-slate-700/50">
                                 {formatDate(r.requestedDate)}
                               </td>
-                              <td className="p-2">
+                              <td className="p-4 border-b border-slate-700/50">
                                 {r.requestedStartTime || "-"}
                               </td>
-                              <td className="p-2">
+                              <td className="p-4 border-b border-slate-700/50">
                                 {r.durationHours ? `${r.durationHours}h` : "-"}
                               </td>
-                              <td className="p-2">{r.reason || "-"}</td>
-                              <td className="p-2">
+                              <td className="p-4 border-b border-slate-700/50">
+                                {r.reason || "-"}
+                              </td>
+                              <td className="p-4 border-b border-slate-700/50">
                                 <span
-                                  className={`px-2 py-1 rounded text-sm ${statusColors[statusLower]}`}
+                                  className={`px-3 py-1 rounded-full text-sm font-medium ${statusColors[statusLower]}`}
                                 >
                                   {r.status || "Pending"}
                                 </span>

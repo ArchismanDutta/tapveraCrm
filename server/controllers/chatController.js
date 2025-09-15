@@ -44,8 +44,9 @@ exports.getOrCreatePrivateConversation = async (userIdA, userIdB) => {
 
 // List all group conversations a user belongs to
 exports.getGroupConversationsForUser = async (userId) => {
-  // Find groups where userId is in members array (strings)
-  const groups = await Conversation.find({ type: "group", members: userId });
+  // Ensure we compare as strings because Conversation.members is String[]
+  const userIdStr = String(userId);
+  const groups = await Conversation.find({ type: "group", members: userIdStr });
 
   // For each group, fetch user details for members manually
   const populatedGroups = await Promise.all(
@@ -66,11 +67,16 @@ exports.getGroupConversationsForUser = async (userId) => {
 
 // Create a new group conversation (admin or super-admin only)
 exports.createGroupConversation = async (name, memberIds, createdBy) => {
+  // Normalize to string IDs and ensure creator is a member
+  const members = Array.from(
+    new Set([...(memberIds || []).map(String), String(createdBy)])
+  );
+
   const conversation = new Conversation({
     type: "group",
     name,
-    members: memberIds,
-    createdBy,
+    members,
+    createdBy: String(createdBy),
   });
   return await conversation.save();
 };

@@ -139,7 +139,7 @@ const RecentActivityTable = ({ activities = [] }) => {
 
 
   return (
-    <div className="bg-[#161c2c] rounded-xl shadow-md p-4 w-full border border-[#232945]">
+    <div className="bg-[#161c2c] rounded-xl shadow-md p-4 w-full border border-[#232945] min-w-0">
       {/* Header with controls */}
       <div className="flex justify-between items-center mb-4">
         <div className="flex items-center gap-2">
@@ -200,11 +200,11 @@ const RecentActivityTable = ({ activities = [] }) => {
 
       {/* Table */}
       <div className="overflow-x-auto">
-        <table className="w-full text-sm text-gray-300">
+        <table className="w-full text-sm text-gray-300 table-fixed">
           <thead>
             <tr className="border-b border-[#232945] text-left">
               <th 
-                className="py-3 px-3 cursor-pointer hover:text-blue-400 transition-colors"
+                className="py-3 px-3 cursor-pointer hover:text-blue-400 transition-colors w-36"
                 onClick={() => handleSort("date")}
               >
                 <div className="flex items-center gap-1">
@@ -215,7 +215,7 @@ const RecentActivityTable = ({ activities = [] }) => {
                 </div>
               </th>
               <th 
-                className="py-3 px-3 cursor-pointer hover:text-blue-400 transition-colors"
+                className="py-3 px-3 cursor-pointer hover:text-blue-400 transition-colors w-28"
                 onClick={() => handleSort("timeIn")}
               >
                 <div className="flex items-center gap-1">
@@ -225,9 +225,9 @@ const RecentActivityTable = ({ activities = [] }) => {
                   }`} />
                 </div>
               </th>
-              <th className="py-3 px-3">Time Out</th>
+              <th className="py-3 px-3 w-28">Time Out</th>
               <th 
-                className="py-3 px-3 cursor-pointer hover:text-blue-400 transition-colors"
+                className="py-3 px-3 cursor-pointer hover:text-blue-400 transition-colors w-32"
                 onClick={() => handleSort("status")}
               >
                 <div className="flex items-center gap-1">
@@ -238,7 +238,7 @@ const RecentActivityTable = ({ activities = [] }) => {
                 </div>
               </th>
               <th 
-                className="py-3 px-3 cursor-pointer hover:text-blue-400 transition-colors"
+                className="py-3 px-3 cursor-pointer hover:text-blue-400 transition-colors w-24"
                 onClick={() => handleSort("workingHours")}
               >
                 <div className="flex items-center gap-1">
@@ -248,8 +248,8 @@ const RecentActivityTable = ({ activities = [] }) => {
                   }`} />
                 </div>
               </th>
-              <th className="py-3 px-3 hidden sm:table-cell">Break</th>
-              <th className="py-3 px-3 hidden md:table-cell">Efficiency</th>
+              <th className="py-3 px-3 hidden sm:table-cell w-20">Break</th>
+              <th className="py-3 px-3 hidden md:table-cell w-36">Efficiency</th>
             </tr>
           </thead>
           <tbody>
@@ -291,7 +291,7 @@ const RecentActivityTable = ({ activities = [] }) => {
                       <span>{activity.timeOut}</span>
                     </div>
                   </td>
-                  <td className="py-3 px-3">
+                  <td className="py-3 px-3 break-words">
                     <div
                       className={`inline-flex items-center gap-1 px-3 py-1 rounded-full font-medium text-xs border ${statusStyle}`}
                     >
