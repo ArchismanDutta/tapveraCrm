@@ -272,6 +272,16 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
       const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
       monthEnd.setHours(23, 59, 59, 999);
 
+      // Also compute current week range (Mon-Sun) for weekly views
+      const day = now.getDay(); // Sunday = 0
+      const diffToMonday = (day + 6) % 7;
+      const weekStart = new Date(now);
+      weekStart.setDate(now.getDate() - diffToMonday);
+      weekStart.setHours(0, 0, 0, 0);
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekStart.getDate() + 6);
+      weekEnd.setHours(23, 59, 59, 999);
+
       // Create a timeout promise for the main API call
       const timeoutPromise = new Promise((_, reject) => 
         setTimeout(() => reject(new Error('Request timeout')), 8000)
@@ -312,13 +322,13 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
       const holidays = holidaysRes.status === 'fulfilled' ? holidaysRes.value.data || [] : [];
 
       // Calculate working days for accurate stats over the month
-      const weekWorkingDays = calculateWorkingDays(monthStart, monthEnd, holidays, approvedLeaves);
+      const monthWorkingDays = calculateWorkingDays(monthStart, monthEnd, holidays, approvedLeaves);
       
       // Set complete stats with all accurate calculations
       setStats({
-        attendanceRate: weekWorkingDays > 0 ? Math.round((presentDaysCount / weekWorkingDays) * 100) : 0,
+        attendanceRate: monthWorkingDays > 0 ? Math.round((presentDaysCount / monthWorkingDays) * 100) : 0,
         presentDays: presentDaysCount,
-        totalDays: weekWorkingDays,
+        totalDays: monthWorkingDays,
         workingHours: totalWorkHours.toFixed(1),
         onTimeRate: 0, // Will be calculated below
         lastUpdated: new Date().toLocaleString(),
@@ -421,19 +431,28 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
         }
       });
 
-      // Simplified weekly hours processing
+      // Weekly hours processing for the CURRENT week only
       const weekDays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
       const weeklyHoursData = weekDays.map(label => ({ label, hours: 0, target: 8 }));
+      const currentWeekData = dailyData
+        .filter(d => {
+          const dDate = new Date(d.date);
+          return dDate >= weekStart && dDate <= weekEnd;
+        })
+        .sort((a, b) => new Date(a.date) - new Date(b.date));
 
-      dailyData.forEach(d => {
+      currentWeekData.forEach(d => {
         const dayOfWeek = new Date(d.date).getDay();
         if (dayOfWeek >= 0 && dayOfWeek <= 6) {
           weeklyHoursData[dayOfWeek].hours = calculateHoursFromSeconds(d.workDurationSeconds || 0);
         }
       });
 
-      // Simplified recent activity processing
-      const recent = dailyData.slice(0, 5).map(d => {
+      // Recent activity: most recent 5 days
+      const recent = [...dailyData]
+        .sort((a, b) => new Date(b.date) - new Date(a.date))
+        .slice(0, 5)
+        .map(d => {
         const workSeconds = d.workDurationSeconds || 0;
         const breakSeconds = d.breakDurationSeconds || 0;
         
@@ -468,13 +487,13 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
 
       // Cache the data for future use (use freshly computed values, not stale state)
       const cachedStats = {
-        attendanceRate: weekWorkingDays > 0 ? Math.round((presentDaysCount / weekWorkingDays) * 100) : 0,
+        attendanceRate: monthWorkingDays > 0 ? Math.round((presentDaysCount / monthWorkingDays) * 100) : 0,
         presentDays: presentDaysCount,
-        totalDays: weekWorkingDays,
+        totalDays: monthWorkingDays,
         workingHours: totalWorkHours.toFixed(1),
         onTimeRate,
         lastUpdated: new Date().toLocaleString(),
-        period: "This week",
+        period: "This month",
         averageHoursPerDay: presentDaysCount > 0 ? (totalWorkHours / presentDaysCount).toFixed(1) : "0.0",
         lateDays: presentDaysCount - onTimeDays,
         currentStatus: statusData ? {
