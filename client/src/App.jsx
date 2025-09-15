@@ -6,6 +6,7 @@ import {
   Route,
   Navigate,
   useNavigate,
+  useLocation,
 } from "react-router-dom";
 import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
@@ -39,6 +40,7 @@ import ShiftManagement from "./components/humanResource/ShiftManagement";
 
 import { resetChat } from "./store/slices/chatSlice";
 import { useDispatch } from "react-redux";
+import useGlobalChatNotifications from "./hooks/useGlobalChatNotifications";
 
 // Unified role normalization function
 const normalizeRole = (role) => {
@@ -50,6 +52,7 @@ const normalizeRole = (role) => {
 
 const AppWrapper = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [role, setRole] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -96,6 +99,50 @@ const AppWrapper = () => {
     toast.info("👋 Logged out successfully!");
     navigate("/login", { replace: true });
   };
+  // Global chat notifications & unread counter hook
+  useGlobalChatNotifications(localStorage.getItem("token"));
+
+  // Clear active conversation hint when leaving Messages page
+  useEffect(() => {
+    const onRoute = () => {
+      if (location.pathname !== "/messages") {
+        window.dispatchEvent(new CustomEvent("chat-active-conversation", { detail: { conversationId: null } }));
+      }
+    };
+    onRoute();
+  }, [location.pathname]);
+
+
+  // Bridge WS notifications to toast UI globally
+  useEffect(() => {
+    // Expose toast globally for hooks/utilities
+    window.toast = toast;
+
+    const onWsNotification = (e) => {
+      try {
+        const n = e.detail || {};
+        const title = n.title || "Notification";
+        const body = n.body || "";
+        const channel = n.channel ? ` [${n.channel}]` : "";
+        // Force unique toastId to avoid any dedupe by identical content
+        const tid = `chat-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        toast.info(`${title}${channel}: ${body}` , { toastId: tid });
+
+        // Also increment global unread counter for chat notifications
+        if ((n.channel || "").toLowerCase() === "chat") {
+          try {
+            const prev = Number(sessionStorage.getItem("chat_unread_total") || 0) || 0;
+            const next = prev + 1;
+            sessionStorage.setItem("chat_unread_total", String(next));
+            window.dispatchEvent(new CustomEvent("chat-unread-total", { detail: { total: next } }));
+          } catch {}
+        }
+      } catch {}
+    };
+
+    window.addEventListener("ws-notification", onWsNotification);
+    return () => window.removeEventListener("ws-notification", onWsNotification);
+  }, []);
 
   if (loading) {
     return (

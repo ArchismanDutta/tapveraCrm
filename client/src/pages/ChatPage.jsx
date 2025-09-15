@@ -67,6 +67,20 @@ const ChatPage = ({ onLogout }) => {
     fetchMessages();
   }, [selectedConversation, jwtToken]);
 
+  // Listen for global unread map updates and initialize from storage
+  useEffect(() => {
+    const onMap = (e) => {
+      const incoming = e.detail?.map || {};
+      setUnreadMessages(incoming);
+    };
+    window.addEventListener("chat-unread-map", onMap);
+    try {
+      const raw = sessionStorage.getItem("chat_unread_map");
+      if (raw) setUnreadMessages(JSON.parse(raw));
+    } catch {}
+    return () => window.removeEventListener("chat-unread-map", onMap);
+  }, []);
+
   // Track new live messages for unread counts
   useEffect(() => {
     // Only proceed if we have allMessages (from updated WebSocket hook)
@@ -87,6 +101,15 @@ const ChatPage = ({ onLogout }) => {
             (prev[latestMessage.conversationId] || 0) + 1,
         }));
       }
+
+      // Persist total and map in sessionStorage for Sidebar on route changes
+      try {
+        sessionStorage.setItem("chat_unread_map", JSON.stringify(unreadMessages));
+        const total = Object.values(unreadMessages).reduce((a, b) => a + Number(b || 0), 0);
+        sessionStorage.setItem("chat_unread_total", String(total));
+        window.dispatchEvent(new CustomEvent("chat-unread-total", { detail: { total } }));
+        window.dispatchEvent(new CustomEvent("chat-unread-map", { detail: { map: unreadMessages } }));
+      } catch {}
     } else if (liveMessages && liveMessages.length > 0) {
       // Fallback: use liveMessages for basic unread tracking if allMessages isn't available
       const latestMessage = liveMessages[liveMessages.length - 1];
@@ -106,15 +129,41 @@ const ChatPage = ({ onLogout }) => {
             (prev[latestMessage.conversationId] || 0) + 1,
         }));
       }
+
+      try {
+        sessionStorage.setItem("chat_unread_map", JSON.stringify(unreadMessages));
+        const total = Object.values(unreadMessages).reduce((a, b) => a + Number(b || 0), 0);
+        sessionStorage.setItem("chat_unread_total", String(total));
+        window.dispatchEvent(new CustomEvent("chat-unread-total", { detail: { total } }));
+        window.dispatchEvent(new CustomEvent("chat-unread-map", { detail: { map: unreadMessages } }));
+      } catch {}
     }
   }, [allMessages, liveMessages, selectedConversation, currentUserId]);
 
-  const combinedMessages = [
-    ...initialMessages,
-    ...liveMessages.filter(
-      (msg) => !initialMessages.find((m) => m._id === msg._id)
-    ),
-  ];
+  // Broadcast total unread count for sidebar badge
+  useEffect(() => {
+    const total = Object.values(unreadMessages).reduce((a, b) => a + Number(b || 0), 0);
+    try {
+      sessionStorage.setItem("chat_unread_total", String(total));
+      sessionStorage.setItem("chat_unread_map", JSON.stringify(unreadMessages));
+    } catch {}
+    window.dispatchEvent(
+      new CustomEvent("chat-unread-total", { detail: { total } })
+    );
+    window.dispatchEvent(
+      new CustomEvent("chat-unread-map", { detail: { map: unreadMessages } })
+    );
+  }, [unreadMessages]);
+
+  // Merge messages from initial fetch, live WS, and any optimistic ones from the hook (in allMessages)
+  const combinedMessages = React.useMemo(() => {
+    const map = new Map();
+    const put = (m) => map.set(String(m._id || m.messageId || `${m.senderId}-${m.timestamp}`), m);
+    initialMessages.forEach(put);
+    (allMessages || []).forEach(put);
+    (liveMessages || []).forEach(put);
+    return Array.from(map.values()).sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+  }, [initialMessages, allMessages, liveMessages]);
 
   const fetchConversations = async (token) => {
     try {
@@ -124,6 +173,12 @@ const ChatPage = ({ onLogout }) => {
       if (!res.ok) throw new Error("Failed to fetch conversations");
       const data = await res.json();
       setConversations(data);
+      // After conversations load, broadcast a fresh unread map event so list can render badges
+      try {
+        const raw = sessionStorage.getItem("chat_unread_map");
+        const map = raw ? JSON.parse(raw) : {};
+        window.dispatchEvent(new CustomEvent("chat-unread-map", { detail: { map } }));
+      } catch {}
     } catch (error) {
       console.error(error);
     }
@@ -200,6 +255,11 @@ const ChatPage = ({ onLogout }) => {
       delete updated[conv._id];
       return updated;
     });
+
+    // Notify global hook about active conversation (to avoid counting those messages)
+    window.dispatchEvent(
+      new CustomEvent("chat-active-conversation", { detail: { conversationId: conv._id } })
+    );
   };
 
   // Get unread count for a conversation
