@@ -119,15 +119,30 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
     if (!Array.isArray(timeline) || timeline.length === 0) return null;
     
     try {
-      const events = timeline.filter(event => 
-        event.type && event.type.toLowerCase().includes(eventType.toLowerCase())
-      );
+      const normalize = (str) => String(str || "").toLowerCase().replace(/[_\s-]/g, "");
+      const typeNorm = normalize(eventType);
+      const synonyms = typeNorm.includes("in")
+        ? [
+            "punchin","checkin","clockin","signin","workstart","startwork",
+            "start","arrived","arrival","in"
+          ]
+        : [
+            "punchout","checkout","clockout","signout","workend","endwork",
+            "end","left","departure","out"
+          ];
+      const matchesAny = (t) => synonyms.some((s) => t.includes(s));
+
+      const events = timeline.filter((event) => {
+        if (!event?.type) return false;
+        const t = normalize(event.type);
+        return matchesAny(t);
+      });
       
       if (events.length === 0) return null;
       
       // For punch in, get the first occurrence; for punch out, get the last
       const sortedEvents = events.sort((a, b) => new Date(a.time) - new Date(b.time));
-      const targetEvent = eventType === "punch in" ? sortedEvents[0] : sortedEvents[sortedEvents.length - 1];
+      const targetEvent = typeNorm.includes("in") ? sortedEvents[0] : sortedEvents[sortedEvents.length - 1];
       
       return new Date(targetEvent.time);
     } catch (error) {
@@ -287,13 +302,13 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
         setTimeout(() => reject(new Error('Request timeout')), 8000)
       );
 
-      // Fetch only the essential weekly data with timeout
+      // Fetch weekly data strictly for the current week window
       const weeklyRes = await Promise.race([
         apiClient.get('/api/summary/week', {
           params: {
             userId: employeeId,
-            startDate: monthStart.toISOString(),
-            endDate: monthEnd.toISOString(),
+            startDate: weekStart.toISOString(),
+            endDate: weekEnd.toISOString(),
           },
         }),
         timeoutPromise
@@ -431,21 +446,22 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
         }
       });
 
-      // Weekly hours processing for the CURRENT week only
+      // Weekly hours processing for the CURRENT week only (date-string matching to avoid TZ drift)
       const weekDays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
       const weeklyHoursData = weekDays.map(label => ({ label, hours: 0, target: 8 }));
-      const currentWeekData = dailyData
-        .filter(d => {
-          const dDate = new Date(d.date);
-          return dDate >= weekStart && dDate <= weekEnd;
-        })
-        .sort((a, b) => new Date(a.date) - new Date(b.date));
-
-      currentWeekData.forEach(d => {
-        const dayOfWeek = new Date(d.date).getDay();
-        if (dayOfWeek >= 0 && dayOfWeek <= 6) {
-          weeklyHoursData[dayOfWeek].hours = calculateHoursFromSeconds(d.workDurationSeconds || 0);
-        }
+      const weekDates = Array.from({ length: 7 }, (_, i) => {
+        const d = new Date(weekStart);
+        d.setDate(weekStart.getDate() + i);
+        d.setHours(0, 0, 0, 0);
+        return d;
+      });
+      weekDates.forEach((targetDate) => {
+        const match = dailyData.find((rec) => {
+          const recDate = new Date(rec.date);
+          return recDate.toDateString() === targetDate.toDateString();
+        });
+        const dow = targetDate.getDay();
+        weeklyHoursData[dow].hours = match ? calculateHoursFromSeconds(match.workDurationSeconds || 0) : 0;
       });
 
       // Recent activity: most recent 5 days
