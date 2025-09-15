@@ -43,7 +43,7 @@ const AdminAttendancePage = () => {
     return new Date(new Date(date).getTime() + istOffset * 60000);
   };
 
-  // Compute first punch-in and last punch-out
+  // Compute first punch-in and last punch-out using timeline events to avoid counting break as punch-out
   const computePunchTimes = (dailyData = []) => {
     let firstPunchIn = null;
     let lastPunchOut = null;
@@ -52,20 +52,33 @@ const AdminAttendancePage = () => {
       // Skip absent days
       if (day.isAbsent) return;
 
-      // First punch-in
-      if (day.arrivalTime) {
+      // First punch-in: prefer timeline event type includes 'punch in'; fallback to arrivalTime
+      if (Array.isArray(day.timeline) && day.timeline.length) {
+        const punchIns = day.timeline
+          .filter((e) => typeof e.type === 'string' && e.type.toLowerCase().includes('punch in') && e.time)
+          .map((e) => toIST(e.time))
+          .filter(Boolean)
+          .sort((a, b) => a - b);
+        if (punchIns.length) {
+          if (!firstPunchIn || punchIns[0] < firstPunchIn) firstPunchIn = punchIns[0];
+        }
+      }
+      if (!firstPunchIn && day.arrivalTime) {
         const arrival = toIST(day.arrivalTime);
         if (!firstPunchIn || arrival < firstPunchIn) firstPunchIn = arrival;
       }
 
-      // Last punch-out
-      if (Array.isArray(day.workedSessions)) {
-        day.workedSessions.forEach((session) => {
-          if (session.end) {
-            const endTime = toIST(session.end);
-            if (!lastPunchOut || endTime > lastPunchOut) lastPunchOut = endTime;
-          }
-        });
+      // Last punch-out: strictly from timeline 'punch out' events (avoid treating break as punch-out)
+      if (Array.isArray(day.timeline) && day.timeline.length) {
+        const punchOuts = day.timeline
+          .filter((e) => typeof e.type === 'string' && e.type.toLowerCase().includes('punch out') && e.time)
+          .map((e) => toIST(e.time))
+          .filter(Boolean)
+          .sort((a, b) => a - b);
+        if (punchOuts.length) {
+          const last = punchOuts[punchOuts.length - 1];
+          if (!lastPunchOut || last > lastPunchOut) lastPunchOut = last;
+        }
       }
     });
 
@@ -142,8 +155,19 @@ const AdminAttendancePage = () => {
           const dailyData = res.dailyData || [];
           const { firstPunchIn, lastPunchOut } = computePunchTimes(dailyData);
 
+          // Format hours like "Xh Ym" for display
+          const formatHoursHM = (hoursStrOrNum) => {
+            const hoursNum = parseFloat(hoursStrOrNum || 0);
+            const totalMinutes = Math.round(hoursNum * 60);
+            const h = Math.floor(totalMinutes / 60);
+            const m = totalMinutes % 60;
+            return `${h}h ${m.toString().padStart(2, "0")}m`;
+          };
+
           const summaryWithPunch = {
             ...res.summary,
+            totalWorkHours: formatHoursHM(res.summary?.totalWorkHours),
+            totalBreakHours: formatHoursHM(res.summary?.totalBreakHours),
             firstPunchIn,
             lastPunchOut,
           };

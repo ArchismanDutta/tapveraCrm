@@ -56,6 +56,15 @@ const AttendanceCalendar = ({ dailyData = [] }) => {
               status = "present";
               tooltip += ` - Present (${record.arrivalTime} - ${record.departureTime || "N/A"})`;
             }
+
+            // Append break details if available
+            const breakSeconds = record.breakDurationSeconds || 0;
+            if (breakSeconds > 0) {
+              const minutes = Math.round(breakSeconds / 60);
+              const h = Math.floor(minutes / 60);
+              const m = minutes % 60;
+              tooltip += ` • Break: ${h}h ${m.toString().padStart(2, "0")}m`;
+            }
           }
 
           return { day: dayNum, status, tooltip };

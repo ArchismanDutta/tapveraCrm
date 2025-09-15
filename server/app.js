@@ -191,11 +191,54 @@ wss.on("connection", (ws) => {
           timestamp: savedMessage.timestamp,
         };
 
-        for (const userId of conversationMembersOnline[data.conversationId] || []) {
+        // Determine recipients: prefer actual conversation members from DB, fallback to tracked set
+        let recipientIds = [];
+        try {
+          const conv = await ChatController.getConversationById(savedMessage.conversationId);
+          if (conv && Array.isArray(conv.members)) {
+            recipientIds = conv.members.map(String);
+          }
+        } catch {}
+        if (!recipientIds.length) {
+          recipientIds = Array.from(conversationMembersOnline[data.conversationId] || []);
+        }
+
+        for (const userId of recipientIds) {
           const recipientWs = users[userId];
           if (recipientWs && recipientWs.readyState === WebSocket.OPEN) {
             recipientWs.send(JSON.stringify(payload));
+            if (String(userId) !== String(ws.user.id)) {
+              // Lightweight notification for recipients (not the sender)
+              recipientWs.send(
+                JSON.stringify({
+                  type: "notification",
+                  channel: "chat",
+                  title: "New group message",
+                  body: savedMessage.message,
+                  from: ws.user.id,
+                  conversationId: savedMessage.conversationId,
+                  timestamp: savedMessage.timestamp,
+                })
+              );
+            }
           }
+        }
+
+        // Also echo to sender so they see their message immediately even if not tracked in the set
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify(payload));
+          // And notify sender's other tabs
+          ws.send(
+            JSON.stringify({
+              type: "notification",
+              channel: "chat",
+              title: "Message sent",
+              body: savedMessage.message,
+              from: ws.user.id,
+              conversationId: savedMessage.conversationId,
+              timestamp: savedMessage.timestamp,
+            })
+          );
         }
       } catch (err) {
         console.error("Failed to save/broadcast group message:", err);
@@ -215,10 +258,41 @@ wss.on("connection", (ws) => {
       }
 
       try {
-        await ChatController.saveMessage(senderId, recipientId, msg);
-        console.log(`Saved message from ${senderId} to ${recipientId}`);
+        const saved = await ChatController.saveMessage(senderId, recipientId, msg);
+        const payload = {
+          type: "private_message",
+          _id: saved?._id,
+          senderId,
+          recipientId,
+          message: msg,
+          timestamp: saved?.timestamp || Date.now(),
+        };
+
+        // Echo to sender so UI updates immediately
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify(payload));
+        }
+
+        // Deliver to recipient in real time
+        const recipientWs = users[recipientId];
+        if (recipientWs && recipientWs.readyState === WebSocket.OPEN) {
+          recipientWs.send(JSON.stringify(payload));
+          // Lightweight notification event
+          recipientWs.send(
+            JSON.stringify({
+              type: "notification",
+              channel: "chat",
+              title: "New message",
+              body: msg,
+              from: senderId,
+              timestamp: payload.timestamp,
+            })
+          );
+        }
+
+        console.log(`Delivered message from ${senderId} to ${recipientId}`);
       } catch (err) {
-        console.error("Error saving message:", err);
+        console.error("Error saving/broadcasting private message:", err);
       }
     }
   });

@@ -31,7 +31,7 @@ const WeeklyHoursChart = ({ weeklyHours = [], targetHours = 8, showTarget = true
     }
 
     const totalHours = weeklyHours.reduce((sum, d) => sum + (d.hours || 0), 0);
-    
+
     // Only count weekdays (Mon-Fri) for working days calculation
     const weekdayIndices = [1, 2, 3, 4, 5]; // Monday to Friday
     const weekdayData = weeklyHours.filter((_, index) => {
@@ -39,14 +39,16 @@ const WeeklyHoursChart = ({ weeklyHours = [], targetHours = 8, showTarget = true
       const dayOfWeek = index === 0 ? 0 : index; // Sunday=0, Mon=1, etc.
       return weekdayIndices.includes(dayOfWeek);
     });
-    
+
+    // Number of weekdays in provided data (fallback to 5 if empty)
+    const totalWeekdays = weekdayData.length || 5;
+
     const workingDaysWithHours = weekdayData.filter(d => (d.hours || 0) > 0).length;
     const targetMetDays = weekdayData.filter(d => (d.hours || 0) >= targetHours).length;
-    
-    // Efficiency: percentage of ALL weekdays where target was met (not just working days)
-    const totalWeekdays = weekdayData.length; // Total weekdays in the week
-    const efficiency = totalWeekdays > 0 ? 
-      Math.round((targetMetDays / totalWeekdays) * 100) : 0;
+
+    // Efficiency: percentage of working days where target was met
+    const efficiency = workingDaysWithHours > 0 ? 
+      Math.round((targetMetDays / workingDaysWithHours) * 100) : 0;
 
     // Calculate streak of consecutive days meeting target
     let streak = 0;
@@ -87,7 +89,7 @@ const WeeklyHoursChart = ({ weeklyHours = [], targetHours = 8, showTarget = true
   const chartHeight = 280;
   const barWidth = 35;
   const barGap = 15;
-  const padding = { top: 40, right: 40, bottom: 80, left: 60 };
+  const padding = { top: 40, right: 40, bottom: 110, left: 60 };
   const svgWidth = Math.max(weeklyHours.length * (barWidth + barGap) + padding.left + padding.right, 400);
   const svgHeight = chartHeight + padding.top + padding.bottom;
   const maxScale = Math.max(...weeklyHours.map(d => d.hours || 0), targetHours, 8) + 2;
@@ -138,22 +140,22 @@ const WeeklyHoursChart = ({ weeklyHours = [], targetHours = 8, showTarget = true
   return (
     <div className="bg-[#161c2c] rounded-xl shadow-md p-6 w-full border border-[#232945]">
       {/* Header with enhanced controls */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-2">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+        <div className="flex flex-wrap items-center gap-2">
           <BarChart3 className="w-5 h-5 text-blue-400" />
           <h3 className="font-semibold text-lg text-gray-100">Weekly Hours</h3>
-          <div className="flex items-center gap-1 ml-2">
+          <div className="flex flex-wrap items-center gap-1 ml-2">
             {metrics.trend === "up" && <TrendingUp className="w-4 h-4 text-green-400" />}
             {metrics.trend === "down" && <TrendingUp className="w-4 h-4 text-red-400 transform rotate-180" />}
             {metrics.streak > 0 && (
-              <div className="flex items-center gap-1 text-xs bg-green-900/30 text-green-400 px-2 py-1 rounded">
+              <div className="flex items-center gap-1 text-xs bg-green-900/30 text-green-400 px-2 py-1 rounded whitespace-nowrap">
                 <Award className="w-3 h-3" />
                 {metrics.streak} day streak
               </div>
             )}
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 self-start sm:self-auto">
           <button
             onClick={() => setShowDetails(!showDetails)}
             className={`p-2 rounded-md transition-colors ${
@@ -190,13 +192,18 @@ const WeeklyHoursChart = ({ weeklyHours = [], targetHours = 8, showTarget = true
         </div>
       </div>
 
-      {/* Enhanced Metrics Grid */}
-      <div className={`grid gap-2 mb-4 transition-all duration-300 ${
-        showDetails ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-4' : 'grid-cols-1 sm:grid-cols-3'
-      }`}>
-        <div className="bg-[#232945] rounded-lg p-2.5">
-          <div className="flex items-center gap-1.5 mb-1">
-            <Clock className="w-3 h-3 text-blue-400" />
+      {/* Enhanced Metrics Grid with responsive auto-fit */}
+      <div
+        className={`grid gap-4 mb-6 transition-all duration-300`}
+        style={{
+          gridTemplateColumns: showDetails
+            ? "repeat(auto-fit,minmax(180px,1fr))"
+            : "repeat(auto-fit,minmax(180px,1fr))",
+        }}
+      >
+        <div className="bg-[#232945] rounded-lg p-4 overflow-hidden">
+          <div className="flex items-center gap-2 mb-1">
+            <Clock className="w-4 h-4 text-blue-400" />
             <span className="text-xs text-gray-400">Total Hours</span>
           </div>
           <div className="flex items-center gap-1.5">
@@ -205,17 +212,17 @@ const WeeklyHoursChart = ({ weeklyHours = [], targetHours = 8, showTarget = true
               of {(targetHours * 5).toFixed(0)}h
             </div>
           </div>
-          <div className="w-full bg-gray-700 rounded-full h-1 mt-1.5">
-            <div 
-              className="h-1 bg-blue-500 rounded-full transition-all duration-300"
+          <div className="w-full bg-gray-700 rounded-full h-1.5 mt-2">
+            <div
+              className="h-1.5 bg-blue-500 rounded-full transition-all duration-300"
               style={{ width: `${metrics.weekProgress}%` }}
             ></div>
           </div>
         </div>
-        
-        <div className="bg-[#232945] rounded-lg p-2.5">
-          <div className="flex items-center gap-1.5 mb-1">
-            <Target className="w-3 h-3 text-green-400" />
+
+        <div className="bg-[#232945] rounded-lg p-4 overflow-hidden">
+          <div className="flex items-center gap-2 mb-1">
+            <Target className="w-4 h-4 text-green-400" />
             <span className="text-xs text-gray-400">Target Met</span>
           </div>
           <div className="flex items-center gap-1.5">
@@ -225,10 +232,10 @@ const WeeklyHoursChart = ({ weeklyHours = [], targetHours = 8, showTarget = true
             <div className="text-xs text-gray-500">days</div>
           </div>
         </div>
-        
-        <div className="bg-[#232945] rounded-lg p-2.5">
-          <div className="flex items-center gap-1.5 mb-1">
-            <TrendingUp className="w-3 h-3 text-purple-400" />
+
+        <div className="bg-[#232945] rounded-lg p-4 overflow-hidden">
+          <div className="flex items-center gap-2 mb-1">
+            <TrendingUp className="w-4 h-4 text-purple-400" />
             <span className="text-xs text-gray-400">Efficiency</span>
           </div>
           <div className="flex items-center gap-1.5">
@@ -236,11 +243,11 @@ const WeeklyHoursChart = ({ weeklyHours = [], targetHours = 8, showTarget = true
             <div className="text-xs text-gray-500">rate</div>
           </div>
         </div>
-        
+
         {showDetails && (
-          <div className="bg-[#232945] rounded-lg p-2.5">
-            <div className="flex items-center gap-1.5 mb-1">
-              <Activity className="w-3 h-3 text-cyan-400" />
+          <div className="bg-[#232945] rounded-lg p-4 overflow-hidden">
+            <div className="flex items-center gap-2 mb-1">
+              <Activity className="w-4 h-4 text-cyan-400" />
               <span className="text-xs text-gray-400">Daily Avg</span>
             </div>
             <div className="flex items-center gap-1.5">
@@ -252,8 +259,8 @@ const WeeklyHoursChart = ({ weeklyHours = [], targetHours = 8, showTarget = true
       </div>
 
       {/* Chart */}
-      <div className="relative bg-[#0f1419] rounded-lg p-4 overflow-hidden">
-        <div className="w-full overflow-x-auto">
+      <div className="relative bg-[#0f1419] rounded-lg p-4 overflow-x-auto max-w-full">
+        <div className="min-w-[600px] w-full max-w-full">
           <svg
             viewBox={`0 0 ${svgWidth} ${svgHeight}`}
             preserveAspectRatio="xMidYMid meet"
@@ -330,7 +337,7 @@ const WeeklyHoursChart = ({ weeklyHours = [], targetHours = 8, showTarget = true
                 >
                   Target: {targetHours}h
                 </text>
-                
+
                 {/* Target zone indicator */}
                 <rect
                   x={padding.left}
@@ -366,7 +373,7 @@ const WeeklyHoursChart = ({ weeklyHours = [], targetHours = 8, showTarget = true
                         opacity="0.3" 
                         rx="6" 
                       />
-                      
+
                       {/* Main bar with enhanced styling */}
                       <rect
                         x={x}
@@ -384,7 +391,7 @@ const WeeklyHoursChart = ({ weeklyHours = [], targetHours = 8, showTarget = true
                         onMouseEnter={() => setHoveredIndex(index)}
                         onMouseLeave={() => setHoveredIndex(null)}
                       />
-                      
+
                       {/* Weekend indicator */}
                       {isWeekend && (
                         <rect
@@ -397,7 +404,7 @@ const WeeklyHoursChart = ({ weeklyHours = [], targetHours = 8, showTarget = true
                           opacity="0.5"
                         />
                       )}
-                      
+
                       {/* Target achievement indicator */}
                       {hours >= targetHours && (
                         <circle
@@ -409,7 +416,7 @@ const WeeklyHoursChart = ({ weeklyHours = [], targetHours = 8, showTarget = true
                           strokeWidth="1"
                         />
                       )}
-                      
+
                       {/* Enhanced hover tooltip */}
                       {isHovered && (
                         <g>
@@ -444,7 +451,7 @@ const WeeklyHoursChart = ({ weeklyHours = [], targetHours = 8, showTarget = true
                           </text>
                         </g>
                       )}
-                      
+
                       {/* Day label with performance indicator */}
                       <text
                         x={x + barWidth / 2}
@@ -456,7 +463,7 @@ const WeeklyHoursChart = ({ weeklyHours = [], targetHours = 8, showTarget = true
                       >
                         {data.label}
                       </text>
-                      
+
                       {/* Hours label */}
                       <text 
                         x={x + barWidth / 2} 
@@ -482,14 +489,14 @@ const WeeklyHoursChart = ({ weeklyHours = [], targetHours = 8, showTarget = true
                     strokeLinejoin="round"
                     filter="url(#glow)"
                   />
-                  
+
                   {/* Area fill under line */}
                   <path
                     d={`${linePath} L ${padding.left + (weeklyHours.length - 1) * (barWidth + barGap) + barWidth / 2},${padding.top + chartHeight} L ${padding.left + barWidth / 2},${padding.top + chartHeight} Z`}
                     fill="url(#barGradient)"
                     opacity="0.3"
                   />
-                  
+
                   {/* Data points with enhanced interactivity */}
                   {weeklyHours.map((data, index) => {
                     const hours = data.hours || 0;
@@ -510,7 +517,7 @@ const WeeklyHoursChart = ({ weeklyHours = [], targetHours = 8, showTarget = true
                             opacity="0.2"
                           />
                         )}
-                        
+
                         {/* Main data point */}
                         <circle
                           cx={x}
@@ -523,7 +530,7 @@ const WeeklyHoursChart = ({ weeklyHours = [], targetHours = 8, showTarget = true
                           onMouseEnter={() => setHoveredIndex(index)}
                           onMouseLeave={() => setHoveredIndex(null)}
                         />
-                        
+
                         {/* Weekend indicator for line chart */}
                         {isWeekend && (
                           <rect
@@ -536,7 +543,7 @@ const WeeklyHoursChart = ({ weeklyHours = [], targetHours = 8, showTarget = true
                             opacity="0.5"
                           />
                         )}
-                        
+
                         {/* Enhanced hover tooltip for line chart */}
                         {isHovered && (
                           <g>
@@ -570,7 +577,7 @@ const WeeklyHoursChart = ({ weeklyHours = [], targetHours = 8, showTarget = true
                             </text>
                           </g>
                         )}
-                        
+
                         {/* Day label for line chart */}
                         <text 
                           x={x} 
@@ -581,7 +588,7 @@ const WeeklyHoursChart = ({ weeklyHours = [], targetHours = 8, showTarget = true
                         >
                           {data.label}
                         </text>
-                        
+
                         {/* Hours label for line chart */}
                         <text 
                           x={x} 
