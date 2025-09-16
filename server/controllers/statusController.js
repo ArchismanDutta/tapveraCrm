@@ -479,13 +479,17 @@ async function getTodayStatus(req, res) {
     const todayLocal = new Date();
     todayLocal.setHours(0, 0, 0, 0);
     const todayUTC = zonedTimeToUtc(todayLocal, userTimeZone);
+    const nextDayLocal = new Date(todayLocal);
+    nextDayLocal.setDate(nextDayLocal.getDate() + 1);
+    nextDayLocal.setHours(0, 0, 0, 0);
+    const nextDayUTC = zonedTimeToUtc(nextDayLocal, userTimeZone);
 
     let todayStatus = await UserStatus.findOneAndUpdate(
-      { userId, today: { $gte: todayUTC } },
+      { userId, today: { $gte: todayUTC, $lt: nextDayUTC } },
       {
         $setOnInsert: {
           userId,
-          today: new Date(),
+          today: todayUTC,
           currentlyWorking: false,
           onBreak: false,
           workedSessions: [],
@@ -560,22 +564,28 @@ async function updateTodayStatus(req, res) {
     const todayLocal = new Date();
     todayLocal.setHours(0, 0, 0, 0);
     const todayUTC = zonedTimeToUtc(todayLocal, userTimeZone);
+    const nextDayLocal = new Date(todayLocal);
+    nextDayLocal.setDate(nextDayLocal.getDate() + 1);
+    nextDayLocal.setHours(0, 0, 0, 0);
+    const nextDayUTC = zonedTimeToUtc(nextDayLocal, userTimeZone);
 
-    let todayStatus = await UserStatus.findOne({
-      userId,
-      today: { $gte: todayUTC },
-    });
-    if (!todayStatus) {
-      todayStatus = await UserStatus.create({
-        userId,
-        currentlyWorking: false,
-        onBreak: false,
-        workedSessions: [],
-        breakSessions: [],
-        timeline: [],
-        recentActivities: [],
-      });
-    }
+    // Atomic upsert to avoid duplicate key errors under concurrent requests
+    let todayStatus = await UserStatus.findOneAndUpdate(
+      { userId, today: { $gte: todayUTC, $lt: nextDayUTC } },
+      {
+        $setOnInsert: {
+          userId,
+          today: todayUTC,
+          currentlyWorking: false,
+          onBreak: false,
+          workedSessions: [],
+          breakSessions: [],
+          timeline: [],
+          recentActivities: [],
+        },
+      },
+      { upsert: true, new: true }
+    );
 
     const ws = todayStatus.workedSessions || [];
     const bs = todayStatus.breakSessions || [];
@@ -672,7 +682,16 @@ async function updateTodayStatus(req, res) {
     todayStatus.workedSessions = ws;
     todayStatus.breakSessions = bs;
 
-    await todayStatus.save();
+    try {
+      await todayStatus.save();
+    } catch (e) {
+      // In rare race conditions, if unique index throws, re-fetch the doc
+      if (e && e.code === 11000) {
+        todayStatus = await UserStatus.findOne({ userId, today: { $gte: todayUTC, $lt: nextDayUTC } });
+      } else {
+        throw e;
+      }
+    }
 
     const dailyWork = await syncDailyWork(
       userId,
@@ -763,10 +782,14 @@ async function getEmployeeTodayStatus(req, res) {
     const todayLocal = new Date();
     todayLocal.setHours(0, 0, 0, 0);
     const todayUTC = zonedTimeToUtc(todayLocal, userTimeZone);
+    const nextDayLocal = new Date(todayLocal);
+    nextDayLocal.setDate(nextDayLocal.getDate() + 1);
+    nextDayLocal.setHours(0, 0, 0, 0);
+    const nextDayUTC = zonedTimeToUtc(nextDayLocal, userTimeZone);
 
     let todayStatus = await UserStatus.findOne({
       userId: employeeId,
-      today: { $gte: todayUTC },
+      today: { $gte: todayUTC, $lt: nextDayUTC },
     });
 
     if (!todayStatus) {
@@ -850,624 +873,4 @@ module.exports = {
   getLastPunchOutTime,
   secToHMS,
   secToHM,
-};
-
-
-
-// -----------------------
-
-// Update Today's Status with enhanced timeline tracking
-
-// -----------------------
-
-async function updateTodayStatus(req, res) {
-
-  try {
-
-    const userId = req.user._id;
-
-    const { timelineEvent } = req.body;
-
-    const user = await User.findById(userId).lean();
-
-    const userTimeZone = user?.timeZone || "UTC";
-
-
-
-    const todayLocal = new Date();
-
-    todayLocal.setHours(0, 0, 0, 0);
-
-    const todayUTC = zonedTimeToUtc(todayLocal, userTimeZone);
-
-
-
-    let todayStatus = await UserStatus.findOne({
-
-      userId,
-
-      today: { $gte: todayUTC },
-
-    });
-
-    if (!todayStatus) {
-
-      todayStatus = await UserStatus.create({
-
-        userId,
-
-        currentlyWorking: false,
-
-        onBreak: false,
-
-        workedSessions: [],
-
-        breakSessions: [],
-
-        timeline: [],
-
-        recentActivities: [],
-
-      });
-
-    }
-
-
-
-    const ws = todayStatus.workedSessions || [];
-
-    const bs = todayStatus.breakSessions || [];
-
-
-
-    if (timelineEvent && timelineEvent.type) {
-
-      const now = new Date();
-
-      const rawType = String(timelineEvent.type || "").trim();
-
-      const lower = rawType.toLowerCase();
-
-      const breakTypeMatch = rawType.match(/\(([^)]+)\)/);
-
-      const breakType = breakTypeMatch ? breakTypeMatch[1].trim() : undefined;
-
-
-
-      if (lower.includes("punch in")) {
-
-        // --- Early punch check ---
-
-        const effectiveShift = await getEffectiveShift(userId, todayUTC);
-
-        
-
-        // Handle case where no shift is assigned
-
-        if (!effectiveShift) {
-
-          return res.status(400).json({ 
-
-            message: "No shift assigned to this employee. Please assign a shift first." 
-
-          });
-
-        }
-
-        if (effectiveShift.start) {
-
-          const [h, m] = effectiveShift.start.split(":").map(Number);
-
-          const shiftStartLocal = new Date(utcToZonedTime(now, userTimeZone));
-
-          shiftStartLocal.setHours(h, m, 0, 0);
-
-          const earliestAllowed = new Date(shiftStartLocal);
-
-          earliestAllowed.setMinutes(earliestAllowed.getMinutes() - EARLY_PUNCH_MINUTES);
-
-
-
-          if (now < earliestAllowed) {
-
-            return res.status(400).json({
-
-              message: `Cannot punch in earlier than ${EARLY_PUNCH_MINUTES} minutes before shift start`
-
-            });
-
-          }
-
-        }
-
-
-
-        if (!todayStatus.arrivalTime) todayStatus.arrivalTime = now;
-
-        if (!ws.length || ws[ws.length - 1].end) ws.push({ start: now });
-
-        todayStatus.currentlyWorking = true;
-
-        todayStatus.onBreak = false;
-
-        todayStatus.breakStartTime = null;
-
-        await User.findByIdAndUpdate(userId, { status: "active" }).catch(() => {});
-
-      } else if (lower.includes("punch out")) {
-
-        if (ws.length && !ws[ws.length - 1].end) ws[ws.length - 1].end = now;
-
-        else if (!ws.length) ws.push({ start: now, end: now });
-
-        if (bs.length && !bs[bs.length - 1].end) bs[bs.length - 1].end = now;
-
-        todayStatus.currentlyWorking = false;
-
-        todayStatus.onBreak = false;
-
-        todayStatus.breakStartTime = null;
-
-        await User.findByIdAndUpdate(userId, { status: "inactive" }).catch(() => {});
-
-      } else if (lower.includes("break start")) {
-
-        if (!bs.length || bs[bs.length - 1].end) {
-
-          const newBreak = { start: now };
-
-          if (breakType) newBreak.type = breakType;
-
-          bs.push(newBreak);
-
-        }
-
-        if (ws.length && !ws[ws.length - 1].end) ws[ws.length - 1].end = now;
-
-        todayStatus.currentlyWorking = false;
-
-        todayStatus.onBreak = true;
-
-        todayStatus.breakStartTime = now;
-
-      } else if (lower.includes("resume")) {
-
-        if (bs.length && !bs[bs.length - 1].end) bs[bs.length - 1].end = now;
-
-        if (!ws.length || ws[ws.length - 1].end) ws.push({ start: now });
-
-        todayStatus.currentlyWorking = true;
-
-        todayStatus.onBreak = false;
-
-        todayStatus.breakStartTime = null;
-
-      }
-
-
-
-      // Enhanced timeline tracking with proper event structure
-
-      todayStatus.timeline = todayStatus.timeline || [];
-
-      todayStatus.timeline.push({ 
-
-        type: rawType, 
-
-        time: now
-
-      });
-
-
-
-      todayStatus.recentActivities = todayStatus.recentActivities || [];
-
-      todayStatus.recentActivities.unshift({
-
-        date: now, // Use Date object instead of string
-
-        activity: rawType,
-
-        time: now.toLocaleTimeString([], {
-
-          hour: "2-digit",
-
-          minute: "2-digit",
-
-          hour12: true,
-
-        }),
-
-      });
-
-      if (todayStatus.recentActivities.length > 10)
-
-        todayStatus.recentActivities.length = 10;
-
-    }
-
-
-
-    todayStatus.workDurationSeconds = getWorkDurationSeconds(
-
-      ws,
-
-      todayStatus.currentlyWorking
-
-    );
-
-    todayStatus.breakDurationSeconds = getBreakDurationSeconds(
-
-      bs,
-
-      todayStatus.onBreak,
-
-      todayStatus.breakStartTime
-
-    );
-
-    todayStatus.totalWorkMs = todayStatus.workDurationSeconds * 1000;
-
-    todayStatus.workedSessions = ws;
-
-    todayStatus.breakSessions = bs;
-
-
-
-    await todayStatus.save();
-
-
-
-    const dailyWork = await syncDailyWork(
-
-      userId,
-
-      todayStatus,
-
-      userTimeZone
-
-    ).catch((e) => {
-
-      console.error("syncDailyWork error:", e);
-
-      return null;
-
-    });
-
-
-
-    const effectiveShift = await getEffectiveShift(userId, todayUTC);
-
-
-
-    // Enhanced arrival time logic
-
-    let arrivalTime = todayStatus.arrivalTime;
-
-    if (!arrivalTime && todayStatus.timeline) {
-
-      const timelineArrival = getFirstPunchInTime(todayStatus.timeline);
-
-      if (timelineArrival) {
-
-        arrivalTime = timelineArrival;
-
-      }
-
-    }
-
-
-
-    const payload = {
-
-      ...todayStatus.toObject(),
-
-      effectiveShift: effectiveShift || { message: "No shift assigned" },
-
-      shiftType: dailyWork ? dailyWork.shiftType : todayStatus.shiftType || "standard",
-
-      workDurationSeconds: todayStatus.workDurationSeconds,
-
-      breakDurationSeconds: todayStatus.breakDurationSeconds,
-
-      workDuration: secToHMS(todayStatus.workDurationSeconds),
-
-      breakDuration: secToHMS(todayStatus.breakDurationSeconds),
-
-      arrivalTimeFormatted: todayStatus.arrivalTime
-
-        ? utcToZonedTime(todayStatus.arrivalTime, userTimeZone).toLocaleTimeString(
-
-            [],
-
-            {
-
-              hour: "2-digit",
-
-              minute: "2-digit",
-
-              hour12: true,
-
-            }
-
-          )
-
-        : null,
-
-      isLate: dailyWork?.isLate || false,
-
-      isHalfDay: dailyWork?.isHalfDay || false,
-
-      isAbsent: dailyWork?.isAbsent || false,
-
-      dailyWork: dailyWork
-
-        ? {
-
-            id: dailyWork._id,
-
-            date: dailyWork.date,
-
-            workDurationSeconds: dailyWork.workDurationSeconds,
-
-            breakDurationSeconds: dailyWork.breakDurationSeconds,
-
-            breakSessions: dailyWork.breakSessions || [],
-
-            shift: dailyWork.shift || {},
-
-            shiftType: dailyWork.shiftType || "standard",
-
-            isLate: dailyWork.isLate,
-
-            isHalfDay: dailyWork.isHalfDay,
-
-            isAbsent: dailyWork.isAbsent,
-
-          }
-
-        : null,
-
-    };
-
-
-
-    return res.json(payload);
-
-  } catch (err) {
-
-    console.error("Error updating today's status:", err);
-
-    return res.status(500).json({ message: "Server error", error: err.message });
-
-  }
-
-}
-
-
-
-// Get today's status for a specific employee (admin/super-admin only)
-
-async function getEmployeeTodayStatus(req, res) {
-
-  try {
-
-    const { employeeId } = req.params;
-
-    
-
-    if (!employeeId) {
-
-      return res.status(400).json({ message: "Employee ID is required" });
-
-    }
-
-
-
-    // Check if the requesting user has admin privileges
-
-    const requestingUser = req.user;
-
-    if (!["admin", "super-admin", "hr"].includes(requestingUser.role)) {
-
-      return res.status(403).json({ message: "Access denied. Admin privileges required." });
-
-    }
-
-
-
-    const user = await User.findById(employeeId).lean();
-
-    if (!user) {
-
-      return res.status(404).json({ message: "Employee not found" });
-
-    }
-
-
-
-    const userTimeZone = user?.timeZone || "UTC";
-
-
-
-    const todayLocal = new Date();
-
-    todayLocal.setHours(0, 0, 0, 0);
-
-    const todayUTC = zonedTimeToUtc(todayLocal, userTimeZone);
-
-
-
-    let todayStatus = await UserStatus.findOne({
-
-      userId: employeeId,
-
-      today: { $gte: todayUTC },
-
-    });
-
-
-
-    if (!todayStatus) {
-
-      // Return default status if no status found
-
-      return res.json({
-
-        userId: employeeId,
-
-        currentlyWorking: false,
-
-        onBreak: false,
-
-        workedSessions: [],
-
-        breakSessions: [],
-
-        timeline: [],
-
-        recentActivities: [],
-
-        workDurationSeconds: 0,
-
-        breakDurationSeconds: 0,
-
-        workDuration: "0h 00m 00s",
-
-        breakDuration: "0h 00m 00s",
-
-        arrivalTime: null,
-
-        arrivalTimeFormatted: null,
-
-        isLate: false,
-
-        isHalfDay: false,
-
-        isAbsent: true,
-
-        effectiveShift: null
-
-      });
-
-    }
-
-
-
-    const effectiveShift = await getEffectiveShift(employeeId, todayUTC);
-
-    
-
-    const workSecs = getWorkDurationSeconds(
-
-      todayStatus.workedSessions,
-
-      todayStatus.currentlyWorking
-
-    );
-
-    const breakSecs = getBreakDurationSeconds(
-
-      todayStatus.breakSessions,
-
-      todayStatus.onBreak,
-
-      todayStatus.breakStartTime
-
-    );
-
-
-
-    const { isLate, isHalfDay, isAbsent } = calculateLateAndHalfDay(
-
-      workSecs,
-
-      effectiveShift?.start,
-
-      todayStatus.arrivalTime,
-
-      userTimeZone
-
-    );
-
-
-
-    const payload = {
-
-      ...todayStatus.toObject(),
-
-      effectiveShift,
-
-      workDurationSeconds: workSecs,
-
-      breakDurationSeconds: breakSecs,
-
-      workDuration: secToHMS(workSecs),
-
-      breakDuration: secToHMS(breakSecs),
-
-      isLate,
-
-      isHalfDay,
-
-      isAbsent,
-
-      arrivalTimeFormatted: todayStatus.arrivalTime
-
-        ? utcToZonedTime(todayStatus.arrivalTime, userTimeZone).toLocaleTimeString(
-
-            [],
-
-            {
-
-              hour: "2-digit",
-
-              minute: "2-digit",
-
-              hour12: true,
-
-            }
-
-          )
-
-        : null,
-
-    };
-
-
-
-    res.json(payload);
-
-  } catch (err) {
-
-    console.error("Error fetching employee's today status:", err);
-
-    res.status(500).json({ message: "Server error", error: err.message });
-
-  }
-
-}
-
-
-
-module.exports = {
-
-  getTodayStatus,
-
-  getEmployeeTodayStatus,
-
-  updateTodayStatus,
-
-  syncDailyWork,
-
-  getEffectiveShift,
-
-  getFirstPunchInTime,
-
-  getLastPunchOutTime,
-
-  secToHMS,
-
-  secToHM,
-
 };
