@@ -1,6 +1,8 @@
 import React, { useState } from "react";
 import tapveraLogo from "../assets/tapvera.png"; // Adjust path if needed
 
+const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
+
 export default function ForgetPassword() {
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
@@ -19,7 +21,7 @@ export default function ForgetPassword() {
 
     try {
       setLoading(true);
-      const res = await fetch("/api/auth/forgot-password", {
+      const res = await fetch(`${API_BASE}/api/password/forgot-password`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email }),
@@ -29,7 +31,9 @@ export default function ForgetPassword() {
       if (!res.ok) {
         setError(data.message || "Something went wrong");
       } else {
-        setMessage("Password reset link sent to your email if it exists in our system.");
+        setMessage(
+          "Password reset link sent to your email if it exists in our system."
+        );
         setEmail("");
       }
     } catch (err) {

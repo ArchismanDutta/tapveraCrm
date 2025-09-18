@@ -15,6 +15,14 @@ const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
 const SIDEBAR_WIDTH_EXPANDED = 288;
 const SIDEBAR_WIDTH_COLLAPSED = 80;
 
+// Event types constants for consistency
+const EVENT_TYPES = {
+  PUNCH_IN: "Punch In",
+  PUNCH_OUT: "Punch Out",
+  BREAK_START: "Break Start",
+  RESUME_WORK: "Resume Work",
+};
+
 const formatHMS = (seconds = 0) => {
   const h = Math.floor(seconds / 3600);
   const m = Math.floor((seconds % 3600) / 60);
@@ -30,10 +38,19 @@ const safeParseDate = (v) => {
   return isNaN(d.getTime()) ? null : d;
 };
 
-const normalizeEventType = (t) =>
-  String(t || "")
+const normalizeEventType = (type) => {
+  const normalized = String(type || "")
     .toLowerCase()
-    .replace(/[\s_-]+/g, "");
+    .trim();
+  if (normalized.includes("punch") && normalized.includes("in"))
+    return "punch_in";
+  if (normalized.includes("punch") && normalized.includes("out"))
+    return "punch_out";
+  if (normalized.includes("break") && normalized.includes("start"))
+    return "break_start";
+  if (normalized.includes("resume")) return "resume_work";
+  return normalized.replace(/[\s_-]+/g, "");
+};
 
 const statusColors = {
   approved: "bg-green-500 text-white",
@@ -59,23 +76,41 @@ const TodayStatusPage = ({ onLogout }) => {
   const [requestReason, setRequestReason] = useState("");
   const [isSubmittingRequest, setIsSubmittingRequest] = useState(false);
   const [flexibleRequests, setFlexibleRequests] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [requestInProgress, setRequestInProgress] = useState(false);
 
   const token = localStorage.getItem("token");
-  const axiosConfig = { headers: { Authorization: `Bearer ${token}` } };
 
-  // Fetch today's status
+  // Helper function to create axios config
+  const getAxiosConfig = () => ({
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  // Fetch today's status with enhanced error handling
   const fetchStatus = useCallback(async () => {
     try {
-      const res = await axios.get(`${API_BASE}/api/status/today`, axiosConfig);
+      const res = await axios.get(
+        `${API_BASE}/api/status/today`,
+        getAxiosConfig()
+      );
+      console.log("Fetched status:", res.data);
       setStatus(res.data);
     } catch (err) {
       console.error(
         "Failed to fetch today's status:",
         err.response?.data || err
       );
-      toast.error("Failed to load today's status.");
+      if (err.response?.status === 401) {
+        // Handle authentication error
+        localStorage.removeItem("token");
+        if (onLogout) onLogout();
+      } else if (err.response?.status !== 500) {
+        toast.error(
+          err.response?.data?.message || "Failed to load today's status."
+        );
+      }
     }
-  }, [token]);
+  }, [token, onLogout]);
 
   // Fetch weekly summary and daily data
   const fetchWeeklySummary = useCallback(async () => {
@@ -91,7 +126,7 @@ const TodayStatusPage = ({ onLogout }) => {
       sunday.setHours(23, 59, 59, 999);
 
       const res = await axios.get(`${API_BASE}/api/summary/week`, {
-        ...axiosConfig,
+        ...getAxiosConfig(),
         params: {
           startDate: monday.toISOString(),
           endDate: sunday.toISOString(),
@@ -113,7 +148,7 @@ const TodayStatusPage = ({ onLogout }) => {
     try {
       const res = await axios.get(
         `${API_BASE}/api/flexible-shifts/my-requests`,
-        axiosConfig
+        getAxiosConfig()
       );
       setFlexibleRequests(res.data || []);
     } catch (err) {
@@ -124,111 +159,207 @@ const TodayStatusPage = ({ onLogout }) => {
     }
   }, [token]);
 
-  // Update status helper
+  // Enhanced update status with better error handling and race condition prevention
   const updateStatus = async (update) => {
     if (!status && update?.currentlyWorking !== true) return;
+
+    if (requestInProgress) {
+      toast.info("Please wait for the current operation to complete.");
+      return;
+    }
+
+    setRequestInProgress(true);
+    setIsLoading(true);
+
     try {
       const payload = {
         currentlyWorking: status?.currentlyWorking || false,
         onBreak: status?.onBreak || false,
         ...update,
       };
+
+      // Validate and format timelineEvent.time
       if (payload.timelineEvent?.time) {
-        payload.timelineEvent.time = new Date(payload.timelineEvent.time);
+        const timeValue = new Date(payload.timelineEvent.time);
+        if (isNaN(timeValue.getTime())) {
+          throw new Error("Invalid time value in timeline event");
+        }
+        payload.timelineEvent.time = timeValue.toISOString();
       }
+
+      // Validate and format breakStartTime
+      if (payload.breakStartTime) {
+        const breakStartValue = new Date(payload.breakStartTime);
+        if (isNaN(breakStartValue.getTime())) {
+          throw new Error("Invalid break start time value");
+        }
+        payload.breakStartTime = breakStartValue.toISOString();
+      }
+
+      console.log("Sending update payload:", payload);
+
       const res = await axios.put(
         `${API_BASE}/api/status/today`,
         payload,
-        axiosConfig
+        getAxiosConfig()
       );
+
+      console.log("Update response:", res.data);
       setStatus(res.data);
       setSelectedBreakType("");
-      fetchWeeklySummary();
+
+      // Refresh related data
+      await fetchWeeklySummary();
       window.dispatchEvent(new Event("attendanceDataUpdate"));
+
+      // Show success message for major actions
+      if (payload.timelineEvent?.type) {
+        const eventType = payload.timelineEvent.type.toLowerCase();
+        if (eventType.includes("punch in")) {
+          toast.success("Punched in successfully!");
+        } else if (eventType.includes("punch out")) {
+          toast.success("Punched out successfully!");
+        } else if (eventType.includes("break")) {
+          toast.success("Break started!");
+        } else if (eventType.includes("resume")) {
+          toast.success("Work resumed!");
+        }
+      }
     } catch (err) {
       const serverData = err.response?.data;
-      toast.error(
-        serverData?.message || serverData?.error || "Failed to update status."
-      );
+      const errorMessage =
+        serverData?.message || serverData?.error || "Failed to update status.";
+      toast.error(errorMessage);
       console.error("Failed to update status:", serverData || err);
+    } finally {
+      setIsLoading(false);
+      setRequestInProgress(false);
     }
   };
 
-  // Live timers update
+  // Live timers update with improved logic
   useEffect(() => {
     if (!status) return;
+
+    // Initialize with backend calculated values
     setLiveWork(status.workDurationSeconds || 0);
     setLiveBreak(status.breakDurationSeconds || 0);
 
     const timers = [];
-    if (status.currentlyWorking)
+
+    // Only start live timers if currently working or on break
+    if (status.currentlyWorking && !status.onBreak) {
       timers.push(setInterval(() => setLiveWork((prev) => prev + 1), 1000));
-    if (status.onBreak)
+    }
+    if (status.onBreak) {
       timers.push(setInterval(() => setLiveBreak((prev) => prev + 1), 1000));
+    }
 
     return () => timers.forEach(clearInterval);
-  }, [status]);
+  }, [
+    status?.currentlyWorking,
+    status?.onBreak,
+    status?.workDurationSeconds,
+    status?.breakDurationSeconds,
+  ]);
 
   // Initial and periodic data fetch
   useEffect(() => {
     fetchStatus();
     fetchWeeklySummary();
     fetchFlexibleRequests();
+
     const interval = setInterval(() => {
-      fetchStatus();
-      fetchWeeklySummary();
-      fetchFlexibleRequests();
+      if (!requestInProgress) {
+        fetchStatus();
+        fetchWeeklySummary();
+        fetchFlexibleRequests();
+      }
     }, 60000);
+
     return () => clearInterval(interval);
-  }, [fetchStatus, fetchWeeklySummary, fetchFlexibleRequests]);
+  }, [
+    fetchStatus,
+    fetchWeeklySummary,
+    fetchFlexibleRequests,
+    requestInProgress,
+  ]);
 
   // External update listener
   useEffect(() => {
     const handler = () => {
-      fetchStatus();
-      fetchWeeklySummary();
-      fetchFlexibleRequests();
+      if (!requestInProgress) {
+        fetchStatus();
+        fetchWeeklySummary();
+        fetchFlexibleRequests();
+      }
     };
     window.addEventListener("attendanceDataUpdate", handler);
     return () => window.removeEventListener("attendanceDataUpdate", handler);
-  }, [fetchStatus, fetchWeeklySummary, fetchFlexibleRequests]);
+  }, [
+    fetchStatus,
+    fetchWeeklySummary,
+    fetchFlexibleRequests,
+    requestInProgress,
+  ]);
 
-  // Punch related logic
-  const todayKey = new Date().toISOString().slice(0, 10);
-  const timelineToday = (status?.timeline || []).filter((e) =>
-    safeParseDate(e.time)?.toISOString().startsWith(todayKey)
-  );
+  // Enhanced punch logic with better validation
+  const today = new Date();
+  const todayKey = today.toISOString().slice(0, 10);
+  const timelineToday = (status?.timeline || []).filter((e) => {
+    const eventDate = safeParseDate(e.time);
+    return eventDate && eventDate.toISOString().startsWith(todayKey);
+  });
 
   const alreadyPunchedIn = timelineToday.some(
-    (e) => normalizeEventType(e.type) === "punchin"
+    (e) => normalizeEventType(e.type) === "punch_in"
   );
+
   const alreadyPunchedOut = timelineToday.some(
-    (e) => normalizeEventType(e.type) === "punchout"
+    (e) => normalizeEventType(e.type) === "punch_out"
   );
+
   const currentlyWorkingToday = !!status?.currentlyWorking;
 
   const handlePunchIn = () => {
-    if (currentlyWorkingToday || alreadyPunchedIn) {
-      toast.info("You are already punched in.");
+    if (requestInProgress) {
+      toast.info("Please wait for the current operation to complete.");
       return;
     }
+
+    if (alreadyPunchedOut) {
+      toast.error("You have already punched out today. Cannot punch in again.");
+      return;
+    }
+
+    if (currentlyWorkingToday || alreadyPunchedIn) {
+      toast.info("You are already punched in and working.");
+      return;
+    }
+
     updateStatus({
       currentlyWorking: true,
       onBreak: false,
       timelineEvent: {
-        type: "Punch In",
+        type: EVENT_TYPES.PUNCH_IN,
         time: new Date().toISOString(),
       },
     });
   };
 
   const handlePunchOutClick = async () => {
-    if (!currentlyWorkingToday && !status?.onBreak) {
-      toast.info("You are not currently working.");
+    if (requestInProgress) {
+      toast.info("Please wait for the current operation to complete.");
       return;
     }
+
     if (alreadyPunchedOut) {
-      toast.error("Already punched out today.");
+      toast.error("You have already punched out today.");
+      return;
+    }
+
+    if (!currentlyWorkingToday && !status?.onBreak) {
+      toast.info("You are not currently working or on break.");
       return;
     }
 
@@ -236,7 +367,7 @@ const TodayStatusPage = ({ onLogout }) => {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       const res = await axios.get(`${API_BASE}/api/todos`, {
-        ...axiosConfig,
+        ...getAxiosConfig(),
         params: { date: today.toISOString() },
       });
       const incompletes = (res.data || []).filter((t) => !t.completed);
@@ -248,57 +379,91 @@ const TodayStatusPage = ({ onLogout }) => {
       setShowPunchOutConfirm(true);
     } catch (err) {
       console.error("Error fetching todo tasks:", err);
-      toast.error("Error fetching todo tasks before punch out.");
+      // Continue with punch out even if todos can't be fetched
+      setShowPunchOutConfirm(true);
     }
   };
 
   const onCancelPunchOut = () => setShowPunchOutConfirm(false);
+
   const onConfirmPunchOut = () => {
     setShowPunchOutConfirm(false);
     updateStatus({
       currentlyWorking: false,
       onBreak: false,
       timelineEvent: {
-        type: "Punch Out",
+        type: EVENT_TYPES.PUNCH_OUT,
         time: new Date().toISOString(),
       },
     });
   };
 
-  // Break management
+  // Enhanced break management with validation
   const handleStartBreak = (breakType) => {
-    if (!breakType || !currentlyWorkingToday || status?.onBreak) {
-      toast.info("Cannot start break right now.");
+    if (requestInProgress) {
+      toast.info("Please wait for the current operation to complete.");
       return;
     }
+
+    if (!breakType) {
+      toast.error("Please select a break type first.");
+      return;
+    }
+
+    if (!currentlyWorkingToday) {
+      toast.error("You must be working to start a break.");
+      return;
+    }
+
+    if (status?.onBreak) {
+      toast.info("You are already on a break.");
+      return;
+    }
+
+    if (alreadyPunchedOut) {
+      toast.error("You have already punched out today. Cannot take a break.");
+      return;
+    }
+
     updateStatus({
       currentlyWorking: false,
       onBreak: true,
       breakStartTime: new Date().toISOString(),
       timelineEvent: {
-        type: `Break Start (${breakType})`,
+        type: `${EVENT_TYPES.BREAK_START} (${breakType})`,
         time: new Date().toISOString(),
       },
     });
   };
 
   const handleResumeWork = () => {
-    if (!status?.onBreak) {
-      toast.info("No active break to resume.");
+    if (requestInProgress) {
+      toast.info("Please wait for the current operation to complete.");
       return;
     }
+
+    if (!status?.onBreak) {
+      toast.info("You are not currently on a break.");
+      return;
+    }
+
+    if (alreadyPunchedOut) {
+      toast.error("You have already punched out today. Cannot resume work.");
+      return;
+    }
+
     updateStatus({
       currentlyWorking: true,
       onBreak: false,
       breakStartTime: null,
       timelineEvent: {
-        type: "Resume Work",
+        type: EVENT_TYPES.RESUME_WORK,
         time: new Date().toISOString(),
       },
     });
   };
 
-  // Flexible shift modal
+  // Flexible shift modal functions (unchanged but with better error handling)
   const openFlexibleModal = () => {
     setRequestDate(new Date().toISOString().split("T")[0]);
     setRequestStartTime("");
@@ -336,7 +501,7 @@ const TodayStatusPage = ({ onLogout }) => {
           durationHours: Number(requestDurationHours) || 9,
           reason: requestReason?.trim() || "",
         },
-        axiosConfig
+        getAxiosConfig()
       );
       toast.success("Flexible shift request submitted.");
 
@@ -426,8 +591,12 @@ const TodayStatusPage = ({ onLogout }) => {
       if (dKey !== todayStr) return d;
       return {
         ...d,
-        workDurationSeconds: typeof liveWork === 'number' ? liveWork : (d.workDurationSeconds || 0),
-        breakDurationSeconds: typeof liveBreak === 'number' ? liveBreak : (d.breakDurationSeconds || 0),
+        workDurationSeconds:
+          typeof liveWork === "number" ? liveWork : d.workDurationSeconds || 0,
+        breakDurationSeconds:
+          typeof liveBreak === "number"
+            ? liveBreak
+            : d.breakDurationSeconds || 0,
         arrivalTime: status.arrivalTime || d.arrivalTime,
       };
     });
@@ -436,14 +605,12 @@ const TodayStatusPage = ({ onLogout }) => {
   if (!status)
     return (
       <div className="min-h-screen bg-[#101525] flex items-center justify-center">
-
         <div className="text-white text-xl font-medium">Loading...</div>
       </div>
     );
 
   return (
     <div className="min-h-screen bg-[#101525]">
-
       <Sidebar
         collapsed={collapsed}
         setCollapsed={setCollapsed}
@@ -477,27 +644,32 @@ const TodayStatusPage = ({ onLogout }) => {
             <StatusCard
               workDuration={formatHMS(liveWork)}
               breakTime={formatHMS(liveBreak)}
-              arrivalTime={status.arrivalTime || "--"}
+              arrivalTime={
+                status.arrivalTimeFormatted || status.arrivalTime || "--"
+              }
               currentlyWorking={status.currentlyWorking}
               alreadyPunchedIn={alreadyPunchedIn}
               alreadyPunchedOut={alreadyPunchedOut}
               onPunchIn={handlePunchIn}
               onPunchOut={handlePunchOutClick}
               onRequestFlexible={openFlexibleModal}
+              isLoading={isLoading}
             />
-            
+
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <BreakManagement
-              breakDuration={formatHMS(liveBreak)}
-              onBreak={status.onBreak}
-              onStartBreak={handleStartBreak}
-              onResumeWork={handleResumeWork}
-              selectedBreakType={selectedBreakType}
-              onSelectBreakType={setSelectedBreakType}
-              currentlyWorking={status.currentlyWorking}
-            />
-            <Timeline timeline={status.timeline || []} />
-          </div>
+              <BreakManagement
+                breakDuration={formatHMS(liveBreak)}
+                onBreak={status.onBreak}
+                onStartBreak={handleStartBreak}
+                onResumeWork={handleResumeWork}
+                selectedBreakType={selectedBreakType}
+                onSelectBreakType={setSelectedBreakType}
+                currentlyWorking={status.currentlyWorking}
+                alreadyPunchedOut={alreadyPunchedOut}
+                isLoading={isLoading}
+              />
+              <Timeline timeline={status.timeline || []} />
+            </div>
           </div>
 
           {/* Right Column - Summary */}
@@ -527,7 +699,7 @@ const TodayStatusPage = ({ onLogout }) => {
                     axios.post(
                       `${API_BASE}/api/todos/${task._id}/move`,
                       { newDate: tomorrow.toISOString() },
-                      axiosConfig
+                      getAxiosConfig()
                     )
                   )
                 );
@@ -582,7 +754,7 @@ const TodayStatusPage = ({ onLogout }) => {
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-gray-300">
                     Start Time
-                </label>
+                  </label>
                   <input
                     type="time"
                     value={requestStartTime}
@@ -595,7 +767,7 @@ const TodayStatusPage = ({ onLogout }) => {
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-gray-300">
                     Duration (hours)
-                </label>
+                  </label>
                   <input
                     type="number"
                     value={requestDurationHours}
@@ -610,7 +782,7 @@ const TodayStatusPage = ({ onLogout }) => {
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-gray-300">
                     Reason
-                </label>
+                  </label>
                   <textarea
                     value={requestReason}
                     onChange={(e) => setRequestReason(e.target.value)}
@@ -651,9 +823,6 @@ const TodayStatusPage = ({ onLogout }) => {
                     <table className="w-full border-collapse">
                       <thead className="bg-slate-800">
                         <tr>
-                          <th className="p-4 text-left font-semibold text-gray-300 border-b border-slate-700">
-                            Date
-                          </th>
                           <th className="p-4 text-left font-semibold text-gray-300 border-b border-slate-700">
                             Start Time
                           </th>

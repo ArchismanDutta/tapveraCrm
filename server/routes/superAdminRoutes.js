@@ -1,24 +1,45 @@
 const express = require("express");
 const router = express.Router();
+const { protect } = require("../middlewares/authMiddleware");
 const User = require("../models/User");
 const UserStatus = require("../models/UserStatus");
 const DailyWork = require("../models/DailyWork");
 
+// Apply authentication middleware to all routes
+router.use(protect);
+
 // GET all employees, admins, and HRs with attendance for a specific date
 router.get("/employees-today", async (req, res) => {
   try {
+    // Check if user has permission to access this endpoint
+    const userRole = req.user.role;
+    if (!["super-admin", "hr", "admin"].includes(userRole)) {
+      return res
+        .status(403)
+        .json({
+          error:
+            "Access denied. Super admin, HR, or admin privileges required.",
+        });
+    }
+
     const { date } = req.query;
+    console.log("SuperAdmin API called with date:", date);
+    console.log("Requested by user:", req.user.name, "with role:", userRole);
 
     // Parse date or use today
     const targetDate = date ? new Date(date) : new Date();
     targetDate.setHours(0, 0, 0, 0);
+    console.log("Target date:", targetDate);
 
     const startOfDay = new Date(targetDate);
     const endOfDay = new Date(targetDate);
     endOfDay.setHours(23, 59, 59, 999);
 
     // Fetch users with role employee, admin, or hr
-    const users = await User.find({ role: { $in: ["employee", "admin", "hr"] } }).lean();
+    const users = await User.find({
+      role: { $in: ["employee", "admin", "hr"] },
+    }).lean();
+    console.log(`Found ${users.length} users with roles: employee, admin, hr`);
 
     const data = await Promise.all(
       users.map(async (user) => {
@@ -50,7 +71,8 @@ router.get("/employees-today", async (req, res) => {
           breakMinutes = Math.round(breakSeconds / 60);
         } else if (Array.isArray(dailyWork?.breakSessions)) {
           const totalBreakMs = dailyWork.breakSessions.reduce((sum, s) => {
-            if (s.start && s.end) return sum + (new Date(s.end) - new Date(s.start));
+            if (s.start && s.end)
+              return sum + (new Date(s.end) - new Date(s.start));
             return sum;
           }, 0);
           breakMinutes = Math.round(totalBreakMs / 60000);
@@ -61,25 +83,40 @@ router.get("/employees-today", async (req, res) => {
         let punchOutTime = null;
         if (status?.timeline?.length > 0) {
           const firstPunchIn = status.timeline
-            .filter((e) => typeof e.type === 'string' && e.type.toLowerCase().includes('punch in') && e.time)
+            .filter(
+              (e) =>
+                typeof e.type === "string" &&
+                e.type.toLowerCase().includes("punch in") &&
+                e.time
+            )
             .sort((a, b) => new Date(a.time) - new Date(b.time))[0];
           if (firstPunchIn) punchInTime = firstPunchIn.time;
 
           const lastPunchOut = [...status.timeline]
             .reverse()
-            .find((e) => typeof e.type === 'string' && e.type.toLowerCase().includes('punch out') && e.time);
+            .find(
+              (e) =>
+                typeof e.type === "string" &&
+                e.type.toLowerCase().includes("punch out") &&
+                e.time
+            );
           if (lastPunchOut) punchOutTime = lastPunchOut.time;
         }
 
         // Fallbacks
-        if (!punchInTime) punchInTime = status?.arrivalTime || dailyWork?.arrivalTime || null;
+        if (!punchInTime)
+          punchInTime = status?.arrivalTime || dailyWork?.arrivalTime || null;
 
         // Break type from latest break start event
         let breakType = null;
         if (status?.timeline?.length > 0) {
           const breakEntry = [...status.timeline]
             .reverse()
-            .find((e) => typeof e.type === 'string' && e.type.toLowerCase().includes("break start"));
+            .find(
+              (e) =>
+                typeof e.type === "string" &&
+                e.type.toLowerCase().includes("break start")
+            );
           if (breakEntry) breakType = breakEntry.type;
         }
 
@@ -110,6 +147,7 @@ router.get("/employees-today", async (req, res) => {
       return 0;
     });
 
+    console.log(`Returning data for ${data.length} employees`);
     res.json(data);
   } catch (err) {
     console.error(err);
