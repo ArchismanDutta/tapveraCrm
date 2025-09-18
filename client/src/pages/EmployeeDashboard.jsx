@@ -9,6 +9,7 @@ import Sidebar from "../components/dashboard/Sidebar";
 import NotificationBell from "../components/dashboard/NotificationBell";
 import WishPopup from "../components/dashboard/WishPopup";
 import NoticeOverlay from "../components/dashboard/NoticeOverlay";
+import DynamicNotificationOverlay from "../components/notifications/DynamicNotificationOverlay";
 import notificationManager from "../utils/browserNotifications";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
@@ -348,6 +349,9 @@ const EmployeeDashboard = ({ onLogout }) => {
 
       {/* Notice Overlay */}
       <NoticeOverlay />
+
+      {/* Dynamic Notification Overlay */}
+      <DynamicNotificationOverlay />
     </div>
   );
 };
