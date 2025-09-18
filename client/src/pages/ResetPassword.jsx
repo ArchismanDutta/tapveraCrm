@@ -2,6 +2,8 @@ import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import tapveraLogo from "../assets/tapvera.png";
 
+const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
+
 export default function ResetPassword() {
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -21,11 +23,14 @@ export default function ResetPassword() {
 
     try {
       setLoading(true);
-      const res = await fetch(`/api/auth/reset-password/${userId}/${token}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password }),
-      });
+      const res = await fetch(
+        `${API_BASE}/api/password/reset-password/${userId}/${token}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ password }),
+        }
+      );
 
       const data = await res.json();
       if (!res.ok) {
@@ -54,7 +59,9 @@ export default function ResetPassword() {
 
         {/* Card */}
         <div className="bg-gradient-to-b from-yellow-300 to-orange-400 shadow-lg rounded-lg p-6 w-full max-w-md">
-          <h2 className="text-2xl font-bold mb-4 text-center">Reset Password</h2>
+          <h2 className="text-2xl font-bold mb-4 text-center">
+            Reset Password
+          </h2>
 
           {error && <p className="text-red-600 text-sm mb-4">{error}</p>}
 
