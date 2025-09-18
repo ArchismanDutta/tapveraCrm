@@ -8,6 +8,7 @@ import TodayTasks from "../components/dashboard/TodayTasks";
 import Sidebar from "../components/dashboard/Sidebar";
 import NotificationBell from "../components/dashboard/NotificationBell";
 import WishPopup from "../components/dashboard/WishPopup";
+import NoticeOverlay from "../components/dashboard/NoticeOverlay";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
 const TASK_POLL_INTERVAL_MS = 10000;
@@ -288,6 +289,9 @@ const EmployeeDashboard = ({ onLogout }) => {
         wishes={wishes}
         onClose={handleCloseWishPopup}
       />
+
+      {/* Notice Overlay */}
+      <NoticeOverlay />
     </div>
   );
 };
