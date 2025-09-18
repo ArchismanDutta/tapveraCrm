@@ -3,6 +3,51 @@
 class BrowserNotificationManager {
   constructor() {
     this.permission = Notification.permission;
+    this.audioContext = null;
+    this.notificationSound = null;
+    this.initializeAudio();
+  }
+
+  // Initialize audio context for notification sounds
+  async initializeAudio() {
+    try {
+      // Create a simple notification sound using Web Audio API
+      this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    } catch (error) {
+      console.warn("Audio context not supported:", error);
+    }
+  }
+
+  // Play notification sound
+  playNotificationSound() {
+    if (!this.audioContext) return;
+
+    try {
+      const oscillator = this.audioContext.createOscillator();
+      const gainNode = this.audioContext.createGain();
+
+      oscillator.connect(gainNode);
+      gainNode.connect(this.audioContext.destination);
+
+      // Create a pleasant notification sound (two-tone chime)
+      oscillator.frequency.setValueAtTime(800, this.audioContext.currentTime);
+      oscillator.frequency.setValueAtTime(600, this.audioContext.currentTime + 0.1);
+
+      gainNode.gain.setValueAtTime(0.3, this.audioContext.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + 0.3);
+
+      oscillator.start(this.audioContext.currentTime);
+      oscillator.stop(this.audioContext.currentTime + 0.3);
+    } catch (error) {
+      console.warn("Could not play notification sound:", error);
+    }
+  }
+
+  // Vibrate device if supported
+  vibrateDevice(pattern = [200, 100, 200]) {
+    if ('vibrate' in navigator) {
+      navigator.vibrate(pattern);
+    }
   }
 
   // Request notification permission
@@ -44,21 +89,73 @@ class BrowserNotificationManager {
       tag: "tapvera-task", // Prevents duplicate notifications
       requireInteraction: false,
       silent: false,
+      dir: "auto",
+      lang: "en",
+      renotify: true,
       ...options
     };
 
     try {
       const notification = new Notification(title, defaultOptions);
 
-      // Auto-close after 5 seconds if not interacted with
+      // Play sound and vibrate for enhanced system integration
+      if (!defaultOptions.silent) {
+        this.playNotificationSound();
+        this.vibrateDevice();
+      }
+
+      // Add click handler to focus the browser window
+      notification.addEventListener('click', () => {
+        window.focus();
+        notification.close();
+
+        // Try to bring browser window to front
+        if (window.parent) {
+          window.parent.focus();
+        }
+      });
+
+      // Show system toast notification (if available)
+      this.showSystemToast(title, defaultOptions.body);
+
+      // Auto-close after 8 seconds (longer for better visibility)
       setTimeout(() => {
         notification.close();
-      }, 5000);
+      }, 8000);
 
       return notification;
     } catch (error) {
       console.error("Error showing notification:", error);
       return null;
+    }
+  }
+
+  // Show system-level toast notification (experimental)
+  showSystemToast(title, message) {
+    try {
+      // For Windows systems with Chrome, attempt to use the native notification API
+      if ('serviceWorker' in navigator && 'showNotification' in ServiceWorkerRegistration.prototype) {
+        navigator.serviceWorker.ready.then(registration => {
+          registration.showNotification(title, {
+            body: message,
+            icon: '/favicon.ico',
+            badge: '/favicon.ico',
+            vibrate: [200, 100, 200],
+            requireInteraction: false,
+            actions: [
+              {
+                action: 'view',
+                title: 'View Task',
+                icon: '/favicon.ico'
+              }
+            ]
+          });
+        }).catch(error => {
+          console.warn("Service Worker notification failed:", error);
+        });
+      }
+    } catch (error) {
+      console.warn("System toast notification not supported:", error);
     }
   }
 
@@ -71,6 +168,20 @@ class BrowserNotificationManager {
       tag: `task-${task.id}`,
       data: { taskId: task.id, type: "task_assigned" }
     };
+
+    // Also trigger dynamic in-app notification
+    this.showDynamicNotification({
+      type: 'task',
+      title: title,
+      message: `${task.label}\nPriority: ${task.level}\nDue: ${task.dueDateTime || "No due date"}`,
+      duration: 8000,
+      action: {
+        label: 'View Tasks',
+        handler: () => {
+          window.location.href = '/tasks';
+        }
+      }
+    });
 
     return this.showNotification(title, options);
   }
@@ -97,7 +208,26 @@ class BrowserNotificationManager {
       ...options
     };
 
+    // Also show dynamic notification
+    this.showDynamicNotification({
+      type: 'info',
+      title: title,
+      message: message,
+      duration: 5000
+    });
+
     return this.showNotification(title, notificationOptions);
+  }
+
+  // Show dynamic in-app notification
+  showDynamicNotification(notification) {
+    try {
+      window.dispatchEvent(new CustomEvent('show-dynamic-notification', {
+        detail: notification
+      }));
+    } catch (error) {
+      console.warn("Could not show dynamic notification:", error);
+    }
   }
 
   // Check if notifications are supported and enabled
