@@ -9,6 +9,8 @@ import Sidebar from "../components/dashboard/Sidebar";
 import NotificationBell from "../components/dashboard/NotificationBell";
 import WishPopup from "../components/dashboard/WishPopup";
 import NoticeOverlay from "../components/dashboard/NoticeOverlay";
+import DynamicNotificationOverlay from "../components/notifications/DynamicNotificationOverlay";
+import notificationManager from "../utils/browserNotifications";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
 const TASK_POLL_INTERVAL_MS = 10000;
@@ -30,6 +32,7 @@ const EmployeeDashboard = ({ onLogout }) => {
   const [showWishPopup, setShowWishPopup] = useState(false);
 
   const prevTaskIdsRef = useRef(new Set()); // Track previous task IDs for new notifications
+  const [browserNotificationsEnabled, setBrowserNotificationsEnabled] = useState(false);
   const navigate = useNavigate();
 
   // Format task data
@@ -96,12 +99,22 @@ const EmployeeDashboard = ({ onLogout }) => {
         id: t.id,
         message: `Task: ${t.label} (Due: ${t.dueDateTime || "No date"})`,
         isNew: !prevTaskIdsRef.current.has(t.id),
+        task: t, // Include full task data for browser notifications
       }))
       .filter((n) => !dismissedNotificationIds.includes(n.id));
 
+    // Show browser notifications for new tasks
+    if (browserNotificationsEnabled) {
+      newNotifications
+        .filter((n) => n.isNew)
+        .forEach((n) => {
+          notificationManager.showTaskAssigned(n.task);
+        });
+    }
+
     prevTaskIdsRef.current = currentTaskIds;
     setNotifications(newNotifications);
-  }, [tasks, dismissedNotificationIds]);
+  }, [tasks, dismissedNotificationIds, browserNotificationsEnabled]);
 
   // Fetch tasks
   const fetchTasks = useCallback(async () => {
@@ -159,6 +172,23 @@ const EmployeeDashboard = ({ onLogout }) => {
     return () => clearInterval(intervalId);
   }, [fetchUserAndWishes]);
 
+  // Initialize browser notifications
+  useEffect(() => {
+    const initBrowserNotifications = async () => {
+      if (notificationManager.isSupported()) {
+        const enabled = await notificationManager.requestPermission();
+        setBrowserNotificationsEnabled(enabled);
+        if (enabled) {
+          console.log("Browser notifications enabled");
+        } else {
+          console.log("Browser notifications disabled or not supported");
+        }
+      }
+    };
+
+    initBrowserNotifications();
+  }, []);
+
   // Update current time every second
   useEffect(() => {
     const interval = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -213,6 +243,20 @@ const EmployeeDashboard = ({ onLogout }) => {
     ]);
   };
 
+  // Toggle browser notifications
+  const handleToggleBrowserNotifications = async () => {
+    if (!browserNotificationsEnabled) {
+      const enabled = await notificationManager.requestPermission();
+      setBrowserNotificationsEnabled(enabled);
+      if (enabled) {
+        notificationManager.showGeneral("Notifications Enabled", "You will now receive browser notifications for new tasks!");
+      }
+    } else {
+      setBrowserNotificationsEnabled(false);
+      notificationManager.showGeneral("Notifications Disabled", "Browser notifications have been turned off");
+    }
+  };
+
   return (
     <div className="flex bg-gradient-to-br from-[#141a21] via-[#191f2b] to-[#101218] font-sans text-blue-100 min-h-screen">
       <Sidebar
@@ -255,6 +299,19 @@ const EmployeeDashboard = ({ onLogout }) => {
             </p>
           </div>
           <div className="flex items-center gap-4 relative">
+            {/* Browser Notification Toggle */}
+            <button
+              onClick={handleToggleBrowserNotifications}
+              className={`p-2 rounded-lg border transition-colors ${
+                browserNotificationsEnabled
+                  ? "bg-green-600 border-green-500 text-white"
+                  : "bg-gray-600 border-gray-500 text-gray-300 hover:bg-gray-500"
+              }`}
+              title={browserNotificationsEnabled ? "Browser notifications enabled" : "Enable browser notifications"}
+            >
+              🔔
+            </button>
+
             <NotificationBell
               notifications={notifications}
               onDismiss={handleDismissNotification}
@@ -292,6 +349,9 @@ const EmployeeDashboard = ({ onLogout }) => {
 
       {/* Notice Overlay */}
       <NoticeOverlay />
+
+      {/* Dynamic Notification Overlay */}
+      <DynamicNotificationOverlay />
     </div>
   );
 };
