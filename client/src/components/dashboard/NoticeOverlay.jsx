@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import API from "../utils/API";
+import API from "../../api";
 
 export default function NoticeOverlay() {
   const [notices, setNotices] = useState([]);
@@ -13,7 +13,7 @@ export default function NoticeOverlay() {
 
   const fetchNotices = async () => {
     try {
-      const res = await API.get("/api/notices/active"); // your endpoint
+      const res = await API.get("/api/notices"); // your endpoint
       setNotices(res.data || []);
     } catch (err) {
       console.error("Error fetching notices:", err);
