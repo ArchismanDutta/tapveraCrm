@@ -40,7 +40,6 @@ const Login = ({ onLoginSuccess }) => {
 
       console.log("Login response:", data);
 
-
       if (!res.ok) {
         setError(data.message || "Invalid email or password.");
         setLoading(false);

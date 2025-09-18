@@ -14,14 +14,26 @@ const SuperAdminDashboard = ({ onLogout }) => {
   );
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
+  const token = localStorage.getItem("token");
+  const axiosConfig = {
+    headers: { Authorization: `Bearer ${token}` },
+  };
+
   const fetchEmployees = async (date) => {
     try {
       setLoading(true);
       setError(null);
-      const res = await axios.get(`${API_BASE}/api/super-admin/employees-today`, {
-        params: { date },
-      });
+      console.log("Fetching employees for date:", date);
 
+      const res = await axios.get(
+        `${API_BASE}/api/super-admin/employees-today`,
+        {
+          ...axiosConfig,
+          params: { date },
+        }
+      );
+
+      console.log("Employees data received:", res.data);
       let empData = res.data || [];
       empData.sort((a, b) => {
         if (a.currentlyWorking && !b.currentlyWorking) return -1;
@@ -33,7 +45,7 @@ const SuperAdminDashboard = ({ onLogout }) => {
 
       setEmployees(empData);
     } catch (err) {
-      console.error(err);
+      console.error("Error fetching employees:", err);
       setError("Failed to fetch employees. Please try again.");
     } finally {
       setLoading(false);
@@ -43,6 +55,25 @@ const SuperAdminDashboard = ({ onLogout }) => {
   useEffect(() => {
     fetchEmployees(selectedDate);
   }, [selectedDate]);
+
+  // Auto-refresh every 30 seconds for today's data
+  useEffect(() => {
+    const isToday = selectedDate === new Date().toISOString().split("T")[0];
+    if (!isToday) return;
+
+    const interval = setInterval(() => {
+      console.log("Auto-refreshing employee data...");
+      fetchEmployees(selectedDate);
+    }, 30000); // Refresh every 30 seconds
+
+    return () => clearInterval(interval);
+  }, [selectedDate]);
+
+  // Manual refresh function
+  const handleRefresh = () => {
+    console.log("Manual refresh triggered");
+    fetchEmployees(selectedDate);
+  };
 
   return (
     <div className="min-h-screen bg-[#101525] text-gray-100 flex">
@@ -62,7 +93,9 @@ const SuperAdminDashboard = ({ onLogout }) => {
       >
         {/* Header Section */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-white mb-2">Employee Attendance</h1>
+          <h1 className="text-3xl font-bold text-white mb-2">
+            Employee Attendance
+          </h1>
           <p className="text-gray-400">
             Manage employee shifts and schedules efficiently
           </p>
@@ -71,9 +104,23 @@ const SuperAdminDashboard = ({ onLogout }) => {
         {/* Main Card */}
         <div className="bg-[#17203b] rounded-lg shadow-md mb-6 border border-gray-700 p-6">
           <div className="flex justify-between items-center mb-6">
-            <h2 className="text-xl font-semibold text-white">📊 Attendance Overview</h2>
+            <h2 className="text-xl font-semibold text-white">
+              📊 Attendance Overview
+            </h2>
             <div className="flex items-center space-x-3">
-              <label className="text-gray-400 text-sm font-medium" htmlFor="date">
+              <button
+                onClick={handleRefresh}
+                disabled={loading}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-md text-sm font-medium transition-colors duration-200 flex items-center space-x-2"
+                title="Refresh data"
+              >
+                <span>🔄</span>
+                <span>{loading ? "Refreshing..." : "Refresh"}</span>
+              </button>
+              <label
+                className="text-gray-400 text-sm font-medium"
+                htmlFor="date"
+              >
                 Select Date:
               </label>
               <input
@@ -184,7 +231,8 @@ const SuperAdminDashboard = ({ onLogout }) => {
             value={
               employees.length > 0
                 ? `${Math.round(
-                    (employees.filter((emp) => emp.arrivalTime).length / employees.length) *
+                    (employees.filter((emp) => emp.arrivalTime).length /
+                      employees.length) *
                       100
                   )}%`
                 : "0%"
