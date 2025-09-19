@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useMemo } from "react";
 import {
   Calendar,
   Clock,
@@ -6,24 +6,68 @@ import {
   CheckCircle,
   Activity,
   Timer,
+  Filter,
+  CalendarDays,
 } from "lucide-react";
 
-const AttendanceStats = ({ stats }) => {
-  if (!stats) {
+const AttendanceStats = ({ stats, onDateFilterChange }) => {
+  const [dateFilter, setDateFilter] = useState('month');
+  const [showFilters, setShowFilters] = useState(false);
+
+  // Handle date filter change
+  const handleFilterChange = (filter) => {
+    setDateFilter(filter);
+    if (onDateFilterChange) {
+      onDateFilterChange(filter);
+    }
+  };
+
+  // Calculate filtered stats based on date filter
+  const filteredStats = useMemo(() => {
+    if (!stats) return null;
+
+    // For now, return the stats as-is since the filtering is handled by parent
+    // In a real implementation, this would filter the data based on the selected period
+    return {
+      ...stats,
+      period: dateFilter === 'day' ? 'Today' :
+              dateFilter === 'week' ? 'This week' :
+              dateFilter === 'month' ? 'This month' : stats.period
+    };
+  }, [stats, dateFilter]);
+
+  if (!filteredStats) {
     return (
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 mb-6">
-        {Array(4)
-          .fill(0)
-          .map((_, i) => (
-            <div
-              key={i}
-              className="bg-[#1a1f2e] rounded-xl shadow px-6 py-4 border border-[#2a2f3e] animate-pulse"
+      <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 backdrop-blur-sm border border-slate-600/30 rounded-2xl p-6">
+        <div className="flex items-center justify-between mb-6">
+          <h3 className="text-xl font-semibold text-white flex items-center gap-3">
+            <TrendingUp className="w-6 h-6 text-cyan-400" />
+            Attendance Statistics
+          </h3>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowFilters(!showFilters)}
+              className="p-2 bg-slate-700/50 hover:bg-slate-600/50 rounded-lg transition-all duration-200"
+              title="Filter Options"
             >
-              <div className="w-8 h-6 bg-gray-700 rounded mb-2"></div>
-              <div className="w-16 h-3 bg-gray-700 rounded mb-1"></div>
-              <div className="w-12 h-2 bg-gray-800 rounded"></div>
-            </div>
-          ))}
+              <Filter className="w-4 h-4 text-gray-400" />
+            </button>
+          </div>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+          {Array(4)
+            .fill(0)
+            .map((_, i) => (
+              <div
+                key={i}
+                className="bg-slate-700/30 rounded-xl px-6 py-4 border border-slate-600/30 animate-pulse"
+              >
+                <div className="w-8 h-6 bg-slate-600 rounded mb-2"></div>
+                <div className="w-16 h-3 bg-slate-600 rounded mb-1"></div>
+                <div className="w-12 h-2 bg-slate-700 rounded"></div>
+              </div>
+            ))}
+        </div>
       </div>
     );
   }
@@ -50,41 +94,88 @@ const AttendanceStats = ({ stats }) => {
     return "text-purple-400";
   };
 
-  const avgHoursPerDay =
-    stats.presentDays > 0
-      ? (parseFloat(stats.workingHours) / stats.presentDays).toFixed(1)
+  const avgHoursPerDay = filteredStats && filteredStats.presentDays > 0
+      ? (parseFloat(filteredStats.workingHours) / filteredStats.presentDays).toFixed(1)
       : "0.0";
 
   return (
-    <>
+    <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 backdrop-blur-sm border border-slate-600/30 rounded-2xl p-6">
+      {/* Header with Filter Options */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+        <h3 className="text-xl font-semibold text-white flex items-center gap-3">
+          <TrendingUp className="w-6 h-6 text-cyan-400" />
+          Attendance Statistics
+        </h3>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowFilters(!showFilters)}
+            className={`p-2 rounded-lg transition-all duration-200 ${
+              showFilters
+                ? 'bg-cyan-600 text-white'
+                : 'bg-slate-700/50 hover:bg-slate-600/50 text-gray-400'
+            }`}
+            title="Filter Options"
+          >
+            <Filter className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+
+      {/* Date Filter Options */}
+      {showFilters && (
+        <div className="mb-6 p-4 bg-slate-700/30 rounded-xl border border-slate-600/30">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-sm text-gray-400 mr-2">Time Period:</span>
+            {[
+              { key: 'day', label: 'Today', icon: CalendarDays },
+              { key: 'week', label: 'This Week', icon: Calendar },
+              { key: 'month', label: 'This Month', icon: Calendar },
+            ].map(({ key, label, icon: Icon }) => (
+              <button
+                key={key}
+                onClick={() => handleFilterChange(key)}
+                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                  dateFilter === key
+                    ? 'bg-cyan-600 text-white shadow-lg'
+                    : 'bg-slate-600/50 text-gray-300 hover:bg-slate-500/50 hover:text-white'
+                }`}
+              >
+                <Icon className="w-4 h-4" />
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Main Stats Row */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 mb-6">
         {/* Attendance Rate */}
-        <div className="bg-[#1a1f2e] rounded-xl shadow px-6 py-4 border border-[#2a2f3e] hover:border-blue-500/30 transition-all duration-300 group">
+        <div className="bg-gradient-to-br from-blue-600/20 to-blue-800/20 backdrop-blur-sm border border-blue-500/20 rounded-xl px-6 py-4 hover:border-blue-400/40 transition-all duration-300 group">
           <div className="flex items-center justify-between mb-2">
             <TrendingUp className="w-5 h-5 text-blue-400 group-hover:scale-110 transition-transform duration-200" />
             <span
               className={`font-bold text-2xl ${getAttendanceRateColor(
-                stats.attendanceRate
+                filteredStats.attendanceRate
               )}`}
             >
-              {stats.attendanceRate}%
+              {filteredStats.attendanceRate}%
             </span>
           </div>
           <div className="space-y-1">
             <p className="text-sm text-gray-300 font-medium">Attendance Rate</p>
-            <p className="text-xs text-gray-500">{stats.period}</p>
+            <p className="text-xs text-blue-300">{filteredStats.period}</p>
             <div className="w-full bg-gray-700 rounded-full h-1.5">
               <div
                 className={`h-1.5 rounded-full transition-all duration-300 ${
-                  stats.attendanceRate >= 90
+                  filteredStats.attendanceRate >= 90
                     ? "bg-green-500"
-                    : stats.attendanceRate >= 75
+                    : filteredStats.attendanceRate >= 75
                     ? "bg-yellow-500"
                     : "bg-red-500"
                 }`}
                 style={{
-                  width: `${Math.min(stats.attendanceRate, 100)}%`,
+                  width: `${Math.min(filteredStats.attendanceRate, 100)}%`,
                 }}
               ></div>
             </div>
@@ -92,27 +183,27 @@ const AttendanceStats = ({ stats }) => {
         </div>
 
         {/* Present Days */}
-        <div className="bg-[#1a1f2e] rounded-xl shadow px-6 py-4 border border-[#2a2f3e] hover:border-green-500/30 transition-all duration-300 group">
+        <div className="bg-gradient-to-br from-green-600/20 to-green-800/20 backdrop-blur-sm border border-green-500/20 rounded-xl px-6 py-4 hover:border-green-400/40 transition-all duration-300 group">
           <div className="flex items-center justify-between mb-2">
             <CheckCircle className="w-5 h-5 text-green-400 group-hover:scale-110 transition-transform duration-200" />
             <span
               className={`font-bold text-2xl ${getPresentDaysColor(
-                stats.presentDays,
-                stats.totalDays
+                filteredStats.presentDays,
+                filteredStats.totalDays
               )}`}
             >
-              {stats.presentDays}/{stats.totalDays}
+              {filteredStats.presentDays}/{filteredStats.totalDays}
             </span>
           </div>
           <div className="space-y-1">
             <p className="text-sm text-gray-300 font-medium">Present Days</p>
-            <p className="text-xs text-gray-500">Expected working days</p>
-            {stats.totalDays > 0 && (
+            <p className="text-xs text-green-300">Expected working days</p>
+            {filteredStats.totalDays > 0 && (
               <div className="w-full bg-gray-700 rounded-full h-1.5">
                 <div
                   className="h-1.5 bg-green-500 rounded-full transition-all duration-300"
                   style={{
-                    width: `${(stats.presentDays / stats.totalDays) * 100}%`,
+                    width: `${(filteredStats.presentDays / filteredStats.totalDays) * 100}%`,
                   }}
                 ></div>
               </div>
@@ -121,92 +212,91 @@ const AttendanceStats = ({ stats }) => {
         </div>
 
         {/* Working Hours */}
-        <div className="bg-[#1a1f2e] rounded-xl shadow px-6 py-4 border border-[#2a2f3e] hover:border-purple-500/30 transition-all duration-300 group">
+        <div className="bg-gradient-to-br from-purple-600/20 to-purple-800/20 backdrop-blur-sm border border-purple-500/20 rounded-xl px-6 py-4 hover:border-purple-400/40 transition-all duration-300 group">
           <div className="flex items-center justify-between mb-2">
             <Clock className="w-5 h-5 text-purple-400 group-hover:scale-110 transition-transform duration-200" />
             <span
               className={`font-bold text-2xl ${getWorkingHoursColor(
-                stats.workingHours
+                filteredStats.workingHours
               )}`}
             >
-              {stats.workingHours}h
+              {filteredStats.workingHours}h
             </span>
           </div>
           <div className="space-y-1">
             <p className="text-sm text-gray-300 font-medium">Working Hours</p>
-            <p className="text-xs text-gray-500">{stats.period}</p>
+            <p className="text-xs text-purple-300">{filteredStats.period}</p>
             <p className="text-xs text-blue-400">
-              ~{stats.averageHoursPerDay || avgHoursPerDay}h average/day
+              ~{filteredStats.averageHoursPerDay || avgHoursPerDay}h average/day
             </p>
           </div>
         </div>
 
         {/* Full Days */}
-        <div className="bg-[#1a1f2e] rounded-xl shadow px-6 py-4 border border-[#2a2f3e] hover:border-emerald-500/30 transition-all duration-300 group">
+        <div className="bg-gradient-to-br from-emerald-600/20 to-emerald-800/20 backdrop-blur-sm border border-emerald-500/20 rounded-xl px-6 py-4 hover:border-emerald-400/40 transition-all duration-300 group">
           <div className="flex items-center justify-between mb-2">
             <Calendar className="w-5 h-5 text-emerald-400 group-hover:scale-110 transition-transform duration-200" />
             <span className="font-bold text-2xl text-emerald-400">
-              {Math.round(parseFloat(stats.workingHours) / 8)}
+              {Math.round(parseFloat(filteredStats.workingHours) / 8)}
             </span>
           </div>
           <div className="space-y-1">
             <p className="text-sm text-gray-300 font-medium">Full Days</p>
-            <p className="text-xs text-gray-500">8+ hours worked</p>
+            <p className="text-xs text-emerald-300">8+ hours worked</p>
           </div>
         </div>
       </div>
 
       {/* Optional Current Status Row */}
-      {stats.currentStatus && (
+      {filteredStats.currentStatus && (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 mb-6">
           {/* Current Status */}
-          <div className="bg-[#1a1f2e] rounded-xl shadow px-6 py-4 border border-[#2a2f3e] hover:border-cyan-500/30 transition-all duration-300 group">
+          <div className="bg-gradient-to-br from-cyan-600/20 to-cyan-800/20 backdrop-blur-sm border border-cyan-500/20 rounded-xl px-6 py-4 hover:border-cyan-400/40 transition-all duration-300 group">
             <div className="flex items-center justify-between mb-2">
               <Activity className="w-5 h-5 text-cyan-400 group-hover:scale-110 transition-transform duration-200" />
               <span
                 className={`font-bold text-2xl ${
-                  stats.currentStatus.isWorking
+                  filteredStats.currentStatus.isWorking
                     ? "text-green-400"
-                    : stats.currentStatus.onBreak
+                    : filteredStats.currentStatus.onBreak
                     ? "text-yellow-400"
                     : "text-gray-400"
                 }`}
               >
-                {stats.currentStatus.isWorking
+                {filteredStats.currentStatus.isWorking
                   ? "WORK"
-                  : stats.currentStatus.onBreak
+                  : filteredStats.currentStatus.onBreak
                   ? "BREAK"
                   : "OFF"}
               </span>
             </div>
             <div className="space-y-1">
               <p className="text-sm text-gray-300 font-medium">Current Status</p>
-              <p className="text-xs text-gray-500">Live status</p>
+              <p className="text-xs text-cyan-300">Live status</p>
             </div>
           </div>
 
           {/* Today's Hours */}
-          <div className="bg-[#1a1f2e] rounded-xl shadow px-6 py-4 border border-[#2a2f3e] hover:border-indigo-500/30 transition-all duration-300 group">
+          <div className="bg-gradient-to-br from-indigo-600/20 to-indigo-800/20 backdrop-blur-sm border border-indigo-500/20 rounded-xl px-6 py-4 hover:border-indigo-400/40 transition-all duration-300 group">
             <div className="flex items-center justify-between mb-2">
               <Timer className="w-5 h-5 text-indigo-400 group-hover:scale-110 transition-transform duration-200" />
               <span className="font-bold text-2xl text-indigo-400">
-                {stats.currentStatus.todayHours}h
+                {filteredStats.currentStatus.todayHours}h
               </span>
             </div>
             <div className="space-y-1">
               <p className="text-sm text-gray-300 font-medium">Today's Hours</p>
-              <p className="text-xs text-gray-500">
-                {stats.currentStatus.arrivalTime
-                  ? `In: ${stats.currentStatus.arrivalTime}`
+              <p className="text-xs text-indigo-300">
+                {filteredStats.currentStatus.arrivalTime
+                  ? `In: ${filteredStats.currentStatus.arrivalTime}`
                   : "Not clocked in"}
               </p>
             </div>
           </div>
         </div>
       )}
-    </>
+    </div>
   );
 };
 
 export default AttendanceStats;
-

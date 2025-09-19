@@ -4,11 +4,12 @@ const UserStatus = require("../models/UserStatus");
 const DailyWork = require("../models/DailyWork");
 const User = require("../models/User");
 const FlexibleShiftRequest = require("../models/FlexibleShiftRequest");
+const attendanceService = require("../services/attendanceCalculationService");
 
 // -----------------------
 // Constants
 // -----------------------
-const EARLY_PUNCH_MINUTES = 40; // allow punch-in up to 40 min before shift start
+const EARLY_PUNCH_MINUTES = 120; // allow punch-in up to 120 min before shift start
 const MIN_HALF_DAY_SECONDS = 5 * 3600; // 5 hours
 const MIN_FULL_DAY_SECONDS = 8 * 3600; // 8 hours
 
@@ -285,7 +286,7 @@ function getTodayTimeline(timeline = []) {
 }
 
 // -----------------------
-// Late/half-day/absent calculation
+// Late/half-day/absent calculation (DEPRECATED - Use attendanceService instead)
 // -----------------------
 function calculateLateAndHalfDay(
   workedSecs,
@@ -293,6 +294,9 @@ function calculateLateAndHalfDay(
   arrivalTimeUTC,
   userTimeZone = "UTC"
 ) {
+  // This function is deprecated. Use attendanceService.calculateAttendanceStatus instead
+  console.warn("calculateLateAndHalfDay is deprecated. Use attendanceService.calculateAttendanceStatus instead");
+
   const result = { isLate: false, isHalfDay: false, isAbsent: false };
 
   if (!arrivalTimeUTC) {
@@ -317,160 +321,12 @@ function calculateLateAndHalfDay(
 }
 
 // -----------------------
-// Get effective shift function
+// Get effective shift function (DEPRECATED - Use attendanceService instead)
 // -----------------------
 async function getEffectiveShift(userId, date) {
-  try {
-    const targetDate = new Date(date);
-    targetDate.setHours(0, 0, 0, 0);
-    const dateKey = ymdKey(targetDate);
-
-    const user = await User.findById(userId).lean();
-    if (!user) throw new Error("User not found");
-
-    // 1. Check for shift overrides first (highest priority)
-    if (
-      user.shiftOverrides &&
-      user.shiftOverrides.has &&
-      user.shiftOverrides.has(dateKey)
-    ) {
-      const override = user.shiftOverrides.get(dateKey);
-      return {
-        start: override.start,
-        end: override.end,
-        durationHours: override.durationHours,
-        isFlexible: override.type === "flexible",
-        isFlexiblePermanent: false,
-        source: "override",
-        type: override.type,
-        shiftName: override.name || "",
-      };
-    }
-    // Handle Map stored as plain object (common with MongoDB)
-    if (
-      user.shiftOverrides &&
-      typeof user.shiftOverrides === "object" &&
-      user.shiftOverrides[dateKey]
-    ) {
-      const override = user.shiftOverrides[dateKey];
-      return {
-        start: override.start || user.shift?.start || "09:00",
-        end: override.end || user.shift?.end || "18:00",
-        durationHours: override.durationHours || user.shift?.durationHours || 9,
-        isFlexible: override.type === "flexible",
-        isFlexiblePermanent: false,
-        source: "override",
-        type: override.type,
-        shiftName: override.name || "",
-      };
-    }
-
-    // 2. Check if user has flexible permanent shift
-    if (user.shiftType === "flexiblePermanent") {
-      return {
-        start: "00:00",
-        end: "23:59",
-        durationHours: 9,
-        isFlexible: true,
-        isFlexiblePermanent: true,
-        source: "flexiblePermanent",
-        type: "flexible",
-        shiftName: "Flexible Permanent",
-      };
-    }
-
-    // 3. Check for approved flexible shift requests for this date
-    const flexRequest = await FlexibleShiftRequest.findOne({
-      employee: userId,
-      requestedDate: targetDate,
-      status: "approved",
-    }).lean();
-
-    if (flexRequest) {
-      const duration = flexRequest.durationHours || 9;
-      const [startH, startM] = flexRequest.requestedStartTime
-        .split(":")
-        .map(Number);
-
-      // Calculate end time
-      let endH = startH + Math.floor(duration);
-      let endM = startM + Math.round((duration % 1) * 60);
-
-      if (endM >= 60) {
-        endH += Math.floor(endM / 60);
-        endM = endM % 60;
-      }
-
-      if (endH >= 24) {
-        endH = endH % 24;
-      }
-      const endTime = `${String(endH).padStart(2, "0")}:${String(endM).padStart(
-        2,
-        "0"
-      )}`;
-
-      return {
-        start: flexRequest.requestedStartTime,
-        end: endTime,
-        durationHours: duration,
-        isFlexible: true,
-        isFlexiblePermanent: false,
-        source: "flexibleRequest",
-        type: "flexible",
-        shiftName: "Flexible Request",
-      };
-    }
-
-    // 4. Default to user's standard shift if exists
-    if (user.shiftType === "standard") {
-      // Use the standardShiftType to get predefined shift
-      if (
-        user.standardShiftType &&
-        STANDARD_SHIFTS[user.standardShiftType.toUpperCase()]
-      ) {
-        const standardShift =
-          STANDARD_SHIFTS[user.standardShiftType.toUpperCase()];
-        return {
-          start: standardShift.start,
-          end: standardShift.end,
-          durationHours: standardShift.durationHours,
-          isFlexible: false,
-          isFlexiblePermanent: false,
-          source: "standard",
-          type: "standard",
-          shiftName: standardShift.name,
-        };
-      }
-      // Fallback to user.shift if standardShiftType is not set
-      if (user.shift) {
-        return {
-          start: user.shift.start,
-          end: user.shift.end,
-          durationHours: user.shift.durationHours,
-          isFlexible: false,
-          isFlexiblePermanent: false,
-          source: "standard_fallback",
-          type: "standard",
-          shiftName: user.shift.name || "Standard",
-        };
-      }
-    }
-
-    // 5. Ultimate fallback
-    return {
-      start: "09:00",
-      end: "18:00",
-      durationHours: 9,
-      isFlexible: false,
-      isFlexiblePermanent: false,
-      source: "default",
-      type: "standard",
-      shiftName: "Default",
-    };
-  } catch (error) {
-    console.error("Error in getEffectiveShift:", error);
-    return null;
-  }
+  // This function is deprecated. Use attendanceService.getEffectiveShift instead
+  console.warn("getEffectiveShift is deprecated. Use attendanceService.getEffectiveShift instead");
+  return await attendanceService.getEffectiveShift(userId, date);
 }
 
 // -----------------------
@@ -481,13 +337,21 @@ async function syncDailyWork(userId, todayStatus, userTimeZone = "UTC") {
   todayLocal.setHours(0, 0, 0, 0);
   const todayUTC = zonedTimeToUtc(todayLocal, userTimeZone);
 
-  const effectiveShift = await getEffectiveShift(userId, todayUTC);
+  // Use the new attendance service for comprehensive calculations
+  const attendanceData = await attendanceService.getAttendanceData(
+    userId,
+    todayUTC,
+    todayStatus.workedSessions || [],
+    todayStatus.breakSessions || [],
+    todayStatus.arrivalTime
+  );
 
-  // Handle case where no shift is assigned
-  if (!effectiveShift) {
-    console.warn(`No shift assigned for user ${userId} on ${todayUTC}`);
-    return;
+  if (attendanceData.error) {
+    console.warn(`Error getting attendance data for user ${userId} on ${todayUTC}:`, attendanceData.error);
+    return null;
   }
+
+  const { effectiveShift, attendanceStatus } = attendanceData;
 
   const shiftObj = {
     name: effectiveShift.shiftName || "",
@@ -509,9 +373,14 @@ async function syncDailyWork(userId, todayStatus, userTimeZone = "UTC") {
   }
 
   let dailyWork = await DailyWork.findOne({ userId, date: todayUTC });
-  const computedShiftType = effectiveShift.isFlexiblePermanent
-    ? "flexiblePermanent"
-    : "standard";
+
+  // Determine shift type based on effective shift
+  let computedShiftType = "standard";
+  if (effectiveShift.isFlexiblePermanent) {
+    computedShiftType = "flexiblePermanent";
+  } else if (effectiveShift.isFlexible || effectiveShift.isOneDayFlexibleOverride) {
+    computedShiftType = "flexible";
+  }
 
   if (!dailyWork) {
     dailyWork = new DailyWork({
@@ -519,13 +388,13 @@ async function syncDailyWork(userId, todayStatus, userTimeZone = "UTC") {
       userStatusId: todayStatus._id,
       date: todayUTC,
       expectedStartTime:
-        effectiveShift.isFlexiblePermanent || effectiveShift.isFlexible
+        effectiveShift.isFlexiblePermanent || effectiveShift.isFlexible || effectiveShift.isOneDayFlexibleOverride
           ? null
           : effectiveShift.start,
       shift: shiftObj,
       shiftType: computedShiftType,
-      workDurationSeconds: todayStatus.workDurationSeconds || 0,
-      breakDurationSeconds: todayStatus.breakDurationSeconds || 0,
+      workDurationSeconds: attendanceData.workDurationSeconds || 0,
+      breakDurationSeconds: attendanceData.breakDurationSeconds || 0,
       breakSessions: todayStatus.breakSessions || [],
       workedSessions: todayStatus.workedSessions || [],
       timeline: todayStatus.timeline || [],
@@ -536,29 +405,23 @@ async function syncDailyWork(userId, todayStatus, userTimeZone = "UTC") {
   } else {
     dailyWork.shift = shiftObj;
     dailyWork.expectedStartTime =
-      effectiveShift.isFlexiblePermanent || effectiveShift.isFlexible
+      effectiveShift.isFlexiblePermanent || effectiveShift.isFlexible || effectiveShift.isOneDayFlexibleOverride
         ? null
         : effectiveShift.start;
     dailyWork.shiftType = computedShiftType;
     dailyWork.userStatusId = todayStatus._id;
-    dailyWork.workDurationSeconds = todayStatus.workDurationSeconds || 0;
-    dailyWork.breakDurationSeconds = todayStatus.breakDurationSeconds || 0;
+    dailyWork.workDurationSeconds = attendanceData.workDurationSeconds || 0;
+    dailyWork.breakDurationSeconds = attendanceData.breakDurationSeconds || 0;
     dailyWork.breakSessions = todayStatus.breakSessions || [];
     dailyWork.workedSessions = todayStatus.workedSessions || [];
     dailyWork.timeline = todayStatus.timeline || [];
     dailyWork.arrivalTime = arrivalTime;
   }
 
-  const { isLate, isHalfDay, isAbsent } = calculateLateAndHalfDay(
-    todayStatus.workDurationSeconds || 0,
-    effectiveShift.start,
-    arrivalTime,
-    userTimeZone
-  );
-
-  dailyWork.isLate = isLate;
-  dailyWork.isHalfDay = isHalfDay;
-  dailyWork.isAbsent = isAbsent;
+  // Use the new attendance status calculations
+  dailyWork.isLate = attendanceStatus.isLate || false;
+  dailyWork.isHalfDay = attendanceStatus.isHalfDay || false;
+  dailyWork.isAbsent = attendanceStatus.isAbsent || false;
 
   await dailyWork.save();
   return dailyWork;
@@ -594,35 +457,63 @@ async function getTodayStatus(req, res) {
       { upsert: true, new: true }
     );
 
-    const effectiveShift = await getEffectiveShift(userId, todayUTC);
-
-    const workSecs = getWorkDurationSeconds(
-      todayStatus.workedSessions,
-      todayStatus.currentlyWorking
-    );
-    const breakSecs = getBreakDurationSeconds(
-      todayStatus.breakSessions,
-      todayStatus.onBreak,
-      todayStatus.breakStartTime
+    // Use the new attendance service for comprehensive calculations
+    const attendanceData = await attendanceService.getAttendanceData(
+      userId,
+      todayUTC,
+      todayStatus.workedSessions || [],
+      todayStatus.breakSessions || [],
+      todayStatus.arrivalTime
     );
 
-    const { isLate, isHalfDay, isAbsent } = calculateLateAndHalfDay(
-      workSecs,
-      effectiveShift?.start,
-      todayStatus.arrivalTime,
-      userTimeZone
-    );
+    let effectiveShift = null;
+    let attendanceStatus = { isAbsent: true, isHalfDay: false, isFullDay: false, isLate: false };
+    let workSecs = 0;
+    let breakSecs = 0;
+
+    if (attendanceData.error) {
+      console.warn(`Error getting attendance data: ${attendanceData.error}`);
+      // Fallback to legacy calculation
+      effectiveShift = await getEffectiveShift(userId, todayUTC);
+      workSecs = getWorkDurationSeconds(
+        todayStatus.workedSessions,
+        todayStatus.currentlyWorking
+      );
+      breakSecs = getBreakDurationSeconds(
+        todayStatus.breakSessions,
+        todayStatus.onBreak,
+        todayStatus.breakStartTime
+      );
+      const legacy = calculateLateAndHalfDay(
+        workSecs,
+        effectiveShift?.start,
+        todayStatus.arrivalTime,
+        userTimeZone
+      );
+      attendanceStatus = {
+        isAbsent: legacy.isAbsent,
+        isHalfDay: legacy.isHalfDay,
+        isFullDay: !legacy.isHalfDay && !legacy.isAbsent,
+        isLate: legacy.isLate
+      };
+    } else {
+      effectiveShift = attendanceData.effectiveShift;
+      attendanceStatus = attendanceData.attendanceStatus;
+      workSecs = attendanceData.workDurationSeconds;
+      breakSecs = attendanceData.breakDurationSeconds;
+    }
 
     const payload = {
       ...todayStatus.toObject(),
       effectiveShift,
       workDurationSeconds: workSecs,
       breakDurationSeconds: breakSecs,
-      workDuration: secToHMS(workSecs),
-      breakDuration: secToHMS(breakSecs),
-      isLate,
-      isHalfDay,
-      isAbsent,
+      workDuration: attendanceService.formatDuration(workSecs),
+      breakDuration: attendanceService.formatDuration(breakSecs),
+      isLate: attendanceStatus.isLate,
+      isHalfDay: attendanceStatus.isHalfDay,
+      isAbsent: attendanceStatus.isAbsent,
+      isFullDay: attendanceStatus.isFullDay,
       arrivalTimeFormatted: todayStatus.arrivalTime
         ? utcToZonedTime(
             todayStatus.arrivalTime,
@@ -735,27 +626,14 @@ async function updateTodayStatus(req, res) {
           });
         }
 
-        // Early punch check
-        const effectiveShift = await getEffectiveShift(userId, todayUTC);
-        if (
-          effectiveShift &&
-          effectiveShift.start &&
-          !effectiveShift.isFlexible &&
-          !effectiveShift.isFlexiblePermanent
-        ) {
-          const [h, m] = effectiveShift.start.split(":").map(Number);
-          const shiftStartLocal = new Date(utcToZonedTime(now, userTimeZone));
-          shiftStartLocal.setHours(h, m, 0, 0);
-          const earliestAllowed = new Date(shiftStartLocal);
-          earliestAllowed.setMinutes(
-            earliestAllowed.getMinutes() - EARLY_PUNCH_MINUTES
-          );
+        // Enhanced punch in validation using attendance service
+        const effectiveShift = await attendanceService.getEffectiveShift(userId, todayUTC);
+        const punchValidation = attendanceService.validatePunchInTime(now, effectiveShift, userTimeZone);
 
-          if (now < earliestAllowed) {
-            return res.status(400).json({
-              message: `Cannot punch in earlier than ${EARLY_PUNCH_MINUTES} minutes before shift start`,
-            });
-          }
+        if (!punchValidation.isValid) {
+          return res.status(400).json({
+            message: punchValidation.message,
+          });
         }
 
         if (!todayStatus.arrivalTime) todayStatus.arrivalTime = now;
@@ -951,7 +829,31 @@ async function updateTodayStatus(req, res) {
       return null;
     });
 
-    const effectiveShift = await getEffectiveShift(userId, todayUTC);
+    // Get updated attendance data after all operations
+    const finalAttendanceData = await attendanceService.getAttendanceData(
+      userId,
+      todayUTC,
+      todayStatus.workedSessions || [],
+      todayStatus.breakSessions || [],
+      todayStatus.arrivalTime
+    );
+
+    let effectiveShift = null;
+    let attendanceStatus = { isAbsent: true, isHalfDay: false, isFullDay: false, isLate: false };
+
+    if (finalAttendanceData.error) {
+      console.warn(`Error getting final attendance data: ${finalAttendanceData.error}`);
+      effectiveShift = await getEffectiveShift(userId, todayUTC);
+      attendanceStatus = {
+        isLate: dailyWork?.isLate || false,
+        isHalfDay: dailyWork?.isHalfDay || false,
+        isAbsent: dailyWork?.isAbsent || false,
+        isFullDay: !(dailyWork?.isHalfDay || dailyWork?.isAbsent) || false
+      };
+    } else {
+      effectiveShift = finalAttendanceData.effectiveShift;
+      attendanceStatus = finalAttendanceData.attendanceStatus;
+    }
 
     // Enhanced arrival time logic
     let arrivalTime = todayStatus.arrivalTime;
@@ -971,8 +873,8 @@ async function updateTodayStatus(req, res) {
         : todayStatus.shiftType || "standard",
       workDurationSeconds: todayStatus.workDurationSeconds,
       breakDurationSeconds: todayStatus.breakDurationSeconds,
-      workDuration: secToHMS(todayStatus.workDurationSeconds),
-      breakDuration: secToHMS(todayStatus.breakDurationSeconds),
+      workDuration: attendanceService.formatDuration(todayStatus.workDurationSeconds),
+      breakDuration: attendanceService.formatDuration(todayStatus.breakDurationSeconds),
       arrivalTimeFormatted: todayStatus.arrivalTime
         ? utcToZonedTime(
             todayStatus.arrivalTime,
@@ -983,9 +885,10 @@ async function updateTodayStatus(req, res) {
             hour12: true,
           })
         : null,
-      isLate: dailyWork?.isLate || false,
-      isHalfDay: dailyWork?.isHalfDay || false,
-      isAbsent: dailyWork?.isAbsent || false,
+      isLate: attendanceStatus.isLate,
+      isHalfDay: attendanceStatus.isHalfDay,
+      isAbsent: attendanceStatus.isAbsent,
+      isFullDay: attendanceStatus.isFullDay,
       dailyWork: dailyWork
         ? {
             id: dailyWork._id,
