@@ -37,6 +37,7 @@ import HolidayManagementPage from "./pages/HolidayManagementPage";
 import SuperAdminDashboard from "./pages/SuperAdminDashboard";
 import SuperAdminAttendancePortal from "./pages/SuperAdminAttendancePortal";
 import ShiftManagement from "./components/humanResource/ShiftManagement";
+import ManualAttendanceManagement from "./pages/admin/ManualAttendanceManagement";
 
 import { resetChat } from "./store/slices/chatSlice";
 import { useDispatch } from "react-redux";
@@ -364,6 +365,19 @@ const AppWrapper = () => {
           element={
             isAuthenticated && (isAdmin || isHR) ? (
               <AdminAttendancePage onLogout={handleLogout} />
+            ) : (
+              <Navigate
+                to={isAuthenticated ? "/dashboard" : "/login"}
+                replace
+              />
+            )
+          }
+        />
+        <Route
+          path="/admin/manual-attendance"
+          element={
+            isAuthenticated && (isAdmin || isHR) ? (
+              <ManualAttendanceManagement onLogout={handleLogout} />
             ) : (
               <Navigate
                 to={isAuthenticated ? "/dashboard" : "/login"}

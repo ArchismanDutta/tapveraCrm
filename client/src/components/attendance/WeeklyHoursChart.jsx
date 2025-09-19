@@ -1,19 +1,31 @@
 import React, { useState, useMemo } from "react";
-import { 
-  BarChart3, 
-  Clock, 
-  TrendingUp, 
-  Target, 
-  Calendar, 
+import {
+  BarChart3,
+  Clock,
+  TrendingUp,
+  Target,
+  Calendar,
   Activity,
   Award,
-  AlertCircle
+  AlertCircle,
+  Filter,
+  CalendarDays
 } from "lucide-react";
 
-const WeeklyHoursChart = ({ weeklyHours = [], targetHours = 8, showTarget = true }) => {
+const WeeklyHoursChart = ({ weeklyHours = [], targetHours = 8, showTarget = true, onDateFilterChange }) => {
   const [hoveredIndex, setHoveredIndex] = useState(null);
   const [chartType, setChartType] = useState("bar");
   const [showDetails, setShowDetails] = useState(false);
+  const [dateFilter, setDateFilter] = useState('week');
+  const [showFilters, setShowFilters] = useState(false);
+
+  // Handle date filter change
+  const handleFilterChange = (filter) => {
+    setDateFilter(filter);
+    if (onDateFilterChange) {
+      onDateFilterChange(filter);
+    }
+  };
 
   // Calculate comprehensive metrics
   const metrics = useMemo(() => {
@@ -26,7 +38,10 @@ const WeeklyHoursChart = ({ weeklyHours = [], targetHours = 8, showTarget = true
         streak: 0,
         trend: "neutral",
         avgDailyHours: "0.0",
-        weekProgress: 0
+        weekProgress: 0,
+        period: dateFilter === 'day' ? 'Today' :
+                dateFilter === 'week' ? 'This week' :
+                dateFilter === 'month' ? 'This month' : 'This week'
       };
     }
 
@@ -47,7 +62,7 @@ const WeeklyHoursChart = ({ weeklyHours = [], targetHours = 8, showTarget = true
     const targetMetDays = weekdayData.filter(d => (d.hours || 0) >= targetHours).length;
 
     // Efficiency: percentage of working days where target was met
-    const efficiency = workingDaysWithHours > 0 ? 
+    const efficiency = workingDaysWithHours > 0 ?
       Math.round((targetMetDays / workingDaysWithHours) * 100) : 0;
 
     // Calculate streak of consecutive days meeting target
@@ -66,7 +81,7 @@ const WeeklyHoursChart = ({ weeklyHours = [], targetHours = 8, showTarget = true
     const trend = secondHalf > firstHalf ? "up" : secondHalf < firstHalf ? "down" : "neutral";
 
     // Average daily hours for ALL weekdays (including zero-hour days)
-    const avgDailyHours = totalWeekdays > 0 ? 
+    const avgDailyHours = totalWeekdays > 0 ?
       (totalHours / totalWeekdays).toFixed(1) : "0.0";
 
     // Week progress (how much of ideal week is completed)
@@ -81,9 +96,12 @@ const WeeklyHoursChart = ({ weeklyHours = [], targetHours = 8, showTarget = true
       streak,
       trend,
       avgDailyHours,
-      weekProgress: Math.round(weekProgress)
+      weekProgress: Math.round(weekProgress),
+      period: dateFilter === 'day' ? 'Today' :
+              dateFilter === 'week' ? 'This week' :
+              dateFilter === 'month' ? 'This month' : 'This week'
     };
-  }, [weeklyHours, targetHours]);
+  }, [weeklyHours, targetHours, dateFilter]);
 
   // Chart dimensions and scales - responsive design
   const chartHeight = 280;
@@ -95,15 +113,15 @@ const WeeklyHoursChart = ({ weeklyHours = [], targetHours = 8, showTarget = true
   const maxScale = Math.max(...weeklyHours.map(d => d.hours || 0), targetHours, 8) + 2;
 
   const getBarColor = (hours, index, isHovered) => {
-    if (isHovered) return "#3b82f6";
-    if (!hours || hours === 0) return "#374151"; // Dark gray for no work
+    if (isHovered) return "#06b6d4";
+    if (!hours || hours === 0) return "#475569"; // Slate for no work
     if (hours >= targetHours) return "#10b981"; // Green for target met
     if (hours >= targetHours * 0.75) return "#f59e0b"; // Amber for close to target
     return "#ef4444"; // Red for below target
   };
 
   const getPerformanceColor = (hours) => {
-    if (!hours || hours === 0) return "text-gray-500";
+    if (!hours || hours === 0) return "text-slate-500";
     if (hours >= targetHours) return "text-green-400";
     if (hours >= targetHours * 0.75) return "text-yellow-400";
     return "text-red-400";
@@ -123,11 +141,50 @@ const WeeklyHoursChart = ({ weeklyHours = [], targetHours = 8, showTarget = true
 
   if (!weeklyHours || weeklyHours.length === 0) {
     return (
-      <div className="bg-[#161c2c] rounded-xl shadow-md p-6 w-full border border-[#232945]">
-        <div className="flex items-center gap-2 mb-4">
-          <BarChart3 className="w-5 h-5 text-blue-400" />
-          <h3 className="font-semibold text-lg text-gray-100">Weekly Hours</h3>
+      <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 backdrop-blur-sm border border-slate-600/30 rounded-2xl p-6 w-full">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-6">
+          <div className="flex items-center gap-3">
+            <BarChart3 className="w-6 h-6 text-cyan-400" />
+            <h3 className="text-xl font-semibold text-white">Weekly Hours Chart</h3>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowFilters(!showFilters)}
+              className="p-2 bg-slate-700/50 hover:bg-slate-600/50 rounded-lg transition-all duration-200"
+              title="Filter Options"
+            >
+              <Filter className="w-4 h-4 text-gray-400" />
+            </button>
+          </div>
         </div>
+
+        {/* Filter Options */}
+        {showFilters && (
+          <div className="mb-6 p-4 bg-slate-700/30 rounded-xl border border-slate-600/30">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-sm text-gray-400 mr-2">Time Period:</span>
+              {[
+                { key: 'day', label: 'Today', icon: CalendarDays },
+                { key: 'week', label: 'This Week', icon: Calendar },
+                { key: 'month', label: 'This Month', icon: Calendar },
+              ].map(({ key, label, icon: Icon }) => (
+                <button
+                  key={key}
+                  onClick={() => handleFilterChange(key)}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                    dateFilter === key
+                      ? 'bg-cyan-600 text-white shadow-lg'
+                      : 'bg-slate-600/50 text-gray-300 hover:bg-slate-500/50 hover:text-white'
+                  }`}
+                >
+                  <Icon className="w-4 h-4" />
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         <div className="text-center py-12">
           <Calendar className="w-16 h-16 text-gray-600 mx-auto mb-4" />
           <p className="text-gray-400 text-lg mb-2">No data available</p>
@@ -138,12 +195,12 @@ const WeeklyHoursChart = ({ weeklyHours = [], targetHours = 8, showTarget = true
   }
 
   return (
-    <div className="bg-[#161c2c] rounded-xl shadow-md p-6 w-full border border-[#232945]">
+    <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 backdrop-blur-sm border border-slate-600/30 rounded-2xl p-6 w-full">
       {/* Header with enhanced controls */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-6">
         <div className="flex flex-wrap items-center gap-2">
-          <BarChart3 className="w-5 h-5 text-blue-400" />
-          <h3 className="font-semibold text-lg text-gray-100">Weekly Hours</h3>
+          <BarChart3 className="w-6 h-6 text-cyan-400" />
+          <h3 className="text-xl font-semibold text-white">Weekly Hours Chart</h3>
           <div className="flex flex-wrap items-center gap-1 ml-2">
             {metrics.trend === "up" && <TrendingUp className="w-4 h-4 text-green-400" />}
             {metrics.trend === "down" && <TrendingUp className="w-4 h-4 text-red-400 transform rotate-180" />}
@@ -155,13 +212,24 @@ const WeeklyHoursChart = ({ weeklyHours = [], targetHours = 8, showTarget = true
             )}
           </div>
         </div>
-        <div className="flex items-center gap-2 self-start sm:self-auto">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowFilters(!showFilters)}
+            className={`p-2 rounded-lg transition-all duration-200 ${
+              showFilters
+                ? 'bg-cyan-600 text-white'
+                : 'bg-slate-700/50 hover:bg-slate-600/50 text-gray-400'
+            }`}
+            title="Filter Options"
+          >
+            <Filter className="w-4 h-4" />
+          </button>
           <button
             onClick={() => setShowDetails(!showDetails)}
-            className={`p-2 rounded-md transition-colors ${
+            className={`p-2 rounded-lg transition-all duration-200 ${
               showDetails
-                ? "bg-blue-600 text-white"
-                : "bg-[#232945] text-gray-400 hover:text-gray-200"
+                ? "bg-cyan-600 text-white"
+                : "bg-slate-700/50 hover:bg-slate-600/50 text-gray-400"
             }`}
             title="Toggle Details"
           >
@@ -169,10 +237,10 @@ const WeeklyHoursChart = ({ weeklyHours = [], targetHours = 8, showTarget = true
           </button>
           <button
             onClick={() => setChartType("bar")}
-            className={`p-2 rounded-md transition-colors ${
+            className={`p-2 rounded-lg transition-all duration-200 ${
               chartType === "bar"
-                ? "bg-blue-600 text-white"
-                : "bg-[#232945] text-gray-400 hover:text-gray-200"
+                ? "bg-cyan-600 text-white"
+                : "bg-slate-700/50 hover:bg-slate-600/50 text-gray-400"
             }`}
             title="Bar Chart"
           >
@@ -180,10 +248,10 @@ const WeeklyHoursChart = ({ weeklyHours = [], targetHours = 8, showTarget = true
           </button>
           <button
             onClick={() => setChartType("line")}
-            className={`p-2 rounded-md transition-colors ${
+            className={`p-2 rounded-lg transition-all duration-200 ${
               chartType === "line"
-                ? "bg-blue-600 text-white"
-                : "bg-[#232945] text-gray-400 hover:text-gray-200"
+                ? "bg-cyan-600 text-white"
+                : "bg-slate-700/50 hover:bg-slate-600/50 text-gray-400"
             }`}
             title="Line Chart"
           >
@@ -191,6 +259,33 @@ const WeeklyHoursChart = ({ weeklyHours = [], targetHours = 8, showTarget = true
           </button>
         </div>
       </div>
+
+      {/* Filter Options */}
+      {showFilters && (
+        <div className="mb-6 p-4 bg-slate-700/30 rounded-xl border border-slate-600/30">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-sm text-gray-400 mr-2">Time Period:</span>
+            {[
+              { key: 'day', label: 'Today', icon: CalendarDays },
+              { key: 'week', label: 'This Week', icon: Calendar },
+              { key: 'month', label: 'This Month', icon: Calendar },
+            ].map(({ key, label, icon: Icon }) => (
+              <button
+                key={key}
+                onClick={() => handleFilterChange(key)}
+                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                  dateFilter === key
+                    ? 'bg-cyan-600 text-white shadow-lg'
+                    : 'bg-slate-600/50 text-gray-300 hover:bg-slate-500/50 hover:text-white'
+                }`}
+              >
+                <Icon className="w-4 h-4" />
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Enhanced Metrics Grid with responsive auto-fit */}
       <div
@@ -201,65 +296,68 @@ const WeeklyHoursChart = ({ weeklyHours = [], targetHours = 8, showTarget = true
             : "repeat(auto-fit,minmax(180px,1fr))",
         }}
       >
-        <div className="bg-[#232945] rounded-lg p-4 overflow-hidden">
+        <div className="bg-gradient-to-br from-blue-600/20 to-blue-800/20 backdrop-blur-sm border border-blue-500/20 rounded-xl p-4 hover:border-blue-400/40 transition-all duration-300 group">
           <div className="flex items-center gap-2 mb-1">
-            <Clock className="w-4 h-4 text-blue-400" />
+            <Clock className="w-4 h-4 text-blue-400 group-hover:scale-110 transition-transform duration-200" />
             <span className="text-xs text-gray-400">Total Hours</span>
           </div>
           <div className="flex items-center gap-1.5">
             <span className="text-base font-bold text-blue-400">{metrics.totalHours}h</span>
-            <div className="text-xs text-gray-500">
+            <div className="text-xs text-blue-300">
               of {(targetHours * 5).toFixed(0)}h
             </div>
           </div>
-          <div className="w-full bg-gray-700 rounded-full h-1.5 mt-2">
-            <div
-              className="h-1.5 bg-blue-500 rounded-full transition-all duration-300"
-              style={{ width: `${metrics.weekProgress}%` }}
-            ></div>
+          <div className="space-y-1">
+            <p className="text-xs text-blue-300">{metrics.period}</p>
+            <div className="w-full bg-gray-700 rounded-full h-1.5">
+              <div
+                className="h-1.5 bg-blue-500 rounded-full transition-all duration-300"
+                style={{ width: `${metrics.weekProgress}%` }}
+              ></div>
+            </div>
           </div>
         </div>
 
-        <div className="bg-[#232945] rounded-lg p-4 overflow-hidden">
+        <div className="bg-gradient-to-br from-green-600/20 to-green-800/20 backdrop-blur-sm border border-green-500/20 rounded-xl p-4 hover:border-green-400/40 transition-all duration-300 group">
           <div className="flex items-center gap-2 mb-1">
-            <Target className="w-4 h-4 text-green-400" />
+            <Target className="w-4 h-4 text-green-400 group-hover:scale-110 transition-transform duration-200" />
             <span className="text-xs text-gray-400">Target Met</span>
           </div>
           <div className="flex items-center gap-1.5">
             <span className="text-base font-bold text-green-400">
               {metrics.targetMet}/{metrics.workingDays}
             </span>
-            <div className="text-xs text-gray-500">days</div>
+            <div className="text-xs text-green-300">days</div>
           </div>
         </div>
 
-        <div className="bg-[#232945] rounded-lg p-4 overflow-hidden">
+        <div className="bg-gradient-to-br from-purple-600/20 to-purple-800/20 backdrop-blur-sm border border-purple-500/20 rounded-xl p-4 hover:border-purple-400/40 transition-all duration-300 group">
           <div className="flex items-center gap-2 mb-1">
-            <TrendingUp className="w-4 h-4 text-purple-400" />
+            <TrendingUp className="w-4 h-4 text-purple-400 group-hover:scale-110 transition-transform duration-200" />
             <span className="text-xs text-gray-400">Efficiency</span>
           </div>
           <div className="flex items-center gap-1.5">
             <span className="text-base font-bold text-purple-400">{metrics.efficiency}%</span>
-            <div className="text-xs text-gray-500">rate</div>
+            <div className="text-xs text-purple-300">rate</div>
           </div>
         </div>
 
         {showDetails && (
-          <div className="bg-[#232945] rounded-lg p-4 overflow-hidden">
+          <div className="bg-gradient-to-br from-cyan-600/20 to-cyan-800/20 backdrop-blur-sm border border-cyan-500/20 rounded-xl p-4 hover:border-cyan-400/40 transition-all duration-300 group">
             <div className="flex items-center gap-2 mb-1">
-              <Activity className="w-4 h-4 text-cyan-400" />
+              <Activity className="w-4 h-4 text-cyan-400 group-hover:scale-110 transition-transform duration-200" />
               <span className="text-xs text-gray-400">Daily Avg</span>
             </div>
             <div className="flex items-center gap-1.5">
               <span className="text-base font-bold text-cyan-400">{metrics.avgDailyHours}h</span>
-              <div className="text-xs text-gray-500">per day</div>
+              <div className="text-xs text-cyan-300">per day</div>
             </div>
           </div>
         )}
       </div>
 
       {/* Chart */}
-      <div className="relative bg-[#0f1419] rounded-lg p-4 overflow-x-auto max-w-full">
+      <div className="relative bg-slate-700/20 rounded-xl p-4 border border-slate-600/20 overflow-x-auto max-w-full">
         <div className="min-w-[600px] w-full max-w-full">
           <svg
             viewBox={`0 0 ${svgWidth} ${svgHeight}`}
@@ -277,8 +375,8 @@ const WeeklyHoursChart = ({ weeklyHours = [], targetHours = 8, showTarget = true
                 </feMerge>
               </filter>
               <linearGradient id="barGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-                <stop offset="0%" stopColor="rgba(59, 130, 246, 0.8)" />
-                <stop offset="100%" stopColor="rgba(59, 130, 246, 0.4)" />
+                <stop offset="0%" stopColor="rgba(6, 182, 212, 0.8)" />
+                <stop offset="100%" stopColor="rgba(6, 182, 212, 0.4)" />
               </linearGradient>
               <linearGradient id="targetGradient" x1="0%" y1="0%" x2="100%" y2="0%">
                 <stop offset="0%" stopColor="rgba(245, 158, 11, 0.2)" />
@@ -297,7 +395,7 @@ const WeeklyHoursChart = ({ weeklyHours = [], targetHours = 8, showTarget = true
                     y1={y}
                     x2={svgWidth - padding.right}
                     y2={y}
-                    stroke="#374151"
+                    stroke="#475569"
                     strokeDasharray="2,2"
                     opacity="0.3"
                   />
@@ -306,7 +404,7 @@ const WeeklyHoursChart = ({ weeklyHours = [], targetHours = 8, showTarget = true
                     y={y + 3}
                     textAnchor="end"
                     fontSize="10"
-                    fill="#6b7280"
+                    fill="#64748b"
                   >
                     {label}h
                   </text>
@@ -364,14 +462,14 @@ const WeeklyHoursChart = ({ weeklyHours = [], targetHours = 8, showTarget = true
                   return (
                     <g key={`${data.label}-${index}`}>
                       {/* Bar shadow */}
-                      <rect 
-                        x={x + 2} 
-                        y={y + 2} 
-                        width={barWidth} 
-                        height={barHeight} 
-                        fill="#000" 
-                        opacity="0.3" 
-                        rx="6" 
+                      <rect
+                        x={x + 2}
+                        y={y + 2}
+                        width={barWidth}
+                        height={barHeight}
+                        fill="#000"
+                        opacity="0.3"
+                        rx="6"
                       />
 
                       {/* Main bar with enhanced styling */}
@@ -383,7 +481,7 @@ const WeeklyHoursChart = ({ weeklyHours = [], targetHours = 8, showTarget = true
                         fill={barColor}
                         rx="6"
                         className="cursor-pointer transition-all duration-200"
-                        style={{ 
+                        style={{
                           filter: isHovered ? "url(#glow)" : "none",
                           transform: isHovered ? "scale(1.02)" : "scale(1)",
                           transformOrigin: `${x + barWidth/2}px ${y + barHeight}px`
@@ -399,7 +497,7 @@ const WeeklyHoursChart = ({ weeklyHours = [], targetHours = 8, showTarget = true
                           y={y - 3}
                           width={barWidth}
                           height="3"
-                          fill="#6b7280"
+                          fill="#64748b"
                           rx="1"
                           opacity="0.5"
                         />
@@ -420,33 +518,33 @@ const WeeklyHoursChart = ({ weeklyHours = [], targetHours = 8, showTarget = true
                       {/* Enhanced hover tooltip */}
                       {isHovered && (
                         <g>
-                          <rect 
-                            x={x - 15} 
-                            y={y - 50} 
-                            width={barWidth + 30} 
-                            height="40" 
-                            fill="rgba(15, 20, 25, 0.95)" 
-                            stroke="#374151" 
-                            rx="6" 
+                          <rect
+                            x={x - 15}
+                            y={y - 50}
+                            width={barWidth + 30}
+                            height="40"
+                            fill="rgba(30, 41, 59, 0.95)"
+                            stroke="#475569"
+                            rx="6"
                           />
-                          <text 
-                            x={x + barWidth / 2} 
-                            y={y - 32} 
-                            textAnchor="middle" 
-                            fontSize="12" 
-                            fill="#fff" 
+                          <text
+                            x={x + barWidth / 2}
+                            y={y - 32}
+                            textAnchor="middle"
+                            fontSize="12"
+                            fill="#fff"
                             fontWeight="bold"
                           >
                             {hours.toFixed(1)}h
                           </text>
-                          <text 
-                            x={x + barWidth / 2} 
-                            y={y - 18} 
-                            textAnchor="middle" 
-                            fontSize="10" 
-                            fill="#9ca3af"
+                          <text
+                            x={x + barWidth / 2}
+                            y={y - 18}
+                            textAnchor="middle"
+                            fontSize="10"
+                            fill="#94a3b8"
                           >
-                            {hours >= targetHours ? "Target Met" : 
+                            {hours >= targetHours ? "Target Met" :
                              hours >= targetHours * 0.75 ? "Close" : "Below Target"}
                           </text>
                         </g>
@@ -465,12 +563,12 @@ const WeeklyHoursChart = ({ weeklyHours = [], targetHours = 8, showTarget = true
                       </text>
 
                       {/* Hours label */}
-                      <text 
-                        x={x + barWidth / 2} 
-                        y={padding.top + chartHeight + 35} 
-                        textAnchor="middle" 
-                        fontSize="9" 
-                        fill="#6b7280"
+                      <text
+                        x={x + barWidth / 2}
+                        y={padding.top + chartHeight + 35}
+                        textAnchor="middle"
+                        fontSize="9"
+                        fill="#64748b"
                       >
                         {hours.toFixed(1)}h
                       </text>
@@ -480,10 +578,10 @@ const WeeklyHoursChart = ({ weeklyHours = [], targetHours = 8, showTarget = true
               : (
                 <g>
                   {/* Line path with gradient */}
-                  <path 
-                    d={linePath} 
-                    stroke="#3b82f6" 
-                    strokeWidth="3" 
+                  <path
+                    d={linePath}
+                    stroke="#06b6d4"
+                    strokeWidth="3"
                     fill="none"
                     strokeLinecap="round"
                     strokeLinejoin="round"
@@ -513,7 +611,7 @@ const WeeklyHoursChart = ({ weeklyHours = [], targetHours = 8, showTarget = true
                             cx={x}
                             cy={y}
                             r="12"
-                            fill="#3b82f6"
+                            fill="#06b6d4"
                             opacity="0.2"
                           />
                         )}
@@ -538,7 +636,7 @@ const WeeklyHoursChart = ({ weeklyHours = [], targetHours = 8, showTarget = true
                             y={y - 15}
                             width="4"
                             height="6"
-                            fill="#6b7280"
+                            fill="#64748b"
                             rx="2"
                             opacity="0.5"
                           />
@@ -547,31 +645,31 @@ const WeeklyHoursChart = ({ weeklyHours = [], targetHours = 8, showTarget = true
                         {/* Enhanced hover tooltip for line chart */}
                         {isHovered && (
                           <g>
-                            <rect 
-                              x={x - 25} 
-                              y={y - 50} 
-                              width="50" 
-                              height="35" 
-                              fill="rgba(15, 20, 25, 0.95)" 
-                              stroke="#374151" 
-                              rx="4" 
+                            <rect
+                              x={x - 25}
+                              y={y - 50}
+                              width="50"
+                              height="35"
+                              fill="rgba(30, 41, 59, 0.95)"
+                              stroke="#475569"
+                              rx="4"
                             />
-                            <text 
-                              x={x} 
-                              y={y - 30} 
-                              textAnchor="middle" 
-                              fontSize="12" 
-                              fill="#fff" 
+                            <text
+                              x={x}
+                              y={y - 30}
+                              textAnchor="middle"
+                              fontSize="12"
+                              fill="#fff"
                               fontWeight="bold"
                             >
                               {hours.toFixed(1)}h
                             </text>
-                            <text 
-                              x={x} 
-                              y={y - 18} 
-                              textAnchor="middle" 
-                              fontSize="9" 
-                              fill="#9ca3af"
+                            <text
+                              x={x}
+                              y={y - 18}
+                              textAnchor="middle"
+                              fontSize="9"
+                              fill="#94a3b8"
                             >
                               {data.label}
                             </text>
@@ -579,23 +677,23 @@ const WeeklyHoursChart = ({ weeklyHours = [], targetHours = 8, showTarget = true
                         )}
 
                         {/* Day label for line chart */}
-                        <text 
-                          x={x} 
-                          y={padding.top + chartHeight + 20} 
-                          textAnchor="middle" 
-                          fontSize="11" 
+                        <text
+                          x={x}
+                          y={padding.top + chartHeight + 20}
+                          textAnchor="middle"
+                          fontSize="11"
                           fill={isHovered ? "#ffffff" : getPerformanceColor(hours)}
                         >
                           {data.label}
                         </text>
 
                         {/* Hours label for line chart */}
-                        <text 
-                          x={x} 
-                          y={padding.top + chartHeight + 35} 
-                          textAnchor="middle" 
-                          fontSize="9" 
-                          fill="#6b7280"
+                        <text
+                          x={x}
+                          y={padding.top + chartHeight + 35}
+                          textAnchor="middle"
+                          fontSize="9"
+                          fill="#64748b"
                         >
                           {hours.toFixed(1)}h
                         </text>
@@ -623,28 +721,29 @@ const WeeklyHoursChart = ({ weeklyHours = [], targetHours = 8, showTarget = true
           <span>Below Target</span>
         </div>
         <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded-full bg-gray-600" />
+          <div className="w-3 h-3 rounded-full bg-slate-600" />
           <span>No Work</span>
         </div>
       </div>
 
       {/* Performance insights and recommendations */}
       {showDetails && (
-        <div className="mt-6 pt-4 border-t border-[#232945]">
+        <div className="mt-6 pt-4 border-t border-slate-600/30">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Weekly insights */}
-            <div className="bg-[#232945] rounded-lg p-4">
+            <div className="bg-slate-700/30 rounded-xl p-4 border border-slate-600/30">
               <h4 className="text-sm font-semibold text-gray-200 mb-3 flex items-center gap-2">
-                <TrendingUp className="w-4 h-4 text-blue-400" />
+                <TrendingUp className="w-4 h-4 text-cyan-400" />
                 Weekly Insights
               </h4>
               <div className="space-y-2 text-xs text-gray-400">
-                <div>Week Progress: <span className="text-blue-400">{metrics.weekProgress}%</span></div>
+                <div>Week Progress: <span className="text-cyan-400">{metrics.weekProgress}%</span></div>
+                <div>Period: <span className="text-blue-400">{metrics.period}</span></div>
                 <div>Trend: <span className={
-                  metrics.trend === 'up' ? 'text-green-400' : 
+                  metrics.trend === 'up' ? 'text-green-400' :
                   metrics.trend === 'down' ? 'text-red-400' : 'text-gray-400'
                 }>
-                  {metrics.trend === 'up' ? 'Improving' : 
+                  {metrics.trend === 'up' ? 'Improving' :
                    metrics.trend === 'down' ? 'Declining' : 'Stable'}
                 </span></div>
                 <div>Consistency: <span className="text-purple-400">
@@ -654,7 +753,7 @@ const WeeklyHoursChart = ({ weeklyHours = [], targetHours = 8, showTarget = true
             </div>
 
             {/* Recommendations */}
-            <div className="bg-[#232945] rounded-lg p-4">
+            <div className="bg-slate-700/30 rounded-xl p-4 border border-slate-600/30">
               <h4 className="text-sm font-semibold text-gray-200 mb-3 flex items-center gap-2">
                 <AlertCircle className="w-4 h-4 text-yellow-400" />
                 Recommendations
@@ -680,7 +779,7 @@ const WeeklyHoursChart = ({ weeklyHours = [], targetHours = 8, showTarget = true
 
       {/* Footer note */}
       <div className="text-xs text-gray-500 mt-4 text-center">
-        * Efficiency calculated based on weekdays only (Mon-Fri) • Target: {targetHours}h per day
+        * Efficiency calculated based on weekdays only (Mon-Fri) • Target: {targetHours}h per day • {metrics.period}
       </div>
     </div>
   );
