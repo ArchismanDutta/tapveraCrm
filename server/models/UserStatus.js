@@ -192,29 +192,39 @@ UserStatusSchema.methods.resumeWork = async function () {
 };
 
 // -----------------------------
-// Late / Half-Day / Absent calculation
+// Late / Half-Day / Absent calculation (DEPRECATED - Use attendanceService instead)
 // -----------------------------
 UserStatusSchema.methods.updateAttendanceFlags = function (effectiveShift) {
-  // Skip for flexible permanent
-  if (effectiveShift.isFlexiblePermanent) {
-    this.isLate = false;
-    this.isHalfDay = false;
-    this.isAbsent = false;
+  console.warn("updateAttendanceFlags is deprecated. Use attendanceService.getAttendanceData instead");
+
+  // Skip for flexible permanent - use new logic
+  if (effectiveShift?.isFlexiblePermanent || effectiveShift?.isOneDayFlexibleOverride) {
+    // For flexible shifts, check total hours (work + break = 9)
+    const totalSeconds = this.workDurationSeconds + this.breakDurationSeconds;
+    const minHalfFlex = 5 * 3600; // 5 hours total
+    const minFullFlex = 9 * 3600; // 9 hours total (8 work + 1 break)
+
+    this.isLate = false; // No late concept for flexible
+    this.isHalfDay = totalSeconds >= minHalfFlex && totalSeconds < minFullFlex;
+    this.isAbsent = totalSeconds < minHalfFlex;
     return;
   }
 
-  const minHalf = 5 * 3600;
-  const minFull = 8 * 3600;
+  // Standard shift logic
+  const minHalf = 5 * 3600; // 5 hours work
+  const minFull = 8 * 3600; // 8 hours work
 
-  // Late
-  if (effectiveShift.start && this.arrivalTime) {
+  // Late calculation for standard shifts
+  if (effectiveShift?.start && this.arrivalTime) {
     const shiftStart = new Date(this.today);
     const [h, m] = effectiveShift.start.split(":").map(Number);
     shiftStart.setHours(h, m, 0, 0);
     this.isLate = this.arrivalTime > shiftStart;
-  } else this.isLate = false;
+  } else {
+    this.isLate = false;
+  }
 
-  // Half day / absent
+  // Half day / absent based on work hours only (for standard shifts)
   this.isHalfDay = this.workDurationSeconds >= minHalf && this.workDurationSeconds < minFull;
   this.isAbsent = this.workDurationSeconds < minHalf;
 };

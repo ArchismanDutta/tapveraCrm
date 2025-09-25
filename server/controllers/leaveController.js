@@ -139,6 +139,94 @@ exports.updateLeaveStatus = async (req, res) => {
 };
 
 
+// Update leave request (employee can only edit pending requests)
+exports.updateLeave = async (req, res) => {
+  try {
+    const leave = await LeaveRequest.findById(req.params.id);
+
+    if (!leave) {
+      return res.status(404).json({ message: "Leave request not found" });
+    }
+
+    // Check if user owns this leave request
+    if (leave.employee.email !== req.user.email) {
+      return res.status(403).json({ message: "Not authorized to edit this leave request" });
+    }
+
+    // Check if leave is still pending (can only edit pending requests)
+    if (leave.status !== "Pending") {
+      return res.status(400).json({
+        message: `Cannot edit leave request with status: ${leave.status}. Only pending requests can be edited.`
+      });
+    }
+
+    // Extract update fields
+    let start = req.body.startDate;
+    let end = req.body.endDate;
+    const type = req.body.type;
+    const reason = req.body.reason;
+
+    if (!start) {
+      return res.status(400).json({ message: "startDate is required" });
+    }
+
+    // Handle half-day logic
+    if (type === "halfDay" && !end) end = start;
+
+    let period = { start: new Date(start), end: new Date(end || start) };
+    if (isNaN(period.start.getTime()) || isNaN(period.end.getTime())) {
+      return res.status(400).json({ message: "Invalid start or end date" });
+    }
+
+    // Apply sandwich policy expansion
+    let adjustedStart = new Date(period.start);
+    let adjustedEnd = new Date(period.end);
+
+    // expand backwards
+    let checkPrev = new Date(adjustedStart);
+    checkPrev.setDate(checkPrev.getDate() - 1);
+    while (await holidayService.isHolidayOrWeekend(checkPrev)) {
+      adjustedStart = new Date(checkPrev);
+      checkPrev.setDate(checkPrev.getDate() - 1);
+    }
+
+    // expand forwards
+    let checkNext = new Date(adjustedEnd);
+    checkNext.setDate(checkNext.getDate() + 1);
+    while (await holidayService.isHolidayOrWeekend(checkNext)) {
+      adjustedEnd = new Date(checkNext);
+      checkNext.setDate(checkNext.getDate() + 1);
+    }
+
+    // Prepare update object
+    const updateData = {
+      period: { start: adjustedStart, end: adjustedEnd },
+      type,
+      reason,
+    };
+
+    // Handle document upload if provided
+    if (req.file) {
+      updateData.document = {
+        name: req.file.originalname,
+        size: req.file.size,
+        url: `${req.protocol}://${req.get("host")}/uploads/${req.file.filename}`,
+      };
+    }
+
+    const updatedLeave = await LeaveRequest.findByIdAndUpdate(
+      req.params.id,
+      updateData,
+      { new: true }
+    );
+
+    res.json(updatedLeave);
+  } catch (error) {
+    console.error("Update Leave Error:", error);
+    res.status(400).json({ message: error.message });
+  }
+};
+
 // Delete leave request
 exports.deleteLeave = async (req, res) => {
   try {

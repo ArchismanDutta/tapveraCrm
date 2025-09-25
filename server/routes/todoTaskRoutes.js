@@ -9,6 +9,9 @@ router.get("/", protect, todoTaskController.getTodoTasksByDate);
 // Get upcoming tasks
 router.get("/upcoming", protect, todoTaskController.getUpcomingTasks);
 
+// Get analytics data
+router.get("/analytics", protect, todoTaskController.getTodoAnalytics);
+
 // Create a new task
 router.post("/", protect, todoTaskController.createTodoTask);
 

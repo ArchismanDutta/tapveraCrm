@@ -163,12 +163,12 @@ exports.getEmployeeDirectory = async (req, res) => {
     }
 
     const employees = await User.find(filter)
-      .select("_id employeeId name email contact department designation jobLevel")
+      .select("_id employeeId name email contact department designation jobLevel status shiftType")
       .sort({ name: 1 });
 
     const employeesWithStatus = employees.map(emp => ({
       ...emp.toObject(),
-      status: emp.status || "inactive",
+      status: emp.status, // Preserve actual status from database
       shiftType: emp.shiftType || "standard",
       jobLevel: emp.jobLevel || "junior",
     }));
@@ -387,8 +387,9 @@ exports.updateEmployeeStatus = async (req, res) => {
     const userId = req.params.id;
     const { status } = req.body;
 
-    if (!["active", "inactive"].includes(status)) {
-      return res.status(400).json({ message: "Invalid status value" });
+    // Updated to accept new status values
+    if (!["active", "inactive", "terminated", "absconded"].includes(status)) {
+      return res.status(400).json({ message: "Invalid status value. Must be one of: active, inactive, terminated, absconded" });
     }
 
     const user = await User.findByIdAndUpdate(userId, { status }, { new: true });

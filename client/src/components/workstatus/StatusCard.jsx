@@ -14,6 +14,7 @@ const StatusCard = ({
 }) => {
   // Convert arrivalTime to local time string; handle ISO Date, Date object, or already-formatted string
   const formattedArrivalTime = (() => {
+    console.log("🔍 StatusCard arrivalTime received:", arrivalTime, typeof arrivalTime);
     if (!arrivalTime) return "--";
     // If it's already a string that isn't parseable as date, show as-is
     if (typeof arrivalTime === "string") {
@@ -43,7 +44,7 @@ const StatusCard = ({
   })();
 
   return (
-    <div className="bg-slate-800/50 backdrop-blur-sm border border-slate-700/50 rounded-2xl shadow-xl p-8 transition-all hover:shadow-2xl hover:border-slate-600/50">
+    <div className="bg-[#161c2c] border border-[#232945] rounded-xl shadow-md p-8 transition-all hover:border-[#2c3454]">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-2xl font-bold text-white">Work Status</h2>
@@ -63,10 +64,10 @@ const StatusCard = ({
 
       {/* Loading Indicator */}
       {isLoading && (
-        <div className="mb-4 p-3 bg-blue-500/20 border border-blue-500/30 rounded-lg">
+        <div className="mb-4 p-3 bg-cyan-500/20 border border-cyan-500/30 rounded-lg">
           <div className="flex items-center space-x-2">
-            <div className="w-4 h-4 bg-blue-400 rounded-full animate-pulse"></div>
-            <span className="text-blue-400 text-sm font-medium">
+            <div className="w-4 h-4 bg-cyan-400 rounded-full animate-pulse"></div>
+            <span className="text-cyan-400 text-sm font-medium">
               Processing...
             </span>
           </div>
@@ -75,12 +76,12 @@ const StatusCard = ({
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <div className="bg-slate-900/60 p-6 rounded-xl border border-slate-700/30">
+        <div className="bg-[#0f1419] p-6 rounded-lg border border-[#232945]">
           <div className="flex items-center justify-between mb-2">
             <p className="text-sm font-medium text-gray-400 uppercase tracking-wide">
               Work Duration
             </p>
-            <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-cyan-500 rounded-lg flex items-center justify-center">
+            <div className="w-8 h-8 bg-cyan-500 rounded-lg flex items-center justify-center">
               <svg
                 className="w-4 h-4 text-white"
                 fill="currentColor"
@@ -97,12 +98,12 @@ const StatusCard = ({
           <p className="text-2xl font-bold text-white">{workDuration}</p>
         </div>
 
-        <div className="bg-slate-900/60 p-6 rounded-xl border border-slate-700/30">
+        <div className="bg-[#0f1419] p-6 rounded-lg border border-[#232945]">
           <div className="flex items-center justify-between mb-2">
             <p className="text-sm font-medium text-gray-400 uppercase tracking-wide">
               Break Time
             </p>
-            <div className="w-8 h-8 bg-gradient-to-r from-orange-500 to-red-500 rounded-lg flex items-center justify-center">
+            <div className="w-8 h-8 bg-orange-500 rounded-lg flex items-center justify-center">
               <svg
                 className="w-4 h-4 text-white"
                 fill="currentColor"
@@ -110,7 +111,7 @@ const StatusCard = ({
               >
                 <path
                   fillRule="evenodd"
-                  d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z"
+                  d="M4 4a2 2 0 00-2 2v8a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2H4zm0 2h12v8H4V6z"
                   clipRule="evenodd"
                 />
               </svg>
@@ -119,12 +120,12 @@ const StatusCard = ({
           <p className="text-2xl font-bold text-white">{breakTime}</p>
         </div>
 
-        <div className="bg-slate-900/60 p-6 rounded-xl border border-slate-700/30">
+        <div className="bg-[#0f1419] p-6 rounded-lg border border-[#232945]">
           <div className="flex items-center justify-between mb-2">
             <p className="text-sm font-medium text-gray-400 uppercase tracking-wide">
               Arrival Time
             </p>
-            <div className="w-8 h-8 bg-gradient-to-r from-purple-500 to-pink-500 rounded-lg flex items-center justify-center">
+            <div className="w-8 h-8 bg-green-500 rounded-lg flex items-center justify-center">
               <svg
                 className="w-4 h-4 text-white"
                 fill="currentColor"

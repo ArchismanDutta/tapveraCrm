@@ -21,16 +21,8 @@ const PollingLeaveRequestsTable = ({
       const data = await fetchAllLeaveRequests();
       const safeData = Array.isArray(data) ? data : [];
 
-      // Preserve existing remarks in state
-      setRequests((prev) =>
-        safeData.map((req) => {
-          const existing = prev.find((r) => String(r._id) === String(req._id));
-          if (existing?.adminRemarks) {
-            return { ...req, adminRemarks: existing.adminRemarks };
-          }
-          return req;
-        })
-      );
+      // Use server data directly, preserving only local draft changes for unsaved requests
+      setRequests(safeData);
 
       setLoading(false);
       setError(null);

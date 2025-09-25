@@ -50,7 +50,96 @@ router.get("/:id", protect, authorize("admin", "hr", "super-admin"), getEmployee
 // Update employee details - restricted to super-admin & hr (no restrictions on fields)
 router.put("/:id", protect, authorize("super-admin", "hr"), updateEmployee);
 
-// Update employee status (active/inactive) - accessible to admin, hr, super-admin
+// Update employee status (active/terminated/absconded) - accessible to admin, hr, super-admin
 router.patch("/:id/status", protect, authorize("admin", "hr", "super-admin"), updateEmployeeStatus);
+router.put("/:id/status", protect, authorize("admin", "hr", "super-admin"), updateEmployeeStatus);
+
+// Cleanup corrupted attendance data - for emergency data fixes
+router.post("/cleanup-attendance", protect, authorize("super-admin"), async (req, res) => {
+  try {
+    const UserStatus = require('../models/UserStatus');
+
+    // Get today's date range
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayEnd = new Date(today);
+    todayEnd.setHours(23, 59, 59, 999);
+
+    // Find all UserStatus records
+    const statuses = await UserStatus.find({});
+    let fixedCount = 0;
+
+    for (const status of statuses) {
+      let needsUpdate = false;
+
+      // Clean work sessions - only keep today's sessions
+      if (status.workedSessions && status.workedSessions.length > 0) {
+        const originalCount = status.workedSessions.length;
+        status.workedSessions = status.workedSessions.filter(session => {
+          if (!session || !session.start) return false;
+          const sessionStart = new Date(session.start);
+          return sessionStart >= today && sessionStart <= todayEnd;
+        });
+
+        if (status.workedSessions.length !== originalCount) {
+          needsUpdate = true;
+          console.log(`🧹 User ${status.userId}: Cleaned ${originalCount - status.workedSessions.length} old work sessions`);
+        }
+      }
+
+      // Clean break sessions - only keep today's sessions
+      if (status.breakSessions && status.breakSessions.length > 0) {
+        const originalCount = status.breakSessions.length;
+        status.breakSessions = status.breakSessions.filter(session => {
+          if (!session || !session.start) return false;
+          const sessionStart = new Date(session.start);
+          return sessionStart >= today && sessionStart <= todayEnd;
+        });
+
+        if (status.breakSessions.length !== originalCount) {
+          needsUpdate = true;
+          console.log(`🧹 User ${status.userId}: Cleaned ${originalCount - status.breakSessions.length} old break sessions`);
+        }
+      }
+
+      // Recalculate work duration from cleaned sessions
+      if (needsUpdate) {
+        let newWorkDuration = 0;
+        if (status.workedSessions && status.workedSessions.length > 0) {
+          for (const session of status.workedSessions) {
+            if (session.start && session.end) {
+              const duration = Math.min((new Date(session.end) - new Date(session.start)) / 1000, 86400);
+              newWorkDuration += duration;
+            }
+          }
+        }
+
+        // Cap at 24 hours maximum
+        newWorkDuration = Math.min(newWorkDuration, 86400);
+
+        status.workDurationSeconds = Math.floor(newWorkDuration);
+        status.totalWorkMs = status.workDurationSeconds * 1000;
+
+        await status.save();
+        fixedCount++;
+        console.log(`✅ User ${status.userId}: Fixed work duration from corrupted data`);
+      }
+    }
+
+    res.json({
+      success: true,
+      message: `Successfully cleaned up attendance data for ${fixedCount} users`,
+      fixedCount,
+      totalChecked: statuses.length
+    });
+  } catch (error) {
+    console.error('❌ Error cleaning attendance data:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to cleanup attendance data',
+      message: error.message
+    });
+  }
+});
 
 module.exports = router;

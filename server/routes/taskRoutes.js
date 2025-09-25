@@ -28,11 +28,15 @@ router.get("/:taskId", protect, taskController.getTaskById);
 router.patch("/:taskId/status", protect, taskController.updateTaskStatus);
 
 // Edit task
-// Admin / Super-admin or assignedBy can edit
-router.put("/:taskId", protect, authorize("admin", "super-admin"), taskController.editTask);
+// Admin / Super-admin or assignedBy can edit (authorization handled in controller)
+router.put("/:taskId", protect, taskController.editTask);
 
 // Delete task
-// Admin / Super-admin or assignedBy can delete
-router.delete("/:taskId", protect, authorize("admin", "super-admin"), taskController.deleteTask);
+// Admin / Super-admin or assignedBy can delete (authorization handled in controller)
+router.delete("/:taskId", protect, taskController.deleteTask);
+
+// Get employee task analytics
+// Admin / Super-admin only
+router.get("/analytics/employee/:employeeId", protect, authorize("admin", "super-admin"), taskController.getEmployeeTaskAnalytics);
 
 module.exports = router;

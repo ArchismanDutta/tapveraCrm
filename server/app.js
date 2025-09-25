@@ -29,8 +29,11 @@ const wishRoutes = require("./routes/wishRoutes");
 const flexibleShiftRoutes = require("./routes/flexibleShiftRoutes");
 const shiftRoutes = require("./routes/shiftRoutes");
 const adminAttendanceRoutes = require("./routes/adminAttendanceRoutes");
+const manualAttendanceRoutes = require("./routes/manualAttendanceRoutes");
 const holidayRoutes = require("./routes/holidayRoutes");
 const superAdminRoutes = require("./routes/superAdminRoutes"); // Make sure this file exists
+const payslipRoutes = require("./routes/payslipRoutes");
+const celebrationRoutes = require("./routes/celebrationRoutes");
 
 // Controllers
 const ChatController = require("./controllers/chatController");
@@ -99,7 +102,10 @@ app.use("/api/holidays", holidayRoutes);
 app.use("/api/flexible-shifts", flexibleShiftRoutes);
 app.use("/api/shifts", shiftRoutes);
 app.use("/api/admin", adminAttendanceRoutes);
+app.use("/api/admin/manual-attendance", manualAttendanceRoutes);
 app.use("/api/super-admin", superAdminRoutes); // Super admin route added
+app.use("/api/payslips", payslipRoutes);
+app.use("/api/celebrations", celebrationRoutes);
 
 
 

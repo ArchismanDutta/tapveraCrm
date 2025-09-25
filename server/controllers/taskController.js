@@ -7,6 +7,7 @@ const populateTask = (query) =>
   query
     .populate("assignedTo", "name email")
     .populate("assignedBy", "name email")
+    .populate("lastEditedBy", "name email")
     .populate("remarks.user", "name email");
 
 // ------------------- CREATE TASK -------------------
@@ -86,6 +87,12 @@ exports.editTask = async (req, res) => {
 
     if (priority && ["High", "Medium", "Low"].includes(priority)) task.priority = priority;
 
+    // Track who last edited the task
+    task.lastEditedBy = req.user._id;
+
+    // Ensure the field is marked as modified for existing documents
+    task.markModified('lastEditedBy');
+
     await task.save();
     const populated = await populateTask(Task.findById(taskId)).lean();
 
@@ -131,6 +138,12 @@ exports.updateTaskStatus = async (req, res) => {
     }
 
     task.status = status;
+    // Track who last edited the task
+    task.lastEditedBy = req.user._id;
+
+    // Ensure the field is marked as modified for existing documents
+    task.markModified('lastEditedBy');
+
     await task.save();
 
     const populated = await populateTask(Task.findById(taskId)).lean();
@@ -242,6 +255,127 @@ exports.getRemarks = async (req, res) => {
     res.json(task.remarks || []);
   } catch (err) {
     console.error("Error fetching remarks:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+// ------------------- GET EMPLOYEE TASK ANALYTICS -------------------
+exports.getEmployeeTaskAnalytics = async (req, res) => {
+  try {
+    const { employeeId } = req.params;
+
+    // Check if the employee exists
+    const User = require("../models/User");
+    const employee = await User.findById(employeeId).select("name email role");
+    if (!employee) {
+      return res.status(404).json({ message: "Employee not found" });
+    }
+
+    // Get all tasks assigned to this employee
+    const tasks = await Task.find({
+      assignedTo: { $in: [employeeId] }
+    })
+    .populate("assignedBy", "name email")
+    .populate("assignedTo", "name email")
+    .sort({ createdAt: -1 });
+
+    // Calculate analytics
+    const totalTasks = tasks.length;
+    const completedTasks = tasks.filter(task => task.status === "completed").length;
+    const inProgressTasks = tasks.filter(task => task.status === "in-progress").length;
+    const pendingTasks = tasks.filter(task => task.status === "pending").length;
+    const overdueTasks = tasks.filter(task => {
+      const now = new Date();
+      const dueDate = new Date(task.dueDate);
+      return task.status !== "completed" && dueDate < now;
+    }).length;
+
+    // Calculate completion rate
+    const completionRate = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+
+    // Group tasks by priority
+    const highPriorityTasks = tasks.filter(task => task.priority === "high").length;
+    const mediumPriorityTasks = tasks.filter(task => task.priority === "medium").length;
+    const lowPriorityTasks = tasks.filter(task => task.priority === "low").length;
+
+    // Recent tasks (last 10)
+    const recentTasks = tasks.slice(0, 10).map(task => ({
+      _id: task._id,
+      title: task.title,
+      description: task.description,
+      status: task.status,
+      priority: task.priority,
+      dueDate: task.dueDate,
+      assignedBy: task.assignedBy,
+      createdAt: task.createdAt,
+      updatedAt: task.updatedAt
+    }));
+
+    // Tasks by status with details
+    const tasksByStatus = {
+      completed: tasks.filter(task => task.status === "completed").map(task => ({
+        _id: task._id,
+        title: task.title,
+        status: task.status,
+        priority: task.priority,
+        dueDate: task.dueDate,
+        completedAt: task.updatedAt
+      })),
+      inProgress: tasks.filter(task => task.status === "in-progress").map(task => ({
+        _id: task._id,
+        title: task.title,
+        status: task.status,
+        priority: task.priority,
+        dueDate: task.dueDate,
+        createdAt: task.createdAt
+      })),
+      pending: tasks.filter(task => task.status === "pending").map(task => ({
+        _id: task._id,
+        title: task.title,
+        status: task.status,
+        priority: task.priority,
+        dueDate: task.dueDate,
+        createdAt: task.createdAt
+      })),
+      overdue: tasks.filter(task => {
+        const now = new Date();
+        const dueDate = new Date(task.dueDate);
+        return task.status !== "completed" && dueDate < now;
+      }).map(task => ({
+        _id: task._id,
+        title: task.title,
+        status: task.status,
+        priority: task.priority,
+        dueDate: task.dueDate,
+        daysPastDue: Math.ceil((new Date() - new Date(task.dueDate)) / (1000 * 60 * 60 * 24))
+      }))
+    };
+
+    const analytics = {
+      employee: {
+        _id: employee._id,
+        name: employee.name,
+        email: employee.email,
+        role: employee.role
+      },
+      summary: {
+        totalTasks,
+        completedTasks,
+        inProgressTasks,
+        pendingTasks,
+        overdueTasks,
+        completionRate,
+        highPriorityTasks,
+        mediumPriorityTasks,
+        lowPriorityTasks
+      },
+      recentTasks,
+      tasksByStatus
+    };
+
+    res.json(analytics);
+  } catch (err) {
+    console.error("Error fetching employee task analytics:", err);
     res.status(500).json({ message: "Server error" });
   }
 };

@@ -1,5 +1,5 @@
 import React from "react";
-import { CheckCircle, XCircle, AlertCircle } from "lucide-react";
+import { CheckCircle, XCircle, AlertCircle, Edit3 } from "lucide-react";
 
 const statusStyles = {
   Approved: "bg-green-100 text-green-700",
@@ -22,7 +22,7 @@ const leaveTypeLabels = {
   halfDay: "Half Day",
 };
 
-const RecentLeaveRequests = ({ requests }) => {
+const RecentLeaveRequests = ({ requests, onEditRequest }) => {
   const safeRequests = Array.isArray(requests) ? requests : [];
 
   const formatFileSize = (size) => {
@@ -49,6 +49,7 @@ const RecentLeaveRequests = ({ requests }) => {
               <th className="p-3 text-left">Status</th>
               <th className="p-3 text-left">Remarks</th>
               <th className="p-3 text-left">Document</th>
+              <th className="p-3 text-left">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -91,6 +92,23 @@ const RecentLeaveRequests = ({ requests }) => {
                       </a>
                     ) : (
                       "-"
+                    )}
+                  </td>
+                  <td className="p-3">
+                    {req?.status === "Pending" && onEditRequest ? (
+                      <button
+                        onClick={() => onEditRequest(req)}
+                        className="inline-flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-medium bg-blue-600/20 hover:bg-blue-600/40 text-blue-400 border border-blue-500/30 hover:border-blue-500/50 transition-colors"
+                        title="Edit leave request"
+                      >
+                        <Edit3 size={12} />
+                        Edit
+                      </button>
+                    ) : (
+                      <span className="text-gray-500 text-xs">
+                        {req?.status === "Approved" ? "Approved" :
+                         req?.status === "Rejected" ? "Rejected" : "-"}
+                      </span>
                     )}
                   </td>
                 </tr>

@@ -10,6 +10,7 @@ import {
   Users,
   Calendar,
   Clock,
+  DollarSign,
 } from "lucide-react";
 import { FaChevronCircleRight } from "react-icons/fa";
 
@@ -39,6 +40,7 @@ const menuConfig = {
     { to: "/attendance", icon: <ClipboardList size={18} />, label: "My Attendance" },
     { to: "/directory", icon: <Users size={18} />, label: "Employee Details" },
     { to: "/admin/shifts", icon: <Clock size={18} />, label: "Shift Management" },
+    { to: "/admin/manual-attendance", icon: <Calendar size={18} />, label: "Manual Attendance" },
     { to: "/admin/notices", icon: <Flag size={18} />, label: "Notice Board" },
     { to: "/admin/holidays", icon: <Calendar size={18} />, label: "Holidays List" },
     { to: "/messages", icon: <MessageCircle size={18} />, label: "Messages" },
@@ -53,6 +55,7 @@ const menuConfig = {
     { to: "/leaves", icon: <FileText size={18} />, label: "My Leaves" },
     { to: "/messages", icon: <MessageCircle size={18} />, label: "Messages" },
     { to: "/admin/shifts", icon: <Clock size={18} />, label: "Shift Management" },
+    // { to: "/admin/manual-attendance", icon: <Calendar size={18} />, label: "Manual Attendance" },
     { to: "/admin/holidays", icon: <Calendar size={18} />, label: "Holidays List" },
     { to: "/attendance", icon: <ClipboardList size={18} />, label: "My Attendance" },
     { to: "/profile", icon: <User size={18} />, label: "My Profile" },
@@ -65,6 +68,8 @@ const menuConfig = {
     { to: "/admin/leaves", icon: <FileText size={18} />, label: "Leave Requests" },
     { to: "/directory", icon: <Users size={18} />, label: "Employee Details" },
     { to: "/admin/shifts", icon: <Clock size={18} />, label: "Shift Management" },
+    { to: "/admin/manual-attendance", icon: <Calendar size={18} />, label: "Manual Attendance" },
+    { to: "/admin/salary-management", icon: <DollarSign size={18} />, label: "Salary Management" },
     { to: "/todo", icon: <ClipboardList size={18} />, label: "Todo" },
     { to: "/admin/notices", icon: <Flag size={18} />, label: "Notice Board" },
     { to: "/messages", icon: <MessageCircle size={18} />, label: "Messages" },
