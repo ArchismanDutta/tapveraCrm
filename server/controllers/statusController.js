@@ -137,22 +137,119 @@ function ymdKey(date) {
 function getWorkDurationSeconds(workedSessions, currentlyWorking) {
   if (!Array.isArray(workedSessions)) return 0;
 
-  let total = workedSessions.reduce((sum, s) => {
-    if (s && s.start && s.end)
-      return (
-        sum + (new Date(s.end).getTime() - new Date(s.start).getTime()) / 1000
-      );
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const todayEnd = new Date(today);
+  todayEnd.setHours(23, 59, 59, 999);
+
+  // Filter to only include today's sessions and validate durations
+  const todaysSessions = workedSessions.filter(session => {
+    if (!session || !session.start) return false;
+
+    const sessionStart = new Date(session.start);
+
+    // Only include sessions that started today
+    if (sessionStart < today || sessionStart > todayEnd) {
+      console.warn(`⚠️ Filtering out non-today work session:`, {
+        sessionStart: session.start,
+        today: today.toISOString(),
+        todayEnd: todayEnd.toISOString()
+      });
+      return false;
+    }
+
+    return true;
+  });
+
+  // Deduplicate sessions to prevent double counting
+  const uniqueSessions = [];
+  const sessionMap = new Map();
+
+  todaysSessions.forEach(session => {
+    const key = `${session.start}-${session.end || 'ongoing'}`;
+    if (!sessionMap.has(key)) {
+      sessionMap.set(key, session);
+      uniqueSessions.push(session);
+    } else {
+      console.warn(`⚠️ Duplicate session detected and removed:`, {
+        sessionStart: session.start,
+        sessionEnd: session.end
+      });
+    }
+  });
+
+  let total = uniqueSessions.reduce((sum, s) => {
+    if (s && s.start && s.end) {
+      const sessionDuration = (new Date(s.end).getTime() - new Date(s.start).getTime()) / 1000;
+
+      // Validate session duration
+      if (sessionDuration <= 0) {
+        console.warn(`⚠️ Invalid work session duration (negative or zero):`, {
+          duration: sessionDuration,
+          sessionStart: s.start,
+          sessionEnd: s.end
+        });
+        return sum; // Skip invalid sessions
+      }
+
+      // Cap individual sessions at 24 hours (86400 seconds) to prevent corruption
+      if (sessionDuration > 86400) {
+        console.warn(`⚠️ Work session exceeds 24 hours, capping:`, {
+          originalDuration: sessionDuration,
+          cappedDuration: 86400,
+          sessionStart: s.start,
+          sessionEnd: s.end
+        });
+        return sum + 86400;
+      }
+
+      return sum + sessionDuration;
+    }
     return sum;
   }, 0);
 
-  if (currentlyWorking && workedSessions.length) {
-    const last = workedSessions[workedSessions.length - 1];
+  // Final validation: cap total work duration at 24 hours per day
+  if (total > 86400) {
+    console.warn(`⚠️ Total work duration exceeds 24 hours, capping:`, {
+      originalTotal: total,
+      cappedTotal: 86400,
+      sessionsCount: uniqueSessions.length
+    });
+    total = 86400;
+  }
+
+  if (currentlyWorking && uniqueSessions.length) {
+    const last = uniqueSessions[uniqueSessions.length - 1];
     if (last && last.start && !last.end) {
-      total += (Date.now() - new Date(last.start).getTime()) / 1000;
+      const ongoingDuration = (Date.now() - new Date(last.start).getTime()) / 1000;
+
+      // Cap ongoing session at 24 hours to prevent corruption
+      if (ongoingDuration > 86400) {
+        console.warn(`⚠️ Ongoing work session exceeds 24 hours, capping:`, {
+          originalDuration: ongoingDuration,
+          cappedDuration: 86400,
+          sessionStart: last.start
+        });
+        total += 86400;
+      } else {
+        total += ongoingDuration;
+      }
     }
   }
 
-  return Math.floor(total);
+  const finalTotal = Math.floor(total);
+
+  // Additional validation - log if total seems unrealistic
+  if (finalTotal > 86400) {
+    console.warn(`⚠️ Total work duration exceeds 24 hours:`, {
+      totalSeconds: finalTotal,
+      totalHours: (finalTotal / 3600).toFixed(1),
+      sessionsCount: todaysSessions.length,
+      sessions: todaysSessions
+    });
+  }
+
+  return finalTotal;
 }
 
 function getBreakDurationSeconds(breakSessions, onBreak, breakStart) {
@@ -363,12 +460,17 @@ async function syncDailyWork(userId, todayStatus, userTimeZone = "UTC") {
     durationHours: effectiveShift.durationHours || 9,
   };
 
-  // Get arrival time from todayStatus or timeline
+  // Get arrival time - always use timeline as source of truth
   let arrivalTime = todayStatus.arrivalTime;
-  if (!arrivalTime && todayStatus.timeline) {
+  if (todayStatus.timeline) {
     const timelineArrival = getFirstPunchInTime(todayStatus.timeline);
     if (timelineArrival) {
+      // Use timeline as source of truth
       arrivalTime = timelineArrival;
+      // Update todayStatus if different
+      if (!todayStatus.arrivalTime || timelineArrival.getTime() !== new Date(todayStatus.arrivalTime).getTime()) {
+        todayStatus.arrivalTime = timelineArrival;
+      }
     }
   }
 
@@ -503,6 +605,19 @@ async function getTodayStatus(req, res) {
       breakSecs = attendanceData.breakDurationSeconds;
     }
 
+    // Ensure arrival time consistency - use timeline as source of truth
+    if (todayStatus.timeline) {
+      const timelineArrival = getFirstPunchInTime(todayStatus.timeline);
+      if (timelineArrival) {
+        // Use timeline as source of truth and update stored arrivalTime if different
+        if (!todayStatus.arrivalTime || timelineArrival.getTime() !== new Date(todayStatus.arrivalTime).getTime()) {
+          todayStatus.arrivalTime = timelineArrival;
+          // Save the updated arrival time
+          await todayStatus.save();
+        }
+      }
+    }
+
     const payload = {
       ...todayStatus.toObject(),
       effectiveShift,
@@ -568,8 +683,8 @@ async function updateTodayStatus(req, res) {
       { upsert: true, new: true }
     );
 
-    const ws = todayStatus.workedSessions || [];
-    const bs = todayStatus.breakSessions || [];
+    let ws = todayStatus.workedSessions || [];
+    let bs = todayStatus.breakSessions || [];
 
     if (timelineEvent && timelineEvent.type) {
       // Validate timeline event
@@ -636,8 +751,54 @@ async function updateTodayStatus(req, res) {
           });
         }
 
-        if (!todayStatus.arrivalTime) todayStatus.arrivalTime = now;
-        if (!ws.length || ws[ws.length - 1].end) ws.push({ start: now });
+        // Set arrival time - update it if this is the first punch-in of the day or if it's earlier than the existing arrival time
+        const existingPunchIns = todayTimeline.filter((e) =>
+          e.type.toLowerCase().includes("punch in")
+        );
+
+        // If this is the first punch-in of the day, set the arrival time
+        // Or if this punch-in is earlier than the existing arrival time, update it
+        if (!todayStatus.arrivalTime || existingPunchIns.length === 0) {
+          todayStatus.arrivalTime = now;
+        } else if (now < todayStatus.arrivalTime) {
+          todayStatus.arrivalTime = now;
+        }
+
+        // Clean up old work sessions that don't belong to today (data integrity fix)
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const todayEnd = new Date(today);
+        todayEnd.setHours(23, 59, 59, 999);
+
+        const originalSessionCount = ws.length;
+        ws = ws.filter(session => {
+          if (!session || !session.start) return false;
+          const sessionStart = new Date(session.start);
+          return sessionStart >= today && sessionStart <= todayEnd;
+        });
+
+        if (originalSessionCount !== ws.length) {
+          console.log(`🧹 Cleaned up ${originalSessionCount - ws.length} old work sessions for user ${userId}`);
+        }
+
+        // Create new work session for today
+        if (!ws.length || ws[ws.length - 1].end) {
+          ws.push({ start: now });
+          console.log(`✅ Created new work session for user ${userId} at ${now.toISOString()}`);
+        }
+
+        // Also clean up old break sessions while we're at it
+        const originalBreakCount = bs.length;
+        bs = bs.filter(session => {
+          if (!session || !session.start) return false;
+          const sessionStart = new Date(session.start);
+          return sessionStart >= today && sessionStart <= todayEnd;
+        });
+
+        if (originalBreakCount !== bs.length) {
+          console.log(`🧹 Cleaned up ${originalBreakCount - bs.length} old break sessions for user ${userId}`);
+        }
+
         todayStatus.currentlyWorking = true;
         todayStatus.onBreak = false;
         todayStatus.breakStartTime = null;
@@ -730,6 +891,9 @@ async function updateTodayStatus(req, res) {
         todayStatus.breakStartTime = req.body.breakStartTime
           ? new Date(req.body.breakStartTime)
           : now;
+
+        // Store the break start time for fallback calculations
+        todayStatus.lastBreakStart = todayStatus.breakStartTime;
       } else if (lower.includes("resume")) {
         // Enhanced resume work validation
         if (!todayStatus.onBreak) {
@@ -762,6 +926,16 @@ async function updateTodayStatus(req, res) {
         todayStatus.currentlyWorking = true;
         todayStatus.onBreak = false;
         todayStatus.breakStartTime = null;
+      }
+
+      // Validate break types for consistency with frontend
+      const allowedBreakTypes = ["Lunch", "Coffee", "Personal"];
+      if (rawType.includes("Break Start") && payload.breakType) {
+        if (!allowedBreakTypes.includes(payload.breakType)) {
+          return res.status(400).json({
+            error: `Invalid break type. Allowed types: ${allowedBreakTypes.join(", ")}`
+          });
+        }
       }
 
       // Enhanced timeline tracking with proper event structure
@@ -855,12 +1029,16 @@ async function updateTodayStatus(req, res) {
       attendanceStatus = finalAttendanceData.attendanceStatus;
     }
 
-    // Enhanced arrival time logic
+    // Enhanced arrival time logic - always use the earliest punch-in from timeline as source of truth
     let arrivalTime = todayStatus.arrivalTime;
-    if (!arrivalTime && todayStatus.timeline) {
+    if (todayStatus.timeline) {
       const timelineArrival = getFirstPunchInTime(todayStatus.timeline);
       if (timelineArrival) {
-        arrivalTime = timelineArrival;
+        // Use timeline as source of truth and update stored arrivalTime if different
+        if (!arrivalTime || timelineArrival.getTime() !== new Date(arrivalTime).getTime()) {
+          arrivalTime = timelineArrival;
+          todayStatus.arrivalTime = timelineArrival;
+        }
       }
     }
 

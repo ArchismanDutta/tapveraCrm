@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
 import axios from "axios";
+import { attendanceUtils } from "../api.js";
 import AttendanceStats from "../components/attendance/AttendanceStats";
 import AttendanceCalendar from "../components/attendance/AttendanceCalendar";
 import WeeklyHoursChart from "../components/attendance/WeeklyHoursChart";
@@ -25,6 +26,7 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
   const [employeeCache, setEmployeeCache] = useState(new Map());
   const [showDropdown, setShowDropdown] = useState(false);
+  const [hasFullMonthData, setHasFullMonthData] = useState(false);
 
   // Dropdown positioning (Portal)
   const selectorRef = useRef(null);
@@ -40,11 +42,11 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
   // Enhanced axios configuration with proper error handling
   const apiClient = axios.create({
     baseURL: API_BASE,
-    headers: { 
+    headers: {
       Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json'
     },
-    timeout: 5000, // Reduced timeout for faster failure detection
+    timeout: 30000, // Increased timeout for complex attendance calculations
   });
 
   // Add response interceptor for better error handling
@@ -59,25 +61,9 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
     }
   );
 
-  // Utility functions
-  const calculateHoursFromSeconds = (seconds) => {
-    if (!seconds || seconds === 0) return 0;
-    return Math.round((seconds / 3600) * 10) / 10;
-  };
-
-  const formatTime = (dateString) => {
-    if (!dateString) return "--";
-    try {
-      const date = new Date(dateString);
-      return date.toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-        hour12: true
-      });
-    } catch {
-      return "--";
-    }
-  };
+  // Use standardized utility functions
+  const calculateHoursFromSeconds = attendanceUtils.calculateWorkHours;
+  const formatTime = attendanceUtils.formatTime;
 
   const isWorkingDay = (date) => {
     const day = date.getDay();
@@ -114,69 +100,9 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
     return workingDays;
   };
 
-  // Enhanced timeline parsing with better error handling
-  const getPunchTimeFromTimeline = (timeline, eventType) => {
-    if (!Array.isArray(timeline) || timeline.length === 0) return null;
-    
-    try {
-      const events = timeline.filter(event => 
-        event.type && event.type.toLowerCase().includes(eventType.toLowerCase())
-      );
-      
-      if (events.length === 0) return null;
-      
-      // For punch in, get the first occurrence; for punch out, get the last
-      const sortedEvents = events.sort((a, b) => new Date(a.time) - new Date(b.time));
-      const targetEvent = eventType === "punch in" ? sortedEvents[0] : sortedEvents[sortedEvents.length - 1];
-      
-      return new Date(targetEvent.time);
-    } catch (error) {
-      console.warn(`Error parsing timeline for ${eventType}:`, error);
-      return null;
-    }
-  };
-
-  const getArrivalTime = (dailyData) => {
-    // Priority 1: Direct arrivalTime field
-    if (dailyData.arrivalTime) {
-      return new Date(dailyData.arrivalTime);
-    }
-    
-    // Priority 2: First punch in from timeline
-    if (dailyData.timeline && Array.isArray(dailyData.timeline)) {
-      const punchInTime = getPunchTimeFromTimeline(dailyData.timeline, "punch in");
-      if (punchInTime) return punchInTime;
-    }
-    
-    // Priority 3: First worked session start time
-    if (dailyData.workedSessions && Array.isArray(dailyData.workedSessions) && dailyData.workedSessions.length > 0) {
-      const firstSession = dailyData.workedSessions[0];
-      if (firstSession.start) {
-        return new Date(firstSession.start);
-      }
-    }
-    
-    return null;
-  };
-
-  // Derive robust departure time: prefer direct field, otherwise last punch out, else last session end
-  const getDepartureTime = (dailyData) => {
-    if (!dailyData) return null;
-    if (dailyData.departureTime) {
-      try { return new Date(dailyData.departureTime); } catch {}
-    }
-    if (Array.isArray(dailyData.timeline)) {
-      const po = getPunchTimeFromTimeline(dailyData.timeline, "punch out");
-      if (po) return po;
-    }
-    if (Array.isArray(dailyData.workedSessions) && dailyData.workedSessions.length > 0) {
-      const last = dailyData.workedSessions[dailyData.workedSessions.length - 1];
-      if (last?.end) {
-        try { return new Date(last.end); } catch {}
-      }
-    }
-    return null;
-  };
+  // Use standardized utility functions for time extraction
+  const getArrivalTime = attendanceUtils.getArrivalTime;
+  const getDepartureTime = attendanceUtils.getDepartureTime;
 
   // Position dropdown right under the selector using a Portal
   const updateDropdownPosition = useCallback(() => {
@@ -228,10 +154,19 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
   const fetchCurrentStatus = useCallback(async (employeeId) => {
     if (!employeeId) return null;
     try {
-      const response = await apiClient.get(`/api/status/today/${employeeId}`);
+      console.log('Fetching current status for employee:', employeeId);
+      const response = await apiClient.get(`/api/status/today/${employeeId}`, {
+        params: { _t: Date.now() } // Cache-busting parameter
+      });
+      console.log('Current status response:', response.data);
       return response.data;
     } catch (error) {
       console.error('Error fetching current status:', error);
+      console.error('Current status error details:', {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status
+      });
       return null;
     }
   }, []);
@@ -254,10 +189,10 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
     
     // Add overall timeout to prevent hanging
     const overallTimeout = setTimeout(() => {
-      setError('Request timeout - please try again');
+      setError('Request timeout - The server is taking longer than expected. Please try again or contact support.');
       setLoadingEmployeeData(false);
       setRefreshing(false);
-    }, 15000); // 15 second overall timeout
+    }, 45000); // 45 second overall timeout for complex operations
     
     try {
       if (isRefresh) {
@@ -266,159 +201,302 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
       setError(null);
 
       const now = new Date();
-      // Use full current month range so the calendar has complete data
-      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-      monthStart.setHours(0, 0, 0, 0);
-      const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-      monthEnd.setHours(23, 59, 59, 999);
+
+      // For SuperAdmin portal, start with a smaller date range for faster loading
+      // Use last 2 weeks instead of full month for initial load
+      let dataStart, dataEnd;
+
+      if (isRefresh || hasFullMonthData) {
+        // On refresh or when full data is requested, use full month for complete data
+        dataStart = new Date(now.getFullYear(), now.getMonth(), 1);
+        dataEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        setHasFullMonthData(true);
+      } else {
+        // Initial load: last 2 weeks for faster response
+        dataStart = new Date(now);
+        dataStart.setDate(now.getDate() - 14);
+        dataEnd = new Date(now);
+        setHasFullMonthData(false);
+      }
+
+      dataStart.setHours(0, 0, 0, 0);
+      dataEnd.setHours(23, 59, 59, 999);
+
+      console.log('Date range strategy:', isRefresh ? 'Full month' : 'Last 2 weeks');
 
       // Create a timeout promise for the main API call
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Request timeout')), 8000)
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Request timeout - Server took longer than 30 seconds')), 30000)
       );
 
       // Fetch only the essential weekly data with timeout
+      console.log('Fetching attendance data for employee:', employeeId);
+      console.log('Date range:', {
+        startDate: dataStart.toISOString(),
+        endDate: dataEnd.toISOString()
+      });
+
       const weeklyRes = await Promise.race([
         apiClient.get('/api/summary/week', {
           params: {
             userId: employeeId,
-            startDate: monthStart.toISOString(),
-            endDate: monthEnd.toISOString(),
+            startDate: dataStart.toISOString(),
+            endDate: dataEnd.toISOString(),
+            _t: Date.now(), // Cache-busting parameter
           },
         }),
         timeoutPromise
       ]);
 
-      // Set basic stats immediately for faster UI response
-      const { dailyData = [] } = weeklyRes.data;
-      const presentDaysCount = dailyData.filter(d => (d.workDurationSeconds || 0) >= MIN_PRESENT_SECONDS).length;
-      const totalWorkHours = dailyData.reduce((sum, d) => 
-        sum + calculateHoursFromSeconds(d.workDurationSeconds || 0), 0
-      );
+      console.log('Weekly data response:', weeklyRes.data);
 
-      // Don't set stats yet - wait for complete data
+      // Set basic stats immediately for faster UI response
+      const { dailyData = [] } = weeklyRes.data || {};
+
+      if (!Array.isArray(dailyData)) {
+        throw new Error('Invalid response format: dailyData is not an array');
+      }
+
+      console.log('Daily data received:', dailyData.length, 'records');
+
+      // Calculate total work hours with validation to catch unrealistic values
+      const totalWorkHours = dailyData.reduce((sum, d) => {
+        const workSeconds = d.workDurationSeconds || 0;
+
+        // Log any unrealistic values (more than 24 hours = 86400 seconds)
+        if (workSeconds > 86400) {
+          console.warn(`⚠️ Unrealistic work duration detected for ${d.date}:`, {
+            workDurationSeconds: workSeconds,
+            workHours: (workSeconds / 3600).toFixed(1),
+            recordId: d._id
+          });
+          // Cap at 24 hours maximum for calculation purposes
+          return sum + attendanceUtils.calculateWorkHours(Math.min(workSeconds, 86400));
+        }
+
+        return sum + attendanceUtils.calculateWorkHours(workSeconds);
+      }, 0);
+
+      // Use standardized attendance status determination
+      let presentDaysCount = 0;
+      let lateDaysCount = 0;
+      let halfDayCount = 0;
+
+      dailyData.forEach(d => {
+        const statusInfo = attendanceUtils.getAttendanceStatus(d);
+        if (statusInfo.status === 'present') presentDaysCount++;
+        else if (statusInfo.status === 'late') lateDaysCount++;
+        else if (statusInfo.status === 'half-day') halfDayCount++;
+      });
+
+      console.log('Standardized stats calculated:', {
+        presentDaysCount,
+        lateDaysCount,
+        halfDayCount,
+        totalWorkHours: totalWorkHours.toFixed(1)
+      });
 
       // Fetch additional data in parallel with shorter timeouts
+      console.log('Fetching additional data...');
       const [statusRes, leavesRes, holidaysRes] = await Promise.allSettled([
         fetchCurrentStatus(employeeId),
-        apiClient.get(`/api/leaves/employee/${employeeId}`, { timeout: 3000 }).catch(() => ({ data: [] })),
-        apiClient.get('/api/holidays?shift=standard', { timeout: 3000 }).catch(() => ({ data: [] }))
+        apiClient.get(`/api/leaves/employee/${employeeId}`, { timeout: 3000 }).catch((err) => {
+          console.warn('Leaves API failed:', err.message);
+          return { data: [] };
+        }),
+        apiClient.get('/api/holidays?shift=standard', { timeout: 3000 }).catch((err) => {
+          console.warn('Holidays API failed:', err.message);
+          return { data: [] };
+        })
       ]);
 
-      // Process the additional data results
-      const statusData = statusRes.status === 'fulfilled' ? statusRes.value : null;
-      const approvedLeaves = leavesRes.status === 'fulfilled' ? 
-        leavesRes.value.data.filter(l => l.status.toLowerCase() === "approved") : [];
-      const holidays = holidaysRes.status === 'fulfilled' ? holidaysRes.value.data || [] : [];
+      console.log('Promise.allSettled results:', {
+        statusRes: statusRes.status,
+        leavesRes: leavesRes.status,
+        holidaysRes: holidaysRes.status
+      });
 
-      // Calculate working days for accurate stats over the month
-      const weekWorkingDays = calculateWorkingDays(monthStart, monthEnd, holidays, approvedLeaves);
+      // Process the additional data results with better error handling
+      const statusData = statusRes.status === 'fulfilled' ? statusRes.value : null;
+
+      let approvedLeaves = [];
+      if (leavesRes.status === 'fulfilled' && leavesRes.value?.data) {
+        try {
+          approvedLeaves = Array.isArray(leavesRes.value.data) ?
+            leavesRes.value.data.filter(l => l.status?.toLowerCase() === "approved") : [];
+        } catch (err) {
+          console.warn('Error processing leaves data:', err);
+          approvedLeaves = [];
+        }
+      }
+
+      let holidays = [];
+      if (holidaysRes.status === 'fulfilled' && holidaysRes.value?.data) {
+        try {
+          holidays = Array.isArray(holidaysRes.value.data) ? holidaysRes.value.data : [];
+        } catch (err) {
+          console.warn('Error processing holidays data:', err);
+          holidays = [];
+        }
+      }
+
+      console.log('Processed additional data:', {
+        statusData: statusData ? 'loaded' : 'null',
+        approvedLeaves: approvedLeaves.length,
+        holidays: holidays.length
+      });
+
+      // Calculate working days for accurate stats over the data range
+      const weekWorkingDays = calculateWorkingDays(dataStart, dataEnd, holidays, approvedLeaves);
       
-      // Set complete stats with all accurate calculations
+      // Calculate on-time rate properly
+      const totalPresentDays = presentDaysCount + lateDaysCount + halfDayCount;
+      const onTimeRate = totalPresentDays > 0 ? Math.round((presentDaysCount / totalPresentDays) * 100) : 0;
+
+      // Set complete stats with standardized calculations
       setStats({
-        attendanceRate: weekWorkingDays > 0 ? Math.round((presentDaysCount / weekWorkingDays) * 100) : 0,
-        presentDays: presentDaysCount,
+        attendanceRate: weekWorkingDays > 0 ? Math.floor((totalPresentDays / weekWorkingDays) * 100) : 0,
+        presentDays: totalPresentDays,
         totalDays: weekWorkingDays,
         workingHours: totalWorkHours.toFixed(1),
-        onTimeRate: 0, // Will be calculated below
+        onTimeRate: `${onTimeRate}%`,
         lastUpdated: new Date().toLocaleString(),
-        period: "This month",
-        averageHoursPerDay: presentDaysCount > 0 ? (totalWorkHours / presentDaysCount).toFixed(1) : "0.0",
-        lateDays: 0, // Will be calculated below
+        period: isRefresh || hasFullMonthData ? "This month" : "Last 2 weeks",
+        averageHoursPerDay: totalPresentDays > 0 ? (totalWorkHours / totalPresentDays).toFixed(1) : "0.0",
+        lateDays: lateDaysCount,
+        halfDays: halfDayCount,
         currentStatus: statusData ? {
           isWorking: statusData.currentlyWorking,
           onBreak: statusData.onBreak,
           todayHours: calculateHoursFromSeconds(statusData.workDurationSeconds || 0).toFixed(1),
-          arrivalTime: statusData.arrivalTimeFormatted
+          arrivalTime: statusData.arrivalTimeFormatted || attendanceUtils.formatTime(statusData.arrivalTime)
         } : null
       });
 
-      // Calculate on-time rate (only for standard shift employees)
-      const onTimeDays = dailyData.filter(d => {
-        if ((d.workDurationSeconds || 0) < MIN_PRESENT_SECONDS) return false;
-        
-        // Only calculate late/early for standard shift employees
-        if (d.effectiveShift?.isFlexible) return true; // Flexible shift = always on-time if present
-        
-        const arrivalTime = getArrivalTime(d);
-        if (!arrivalTime) return false;
-        
-        const expectedStart = d.effectiveShift?.start || d.expectedStartTime || "09:00";
-        const [expH, expM] = expectedStart.split(":").map(Number);
-        const expectedDate = new Date(arrivalTime);
-        expectedDate.setHours(expH, expM, 0, 0);
-        
-        return arrivalTime <= expectedDate;
-      }).length;
-
-      const onTimeRate = presentDaysCount > 0 ? 
-        Math.round((onTimeDays / presentDaysCount) * 100) : 0;
-
-      // Final stats update with complete data
-      setStats(prev => ({
-        ...prev,
-        onTimeRate,
-        lateDays: presentDaysCount - onTimeDays
-      }));
+      console.log('Stats calculation completed:', {
+        attendanceRate: weekWorkingDays > 0 ? Math.floor((totalPresentDays / weekWorkingDays) * 100) : 0,
+        presentDays: totalPresentDays,
+        lateDays: lateDaysCount,
+        onTimeRate: `${onTimeRate}%`
+      });
 
       // Simplified calendar data processing for faster loading
       const nowMonth = now.toLocaleString("default", { month: "long" });
       const year = now.getFullYear();
       const monthIndex = now.getMonth();
       const maxDays = new Date(year, monthIndex + 1, 0).getDate();
+
+      console.log('Calendar processing for:', hasFullMonthData ? 'Full month' : 'Recent data only');
       
-      // Create a simple calendar with basic data
+      // Create enhanced calendar data with complete attendance information
       const days = Array.from({ length: maxDays }, (_, i) => {
         const dayNum = i + 1;
         const dateObj = new Date(year, monthIndex, dayNum);
         const dayOfWeek = dateObj.getDay();
         const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-        
+
         // Find matching attendance data
         const attendanceData = dailyData.find(d => {
           const dDate = new Date(d.date);
-          return dDate.getDate() === dayNum && dDate.getMonth() === monthIndex;
+          return dDate.getDate() === dayNum && dDate.getMonth() === monthIndex && dDate.getFullYear() === year;
         });
-        
+
         let status = "absent";
         let workingHours = "0.0";
-        
+        let arrivalTime = null;
+        let departureTime = null;
+        let metadata = {};
+
         if (attendanceData) {
-          const workSeconds = attendanceData.workDurationSeconds || 0;
-          workingHours = calculateHoursFromSeconds(workSeconds).toFixed(1);
-          
-          if (workSeconds >= MIN_PRESENT_SECONDS) {
-            status = "present";
-          } else if (workSeconds > 0) {
-            status = "half-day";
-          }
+          // Use standardized status determination with new logic
+          const statusInfo = attendanceUtils.getAttendanceStatus(attendanceData);
+          status = statusInfo.status;
+
+          // Calculate working hours with validation
+          const rawWorkSeconds = attendanceData.workDurationSeconds || 0;
+          const cappedWorkSeconds = Math.min(rawWorkSeconds, 86400); // Cap at 24 hours
+          workingHours = calculateHoursFromSeconds(cappedWorkSeconds).toFixed(1);
+
+          // Extract arrival and departure times
+          arrivalTime = attendanceUtils.getArrivalTime(attendanceData);
+          departureTime = attendanceUtils.getDepartureTime(attendanceData);
+
+          // Add metadata for tooltip display
+          metadata = {
+            workDurationSeconds: attendanceData.workDurationSeconds || 0,
+            breakDurationMinutes: attendanceUtils.calculateBreakMinutes(attendanceData),
+            isLate: attendanceData.isLate === true,
+            isEarly: attendanceData.isEarly === true,
+            shiftType: attendanceData.shiftType || 'standard',
+            expectedStartTime: attendanceData.expectedStartTime,
+            timeline: attendanceData.timeline || [],
+            actualWorkHours: (rawWorkSeconds / 3600).toFixed(1), // Uncapped for debugging
+            cappedWorkHours: (cappedWorkSeconds / 3600).toFixed(1)
+          };
+
+          console.log(`Calendar day ${dayNum}:`, {
+            status: status,
+            workingHours: workingHours,
+            rawSeconds: rawWorkSeconds,
+            workHours: (rawWorkSeconds / 3600).toFixed(1),
+            isLate: attendanceData.isLate,
+            isHalfDay: attendanceData.isHalfDay,
+            isFullDay: attendanceData.isFullDay
+          });
+
         } else if (isWeekend) {
           status = "weekend";
+          metadata = { isWeekend: true };
+        } else {
+          // Future dates or days with no data
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          dateObj.setHours(0, 0, 0, 0);
+
+          if (dateObj > today) {
+            status = "default"; // Future date
+            metadata = { isFuture: true };
+          } else {
+            status = "absent"; // Past date with no data
+            metadata = { noData: true };
+          }
         }
-        
-        return { 
-          day: dayNum, 
-          status, 
-          workingHours
+
+        return {
+          day: dayNum,
+          status,
+          workingHours,
+          arrivalTime: arrivalTime ? attendanceUtils.formatTime(arrivalTime) : null,
+          departureTime: departureTime ? attendanceUtils.formatTime(departureTime) : null,
+          metadata
         };
       });
 
       const firstDayOfMonth = new Date(year, monthIndex, 1);
       const startDayOfWeek = firstDayOfMonth.getDay();
 
-      // Set calendar data
+      // Calculate enhanced monthly stats
+      const monthlyStats = {
+        totalPresent: days.filter(d => d.status === "present").length,
+        totalLate: days.filter(d => d.status === "late").length,
+        totalHalfDay: days.filter(d => d.status === "half-day").length,
+        totalAbsent: days.filter(d => d.status === "absent").length,
+        totalWeekend: days.filter(d => d.status === "weekend").length,
+        totalLeave: 0, // Could be enhanced later
+        totalHolidays: 0, // Could be enhanced later
+        totalWorkingDays: days.filter(d => !["weekend", "default"].includes(d.status)).length,
+        totalWorkHours: days.reduce((sum, d) => sum + parseFloat(d.workingHours || 0), 0).toFixed(1)
+      };
+
+      console.log('Calendar monthly stats:', monthlyStats);
+
+      // Set calendar data with enhanced information
       setCalendarData({
         month: nowMonth,
         year,
         days,
         startDayOfWeek,
-        monthlyStats: {
-          totalPresent: days.filter(d => d.status === "present").length,
-          totalLate: days.filter(d => d.status === "late").length,
-          totalAbsent: days.filter(d => d.status === "absent").length,
-          totalLeave: 0, // Simplified for speed
-          totalHolidays: 0 // Simplified for speed
-        }
+        monthlyStats
       });
 
       // Simplified weekly hours processing
@@ -426,62 +504,74 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
       const weeklyHoursData = weekDays.map(label => ({ label, hours: 0, target: 8 }));
 
       dailyData.forEach(d => {
-        const dayOfWeek = new Date(d.date).getDay();
+        // Fix timezone issue for weekly chart
+        const dateString = typeof d.date === 'string' ?
+          (d.date.includes('T') ? d.date.split('T')[0] : d.date) :
+          d.date.toISOString().split('T')[0];
+        const dayOfWeek = new Date(dateString + 'T12:00:00').getDay();
         if (dayOfWeek >= 0 && dayOfWeek <= 6) {
-          weeklyHoursData[dayOfWeek].hours = calculateHoursFromSeconds(d.workDurationSeconds || 0);
+          const workSeconds = d.workDurationSeconds || 0;
+          // Cap at 24 hours for weekly chart display
+          const cappedSeconds = Math.min(workSeconds, 86400);
+          weeklyHoursData[dayOfWeek].hours = calculateHoursFromSeconds(cappedSeconds);
         }
       });
 
-      // Simplified recent activity processing
-      const recent = dailyData.slice(0, 5).map(d => {
-        const workSeconds = d.workDurationSeconds || 0;
-        const breakSeconds = d.breakDurationSeconds || 0;
-        
-        let status = "Absent";
-        let statusColor = "red";
-        
-        if (workSeconds >= MIN_PRESENT_SECONDS) {
-          status = "Present";
-          statusColor = "green";
-        } else if (workSeconds > 0) {
-          status = "Half Day";
-          statusColor = "orange";
-        }
+      // Standardized recent activity processing - sort by date descending and take most recent 5
+      const recent = dailyData
+        .sort((a, b) => new Date(b.date) - new Date(a.date))
+        .slice(0, 5)
+        .map(d => {
+          // Use standardized status determination
+          const statusInfo = attendanceUtils.getAttendanceStatus(d);
 
-        return {
-          date: new Date(d.date).toISOString().split("T")[0],
-          timeIn: formatTime(getArrivalTime(d)),
-          timeOut: formatTime(getDepartureTime(d)),
-          status,
-          statusColor,
-          workingHours: calculateHoursFromSeconds(workSeconds).toFixed(1) + "h",
-          breakTime: calculateHoursFromSeconds(breakSeconds).toFixed(1) + "h",
-          efficiency: workSeconds > 0 ? 
-            Math.round((workSeconds / (8 * 3600)) * 100) + "%" : "0%"
-        };
-      });
+          // Map status to display format
+          const statusDisplayMap = {
+            'present': { text: 'Present', color: 'green' },
+            'late': { text: 'Late', color: 'yellow' },
+            'half-day': { text: 'Half Day', color: 'orange' },
+            'absent': { text: 'Absent', color: 'red' }
+          };
+
+          const displayStatus = statusDisplayMap[statusInfo.status] || statusDisplayMap['absent'];
+
+          return {
+            date: typeof d.date === 'string' ?
+              (d.date.includes('T') ? d.date.split('T')[0] : d.date) :
+              d.date.toISOString().split('T')[0],
+            timeIn: formatTime(getArrivalTime(d)),
+            timeOut: formatTime(getDepartureTime(d)),
+            status: displayStatus.text,
+            statusColor: displayStatus.color,
+            workingHours: calculateHoursFromSeconds(Math.min(d.workDurationSeconds || 0, 86400)).toFixed(1) + "h",
+            breakTime: `${attendanceUtils.calculateBreakMinutes(d)}m`,
+            efficiency: (d.workDurationSeconds || 0) > 0 ?
+              Math.floor(((d.workDurationSeconds || 0) / (8 * 3600)) * 100) + "%" : "0%"
+          };
+        });
 
       // Set all data at once
       setWeeklyHours(weeklyHoursData);
       setRecentActivity(recent);
       setCurrentStatus(statusData);
 
-      // Cache the data for future use (use freshly computed values, not stale state)
+      // Cache the data for future use (use the same values as the current stats)
       const cachedStats = {
-        attendanceRate: weekWorkingDays > 0 ? Math.round((presentDaysCount / weekWorkingDays) * 100) : 0,
-        presentDays: presentDaysCount,
+        attendanceRate: weekWorkingDays > 0 ? Math.floor((totalPresentDays / weekWorkingDays) * 100) : 0,
+        presentDays: totalPresentDays,
         totalDays: weekWorkingDays,
         workingHours: totalWorkHours.toFixed(1),
-        onTimeRate,
+        onTimeRate: `${onTimeRate}%`,
         lastUpdated: new Date().toLocaleString(),
-        period: "This week",
-        averageHoursPerDay: presentDaysCount > 0 ? (totalWorkHours / presentDaysCount).toFixed(1) : "0.0",
-        lateDays: presentDaysCount - onTimeDays,
+        period: isRefresh || hasFullMonthData ? "This month" : "Last 2 weeks",
+        averageHoursPerDay: totalPresentDays > 0 ? (totalWorkHours / totalPresentDays).toFixed(1) : "0.0",
+        lateDays: lateDaysCount,
+        halfDays: halfDayCount,
         currentStatus: statusData ? {
           isWorking: statusData.currentlyWorking,
           onBreak: statusData.onBreak,
           todayHours: calculateHoursFromSeconds(statusData.workDurationSeconds || 0).toFixed(1),
-          arrivalTime: statusData.arrivalTimeFormatted
+          arrivalTime: statusData.arrivalTimeFormatted || attendanceUtils.formatTime(statusData.arrivalTime)
         } : null
       };
 
@@ -518,19 +608,86 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
 
     } catch (error) {
       console.error("Error loading attendance data:", error);
-      setError(error.response?.data?.message || error.message || "Failed to load attendance data");
+      console.error("Error details:", {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status,
+        stack: error.stack
+      });
+
+      let errorMessage = "Failed to load attendance data";
+
+      if (error.message === 'Request timeout') {
+        errorMessage = "Request timed out. Please try again.";
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.message) {
+        errorMessage = error.message;
+      } else if (error.code === 'ECONNABORTED') {
+        errorMessage = "Request timeout. Please check your connection.";
+      }
+
+      setError(errorMessage);
     } finally {
       clearTimeout(overallTimeout);
       setLoading(false);
       setLoadingEmployeeData(false);
       setRefreshing(false);
     }
-  }, [fetchCurrentStatus, employeeCache]);
+  }, [fetchCurrentStatus, employeeCache, hasFullMonthData]);
+
+  console.log('🔍 SuperAdminAttendancePortal Debug Info:', {
+    selectedEmployee: selectedEmployee?.name,
+    hasStats: !!stats,
+    hasCalendarData: !!calendarData,
+    hasWeeklyHours: weeklyHours?.length > 0,
+    hasRecentActivity: recentActivity?.length > 0,
+    loadingEmployeeData,
+    error: error
+  });
 
   // Load employees on component mount
   useEffect(() => {
     fetchEmployees();
   }, [fetchEmployees]);
+
+  // Listen for attendance data updates from manual attendance management
+  useEffect(() => {
+    const handleAttendanceUpdate = () => {
+      // Clear cache to force fresh data
+      setEmployeeCache(new Map());
+
+      // Refresh data for currently selected employee
+      if (selectedEmployee) {
+        fetchAttendanceData(selectedEmployee._id, true);
+      }
+    };
+
+    window.addEventListener('attendanceDataUpdated', handleAttendanceUpdate);
+
+    return () => {
+      window.removeEventListener('attendanceDataUpdated', handleAttendanceUpdate);
+    };
+  }, [selectedEmployee, fetchAttendanceData]);
+
+  // Auto-refresh current employee data periodically during work hours
+  useEffect(() => {
+    if (!selectedEmployee) return;
+
+    const refreshInterval = setInterval(() => {
+      const now = new Date();
+      const hour = now.getHours();
+      const isWeekday = now.getDay() >= 1 && now.getDay() <= 5;
+      const isWorkingHours = hour >= 8 && hour <= 19;
+
+      // Only auto-refresh during work hours on weekdays
+      if (isWeekday && isWorkingHours) {
+        fetchAttendanceData(selectedEmployee._id, true);
+      }
+    }, 300000); // 5 minutes
+
+    return () => clearInterval(refreshInterval);
+  }, [selectedEmployee, fetchAttendanceData]);
 
   // Load attendance data when employee is selected
   useEffect(() => {
@@ -556,11 +713,19 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
     }
   };
 
+  const handleLoadFullMonth = () => {
+    if (selectedEmployee) {
+      setHasFullMonthData(true);
+      fetchAttendanceData(selectedEmployee._id, true);
+    }
+  };
+
   const handleEmployeeSelect = useCallback((employee) => {
     // Only reset if selecting a different employee
     if (selectedEmployee?._id !== employee._id) {
       setSelectedEmployee(employee);
       setShowDropdown(false);
+      setHasFullMonthData(false); // Reset to start with fast load for new employee
       // Don't reset stats immediately - let the loading state handle the UI
       // The fetchAttendanceData will be called by useEffect and will show loading
     }
@@ -676,6 +841,16 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
               Refresh Employees
             </button>
+            {selectedEmployee && !hasFullMonthData && (
+              <button
+                onClick={handleLoadFullMonth}
+                disabled={loadingEmployeeData || refreshing}
+                className="px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 rounded-xl transition-all duration-300 flex items-center gap-2 shadow-lg hover:shadow-green-500/25 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <CalendarIcon className="w-4 h-4" />
+                Load Full Month
+              </button>
+            )}
             <button
               onClick={handleRefresh}
               disabled={refreshing || !selectedEmployee}

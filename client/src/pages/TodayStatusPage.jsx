@@ -11,6 +11,7 @@ import PunchOutConfirmPopup from "../components/workstatus/PunchOutConfirmPopup"
 import { toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 
+
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
 const SIDEBAR_WIDTH_EXPANDED = 288;
 const SIDEBAR_WIDTH_COLLAPSED = 80;
@@ -52,11 +53,6 @@ const normalizeEventType = (type) => {
   return normalized.replace(/[\s_-]+/g, "");
 };
 
-const statusColors = {
-  approved: "bg-green-500 text-white",
-  rejected: "bg-red-500 text-white",
-  pending: "bg-orange-500 text-white",
-};
 
 const TodayStatusPage = ({ onLogout }) => {
   const [collapsed, setCollapsed] = useState(false);
@@ -78,6 +74,18 @@ const TodayStatusPage = ({ onLogout }) => {
   const [flexibleRequests, setFlexibleRequests] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [requestInProgress, setRequestInProgress] = useState(false);
+  const [dataLoadingStates, setDataLoadingStates] = useState({
+    status: false,
+    weeklySummary: false,
+    flexibleRequests: false
+  });
+  const [dataErrors, setDataErrors] = useState({
+    status: null,
+    weeklySummary: null,
+    flexibleRequests: null
+  });
+  const [connectionStatus, setConnectionStatus] = useState('online');
+  const [lastSuccessfulFetch, setLastSuccessfulFetch] = useState(null);
 
   const token = localStorage.getItem("token");
 
@@ -86,34 +94,108 @@ const TodayStatusPage = ({ onLogout }) => {
     headers: { Authorization: `Bearer ${token}` },
   });
 
-  // Fetch today's status with enhanced error handling
-  const fetchStatus = useCallback(async () => {
+  // Enhanced fetch status with retry logic and cache-busting
+  const fetchStatus = useCallback(async (retryCount = 0) => {
+    const maxRetries = 3;
+    const retryDelay = Math.min(1000 * Math.pow(2, retryCount), 5000); // Exponential backoff
+
+    // Update loading state
+    setDataLoadingStates(prev => ({ ...prev, status: true }));
+    setDataErrors(prev => ({ ...prev, status: null }));
+
     try {
       const res = await axios.get(
         `${API_BASE}/api/status/today`,
-        getAxiosConfig()
+        {
+          ...getAxiosConfig(),
+          params: {
+            _timestamp: Date.now(), // Cache-busting
+            _retry: retryCount
+          },
+          timeout: 15000 // 15 second timeout
+        }
       );
-      console.log("Fetched status:", res.data);
-      setStatus(res.data);
+
+      console.log("✅ Successfully fetched status:", res.data);
+      console.log("🔍 ARRIVAL TIME DEBUG:");
+      console.log("  - arrivalTime:", res.data.arrivalTime);
+      console.log("  - arrivalTimeFormatted:", res.data.arrivalTimeFormatted);
+      console.log("  - timeline:", res.data.timeline);
+      console.log("  - first punch in from timeline:", res.data.timeline?.find(e => e.type?.toLowerCase().includes('punch in')));
+
+      // Validate critical data
+      if (res.data && typeof res.data === 'object') {
+        const statusData = { ...res.data };
+
+        // If server sends arrivalTime in UTC, convert to local formatted time
+        if (statusData.arrivalTime && !statusData.arrivalTimeFormatted) {
+          const arrivalDate = new Date(statusData.arrivalTime);
+          if (!isNaN(arrivalDate.getTime())) {
+            statusData.arrivalTimeFormatted = arrivalDate.toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+              hour12: true,
+            });
+            console.log("🕒 Converted initial fetch UTC arrival time to local:", statusData.arrivalTimeFormatted);
+          }
+        }
+
+        setStatus(statusData);
+        setDataLoadingStates(prev => ({ ...prev, status: false }));
+        setDataErrors(prev => ({ ...prev, status: null }));
+        setLastSuccessfulFetch(new Date());
+        return statusData;
+      } else {
+        throw new Error('Invalid status data received');
+      }
     } catch (err) {
       console.error(
-        "Failed to fetch today's status:",
-        err.response?.data || err
+        `❌ Failed to fetch today's status (attempt ${retryCount + 1}/${maxRetries + 1}):`,
+        err.response?.data || err.message
       );
+
       if (err.response?.status === 401) {
-        // Handle authentication error
+        // Handle authentication error - don't retry
         localStorage.removeItem("token");
         if (onLogout) onLogout();
-      } else if (err.response?.status !== 500) {
-        toast.error(
-          err.response?.data?.message || "Failed to load today's status."
-        );
+        return null;
       }
+
+      // Retry logic for network errors or server issues
+      if (retryCount < maxRetries &&
+          (err.code === 'NETWORK_ERROR' ||
+           err.response?.status >= 500 ||
+           err.code === 'ECONNABORTED')) {
+        console.log(`🔄 Retrying in ${retryDelay}ms...`);
+        setTimeout(() => fetchStatus(retryCount + 1), retryDelay);
+        return null;
+      }
+
+      // Update error state and show error toast on final failure
+      if (retryCount >= maxRetries) {
+        const errorMessage = err.response?.data?.message ||
+          err.message ||
+          "Failed to load today's status. Please check your connection.";
+
+        setDataErrors(prev => ({ ...prev, status: errorMessage }));
+        setConnectionStatus(err.code === 'NETWORK_ERROR' ? 'offline' : 'error');
+        toast.error(errorMessage);
+      }
+
+      setDataLoadingStates(prev => ({ ...prev, status: false }));
+      return null;
     }
   }, [token, onLogout]);
 
-  // Fetch weekly summary and daily data
-  const fetchWeeklySummary = useCallback(async () => {
+  // Enhanced fetch weekly summary with retry logic and data validation
+  const fetchWeeklySummary = useCallback(async (retryCount = 0) => {
+    const maxRetries = 2;
+    const retryDelay = Math.min(1000 * Math.pow(2, retryCount), 3000);
+
+    // Update loading state
+    setDataLoadingStates(prev => ({ ...prev, weeklySummary: true }));
+    setDataErrors(prev => ({ ...prev, weeklySummary: null }));
+
     try {
       const now = new Date();
       const diffToMonday = (now.getDay() + 6) % 7;
@@ -130,46 +212,132 @@ const TodayStatusPage = ({ onLogout }) => {
         params: {
           startDate: monday.toISOString(),
           endDate: sunday.toISOString(),
+          _timestamp: Date.now(), // Cache-busting
+          _retry: retryCount
         },
+        timeout: 12000 // 12 second timeout
       });
 
-      setWeeklySummary(res.data?.weeklySummary || null);
-      setDailyData(res.data?.dailyData || []);
+      console.log("✅ Successfully fetched weekly summary:", res.data);
+
+      // Validate and set data with fallbacks
+      const weeklySummaryData = res.data?.weeklySummary || null;
+      const dailyDataArray = Array.isArray(res.data?.dailyData) ? res.data.dailyData : [];
+
+      setWeeklySummary(weeklySummaryData);
+      setDailyData(dailyDataArray);
+      setDataLoadingStates(prev => ({ ...prev, weeklySummary: false }));
+      setDataErrors(prev => ({ ...prev, weeklySummary: null }));
+
+      return { weeklySummary: weeklySummaryData, dailyData: dailyDataArray };
     } catch (err) {
       console.error(
-        "Failed to fetch weekly summary:",
-        err.response?.data || err
+        `❌ Failed to fetch weekly summary (attempt ${retryCount + 1}/${maxRetries + 1}):`,
+        err.response?.data || err.message
       );
+
+      // Retry logic for network/server errors
+      if (retryCount < maxRetries &&
+          (err.code === 'NETWORK_ERROR' ||
+           err.response?.status >= 500 ||
+           err.code === 'ECONNABORTED')) {
+        console.log(`🔄 Retrying weekly summary in ${retryDelay}ms...`);
+        setTimeout(() => fetchWeeklySummary(retryCount + 1), retryDelay);
+        return null;
+      }
+
+      // Update error state and show error on final failure
+      if (retryCount >= maxRetries) {
+        const errorMessage = "Failed to load weekly summary. Some data may be incomplete.";
+        setDataErrors(prev => ({ ...prev, weeklySummary: errorMessage }));
+        toast.error(errorMessage);
+      }
+
+      setDataLoadingStates(prev => ({ ...prev, weeklySummary: false }));
+      return null;
     }
   }, [token]);
 
-  // Fetch flexible shift requests
-  const fetchFlexibleRequests = useCallback(async () => {
+  // Enhanced fetch flexible shift requests with retry and validation
+  const fetchFlexibleRequests = useCallback(async (retryCount = 0) => {
+    const maxRetries = 2;
+    const retryDelay = Math.min(1000 * Math.pow(2, retryCount), 3000);
+
+    // Update loading state
+    setDataLoadingStates(prev => ({ ...prev, flexibleRequests: true }));
+    setDataErrors(prev => ({ ...prev, flexibleRequests: null }));
+
     try {
       const res = await axios.get(
         `${API_BASE}/api/flexible-shifts/my-requests`,
-        getAxiosConfig()
+        {
+          ...getAxiosConfig(),
+          params: {
+            _timestamp: Date.now(), // Cache-busting
+            _retry: retryCount
+          },
+          timeout: 10000 // 10 second timeout
+        }
       );
-      setFlexibleRequests(res.data || []);
+
+      console.log("✅ Successfully fetched flexible requests:", res.data);
+
+      // Validate data and ensure it's an array
+      const requestsData = Array.isArray(res.data) ? res.data : [];
+      setFlexibleRequests(requestsData);
+      setDataLoadingStates(prev => ({ ...prev, flexibleRequests: false }));
+      setDataErrors(prev => ({ ...prev, flexibleRequests: null }));
+
+      return requestsData;
     } catch (err) {
       console.error(
-        "Failed to fetch flexible shift requests:",
-        err.response?.data || err
+        `❌ Failed to fetch flexible shift requests (attempt ${retryCount + 1}/${maxRetries + 1}):`,
+        err.response?.data || err.message
       );
+
+      // Retry logic for network/server errors
+      if (retryCount < maxRetries &&
+          (err.code === 'NETWORK_ERROR' ||
+           err.response?.status >= 500 ||
+           err.code === 'ECONNABORTED')) {
+        console.log(`🔄 Retrying flexible requests in ${retryDelay}ms...`);
+        setTimeout(() => fetchFlexibleRequests(retryCount + 1), retryDelay);
+        return null;
+      }
+
+      // Update error state - silently fail for flexible requests as they're not critical
+      if (retryCount >= maxRetries && err.response?.status !== 404) {
+        const errorMessage = "Could not load flexible shift requests";
+        setDataErrors(prev => ({ ...prev, flexibleRequests: errorMessage }));
+        console.warn(errorMessage + ", but continuing...");
+      }
+
+      setDataLoadingStates(prev => ({ ...prev, flexibleRequests: false }));
+      return [];
     }
   }, [token]);
 
-  // Enhanced update status with better error handling and race condition prevention
+  // Enhanced update status with optimistic updates and better error handling
   const updateStatus = async (update) => {
-    if (!status && update?.currentlyWorking !== true) return;
+    if (!status && update?.currentlyWorking !== true) {
+      console.warn("⚠️ Cannot update status - no current status available");
+      return;
+    }
 
     if (requestInProgress) {
       toast.info("Please wait for the current operation to complete.");
       return;
     }
 
+    console.log("📤 Status update initiated:", update);
+
     setRequestInProgress(true);
     setIsLoading(true);
+
+    // Store previous status for rollback on error
+    const previousStatus = { ...status };
+    const previousLiveWork = liveWork;
+    const previousLiveBreak = liveBreak;
 
     try {
       const payload = {
@@ -196,112 +364,435 @@ const TodayStatusPage = ({ onLogout }) => {
         payload.breakStartTime = breakStartValue.toISOString();
       }
 
-      console.log("Sending update payload:", payload);
+      // Optimistic update - immediately update UI for better responsiveness
+      if (payload.timelineEvent) {
+        const eventType = payload.timelineEvent.type?.toLowerCase() || '';
+        const eventTime = payload.timelineEvent.time;
+
+        const optimisticStatus = {
+          ...status,
+          currentlyWorking: payload.currentlyWorking,
+          onBreak: payload.onBreak,
+          timeline: [...(status.timeline || []), {
+            ...payload.timelineEvent,
+            time: eventTime
+          }]
+        };
+
+        // Handle arrival time for punch in events
+        if (eventType.includes('punch in') && !status.arrivalTime) {
+          // Use current UTC time for arrival time (matches backend expectation)
+          const currentUTCTime = new Date();
+          optimisticStatus.arrivalTime = currentUTCTime.toISOString();
+          // Format for display using local time
+          optimisticStatus.arrivalTimeFormatted = currentUTCTime.toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+            hour12: true,
+          });
+          console.log("🚀 Setting arrival time optimistically (UTC):", optimisticStatus.arrivalTime);
+          console.log("🚀 Arrival time formatted (local):", optimisticStatus.arrivalTimeFormatted);
+        }
+
+        setStatus(optimisticStatus);
+        console.log("🚀 Optimistic update applied");
+      }
+
+      console.log("📤 Sending update payload:", payload);
 
       const res = await axios.put(
         `${API_BASE}/api/status/today`,
         payload,
-        getAxiosConfig()
+        {
+          ...getAxiosConfig(),
+          timeout: 10000 // 10 second timeout for status updates
+        }
       );
 
-      console.log("Update response:", res.data);
-      setStatus(res.data);
+      console.log("✅ Status update successful:", res.data);
+
+      // Update with server response and ensure proper time formatting
+      const serverStatus = { ...res.data };
+
+      // If server sends arrivalTime in UTC, convert to local formatted time
+      if (serverStatus.arrivalTime && !serverStatus.arrivalTimeFormatted) {
+        const arrivalDate = new Date(serverStatus.arrivalTime);
+        if (!isNaN(arrivalDate.getTime())) {
+          serverStatus.arrivalTimeFormatted = arrivalDate.toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+            hour12: true,
+          });
+          console.log("🕒 Converted server UTC arrival time to local:", serverStatus.arrivalTimeFormatted);
+        }
+      }
+
+      setStatus(serverStatus);
       setSelectedBreakType("");
+      setConnectionStatus('online');
+      setDataErrors(prev => ({ ...prev, status: null }));
 
-      // Refresh related data
-      await fetchWeeklySummary();
-      window.dispatchEvent(new Event("attendanceDataUpdate"));
+      // For punch-in events, refresh status to ensure arrival time is properly synced
+      const eventType = payload.timelineEvent?.type?.toLowerCase() || '';
+      if (eventType.includes('punch in')) {
+        console.log("🔄 Refreshing status after punch-in to sync arrival time...");
+        setTimeout(() => {
+          fetchStatus().catch(err => {
+            console.warn("⚠️ Failed to refresh status after punch-in:", err);
+          });
+        }, 1000); // Small delay to allow backend processing
+      }
 
-      // Show success message for major actions
+      // Refresh related data in background
+      fetchWeeklySummary().catch(err => {
+        console.warn("⚠️ Failed to refresh weekly summary after status update:", err);
+      });
+
+      // Notify other components
+      window.dispatchEvent(new CustomEvent("statusUpdate", {
+        detail: {
+          type: payload.timelineEvent?.type,
+          timestamp: new Date().toISOString(),
+          status: res.data
+        }
+      }));
+
+      // Show success message for major actions with enhanced feedback
       if (payload.timelineEvent?.type) {
         const eventType = payload.timelineEvent.type.toLowerCase();
         if (eventType.includes("punch in")) {
-          toast.success("Punched in successfully!");
+          toast.success("🔓 Punched in successfully! Work timer started.", { autoClose: 3000 });
         } else if (eventType.includes("punch out")) {
-          toast.success("Punched out successfully!");
+          toast.success("🔒 Punched out successfully! Great work today!", { autoClose: 3000 });
         } else if (eventType.includes("break")) {
-          toast.success("Break started!");
+          toast.success("☕ Break started! Take your time.", { autoClose: 3000 });
         } else if (eventType.includes("resume")) {
-          toast.success("Work resumed!");
+          toast.success("💼 Work resumed! Break timer stopped.", { autoClose: 3000 });
         }
       }
     } catch (err) {
+      console.error("❌ Status update failed:", err);
+
+      // Rollback optimistic update
+      setStatus(previousStatus);
+      setLiveWork(previousLiveWork);
+      setLiveBreak(previousLiveBreak);
+      console.log("🔄 Optimistic update rolled back");
+
       const serverData = err.response?.data;
       const errorMessage =
-        serverData?.message || serverData?.error || "Failed to update status.";
-      toast.error(errorMessage);
-      console.error("Failed to update status:", serverData || err);
+        serverData?.message ||
+        serverData?.error ||
+        (err.code === 'NETWORK_ERROR' ? "Network error. Please check your connection." : "Failed to update status.");
+
+      // Set connection status based on error type
+      if (err.code === 'NETWORK_ERROR' || err.response?.status >= 500) {
+        setConnectionStatus('error');
+        setDataErrors(prev => ({ ...prev, status: errorMessage }));
+      }
+
+      toast.error(errorMessage, { autoClose: 5000 });
     } finally {
       setIsLoading(false);
       setRequestInProgress(false);
     }
   };
 
-  // Live timers update with improved logic
+  // Enhanced live timers with better synchronization and accuracy
   useEffect(() => {
     if (!status) return;
+
+    console.log("🕰️ Initializing live timers:", {
+      currentlyWorking: status.currentlyWorking,
+      onBreak: status.onBreak,
+      workDurationSeconds: status.workDurationSeconds,
+      breakDurationSeconds: status.breakDurationSeconds
+    });
 
     // Initialize with backend calculated values
     setLiveWork(status.workDurationSeconds || 0);
     setLiveBreak(status.breakDurationSeconds || 0);
 
     const timers = [];
+    let workStartTime = null;
+    let breakStartTime = null;
 
-    // Only start live timers if currently working or on break
+    // Calculate accurate start times from timeline if available
+    if (status.timeline && Array.isArray(status.timeline)) {
+      const now = new Date();
+      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+      // Find the last work session start time
+      const lastWorkStart = [...status.timeline]
+        .reverse()
+        .find(event => {
+          const eventDate = new Date(event.time);
+          return eventDate >= todayStart &&
+                 (event.type?.toLowerCase().includes('punch in') ||
+                  event.type?.toLowerCase().includes('resume'));
+        });
+
+      // Find the last break start time
+      const lastBreakStart = [...status.timeline]
+        .reverse()
+        .find(event => {
+          const eventDate = new Date(event.time);
+          return eventDate >= todayStart &&
+                 event.type?.toLowerCase().includes('break start');
+        });
+
+      if (lastWorkStart) workStartTime = new Date(lastWorkStart.time);
+      if (lastBreakStart) breakStartTime = new Date(lastBreakStart.time);
+    }
+
+    // Enhanced work timer with drift correction
     if (status.currentlyWorking && !status.onBreak) {
-      timers.push(setInterval(() => setLiveWork((prev) => prev + 1), 1000));
-    }
-    if (status.onBreak) {
-      timers.push(setInterval(() => setLiveBreak((prev) => prev + 1), 1000));
+      let lastUpdateTime = Date.now();
+      const workTimer = setInterval(() => {
+        const now = Date.now();
+        const elapsed = Math.round((now - lastUpdateTime) / 1000);
+        lastUpdateTime = now;
+
+        setLiveWork((prev) => {
+          const newValue = prev + elapsed;
+          // Periodic sync check every 30 seconds to prevent drift
+          if (newValue % 30 === 0 && workStartTime) {
+            const expectedSeconds = Math.floor((now - workStartTime.getTime()) / 1000);
+            const baseWorkSeconds = status.workDurationSeconds || 0;
+            const calculatedWork = baseWorkSeconds + expectedSeconds;
+            console.log("🔄 Work timer sync check:", { current: newValue, calculated: calculatedWork });
+            return Math.max(calculatedWork, newValue); // Prevent going backwards
+          }
+          return newValue;
+        });
+      }, 1000);
+      timers.push(workTimer);
+      console.log("▶️ Work timer started");
     }
 
-    return () => timers.forEach(clearInterval);
+    // Enhanced break timer with drift correction
+    if (status.onBreak) {
+      let lastUpdateTime = Date.now();
+      const breakTimer = setInterval(() => {
+        const now = Date.now();
+        const elapsed = Math.round((now - lastUpdateTime) / 1000);
+        lastUpdateTime = now;
+
+        setLiveBreak((prev) => {
+          const newValue = prev + elapsed;
+          // Periodic sync check every 30 seconds
+          if (newValue % 30 === 0 && breakStartTime) {
+            const expectedSeconds = Math.floor((now - breakStartTime.getTime()) / 1000);
+            const baseBreakSeconds = status.breakDurationSeconds || 0;
+            const calculatedBreak = baseBreakSeconds + expectedSeconds;
+            console.log("🔄 Break timer sync check:", { current: newValue, calculated: calculatedBreak });
+            return Math.max(calculatedBreak, newValue); // Prevent going backwards
+          }
+          return newValue;
+        });
+      }, 1000);
+      timers.push(breakTimer);
+      console.log("⏸️ Break timer started");
+    }
+
+    // Page visibility optimization - pause timers when page is hidden
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        console.log("😴 Page hidden - timers will sync on visibility");
+      } else {
+        console.log("👁️ Page visible - resyncing timers");
+        // Resync when page becomes visible
+        setTimeout(() => {
+          if (status.currentlyWorking || status.onBreak) {
+            fetchStatus(); // Refresh to get accurate server state
+          }
+        }, 1000);
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      timers.forEach(clearInterval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      console.log("⏹️ Timers cleared");
+    };
   }, [
     status?.currentlyWorking,
     status?.onBreak,
     status?.workDurationSeconds,
     status?.breakDurationSeconds,
+    status?.timeline,
+    fetchStatus
   ]);
 
-  // Initial and periodic data fetch
-  useEffect(() => {
-    fetchStatus();
-    fetchWeeklySummary();
-    fetchFlexibleRequests();
+  // Enhanced data fetching with intelligent refresh intervals
+  const fetchAllData = useCallback(async (options = {}) => {
+    const { isInitial = false, force = false } = options;
 
-    const interval = setInterval(() => {
+    if (!force && requestInProgress) {
+      console.log("⏸️ Skipping data fetch - request in progress");
+      return;
+    }
+
+    console.log(`📡 ${isInitial ? 'Initial' : 'Periodic'} data fetch started`);
+
+    // Fetch data in parallel for better performance
+    const promises = [
+      fetchStatus(),
+      fetchWeeklySummary(),
+      fetchFlexibleRequests()
+    ];
+
+    try {
+      const results = await Promise.allSettled(promises);
+      const successful = results.filter(r => r.status === 'fulfilled').length;
+      const failed = results.filter(r => r.status === 'rejected').length;
+
+      console.log(`📊 Data fetch completed: ${successful} successful, ${failed} failed`);
+
+      if (failed > 0 && isInitial) {
+        toast.warning(`Some data could not be loaded. Retrying in background...`);
+      }
+    } catch (error) {
+      console.error("❌ Critical error during data fetch:", error);
+      if (isInitial) {
+        toast.error("Failed to load application data. Please refresh the page.");
+      }
+    }
+  }, [fetchStatus, fetchWeeklySummary, fetchFlexibleRequests, requestInProgress]);
+
+  // Initial data fetch
+  useEffect(() => {
+    fetchAllData({ isInitial: true });
+  }, []);
+
+  // Periodic data refresh with smart intervals
+  useEffect(() => {
+    // More frequent updates for status (every 30s), less frequent for summary data (every 2min)
+    const statusInterval = setInterval(() => {
       if (!requestInProgress) {
+        console.log("🔄 Quick status refresh");
         fetchStatus();
+      }
+    }, 30000); // 30 seconds for live status
+
+    const summaryInterval = setInterval(() => {
+      if (!requestInProgress) {
+        console.log("📈 Summary data refresh");
         fetchWeeklySummary();
+      }
+    }, 120000); // 2 minutes for summary data
+
+    const flexibleInterval = setInterval(() => {
+      if (!requestInProgress) {
+        console.log("📋 Flexible requests refresh");
         fetchFlexibleRequests();
       }
-    }, 60000);
+    }, 300000); // 5 minutes for flexible requests
 
-    return () => clearInterval(interval);
-  }, [
-    fetchStatus,
-    fetchWeeklySummary,
-    fetchFlexibleRequests,
-    requestInProgress,
-  ]);
+    return () => {
+      clearInterval(statusInterval);
+      clearInterval(summaryInterval);
+      clearInterval(flexibleInterval);
+    };
+  }, [fetchStatus, fetchWeeklySummary, fetchFlexibleRequests, requestInProgress]);
 
-  // External update listener
+  // External update listener with enhanced event handling
   useEffect(() => {
-    const handler = () => {
+    const handler = (event) => {
+      console.log("🔔 External data update event received:", event.detail);
+
       if (!requestInProgress) {
-        fetchStatus();
-        fetchWeeklySummary();
-        fetchFlexibleRequests();
+        // Force refresh when external update is triggered
+        fetchAllData({ force: true });
+      } else {
+        // Schedule refresh after current request completes
+        setTimeout(() => {
+          if (!requestInProgress) {
+            fetchAllData({ force: true });
+          }
+        }, 1000);
       }
     };
-    window.addEventListener("attendanceDataUpdate", handler);
-    return () => window.removeEventListener("attendanceDataUpdate", handler);
-  }, [
-    fetchStatus,
-    fetchWeeklySummary,
-    fetchFlexibleRequests,
-    requestInProgress,
-  ]);
+
+    // Listen for multiple event types
+    const events = ['attendanceDataUpdate', 'statusUpdate', 'dataRefresh'];
+    events.forEach(eventType => {
+      window.addEventListener(eventType, handler);
+    });
+
+    return () => {
+      events.forEach(eventType => {
+        window.removeEventListener(eventType, handler);
+      });
+    };
+  }, [fetchAllData, requestInProgress]);
+
+  // Page visibility change handler - refresh when page becomes visible
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden && !requestInProgress) {
+        console.log("👁️ Page became visible - refreshing data");
+        fetchAllData({ force: true });
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [fetchAllData, requestInProgress]);
+
+  // Network connectivity handler with enhanced state management
+  useEffect(() => {
+    const handleOnline = () => {
+      console.log("🌐 Network connectivity restored - refreshing data");
+      setConnectionStatus('online');
+      toast.success("Connection restored. Refreshing data...");
+      // Reset all error states on reconnection
+      setDataErrors({
+        status: null,
+        weeklySummary: null,
+        flexibleRequests: null
+      });
+      fetchAllData({ force: true });
+    };
+
+    const handleOffline = () => {
+      console.log("📡 Network connectivity lost");
+      setConnectionStatus('offline');
+      toast.warning("Connection lost. Data may not be up to date.", {
+        autoClose: false,
+        closeOnClick: true
+      });
+    };
+
+    // Set initial connection status
+    setConnectionStatus(navigator.onLine ? 'online' : 'offline');
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, [fetchAllData]);
+
+  // Auto-recovery mechanism for failed requests
+  useEffect(() => {
+    const hasErrors = dataErrors.status || dataErrors.weeklySummary;
+    const isOnline = connectionStatus === 'online';
+    const notLoading = !dataLoadingStates.status && !dataLoadingStates.weeklySummary;
+
+    if (hasErrors && isOnline && notLoading) {
+      console.log("🔄 Auto-recovery: Attempting to refetch failed data");
+      const recoveryTimer = setTimeout(() => {
+        fetchAllData({ force: true });
+      }, 10000); // Try to recover after 10 seconds
+
+      return () => clearTimeout(recoveryTimer);
+    }
+  }, [dataErrors, connectionStatus, dataLoadingStates, fetchAllData]);
 
   // Enhanced punch logic with better validation
   const today = new Date();
@@ -530,9 +1021,14 @@ const TodayStatusPage = ({ onLogout }) => {
     .slice()
     .sort((a, b) => new Date(b.requestedDate) - new Date(a.requestedDate));
 
-  // Calculate quickStats combining backend and workedSessions dynamically
+  // Enhanced quick stats calculation with real-time updates and memoization
   const combinedQuickStats = useMemo(() => {
-    if (!weeklySummary || !status) return null;
+    if (!weeklySummary || !status) {
+      console.log("📊 Quick stats: No data available");
+      return null;
+    }
+
+    console.log("📊 Calculating combined quick stats...");
 
     const backendQuickStats = weeklySummary.quickStats || {};
     const workedSessions = status.workedSessions || [];
@@ -542,36 +1038,50 @@ const TodayStatusPage = ({ onLogout }) => {
     let lateArrivals = 0;
     let perfectDays = 0;
 
-    const [shiftH, shiftM] = shiftStart.split(":").map(Number);
+    try {
+      const [shiftH, shiftM] = shiftStart.split(":").map(Number);
 
-    workedSessions.forEach((session) => {
-      const punchInTime = new Date(session.start);
-      if (isNaN(punchInTime.getTime())) return;
+      workedSessions.forEach((session) => {
+        const punchInTime = new Date(session.start);
+        if (isNaN(punchInTime.getTime())) {
+          console.warn("⚠️ Invalid session start time:", session.start);
+          return;
+        }
 
-      const expectedShift = new Date(punchInTime);
-      expectedShift.setHours(shiftH, shiftM, 0, 0);
+        const expectedShift = new Date(punchInTime);
+        expectedShift.setHours(shiftH, shiftM, 0, 0);
 
-      if (punchInTime <= expectedShift) {
-        earlyArrivals++;
-      } else {
-        lateArrivals++;
-      }
-    });
+        if (punchInTime <= expectedShift) {
+          earlyArrivals++;
+        } else {
+          lateArrivals++;
+        }
+      });
 
-    return {
-      earlyArrivals:
-        backendQuickStats.earlyArrivals > 0
-          ? backendQuickStats.earlyArrivals
-          : earlyArrivals,
-      lateArrivals:
-        backendQuickStats.lateArrivals > 0
-          ? backendQuickStats.lateArrivals
-          : lateArrivals,
-      perfectDays:
-        backendQuickStats.perfectDays > 0
-          ? backendQuickStats.perfectDays
-          : perfectDays,
-    };
+      // Calculate perfect days based on punctuality and work hours
+      perfectDays = Math.max(earlyArrivals - lateArrivals, 0);
+
+      const calculatedStats = {
+        earlyArrivals:
+          backendQuickStats.earlyArrivals > 0
+            ? backendQuickStats.earlyArrivals
+            : earlyArrivals,
+        lateArrivals:
+          backendQuickStats.lateArrivals > 0
+            ? backendQuickStats.lateArrivals
+            : lateArrivals,
+        perfectDays:
+          backendQuickStats.perfectDays > 0
+            ? backendQuickStats.perfectDays
+            : perfectDays,
+      };
+
+      console.log("✅ Quick stats calculated:", calculatedStats);
+      return calculatedStats;
+    } catch (error) {
+      console.error("❌ Error calculating quick stats:", error);
+      return backendQuickStats;
+    }
   }, [weeklySummary, status]);
 
   const weeklySummaryWithQuickStats = useMemo(() => {
@@ -582,35 +1092,74 @@ const TodayStatusPage = ({ onLogout }) => {
     };
   }, [weeklySummary, combinedQuickStats]);
 
-  // Keep SummaryCard in sync with live timers by overriding today's entry
+  // Enhanced daily data adjustment with real-time synchronization and validation
   const adjustedDailyData = useMemo(() => {
-    if (!Array.isArray(dailyData) || !status) return dailyData;
+    if (!Array.isArray(dailyData) || !status) {
+      console.log("📅 Daily data: No data available for adjustment");
+      return dailyData || [];
+    }
+
     const todayStr = new Date().toISOString().slice(0, 10);
-    return dailyData.map((d) => {
-      const dKey = new Date(d.date).toISOString().slice(0, 10);
-      if (dKey !== todayStr) return d;
-      return {
-        ...d,
-        workDurationSeconds:
-          typeof liveWork === "number" ? liveWork : d.workDurationSeconds || 0,
-        breakDurationSeconds:
-          typeof liveBreak === "number"
-            ? liveBreak
-            : d.breakDurationSeconds || 0,
-        arrivalTime: status.arrivalTime || d.arrivalTime,
-      };
+    console.log("📅 Adjusting daily data for today:", todayStr);
+
+    const adjustedData = dailyData.map((d) => {
+      try {
+        const dKey = new Date(d.date).toISOString().slice(0, 10);
+        if (dKey !== todayStr) return d;
+
+        // Create enhanced today's entry with live data
+        const enhancedEntry = {
+          ...d,
+          workDurationSeconds:
+            typeof liveWork === "number" && liveWork >= 0
+              ? liveWork
+              : d.workDurationSeconds || 0,
+          breakDurationSeconds:
+            typeof liveBreak === "number" && liveBreak >= 0
+              ? liveBreak
+              : d.breakDurationSeconds || 0,
+          arrivalTime: status.arrivalTime || d.arrivalTime,
+          // Add real-time indicators
+          isLive: status.currentlyWorking || status.onBreak,
+          lastUpdated: new Date().toISOString(),
+          // Add status context
+          currentStatus: {
+            working: status.currentlyWorking,
+            onBreak: status.onBreak,
+            punchedOut: alreadyPunchedOut
+          }
+        };
+
+        console.log("✅ Today's entry enhanced:", {
+          workDuration: formatHMS(enhancedEntry.workDurationSeconds),
+          breakDuration: formatHMS(enhancedEntry.breakDurationSeconds),
+          isLive: enhancedEntry.isLive
+        });
+
+        return enhancedEntry;
+      } catch (error) {
+        console.error("❌ Error adjusting daily data entry:", error, d);
+        return d; // Return original entry on error
+      }
     });
-  }, [dailyData, status, liveWork, liveBreak]);
+
+    return adjustedData;
+  }, [dailyData, status, liveWork, liveBreak, alreadyPunchedOut]);
 
   if (!status)
     return (
-      <div className="min-h-screen bg-[#101525] flex items-center justify-center">
-        <div className="text-white text-xl font-medium">Loading...</div>
+      <div className="flex min-h-screen bg-[#0f1419] text-gray-100 items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+          <h2 className="text-2xl font-bold mb-4">Loading Status</h2>
+          <p className="text-gray-400">Please wait while we load your work status...</p>
+        </div>
       </div>
     );
 
   return (
-    <div className="min-h-screen bg-[#101525]">
+    <div className="flex min-h-screen bg-[#0f1419] text-gray-100">
+
       <Sidebar
         collapsed={collapsed}
         setCollapsed={setCollapsed}
@@ -619,65 +1168,213 @@ const TodayStatusPage = ({ onLogout }) => {
       />
 
       <main
-        className="transition-all duration-300 p-4 sm:p-8 max-w-7xl mx-auto"
-        style={{
-          marginLeft: collapsed
-            ? SIDEBAR_WIDTH_COLLAPSED
-            : SIDEBAR_WIDTH_EXPANDED,
-          minHeight: "100vh",
-        }}
+        className={`flex-1 p-6 space-y-6 transition-all duration-300 ${
+          collapsed ? "ml-20" : "ml-72"
+        }`}
       >
         {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold text-white mb-2">
-            Today Work Status
-          </h1>
-          <p className="text-gray-300">
-            Manage employee shifts and schedules efficiently
-          </p>
-        </div>
+        <div className="flex justify-between items-start">
+          <div className="flex-1">
+            <h1 className="text-3xl font-bold text-gray-100 mb-2">Today's Status</h1>
+            <p className="text-gray-400 mb-3">Monitor your daily work activity and manage your time</p>
 
-        {/* Main Grid Layout */}
-        <div className="grid grid-cols-1 xl:grid-cols-4 gap-6 mb-8">
-          {/* Left Column - Status & Break Management */}
-          <div className="xl:col-span-3 space-y-6">
-            <StatusCard
-              workDuration={formatHMS(liveWork)}
-              breakTime={formatHMS(liveBreak)}
-              arrivalTime={
-                status.arrivalTimeFormatted || status.arrivalTime || "--"
-              }
-              currentlyWorking={status.currentlyWorking}
-              alreadyPunchedIn={alreadyPunchedIn}
-              alreadyPunchedOut={alreadyPunchedOut}
-              onPunchIn={handlePunchIn}
-              onPunchOut={handlePunchOutClick}
-              onRequestFlexible={openFlexibleModal}
-              isLoading={isLoading}
-            />
+            {/* Status indicator */}
+            <div className="flex items-center gap-4 bg-[#161c2c] rounded-lg px-4 py-2 border border-[#232945]">
+              <div className="flex items-center gap-2">
+                <div className={`w-2 h-2 rounded-full ${
+                  status?.currentlyWorking
+                    ? status?.onBreak
+                      ? 'bg-yellow-400 animate-pulse'
+                      : 'bg-green-400 animate-pulse'
+                    : 'bg-gray-500'
+                }`}></div>
+                <span className="text-sm font-medium">
+                  {status?.currentlyWorking
+                    ? status?.onBreak
+                      ? 'On Break'
+                      : 'Working'
+                    : 'Offline'
+                  }
+                </span>
+              </div>
+              {(() => {
+                // Derive arrival time from timeline punch-in event (same source as timeline display)
+                const today = new Date();
+                const todayKey = today.toISOString().slice(0, 10);
+                const timelineToday = (status?.timeline || []).filter((e) => {
+                  const eventDate = safeParseDate(e.time);
+                  return eventDate && eventDate.toISOString().startsWith(todayKey);
+                });
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <BreakManagement
-                breakDuration={formatHMS(liveBreak)}
-                onBreak={status.onBreak}
-                onStartBreak={handleStartBreak}
-                onResumeWork={handleResumeWork}
-                selectedBreakType={selectedBreakType}
-                onSelectBreakType={setSelectedBreakType}
-                currentlyWorking={status.currentlyWorking}
-                alreadyPunchedOut={alreadyPunchedOut}
-                isLoading={isLoading}
-              />
-              <Timeline timeline={status.timeline || []} />
+                const firstPunchIn = timelineToday.find(
+                  (e) => normalizeEventType(e.type) === "punch_in"
+                );
+
+                if (firstPunchIn && firstPunchIn.time) {
+                  const arrivalDate = new Date(firstPunchIn.time);
+                  if (!isNaN(arrivalDate.getTime())) {
+                    return (
+                      <div className="text-sm text-gray-400">
+                        Arrived: {arrivalDate.toLocaleTimeString([], {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                          hour12: true,
+                        })}
+                      </div>
+                    );
+                  }
+                }
+
+                // Fallback to server arrival time if no timeline punch-in found
+                if (status?.arrivalTimeFormatted || status?.arrivalTime) {
+                  return (
+                    <div className="text-sm text-gray-400">
+                      Arrived: {(() => {
+                        if (status.arrivalTimeFormatted) {
+                          return status.arrivalTimeFormatted;
+                        }
+                        if (status.arrivalTime) {
+                          const arrivalDate = new Date(status.arrivalTime);
+                          if (!isNaN(arrivalDate.getTime())) {
+                            return arrivalDate.toLocaleTimeString([], {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                              hour12: true,
+                            });
+                          }
+                        }
+                        return "--";
+                      })()}
+                    </div>
+                  );
+                }
+
+                return null;
+              })()}
+              <div className="text-sm text-blue-400">
+                Work: {formatHMS(liveWork)}
+              </div>
+              <div className="text-sm text-orange-400">
+                Break: {formatHMS(liveBreak)}
+              </div>
             </div>
           </div>
 
-          {/* Right Column - Summary */}
-          <div className="xl:col-span-1">
-            <SummaryCard
-              weeklySummary={weeklySummaryWithQuickStats}
-              dailyData={adjustedDailyData}
-            />
+          <div className="flex items-center gap-3">
+            {(dataErrors.status || dataErrors.weeklySummary || connectionStatus !== 'online') && (
+              <button
+                onClick={() => fetchAllData({ force: true })}
+                className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-4 py-2 rounded-lg transition-colors text-sm font-medium flex items-center gap-2"
+                disabled={dataLoadingStates.status || dataLoadingStates.weeklySummary}
+              >
+                <svg className={`w-4 h-4 ${(dataLoadingStates.status || dataLoadingStates.weeklySummary) ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                {(dataLoadingStates.status || dataLoadingStates.weeklySummary) ? 'Syncing...' : 'Retry'}
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 xl:grid-cols-5 gap-6">
+          <div className="xl:col-span-3 space-y-6">
+            <div className="bg-[#161c2c] rounded-xl shadow-md border border-[#232945] relative">
+              {dataLoadingStates.status && (
+                <div className="absolute inset-0 bg-black/50 z-10 flex items-center justify-center rounded-xl">
+                  <div className="flex items-center gap-3 bg-[#161c2c] p-4 rounded-lg border border-[#232945]">
+                    <div className="w-5 h-5 border-2 border-blue-500/20 border-t-blue-500 rounded-full animate-spin"></div>
+                    <span className="text-gray-200">Updating status...</span>
+                  </div>
+                </div>
+              )}
+              <StatusCard
+                workDuration={formatHMS(liveWork)}
+                breakTime={formatHMS(liveBreak)}
+                arrivalTime={(() => {
+                  // Derive arrival time from timeline punch-in event (same source as timeline display)
+                  const today = new Date();
+                  const todayKey = today.toISOString().slice(0, 10);
+                  const timelineToday = (status?.timeline || []).filter((e) => {
+                    const eventDate = safeParseDate(e.time);
+                    return eventDate && eventDate.toISOString().startsWith(todayKey);
+                  });
+
+                  const firstPunchIn = timelineToday.find(
+                    (e) => normalizeEventType(e.type) === "punch_in"
+                  );
+
+                  if (firstPunchIn && firstPunchIn.time) {
+                    const arrivalDate = new Date(firstPunchIn.time);
+                    if (!isNaN(arrivalDate.getTime())) {
+                      return arrivalDate.toLocaleTimeString([], {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                        hour12: true,
+                      });
+                    }
+                  }
+
+                  // Fallback to server arrival time if no timeline punch-in found
+                  if (status.arrivalTimeFormatted) {
+                    return status.arrivalTimeFormatted;
+                  }
+                  if (status.arrivalTime) {
+                    const arrivalDate = new Date(status.arrivalTime);
+                    if (!isNaN(arrivalDate.getTime())) {
+                      return arrivalDate.toLocaleTimeString([], {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                        hour12: true,
+                      });
+                    }
+                  }
+                  return "--";
+                })()}
+                currentlyWorking={status.currentlyWorking}
+                alreadyPunchedIn={alreadyPunchedIn}
+                alreadyPunchedOut={alreadyPunchedOut}
+                onPunchIn={handlePunchIn}
+                onPunchOut={handlePunchOutClick}
+                onRequestFlexible={openFlexibleModal}
+                isLoading={isLoading}
+              />
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="bg-[#161c2c] rounded-xl shadow-md border border-[#232945]">
+                <BreakManagement
+                  breakDuration={formatHMS(liveBreak)}
+                  onBreak={status.onBreak}
+                  onStartBreak={handleStartBreak}
+                  onResumeWork={handleResumeWork}
+                  selectedBreakType={selectedBreakType}
+                  onSelectBreakType={setSelectedBreakType}
+                  currentlyWorking={status.currentlyWorking}
+                  alreadyPunchedOut={alreadyPunchedOut}
+                  isLoading={isLoading}
+                />
+              </div>
+              <div className="bg-[#161c2c] rounded-xl shadow-md border border-[#232945]">
+                <Timeline timeline={status.timeline || []} />
+              </div>
+            </div>
+          </div>
+
+          <div className="xl:col-span-2">
+            <div className="bg-[#161c2c] rounded-xl shadow-md border border-[#232945] sticky top-8 relative">
+              {dataLoadingStates.weeklySummary && (
+                <div className="absolute inset-0 bg-black/50 z-10 flex items-center justify-center rounded-xl">
+                  <div className="flex items-center gap-3 bg-[#161c2c] p-4 rounded-lg border border-[#232945]">
+                    <div className="w-5 h-5 border-2 border-blue-500/20 border-t-blue-500 rounded-full animate-spin"></div>
+                    <span className="text-gray-200">Loading summary...</span>
+                  </div>
+                </div>
+              )}
+              <SummaryCard
+                weeklySummary={weeklySummaryWithQuickStats}
+                dailyData={adjustedDailyData}
+              />
+            </div>
           </div>
         </div>
 
@@ -723,49 +1420,62 @@ const TodayStatusPage = ({ onLogout }) => {
 
         {showFlexibleModal && (
           <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm overflow-auto p-4"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 overflow-auto p-4"
             onClick={closeFlexibleModal}
           >
             <div
-              className="bg-slate-900 text-white rounded-2xl shadow-2xl w-full max-w-4xl p-8 max-h-[85vh] overflow-auto border border-slate-700"
+              className="bg-[#161c2c] text-white rounded-xl shadow-xl w-full max-w-5xl p-6 max-h-[90vh] overflow-auto border border-[#232945]"
               onClick={(e) => e.stopPropagation()}
             >
-              <h2 className="text-3xl font-bold mb-6 text-white">
-                Request Flexible Shift
-              </h2>
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h2 className="text-2xl font-bold text-white mb-1">
+                    Request Flexible Shift
+                  </h2>
+                  <p className="text-gray-400">Submit a request for flexible working hours</p>
+                </div>
+                <button
+                  onClick={closeFlexibleModal}
+                  className="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition-colors"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
 
               <form
-                className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8"
+                className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6"
                 onSubmit={submitFlexibleRequest}
               >
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-gray-300">
+                  <label className="text-sm font-medium text-gray-200">
                     Date
                   </label>
                   <input
                     type="date"
                     value={requestDate}
                     onChange={(e) => setRequestDate(e.target.value)}
-                    className="w-full rounded-xl p-3 bg-slate-800 text-white border border-slate-600 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    className="w-full rounded-lg p-3 bg-[#0f1419] text-white border border-[#232945] focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     required
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-gray-300">
+                  <label className="text-sm font-medium text-gray-200">
                     Start Time
                   </label>
                   <input
                     type="time"
                     value={requestStartTime}
                     onChange={(e) => setRequestStartTime(e.target.value)}
-                    className="w-full rounded-xl p-3 bg-slate-800 text-white border border-slate-600 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    className="w-full rounded-lg p-3 bg-[#0f1419] text-white border border-[#232945] focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     required
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-gray-300">
+                  <label className="text-sm font-medium text-gray-200">
                     Duration (hours)
                   </label>
                   <input
@@ -774,65 +1484,75 @@ const TodayStatusPage = ({ onLogout }) => {
                     onChange={(e) => setRequestDurationHours(e.target.value)}
                     min={1}
                     max={24}
-                    className="w-full rounded-xl p-3 bg-slate-800 text-white border border-slate-600 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    className="w-full rounded-lg p-3 bg-[#0f1419] text-white border border-[#232945] focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     required
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-gray-300">
+                  <label className="text-sm font-medium text-gray-200">
                     Reason
                   </label>
                   <textarea
                     value={requestReason}
                     onChange={(e) => setRequestReason(e.target.value)}
-                    className="w-full rounded-xl p-3 bg-slate-800 text-white border border-slate-600 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent h-24 resize-none"
+                    className="w-full rounded-lg p-3 bg-[#0f1419] text-white border border-[#232945] focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 h-24 resize-none"
                     placeholder="Optional reason for flexible shift request..."
                   />
                 </div>
 
-                <div className="md:col-span-2 flex justify-end gap-4 mt-4">
+                <div className="md:col-span-2 flex justify-end gap-3 mt-4">
                   <button
                     type="button"
-                    className="px-6 py-3 rounded-xl bg-slate-700 hover:bg-slate-600 transition font-medium"
+                    className="px-6 py-2 rounded-lg bg-gray-600 hover:bg-gray-700 text-white transition-colors"
                     onClick={closeFlexibleModal}
                   >
-                    Close
+                    Cancel
                   </button>
                   <button
                     type="submit"
-                    className={`px-6 py-3 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 text-white hover:from-purple-700 hover:to-pink-700 transition font-semibold ${
+                    className={`px-6 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white transition-colors ${
                       isSubmittingRequest ? "opacity-50 cursor-not-allowed" : ""
                     }`}
                     disabled={isSubmittingRequest}
                   >
-                    {isSubmittingRequest ? "Submitting..." : "Submit Request"}
+                    {isSubmittingRequest ? (
+                      <div className="flex items-center gap-2">
+                        <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin"></div>
+                        Submitting...
+                      </div>
+                    ) : (
+                      "Submit Request"
+                    )}
                   </button>
                 </div>
               </form>
 
-              {/* Requests Table */}
               <div className="mt-8">
-                <h3 className="text-2xl font-bold mb-6">My Requests</h3>
+                <h3 className="text-xl font-bold text-white mb-4">My Requests</h3>
                 {sortedFlexibleRequests.length === 0 ? (
-                  <div className="text-center py-12">
-                    <p className="text-gray-400 text-lg">No requests found.</p>
+                  <div className="text-center py-12 bg-[#0f1419] rounded-lg border border-[#232945]">
+                    <p className="text-gray-300 text-lg mb-2">No requests found</p>
+                    <p className="text-gray-500 text-sm">Your flexible shift requests will appear here</p>
                   </div>
                 ) : (
-                  <div className="overflow-x-auto rounded-xl border border-slate-700">
-                    <table className="w-full border-collapse">
-                      <thead className="bg-slate-800">
+                  <div className="overflow-x-auto rounded-lg border border-[#232945]">
+                    <table className="w-full border-collapse bg-[#0f1419]">
+                      <thead className="bg-[#232945]">
                         <tr>
-                          <th className="p-4 text-left font-semibold text-gray-300 border-b border-slate-700">
+                          <th className="p-4 text-left font-semibold text-gray-200 border-b border-[#232945]">
+                            Date
+                          </th>
+                          <th className="p-4 text-left font-semibold text-gray-200 border-b border-[#232945]">
                             Start Time
                           </th>
-                          <th className="p-4 text-left font-semibold text-gray-300 border-b border-slate-700">
+                          <th className="p-4 text-left font-semibold text-gray-200 border-b border-[#232945]">
                             Duration
                           </th>
-                          <th className="p-4 text-left font-semibold text-gray-300 border-b border-slate-700">
+                          <th className="p-4 text-left font-semibold text-gray-200 border-b border-[#232945]">
                             Reason
                           </th>
-                          <th className="p-4 text-left font-semibold text-gray-300 border-b border-slate-700">
+                          <th className="p-4 text-left font-semibold text-gray-200 border-b border-[#232945]">
                             Status
                           </th>
                         </tr>
@@ -848,25 +1568,33 @@ const TodayStatusPage = ({ onLogout }) => {
                                 r._id ||
                                 `${r.requestedDate}-${r.requestedStartTime}`
                               }
-                              className={`hover:bg-slate-800/50 transition ${
-                                idx % 2 === 0 ? "bg-slate-900/30" : ""
+                              className={`hover:bg-[#232945]/50 transition-colors ${
+                                idx % 2 === 0 ? "bg-[#161c2c]/50" : ""
                               }`}
                             >
-                              <td className="p-4 border-b border-slate-700/50">
+                              <td className="p-4 border-b border-[#232945] text-white">
                                 {formatDate(r.requestedDate)}
                               </td>
-                              <td className="p-4 border-b border-slate-700/50">
+                              <td className="p-4 border-b border-[#232945] text-gray-300">
                                 {r.requestedStartTime || "-"}
                               </td>
-                              <td className="p-4 border-b border-slate-700/50">
+                              <td className="p-4 border-b border-[#232945] text-gray-300">
                                 {r.durationHours ? `${r.durationHours}h` : "-"}
                               </td>
-                              <td className="p-4 border-b border-slate-700/50">
-                                {r.reason || "-"}
+                              <td className="p-4 border-b border-[#232945] text-gray-300 max-w-xs">
+                                <div className="truncate" title={r.reason || "-"}>
+                                  {r.reason || "-"}
+                                </div>
                               </td>
-                              <td className="p-4 border-b border-slate-700/50">
+                              <td className="p-4 border-b border-[#232945]">
                                 <span
-                                  className={`px-3 py-1 rounded-full text-sm font-medium ${statusColors[statusLower]}`}
+                                  className={`px-3 py-1 rounded-lg text-sm font-medium ${
+                                    statusLower === 'approved'
+                                      ? 'bg-green-600 text-white'
+                                      : statusLower === 'rejected'
+                                      ? 'bg-red-600 text-white'
+                                      : 'bg-orange-600 text-white'
+                                  }`}
                                 >
                                   {r.status || "Pending"}
                                 </span>

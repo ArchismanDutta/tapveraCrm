@@ -255,7 +255,6 @@ const createManualAttendance = async (req, res) => {
     };
 
     const userStatus = new UserStatus(userStatusData);
-    await userStatus.save();
 
     // Create DailyWork record
     const dailyWorkData = {
@@ -287,6 +286,9 @@ const createManualAttendance = async (req, res) => {
     };
 
     const dailyWork = new DailyWork(dailyWorkData);
+
+    // Save both records in sequence to ensure consistency and referential integrity
+    await userStatus.save();
     await dailyWork.save();
 
     // Return success response
@@ -330,12 +332,12 @@ const updateManualAttendance = async (req, res) => {
       punchOutTime,
       breakSessions = [],
       notes = "",
-      isOnLeave,
-      isHoliday
+      isOnLeave = false,
+      isHoliday = false
     } = req.body;
 
     // Find the DailyWork record
-    const dailyWork = await DailyWork.findById(id);
+    const dailyWork = await DailyWork.findById(id).populate("userId");
     if (!dailyWork) {
       return res.status(404).json({
         success: false,
@@ -343,14 +345,238 @@ const updateManualAttendance = async (req, res) => {
       });
     }
 
-    // Update the record using the same logic as create
-    // This is a simplified approach - in practice, you might want to refactor
-    // the common logic into a separate service function
+    const userId = dailyWork.userId._id;
+    const targetDate = new Date(dailyWork.date);
+    targetDate.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(targetDate);
+    endOfDay.setHours(23, 59, 59, 999);
+
+    // Get effective shift for the user and date
+    const effectiveShift = await getEffectiveShift(userId, targetDate);
+    if (!effectiveShift) {
+      return res.status(400).json({
+        success: false,
+        error: "No shift configuration found for this user and date"
+      });
+    }
+
+    // Validate and parse punch times
+    let punchIn = null;
+    let punchOut = null;
+
+    if (punchInTime) {
+      punchIn = new Date(punchInTime);
+      if (isNaN(punchIn.getTime())) {
+        return res.status(400).json({
+          success: false,
+          error: "Invalid punch in time format"
+        });
+      }
+    }
+
+    if (punchOutTime) {
+      punchOut = new Date(punchOutTime);
+      if (isNaN(punchOut.getTime())) {
+        return res.status(400).json({
+          success: false,
+          error: "Invalid punch out time format"
+        });
+      }
+    }
+
+    // Validate punch out is after punch in
+    if (punchIn && punchOut && punchOut <= punchIn) {
+      return res.status(400).json({
+        success: false,
+        error: "Punch out time must be after punch in time"
+      });
+    }
+
+    // Process break sessions
+    const processedBreakSessions = [];
+    let totalBreakSeconds = 0;
+
+    for (const breakSession of breakSessions) {
+      const breakStart = new Date(breakSession.start);
+      const breakEnd = new Date(breakSession.end);
+
+      if (isNaN(breakStart.getTime()) || isNaN(breakEnd.getTime())) {
+        return res.status(400).json({
+          success: false,
+          error: "Invalid break session time format"
+        });
+      }
+
+      if (breakEnd <= breakStart) {
+        return res.status(400).json({
+          success: false,
+          error: "Break end time must be after break start time"
+        });
+      }
+
+      const breakDuration = Math.floor((breakEnd - breakStart) / 1000);
+      totalBreakSeconds += breakDuration;
+
+      processedBreakSessions.push({
+        start: breakStart,
+        end: breakEnd,
+        type: breakSession.type || "break"
+      });
+    }
+
+    // Create work sessions based on punch times and breaks
+    const workedSessions = [];
+    let totalWorkSeconds = 0;
+
+    if (punchIn && punchOut && !isOnLeave && !isHoliday) {
+      // If no breaks, create one continuous session
+      if (processedBreakSessions.length === 0) {
+        const workDuration = Math.floor((punchOut - punchIn) / 1000);
+        totalWorkSeconds = workDuration;
+        workedSessions.push({
+          start: punchIn,
+          end: punchOut
+        });
+      } else {
+        // Split work sessions around breaks
+        let currentStart = punchIn;
+
+        // Sort breaks by start time
+        const sortedBreaks = processedBreakSessions.sort((a, b) => a.start - b.start);
+
+        for (const breakSession of sortedBreaks) {
+          if (currentStart < breakSession.start) {
+            // Work session before break
+            const workDuration = Math.floor((breakSession.start - currentStart) / 1000);
+            if (workDuration > 0) {
+              totalWorkSeconds += workDuration;
+              workedSessions.push({
+                start: currentStart,
+                end: breakSession.start
+              });
+            }
+          }
+          currentStart = breakSession.end;
+        }
+
+        // Final work session after last break
+        if (currentStart < punchOut) {
+          const workDuration = Math.floor((punchOut - currentStart) / 1000);
+          if (workDuration > 0) {
+            totalWorkSeconds += workDuration;
+            workedSessions.push({
+              start: currentStart,
+              end: punchOut
+            });
+          }
+        }
+      }
+    }
+
+    // Create timeline events
+    const timeline = [];
+    if (punchIn && !isOnLeave && !isHoliday) {
+      timeline.push({ type: "punch in", time: punchIn });
+    }
+
+    // Add break events to timeline
+    processedBreakSessions.forEach(breakSession => {
+      timeline.push({ type: "break start", time: breakSession.start });
+      timeline.push({ type: "break end", time: breakSession.end });
+    });
+
+    if (punchOut && !isOnLeave && !isHoliday) {
+      timeline.push({ type: "punch out", time: punchOut });
+    }
+
+    // Calculate attendance status using the attendance service
+    const attendanceData = await getAttendanceData(
+      userId,
+      targetDate,
+      workedSessions,
+      processedBreakSessions,
+      punchIn
+    );
+
+    // Update UserStatus record
+    const userStatusUpdate = {
+      arrivalTime: punchIn,
+      currentlyWorking: false,
+      onBreak: false,
+      workDurationSeconds: totalWorkSeconds,
+      breakDurationSeconds: totalBreakSeconds,
+      workDuration: `${Math.floor(totalWorkSeconds / 3600)}h ${Math.floor((totalWorkSeconds % 3600) / 60)}m`,
+      breakDuration: `${Math.floor(totalBreakSeconds / 3600)}h ${Math.floor((totalBreakSeconds % 3600) / 60)}m`,
+      workedSessions,
+      breakSessions: processedBreakSessions,
+      timeline,
+      isLate: attendanceData.attendanceStatus.isLate || false,
+      isHalfDay: attendanceData.attendanceStatus.isHalfDay || false,
+      isAbsent: attendanceData.attendanceStatus.isAbsent || false,
+    };
+
+    // Update DailyWork record
+    const dailyWorkUpdate = {
+      shift: {
+        name: effectiveShift.shiftName,
+        start: effectiveShift.start,
+        end: effectiveShift.end,
+        isFlexible: effectiveShift.isFlexible,
+        durationHours: effectiveShift.durationHours
+      },
+      shiftType: effectiveShift.type === "flexiblePermanent" ? "flexiblePermanent" :
+                 effectiveShift.isFlexible ? "flexible" : "standard",
+      workDurationSeconds: totalWorkSeconds,
+      breakDurationSeconds: totalBreakSeconds,
+      workedSessions,
+      breakSessions: processedBreakSessions,
+      timeline,
+      arrivalTime: punchIn,
+      departureTime: punchOut,
+      isLate: attendanceData.attendanceStatus.isLate || false,
+      isHalfDay: attendanceData.attendanceStatus.isHalfDay || false,
+      isAbsent: attendanceData.attendanceStatus.isAbsent || false,
+      isOnLeave,
+      isHoliday,
+      notes
+    };
+
+    // Update the records
+    const [updatedUserStatus, updatedDailyWork] = await Promise.all([
+      dailyWork.userStatusId ?
+        UserStatus.findByIdAndUpdate(dailyWork.userStatusId, userStatusUpdate, { new: true }) :
+        null,
+      DailyWork.findByIdAndUpdate(id, dailyWorkUpdate, { new: true }).populate("userId")
+    ]);
+
+    // If no UserStatus record existed, create one
+    if (!updatedUserStatus && dailyWork.userStatusId) {
+      const newUserStatus = new UserStatus({
+        userId,
+        today: targetDate,
+        ...userStatusUpdate
+      });
+      await newUserStatus.save();
+
+      // Update DailyWork to reference the new UserStatus
+      await DailyWork.findByIdAndUpdate(id, { userStatusId: newUserStatus._id });
+    }
 
     res.status(200).json({
       success: true,
-      message: "Manual attendance update functionality - implementation needed",
-      data: { id }
+      message: "Manual attendance record updated successfully",
+      data: {
+        userStatus: updatedUserStatus,
+        dailyWork: updatedDailyWork,
+        effectiveShift,
+        attendanceStatus: attendanceData.attendanceStatus,
+        calculatedMetrics: {
+          totalWorkHours: (totalWorkSeconds / 3600).toFixed(2),
+          totalBreakHours: (totalBreakSeconds / 3600).toFixed(2),
+          workSessions: workedSessions.length,
+          breakSessions: processedBreakSessions.length
+        }
+      }
     });
 
   } catch (error) {

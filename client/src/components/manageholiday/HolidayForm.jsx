@@ -1,6 +1,6 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 
-const HolidayForm = ({ onAdd }) => {
+const HolidayForm = ({ onAdd, onUpdate, editingHoliday, onCancelEdit }) => {
   const [form, setForm] = useState({
     name: "",
     date: "",
@@ -9,6 +9,28 @@ const HolidayForm = ({ onAdd }) => {
     optional: false,
     shifts: ["ALL"],
   });
+
+  useEffect(() => {
+    if (editingHoliday) {
+      setForm({
+        name: editingHoliday.name,
+        date: new Date(editingHoliday.date).toISOString().split('T')[0],
+        type: editingHoliday.type,
+        recurring: editingHoliday.recurring,
+        optional: editingHoliday.optional,
+        shifts: editingHoliday.shifts,
+      });
+    } else {
+      setForm({
+        name: "",
+        date: "",
+        type: "NATIONAL",
+        recurring: false,
+        optional: false,
+        shifts: ["ALL"],
+      });
+    }
+  }, [editingHoliday]);
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -26,7 +48,13 @@ const HolidayForm = ({ onAdd }) => {
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!form.name || !form.date) return alert("Name and date required");
-    onAdd(form);
+
+    if (editingHoliday) {
+      onUpdate(editingHoliday._id, form);
+    } else {
+      onAdd(form);
+    }
+
     setForm({
       name: "",
       date: "",
@@ -50,7 +78,7 @@ const HolidayForm = ({ onAdd }) => {
           value={form.name}
           onChange={handleChange}
           placeholder="Holiday Name"
-          className="border border-[#82aaff] bg-[#1b2439] text-white placeholder-[#6c7897] rounded-lg p-3 w-52 focus:outline-none focus:ring-2 focus:ring-[#58a6ff] transition"
+          className="border border-[#232945] bg-[#141a21] text-white placeholder-blue-300 rounded-lg p-3 w-52 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
           required
         />
 
@@ -60,7 +88,7 @@ const HolidayForm = ({ onAdd }) => {
           value={form.date}
           onChange={handleChange}
           placeholder="dd-mm-yyyy"
-          className="border border-[#82aaff] bg-[#1b2439] text-white rounded-lg p-3 w-48 focus:outline-none focus:ring-2 focus:ring-[#58a6ff] transition"
+          className="border border-[#232945] bg-[#141a21] text-white rounded-lg p-3 w-48 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
           required
         />
 
@@ -68,7 +96,7 @@ const HolidayForm = ({ onAdd }) => {
           name="type"
           value={form.type}
           onChange={handleChange}
-          className="border border-[#82aaff] bg-[#1b2439] text-white rounded-lg p-3 w-48 focus:outline-none focus:ring-2 focus:ring-[#58a6ff] transition"
+          className="border border-[#232945] bg-[#141a21] text-white rounded-lg p-3 w-48 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
         >
           <option value="NATIONAL">National</option>
           <option value="COMPANY">Company</option>
@@ -80,7 +108,7 @@ const HolidayForm = ({ onAdd }) => {
           name="shifts"
           value={form.shifts}
           onChange={handleShiftsChange}
-          className="border border-[#82aaff] bg-[#1b2439] text-white rounded-lg p-3 w-40 focus:outline-none focus:ring-2 focus:ring-[#58a6ff] transition"
+          className="border border-[#232945] bg-[#141a21] text-white rounded-lg p-3 w-40 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
         >
           <option value="ALL">All</option>
           <option value="standard">Standard</option>
@@ -91,34 +119,45 @@ const HolidayForm = ({ onAdd }) => {
       {/* Row 2: Checkboxes + Button */}
       <div className="flex flex-wrap gap-4 items-center justify-between mt-2">
         <div className="flex gap-6">
-          <label className="flex items-center gap-2 text-white font-normal">
+          <label className="flex items-center gap-2 text-blue-100 font-normal">
             <input
               type="checkbox"
               name="optional"
               checked={form.optional}
               onChange={handleChange}
-              className="accent-[#58a6ff] scale-125"
+              className="accent-blue-500 scale-125"
             />
             Optional
           </label>
-          <label className="flex items-center gap-2 text-white font-normal">
+          <label className="flex items-center gap-2 text-blue-100 font-normal">
             <input
               type="checkbox"
               name="recurring"
               checked={form.recurring}
               onChange={handleChange}
-              className="accent-[#58a6ff] scale-125"
+              className="accent-blue-500 scale-125"
             />
             Recurring
           </label>
         </div>
-        <button
-          type="submit"
-          className="bg-gradient-to-r from-[#58a6ff] to-[#485fc7] text-white font-semibold px-12 py-4 rounded-lg shadow-lg hover:scale-110 transition-transform duration-200"
-          style={{ minWidth: "170px" }}
-        >
-          Add Holiday
-        </button>
+        <div className="flex gap-3">
+          <button
+            type="submit"
+            className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-8 py-3 rounded-lg shadow-lg transition-colors duration-200"
+            style={{ minWidth: "150px" }}
+          >
+            {editingHoliday ? "Update Holiday" : "Add Holiday"}
+          </button>
+          {editingHoliday && (
+            <button
+              type="button"
+              onClick={onCancelEdit}
+              className="bg-gray-600 hover:bg-gray-700 text-white font-semibold px-6 py-3 rounded-lg shadow-lg transition-colors duration-200"
+            >
+              Cancel
+            </button>
+          )}
+        </div>
       </div>
     </form>
   );

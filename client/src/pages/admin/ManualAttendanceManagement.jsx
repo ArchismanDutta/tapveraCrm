@@ -58,7 +58,8 @@ const ManualAttendanceManagement = ({ onLogout }) => {
   const fetchUsers = async () => {
     try {
       const token = localStorage.getItem("token");
-      const response = await fetch("/api/users", {
+      const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
+      const response = await fetch(`${API_BASE}/api/users`, {
         headers: { Authorization: `Bearer ${token}` }
       });
 
@@ -76,6 +77,7 @@ const ManualAttendanceManagement = ({ onLogout }) => {
     setLoading(true);
     try {
       const token = localStorage.getItem("token");
+      const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
       const params = new URLSearchParams({
         page: pagination.currentPage.toString(),
         limit: pagination.recordsPerPage.toString(),
@@ -87,7 +89,7 @@ const ManualAttendanceManagement = ({ onLogout }) => {
       if (filters.startDate) params.append("startDate", filters.startDate);
       if (filters.endDate) params.append("endDate", filters.endDate);
 
-      const response = await fetch(`/api/admin/manual-attendance?${params}`, {
+      const response = await fetch(`${API_BASE}/api/admin/manual-attendance/?${params}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
 
@@ -117,7 +119,8 @@ const ManualAttendanceManagement = ({ onLogout }) => {
 
     try {
       const token = localStorage.getItem("token");
-      const response = await fetch(`/api/admin/manual-attendance/${id}`, {
+      const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
+      const response = await fetch(`${API_BASE}/api/admin/manual-attendance/${id}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -125,6 +128,18 @@ const ManualAttendanceManagement = ({ onLogout }) => {
       if (response.ok) {
         toast.success("Attendance record deleted successfully");
         fetchRecords();
+
+        // Emit a custom event to notify other components that attendance data has changed
+        // Add a small delay to ensure database transactions are committed
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('attendanceDataUpdated', {
+            detail: {
+              timestamp: Date.now(),
+              action: 'delete',
+              forceRefresh: true
+            }
+          }));
+        }, 500); // 500ms delay to ensure database consistency
       } else {
         const error = await response.json();
         toast.error(error.error || "Failed to delete record");
@@ -139,10 +154,34 @@ const ManualAttendanceManagement = ({ onLogout }) => {
     fetchRecords();
     setShowForm(false);
     setEditData(null);
+
+    // Emit a custom event to notify other components that attendance data has changed
+    // Add a small delay to ensure database transactions are committed
+    setTimeout(() => {
+      window.dispatchEvent(new CustomEvent('attendanceDataUpdated', {
+        detail: {
+          timestamp: Date.now(),
+          action: 'form-success',
+          forceRefresh: true
+        }
+      }));
+    }, 500); // 500ms delay to ensure database consistency
   };
 
   const handleEdit = (record) => {
     setEditData(record);
+    setShowForm(true);
+  };
+
+  const handleDuplicate = (record) => {
+    // Create a copy of the record with a new date (today)
+    const duplicatedRecord = {
+      ...record,
+      date: new Date().toISOString().split('T')[0], // Set to today
+      _id: undefined, // Remove the ID so it creates a new record
+      overrideExisting: false
+    };
+    setEditData(duplicatedRecord);
     setShowForm(true);
   };
 
@@ -298,23 +337,49 @@ const ManualAttendanceManagement = ({ onLogout }) => {
           {/* Start Date */}
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">Start Date</label>
-            <input
-              type="date"
-              value={filters.startDate}
-              onChange={(e) => setFilters(prev => ({ ...prev, startDate: e.target.value }))}
-              className="w-full px-4 py-2 bg-slate-700/50 border border-slate-600/50 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
-            />
+            <div className="flex gap-2">
+              <input
+                type="date"
+                value={filters.startDate}
+                onChange={(e) => setFilters(prev => ({ ...prev, startDate: e.target.value }))}
+                className="flex-1 px-4 py-2 bg-slate-700/50 border border-slate-600/50 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  const today = new Date().toISOString().split('T')[0];
+                  setFilters(prev => ({ ...prev, startDate: today }));
+                }}
+                className="px-3 py-2 bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-400 text-xs rounded-lg transition-colors"
+                title="Set to today"
+              >
+                Today
+              </button>
+            </div>
           </div>
 
           {/* End Date */}
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">End Date</label>
-            <input
-              type="date"
-              value={filters.endDate}
-              onChange={(e) => setFilters(prev => ({ ...prev, endDate: e.target.value }))}
-              className="w-full px-4 py-2 bg-slate-700/50 border border-slate-600/50 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
-            />
+            <div className="flex gap-2">
+              <input
+                type="date"
+                value={filters.endDate}
+                onChange={(e) => setFilters(prev => ({ ...prev, endDate: e.target.value }))}
+                className="flex-1 px-4 py-2 bg-slate-700/50 border border-slate-600/50 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  const today = new Date().toISOString().split('T')[0];
+                  setFilters(prev => ({ ...prev, endDate: today }));
+                }}
+                className="px-3 py-2 bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-400 text-xs rounded-lg transition-colors"
+                title="Set to today"
+              >
+                Today
+              </button>
+            </div>
           </div>
 
           {/* Search */}
@@ -333,7 +398,7 @@ const ManualAttendanceManagement = ({ onLogout }) => {
           </div>
 
           {/* Actions */}
-          <div className="flex items-end gap-2">
+          <div className="flex flex-col gap-2">
             <button
               onClick={fetchRecords}
               className="flex items-center gap-2 px-4 py-2 bg-slate-600/50 hover:bg-slate-600 text-gray-300 rounded-lg transition-colors"
@@ -341,6 +406,58 @@ const ManualAttendanceManagement = ({ onLogout }) => {
               <RefreshCw className="w-4 h-4" />
               Refresh
             </button>
+
+            {/* Quick Date Presets */}
+            <div className="grid grid-cols-2 gap-1">
+              <button
+                type="button"
+                onClick={() => {
+                  const today = new Date();
+                  const lastWeek = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+                  setFilters(prev => ({
+                    ...prev,
+                    startDate: lastWeek.toISOString().split('T')[0],
+                    endDate: today.toISOString().split('T')[0]
+                  }));
+                }}
+                className="px-2 py-1 bg-purple-600/20 hover:bg-purple-600/30 text-purple-400 text-xs rounded transition-colors"
+                title="Last 7 days"
+              >
+                Last 7d
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const today = new Date();
+                  const lastMonth = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+                  setFilters(prev => ({
+                    ...prev,
+                    startDate: lastMonth.toISOString().split('T')[0],
+                    endDate: today.toISOString().split('T')[0]
+                  }));
+                }}
+                className="px-2 py-1 bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 text-xs rounded transition-colors"
+                title="Last 30 days"
+              >
+                Last 30d
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setFilters(prev => ({
+                    ...prev,
+                    startDate: "",
+                    endDate: "",
+                    userId: "",
+                    search: ""
+                  }));
+                }}
+                className="px-2 py-1 bg-red-600/20 hover:bg-red-600/30 text-red-400 text-xs rounded transition-colors col-span-2"
+                title="Clear all filters"
+              >
+                Clear All
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -353,7 +470,35 @@ const ManualAttendanceManagement = ({ onLogout }) => {
             <h3 className="text-lg font-semibold text-white flex items-center gap-2">
               <Users className="w-5 h-5 text-cyan-400" />
               Attendance Records ({pagination.totalRecords})
+              {selectedRecords.size > 0 && (
+                <span className="text-sm text-cyan-400 ml-2">
+                  ({selectedRecords.size} selected)
+                </span>
+              )}
             </h3>
+            {selectedRecords.size > 0 && (
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    if (window.confirm(`Are you sure you want to delete ${selectedRecords.size} selected records?`)) {
+                      selectedRecords.forEach(id => handleDeleteRecord(id));
+                      setSelectedRecords(new Set());
+                    }
+                  }}
+                  className="flex items-center gap-2 px-3 py-2 bg-red-600/20 hover:bg-red-600/30 text-red-400 rounded-lg transition-colors text-sm"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  Delete Selected
+                </button>
+                <button
+                  onClick={() => setSelectedRecords(new Set())}
+                  className="flex items-center gap-2 px-3 py-2 bg-slate-600/50 hover:bg-slate-600 text-gray-300 rounded-lg transition-colors text-sm"
+                >
+                  <X className="w-4 h-4" />
+                  Clear Selection
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
@@ -376,6 +521,20 @@ const ManualAttendanceManagement = ({ onLogout }) => {
             <table className="w-full">
               <thead className="bg-slate-800/50">
                 <tr>
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 w-12">
+                    <input
+                      type="checkbox"
+                      checked={filteredRecords.length > 0 && filteredRecords.every(record => selectedRecords.has(record._id))}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedRecords(new Set(filteredRecords.map(record => record._id)));
+                        } else {
+                          setSelectedRecords(new Set());
+                        }
+                      }}
+                      className="w-4 h-4 text-cyan-600 bg-slate-700 border-slate-600 rounded focus:ring-cyan-500"
+                    />
+                  </th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Employee</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Date</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Punch In</th>
@@ -388,6 +547,22 @@ const ManualAttendanceManagement = ({ onLogout }) => {
               <tbody className="divide-y divide-slate-600/20">
                 {filteredRecords.map((record) => (
                   <tr key={record._id} className="hover:bg-slate-700/30 transition-colors">
+                    <td className="px-6 py-4">
+                      <input
+                        type="checkbox"
+                        checked={selectedRecords.has(record._id)}
+                        onChange={(e) => {
+                          const newSelected = new Set(selectedRecords);
+                          if (e.target.checked) {
+                            newSelected.add(record._id);
+                          } else {
+                            newSelected.delete(record._id);
+                          }
+                          setSelectedRecords(newSelected);
+                        }}
+                        className="w-4 h-4 text-cyan-600 bg-slate-700 border-slate-600 rounded focus:ring-cyan-500"
+                      />
+                    </td>
                     <td className="px-6 py-4">
                       <div>
                         <div className="font-medium text-white">{record.userId?.name}</div>
@@ -424,6 +599,13 @@ const ManualAttendanceManagement = ({ onLogout }) => {
                           title="Edit Record"
                         >
                           <Edit className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleDuplicate(record)}
+                          className="p-2 hover:bg-green-600/20 text-green-400 rounded-lg transition-colors"
+                          title="Duplicate Record"
+                        >
+                          <Plus className="w-4 h-4" />
                         </button>
                         <button
                           onClick={() => handleDeleteRecord(record._id)}

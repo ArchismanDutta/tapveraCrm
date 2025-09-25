@@ -1,4 +1,5 @@
 import React from "react";
+import { attendanceUtils } from "../../api.js";
 
 const EmployeeRow = ({ employee }) => {
   const {
@@ -13,15 +14,28 @@ const EmployeeRow = ({ employee }) => {
     currentlyWorking,
   } = employee;
 
-  const formatTime = (time) =>
-    time ? new Date(time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "-";
+  const formatTime = (time) => {
+    if (!time) return "-";
+    return attendanceUtils.formatTime(time);
+  };
+
+  // Get standardized arrival time
+  const arrivalTimeStandardized = attendanceUtils.getArrivalTime(employee) || arrivalTime;
+  const departureTimeStandardized = attendanceUtils.getDepartureTime(employee) || punchOutTime;
 
   const getRowClass = () => {
-    if (currentlyWorking) {
-      return "bg-gradient-to-r from-green-600/20 to-emerald-600/20 border border-green-500/40 text-green-200";
+    // Simple logic: Green if working, Yellow if on break, Violet if punched out, Normal for rest
+    if (currentlyWorking && !onBreak) {
+      // Working employees - Green
+      return "bg-gradient-to-r from-green-600/30 to-emerald-600/30 border border-green-500/50 text-green-100 shadow-lg shadow-green-500/20";
     } else if (onBreak) {
-      return "bg-gradient-to-r from-yellow-600/20 to-orange-600/20 border border-yellow-500/40 text-yellow-200";
+      // On break employees - Yellow
+      return "bg-gradient-to-r from-yellow-600/30 to-orange-600/30 border border-yellow-500/50 text-yellow-100 shadow-lg shadow-yellow-500/20";
+    } else if (punchOutTime) {
+      // Punched out employees - Violet
+      return "bg-gradient-to-r from-purple-600/20 to-violet-600/20 border border-purple-500/40 text-purple-200";
     } else {
+      // Normal for rest
       return "bg-gray-800 border border-gray-700 text-gray-300";
     }
   };
@@ -52,14 +66,14 @@ const EmployeeRow = ({ employee }) => {
       <td className="py-3 px-4 whitespace-nowrap text-sm">
         <div className="flex items-center space-x-2">
           <span className="text-lg">🔓</span>
-          <span className="font-mono">{formatTime(arrivalTime)}</span>
+          <span className="font-mono">{formatTime(arrivalTimeStandardized)}</span>
         </div>
       </td>
 
       <td className="py-3 px-4 whitespace-nowrap text-sm">
         <div className="flex items-center space-x-2">
-          <span className="text-lg">{punchOutTime ? "🔒" : "⏳"}</span>
-          <span className="font-mono">{formatTime(punchOutTime)}</span>
+          <span className="text-lg">{departureTimeStandardized ? "🔒" : "⏳"}</span>
+          <span className="font-mono">{formatTime(departureTimeStandardized)}</span>
         </div>
       </td>
 
@@ -91,8 +105,13 @@ const EmployeeRow = ({ employee }) => {
       <td className="py-3 px-4 whitespace-nowrap font-mono text-center text-sm">
         <div className="flex items-center justify-center space-x-1">
           <span className="text-lg">⏱️</span>
-          <span className="font-bold">{breakDurationMinutes ?? "0"}</span>
+          <span className="font-bold">
+            {attendanceUtils.calculateBreakMinutes(employee, onBreak)}
+          </span>
           <span className="text-xs opacity-70">min</span>
+          {onBreak && (
+            <div className="w-1 h-1 bg-orange-400 rounded-full animate-pulse ml-1" title="Real-time break tracking"></div>
+          )}
         </div>
       </td>
 
@@ -103,14 +122,27 @@ const EmployeeRow = ({ employee }) => {
         <div className="flex items-center justify-center space-x-1">
           <span className="text-lg">💼</span>
           <span className="font-bold">{workDuration || "0:00"}</span>
+          {currentlyWorking && (
+            <div className="w-1 h-1 bg-green-400 rounded-full animate-pulse ml-1" title="Real-time work tracking"></div>
+          )}
         </div>
       </td>
 
       <td className="py-3 px-4 whitespace-nowrap text-sm">
-        {currentlyWorking ? (
+        {currentlyWorking && !onBreak ? (
           <span className="inline-flex items-center space-x-1 bg-gradient-to-r from-green-500 to-emerald-500 text-white px-3 py-1 rounded-full font-semibold text-xs shadow-lg animate-pulse">
             <span>🔄</span>
             <span>Working</span>
+          </span>
+        ) : onBreak ? (
+          <span className="inline-flex items-center space-x-1 bg-gradient-to-r from-yellow-500 to-orange-500 text-white px-3 py-1 rounded-full font-semibold text-xs shadow-lg">
+            <span>☕</span>
+            <span>On Break</span>
+          </span>
+        ) : punchOutTime ? (
+          <span className="inline-flex items-center space-x-1 bg-gradient-to-r from-purple-500 to-violet-500 text-white px-3 py-1 rounded-full text-xs">
+            <span>🔒</span>
+            <span>Punched Out</span>
           </span>
         ) : (
           <span className="inline-flex items-center space-x-1 bg-gray-600/50 text-gray-300 px-3 py-1 rounded-full text-xs">

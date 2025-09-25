@@ -27,7 +27,7 @@ const useGlobalChatNotifications = (jwtToken) => {
         const proto = window.location.protocol === "https:" ? "wss" : "ws";
         return `${proto}://${window.location.hostname}:5000`;
       }
-      return "ws://localhost:5000";
+      return import.meta.env.VITE_WS_BASE || "ws://localhost:5000";
     };
 
     const onActiveConv = (e) => {

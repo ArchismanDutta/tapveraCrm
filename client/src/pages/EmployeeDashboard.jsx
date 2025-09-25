@@ -1,7 +1,23 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import axios from "axios";
 import { Link, useNavigate } from "react-router-dom";
 import dayjs from "dayjs";
+import {
+  TrendingUp,
+  Clock,
+  Target,
+  Activity,
+  Calendar,
+  CheckSquare,
+  AlertTriangle,
+  Coffee,
+  Play,
+  Pause,
+  RefreshCw,
+  BarChart3,
+  Zap,
+  Timer
+} from "lucide-react";
 
 import SummaryCards from "../components/dashboard/SummaryCards";
 import TodayTasks from "../components/dashboard/TodayTasks";
@@ -11,6 +27,8 @@ import WishPopup from "../components/dashboard/WishPopup";
 import NoticeOverlay from "../components/dashboard/NoticeOverlay";
 import DynamicNotificationOverlay from "../components/notifications/DynamicNotificationOverlay";
 import notificationManager from "../utils/browserNotifications";
+import CelebrationPopup from "../components/common/CelebrationPopup";
+import useCelebrationNotifications from "../hooks/useCelebrationNotifications";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
 const TASK_POLL_INTERVAL_MS = 10000;
@@ -23,6 +41,7 @@ const EmployeeDashboard = ({ onLogout }) => {
   const [loading, setLoading] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [userName, setUserName] = useState("");
+  const [userInfo, setUserInfo] = useState(null);
   const [summaryData, setSummaryData] = useState([]);
   const [notifications, setNotifications] = useState([]);
   const [dismissedNotificationIds, setDismissedNotificationIds] = useState(
@@ -30,6 +49,27 @@ const EmployeeDashboard = ({ onLogout }) => {
   );
   const [wishes, setWishes] = useState([]);
   const [showWishPopup, setShowWishPopup] = useState(false);
+
+  // New enhanced state
+  const [workStatus, setWorkStatus] = useState(null);
+  const [weeklyStats, setWeeklyStats] = useState(null);
+  const [recentActivity, setRecentActivity] = useState([]);
+  const [productivity, setProductivity] = useState(null);
+  const [dataLoading, setDataLoading] = useState({
+    tasks: false,
+    status: false,
+    stats: false,
+    activity: false
+  });
+  const [errors, setErrors] = useState({});
+  const [lastRefresh, setLastRefresh] = useState(new Date());
+
+  // Celebration notifications
+  const {
+    celebrations,
+    showPopup: showCelebrationPopup,
+    closePopup: closeCelebrationPopup
+  } = useCelebrationNotifications();
 
   const prevTaskIdsRef = useRef(new Set()); // Track previous task IDs for new notifications
   const [browserNotificationsEnabled, setBrowserNotificationsEnabled] = useState(false);
@@ -67,26 +107,45 @@ const EmployeeDashboard = ({ onLogout }) => {
     status: task.status,
   });
 
-  // Compute summary cards
+  // Enhanced summary computation
   const computeSummary = useCallback(() => {
     const today = dayjs(currentTime).startOf("day");
+    const completedTasks = tasks.filter(t => t.status?.toLowerCase() === "completed");
+    const pendingTasks = tasks.filter(t => t.status?.toLowerCase() !== "completed");
+    const highPriorityTasks = tasks.filter(t => t.level === "High" && t.status?.toLowerCase() !== "completed");
+    const dueTodayTasks = tasks.filter(
+      (t) => t.dueDate && dayjs(t.dueDate).isSame(today, "day") && t.status?.toLowerCase() !== "completed"
+    );
+
     setSummaryData([
-      { label: "All Tasks", count: tasks.length },
       {
-        label: "Tasks Due Today",
-        count: tasks.filter(
-          (t) => t.dueDate && dayjs(t.dueDate).isSame(today, "day")
-        ).length,
+        label: "All Tasks",
+        count: tasks.length,
+        icon: CheckSquare,
+        color: "blue",
+        trend: tasks.length > 0 ? Math.floor((completedTasks.length / tasks.length) * 100) + "%" : "0%"
       },
       {
-        label: "Overdue Tasks",
-        count: tasks.filter(
-          (t) =>
-            t.dueDate &&
-            dayjs(t.dueDate).isBefore(dayjs(currentTime)) &&
-            t.status?.toLowerCase() !== "completed"
-        ).length,
+        label: "Due Today",
+        count: dueTodayTasks.length,
+        icon: Calendar,
+        color: "orange",
+        urgent: dueTodayTasks.length > 0
       },
+      {
+        label: "High Priority",
+        count: highPriorityTasks.length,
+        icon: AlertTriangle,
+        color: "red",
+        urgent: highPriorityTasks.length > 0
+      },
+      {
+        label: "Completed",
+        count: completedTasks.length,
+        icon: Target,
+        color: "green",
+        trend: tasks.length > 0 ? Math.floor((completedTasks.length / tasks.length) * 100) + "%" : "0%"
+      }
     ]);
   }, [tasks, currentTime]);
 
@@ -133,7 +192,7 @@ const EmployeeDashboard = ({ onLogout }) => {
     }
   }, [navigate]);
 
-  // Fetch user info & unread wishes
+  // Enhanced user info & wishes fetch
   const fetchUserAndWishes = useCallback(async () => {
     const token = localStorage.getItem("token");
     if (!token) return navigate("/login", { replace: true });
@@ -142,6 +201,7 @@ const EmployeeDashboard = ({ onLogout }) => {
         headers: { Authorization: `Bearer ${token}` },
       });
       setUserName(res.data?.name || "User");
+      setUserInfo(res.data);
 
       const wishesRes = await axios.get(`${API_BASE}/api/wishes/me`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -155,22 +215,112 @@ const EmployeeDashboard = ({ onLogout }) => {
         "Error fetching user or wishes:",
         err.response?.data || err.message
       );
+      setErrors(prev => ({ ...prev, user: err.message }));
     }
   }, [navigate]);
 
-  // Auto-refresh tasks
-  useEffect(() => {
-    fetchTasks();
-    const intervalId = setInterval(fetchTasks, TASK_POLL_INTERVAL_MS);
-    return () => clearInterval(intervalId);
-  }, [fetchTasks]);
+  // Fetch work status
+  const fetchWorkStatus = useCallback(async () => {
+    const token = localStorage.getItem("token");
+    if (!token) return;
 
-  // Auto-refresh user/wishes
+    setDataLoading(prev => ({ ...prev, status: true }));
+    try {
+      const res = await axios.get(`${API_BASE}/api/status/today`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setWorkStatus(res.data);
+      setErrors(prev => ({ ...prev, status: null }));
+    } catch (err) {
+      console.error("Error fetching work status:", err);
+      setErrors(prev => ({ ...prev, status: err.message }));
+    } finally {
+      setDataLoading(prev => ({ ...prev, status: false }));
+    }
+  }, []);
+
+  // Fetch weekly statistics
+  const fetchWeeklyStats = useCallback(async () => {
+    const token = localStorage.getItem("token");
+    if (!token) return;
+
+    setDataLoading(prev => ({ ...prev, stats: true }));
+    try {
+      const now = new Date();
+      const diffToMonday = (now.getDay() + 6) % 7;
+      const monday = new Date(now);
+      monday.setDate(now.getDate() - diffToMonday);
+      monday.setHours(0, 0, 0, 0);
+
+      const sunday = new Date(monday);
+      sunday.setDate(monday.getDate() + 6);
+      sunday.setHours(23, 59, 59, 999);
+
+      const res = await axios.get(`${API_BASE}/api/summary/week`, {
+        headers: { Authorization: `Bearer ${token}` },
+        params: {
+          startDate: monday.toISOString(),
+          endDate: sunday.toISOString()
+        }
+      });
+      setWeeklyStats(res.data);
+      setErrors(prev => ({ ...prev, stats: null }));
+    } catch (err) {
+      console.error("Error fetching weekly stats:", err);
+      setErrors(prev => ({ ...prev, stats: err.message }));
+    } finally {
+      setDataLoading(prev => ({ ...prev, stats: false }));
+    }
+  }, []);
+
+
+  // Enhanced data fetching on mount
   useEffect(() => {
-    fetchUserAndWishes();
-    const intervalId = setInterval(fetchUserAndWishes, USER_POLL_INTERVAL_MS);
-    return () => clearInterval(intervalId);
-  }, [fetchUserAndWishes]);
+    const initializeDashboard = async () => {
+      await Promise.all([
+        fetchTasks(),
+        fetchUserAndWishes(),
+        fetchWorkStatus()
+      ]);
+      setLastRefresh(new Date());
+    };
+
+    initializeDashboard();
+  }, [fetchTasks, fetchUserAndWishes, fetchWorkStatus]);
+
+  // Auto-refresh with smart intervals
+  useEffect(() => {
+    const taskInterval = setInterval(fetchTasks, TASK_POLL_INTERVAL_MS);
+    const userInterval = setInterval(fetchUserAndWishes, USER_POLL_INTERVAL_MS);
+    const statusInterval = setInterval(fetchWorkStatus, 30000); // 30s for work status
+
+    return () => {
+      clearInterval(taskInterval);
+      clearInterval(userInterval);
+      clearInterval(statusInterval);
+    };
+  }, [fetchTasks, fetchUserAndWishes, fetchWorkStatus]);
+
+  // Listen for attendance data updates from manual attendance management
+  useEffect(() => {
+    const handleAttendanceUpdate = async () => {
+      console.log("🔄 EmployeeDashboard: Received attendanceDataUpdated event, refreshing work status...");
+
+      // Refresh work status and tasks to reflect manual attendance changes
+      await Promise.all([
+        fetchWorkStatus(),
+        fetchTasks()
+      ]);
+
+      setLastRefresh(new Date());
+    };
+
+    window.addEventListener('attendanceDataUpdated', handleAttendanceUpdate);
+
+    return () => {
+      window.removeEventListener('attendanceDataUpdated', handleAttendanceUpdate);
+    };
+  }, [fetchWorkStatus, fetchTasks]);
 
   // Initialize browser notifications
   useEffect(() => {
@@ -257,6 +407,168 @@ const EmployeeDashboard = ({ onLogout }) => {
     }
   };
 
+  // Manual refresh all data
+  const handleRefreshAll = async () => {
+    await Promise.all([
+      fetchTasks(),
+      fetchWorkStatus()
+    ]);
+    setLastRefresh(new Date());
+  };
+
+  // Handle punch in action
+  const handlePunchIn = async () => {
+    const token = localStorage.getItem("token");
+    if (!token) return;
+
+    try {
+      await axios.put(`${API_BASE}/api/status/today`, {
+        currentlyWorking: true,
+        onBreak: false,
+        timelineEvent: {
+          type: "Punch In",
+          time: new Date().toISOString(),
+        },
+      }, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      // Refresh work status
+      await fetchWorkStatus();
+
+      // Emit event for other components to sync
+      window.dispatchEvent(new CustomEvent('attendanceDataUpdated', {
+        detail: { type: 'punch_in', userId: userInfo?._id }
+      }));
+
+      notificationManager.showGeneral("Punched In", "Successfully punched in for today!");
+    } catch (err) {
+      console.error("Error punching in:", err);
+      notificationManager.showGeneral("Error", "Failed to punch in. Please try again.");
+    }
+  };
+
+  // Handle break action
+  const handleTakeBreak = async () => {
+    const token = localStorage.getItem("token");
+    if (!token) return;
+
+    try {
+      await axios.put(`${API_BASE}/api/status/today`, {
+        currentlyWorking: false,
+        onBreak: true,
+        breakStartTime: new Date().toISOString(),
+        timelineEvent: {
+          type: "Break Start (Coffee)",
+          time: new Date().toISOString(),
+        },
+        breakType: "Coffee",
+      }, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      // Refresh work status
+      await fetchWorkStatus();
+
+      // Emit event for other components to sync
+      window.dispatchEvent(new CustomEvent('attendanceDataUpdated', {
+        detail: { type: 'break_start', userId: userInfo?._id }
+      }));
+
+      notificationManager.showGeneral("Break Started", "Enjoy your break!");
+    } catch (err) {
+      console.error("Error starting break:", err);
+      notificationManager.showGeneral("Error", "Failed to start break. Please try again.");
+    }
+  };
+
+
+  // Handle resume work action
+  const handleResumeWork = async () => {
+    const token = localStorage.getItem("token");
+    if (!token) return;
+
+    try {
+      await axios.put(`${API_BASE}/api/status/today`, {
+        currentlyWorking: true,
+        onBreak: false,
+        breakStartTime: null,
+        timelineEvent: {
+          type: "Resume Work",
+          time: new Date().toISOString(),
+        },
+      }, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      // Refresh work status
+      await fetchWorkStatus();
+
+      // Emit event for other components to sync
+      window.dispatchEvent(new CustomEvent('attendanceDataUpdated', {
+        detail: { type: 'work_resume', userId: userInfo?._id }
+      }));
+
+      notificationManager.showGeneral("Work Resumed", "Welcome back to work!");
+    } catch (err) {
+      console.error("Error resuming work:", err);
+      notificationManager.showGeneral("Error", "Failed to resume work. Please try again.");
+    }
+  };
+
+  // Quick actions with proper handlers (no punch out)
+  const quickActions = useMemo(() => {
+    const actions = [];
+
+    // Punch In/Break logic (no punch out)
+    if (!workStatus?.currentlyWorking && !workStatus?.onBreak) {
+      actions.push({
+        label: "Punch In",
+        icon: Play,
+        action: handlePunchIn,
+        color: "green",
+        disabled: false
+      });
+    } else if (workStatus?.currentlyWorking && !workStatus?.onBreak) {
+      actions.push({
+        label: "Take Break",
+        icon: Coffee,
+        action: handleTakeBreak,
+        color: "orange",
+        disabled: false
+      });
+    } else if (workStatus?.onBreak) {
+      actions.push({
+        label: "Resume Work",
+        icon: Play,
+        action: handleResumeWork,
+        color: "green",
+        disabled: false
+      });
+    }
+
+    // Always available actions
+    actions.push(
+      {
+        label: "View Tasks",
+        icon: CheckSquare,
+        action: () => navigate("/tasks"),
+        color: "blue",
+        disabled: false
+      },
+      {
+        label: "Attendance",
+        icon: Calendar,
+        action: () => navigate("/attendance"),
+        color: "purple",
+        disabled: false
+      }
+    );
+
+    return actions;
+  }, [workStatus, navigate, handlePunchIn, handleTakeBreak, handleResumeWork]);
+
+
   return (
     <div className="flex bg-gradient-to-br from-[#141a21] via-[#191f2b] to-[#101218] font-sans text-blue-100 min-h-screen">
       <Sidebar
@@ -271,19 +583,44 @@ const EmployeeDashboard = ({ onLogout }) => {
           collapsed ? "ml-20" : "ml-72"
         }`}
       >
-        {/* Greeting */}
-        <div className="flex justify-between items-center mb-8">
-          <div>
-            <h1 className="text-2xl font-bold text-white tracking-tight">
-              Good{" "}
-              {currentTime.getHours() < 12
-                ? "Morning"
-                : currentTime.getHours() < 18
-                ? "Afternoon"
-                : "Evening"}
-              , {userName}
-            </h1>
-            <p className="text-sm text-blue-300">
+        {/* Enhanced Header */}
+        <div className="flex flex-col lg:flex-row lg:justify-between lg:items-start gap-6 mb-8">
+          <div className="flex-1">
+            <div className="flex items-center gap-4 mb-2">
+              <h1 className="text-3xl font-bold text-white tracking-tight">
+                Good{" "}
+                {currentTime.getHours() < 12
+                  ? "Morning"
+                  : currentTime.getHours() < 18
+                  ? "Afternoon"
+                  : "Evening"}
+                , {userName}
+              </h1>
+              {workStatus && (
+                <div className={`flex items-center gap-2 px-3 py-1 rounded-full text-sm font-medium ${
+                  workStatus.currentlyWorking
+                    ? workStatus.onBreak
+                      ? "bg-yellow-500/20 text-yellow-400"
+                      : "bg-green-500/20 text-green-400"
+                    : "bg-gray-500/20 text-gray-400"
+                }`}>
+                  <div className={`w-2 h-2 rounded-full animate-pulse ${
+                    workStatus.currentlyWorking
+                      ? workStatus.onBreak
+                        ? "bg-yellow-400"
+                        : "bg-green-400"
+                      : "bg-gray-400"
+                  }`}></div>
+                  {workStatus.currentlyWorking
+                    ? workStatus.onBreak
+                      ? "On Break"
+                      : "Working"
+                    : "Offline"
+                  }
+                </div>
+              )}
+            </div>
+            <p className="text-blue-300 mb-3">
               {currentTime.toLocaleDateString("en-US", {
                 weekday: "long",
                 year: "numeric",
@@ -297,8 +634,42 @@ const EmployeeDashboard = ({ onLogout }) => {
                 second: "2-digit",
               })}
             </p>
+
+            {/* Work Status Summary */}
+            {workStatus && (
+              <div className="flex items-center gap-6 text-sm text-gray-300">
+                <div className="flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-blue-400" />
+                  <span>Today: {(() => {
+                    const seconds = workStatus.workDurationSeconds || 0;
+                    const hours = Math.floor(seconds / 3600);
+                    const minutes = Math.floor((seconds % 3600) / 60);
+                    return `${hours}h ${minutes}m`;
+                  })()}</span>
+                </div>
+                {workStatus.arrivalTimeFormatted && (
+                  <div className="flex items-center gap-2">
+                    <Timer className="w-4 h-4 text-green-400" />
+                    <span>Arrived: {workStatus.arrivalTimeFormatted}</span>
+                  </div>
+                )}
+                <div className="text-xs text-gray-500">
+                  Last updated: {lastRefresh.toLocaleTimeString()}
+                </div>
+              </div>
+            )}
           </div>
-          <div className="flex items-center gap-4 relative">
+
+          <div className="flex items-center gap-3">
+            {/* Refresh Button */}
+            <button
+              onClick={handleRefreshAll}
+              className="p-2 rounded-lg bg-blue-600/20 hover:bg-blue-600/40 text-blue-400 border border-blue-500/30 transition-colors"
+              title="Refresh all data"
+            >
+              <RefreshCw className="w-4 h-4" />
+            </button>
+
             {/* Browser Notification Toggle */}
             <button
               onClick={handleToggleBrowserNotifications}
@@ -321,24 +692,93 @@ const EmployeeDashboard = ({ onLogout }) => {
               <img
                 src="https://i.pravatar.cc/40?img=3"
                 alt="Profile Avatar"
-                className="w-9 h-9 rounded-full cursor-pointer border-2 border-orange-500 shadow-lg"
+                className="w-9 h-9 rounded-full cursor-pointer border-2 border-orange-500 shadow-lg hover:border-orange-400 transition-colors"
               />
             </Link>
           </div>
         </div>
 
-        {/* Summary Cards */}
-        <SummaryCards data={summaryData} />
+        {/* Enhanced Dashboard Grid */}
+        <div className="space-y-6">
+            {/* Enhanced Summary Cards */}
+            <SummaryCards data={summaryData} />
 
-        {/* Main content */}
-        <div className="mt-8">
-          <TodayTasks
-            data={tasks}
-            loading={loading}
-            className="bg-[#191f2b]/70 p-4 rounded-xl shadow-xl border border-[#232945]"
-          />
-        </div>
+            {/* Quick Actions Panel */}
+            <div className="bg-[#191f2b]/70 rounded-xl shadow-xl border border-[#232945] p-6">
+              <div className="flex items-center gap-2 mb-4">
+                <Zap className="w-5 h-5 text-yellow-400" />
+                <h3 className="text-lg font-semibold text-white">Quick Actions</h3>
+                {dataLoading.status && (
+                  <div className="w-4 h-4 border-2 border-yellow-500/20 border-t-yellow-500 rounded-full animate-spin"></div>
+                )}
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {quickActions.map((action, idx) => {
+                  const Icon = action.icon;
+                  return (
+                    <button
+                      key={`${action.label}-${idx}`}
+                      onClick={action.action}
+                      disabled={action.disabled || dataLoading.status}
+                      className={`flex flex-col items-center gap-2 p-4 rounded-lg border transition-all duration-200 hover:scale-105 ${
+                        action.disabled || dataLoading.status
+                          ? "bg-gray-700/50 border-gray-600 text-gray-500 cursor-not-allowed"
+                          : action.color === "green"
+                            ? "bg-green-600/20 border-green-500/50 text-green-400 hover:bg-green-600/30"
+                            : action.color === "orange"
+                            ? "bg-orange-600/20 border-orange-500/50 text-orange-400 hover:bg-orange-600/30"
+                            : action.color === "red"
+                            ? "bg-red-600/20 border-red-500/50 text-red-400 hover:bg-red-600/30"
+                            : action.color === "blue"
+                            ? "bg-blue-600/20 border-blue-500/50 text-blue-400 hover:bg-blue-600/30"
+                            : "bg-purple-600/20 border-purple-500/50 text-purple-400 hover:bg-purple-600/30"
+                      }`}
+                    >
+                      {dataLoading.status && (action.label.includes("Punch") || action.label.includes("Break") || action.label.includes("Resume")) ? (
+                        <div className="w-5 h-5 border-2 border-gray-500/20 border-t-gray-500 rounded-full animate-spin"></div>
+                      ) : (
+                        <Icon className="w-5 h-5" />
+                      )}
+                      <span className="text-sm font-medium">{action.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Tasks Section */}
+            <div className="bg-[#191f2b]/70 rounded-xl shadow-xl border border-[#232945] p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <CheckSquare className="w-5 h-5 text-blue-400" />
+                  <h3 className="text-lg font-semibold text-white">Today's Tasks</h3>
+                  {loading && (
+                    <div className="w-4 h-4 border-2 border-blue-500/20 border-t-blue-500 rounded-full animate-spin"></div>
+                  )}
+                </div>
+                <Link
+                  to="/tasks"
+                  className="text-sm text-blue-400 hover:text-blue-300 transition-colors"
+                >
+                  View All →
+                </Link>
+              </div>
+              <TodayTasks data={tasks} loading={loading} />
+            </div>
+          </div>
       </main>
+
+      {/* Error Messages */}
+      {Object.entries(errors).map(([key, error]) =>
+        error && (
+          <div key={key} className="fixed top-4 right-4 z-50 bg-red-500/20 border border-red-500 rounded-lg p-3 text-red-400 text-sm max-w-sm">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4" />
+              <span>Failed to load {key}: {error}</span>
+            </div>
+          </div>
+        )
+      )}
 
       {/* Wishes Popup */}
       <WishPopup
@@ -352,6 +792,13 @@ const EmployeeDashboard = ({ onLogout }) => {
 
       {/* Dynamic Notification Overlay */}
       <DynamicNotificationOverlay />
+
+      {/* Global Celebration Popup */}
+      <CelebrationPopup
+        celebrations={celebrations}
+        isOpen={showCelebrationPopup}
+        onClose={closeCelebrationPopup}
+      />
     </div>
   );
 };

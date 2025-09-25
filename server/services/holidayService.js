@@ -71,6 +71,11 @@ exports.addHoliday = async (data) => {
   return await Holiday.create(data);
 };
 
+// Update holiday by ID
+exports.updateHoliday = async (id, data) => {
+  return await Holiday.findByIdAndUpdate(id, data, { new: true });
+};
+
 // Delete holiday by ID
 exports.deleteHoliday = async (id) => {
   return await Holiday.findByIdAndDelete(id);
