@@ -14,6 +14,12 @@ router.post(
   authorize("admin", "super-admin", "hr"),
   holidayController.createHoliday
 );
+router.put(
+  "/:id",
+  protect,
+  authorize("admin", "super-admin", "hr"),
+  holidayController.updateHoliday
+);
 router.delete(
   "/:id",
   protect,

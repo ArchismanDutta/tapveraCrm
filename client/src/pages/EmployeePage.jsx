@@ -1,6 +1,27 @@
 // File: src/pages/EmployeePage.jsx
 import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import {
+  User,
+  Edit,
+  ArrowLeft,
+  Mail,
+  Phone,
+  MapPin,
+  Calendar,
+  Building2,
+  Badge,
+  DollarSign,
+  Clock,
+  Save,
+  X,
+  Crown,
+  Shield,
+  GraduationCap,
+  Briefcase,
+  Heart,
+  AlertCircle
+} from "lucide-react";
 import Sidebar from "../components/dashboard/Sidebar";
 import ContactInfo from "../components/employeeinfo/ContactInfo";
 import PersonalInfo from "../components/employeeinfo/PersonalInfo";
@@ -20,6 +41,14 @@ const EmployeePage = () => {
   const [error, setError] = useState("");
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState({});
+  const [collapsed, setCollapsed] = useState(false);
+  const [currentTime, setCurrentTime] = useState(new Date());
+
+  // Update time every second
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   // Fetch employee
   useEffect(() => {
@@ -94,17 +123,53 @@ const EmployeePage = () => {
     }
   };
 
-  const pageBackground = "bg-[#11182b] min-h-screen";
+  // Helper functions
+  const getStatusColor = (status) => {
+    switch (status?.toLowerCase()) {
+      case 'active':
+        return 'bg-green-500/20 text-green-300 border border-green-500/30';
+      case 'inactive':
+        return 'bg-red-500/20 text-red-300 border border-red-500/30';
+      default:
+        return 'bg-gray-500/20 text-gray-300 border border-gray-500/30';
+    }
+  };
+
+  const getDepartmentIcon = (department) => {
+    switch (department?.toLowerCase()) {
+      case 'executives':
+        return <Crown className="h-5 w-5" />;
+      case 'development':
+        return <Badge className="h-5 w-5" />;
+      case 'humanresource':
+      case 'human resource':
+        return <User className="h-5 w-5" />;
+      default:
+        return <Building2 className="h-5 w-5" />;
+    }
+  };
 
   if (loading) {
     return (
-      <div className="flex min-h-screen">
-        <Sidebar />
-        <div
-          style={{ marginLeft: SIDEBAR_WIDTH }}
-          className={`${pageBackground} w-full flex items-center justify-center text-blue-200`}
-        >
-          Loading employee details...
+      <div className="flex bg-[#0f1419] min-h-screen text-white relative overflow-hidden">
+        {/* Animated Background */}
+        <div className="absolute inset-0 bg-gradient-to-br from-slate-900/20 via-blue-900/10 to-purple-900/20"></div>
+        <div className="absolute inset-0">
+          <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-cyan-500/5 rounded-full blur-3xl animate-pulse"></div>
+          <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-purple-500/5 rounded-full blur-3xl animate-pulse"></div>
+        </div>
+
+        <Sidebar
+          collapsed={collapsed}
+          setCollapsed={setCollapsed}
+          userRole="admin"
+        />
+
+        <div className={`relative z-10 flex-1 transition-all duration-300 ${collapsed ? "ml-24" : "ml-72"} flex items-center justify-center`}>
+          <div className="flex items-center space-x-3">
+            <div className="w-8 h-8 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin"></div>
+            <span className="text-xl text-cyan-400">Loading employee details...</span>
+          </div>
         </div>
       </div>
     );
@@ -112,13 +177,37 @@ const EmployeePage = () => {
 
   if (error) {
     return (
-      <div className="flex min-h-screen">
-        <Sidebar />
-        <div
-          style={{ marginLeft: SIDEBAR_WIDTH }}
-          className={`${pageBackground} w-full flex items-center justify-center text-pink-400`}
-        >
-          {error}
+      <div className="flex bg-[#0f1419] min-h-screen text-white relative overflow-hidden">
+        {/* Animated Background */}
+        <div className="absolute inset-0 bg-gradient-to-br from-slate-900/20 via-blue-900/10 to-purple-900/20"></div>
+        <div className="absolute inset-0">
+          <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-cyan-500/5 rounded-full blur-3xl animate-pulse"></div>
+          <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-purple-500/5 rounded-full blur-3xl animate-pulse"></div>
+        </div>
+
+        <Sidebar
+          collapsed={collapsed}
+          setCollapsed={setCollapsed}
+          userRole="admin"
+        />
+
+        <div className={`relative z-10 flex-1 transition-all duration-300 ${collapsed ? "ml-24" : "ml-72"} flex items-center justify-center`}>
+          <div className="bg-gradient-to-br from-red-900/20 to-red-800/20 backdrop-blur-xl border border-red-500/30 rounded-3xl p-8 max-w-md text-center">
+            <div className="flex items-center justify-center mb-4">
+              <div className="p-3 bg-gradient-to-br from-red-500/20 to-pink-600/20 rounded-xl">
+                <AlertCircle className="w-8 h-8 text-red-400" />
+              </div>
+            </div>
+            <h2 className="text-xl font-bold text-red-400 mb-2">Error Loading Employee</h2>
+            <p className="text-red-300 mb-6">{error}</p>
+            <button
+              onClick={() => navigate(-1)}
+              className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white rounded-xl font-semibold transition-all duration-300 hover:scale-105 mx-auto"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Go Back
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -266,3 +355,4 @@ const EmployeePage = () => {
 };
 
 export default EmployeePage;
+

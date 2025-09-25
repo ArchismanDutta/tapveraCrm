@@ -56,7 +56,7 @@ const userSchema = new mongoose.Schema(
     doj: { type: Date, required: true, validate: { validator: v => v <= new Date(), message: "DOJ cannot be a future date" } },
     salary: { type: salarySchema, default: () => ({}) },
     ref: { type: String, trim: true },
-    status: { type: String, enum: ["active", "inactive"], default: "active" },
+    status: { type: String, enum: ["active", "inactive", "terminated", "absconded"], default: "active" },
     totalPl: { type: Number, default: 0, min: 0 },
     password: { type: String, required: true },
     role: { type: String, enum: ["super-admin", "admin", "hr", "employee"], default: "employee" },

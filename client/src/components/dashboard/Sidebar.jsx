@@ -10,6 +10,7 @@ import {
   Users,
   Calendar,
   Clock,
+  DollarSign,
 } from "lucide-react";
 import { FaChevronCircleRight } from "react-icons/fa";
 
@@ -68,6 +69,7 @@ const menuConfig = {
     { to: "/directory", icon: <Users size={18} />, label: "Employee Details" },
     { to: "/admin/shifts", icon: <Clock size={18} />, label: "Shift Management" },
     { to: "/admin/manual-attendance", icon: <Calendar size={18} />, label: "Manual Attendance" },
+    { to: "/admin/salary-management", icon: <DollarSign size={18} />, label: "Salary Management" },
     { to: "/todo", icon: <ClipboardList size={18} />, label: "Todo" },
     { to: "/admin/notices", icon: <Flag size={18} />, label: "Notice Board" },
     { to: "/messages", icon: <MessageCircle size={18} />, label: "Messages" },

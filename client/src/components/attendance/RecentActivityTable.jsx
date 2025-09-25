@@ -18,6 +18,12 @@ const STATUS_STYLES = {
   Late: "text-orange-400 bg-gradient-to-r from-orange-900/30 to-orange-800/30 border-orange-500/30",
   Absent: "text-red-400 bg-gradient-to-r from-red-900/30 to-red-800/30 border-red-500/30",
   "Half Day": "text-yellow-400 bg-gradient-to-r from-yellow-900/30 to-yellow-800/30 border-yellow-500/30",
+  "Half Day Leave": "text-yellow-400 bg-gradient-to-r from-yellow-900/30 to-yellow-800/30 border-yellow-500/30",
+  WFH: "text-orange-400 bg-gradient-to-r from-orange-900/30 to-orange-800/30 border-orange-500/30",
+  "Sick Leave": "text-purple-400 bg-gradient-to-r from-purple-900/30 to-purple-800/30 border-purple-500/30",
+  "Paid Leave": "text-purple-400 bg-gradient-to-r from-purple-900/30 to-purple-800/30 border-purple-500/30",
+  "Unpaid Leave": "text-purple-400 bg-gradient-to-r from-purple-900/30 to-purple-800/30 border-purple-500/30",
+  "Maternity Leave": "text-purple-400 bg-gradient-to-r from-purple-900/30 to-purple-800/30 border-purple-500/30",
   default: "text-slate-400 bg-gradient-to-r from-slate-900/30 to-slate-800/30 border-slate-500/30",
 };
 
@@ -26,15 +32,26 @@ const STATUS_ICONS = {
   Late: Clock,
   Absent: XCircle,
   "Half Day": Timer,
+  "Half Day Leave": Timer,
+  WFH: Activity,
+  "Sick Leave": XCircle,
+  "Paid Leave": XCircle,
+  "Unpaid Leave": XCircle,
+  "Maternity Leave": XCircle,
   default: Activity,
 };
 
-const RecentActivityTable = ({ activities = [], onDateFilterChange }) => {
+const RecentActivityTable = ({ activities = [], onDateFilterChange, currentFilter = '5days' }) => {
   const [filter, setFilter] = useState("all");
   const [sortBy, setSortBy] = useState("date");
   const [sortOrder, setSortOrder] = useState("desc");
-  const [dateFilter, setDateFilter] = useState('month');
+  const [dateFilter, setDateFilter] = useState(currentFilter);
   const [showFilters, setShowFilters] = useState(false);
+
+  // Update local state when prop changes
+  React.useEffect(() => {
+    setDateFilter(currentFilter);
+  }, [currentFilter]);
 
   // Handle date filter change
   const handleDateFilterChange = (filter) => {
@@ -69,7 +86,7 @@ const RecentActivityTable = ({ activities = [], onDateFilterChange }) => {
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-sm text-gray-400 mr-2">Time Period:</span>
               {[
-                { key: 'day', label: 'Today', icon: CalendarDays },
+                { key: '5days', label: 'Last 5 Days', icon: CalendarDays },
                 { key: 'week', label: 'This Week', icon: Calendar },
                 { key: 'month', label: 'This Month', icon: Calendar },
               ].map(({ key, label, icon: Icon }) => (
@@ -151,7 +168,7 @@ const RecentActivityTable = ({ activities = [], onDateFilterChange }) => {
     totalHours: filteredActivities.reduce((sum, a) => sum + parseFloat(a.workingHours || 0), 0),
     averageHours: filteredActivities.length > 0 ?
       (filteredActivities.reduce((sum, a) => sum + parseFloat(a.workingHours || 0), 0) / filteredActivities.length).toFixed(1) : 0,
-    period: dateFilter === 'day' ? 'Today' :
+    period: dateFilter === '5days' ? 'Last 5 days' :
             dateFilter === 'week' ? 'This week' :
             dateFilter === 'month' ? 'This month' : 'This month'
   };
@@ -189,6 +206,11 @@ const RecentActivityTable = ({ activities = [], onDateFilterChange }) => {
           <h3 className="text-xl font-semibold text-white">Recent Activity</h3>
           <span className="text-sm text-gray-400 bg-slate-700/50 px-2 py-1 rounded">
             {sortedActivities.length} records
+          </span>
+          <span className="text-xs text-cyan-400 bg-cyan-900/30 px-2 py-1 rounded border border-cyan-700/50">
+            {dateFilter === '5days' ? 'Last 5 Days' :
+             dateFilter === 'week' ? 'This Week' :
+             dateFilter === 'month' ? 'This Month' : 'This Month'}
           </span>
         </div>
 
@@ -237,7 +259,7 @@ const RecentActivityTable = ({ activities = [], onDateFilterChange }) => {
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-sm text-gray-400 mr-2">Time Period:</span>
             {[
-              { key: 'day', label: 'Today', icon: CalendarDays },
+              { key: '5days', label: 'Last 5 Days', icon: CalendarDays },
               { key: 'week', label: 'This Week', icon: Calendar },
               { key: 'month', label: 'This Month', icon: Calendar },
             ].map(({ key, label, icon: Icon }) => (

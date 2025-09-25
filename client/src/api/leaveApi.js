@@ -132,6 +132,32 @@ export async function updateLeaveRequestStatus(_id, status, adminRemarks = "") {
   };
 }
 
+// Update leave request (employee can only edit pending requests)
+export async function updateLeaveRequest(leaveId, formData) {
+  const res = await fetch(`${API_BASE}/api/leaves/${leaveId}`, {
+    method: "PUT",
+    headers: getAuthHeaders(false),
+    body: formData,
+  });
+  if (!res.ok)
+    throw new Error(
+      (await res.json()).message || "Failed to update leave request"
+    );
+  const r = await res.json();
+  return {
+    _id: r._id,
+    type: r.type,
+    status: r.status,
+    period: r.period,
+    reason: r.reason,
+    document: r.document,
+    employee: r.employee,
+    duration: formatDuration(r.type, r.period),
+    adminRemarks: r.adminRemarks || "",
+    createdAt: r.createdAt || null,
+  };
+}
+
 // Fetch team leaves (same department, excluding logged-in user)
 export async function fetchTeamLeaves(department, excludeEmail) {
   const res = await fetch(

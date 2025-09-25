@@ -4,8 +4,9 @@ import RecentLeaveRequests from "../components/leaves/RecentLeaveRequests";
 import LeaveApplicationForm from "../components/leaves/LeaveApplicationForm";
 import HolidayList from "../components/leaves/HolidayList";
 import TeamLeaveCalendar from "../components/leaves/TeamLeaveCalendar";
+import EditLeaveRequestModal from "../components/leaves/EditLeaveRequestModal";
 import Sidebar from "../components/dashboard/Sidebar";
-import { fetchLeavesForEmployee, submitLeaveRequest } from "../api/leaveApi";
+import { fetchLeavesForEmployee, submitLeaveRequest, updateLeaveRequest } from "../api/leaveApi";
 import axios from "axios";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
@@ -27,6 +28,9 @@ const HolidaysAndLeaves = ({ onLogout }) => {
   const [holidays, setHolidays] = useState([]);
   const [loadingHolidays, setLoadingHolidays] = useState(true);
   const [errorHolidays, setErrorHolidays] = useState(null);
+
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [editingRequest, setEditingRequest] = useState(null);
 
   const pollingRef = useRef(null);
 
@@ -118,6 +122,35 @@ const HolidaysAndLeaves = ({ onLogout }) => {
     }
   };
 
+  // Handle opening edit modal
+  const handleEditRequest = (leaveRequest) => {
+    setEditingRequest(leaveRequest);
+    setEditModalOpen(true);
+  };
+
+  // Handle closing edit modal
+  const handleCloseEditModal = () => {
+    setEditModalOpen(false);
+    setEditingRequest(null);
+  };
+
+  // Handle saving edited leave request
+  const handleSaveEditedRequest = async (leaveId, formData) => {
+    try {
+      const updatedLeave = await updateLeaveRequest(leaveId, formData);
+
+      // Update the leave request in the local state
+      setLeaveRequests((prev) =>
+        prev.map((req) => (req._id === leaveId ? updatedLeave : req))
+      );
+
+      setErrorLeaves(null);
+    } catch (err) {
+      console.error("Failed to update leave request:", err);
+      throw new Error(err.message || "Failed to update leave request");
+    }
+  };
+
   // Global loading/error
   if (loadingLeaves && loadingHolidays)
     return (
@@ -159,7 +192,10 @@ const HolidaysAndLeaves = ({ onLogout }) => {
               />
             </div>
             <div className="space-y-4">
-              <RecentLeaveRequests requests={leaveRequests} />
+              <RecentLeaveRequests
+                requests={leaveRequests}
+                onEditRequest={handleEditRequest}
+              />
               <LeaveApplicationForm onSubmitLeave={handleLeaveSubmit} />
             </div>
           </section>
@@ -174,6 +210,14 @@ const HolidaysAndLeaves = ({ onLogout }) => {
           </section>
         </div>
       </main>
+
+      {/* Edit Leave Request Modal */}
+      <EditLeaveRequestModal
+        isOpen={editModalOpen}
+        onClose={handleCloseEditModal}
+        leaveRequest={editingRequest}
+        onSave={handleSaveEditedRequest}
+      />
     </div>
   );
 };

@@ -109,14 +109,15 @@ const TaskTable = ({ tasks = [], onViewTask, onEditTask, onDeleteTask }) => {
         <table className="w-full border-collapse text-blue-100 table-fixed">
           <thead className="bg-[rgba(191,111,47,0.15)]">
             <tr className="text-left text-xs uppercase tracking-wide text-[#bf6f2f]">
-              <th className="p-2 w-[130px] max-w-[130px]">Task Title</th>
-              <th className="p-2 w-[100px] max-w-[100px]">Assigned To</th>
-              <th className="p-2 w-[100px] max-w-[100px]">Assigned By</th>
-              <th className="p-2 w-[90px] max-w-[90px]">Due Date & Time</th>
-              <th className="p-2 w-[90px] max-w-[90px]">Completed At</th>
+              <th className="p-2 w-[120px] max-w-[120px]">Task Title</th>
+              <th className="p-2 w-[90px] max-w-[90px]">Assigned To</th>
+              <th className="p-2 w-[90px] max-w-[90px]">Assigned By</th>
+              <th className="p-2 w-[90px] max-w-[90px]">Last Edited By</th>
+              <th className="p-2 w-[80px] max-w-[80px]">Due Date & Time</th>
+              <th className="p-2 w-[80px] max-w-[80px]">Completed At</th>
               <th className="p-2 w-[50px] max-w-[50px]">Priority</th>
               <th className="p-2 w-[60px] max-w-[60px]">Status</th>
-              <th className="p-2 w-[80px] max-w-[80px] text-center">Actions</th>
+              <th className="p-2 w-[70px] max-w-[70px] text-center">Actions</th>
             </tr>
           </thead>
           <tbody className="text-xs">
@@ -130,6 +131,7 @@ const TaskTable = ({ tasks = [], onViewTask, onEditTask, onDeleteTask }) => {
                       ? task.assignedTo
                       : [],
                     assignedBy: task.assignedBy || null,
+                    lastEditedBy: task.lastEditedBy || null,
                     dueDate: formatDateTime(task?.dueDate),
                     completedAt: formatDateTime(task?.completedAt),
                   }}
@@ -142,7 +144,7 @@ const TaskTable = ({ tasks = [], onViewTask, onEditTask, onDeleteTask }) => {
             ) : (
               <tr>
                 <td
-                  colSpan={8}
+                  colSpan={9}
                   className="p-4 text-center text-blue-400 italic"
                 >
                   No tasks found.

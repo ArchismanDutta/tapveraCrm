@@ -21,6 +21,16 @@ exports.createHoliday = async (req, res) => {
   }
 };
 
+// PUT /holidays/:id
+exports.updateHoliday = async (req, res) => {
+  try {
+    const holiday = await holidayService.updateHoliday(req.params.id, req.body);
+    res.json(holiday);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+};
+
 // DELETE /holidays/:id
 exports.removeHoliday = async (req, res) => {
   try {

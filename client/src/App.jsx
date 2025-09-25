@@ -32,12 +32,13 @@ import ChatPage from "./pages/ChatPage";
 import EmployeeDirectory from "./pages/EmployeeDirectory";
 import EmployeePage from "./pages/EmployeePage";
 import HRDashboard from "./pages/HRDashboard";
-import AdminAttendancePage from "./pages/AdminAttendancePage";
+// import AdminAttendancePage from "./pages/AdminAttendancePage";
 import HolidayManagementPage from "./pages/HolidayManagementPage";
 import SuperAdminDashboard from "./pages/SuperAdminDashboard";
 import SuperAdminAttendancePortal from "./pages/SuperAdminAttendancePortal";
 import ShiftManagement from "./components/humanResource/ShiftManagement";
 import ManualAttendanceManagement from "./pages/admin/ManualAttendanceManagement";
+import SalaryManagement from "./pages/admin/SalaryManagement";
 
 import { resetChat } from "./store/slices/chatSlice";
 import { useDispatch } from "react-redux";
@@ -364,7 +365,7 @@ const AppWrapper = () => {
           path="/admin-attendance"
           element={
             isAuthenticated && (isAdmin || isHR) ? (
-              <AdminAttendancePage onLogout={handleLogout} />
+              <SuperAdminAttendancePortal onLogout={handleLogout} />
             ) : (
               <Navigate
                 to={isAuthenticated ? "/dashboard" : "/login"}
@@ -378,6 +379,19 @@ const AppWrapper = () => {
           element={
             isAuthenticated && (isAdmin || isHR) ? (
               <ManualAttendanceManagement onLogout={handleLogout} />
+            ) : (
+              <Navigate
+                to={isAuthenticated ? "/dashboard" : "/login"}
+                replace
+              />
+            )
+          }
+        />
+        <Route
+          path="/admin/salary-management"
+          element={
+            isAuthenticated && isSuperAdmin ? (
+              <SalaryManagement onLogout={handleLogout} />
             ) : (
               <Navigate
                 to={isAuthenticated ? "/dashboard" : "/login"}

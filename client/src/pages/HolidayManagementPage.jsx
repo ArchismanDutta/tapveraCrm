@@ -10,6 +10,7 @@ const HolidayManagementPage = () => {
   const [holidays, setHolidays] = useState([]);
   const [loading, setLoading] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [editingHoliday, setEditingHoliday] = useState(null);
 
   const fetchHolidays = async () => {
     try {
@@ -34,6 +35,20 @@ const HolidayManagementPage = () => {
     }
   };
 
+  const updateHoliday = async (id, holidayData) => {
+    try {
+      const res = await axios.put(`${API_BASE}/api/holidays/${id}`, holidayData, {
+        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+      });
+      setHolidays((prev) =>
+        prev.map((h) => (h._id === id ? res.data : h))
+      );
+      setEditingHoliday(null);
+    } catch (err) {
+      console.error("Error updating holiday:", err);
+    }
+  };
+
   const deleteHoliday = async (id) => {
     try {
       await axios.delete(`${API_BASE}/api/holidays/${id}`, {
@@ -43,6 +58,14 @@ const HolidayManagementPage = () => {
     } catch (err) {
       console.error("Error deleting holiday:", err);
     }
+  };
+
+  const handleEdit = (holiday) => {
+    setEditingHoliday(holiday);
+  };
+
+  const handleCancelEdit = () => {
+    setEditingHoliday(null);
   };
 
   const handleLogout = () => {
@@ -55,7 +78,7 @@ const HolidayManagementPage = () => {
   }, []);
 
   return (
-    <div className="flex min-h-screen bg-gradient-to-br from-[#101c32] via-[#17233b] to-[#25355a] text-white">
+    <div className="flex bg-gradient-to-br from-[#141a21] via-[#191f2b] to-[#101218] font-sans text-blue-100 min-h-screen">
       {/* Sidebar */}
       <Sidebar
         collapsed={sidebarCollapsed}
@@ -65,27 +88,55 @@ const HolidayManagementPage = () => {
 
       {/* Main Content */}
       <main
-        className={`flex-1 p-8 transition-all duration-300 ${
-          sidebarCollapsed ? "ml-16" : "ml-60"
+        className={`flex-1 p-8 overflow-y-auto transition-all duration-300 ${
+          sidebarCollapsed ? "ml-20" : "ml-72"
         }`}
       >
-        <div className="max-w-5xl mx-auto space-y-10">
+        <div className="max-w-6xl mx-auto space-y-6">
           {/* Header */}
-          <h1 className="text-4xl font-bold text-[#58a6ff] drop-shadow-lg text-center">
-            Holiday Management
-          </h1>
-
-          {/* Card: Holiday Form */}
-          <div className="bg-[#18253d] bg-opacity-80 p-8 rounded-xl shadow-md border border-[#243661]">
-            <HolidayForm onAdd={addHoliday} />
+          <div className="mb-8">
+            <h1 className="text-3xl font-bold text-white tracking-tight mb-2">
+              Holiday Management
+            </h1>
+            <p className="text-blue-300">
+              Manage company holidays and track holiday schedules
+            </p>
           </div>
 
-          {/* Card: Table */}
-          <div className="bg-[#18253d] bg-opacity-80 p-8 rounded-xl shadow-md border border-[#243661]">
+          {/* Holiday Form Card */}
+          <div className="bg-[#191f2b]/70 rounded-xl shadow-xl border border-[#232945] p-6">
+            <div className="flex items-center gap-2 mb-4">
+              <h3 className="text-lg font-semibold text-white">
+                {editingHoliday ? "Edit Holiday" : "Add New Holiday"}
+              </h3>
+            </div>
+            <HolidayForm
+              onAdd={addHoliday}
+              onUpdate={updateHoliday}
+              editingHoliday={editingHoliday}
+              onCancelEdit={handleCancelEdit}
+            />
+          </div>
+
+          {/* Holiday Table Card */}
+          <div className="bg-[#191f2b]/70 rounded-xl shadow-xl border border-[#232945] p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-white">All Holidays</h3>
+              {loading && (
+                <div className="w-4 h-4 border-2 border-blue-500/20 border-t-blue-500 rounded-full animate-spin"></div>
+              )}
+            </div>
             {loading ? (
-              <p className="text-[#82aaff] text-center">Loading holidays...</p>
+              <div className="text-center py-8">
+                <div className="w-6 h-6 border-2 border-blue-500/20 border-t-blue-500 rounded-full animate-spin mx-auto mb-2"></div>
+                <p className="text-blue-300">Loading holidays...</p>
+              </div>
             ) : (
-              <HolidayTable holidays={holidays} onDelete={deleteHoliday} />
+              <HolidayTable
+                holidays={holidays}
+                onDelete={deleteHoliday}
+                onEdit={handleEdit}
+              />
             )}
           </div>
         </div>
