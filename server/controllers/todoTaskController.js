@@ -148,3 +148,163 @@ exports.moveTodoTask = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+
+// GET /api/todos/analytics (Get productivity analytics)
+exports.getTodoAnalytics = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const today = normalizeDate(new Date());
+    const weekAgo = new Date(today);
+    weekAgo.setDate(weekAgo.getDate() - 7);
+    const monthAgo = new Date(today);
+    monthAgo.setDate(monthAgo.getDate() - 30);
+
+    // Get all tasks for analytics
+    const allTasks = await TodoTask.find({ userId });
+    const totalTasks = allTasks.length;
+    const completedTasks = allTasks.filter(task => task.completed).length;
+    const pendingTasks = totalTasks - completedTasks;
+
+    // Today's tasks
+    const todayTasks = allTasks.filter(task => {
+      const taskDate = normalizeDate(task.date);
+      return taskDate.getTime() === today.getTime();
+    });
+    const todayCompleted = todayTasks.filter(task => task.completed).length;
+
+    // This week's tasks
+    const weekTasks = allTasks.filter(task => {
+      const taskDate = normalizeDate(task.date);
+      return taskDate >= weekAgo && taskDate <= today;
+    });
+    const weekCompleted = weekTasks.filter(task => task.completed).length;
+
+    // This month's tasks
+    const monthTasks = allTasks.filter(task => {
+      const taskDate = normalizeDate(task.date);
+      return taskDate >= monthAgo && taskDate <= today;
+    });
+    const monthCompleted = monthTasks.filter(task => task.completed).length;
+
+    // Calculate completion rates
+    const weeklyCompletionRate = weekTasks.length > 0 ? Math.round((weekCompleted / weekTasks.length) * 100) : 0;
+    const monthlyCompletionRate = monthTasks.length > 0 ? Math.round((monthCompleted / monthTasks.length) * 100) : 0;
+    const overallCompletionRate = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+
+    // Task distribution by label
+    const labelDistribution = {};
+    allTasks.forEach(task => {
+      const label = task.label || 'No Label';
+      labelDistribution[label] = (labelDistribution[label] || 0) + 1;
+    });
+
+    // Daily completion trend for the last 7 days
+    const dailyTrend = [];
+    for (let i = 6; i >= 0; i--) {
+      const date = new Date(today);
+      date.setDate(date.getDate() - i);
+      const dateStr = date.toISOString().split('T')[0];
+
+      const dayTasks = allTasks.filter(task => {
+        const taskDate = normalizeDate(task.date);
+        return taskDate.getTime() === normalizeDate(date).getTime();
+      });
+
+      const dayCompleted = dayTasks.filter(task => task.completed).length;
+
+      dailyTrend.push({
+        date: dateStr,
+        day: date.toLocaleDateString('en-US', { weekday: 'short' }),
+        completed: dayCompleted,
+        total: dayTasks.length
+      });
+    }
+
+    // Productivity score (based on completion rate and consistency)
+    const consistencyScore = dailyTrend.filter(day => day.total > 0 && day.completed > 0).length;
+    const productivityScore = Math.round((overallCompletionRate * 0.7) + (consistencyScore * 4.3));
+
+    const analytics = {
+      totalTasks,
+      completedTasks,
+      pendingTasks,
+      todayTasks: todayTasks.length,
+      todayCompleted,
+      weeklyCompletionRate,
+      monthlyCompletionRate,
+      overallCompletionRate,
+      productivityScore: Math.min(productivityScore, 100),
+      labelDistribution,
+      dailyTrend,
+      streakData: {
+        current: calculateCurrentStreak(allTasks, today),
+        longest: calculateLongestStreak(allTasks)
+      }
+    };
+
+    res.json(analytics);
+  } catch (err) {
+    console.error("Error fetching todo analytics:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+// Helper function to calculate current streak
+const calculateCurrentStreak = (tasks, today) => {
+  let streak = 0;
+  let currentDate = new Date(today);
+
+  while (true) {
+    const dayTasks = tasks.filter(task => {
+      const taskDate = normalizeDate(task.date);
+      return taskDate.getTime() === normalizeDate(currentDate).getTime();
+    });
+
+    const dayCompleted = dayTasks.filter(task => task.completed).length;
+
+    if (dayTasks.length > 0 && dayCompleted > 0) {
+      streak++;
+      currentDate.setDate(currentDate.getDate() - 1);
+    } else {
+      break;
+    }
+
+    // Prevent infinite loop
+    if (streak > 365) break;
+  }
+
+  return streak;
+};
+
+// Helper function to calculate longest streak
+const calculateLongestStreak = (tasks) => {
+  const completionDates = new Set();
+
+  tasks.filter(task => task.completed).forEach(task => {
+    const dateStr = normalizeDate(task.date).toISOString().split('T')[0];
+    completionDates.add(dateStr);
+  });
+
+  const sortedDates = Array.from(completionDates).sort();
+  let longestStreak = 0;
+  let currentStreak = 0;
+
+  for (let i = 0; i < sortedDates.length; i++) {
+    if (i === 0) {
+      currentStreak = 1;
+    } else {
+      const prevDate = new Date(sortedDates[i - 1]);
+      const currDate = new Date(sortedDates[i]);
+      const dayDiff = (currDate - prevDate) / (1000 * 60 * 60 * 24);
+
+      if (dayDiff === 1) {
+        currentStreak++;
+      } else {
+        longestStreak = Math.max(longestStreak, currentStreak);
+        currentStreak = 1;
+      }
+    }
+  }
+
+  return Math.max(longestStreak, currentStreak);
+};

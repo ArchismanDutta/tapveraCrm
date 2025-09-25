@@ -159,6 +159,20 @@ const TaskRow = ({ task, onView, onEdit, onDelete }) => {
         {task.assignedBy?.name || "N/A"}
       </td>
 
+      {/* Last Edited By */}
+      <td className="px-2 py-2 text-xs truncate">
+        {task.lastEditedBy ? (
+          <div className="flex items-center gap-1">
+            <div className="w-2 h-2 bg-orange-400 rounded-full"></div>
+            <span className="text-orange-300 font-medium" title={`Last edited by ${task.lastEditedBy.name || task.lastEditedBy.email || 'Unknown'}`}>
+              {task.lastEditedBy.name || task.lastEditedBy.email || 'Unknown'}
+            </span>
+          </div>
+        ) : (
+          <span className="text-gray-500 italic" title="Task has not been edited since creation">Original</span>
+        )}
+      </td>
+
       {/* Due Date */}
       <td className="px-2 py-2 text-blue-200 text-xs truncate">
         {task.dueDate || "No due date"}

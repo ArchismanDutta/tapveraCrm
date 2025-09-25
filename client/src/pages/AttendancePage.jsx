@@ -18,6 +18,12 @@ const AttendancePage = ({ onLogout }) => {
   const [error, setError] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
   const [currentStatus, setCurrentStatus] = useState(null);
+  const [activityFilter, setActivityFilter] = useState('5days'); // Default to last 5 days
+
+  // OPTIMIZATION: Add caching for expensive data
+  const [cachedLeaves, setCachedLeaves] = useState(null);
+  const [cachedHolidays, setCachedHolidays] = useState(null);
+  const [lastCacheTime, setLastCacheTime] = useState(null);
 
   const token = localStorage.getItem("token");
   const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
@@ -47,8 +53,24 @@ const AttendancePage = ({ onLogout }) => {
 
   // Utility functions
   const calculateHoursFromSeconds = (seconds) => {
-    if (!seconds || seconds === 0) return 0;
-    return Math.round((seconds / 3600) * 10) / 10;
+    if (!seconds || seconds === 0 || isNaN(seconds)) return 0;
+
+    // Validate input to prevent corrupted data from affecting display
+    if (seconds < 0) {
+      console.warn(`⚠️ Negative work duration found: ${seconds}, setting to 0`);
+      return 0;
+    }
+
+    // Cap at 24 hours (86400 seconds) to prevent unrealistic display values
+    const cappedSeconds = Math.min(seconds, 86400);
+    if (cappedSeconds !== seconds) {
+      console.warn(`⚠️ Capping work duration for display: ${seconds} -> ${cappedSeconds}`);
+    }
+
+    // Use Math.floor for consistency with backend
+    const hours = Math.floor(cappedSeconds / 3600);
+    const minutes = Math.floor((cappedSeconds % 3600) / 60);
+    return hours + (minutes / 60);
   };
 
   const formatTime = (dateString) => {
@@ -148,7 +170,9 @@ const AttendancePage = ({ onLogout }) => {
   // Fetch current user status
   const fetchCurrentStatus = useCallback(async () => {
     try {
-      const response = await apiClient.get('/api/status/today');
+      const response = await apiClient.get('/api/status/today', {
+        params: { _t: Date.now() } // Cache-busting parameter
+      });
       setCurrentStatus(response.data);
       return response.data;
     } catch (error) {
@@ -185,6 +209,44 @@ const AttendancePage = ({ onLogout }) => {
     }
   }, []);
 
+  // Handle activity filter change
+  const handleActivityFilterChange = useCallback((filter) => {
+    setActivityFilter(filter);
+    fetchAttendanceData(true); // Refresh data with new filter
+  }, []);
+
+  // Get date range based on activity filter
+  const getActivityDateRange = useCallback(() => {
+    const now = new Date();
+    let startDate, endDate;
+
+    switch (activityFilter) {
+      case '5days':
+        startDate = new Date(now);
+        startDate.setDate(now.getDate() - 4); // Last 5 days including today
+        endDate = new Date(now);
+        break;
+      case 'week':
+        const day = now.getDay();
+        const diffToMonday = (day + 6) % 7;
+        startDate = new Date(now);
+        startDate.setDate(now.getDate() - diffToMonday);
+        endDate = new Date(startDate);
+        endDate.setDate(startDate.getDate() + 6);
+        break;
+      case 'month':
+      default:
+        startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+        endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        break;
+    }
+
+    startDate.setHours(0, 0, 0, 0);
+    endDate.setHours(23, 59, 59, 999);
+
+    return { startDate, endDate };
+  }, [activityFilter]);
+
   const fetchAttendanceData = useCallback(async (isRefresh = false) => {
     try {
       if (isRefresh) {
@@ -195,82 +257,154 @@ const AttendancePage = ({ onLogout }) => {
       setError(null);
 
       const now = new Date();
-      
+
       // Calculate month range for calendar and summary
       const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
       monthStart.setHours(0, 0, 0, 0);
       const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
       monthEnd.setHours(23, 59, 59, 999);
 
-      // Fetch all required data in parallel
-      const [weeklyRes, leavesRes, holidaysRes, statusRes] = await Promise.all([
+      // Get activity date range based on filter
+      const { startDate: activityStart, endDate: activityEnd } = getActivityDateRange();
+
+      // Determine if we need separate calls (only if activity range is different from month range)
+      const needSeparateActivityCall =
+        activityStart.getTime() !== monthStart.getTime() ||
+        activityEnd.getTime() !== monthEnd.getTime();
+
+      // Fetch data - optimize to avoid duplicate calls
+      const fetchPromises = [
+        // Monthly data for calendar and stats
         apiClient.get('/api/summary/week', {
           params: {
             startDate: monthStart.toISOString(),
             endDate: monthEnd.toISOString(),
+            _t: Date.now(), // Cache-busting parameter
           },
         }),
-        apiClient.get('/api/leaves/mine'),
-        apiClient.get('/api/holidays?shift=standard'),
         fetchCurrentStatus()
-      ]);
+      ];
+
+      // Only fetch separate activity data if needed
+      if (needSeparateActivityCall) {
+        fetchPromises.push(
+          apiClient.get('/api/summary/week', {
+            params: {
+              startDate: activityStart.toISOString(),
+              endDate: activityEnd.toISOString(),
+              _t: Date.now(), // Cache-busting parameter
+            },
+          })
+        );
+      }
+
+      // OPTIMIZATION: Use cached data for leaves and holidays if recent
+      const currentTime = Date.now();
+      const cacheExpiryMs = 15 * 60 * 1000; // 15 minutes
+      const shouldUseCachedData = !isRefresh && lastCacheTime && (currentTime - lastCacheTime) < cacheExpiryMs;
+
+      // Fetch leaves and holidays only if not cached or expired
+      if (!shouldUseCachedData) {
+        fetchPromises.push(
+          apiClient.get('/api/leaves/mine'),
+          apiClient.get('/api/holidays?shift=standard')
+        );
+      }
+
+      const results = await Promise.all(fetchPromises);
+
+      const weeklyRes = results[0];
+      const statusRes = results[1];
+      let activityRes = weeklyRes; // Default to same data
+      let leavesRes = { data: [] };
+      let holidaysRes = { data: [] };
+
+      // Parse results based on what was fetched
+      let resultIndex = 2;
+      if (needSeparateActivityCall) {
+        activityRes = results[resultIndex];
+        resultIndex++;
+      }
+
+      if (!shouldUseCachedData) {
+        leavesRes = results[resultIndex] || { data: [] };
+        holidaysRes = results[resultIndex + 1] || { data: [] };
+
+        // Update cache
+        setCachedLeaves(leavesRes.data);
+        setCachedHolidays(holidaysRes.data);
+        setLastCacheTime(currentTime);
+      } else {
+        // Use cached data
+        leavesRes = { data: cachedLeaves || [] };
+        holidaysRes = { data: cachedHolidays || [] };
+      }
 
       const { dailyData = [], weeklySummary = {} } = weeklyRes.data;
+      const { dailyData: activityData = [] } = activityRes.data;
       const approvedLeaves = leavesRes.data.filter(l => l.status.toLowerCase() === "approved");
       const holidays = holidaysRes.data || [];
 
-      // Calculate present days (5+ hours of work)
-      const presentDaysCount = dailyData.filter(d => (d.workDurationSeconds || 0) >= MIN_PRESENT_SECONDS).length;
+      // Calculate present days using backend calculation (already processed)
+      // Use backend calculated present days with validation
+      let presentDaysCount = weeklySummary.presentDays;
+      if (typeof presentDaysCount !== 'number' || presentDaysCount < 0) {
+        console.warn('Invalid presentDaysCount from backend, calculating from dailyData');
+        presentDaysCount = dailyData.filter(d => !d.isAbsent).length;
+      }
 
       // Calculate working days for the month (excluding weekends, holidays, and approved leaves)
       const weekWorkingDays = calculateWorkingDays(monthStart, monthEnd, holidays, approvedLeaves);
 
-      // Calculate total work hours for the week
-      const totalWorkHours = dailyData.reduce((sum, d) => 
-        sum + calculateHoursFromSeconds(d.workDurationSeconds || 0), 0
-      );
+      // Calculate total work hours with validation
+      const totalWorkHours = dailyData.reduce((sum, d) => {
+        const workHours = calculateHoursFromSeconds(d.workDurationSeconds || 0);
+        // Additional validation to prevent accumulating invalid data
+        if (isNaN(workHours) || workHours < 0) {
+          console.warn(`Invalid work hours for date ${d.date}:`, workHours);
+          return sum;
+        }
+        return sum + workHours;
+      }, 0);
 
-      // Calculate attendance rate
-      const attendanceRate = weekWorkingDays > 0 ? 
-        Math.round((presentDaysCount / weekWorkingDays) * 100) : 0;
+      // Calculate attendance rate with validation
+      let attendanceRate = 0;
+      if (weekWorkingDays > 0 && presentDaysCount >= 0) {
+        attendanceRate = Math.min(100, Math.floor((presentDaysCount / weekWorkingDays) * 100));
+      }
 
-      // Calculate on-time rate (only for standard shift employees)
-      const onTimeDays = dailyData.filter(d => {
-        if ((d.workDurationSeconds || 0) < MIN_PRESENT_SECONDS) return false;
-        
-        // Only calculate late/early for standard shift employees
-        if (d.effectiveShift?.isFlexible) return true; // Flexible shift = always on-time if present
-        
-        const arrivalTime = getArrivalTime(d);
-        if (!arrivalTime) return false;
-        
-        const expectedStart = d.effectiveShift?.start || d.expectedStartTime || "09:00";
-        const [expH, expM] = expectedStart.split(":").map(Number);
-        const expectedDate = new Date(arrivalTime);
-        expectedDate.setHours(expH, expM, 0, 0);
-        
-        return arrivalTime <= expectedDate;
-      }).length;
+      // Validate attendance rate calculation
+      if (attendanceRate > 100) {
+        console.warn(`⚠️ Attendance rate exceeds 100%: ${attendanceRate}%, capping to 100%`);
+        attendanceRate = 100;
+      }
 
-      const onTimeRate = presentDaysCount > 0 ? 
-        Math.round((onTimeDays / presentDaysCount) * 100) : 0;
+      // Use backend calculated on-time data with validation
+      let onTimeRate = 0;
+      if (weeklySummary.onTimeRate) {
+        const rawOnTimeRate = parseInt(weeklySummary.onTimeRate.replace('%', '') || '0');
+        onTimeRate = Math.min(100, Math.max(0, rawOnTimeRate));
+      }
 
-      // Enhanced stats with additional metrics
+      // Enhanced stats with additional metrics and validation
+      const averageHoursPerDay = presentDaysCount > 0 ?
+        Math.min(24, (totalWorkHours / presentDaysCount)) : 0;
+
       setStats({
-        attendanceRate,
-        presentDays: presentDaysCount,
-        totalDays: weekWorkingDays,
-        workingHours: totalWorkHours.toFixed(1),
-        onTimeRate,
+        attendanceRate: Math.round(attendanceRate),
+        presentDays: Math.max(0, presentDaysCount),
+        totalDays: Math.max(0, weekWorkingDays),
+        workingHours: Math.max(0, totalWorkHours).toFixed(1),
+        onTimeRate: Math.round(onTimeRate),
         lastUpdated: new Date().toLocaleString(),
         period: "This month",
-        averageHoursPerDay: presentDaysCount > 0 ? (totalWorkHours / presentDaysCount).toFixed(1) : "0.0",
-        lateDays: presentDaysCount - onTimeDays,
+        averageHoursPerDay: averageHoursPerDay.toFixed(1),
+        lateDays: Math.max(0, weeklySummary.quickStats?.lateArrivals || 0),
         currentStatus: statusRes ? {
-          isWorking: statusRes.currentlyWorking,
-          onBreak: statusRes.onBreak,
+          isWorking: Boolean(statusRes.currentlyWorking),
+          onBreak: Boolean(statusRes.onBreak),
           todayHours: calculateHoursFromSeconds(statusRes.workDurationSeconds || 0).toFixed(1),
-          arrivalTime: statusRes.arrivalTimeFormatted
+          arrivalTime: statusRes.arrivalTimeFormatted || null
         } : null
       });
 
@@ -295,10 +429,13 @@ const AttendancePage = ({ onLogout }) => {
       // Create holiday days map for current month
       const holidayDaysMap = {};
       holidays.forEach(h => {
-        const dateObj = new Date(h.date);
+        // Fix timezone issue for holidays
+        const dateString = h.date.includes('T') ? h.date.split('T')[0] : h.date;
+        const dateObj = new Date(dateString + 'T12:00:00');
         if (dateObj.getFullYear() === year && dateObj.getMonth() === monthIndex) {
-          holidayDaysMap[dateObj.getDate()] = {
-            day: dateObj.getDate(),
+          const dayNum = parseInt(dateString.split('-')[2], 10);
+          holidayDaysMap[dayNum] = {
+            day: dayNum,
             status: "holiday",
             name: h.name,
             type: h.type,
@@ -310,39 +447,89 @@ const AttendancePage = ({ onLogout }) => {
       // Map daily attendance data
       const attendanceDaysMap = {};
       dailyData.forEach(d => {
-        const dayNum = new Date(d.date).getDate();
+        // Fix timezone issue: extract date safely without timezone conversion
+        let dayNum;
+        if (typeof d.date === 'string') {
+          dayNum = d.date.includes('T') ?
+            parseInt(d.date.split('T')[0].split('-')[2], 10) :
+            parseInt(d.date.split('-')[2], 10);
+        } else {
+          // d.date is a Date object - extract date safely
+          dayNum = parseInt(d.date.toISOString().split('T')[0].split('-')[2], 10);
+        }
+
+        // Debug logging to track date mapping (temporary)
+        console.log(`📅 Mapping attendance data: ${d.date} -> day ${dayNum}`, {
+          originalDate: d.date,
+          dayNum,
+          workHours: ((d.workDurationSeconds || 0) / 3600).toFixed(1),
+          isAbsent: d.isAbsent,
+          isHalfDay: d.isHalfDay,
+          isLate: d.isLate
+        });
         const arrivalTime = getArrivalTime(d);
         const punchOutTime = getPunchTimeFromTimeline(d.timeline, "punch out");
-        
+
+        let status = "absent";
+        // Use backend calculated status with WFH support
+        if (d.isWFH) {
+          status = "wfh";
+        } else if (d.isAbsent) {
+          // Check if it's an approved leave (not WFH)
+          if (d.leaveInfo && d.leaveInfo.type !== 'workFromHome') {
+            status = d.leaveInfo.type === 'halfDay' ? "half-day-leave" : "approved-leave";
+          } else {
+            status = "absent";
+          }
+        } else if (d.isHalfDay) {
+          // Check if it's half-day leave or just worked half day
+          status = d.leaveInfo && d.leaveInfo.type === 'halfDay' ? "half-day-leave" : "half-day";
+        } else if (d.isLate) {
+          status = "late";
+        } else {
+          status = "present";
+        }
+
         const expectedStart = d.effectiveShift?.start || d.expectedStartTime || "09:00";
         const [expH, expM] = expectedStart.split(":").map(Number);
         const expectedDate = arrivalTime ? new Date(arrivalTime) : new Date(d.date);
         expectedDate.setHours(expH, expM, 0, 0);
 
-        let status = "absent";
+        const lateMinutes = (!d.effectiveShift?.isFlexible && arrivalTime && arrivalTime > expectedDate) ?
+          Math.floor((arrivalTime - expectedDate) / (1000 * 60)) : 0;
 
-        if ((d.workDurationSeconds || 0) >= MIN_PRESENT_SECONDS) {
-          status = "present";
-          // Only check for late status for standard shift employees
-          if (!d.effectiveShift?.isFlexible && arrivalTime && arrivalTime > expectedDate) {
-            status = "late";
-          }
-        } else if ((d.workDurationSeconds || 0) > 0) {
-          status = "half-day";
+        // For WFH, set standard working hours if no actual logged hours
+        let displayHours = calculateHoursFromSeconds(d.workDurationSeconds || 0).toFixed(1);
+        if (d.isWFH && (!d.workDurationSeconds || d.workDurationSeconds === 0)) {
+          // For WFH with no logged time, assume standard working hours
+          displayHours = d.leaveInfo?.type === 'halfDay' ? "4.0" : "8.0";
         }
 
         attendanceDaysMap[dayNum] = {
           day: dayNum,
           status,
-          workingHours: calculateHoursFromSeconds(d.workDurationSeconds || 0).toFixed(1),
+          workingHours: displayHours,
           arrivalTime,
           departureTime: punchOutTime,
+          name: d.isWFH ? "Work From Home" :
+                d.leaveInfo ? `${d.leaveInfo.type} Leave` : null,
           metadata: {
             totalBreakTime: calculateHoursFromSeconds(d.breakDurationSeconds || 0).toFixed(1),
             breakSessions: d.breakSessions?.length || 0,
             isFlexible: d.effectiveShift?.isFlexible || false,
-            lateMinutes: (!d.effectiveShift?.isFlexible && arrivalTime && arrivalTime > expectedDate) ? 
-              Math.floor((arrivalTime - expectedDate) / (1000 * 60)) : 0
+            lateMinutes,
+            workDurationSeconds: d.workDurationSeconds || 0,
+            breakDurationSeconds: d.breakDurationSeconds || 0,
+            shiftType: d.shiftType || 'standard',
+            effectiveShift: d.effectiveShift,
+            isLate: d.isLate || false,
+            isHalfDay: d.isHalfDay || false,
+            isAbsent: d.isAbsent || false,
+            isWFH: d.isWFH || false,
+            isFullDay: !d.isHalfDay && !d.isAbsent,
+            netHours: ((d.workDurationSeconds || 0) + (d.breakDurationSeconds || 0)) / 3600,
+            timeline: d.timeline || [],
+            leaveInfo: d.leaveInfo
           }
         };
       });
@@ -395,11 +582,13 @@ const AttendancePage = ({ onLogout }) => {
         days,
         startDayOfWeek,
         monthlyStats: {
-          totalPresent: days.filter(d => d.status === "present").length,
+          totalPresent: days.filter(d => ["present", "wfh"].includes(d.status)).length,
           totalLate: days.filter(d => d.status === "late").length,
           totalAbsent: days.filter(d => d.status === "absent").length,
-          totalLeave: days.filter(d => d.status === "leave").length,
-          totalHolidays: days.filter(d => d.status === "holiday").length
+          totalLeave: days.filter(d => ["leave", "half-day-leave", "approved-leave"].includes(d.status)).length,
+          totalWFH: days.filter(d => d.status === "wfh").length,
+          totalHolidays: days.filter(d => d.status === "holiday").length,
+          totalHalfDay: days.filter(d => ["half-day", "half-day-leave"].includes(d.status)).length
         }
       });
 
@@ -408,9 +597,21 @@ const AttendancePage = ({ onLogout }) => {
       const weeklyHoursData = weekDays.map(label => ({ label, hours: 0, target: 8 }));
 
       dailyData.forEach(d => {
-        const dateObj = new Date(d.date);
+        // Fix timezone issue for weekly chart
+        const dateString = typeof d.date === 'string' ?
+          (d.date.includes('T') ? d.date.split('T')[0] : d.date) :
+          d.date.toISOString().split('T')[0];
+        const dateObj = new Date(dateString + 'T12:00:00'); // Use noon to avoid timezone issues
         const dayOfWeek = dateObj.getDay();
-        const hours = calculateHoursFromSeconds(d.workDurationSeconds || 0);
+
+        // Calculate hours including WFH logic
+        let hours = calculateHoursFromSeconds(d.workDurationSeconds || 0);
+
+        // For WFH with no logged hours, use standard hours
+        if (d.isWFH && hours === 0) {
+          hours = d.leaveInfo?.type === 'halfDay' ? 4.0 : 8.0;
+        }
+
         if (dayOfWeek >= 0 && dayOfWeek <= 6) {
           weeklyHoursData[dayOfWeek].hours = hours;
         }
@@ -418,43 +619,64 @@ const AttendancePage = ({ onLogout }) => {
 
       setWeeklyHours(weeklyHoursData);
 
-      // Enhanced recent activity data
-      const recent = dailyData.slice(0, 10).map(d => {
+      // Simplified recent activity data processing
+      const recent = activityData.map(d => {
         const arrivalTime = getArrivalTime(d);
         const punchOutTime = getPunchTimeFromTimeline(d.timeline, "punch out");
-        
-        const expectedStart = d.effectiveShift?.start || d.expectedStartTime || "09:00";
-        const [expH, expM] = expectedStart.split(":").map(Number);
-        const expectedDate = arrivalTime ? new Date(arrivalTime) : new Date(d.date);
-        expectedDate.setHours(expH, expM, 0, 0);
 
         let status = "Absent";
         let statusColor = "red";
-        
-        if ((d.workDurationSeconds || 0) >= MIN_PRESENT_SECONDS) {
-          if (arrivalTime && arrivalTime > expectedDate) {
-            const lateMinutes = Math.floor((arrivalTime - expectedDate) / (1000 * 60));
-            status = `Late (${lateMinutes}min)`;
-            statusColor = "yellow";
+
+        // Use backend calculated status with WFH support
+        if (d.isWFH) {
+          status = "WFH";
+          statusColor = "blue";
+        } else if (d.isAbsent) {
+          if (d.leaveInfo && d.leaveInfo.type !== 'workFromHome') {
+            status = d.leaveInfo.type === 'halfDay' ? "Half Day Leave" :
+                     `${d.leaveInfo.type.charAt(0).toUpperCase() + d.leaveInfo.type.slice(1)} Leave`;
+            statusColor = "purple";
           } else {
-            status = "Present";
-            statusColor = "green";
+            status = "Absent";
+            statusColor = "red";
           }
-        } else if ((d.workDurationSeconds || 0) > 0) {
-          status = "Half Day";
+        } else if (d.isHalfDay) {
+          status = d.leaveInfo && d.leaveInfo.type === 'halfDay' ? "Half Day Leave" : "Half Day";
           statusColor = "orange";
+        } else if (d.isLate) {
+          status = "Late";
+          statusColor = "yellow";
+        } else {
+          status = "Present";
+          statusColor = "green";
+        }
+
+        // Calculate working hours for display, including WFH logic
+        let displayWorkingHours = calculateHoursFromSeconds(d.workDurationSeconds || 0);
+        if (d.isWFH && displayWorkingHours === 0) {
+          displayWorkingHours = d.leaveInfo?.type === 'halfDay' ? 4.0 : 8.0;
+        }
+
+        // Calculate efficiency based on actual expected hours
+        let efficiency = 0;
+        if (d.isWFH) {
+          const expectedHours = d.leaveInfo?.type === 'halfDay' ? 4 : 8;
+          efficiency = Math.round((displayWorkingHours / expectedHours) * 100);
+        } else if (d.workDurationSeconds > 0) {
+          efficiency = Math.round(((d.workDurationSeconds || 0) / (8 * 3600)) * 100);
         }
 
         return {
-          date: new Date(d.date).toISOString().split("T")[0],
-          timeIn: formatTime(arrivalTime),
-          timeOut: formatTime(punchOutTime),
+          date: typeof d.date === 'string' ?
+            (d.date.includes('T') ? d.date.split('T')[0] : d.date) :
+            d.date.toISOString().split('T')[0],
+          timeIn: d.isWFH ? "WFH" : formatTime(arrivalTime),
+          timeOut: d.isWFH ? "WFH" : formatTime(punchOutTime),
           status,
           statusColor,
-          workingHours: calculateHoursFromSeconds(d.workDurationSeconds || 0).toFixed(1) + "h",
+          workingHours: displayWorkingHours.toFixed(1) + "h",
           breakTime: calculateHoursFromSeconds(d.breakDurationSeconds || 0).toFixed(1) + "h",
-          efficiency: d.workDurationSeconds > 0 ? 
-            Math.round(((d.workDurationSeconds || 0) / (8 * 3600)) * 100) + "%" : "0%"
+          efficiency: efficiency + "%"
         };
       });
 
@@ -470,32 +692,50 @@ const AttendancePage = ({ onLogout }) => {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [fetchCurrentStatus, fetchTeamOnLeave]);
+  }, [fetchCurrentStatus, fetchTeamOnLeave, getActivityDateRange]);
 
   useEffect(() => {
     fetchAttendanceData();
-    
-    // Set up real-time updates
+
+    // OPTIMIZATION: Smarter real-time updates based on user activity
     const intervalId = setInterval(() => {
       if (document.visibilityState === 'visible') {
-        fetchAttendanceData(true);
+        // Only refresh if user is likely working (9 AM to 6 PM on weekdays)
+        const now = new Date();
+        const hour = now.getHours();
+        const isWeekday = now.getDay() >= 1 && now.getDay() <= 5;
+        const isWorkingHours = hour >= 9 && hour <= 18;
+
+        if (isWeekday && isWorkingHours) {
+          fetchAttendanceData(true); // Frequent updates during work hours
+        } else {
+          // Less frequent updates outside work hours (only fetch current status)
+          fetchCurrentStatus();
+        }
       }
-    }, 60000); // Update every minute when page is visible
+    }, 300000); // Update every 5 minutes when page is visible
 
     return () => clearInterval(intervalId);
-  }, [fetchAttendanceData]);
+  }, [fetchAttendanceData, fetchCurrentStatus]);
 
   // Listen for attendance updates
   useEffect(() => {
     const handleAttendanceUpdate = () => fetchAttendanceData(true);
     const handleStatusUpdate = () => fetchCurrentStatus();
-    
+    const handleManualAttendanceUpdate = () => {
+      // Refresh all data when manual attendance is updated
+      fetchAttendanceData(true);
+      fetchCurrentStatus();
+    };
+
     window.addEventListener("attendanceDataUpdate", handleAttendanceUpdate);
     window.addEventListener("statusUpdate", handleStatusUpdate);
-    
+    window.addEventListener("attendanceDataUpdated", handleManualAttendanceUpdate);
+
     return () => {
       window.removeEventListener("attendanceDataUpdate", handleAttendanceUpdate);
       window.removeEventListener("statusUpdate", handleStatusUpdate);
+      window.removeEventListener("attendanceDataUpdated", handleManualAttendanceUpdate);
     };
   }, [fetchAttendanceData, fetchCurrentStatus]);
 
@@ -615,7 +855,11 @@ const AttendancePage = ({ onLogout }) => {
         <div className="grid lg:grid-cols-3 grid-cols-1 gap-6">
           <div className="lg:col-span-2 flex flex-col space-y-6">
             <AttendanceCalendar data={calendarData} />
-            <RecentActivityTable activities={recentActivity} />
+            <RecentActivityTable
+              activities={recentActivity}
+              onDateFilterChange={handleActivityFilterChange}
+              currentFilter={activityFilter}
+            />
           </div>
           <div className="space-y-6">
             <WeeklyHoursChart weeklyHours={weeklyHours} targetHours={8} />

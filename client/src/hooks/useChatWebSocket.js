@@ -42,7 +42,7 @@ const useChatWebSocket = (
         return `${protocol}://${defaultHost}`;
       }
       // 4) Final fallback
-      return "ws://localhost:5000";
+      return import.meta.env.VITE_WS_BASE || "ws://localhost:5000";
     })();
 
     console.log("[WebSocket] Connecting to:", WS_BASE);

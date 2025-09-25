@@ -43,33 +43,136 @@ router.get("/employees-today", async (req, res) => {
 
     const data = await Promise.all(
       users.map(async (user) => {
-        // Get user status for the date
-        const status = await UserStatus.findOne({
-          userId: user._id,
-          today: { $gte: startOfDay, $lte: endOfDay },
-        });
+        try {
+          // Get user status for the date
+          const status = await UserStatus.findOne({
+            userId: user._id,
+            today: { $gte: startOfDay, $lte: endOfDay },
+          });
 
-        // Get daily work info
-        const dailyWork = await DailyWork.findOne({
-          userId: user._id,
-          date: { $gte: startOfDay, $lte: endOfDay },
-        });
+          // Get daily work info
+          const dailyWork = await DailyWork.findOne({
+            userId: user._id,
+            date: { $gte: startOfDay, $lte: endOfDay },
+          });
 
-        // Work duration string from DailyWork or compute from sessions
+          // Log missing data for debugging
+          if (!status) {
+            console.log(`No UserStatus found for ${user.name} (${user.employeeId}) on ${targetDate.toDateString()}`);
+          }
+          if (!dailyWork) {
+            console.log(`No DailyWork found for ${user.name} (${user.employeeId}) on ${targetDate.toDateString()}`);
+          }
+
+        // Work duration string - calculate real-time for accuracy
         let workDurationStr = "0h 0m";
+        let totalWorkMinutes = 0;
+
+        // First try stored work duration as fallback
         const workSeconds = dailyWork?.workDurationSeconds || 0;
         if (workSeconds > 0) {
-          const hours = Math.floor(workSeconds / 3600);
-          const minutes = Math.floor((workSeconds % 3600) / 60);
+          totalWorkMinutes = Math.floor(workSeconds / 60);
+        }
+
+        // For real-time accuracy, calculate from timeline events
+        if (status?.timeline?.length > 0) {
+          let timelineWorkMinutes = 0;
+          let lastPunchIn = null;
+          let isCurrentlyWorking = false;
+
+          // Process timeline to calculate work time
+          for (const event of status.timeline) {
+            const eventTime = new Date(event.time);
+
+            if (event.type && event.type.toLowerCase().includes('punch in')) {
+              lastPunchIn = eventTime;
+              isCurrentlyWorking = true;
+            } else if (event.type && event.type.toLowerCase().includes('punch out')) {
+              if (lastPunchIn) {
+                timelineWorkMinutes += (eventTime - lastPunchIn) / (1000 * 60);
+              }
+              isCurrentlyWorking = false;
+              lastPunchIn = null;
+            } else if (event.type && event.type.toLowerCase().includes('break start') && lastPunchIn) {
+              // Count work time until break start
+              timelineWorkMinutes += (eventTime - lastPunchIn) / (1000 * 60);
+              lastPunchIn = null;
+            } else if (event.type && event.type.toLowerCase().includes('break end')) {
+              // Resume work timing from break end
+              lastPunchIn = eventTime;
+            }
+          }
+
+          // If currently working and not on break, add time since last punch in or break end
+          if (status.currentlyWorking && !status.onBreak && lastPunchIn) {
+            const now = new Date();
+            timelineWorkMinutes += (now - lastPunchIn) / (1000 * 60);
+          }
+
+          // Use timeline calculation if it seems more accurate
+          if (timelineWorkMinutes > 0) {
+            totalWorkMinutes = Math.round(timelineWorkMinutes);
+          }
+        }
+
+        // Format work duration string
+        if (totalWorkMinutes > 0) {
+          const hours = Math.floor(totalWorkMinutes / 60);
+          const minutes = totalWorkMinutes % 60;
           workDurationStr = `${hours}h ${minutes}m`;
         }
 
-        // Break minutes from DailyWork.breakDurationSeconds or compute
+        // Break minutes - calculate from current timeline for real-time accuracy
         let breakMinutes = 0;
-        const breakSeconds = dailyWork?.breakDurationSeconds || 0;
-        if (breakSeconds > 0) {
-          breakMinutes = Math.round(breakSeconds / 60);
-        } else if (Array.isArray(dailyWork?.breakSessions)) {
+
+        // If using DailyWork breakDurationSeconds, use it as fallback
+        const storedBreakSeconds = dailyWork?.breakDurationSeconds || 0;
+        if (storedBreakSeconds > 0) {
+          breakMinutes = Math.round(storedBreakSeconds / 60);
+        }
+
+        // For real-time accuracy, calculate from timeline break sessions
+        if (status?.timeline?.length > 0) {
+          let timelineBreakMinutes = 0;
+          let currentBreakStart = null;
+
+          // Process timeline events to calculate break time
+          for (const event of status.timeline) {
+            const eventTime = new Date(event.time);
+
+            if (event.type && event.type.toLowerCase().includes('break start')) {
+              currentBreakStart = eventTime;
+            } else if (event.type && event.type.toLowerCase().includes('break end') && currentBreakStart) {
+              timelineBreakMinutes += (eventTime - currentBreakStart) / (1000 * 60);
+              currentBreakStart = null;
+            } else if (event.type && event.type.toLowerCase().includes('resume work') && currentBreakStart) {
+              // Also handle "Resume Work" events as break end
+              timelineBreakMinutes += (eventTime - currentBreakStart) / (1000 * 60);
+              currentBreakStart = null;
+            }
+          }
+
+          // If currently on break, add time since break started
+          if (status.onBreak && currentBreakStart) {
+            const now = new Date();
+            timelineBreakMinutes += (now - currentBreakStart) / (1000 * 60);
+          } else if (status.onBreak && !currentBreakStart) {
+            // Fallback: if on break but no break start found in timeline, use breakStartTime
+            const breakStartTime = status.breakStartTime || status.lastBreakStart;
+            if (breakStartTime) {
+              const now = new Date();
+              timelineBreakMinutes += (now - new Date(breakStartTime)) / (1000 * 60);
+            }
+          }
+
+          // Use timeline calculation if available
+          if (timelineBreakMinutes > 0) {
+            breakMinutes = Math.round(timelineBreakMinutes);
+          }
+        }
+
+        // Fallback to DailyWork.breakSessions if available
+        if (breakMinutes === 0 && Array.isArray(dailyWork?.breakSessions)) {
           const totalBreakMs = dailyWork.breakSessions.reduce((sum, s) => {
             if (s.start && s.end)
               return sum + (new Date(s.end) - new Date(s.start));
@@ -120,19 +223,63 @@ router.get("/employees-today", async (req, res) => {
           if (breakEntry) breakType = breakEntry.type;
         }
 
-        return {
-          userId: user._id,
-          employeeId: user.employeeId,
-          name: user.name,
-          role: user.role,
-          arrivalTime: punchInTime,
-          punchOutTime,
-          onBreak: status?.onBreak || false,
-          breakDurationMinutes: breakMinutes,
-          breakType, // include break type
-          workDuration: workDurationStr,
-          currentlyWorking: status?.currentlyWorking || false,
-        };
+          // Debug logging for calculation verification
+          if (user.name && (status?.currentlyWorking || status?.onBreak)) {
+            console.log(`Real-time calc for ${user.name}:`, {
+              currentlyWorking: status?.currentlyWorking,
+              onBreak: status?.onBreak,
+              workDuration: workDurationStr,
+              breakMinutes,
+              storedWorkSeconds: workSeconds,
+              storedBreakSeconds: storedBreakSeconds,
+              timelineEventsCount: status?.timeline?.length || 0,
+              breakStartTime: status?.breakStartTime,
+              lastBreakStart: status?.lastBreakStart
+            });
+          }
+
+          return {
+            userId: user._id,
+            employeeId: user.employeeId || `EMP${user._id.toString().slice(-4)}`,
+            name: user.name || 'Unknown Employee',
+            role: user.role,
+            arrivalTime: punchInTime,
+            punchOutTime,
+            onBreak: status?.onBreak || false,
+            breakDurationMinutes: breakMinutes,
+            breakType, // include break type
+            workDuration: workDurationStr,
+            currentlyWorking: status?.currentlyWorking || false,
+            // Add debug fields
+            hasStatus: !!status,
+            hasDailyWork: !!dailyWork,
+            // Add calculation source info for debugging
+            calculationSource: {
+              workFromTimeline: totalWorkMinutes > Math.floor(workSeconds / 60),
+              breakFromTimeline: breakMinutes > Math.round((dailyWork?.breakDurationSeconds || 0) / 60),
+              lastCalculated: new Date().toISOString()
+            }
+          };
+        } catch (error) {
+          console.error(`Error processing employee ${user.name} (${user.employeeId}):`, error);
+          // Return minimal data for problematic employees
+          return {
+            userId: user._id,
+            employeeId: user.employeeId || `EMP${user._id.toString().slice(-4)}`,
+            name: user.name || 'Unknown Employee',
+            role: user.role,
+            arrivalTime: null,
+            punchOutTime: null,
+            onBreak: false,
+            breakDurationMinutes: 0,
+            breakType: null,
+            workDuration: "0h 0m",
+            currentlyWorking: false,
+            hasStatus: false,
+            hasDailyWork: false,
+            error: error.message,
+          };
+        }
       })
     );
 

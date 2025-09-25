@@ -41,6 +41,13 @@ const taskSchema = new mongoose.Schema(
     // ✅ New field: When the task was marked completed
     completedAt: { type: Date, default: null },
 
+    // ✅ Track who last edited the task
+    lastEditedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+
     // Remarks on the task
     remarks: [
       {

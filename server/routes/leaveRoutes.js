@@ -19,6 +19,13 @@ router.get(
   leaveController.getUserLeaves
 );
 router.get("/team", protect, authorize("employee", "admin", "super-admin", "hr"), leaveController.getTeamLeaves);
+router.put(
+  "/:id",
+  protect,
+  authorize("employee", "admin", "super-admin", "hr"),
+  upload.single("document"),
+  leaveController.updateLeave
+);
 
 // Admin routes
 router.get("/", protect, authorize("admin", "super-admin", "hr"), leaveController.getAllLeaves);
