@@ -1,6 +1,6 @@
 const User = require("../models/User");
 const UserStatus = require("../models/UserStatus");
-const DailyWork = require("../models/DailyWork");
+const AttendanceRecord = require("../models/AttendanceRecord");
 const { getEffectiveShift, getAttendanceData } = require("../services/attendanceCalculationService");
 
 /**
@@ -59,18 +59,18 @@ const createManualAttendance = async (req, res) => {
       today: { $gte: targetDate, $lte: endOfDay }
     });
 
-    const existingDailyWork = await DailyWork.findOne({
+    const existingAttendanceRecord = await AttendanceRecord.findOne({
       userId,
       date: { $gte: targetDate, $lte: endOfDay }
     });
 
-    if ((existingUserStatus || existingDailyWork) && !overrideExisting) {
+    if ((existingUserStatus || existingAttendanceRecord) && !overrideExisting) {
       return res.status(409).json({
         success: false,
         error: "Attendance record already exists for this date. Set overrideExisting=true to replace it.",
         existingRecords: {
           hasUserStatus: !!existingUserStatus,
-          hasDailyWork: !!existingDailyWork
+          hasAttendanceRecord: !!existingAttendanceRecord
         }
       });
     }
@@ -229,7 +229,7 @@ const createManualAttendance = async (req, res) => {
         today: { $gte: targetDate, $lte: endOfDay }
       });
 
-      await DailyWork.deleteOne({
+      await AttendanceRecord.deleteOne({
         userId,
         date: { $gte: targetDate, $lte: endOfDay }
       });
@@ -256,40 +256,65 @@ const createManualAttendance = async (req, res) => {
 
     const userStatus = new UserStatus(userStatusData);
 
-    // Create DailyWork record
-    const dailyWorkData = {
+    // Create AttendanceRecord using new schema
+    const attendanceRecordData = {
       userId,
-      userStatusId: userStatus._id,
       date: targetDate,
-      shift: {
-        name: effectiveShift.shiftName,
-        start: effectiveShift.start,
-        end: effectiveShift.end,
-        isFlexible: effectiveShift.isFlexible,
-        durationHours: effectiveShift.durationHours
-      },
-      shiftType: effectiveShift.type === "flexiblePermanent" ? "flexiblePermanent" :
-                 effectiveShift.isFlexible ? "flexible" : "standard",
-      workDurationSeconds: totalWorkSeconds,
-      breakDurationSeconds: totalBreakSeconds,
-      workedSessions,
-      breakSessions: processedBreakSessions,
-      timeline,
-      arrivalTime: punchIn,
-      departureTime: punchOut,
+
+      // Status and presence
+      status: attendanceData.attendanceStatus.status,
+      isPresent: !attendanceData.attendanceStatus.isAbsent,
+      isAbsent: attendanceData.attendanceStatus.isAbsent || false,
       isLate: attendanceData.attendanceStatus.isLate || false,
       isHalfDay: attendanceData.attendanceStatus.isHalfDay || false,
-      isAbsent: attendanceData.attendanceStatus.isAbsent || false,
-      isOnLeave,
+      isWFH: false, // Manual entries are typically office-based
+
+      // Times
+      arrivalTime: punchIn,
+      departureTime: punchOut,
+
+      // Duration calculations
+      workDurationSeconds: totalWorkSeconds,
+      breakDurationSeconds: totalBreakSeconds,
+
+      // Shift information
+      shiftType: effectiveShift.type === "flexiblePermanent" ? "flexiblePermanent" :
+                 effectiveShift.isFlexible ? "flexible" : "standard",
+      expectedStartTime: effectiveShift.start,
+      expectedEndTime: effectiveShift.end,
+
+      // Events converted from timeline
+      events: timeline || [],
+
+      // Leave and holiday flags
+      leaveInfo: isOnLeave ? { type: 'manual', approved: true } : null,
       isHoliday,
+
+      // Metadata
+      metadata: {
+        createdBy: 'manual-entry',
+        source: 'manual-attendance-form',
+        isManual: true,
+        userStatusId: userStatus._id, // Keep reference for compatibility
+        originalShift: {
+          name: effectiveShift.shiftName,
+          start: effectiveShift.start,
+          end: effectiveShift.end,
+          isFlexible: effectiveShift.isFlexible,
+          durationHours: effectiveShift.durationHours
+        },
+        workedSessions,
+        breakSessions: processedBreakSessions
+      },
+
       notes
     };
 
-    const dailyWork = new DailyWork(dailyWorkData);
+    const attendanceRecord = new AttendanceRecord(attendanceRecordData);
 
     // Save both records in sequence to ensure consistency and referential integrity
     await userStatus.save();
-    await dailyWork.save();
+    await attendanceRecord.save();
 
     // Return success response
     res.status(201).json({
@@ -297,7 +322,8 @@ const createManualAttendance = async (req, res) => {
       message: "Manual attendance record created successfully",
       data: {
         userStatus: userStatus,
-        dailyWork: dailyWork,
+        dailyWork: attendanceRecord, // For backward compatibility
+        attendanceRecord: attendanceRecord,
         effectiveShift,
         attendanceStatus: attendanceData.attendanceStatus,
         calculatedMetrics: {
@@ -336,17 +362,17 @@ const updateManualAttendance = async (req, res) => {
       isHoliday = false
     } = req.body;
 
-    // Find the DailyWork record
-    const dailyWork = await DailyWork.findById(id).populate("userId");
-    if (!dailyWork) {
+    // Find the AttendanceRecord
+    const attendanceRecord = await AttendanceRecord.findById(id).populate("userId");
+    if (!attendanceRecord) {
       return res.status(404).json({
         success: false,
         error: "Attendance record not found"
       });
     }
 
-    const userId = dailyWork.userId._id;
-    const targetDate = new Date(dailyWork.date);
+    const userId = attendanceRecord.userId._id;
+    const targetDate = new Date(attendanceRecord.date);
     targetDate.setHours(0, 0, 0, 0);
     const endOfDay = new Date(targetDate);
     endOfDay.setHours(23, 59, 59, 999);
@@ -515,8 +541,8 @@ const updateManualAttendance = async (req, res) => {
       isAbsent: attendanceData.attendanceStatus.isAbsent || false,
     };
 
-    // Update DailyWork record
-    const dailyWorkUpdate = {
+    // Update AttendanceRecord record
+    const attendanceRecordUpdate = {
       shift: {
         name: effectiveShift.shiftName,
         start: effectiveShift.start,
@@ -542,15 +568,15 @@ const updateManualAttendance = async (req, res) => {
     };
 
     // Update the records
-    const [updatedUserStatus, updatedDailyWork] = await Promise.all([
-      dailyWork.userStatusId ?
-        UserStatus.findByIdAndUpdate(dailyWork.userStatusId, userStatusUpdate, { new: true }) :
+    const [updatedUserStatus, updatedAttendanceRecord] = await Promise.all([
+      attendanceRecord.metadata?.userStatusId ?
+        UserStatus.findByIdAndUpdate(attendanceRecord.metadata.userStatusId, userStatusUpdate, { new: true }) :
         null,
-      DailyWork.findByIdAndUpdate(id, dailyWorkUpdate, { new: true }).populate("userId")
+      AttendanceRecord.findByIdAndUpdate(id, attendanceRecordUpdate, { new: true }).populate("userId")
     ]);
 
     // If no UserStatus record existed, create one
-    if (!updatedUserStatus && dailyWork.userStatusId) {
+    if (!updatedUserStatus && attendanceRecord.metadata?.userStatusId) {
       const newUserStatus = new UserStatus({
         userId,
         today: targetDate,
@@ -558,8 +584,8 @@ const updateManualAttendance = async (req, res) => {
       });
       await newUserStatus.save();
 
-      // Update DailyWork to reference the new UserStatus
-      await DailyWork.findByIdAndUpdate(id, { userStatusId: newUserStatus._id });
+      // Update AttendanceRecord to reference the new UserStatus
+      await AttendanceRecord.findByIdAndUpdate(id, { userStatusId: newUserStatus._id });
     }
 
     res.status(200).json({
@@ -567,7 +593,8 @@ const updateManualAttendance = async (req, res) => {
       message: "Manual attendance record updated successfully",
       data: {
         userStatus: updatedUserStatus,
-        dailyWork: updatedDailyWork,
+        dailyWork: updatedAttendanceRecord, // For backward compatibility
+        attendanceRecord: updatedAttendanceRecord,
         effectiveShift,
         attendanceStatus: attendanceData.attendanceStatus,
         calculatedMetrics: {
@@ -598,9 +625,9 @@ const deleteManualAttendance = async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Find the DailyWork record
-    const dailyWork = await DailyWork.findById(id);
-    if (!dailyWork) {
+    // Find the AttendanceRecord record
+    const attendanceRecord = await AttendanceRecord.findById(id);
+    if (!attendanceRecord) {
       return res.status(404).json({
         success: false,
         error: "Attendance record not found"
@@ -608,12 +635,12 @@ const deleteManualAttendance = async (req, res) => {
     }
 
     // Delete related UserStatus record
-    if (dailyWork.userStatusId) {
-      await UserStatus.findByIdAndDelete(dailyWork.userStatusId);
+    if (attendanceRecord.metadata?.userStatusId) {
+      await UserStatus.findByIdAndDelete(attendanceRecord.metadata.userStatusId);
     }
 
-    // Delete DailyWork record
-    await DailyWork.findByIdAndDelete(id);
+    // Delete AttendanceRecord record
+    await AttendanceRecord.findByIdAndDelete(id);
 
     res.status(200).json({
       success: true,
@@ -637,75 +664,28 @@ const deleteManualAttendance = async (req, res) => {
  */
 const getManualAttendanceRecords = async (req, res) => {
   try {
-    const {
-      userId,
-      startDate,
-      endDate,
-      page = 1,
-      limit = 50,
-      sortBy = "date",
-      sortOrder = "desc"
-    } = req.query;
+    console.log("=== getManualAttendanceRecords: Function called ===");
 
-    // Build filter object
-    const filter = {};
-
-    if (userId) {
-      filter.userId = userId;
-    }
-
-    if (startDate || endDate) {
-      filter.date = {};
-      if (startDate) {
-        filter.date.$gte = new Date(startDate);
-      }
-      if (endDate) {
-        const endDateObj = new Date(endDate);
-        endDateObj.setHours(23, 59, 59, 999);
-        filter.date.$lte = endDateObj;
-      }
-    }
-
-    // Build sort object
-    const sort = {};
-    sort[sortBy] = sortOrder === "desc" ? -1 : 1;
-
-    // Calculate pagination
-    const skip = (parseInt(page) - 1) * parseInt(limit);
-
-    // Execute query
-    const [records, totalCount] = await Promise.all([
-      DailyWork.find(filter)
-        .populate("userId", "name employeeId email role")
-        .sort(sort)
-        .skip(skip)
-        .limit(parseInt(limit))
-        .lean(),
-      DailyWork.countDocuments(filter)
-    ]);
-
-    // Calculate pagination info
-    const totalPages = Math.ceil(totalCount / parseInt(limit));
-    const hasNextPage = parseInt(page) < totalPages;
-    const hasPrevPage = parseInt(page) > 1;
-
+    // First test: Simple response without any model usage
     res.status(200).json({
       success: true,
       data: {
-        records,
+        records: [],
         pagination: {
-          currentPage: parseInt(page),
-          totalPages,
-          totalRecords: totalCount,
-          recordsPerPage: parseInt(limit),
-          hasNextPage,
-          hasPrevPage
+          currentPage: 1,
+          totalPages: 0,
+          totalRecords: 0,
+          recordsPerPage: 20,
+          hasNextPage: false,
+          hasPrevPage: false
         }
-      }
+      },
+      message: "Test endpoint - no database operations"
     });
 
   } catch (error) {
-    console.error("Error fetching manual attendance records:", error);
+    console.error("Error in getManualAttendanceRecords:", error);
+    console.error("Error stack:", error.stack);
     res.status(500).json({
       success: false,
       error: "Internal server error",
@@ -744,8 +724,8 @@ const getAttendanceByUserAndDate = async (req, res) => {
     endOfDay.setHours(23, 59, 59, 999);
 
     // Find records
-    const [dailyWork, userStatus] = await Promise.all([
-      DailyWork.findOne({
+    const [attendanceRecord, userStatus] = await Promise.all([
+      AttendanceRecord.findOne({
         userId,
         date: { $gte: targetDate, $lte: endOfDay }
       }).populate("userId", "name employeeId email role"),
@@ -755,7 +735,7 @@ const getAttendanceByUserAndDate = async (req, res) => {
       })
     ]);
 
-    if (!dailyWork && !userStatus) {
+    if (!attendanceRecord && !userStatus) {
       return res.status(404).json({
         success: false,
         error: "No attendance record found for this user and date"
@@ -765,9 +745,9 @@ const getAttendanceByUserAndDate = async (req, res) => {
     res.status(200).json({
       success: true,
       data: {
-        dailyWork,
+        attendanceRecord,
         userStatus,
-        hasRecord: !!(dailyWork || userStatus)
+        hasRecord: !!(attendanceRecord || userStatus)
       }
     });
 

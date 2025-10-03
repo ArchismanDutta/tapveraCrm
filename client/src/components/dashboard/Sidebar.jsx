@@ -12,10 +12,12 @@ import {
   Clock,
   DollarSign,
 } from "lucide-react";
-import { FaChevronCircleRight } from "react-icons/fa";
+import { FaChevronCircleRight, FaTrophy } from "react-icons/fa";
 
 import Modal from "../modal";
 import DailyEmailSender from "../DailyEmailSender";
+import AchievementsDashboard from "../achievements/AchievementsDashboard";
+import { useAchievements } from "../../contexts/AchievementContext";
 import tapveraLogo from "../../assets/tapvera.png";
 
 // Role → Menu mapping
@@ -29,6 +31,7 @@ const menuConfig = {
     { to: "/messages", icon: <MessageCircle size={18} />, label: "Messages" },
     { to: "/leaves", icon: <FileText size={18} />, label: "Leave Requests" },
     { to: "/tasks", icon: <ClipboardList size={18} />, label: "Tasks" },
+    { type: "achievements", icon: <FaTrophy size={18} />, label: "Achievements" },
   ],
   hr: [
     { to: "/hrdashboard", icon: <LayoutDashboard size={18} />, label: "HR Dashboard" },
@@ -46,6 +49,7 @@ const menuConfig = {
     { to: "/messages", icon: <MessageCircle size={18} />, label: "Messages" },
     { to: "/profile", icon: <User size={18} />, label: "My Profile" },
     { to: "/super-admin", icon: <ClipboardList size={18} />, label: "Employees Current Status" },
+    { type: "achievements", icon: <FaTrophy size={18} />, label: "Achievements" },
   ],
   admin: [
     { to: "/dashboard", icon: <LayoutDashboard size={18} />, label: "Admin Dashboard" },
@@ -61,6 +65,7 @@ const menuConfig = {
     { to: "/profile", icon: <User size={18} />, label: "My Profile" },
     { to: "/admin/notices", icon: <Flag size={18} />, label: "Notice Board" },
   //   { to: "/super-admin", icon: <ClipboardList size={18} />, label: "Employees Current Status" },
+    { type: "achievements", icon: <FaTrophy size={18} />, label: "Achievements" },
   ],
   "super-admin": [
     { to: "/hrdashboard", icon: <LayoutDashboard size={18} />, label: "Dashboard" },
@@ -77,6 +82,7 @@ const menuConfig = {
     { to: "/profile", icon: <User size={18} />, label: "My Profile" },
     { to: "/super-admin", icon: <ClipboardList size={18} />, label: "Employees Current Status" },
     { to: "/super-admin/attendance", icon: <Calendar size={18} />, label: "Employee Attendance Portal" },
+    { type: "achievements", icon: <FaTrophy size={18} />, label: "Achievements" },
   ],
 };
 
@@ -92,6 +98,7 @@ const Sidebar = ({ collapsed, setCollapsed, onLogout, userRole }) => {
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [role, setRole] = useState("employee");
   const [chatUnread, setChatUnread] = useState(0);
+  const { showAchievementsDashboard, openAchievementsDashboard, closeAchievementsDashboard } = useAchievements();
 
   useEffect(() => {
     let resolvedRole = normalizeRole(userRole || "employee");
@@ -169,43 +176,68 @@ const Sidebar = ({ collapsed, setCollapsed, onLogout, userRole }) => {
 
         {/* Menu Items */}
         <nav className="flex-1 overflow-y-auto px-2 space-y-1">
-          {menuItems.map((item) => (
-            <NavLink
-              to={item.to}
-              key={item.to}
-              className={({ isActive, isPending }) =>
-                `group flex items-center gap-4 rounded-lg px-4 py-3 text-sm font-semibold
-                transition-colors duration-150
-                ${
-                  isActive
-                    ? "bg-gradient-to-r from-blue-600 to-blue-400 text-white shadow-md"
-                    : "text-blue-100 hover:text-blue-300"
-                }
-                ${collapsed ? "justify-center" : "justify-start"}`
-              }
-              end={item.to === "/super-admin"}
-              tabIndex={collapsed ? -1 : 0}
-            >
-              <span className="flex items-center justify-center relative">
-                {item.icon}
-                {item.to === "/messages" && chatUnread > 0 && (
-                  <span className="absolute -top-1 -right-2 bg-red-500 text-white text-[10px] px-1.5 py-[1px] rounded-full min-w-[16px] text-center">
-                    {chatUnread > 99 ? "99+" : chatUnread}
+          {menuItems.map((item, index) => {
+            if (item.type === "achievements") {
+              return (
+                <button
+                  key={`achievements-${index}`}
+                  onClick={openAchievementsDashboard}
+                  className={`group flex items-center gap-4 rounded-lg px-4 py-3 text-sm font-semibold
+                    transition-colors duration-150 w-full text-left
+                    text-blue-100 hover:text-blue-300 hover:bg-white/10
+                    ${collapsed ? "justify-center" : "justify-start"}`}
+                  tabIndex={collapsed ? -1 : 0}
+                >
+                  <span className="flex items-center justify-center">
+                    {item.icon}
                   </span>
-                )}
-              </span>
-              {!collapsed && (
-                <span className="flex-1 flex items-center justify-between">
-                  {item.label}
+                  {!collapsed && (
+                    <span className="flex-1">
+                      {item.label}
+                    </span>
+                  )}
+                </button>
+              );
+            }
+
+            return (
+              <NavLink
+                to={item.to}
+                key={item.to}
+                className={({ isActive, isPending }) =>
+                  `group flex items-center gap-4 rounded-lg px-4 py-3 text-sm font-semibold
+                  transition-colors duration-150
+                  ${
+                    isActive
+                      ? "bg-gradient-to-r from-blue-600 to-blue-400 text-white shadow-md"
+                      : "text-blue-100 hover:text-blue-300"
+                  }
+                  ${collapsed ? "justify-center" : "justify-start"}`
+                }
+                end={item.to === "/super-admin"}
+                tabIndex={collapsed ? -1 : 0}
+              >
+                <span className="flex items-center justify-center relative">
+                  {item.icon}
                   {item.to === "/messages" && chatUnread > 0 && (
-                    <span className="ml-2 bg-red-500 text-white text-[10px] px-1.5 py-[1px] rounded-full min-w-[18px] text-center">
+                    <span className="absolute -top-1 -right-2 bg-red-500 text-white text-[10px] px-1.5 py-[1px] rounded-full min-w-[16px] text-center">
                       {chatUnread > 99 ? "99+" : chatUnread}
                     </span>
                   )}
                 </span>
-              )}
-            </NavLink>
-          ))}
+                {!collapsed && (
+                  <span className="flex-1 flex items-center justify-between">
+                    {item.label}
+                    {item.to === "/messages" && chatUnread > 0 && (
+                      <span className="ml-2 bg-red-500 text-white text-[10px] px-1.5 py-[1px] rounded-full min-w-[18px] text-center">
+                        {chatUnread > 99 ? "99+" : chatUnread}
+                      </span>
+                    )}
+                  </span>
+                )}
+              </NavLink>
+            );
+          })}
         </nav>
 
         {/* Daily Updates Button (Employee only) */}
@@ -244,6 +276,11 @@ const Sidebar = ({ collapsed, setCollapsed, onLogout, userRole }) => {
         <Modal isOpen={showEmailModal} onClose={() => setShowEmailModal(false)}>
           <DailyEmailSender onClose={() => setShowEmailModal(false)} />
         </Modal>
+      )}
+
+      {/* Achievements Dashboard Modal */}
+      {showAchievementsDashboard && (
+        <AchievementsDashboard onClose={closeAchievementsDashboard} />
       )}
     </>
   );

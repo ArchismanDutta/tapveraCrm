@@ -3,7 +3,8 @@ const router = express.Router();
 const { protect } = require("../middlewares/authMiddleware");
 const User = require("../models/User");
 const UserStatus = require("../models/UserStatus");
-const DailyWork = require("../models/DailyWork");
+// const DailyWork = require("../models/DailyWork"); // REMOVED - Using new AttendanceRecord system
+const AttendanceRecord = require("../models/AttendanceRecord");
 
 // Apply authentication middleware to all routes
 router.use(protect);
@@ -50,8 +51,8 @@ router.get("/employees-today", async (req, res) => {
             today: { $gte: startOfDay, $lte: endOfDay },
           });
 
-          // Get daily work info
-          const dailyWork = await DailyWork.findOne({
+          // Get attendance record info
+          const attendanceRecord = await AttendanceRecord.findOne({
             userId: user._id,
             date: { $gte: startOfDay, $lte: endOfDay },
           });
@@ -60,8 +61,8 @@ router.get("/employees-today", async (req, res) => {
           if (!status) {
             console.log(`No UserStatus found for ${user.name} (${user.employeeId}) on ${targetDate.toDateString()}`);
           }
-          if (!dailyWork) {
-            console.log(`No DailyWork found for ${user.name} (${user.employeeId}) on ${targetDate.toDateString()}`);
+          if (!attendanceRecord) {
+            console.log(`No AttendanceRecord found for ${user.name} (${user.employeeId}) on ${targetDate.toDateString()}`);
           }
 
         // Work duration string - calculate real-time for accuracy
@@ -69,7 +70,7 @@ router.get("/employees-today", async (req, res) => {
         let totalWorkMinutes = 0;
 
         // First try stored work duration as fallback
-        const workSeconds = dailyWork?.workDurationSeconds || 0;
+        const workSeconds = attendanceRecord?.workDurationSeconds || 0;
         if (workSeconds > 0) {
           totalWorkMinutes = Math.floor(workSeconds / 60);
         }
@@ -126,7 +127,7 @@ router.get("/employees-today", async (req, res) => {
         let breakMinutes = 0;
 
         // If using DailyWork breakDurationSeconds, use it as fallback
-        const storedBreakSeconds = dailyWork?.breakDurationSeconds || 0;
+        const storedBreakSeconds = attendanceRecord?.breakDurationSeconds || 0;
         if (storedBreakSeconds > 0) {
           breakMinutes = Math.round(storedBreakSeconds / 60);
         }
@@ -172,8 +173,8 @@ router.get("/employees-today", async (req, res) => {
         }
 
         // Fallback to DailyWork.breakSessions if available
-        if (breakMinutes === 0 && Array.isArray(dailyWork?.breakSessions)) {
-          const totalBreakMs = dailyWork.breakSessions.reduce((sum, s) => {
+        if (breakMinutes === 0 && Array.isArray(attendanceRecord?.breakSessions)) {
+          const totalBreakMs = attendanceRecord.breakSessions.reduce((sum, s) => {
             if (s.start && s.end)
               return sum + (new Date(s.end) - new Date(s.start));
             return sum;
@@ -208,7 +209,7 @@ router.get("/employees-today", async (req, res) => {
 
         // Fallbacks
         if (!punchInTime)
-          punchInTime = status?.arrivalTime || dailyWork?.arrivalTime || null;
+          punchInTime = status?.arrivalTime || attendanceRecord?.arrivalTime || null;
 
         // Break type from latest break start event
         let breakType = null;
@@ -252,11 +253,11 @@ router.get("/employees-today", async (req, res) => {
             currentlyWorking: status?.currentlyWorking || false,
             // Add debug fields
             hasStatus: !!status,
-            hasDailyWork: !!dailyWork,
+            hasAttendanceRecord: !!attendanceRecord,
             // Add calculation source info for debugging
             calculationSource: {
               workFromTimeline: totalWorkMinutes > Math.floor(workSeconds / 60),
-              breakFromTimeline: breakMinutes > Math.round((dailyWork?.breakDurationSeconds || 0) / 60),
+              breakFromTimeline: breakMinutes > Math.round((attendanceRecord?.breakDurationSeconds || 0) / 60),
               lastCalculated: new Date().toISOString()
             }
           };
@@ -276,7 +277,7 @@ router.get("/employees-today", async (req, res) => {
             workDuration: "0h 0m",
             currentlyWorking: false,
             hasStatus: false,
-            hasDailyWork: false,
+            hasAttendanceRecord: false,
             error: error.message,
           };
         }

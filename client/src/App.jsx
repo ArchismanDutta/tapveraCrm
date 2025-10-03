@@ -12,6 +12,10 @@ import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import "./styles/toastify-custom.css";
 
+// Achievement System
+import { AchievementProvider } from "./contexts/AchievementContext";
+import AchievementNotificationContainer from "./components/achievements/AchievementNotificationContainer";
+
 // Pages
 import Login from "./pages/LoginPage";
 import Signup from "./pages/SignUp";
@@ -528,7 +532,10 @@ const AppWrapper = () => {
 
 const App = () => (
   <Router>
-    <AppWrapper />
+    <AchievementProvider>
+      <AppWrapper />
+      <AchievementNotificationContainer />
+    </AchievementProvider>
   </Router>
 );
 

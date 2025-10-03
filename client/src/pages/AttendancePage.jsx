@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState, useCallback } from "react";
 import axios from "axios";
 import AttendanceStats from "../components/attendance/AttendanceStats";
@@ -6,6 +7,7 @@ import WeeklyHoursChart from "../components/attendance/WeeklyHoursChart";
 import RecentActivityTable from "../components/attendance/RecentActivityTable";
 import Sidebar from "../components/dashboard/Sidebar";
 import { RefreshCw, AlertCircle, Clock, Users, Calendar as CalendarIcon } from "lucide-react";
+import newAttendanceService from "../services/newAttendanceService";
 
 const AttendancePage = ({ onLogout }) => {
   const [collapsed, setCollapsed] = useState(false);
@@ -28,6 +30,9 @@ const AttendancePage = ({ onLogout }) => {
   const token = localStorage.getItem("token");
   const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
   const MIN_PRESENT_SECONDS = 5 * 3600; // 5 hours minimum for present status
+
+  // Feature flag for new attendance system
+  const USE_NEW_ATTENDANCE_SYSTEM = import.meta.env.VITE_USE_NEW_ATTENDANCE === 'true' || true;
 
   // Enhanced axios configuration with proper error handling
   const apiClient = axios.create({
@@ -170,16 +175,59 @@ const AttendancePage = ({ onLogout }) => {
   // Fetch current user status
   const fetchCurrentStatus = useCallback(async () => {
     try {
-      const response = await apiClient.get('/api/status/today', {
-        params: { _t: Date.now() } // Cache-busting parameter
-      });
-      setCurrentStatus(response.data);
-      return response.data;
+      let statusData;
+
+      if (USE_NEW_ATTENDANCE_SYSTEM) {
+        console.log("🆕 AttendancePage: Using new attendance system for current status");
+        const response = await newAttendanceService.getTodayStatus();
+
+        if (response.success && response.data) {
+          const attendanceData = response.data.attendance;
+
+          // Convert to format expected by existing components
+          statusData = {
+            userId: attendanceData?.userId,
+            currentlyWorking: attendanceData?.currentlyWorking || false,
+            onBreak: attendanceData?.onBreak || false,
+            workDuration: attendanceData?.workDuration || '0h 0m',
+            breakDuration: attendanceData?.breakDuration || '0h 0m',
+            workDurationSeconds: attendanceData?.workDurationSeconds || 0,
+            breakDurationSeconds: attendanceData?.breakDurationSeconds || 0,
+            arrivalTime: attendanceData?.arrivalTime,
+            isLate: attendanceData?.isLate || false,
+            isPresent: attendanceData?.isPresent || false,
+            timeline: attendanceData?.events?.map(event => {
+              const typeMap = {
+                'PUNCH_IN': 'Punch In',
+                'PUNCH_OUT': 'Punch Out',
+                'BREAK_START': 'Break Start',
+                'BREAK_END': 'Break End'
+              };
+              return {
+                type: typeMap[event.type] || event.type,
+                time: event.timestamp,
+                location: event.location
+              };
+            }) || []
+          };
+        } else {
+          throw new Error('Invalid response from new attendance system');
+        }
+      } else {
+        console.log("📍 AttendancePage: Using legacy attendance system");
+        const response = await apiClient.get('/api/status/today', {
+          params: { _t: Date.now() } // Cache-busting parameter
+        });
+        statusData = response.data;
+      }
+
+      setCurrentStatus(statusData);
+      return statusData;
     } catch (error) {
       console.error('Error fetching current status:', error);
       return null;
     }
-  }, []);
+  }, [USE_NEW_ATTENDANCE_SYSTEM]);
 
   // Fetch team members on leave
   const fetchTeamOnLeave = useCallback(async () => {
@@ -273,20 +321,34 @@ const AttendancePage = ({ onLogout }) => {
         activityEnd.getTime() !== monthEnd.getTime();
 
       // Fetch data - optimize to avoid duplicate calls
-      const fetchPromises = [
+      const fetchPromises = [];
+
+      if (USE_NEW_ATTENDANCE_SYSTEM) {
+        console.log("🆕 AttendancePage: Using new attendance system for data fetching");
+        // Use new attendance system APIs
+        const user = JSON.parse(localStorage.getItem('user') || '{}');
+        fetchPromises.push(
+          // Monthly attendance data
+          newAttendanceService.getEmployeeMonthlyAttendance(user.id || user._id, now.getFullYear(), now.getMonth() + 1),
+          fetchCurrentStatus()
+        );
+      } else {
+        console.log("📍 AttendancePage: Using legacy attendance system");
         // Monthly data for calendar and stats
-        apiClient.get('/api/summary/week', {
-          params: {
-            startDate: monthStart.toISOString(),
-            endDate: monthEnd.toISOString(),
-            _t: Date.now(), // Cache-busting parameter
-          },
-        }),
-        fetchCurrentStatus()
-      ];
+        fetchPromises.push(
+          apiClient.get('/api/summary/week', {
+            params: {
+              startDate: monthStart.toISOString(),
+              endDate: monthEnd.toISOString(),
+              _t: Date.now(), // Cache-busting parameter
+            },
+          }),
+          fetchCurrentStatus()
+        );
+      }
 
       // Only fetch separate activity data if needed
-      if (needSeparateActivityCall) {
+      if (needSeparateActivityCall && !USE_NEW_ATTENDANCE_SYSTEM) {
         fetchPromises.push(
           apiClient.get('/api/summary/week', {
             params: {
@@ -295,6 +357,12 @@ const AttendancePage = ({ onLogout }) => {
               _t: Date.now(), // Cache-busting parameter
             },
           })
+        );
+      } else if (needSeparateActivityCall && USE_NEW_ATTENDANCE_SYSTEM) {
+        // For new system, fetch activity range data
+        const user = JSON.parse(localStorage.getItem('user') || '{}');
+        fetchPromises.push(
+          newAttendanceService.getEmployeeAttendanceRange(user.id || user._id, activityStart, activityEnd)
         );
       }
 
@@ -313,16 +381,99 @@ const AttendancePage = ({ onLogout }) => {
 
       const results = await Promise.all(fetchPromises);
 
-      const weeklyRes = results[0];
-      const statusRes = results[1];
-      let activityRes = weeklyRes; // Default to same data
+      let weeklyRes, statusRes, activityRes;
       let leavesRes = { data: [] };
       let holidaysRes = { data: [] };
 
+      if (USE_NEW_ATTENDANCE_SYSTEM) {
+        // Parse new system responses
+        const monthlyAttendanceRes = results[0];
+        statusRes = results[1];
+
+        // Convert new system response to format expected by existing code
+        if (monthlyAttendanceRes.success && monthlyAttendanceRes.data) {
+          const monthlyData = monthlyAttendanceRes.data;
+          weeklyRes = {
+            data: {
+              dailyData: monthlyData.attendance?.map(day => ({
+                date: day.date,
+                workDurationSeconds: day.calculated?.workDurationSeconds || 0,
+                breakDurationSeconds: day.calculated?.breakDurationSeconds || 0,
+                isAbsent: !day.calculated?.isPresent,
+                isLate: day.calculated?.isLate || false,
+                isHalfDay: day.calculated?.workDurationSeconds < (4 * 3600), // Less than 4 hours
+                isWFH: false, // TODO: Add WFH support in new system
+                arrivalTime: day.calculated?.arrivalTime,
+                timeline: day.events?.map(event => ({
+                  type: event.type === 'PUNCH_IN' ? 'Punch In' :
+                        event.type === 'PUNCH_OUT' ? 'Punch Out' :
+                        event.type === 'BREAK_START' ? 'Break Start' :
+                        event.type === 'BREAK_END' ? 'Break End' : event.type,
+                  time: event.timestamp,
+                  location: event.location
+                })) || []
+              })) || [],
+              weeklySummary: {
+                presentDays: monthlyData.summary?.totalPresent || 0,
+                onTimeRate: Math.round((monthlyData.summary?.onTimeRate || 0) * 100) + '%',
+                quickStats: {
+                  lateArrivals: monthlyData.summary?.totalLate || 0
+                }
+              }
+            }
+          };
+        } else {
+          // Fallback to empty data structure
+          weeklyRes = {
+            data: {
+              dailyData: [],
+              weeklySummary: {
+                presentDays: 0,
+                onTimeRate: '0%',
+                quickStats: { lateArrivals: 0 }
+              }
+            }
+          };
+        }
+        activityRes = weeklyRes; // Use same data for activity
+      } else {
+        // Legacy system
+        weeklyRes = results[0];
+        statusRes = results[1];
+        activityRes = weeklyRes; // Default to same data
+      }
+
       // Parse results based on what was fetched
-      let resultIndex = 2;
+      let resultIndex = USE_NEW_ATTENDANCE_SYSTEM ? 2 : 2;
       if (needSeparateActivityCall) {
-        activityRes = results[resultIndex];
+        const separateActivityRes = results[resultIndex];
+        if (USE_NEW_ATTENDANCE_SYSTEM && separateActivityRes.success && separateActivityRes.data) {
+          // Convert new system activity response
+          activityRes = {
+            data: {
+              dailyData: separateActivityRes.data.attendance?.map(day => ({
+                date: day.date,
+                workDurationSeconds: day.calculated?.workDurationSeconds || 0,
+                breakDurationSeconds: day.calculated?.breakDurationSeconds || 0,
+                isAbsent: !day.calculated?.isPresent,
+                isLate: day.calculated?.isLate || false,
+                isHalfDay: day.calculated?.workDurationSeconds < (4 * 3600),
+                isWFH: false, // TODO: Add WFH support
+                arrivalTime: day.calculated?.arrivalTime,
+                timeline: day.events?.map(event => ({
+                  type: event.type === 'PUNCH_IN' ? 'Punch In' :
+                        event.type === 'PUNCH_OUT' ? 'Punch Out' :
+                        event.type === 'BREAK_START' ? 'Break Start' :
+                        event.type === 'BREAK_END' ? 'Break End' : event.type,
+                  time: event.timestamp,
+                  location: event.location
+                })) || []
+              })) || []
+            }
+          };
+        } else if (!USE_NEW_ATTENDANCE_SYSTEM) {
+          activityRes = separateActivityRes;
+        }
         resultIndex++;
       }
 
@@ -763,7 +914,7 @@ const AttendancePage = ({ onLogout }) => {
             <AlertCircle className="w-12 h-12 text-red-400 mx-auto mb-4" />
             <h3 className="text-red-400 font-semibold mb-2 text-lg">Error Loading Data</h3>
             <p className="text-gray-300 mb-4">{error}</p>
-            <button 
+            <button
               onClick={() => fetchAttendanceData()}
               className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg transition-colors font-medium"
             >
@@ -838,7 +989,7 @@ const AttendancePage = ({ onLogout }) => {
                 </span>
               </div>
             )}
-            
+
             <button
               onClick={handleRefresh}
               disabled={refreshing}
