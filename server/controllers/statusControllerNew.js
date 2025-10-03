@@ -10,7 +10,6 @@ const {
   getUnifiedAttendanceData,
   validateTimelineEvent,
   validatePunchInTime,
-  syncToDailyWorkSafely,
   formatDuration,
   secondsToHours,
   EVENT_TYPES,
@@ -162,13 +161,8 @@ async function updateTodayStatus(req, res) {
     // Save UserStatus
     await userStatus.save();
 
-    // Sync to DailyWork safely
-    try {
-      await syncToDailyWorkSafely(userId, today);
-    } catch (syncError) {
-      console.error("Sync to DailyWork failed:", syncError);
-      // Don't fail the request if sync fails, but log it
-    }
+    // Note: DailyWork sync removed - using new AttendanceRecord system
+    // Data is automatically maintained by the unified attendance service
 
     // Get updated unified attendance data for response
     const updatedData = await getUnifiedAttendanceData(userId, today);
@@ -440,10 +434,11 @@ async function syncDailyWork(req, res) {
     const userId = req.params.userId || req.user._id;
     const date = req.query.date ? new Date(req.query.date) : new Date();
 
-    await syncToDailyWorkSafely(userId, date);
+    // Note: DailyWork sync removed - using new AttendanceRecord system
+    // The unified attendance service automatically maintains data consistency
 
     res.json({
-      message: "Sync completed successfully",
+      message: "Sync completed successfully (no action needed - using new system)",
       userId,
       date: date.toISOString().split('T')[0]
     });

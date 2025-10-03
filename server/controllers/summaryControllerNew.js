@@ -1,7 +1,7 @@
 // controllers/summaryControllerNew.js
 // Refactored summary controller using unified attendance service
 
-const DailyWork = require("../models/DailyWork");
+const AttendanceRecord = require("../models/AttendanceRecord");
 const User = require("../models/User");
 const unifiedAttendanceService = require("../services/unifiedAttendanceService");
 

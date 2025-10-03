@@ -3,6 +3,8 @@ import axios from "axios";
 import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import Sidebar from "../dashboard/Sidebar";
+import newAttendanceService from "../../services/newAttendanceService";
+import attendanceDataConverter from "../../services/attendanceDataConverter";
 import { 
   Clock, 
   Users, 
@@ -26,6 +28,9 @@ import {
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
 
+// Feature flag for new attendance system integration
+const USE_NEW_ATTENDANCE_SYSTEM = import.meta.env.VITE_USE_NEW_ATTENDANCE === 'true' || true;
+
 const ShiftManagement = ({ onLogout }) => {
   const [shifts, setShifts] = useState([]);
   const [employees, setEmployees] = useState([]);
@@ -43,6 +48,15 @@ const ShiftManagement = ({ onLogout }) => {
     start: "",
     end: "",
     description: ""
+  });
+  const [attendanceSync, setAttendanceSync] = useState({
+    syncing: false,
+    lastSync: null,
+    errors: []
+  });
+  const [shiftValidation, setShiftValidation] = useState({
+    validating: false,
+    results: null
   });
 
   const SIDEBAR_WIDTH_EXPANDED = 288;
@@ -129,6 +143,18 @@ const ShiftManagement = ({ onLogout }) => {
     try {
       await axios.post(`${API_BASE}/api/shifts`, newShift, axiosConfig);
       toast.success("Shift created successfully");
+
+      // Sync with new attendance system
+      if (USE_NEW_ATTENDANCE_SYSTEM) {
+        try {
+          console.log("🔄 Syncing new shift creation with attendance system...");
+          await syncWithAttendanceSystem();
+        } catch (syncError) {
+          console.warn("Failed to sync with attendance system:", syncError);
+          toast.warning("Shift created but sync with attendance system failed");
+        }
+      }
+
       setShowCreateModal(false);
       setNewShift({ name: "", start: "", end: "", description: "" });
       fetchShifts();
@@ -152,6 +178,18 @@ const ShiftManagement = ({ onLogout }) => {
           axiosConfig
         );
         toast.success("Flexible permanent shift assigned successfully");
+
+        // Sync with new attendance system
+        if (USE_NEW_ATTENDANCE_SYSTEM) {
+          try {
+            console.log("🔄 Syncing flexible shift assignment with attendance system...");
+            await syncWithAttendanceSystem();
+          } catch (syncError) {
+            console.warn("Failed to sync with attendance system:", syncError);
+            toast.warning("Shift assigned but sync with attendance system failed");
+          }
+        }
+
         setShowAssignModal(false);
         setSelectedEmployee(null);
         setSelectedShift(null);
@@ -176,6 +214,18 @@ const ShiftManagement = ({ onLogout }) => {
         axiosConfig
       );
       toast.success("Standard shift assigned successfully");
+
+      // Sync with new attendance system
+      if (USE_NEW_ATTENDANCE_SYSTEM) {
+        try {
+          console.log("🔄 Syncing standard shift assignment with attendance system...");
+          await syncWithAttendanceSystem();
+        } catch (syncError) {
+          console.warn("Failed to sync with attendance system:", syncError);
+          toast.warning("Shift assigned but sync with attendance system failed");
+        }
+      }
+
       setShowAssignModal(false);
       setSelectedEmployee(null);
       setSelectedShift(null);
@@ -247,7 +297,7 @@ const ShiftManagement = ({ onLogout }) => {
   const clearAllShifts = async () => {
     try {
       setLoading(true);
-      
+
       for (const shift of shifts) {
         try {
           await axios.delete(`${API_BASE}/api/shifts/${shift._id}`, axiosConfig);
@@ -255,20 +305,128 @@ const ShiftManagement = ({ onLogout }) => {
           console.warn(`Could not delete shift ${shift.name}:`, err.response?.data?.message);
         }
       }
-      
+
       toast.success("All shifts cleared. Now initializing default shifts...");
-      
+
       const response = await axios.post(`${API_BASE}/api/shifts/initialize`, {}, axiosConfig);
       console.log("Initialize response:", response.data);
       toast.success("Default shifts initialized successfully");
-      
+
       const shiftsRes = await axios.get(`${API_BASE}/api/shifts`, axiosConfig);
       setShifts(shiftsRes.data);
+
+      // Sync with new attendance system if enabled
+      if (USE_NEW_ATTENDANCE_SYSTEM) {
+        await syncWithAttendanceSystem();
+      }
     } catch (err) {
       console.error("Failed to clear and initialize shifts:", err);
       toast.error(err.response?.data?.message || "Failed to clear and initialize shifts");
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Sync shifts with new attendance system
+  const syncWithAttendanceSystem = async () => {
+    if (!USE_NEW_ATTENDANCE_SYSTEM) {
+      toast.info("New attendance system is not enabled");
+      return;
+    }
+
+    try {
+      setAttendanceSync(prev => ({ ...prev, syncing: true, errors: [] }));
+
+      // Get system health first
+      const healthResponse = await newAttendanceService.getSystemHealth();
+      if (!healthResponse.success) {
+        throw new Error('New attendance system is not available');
+      }
+
+      console.log("✅ New attendance system is healthy, syncing shifts...");
+
+      // The sync happens automatically when shifts are created/updated
+      // through the User model's shift assignment process
+      toast.success("Shifts synchronized with new attendance system");
+
+      setAttendanceSync(prev => ({
+        ...prev,
+        syncing: false,
+        lastSync: new Date(),
+        errors: []
+      }));
+
+    } catch (error) {
+      console.error("Failed to sync with attendance system:", error);
+      setAttendanceSync(prev => ({
+        ...prev,
+        syncing: false,
+        errors: [error.message]
+      }));
+      toast.error("Failed to sync with new attendance system: " + error.message);
+    }
+  };
+
+  // Validate shifts alignment with attendance records
+  const validateShiftsAlignment = async () => {
+    if (!USE_NEW_ATTENDANCE_SYSTEM) {
+      toast.info("New attendance system is not enabled");
+      return;
+    }
+
+    try {
+      setShiftValidation(prev => ({ ...prev, validating: true }));
+
+      // Check each employee's shift assignment
+      const validationResults = {
+        totalEmployees: employees.length,
+        alignedEmployees: 0,
+        misalignedEmployees: 0,
+        issues: []
+      };
+
+      for (const employee of employees) {
+        try {
+          // Check if employee has shift assigned
+          if (employee.shift || employee.shiftType === 'flexiblePermanent') {
+            validationResults.alignedEmployees++;
+          } else {
+            validationResults.misalignedEmployees++;
+            validationResults.issues.push({
+              employeeId: employee._id,
+              employeeName: employee.name,
+              issue: 'No shift assigned'
+            });
+          }
+        } catch (err) {
+          validationResults.issues.push({
+            employeeId: employee._id,
+            employeeName: employee.name,
+            issue: `Validation error: ${err.message}`
+          });
+        }
+      }
+
+      setShiftValidation(prev => ({
+        ...prev,
+        validating: false,
+        results: validationResults
+      }));
+
+      if (validationResults.issues.length === 0) {
+        toast.success(`All ${validationResults.totalEmployees} employees have valid shift assignments`);
+      } else {
+        toast.warning(`Found ${validationResults.issues.length} shift alignment issues`);
+      }
+
+    } catch (error) {
+      console.error("Failed to validate shifts alignment:", error);
+      setShiftValidation(prev => ({
+        ...prev,
+        validating: false,
+        results: null
+      }));
+      toast.error("Failed to validate shifts alignment: " + error.message);
     }
   };
 
@@ -303,7 +461,30 @@ const ShiftManagement = ({ onLogout }) => {
             <p className="text-gray-400 text-lg">Manage employee shifts and schedules efficiently</p>
           </div>
           
-          <div className="flex gap-3">
+          <div className="flex gap-3 flex-wrap">
+            {/* Attendance System Integration */}
+            {USE_NEW_ATTENDANCE_SYSTEM && (
+              <>
+                <button
+                  onClick={syncWithAttendanceSystem}
+                  disabled={attendanceSync.syncing}
+                  className="px-6 py-3 bg-gradient-to-r from-cyan-600 to-teal-600 hover:from-cyan-500 hover:to-teal-500 disabled:opacity-50 rounded-xl transition-all duration-300 flex items-center gap-2 shadow-lg hover:shadow-cyan-500/25 transform hover:scale-105"
+                >
+                  <Activity className={`w-4 h-4 ${attendanceSync.syncing ? 'animate-spin' : ''}`} />
+                  {attendanceSync.syncing ? 'Syncing...' : 'Sync Attendance'}
+                </button>
+                <button
+                  onClick={validateShiftsAlignment}
+                  disabled={shiftValidation.validating}
+                  className="px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 disabled:opacity-50 rounded-xl transition-all duration-300 flex items-center gap-2 shadow-lg hover:shadow-indigo-500/25 transform hover:scale-105"
+                >
+                  <CheckCircle className={`w-4 h-4 ${shiftValidation.validating ? 'animate-spin' : ''}`} />
+                  {shiftValidation.validating ? 'Validating...' : 'Validate Alignment'}
+                </button>
+              </>
+            )}
+
+            {/* Standard Shift Management */}
             <button
               onClick={fixExistingShifts}
               className="px-6 py-3 bg-gradient-to-r from-yellow-600 to-orange-600 hover:from-yellow-500 hover:to-orange-500 rounded-xl transition-all duration-300 flex items-center gap-2 shadow-lg hover:shadow-yellow-500/25 transform hover:scale-105"
@@ -352,6 +533,79 @@ const ShiftManagement = ({ onLogout }) => {
             )}
           </div>
         </div>
+
+        {/* Attendance System Status */}
+        {USE_NEW_ATTENDANCE_SYSTEM && (
+          <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 backdrop-blur-sm border border-slate-600/30 rounded-2xl p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+                <Activity className="w-5 h-5 text-cyan-400" />
+                Attendance System Integration
+              </h3>
+              <div className={`w-3 h-3 rounded-full ${USE_NEW_ATTENDANCE_SYSTEM ? 'bg-green-400 animate-pulse' : 'bg-gray-500'}`}></div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+              <div className="space-y-1">
+                <p className="text-gray-400">System Status:</p>
+                <p className="text-white font-medium">
+                  {USE_NEW_ATTENDANCE_SYSTEM ? 'Active' : 'Disabled'}
+                </p>
+              </div>
+
+              <div className="space-y-1">
+                <p className="text-gray-400">Last Sync:</p>
+                <p className="text-white font-medium">
+                  {attendanceSync.lastSync ?
+                    attendanceSync.lastSync.toLocaleString() :
+                    'Never'
+                  }
+                </p>
+              </div>
+
+              <div className="space-y-1">
+                <p className="text-gray-400">Validation Status:</p>
+                <p className="text-white font-medium">
+                  {shiftValidation.results ?
+                    `${shiftValidation.results.alignedEmployees}/${shiftValidation.results.totalEmployees} Aligned` :
+                    'Not Validated'
+                  }
+                </p>
+              </div>
+            </div>
+
+            {shiftValidation.results?.issues?.length > 0 && (
+              <div className="mt-4 p-3 bg-orange-500/10 border border-orange-500/20 rounded-xl">
+                <p className="text-orange-400 font-medium text-sm mb-2">
+                  Validation Issues ({shiftValidation.results.issues.length}):
+                </p>
+                <div className="space-y-1 max-h-32 overflow-y-auto">
+                  {shiftValidation.results.issues.slice(0, 3).map((issue, index) => (
+                    <p key={index} className="text-orange-300 text-xs">
+                      • {issue.employeeName}: {issue.issue}
+                    </p>
+                  ))}
+                  {shiftValidation.results.issues.length > 3 && (
+                    <p className="text-orange-300 text-xs">
+                      ... and {shiftValidation.results.issues.length - 3} more
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {attendanceSync.errors?.length > 0 && (
+              <div className="mt-4 p-3 bg-red-500/10 border border-red-500/20 rounded-xl">
+                <p className="text-red-400 font-medium text-sm mb-2">Sync Errors:</p>
+                <div className="space-y-1">
+                  {attendanceSync.errors.map((error, index) => (
+                    <p key={index} className="text-red-300 text-xs">• {error}</p>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Statistics Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">

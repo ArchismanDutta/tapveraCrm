@@ -7,11 +7,13 @@ export const formatLocalTime = (isoString) => {
   try {
     const date = new Date(isoString);
     if (isNaN(date.getTime())) return "--";
-    let hours = date.getHours();
-    const minutes = date.getMinutes();
-    const ampm = hours >= 12 ? "PM" : "AM";
-    hours = hours % 12 || 12;
-    return `${hours}:${minutes.toString().padStart(2, "0")} ${ampm}`;
+
+    // Use consistent formatting with the rest of the app
+    return date.toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true,
+    });
   } catch (error) {
     console.error("Error formatting time:", error);
     return "--";

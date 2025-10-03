@@ -31,6 +31,7 @@ const shiftRoutes = require("./routes/shiftRoutes");
 const adminAttendanceRoutes = require("./routes/adminAttendanceRoutes");
 const manualAttendanceRoutes = require("./routes/manualAttendanceRoutes");
 const holidayRoutes = require("./routes/holidayRoutes");
+const newAttendanceRoutes = require("./routes/newAttendanceRoutes"); // New date-centric attendance system
 const superAdminRoutes = require("./routes/superAdminRoutes"); // Make sure this file exists
 const payslipRoutes = require("./routes/payslipRoutes");
 const celebrationRoutes = require("./routes/celebrationRoutes");
@@ -103,6 +104,7 @@ app.use("/api/flexible-shifts", flexibleShiftRoutes);
 app.use("/api/shifts", shiftRoutes);
 app.use("/api/admin", adminAttendanceRoutes);
 app.use("/api/admin/manual-attendance", manualAttendanceRoutes);
+app.use("/api/attendance-new", newAttendanceRoutes); // New date-centric attendance system
 app.use("/api/super-admin", superAdminRoutes); // Super admin route added
 app.use("/api/payslips", payslipRoutes);
 app.use("/api/celebrations", celebrationRoutes);

@@ -129,17 +129,47 @@ const ManualAttendanceManagement = ({ onLogout }) => {
         toast.success("Attendance record deleted successfully");
         fetchRecords();
 
-        // Emit a custom event to notify other components that attendance data has changed
-        // Add a small delay to ensure database transactions are committed
+        // Enhanced event dispatch for real-time sync
         setTimeout(() => {
+          // Main event for legacy compatibility
+          // Find the record being deleted to get employee info
+          const deletedRecord = records.find(r => r._id === id);
+          const employeeId = deletedRecord?.attendanceData?.userId || deletedRecord?.userId;
+
           window.dispatchEvent(new CustomEvent('attendanceDataUpdated', {
             detail: {
               timestamp: Date.now(),
               action: 'delete',
-              forceRefresh: true
+              recordId: id,
+              employeeId: employeeId,
+              userId: employeeId,
+              forceRefresh: true,
+              message: 'Attendance record deleted successfully'
             }
           }));
-        }, 500); // 500ms delay to ensure database consistency
+
+          // Additional events for specific components
+          window.dispatchEvent(new CustomEvent('manualAttendanceUpdated', {
+            detail: {
+              type: 'DELETE',
+              recordId: id,
+              employeeId: employeeId,
+              timestamp: Date.now(),
+              source: 'ManualAttendanceManagement'
+            }
+          }));
+
+          window.dispatchEvent(new CustomEvent('attendanceRecordModified', {
+            detail: {
+              operation: 'DELETE',
+              recordId: id,
+              employeeId: employeeId,
+              timestamp: Date.now()
+            }
+          }));
+
+          console.log('📢 Manual Attendance: Delete events dispatched for record:', id);
+        }, 100); // Reduced delay for faster sync
       } else {
         const error = await response.json();
         toast.error(error.error || "Failed to delete record");
@@ -155,17 +185,40 @@ const ManualAttendanceManagement = ({ onLogout }) => {
     setShowForm(false);
     setEditData(null);
 
-    // Emit a custom event to notify other components that attendance data has changed
-    // Add a small delay to ensure database transactions are committed
+    // Enhanced event dispatch for real-time sync after form success
     setTimeout(() => {
+      // Main event for legacy compatibility
       window.dispatchEvent(new CustomEvent('attendanceDataUpdated', {
         detail: {
           timestamp: Date.now(),
           action: 'form-success',
-          forceRefresh: true
+          employeeId: null, // Will be set by form if available
+          forceRefresh: true,
+          message: editData ? 'Attendance record updated successfully' : 'Attendance record created successfully'
         }
       }));
-    }, 500); // 500ms delay to ensure database consistency
+
+      // Additional events for specific components
+      window.dispatchEvent(new CustomEvent('manualAttendanceUpdated', {
+        detail: {
+          type: editData ? 'UPDATE' : 'CREATE',
+          operation: editData ? 'EDIT' : 'ADD',
+          timestamp: Date.now(),
+          source: 'ManualAttendanceManagement',
+          refreshAll: true
+        }
+      }));
+
+      window.dispatchEvent(new CustomEvent('attendanceRecordModified', {
+        detail: {
+          operation: editData ? 'UPDATE' : 'CREATE',
+          timestamp: Date.now(),
+          requiresFullRefresh: true
+        }
+      }));
+
+      console.log('📢 Manual Attendance: Form success events dispatched');
+    }, 100); // Reduced delay for faster sync
   };
 
   const handleEdit = (record) => {
