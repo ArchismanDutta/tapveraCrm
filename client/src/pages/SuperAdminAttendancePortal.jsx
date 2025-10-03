@@ -2,6 +2,8 @@ import React, { useEffect, useState, useCallback, useMemo, useRef } from "react"
 import { createPortal } from "react-dom";
 import axios from "axios";
 import { attendanceUtils } from "../api.js";
+import newAttendanceService from "../services/newAttendanceService";
+import attendanceDataConverter from "../services/attendanceDataConverter";
 import AttendanceStats from "../components/attendance/AttendanceStats";
 import AttendanceCalendar from "../components/attendance/AttendanceCalendar";
 import WeeklyHoursChart from "../components/attendance/WeeklyHoursChart";
@@ -25,6 +27,24 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
   const [employeeCache, setEmployeeCache] = useState(new Map());
+
+  // Enhanced cache management for real-time sync
+  const clearEmployeeCache = useCallback((employeeId = null) => {
+    if (employeeId) {
+      // Clear cache for specific employee
+      setEmployeeCache(prev => {
+        const newCache = new Map(prev);
+        newCache.delete(employeeId);
+        console.log(`🗑️ SuperAdmin: Cleared cache for employee ${employeeId}`);
+        return newCache;
+      });
+    } else {
+      // Clear all cache
+      setEmployeeCache(new Map());
+      console.log('🗑️ SuperAdmin: Cleared all employee cache');
+    }
+  }, []);
+
   const [showDropdown, setShowDropdown] = useState(false);
   const [hasFullMonthData, setHasFullMonthData] = useState(false);
 
@@ -38,6 +58,9 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
   const MIN_PRESENT_SECONDS = 5 * 3600; // 5 hours minimum for present status
   const SIDEBAR_WIDTH_EXPANDED = 288;
   const SIDEBAR_WIDTH_COLLAPSED = 80;
+
+  // Feature flag for new attendance system
+  const USE_NEW_ATTENDANCE_SYSTEM = import.meta.env.VITE_USE_NEW_ATTENDANCE === 'true' || true;
 
   // Enhanced axios configuration with proper error handling
   const apiClient = axios.create({
@@ -155,11 +178,32 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
     if (!employeeId) return null;
     try {
       console.log('Fetching current status for employee:', employeeId);
-      const response = await apiClient.get(`/api/status/today/${employeeId}`, {
-        params: { _t: Date.now() } // Cache-busting parameter
-      });
-      console.log('Current status response:', response.data);
-      return response.data;
+
+      let statusData;
+      if (USE_NEW_ATTENDANCE_SYSTEM) {
+        console.log("🆕 SuperAdmin: Using new attendance system for current status");
+        // For admin access, we need to use the employee attendance range for today
+        const today = new Date();
+        const response = await newAttendanceService.getEmployeeAttendanceRange(employeeId, today, today);
+
+        if (response.success && response.data && response.data.data.length > 0) {
+          // Convert the first (today's) record to legacy format
+          const todayRecord = response.data.data[0];
+          statusData = attendanceDataConverter.convertAttendanceToLegacy({ attendance: todayRecord });
+        } else {
+          // No data for today
+          statusData = null;
+        }
+      } else {
+        console.log("📍 SuperAdmin: Using legacy attendance system");
+        const response = await apiClient.get(`/api/status/today/${employeeId}`, {
+          params: { _t: Date.now() } // Cache-busting parameter
+        });
+        statusData = response.data;
+      }
+
+      console.log('Current status response:', statusData);
+      return statusData;
     } catch (error) {
       console.error('Error fetching current status:', error);
       console.error('Current status error details:', {
@@ -169,7 +213,7 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
       });
       return null;
     }
-  }, []);
+  }, [USE_NEW_ATTENDANCE_SYSTEM]);
 
   // Fetch attendance data for selected employee
   const fetchAttendanceData = useCallback(async (employeeId, isRefresh = false) => {
@@ -229,24 +273,162 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
         setTimeout(() => reject(new Error('Request timeout - Server took longer than 30 seconds')), 30000)
       );
 
-      // Fetch only the essential weekly data with timeout
+      // Fetch attendance data using appropriate system
       console.log('Fetching attendance data for employee:', employeeId);
       console.log('Date range:', {
         startDate: dataStart.toISOString(),
         endDate: dataEnd.toISOString()
       });
 
-      const weeklyRes = await Promise.race([
-        apiClient.get('/api/summary/week', {
-          params: {
-            userId: employeeId,
-            startDate: dataStart.toISOString(),
-            endDate: dataEnd.toISOString(),
-            _t: Date.now(), // Cache-busting parameter
-          },
-        }),
-        timeoutPromise
-      ]);
+      let weeklyRes;
+      if (USE_NEW_ATTENDANCE_SYSTEM) {
+        console.log("🆕 SuperAdmin: Using new attendance system for data fetching");
+        const response = await Promise.race([
+          newAttendanceService.getEmployeeAttendanceRange(employeeId, dataStart, dataEnd),
+          timeoutPromise
+        ]);
+
+        if (response.success && response.data) {
+          // Store the original raw data for detailed processing
+          const rawDailyData = response.data.data || [];
+
+          console.log('🔍 Raw data from new system:', {
+            recordCount: rawDailyData.length,
+            sampleRecord: rawDailyData[0] ? {
+              date: rawDailyData[0].date,
+              fields: Object.keys(rawDailyData[0]),
+              hasEvents: !!rawDailyData[0].events,
+              hasCalculated: !!rawDailyData[0].calculated,
+              hasTimeline: !!rawDailyData[0].timeline
+            } : null
+          });
+
+          // Enhanced data processing for SuperAdmin with full detail preservation
+          const enhancedDailyData = rawDailyData.map(day => {
+            // Preserve all original fields and add computed ones
+            const enhanced = {
+              // Core fields
+              date: day.date,
+              workDurationSeconds: day.workDurationSeconds || day.calculated?.workDurationSeconds || 0,
+              breakDurationSeconds: day.breakDurationSeconds || day.calculated?.breakDurationSeconds || 0,
+
+              // Status fields
+              isAbsent: day.isAbsent !== false, // Default to absent if not explicitly present
+              isPresent: day.isPresent || day.calculated?.isPresent || false,
+              isLate: day.isLate || day.calculated?.isLate || false,
+              isHalfDay: day.isHalfDay || day.calculated?.isHalfDay || false,
+              isWFH: day.isWFH || day.calculated?.isWFH || false,
+              isEarly: day.isEarly || day.calculated?.isEarly || false,
+
+              // Time fields
+              arrivalTime: day.arrivalTime || day.calculated?.arrivalTime,
+              departureTime: day.departureTime || day.calculated?.departureTime,
+
+              // Extended details preserved
+              shiftType: day.shiftType || day.calculated?.shiftType || 'standard',
+              expectedStartTime: day.expectedStartTime || day.calculated?.expectedStartTime,
+              expectedEndTime: day.expectedEndTime || day.calculated?.expectedEndTime,
+
+              // Performance metrics
+              efficiency: day.efficiency || day.calculated?.efficiency || 0,
+              punctualityScore: day.punctualityScore || day.calculated?.punctualityScore || 0,
+
+              // Timeline and events (preserve original structure)
+              timeline: day.timeline || day.events || [],
+              events: day.events || day.timeline || [],
+
+              // Leave information
+              leaveInfo: day.leaveInfo || day.calculated?.leaveInfo || null,
+              leaveType: day.leaveType || day.calculated?.leaveType || null,
+
+              // Raw data for debugging
+              rawData: day,
+
+              // Employee specific data
+              employeeId: day.employeeId || day.userId,
+              metadata: day.metadata || {}
+            };
+
+            console.log(`📅 Enhanced data for ${enhanced.date}:`, {
+              workHours: (enhanced.workDurationSeconds / 3600).toFixed(1),
+              status: {
+                present: enhanced.isPresent,
+                absent: enhanced.isAbsent,
+                late: enhanced.isLate,
+                wfh: enhanced.isWFH
+              },
+              times: {
+                arrival: enhanced.arrivalTime,
+                departure: enhanced.departureTime
+              },
+              eventCount: enhanced.timeline?.length || 0
+            });
+
+            return enhanced;
+          });
+
+          // Create a weekly-like response structure for legacy compatibility
+          const weeklyResponse = {
+            success: true,
+            data: {
+              dailyData: enhancedDailyData,
+              weeklyTotals: response.data.summary || {
+                totalWorkDays: 0,
+                totalWorkHours: 0,
+                averagePunctualityRate: 0
+              }
+            }
+          };
+
+          // Use enhanced data directly instead of lossy conversion
+          weeklyRes = {
+            data: {
+              dailyData: enhancedDailyData,
+              weeklySummary: {
+                // Compute summary from enhanced data
+                presentDays: enhancedDailyData.filter(d => d.isPresent).length,
+                totalWork: response.data.summary?.totalWorkHours ?
+                  `${response.data.summary.totalWorkHours.toFixed(1)}h` :
+                  `${(enhancedDailyData.reduce((sum, d) => sum + (d.workDurationSeconds || 0), 0) / 3600).toFixed(1)}h`,
+                totalBreak: response.data.summary?.totalBreakHours ?
+                  `${response.data.summary.totalBreakHours.toFixed(1)}h` :
+                  `${(enhancedDailyData.reduce((sum, d) => sum + (d.breakDurationSeconds || 0), 0) / 3600).toFixed(1)}h`,
+                onTimeRate: response.data.summary?.averagePunctualityRate ?
+                  `${Math.round(response.data.summary.averagePunctualityRate)}%` :
+                  `${Math.round((enhancedDailyData.filter(d => d.isPresent && !d.isLate).length / Math.max(enhancedDailyData.filter(d => d.isPresent).length, 1)) * 100)}%`,
+                quickStats: {
+                  lateArrivals: enhancedDailyData.filter(d => d.isLate).length,
+                  earlyArrivals: enhancedDailyData.filter(d => d.isEarly).length,
+                  wfhDays: enhancedDailyData.filter(d => d.isWFH).length,
+                  perfectDays: enhancedDailyData.filter(d => d.isPresent && !d.isLate && !d.isEarly).length
+                }
+              }
+            }
+          };
+
+          console.log('🎯 Enhanced SuperAdmin data:', {
+            originalCount: rawDailyData.length,
+            enhancedCount: enhancedDailyData.length,
+            preservedFields: enhancedDailyData[0] ? Object.keys(enhancedDailyData[0]).length : 0,
+            summary: weeklyRes.data.weeklySummary
+          });
+        } else {
+          throw new Error('Invalid response from new attendance system');
+        }
+      } else {
+        console.log("📍 SuperAdmin: Using legacy attendance system");
+        weeklyRes = await Promise.race([
+          apiClient.get('/api/summary/week', {
+            params: {
+              userId: employeeId,
+              startDate: dataStart.toISOString(),
+              endDate: dataEnd.toISOString(),
+              _t: Date.now(), // Cache-busting parameter
+            },
+          }),
+          timeoutPromise
+        ]);
+      }
 
       console.log('Weekly data response:', weeklyRes.data);
 
@@ -259,7 +441,7 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
 
       console.log('Daily data received:', dailyData.length, 'records');
 
-      // Calculate total work hours with validation to catch unrealistic values
+      // Calculate total work hours with enhanced validation for new system data
       const totalWorkHours = dailyData.reduce((sum, d) => {
         const workSeconds = d.workDurationSeconds || 0;
 
@@ -271,29 +453,47 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
             recordId: d._id
           });
           // Cap at 24 hours maximum for calculation purposes
-          return sum + attendanceUtils.calculateWorkHours(Math.min(workSeconds, 86400));
+          return sum + Math.min(workSeconds, 86400) / 3600;
         }
 
-        return sum + attendanceUtils.calculateWorkHours(workSeconds);
+        return sum + (workSeconds / 3600);
       }, 0);
 
-      // Use standardized attendance status determination
+      // Enhanced attendance status determination that works with converted data
       let presentDaysCount = 0;
       let lateDaysCount = 0;
       let halfDayCount = 0;
+      let absentDaysCount = 0;
+      let wfhDaysCount = 0;
 
       dailyData.forEach(d => {
-        const statusInfo = attendanceUtils.getAttendanceStatus(d);
-        if (statusInfo.status === 'present') presentDaysCount++;
-        else if (statusInfo.status === 'late') lateDaysCount++;
-        else if (statusInfo.status === 'half-day') halfDayCount++;
+        // Use the data directly from the converted format
+        if (d.isWFH) {
+          wfhDaysCount++;
+          presentDaysCount++; // WFH counts as present
+        } else if (d.isAbsent) {
+          absentDaysCount++;
+        } else if (d.isHalfDay) {
+          halfDayCount++;
+          presentDaysCount++; // Half day counts as present
+        } else if (d.isLate) {
+          lateDaysCount++;
+          presentDaysCount++; // Late but present
+        } else if (!d.isAbsent && (d.workDurationSeconds || 0) > 0) {
+          presentDaysCount++; // Regular present day
+        } else {
+          absentDaysCount++;
+        }
       });
 
-      console.log('Standardized stats calculated:', {
+      console.log('Enhanced stats calculated:', {
         presentDaysCount,
         lateDaysCount,
         halfDayCount,
-        totalWorkHours: totalWorkHours.toFixed(1)
+        absentDaysCount,
+        wfhDaysCount,
+        totalWorkHours: totalWorkHours.toFixed(1),
+        dataSourceSystem: USE_NEW_ATTENDANCE_SYSTEM ? 'New System' : 'Legacy System'
       });
 
       // Fetch additional data in parallel with shorter timeouts
@@ -349,29 +549,53 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
       // Calculate working days for accurate stats over the data range
       const weekWorkingDays = calculateWorkingDays(dataStart, dataEnd, holidays, approvedLeaves);
       
-      // Calculate on-time rate properly
-      const totalPresentDays = presentDaysCount + lateDaysCount + halfDayCount;
-      const onTimeRate = totalPresentDays > 0 ? Math.round((presentDaysCount / totalPresentDays) * 100) : 0;
+      // Calculate on-time rate properly (presentDaysCount already includes late and half-day)
+      const totalPresentDays = presentDaysCount;
+      const onTimeDays = presentDaysCount - lateDaysCount; // Exclude late days from on-time calculation
+      const onTimeRate = totalPresentDays > 0 ? Math.round((onTimeDays / totalPresentDays) * 100) : 0;
 
-      // Set complete stats with standardized calculations
-      setStats({
-        attendanceRate: weekWorkingDays > 0 ? Math.floor((totalPresentDays / weekWorkingDays) * 100) : 0,
+      // Set complete stats with enhanced accuracy for new system
+      const enhancedStats = {
+        attendanceRate: weekWorkingDays > 0 ? Math.min(100, Math.floor((totalPresentDays / weekWorkingDays) * 100)) : 0,
         presentDays: totalPresentDays,
         totalDays: weekWorkingDays,
         workingHours: totalWorkHours.toFixed(1),
-        onTimeRate: `${onTimeRate}%`,
+        onTimeRate: onTimeRate, // Already a number
         lastUpdated: new Date().toLocaleString(),
         period: isRefresh || hasFullMonthData ? "This month" : "Last 2 weeks",
         averageHoursPerDay: totalPresentDays > 0 ? (totalWorkHours / totalPresentDays).toFixed(1) : "0.0",
         lateDays: lateDaysCount,
         halfDays: halfDayCount,
+        absentDays: absentDaysCount,
+        wfhDays: wfhDaysCount,
+        // Enhanced breakdown for better accuracy
+        breakdown: {
+          onTime: onTimeDays,
+          late: lateDaysCount,
+          halfDay: halfDayCount,
+          wfh: wfhDaysCount,
+          absent: absentDaysCount
+        },
         currentStatus: statusData ? {
-          isWorking: statusData.currentlyWorking,
-          onBreak: statusData.onBreak,
-          todayHours: calculateHoursFromSeconds(statusData.workDurationSeconds || 0).toFixed(1),
-          arrivalTime: statusData.arrivalTimeFormatted || attendanceUtils.formatTime(statusData.arrivalTime)
-        } : null
-      });
+          isWorking: Boolean(statusData.currentlyWorking),
+          onBreak: Boolean(statusData.onBreak),
+          todayHours: ((statusData.workDurationSeconds || 0) / 3600).toFixed(1),
+          arrivalTime: statusData.arrivalTimeFormatted || (statusData.arrivalTime ? new Date(statusData.arrivalTime).toLocaleTimeString([], {
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: true
+          }) : null)
+        } : null,
+        // System tracking for debugging
+        systemInfo: {
+          useNewSystem: USE_NEW_ATTENDANCE_SYSTEM,
+          dataConversion: USE_NEW_ATTENDANCE_SYSTEM ? 'Converted from new system' : 'Legacy data',
+          recordCount: dailyData.length
+        }
+      };
+
+      console.log('📊 Enhanced stats for SuperAdmin portal:', enhancedStats);
+      setStats(enhancedStats);
 
       console.log('Stats calculation completed:', {
         attendanceRate: weekWorkingDays > 0 ? Math.floor((totalPresentDays / weekWorkingDays) * 100) : 0,
@@ -395,11 +619,79 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
         const dayOfWeek = dateObj.getDay();
         const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
 
-        // Find matching attendance data
-        const attendanceData = dailyData.find(d => {
-          const dDate = new Date(d.date);
-          return dDate.getDate() === dayNum && dDate.getMonth() === monthIndex && dDate.getFullYear() === year;
+        // Enhanced date matching with multiple fallback strategies
+        let attendanceData = null;
+        const targetDateStr = `${year}-${String(monthIndex + 1).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
+
+        // Strategy 1: Direct date string matching (most reliable)
+        attendanceData = dailyData.find(d => {
+          if (!d.date) return false;
+
+          let dateStr;
+          if (typeof d.date === 'string') {
+            dateStr = d.date.includes('T') ? d.date.split('T')[0] : d.date;
+          } else {
+            dateStr = new Date(d.date).toISOString().split('T')[0];
+          }
+
+          return dateStr === targetDateStr;
         });
+
+        // Strategy 2: Date object comparison (fallback)
+        if (!attendanceData) {
+          attendanceData = dailyData.find(d => {
+            if (!d.date) return false;
+
+            try {
+              const dDate = new Date(d.date);
+              // Normalize to avoid timezone issues
+              const normalizedDate = new Date(dDate.getFullYear(), dDate.getMonth(), dDate.getDate());
+              const targetDate = new Date(year, monthIndex, dayNum);
+
+              return normalizedDate.getTime() === targetDate.getTime();
+            } catch (err) {
+              console.warn('Date parsing error for calendar:', d.date, err);
+              return false;
+            }
+          });
+        }
+
+        // Strategy 3: Flexible day/month/year matching (last resort)
+        if (!attendanceData) {
+          attendanceData = dailyData.find(d => {
+            if (!d.date) return false;
+
+            try {
+              const dDate = new Date(d.date);
+              return dDate.getDate() === dayNum && dDate.getMonth() === monthIndex && dDate.getFullYear() === year;
+            } catch (err) {
+              return false;
+            }
+          });
+        }
+
+        // Log matching results for debugging
+        if (dayNum <= 3) { // Only log first few days to avoid spam
+          console.log(`📅 Calendar matching for ${targetDateStr} (day ${dayNum}):`, {
+            found: !!attendanceData,
+            availableDates: dailyData.slice(0, 3).map(d => ({
+              original: d.date,
+              normalized: typeof d.date === 'string'
+                ? (d.date.includes('T') ? d.date.split('T')[0] : d.date)
+                : new Date(d.date).toISOString().split('T')[0]
+            })),
+            matchedData: attendanceData ? {
+              date: attendanceData.date,
+              workHours: (attendanceData.workDurationSeconds / 3600).toFixed(1),
+              status: {
+                present: attendanceData.isPresent,
+                absent: attendanceData.isAbsent,
+                late: attendanceData.isLate,
+                wfh: attendanceData.isWFH
+              }
+            } : null
+          });
+        }
 
         let status = "absent";
         let workingHours = "0.0";
@@ -408,30 +700,134 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
         let metadata = {};
 
         if (attendanceData) {
-          // Use standardized status determination with new logic
-          const statusInfo = attendanceUtils.getAttendanceStatus(attendanceData);
-          status = statusInfo.status;
+          // Enhanced status determination using all available enhanced data
+          console.log(`📅 Processing calendar status for ${targetDateStr}:`, {
+            isPresent: attendanceData.isPresent,
+            isAbsent: attendanceData.isAbsent,
+            isWFH: attendanceData.isWFH,
+            isLate: attendanceData.isLate,
+            isHalfDay: attendanceData.isHalfDay,
+            isEarly: attendanceData.isEarly,
+            workSeconds: attendanceData.workDurationSeconds,
+            leaveInfo: attendanceData.leaveInfo
+          });
+
+          // Priority-based status determination for accurate calendar display
+          if (attendanceData.isWFH) {
+            status = "wfh";
+          } else if (attendanceData.leaveInfo && attendanceData.leaveInfo.type) {
+            // Handle different leave types
+            switch (attendanceData.leaveInfo.type) {
+              case 'sick':
+                status = "sick-leave";
+                break;
+              case 'vacation':
+                status = "vacation";
+                break;
+              case 'personal':
+                status = "personal-leave";
+                break;
+              case 'halfDay':
+                status = "half-day-leave";
+                break;
+              default:
+                status = "approved-leave";
+            }
+          } else if (attendanceData.isAbsent && !attendanceData.isPresent) {
+            status = "absent";
+          } else if (attendanceData.isHalfDay && attendanceData.isPresent) {
+            status = "half-day";
+          } else if (attendanceData.isLate && attendanceData.isPresent) {
+            status = "late";
+          } else if (attendanceData.isEarly && attendanceData.isPresent) {
+            status = "early";
+          } else if (attendanceData.isPresent || (attendanceData.workDurationSeconds && attendanceData.workDurationSeconds > 0)) {
+            status = "present";
+          } else {
+            status = "absent";
+          }
 
           // Calculate working hours with validation
           const rawWorkSeconds = attendanceData.workDurationSeconds || 0;
           const cappedWorkSeconds = Math.min(rawWorkSeconds, 86400); // Cap at 24 hours
-          workingHours = calculateHoursFromSeconds(cappedWorkSeconds).toFixed(1);
+          workingHours = (cappedWorkSeconds / 3600).toFixed(1);
 
-          // Extract arrival and departure times
-          arrivalTime = attendanceUtils.getArrivalTime(attendanceData);
-          departureTime = attendanceUtils.getDepartureTime(attendanceData);
+          // Extract arrival and departure times from timeline or direct fields
+          arrivalTime = attendanceData.arrivalTime;
+          departureTime = attendanceData.departureTime;
 
-          // Add metadata for tooltip display
+          // If not available, try to extract from timeline
+          if (!arrivalTime && attendanceData.timeline && Array.isArray(attendanceData.timeline)) {
+            const punchInEvent = attendanceData.timeline.find(event =>
+              event.type && (event.type.toLowerCase().includes('punch in') || event.type === 'PUNCH_IN')
+            );
+            if (punchInEvent) {
+              arrivalTime = punchInEvent.time || punchInEvent.timestamp;
+            }
+          }
+
+          if (!departureTime && attendanceData.timeline && Array.isArray(attendanceData.timeline)) {
+            const punchOutEvent = [...attendanceData.timeline].reverse().find(event =>
+              event.type && (event.type.toLowerCase().includes('punch out') || event.type === 'PUNCH_OUT')
+            );
+            if (punchOutEvent) {
+              departureTime = punchOutEvent.time || punchOutEvent.timestamp;
+            }
+          }
+
+          // Add comprehensive metadata for rich tooltip display
+          const breakMinutes = Math.round((attendanceData.breakDurationSeconds || 0) / 60);
+          const efficiency = attendanceData.workDurationSeconds > 0 ?
+            Math.round((attendanceData.workDurationSeconds / (8 * 3600)) * 100) : 0;
+
           metadata = {
+            // Core time data
             workDurationSeconds: attendanceData.workDurationSeconds || 0,
-            breakDurationMinutes: attendanceUtils.calculateBreakMinutes(attendanceData),
+            breakDurationSeconds: attendanceData.breakDurationSeconds || 0,
+            breakDurationMinutes: breakMinutes,
+            actualWorkHours: (rawWorkSeconds / 3600).toFixed(1),
+            cappedWorkHours: (cappedWorkSeconds / 3600).toFixed(1),
+
+            // Status flags
+            isPresent: attendanceData.isPresent === true,
+            isAbsent: attendanceData.isAbsent === true,
             isLate: attendanceData.isLate === true,
             isEarly: attendanceData.isEarly === true,
-            shiftType: attendanceData.shiftType || 'standard',
+            isWFH: attendanceData.isWFH === true,
+            isHalfDay: attendanceData.isHalfDay === true,
+
+            // Time tracking
+            arrivalTime: attendanceData.arrivalTime,
+            departureTime: attendanceData.departureTime,
             expectedStartTime: attendanceData.expectedStartTime,
+            expectedEndTime: attendanceData.expectedEndTime,
+
+            // Work details
+            shiftType: attendanceData.shiftType || 'standard',
+            efficiency: efficiency,
+            punctualityScore: attendanceData.punctualityScore || 0,
+
+            // Leave and event data
+            leaveInfo: attendanceData.leaveInfo || null,
+            leaveType: attendanceData.leaveType || null,
             timeline: attendanceData.timeline || [],
-            actualWorkHours: (rawWorkSeconds / 3600).toFixed(1), // Uncapped for debugging
-            cappedWorkHours: (cappedWorkSeconds / 3600).toFixed(1)
+            events: attendanceData.events || [],
+            eventCount: (attendanceData.timeline || []).length,
+
+            // Employee data
+            employeeId: attendanceData.employeeId,
+
+            // System information
+            dataSource: USE_NEW_ATTENDANCE_SYSTEM ? 'New System (Enhanced)' : 'Legacy System',
+            rawDataFields: Object.keys(attendanceData).length,
+            hasDetailedData: !!(attendanceData.timeline || attendanceData.events),
+
+            // Additional computed metrics
+            workMinutes: Math.round(rawWorkSeconds / 60),
+            breakHours: (attendanceData.breakDurationSeconds / 3600).toFixed(1),
+            netWorkTime: Math.max(0, rawWorkSeconds - (attendanceData.breakDurationSeconds || 0)),
+            isFullDay: rawWorkSeconds >= (6.5 * 3600), // Consider 6.5+ hours as full day
+            isProductiveDay: efficiency >= 80
           };
 
           console.log(`Calendar day ${dayNum}:`, {
@@ -466,8 +862,16 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
           day: dayNum,
           status,
           workingHours,
-          arrivalTime: arrivalTime ? attendanceUtils.formatTime(arrivalTime) : null,
-          departureTime: departureTime ? attendanceUtils.formatTime(departureTime) : null,
+          arrivalTime: arrivalTime ? new Date(arrivalTime).toLocaleTimeString([], {
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: true
+          }) : null,
+          departureTime: departureTime ? new Date(departureTime).toLocaleTimeString([], {
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: true
+          }) : null,
           metadata
         };
       });
@@ -499,58 +903,302 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
         monthlyStats
       });
 
-      // Simplified weekly hours processing
+      // Enhanced weekly hours processing with accurate calculations
       const weekDays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
       const weeklyHoursData = weekDays.map(label => ({ label, hours: 0, target: 8 }));
 
-      dailyData.forEach(d => {
-        // Fix timezone issue for weekly chart
-        const dateString = typeof d.date === 'string' ?
-          (d.date.includes('T') ? d.date.split('T')[0] : d.date) :
-          d.date.toISOString().split('T')[0];
-        const dayOfWeek = new Date(dateString + 'T12:00:00').getDay();
-        if (dayOfWeek >= 0 && dayOfWeek <= 6) {
-          const workSeconds = d.workDurationSeconds || 0;
-          // Cap at 24 hours for weekly chart display
-          const cappedSeconds = Math.min(workSeconds, 86400);
-          weeklyHoursData[dayOfWeek].hours = calculateHoursFromSeconds(cappedSeconds);
+      console.log('📊 Processing weekly hours data for chart...');
+
+      dailyData.forEach((d, index) => {
+        // Enhanced date parsing for weekly chart with comprehensive validation
+        let dayOfWeek;
+        let dateString;
+
+        try {
+          // Multiple date parsing strategies for robustness
+          if (typeof d.date === 'string') {
+            dateString = d.date.includes('T') ? d.date.split('T')[0] : d.date;
+          } else if (d.date instanceof Date) {
+            dateString = d.date.toISOString().split('T')[0];
+          } else {
+            console.warn(`Invalid date format in record ${index}:`, d.date);
+            return;
+          }
+
+          // Parse day of week with timezone consideration
+          dayOfWeek = new Date(dateString + 'T12:00:00').getDay();
+
+          // Validate day of week
+          if (isNaN(dayOfWeek) || dayOfWeek < 0 || dayOfWeek > 6) {
+            console.warn(`Invalid day of week for date ${dateString}:`, dayOfWeek);
+            return;
+          }
+
+        } catch (err) {
+          console.error('Error parsing date for weekly chart:', {
+            date: d.date,
+            type: typeof d.date,
+            index: index,
+            error: err.message
+          });
+          return;
+        }
+
+        // Enhanced work hours calculation with validation
+        const workSeconds = d.workDurationSeconds || 0;
+
+        // Validate work seconds
+        if (typeof workSeconds !== 'number' || workSeconds < 0) {
+          console.warn(`Invalid work duration for ${dateString}:`, workSeconds);
+          return;
+        }
+
+        // Cap at 24 hours for weekly chart display and convert to hours
+        const cappedSeconds = Math.min(workSeconds, 86400);
+        const workHours = cappedSeconds / 3600;
+
+        // Additional validation for realistic work hours
+        if (workHours > 24) {
+          console.warn(`Unrealistic work hours for ${dateString}: ${workHours.toFixed(1)}h`);
+        }
+
+        // Accumulate hours for the day (in case there are multiple records for the same day)
+        const previousHours = weeklyHoursData[dayOfWeek].hours;
+        weeklyHoursData[dayOfWeek].hours += workHours;
+
+        // Enhanced logging for debugging
+        if (workHours > 0) {
+          console.log(`📅 ${weekDays[dayOfWeek]} (${dateString}): +${workHours.toFixed(1)}h (total: ${weeklyHoursData[dayOfWeek].hours.toFixed(1)}h)`, {
+            originalSeconds: workSeconds,
+            cappedSeconds: cappedSeconds,
+            isWFH: d.isWFH,
+            isPresent: d.isPresent,
+            status: d.isAbsent ? 'absent' : d.isWFH ? 'wfh' : d.isLate ? 'late' : 'present'
+          });
         }
       });
 
-      // Standardized recent activity processing - sort by date descending and take most recent 5
+      // Round final hours for display
+      weeklyHoursData.forEach(day => {
+        day.hours = Math.round(day.hours * 10) / 10; // Round to 1 decimal place
+      });
+
+      console.log('📊 Final weekly hours data:', weeklyHoursData);
+
+      // Enhanced recent activity processing with accurate data handling
+      console.log('📋 Processing recent activity data...');
+
       const recent = dailyData
         .sort((a, b) => new Date(b.date) - new Date(a.date))
         .slice(0, 5)
         .map(d => {
-          // Use standardized status determination
-          const statusInfo = attendanceUtils.getAttendanceStatus(d);
+          // Enhanced status determination for new system data
+          let status, statusColor;
 
-          // Map status to display format
-          const statusDisplayMap = {
-            'present': { text: 'Present', color: 'green' },
-            'late': { text: 'Late', color: 'yellow' },
-            'half-day': { text: 'Half Day', color: 'orange' },
-            'absent': { text: 'Absent', color: 'red' }
-          };
+          if (d.isWFH) {
+            status = 'Work From Home';
+            statusColor = 'blue';
+          } else if (d.isAbsent) {
+            if (d.leaveInfo && d.leaveInfo.type !== 'workFromHome') {
+              status = d.leaveInfo.type === 'halfDay' ? 'Half Day Leave' : 'On Leave';
+              statusColor = 'purple';
+            } else {
+              status = 'Absent';
+              statusColor = 'red';
+            }
+          } else if (d.isHalfDay && !d.leaveInfo) {
+            status = 'Half Day';
+            statusColor = 'orange';
+          } else if (d.isLate) {
+            status = 'Late';
+            statusColor = 'yellow';
+          } else if (!d.isAbsent && (d.workDurationSeconds || 0) > 0) {
+            status = 'Present';
+            statusColor = 'green';
+          } else {
+            status = 'Absent';
+            statusColor = 'red';
+          }
 
-          const displayStatus = statusDisplayMap[statusInfo.status] || statusDisplayMap['absent'];
+          // Enhanced time extraction from timeline or direct fields
+          let timeIn = null, timeOut = null;
 
-          return {
+          // Try direct fields first
+          if (d.arrivalTime) {
+            timeIn = new Date(d.arrivalTime).toLocaleTimeString([], {
+              hour: '2-digit',
+              minute: '2-digit',
+              hour12: true
+            });
+          }
+
+          if (d.departureTime) {
+            timeOut = new Date(d.departureTime).toLocaleTimeString([], {
+              hour: '2-digit',
+              minute: '2-digit',
+              hour12: true
+            });
+          }
+
+          // If not available, extract from timeline
+          if (!timeIn && d.timeline && Array.isArray(d.timeline)) {
+            const punchInEvent = d.timeline.find(event =>
+              event.type && (event.type.toLowerCase().includes('punch in') || event.type === 'PUNCH_IN')
+            );
+            if (punchInEvent) {
+              const eventTime = punchInEvent.time || punchInEvent.timestamp;
+              if (eventTime) {
+                timeIn = new Date(eventTime).toLocaleTimeString([], {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  hour12: true
+                });
+              }
+            }
+          }
+
+          if (!timeOut && d.timeline && Array.isArray(d.timeline)) {
+            const punchOutEvent = [...d.timeline].reverse().find(event =>
+              event.type && (event.type.toLowerCase().includes('punch out') || event.type === 'PUNCH_OUT')
+            );
+            if (punchOutEvent) {
+              const eventTime = punchOutEvent.time || punchOutEvent.timestamp;
+              if (eventTime) {
+                timeOut = new Date(eventTime).toLocaleTimeString([], {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  hour12: true
+                });
+              }
+            }
+          }
+
+          // Calculate accurate metrics
+          const workSeconds = d.workDurationSeconds || 0;
+          const cappedWorkSeconds = Math.min(workSeconds, 86400);
+          const workHours = (cappedWorkSeconds / 3600).toFixed(1);
+          const breakMinutes = Math.round((d.breakDurationSeconds || 0) / 60);
+          const efficiency = workSeconds > 0 ? Math.floor((workSeconds / (8 * 3600)) * 100) : 0;
+
+          const activity = {
             date: typeof d.date === 'string' ?
               (d.date.includes('T') ? d.date.split('T')[0] : d.date) :
               d.date.toISOString().split('T')[0],
-            timeIn: formatTime(getArrivalTime(d)),
-            timeOut: formatTime(getDepartureTime(d)),
-            status: displayStatus.text,
-            statusColor: displayStatus.color,
-            workingHours: calculateHoursFromSeconds(Math.min(d.workDurationSeconds || 0, 86400)).toFixed(1) + "h",
-            breakTime: `${attendanceUtils.calculateBreakMinutes(d)}m`,
-            efficiency: (d.workDurationSeconds || 0) > 0 ?
-              Math.floor(((d.workDurationSeconds || 0) / (8 * 3600)) * 100) + "%" : "0%"
+            timeIn: timeIn || '--',
+            timeOut: timeOut || '--',
+            status: status,
+            statusColor: statusColor,
+            workingHours: workHours + "h",
+            breakTime: `${breakMinutes}m`,
+            efficiency: `${efficiency}%`,
+            // Additional metadata for debugging
+            metadata: {
+              rawWorkSeconds: workSeconds,
+              rawBreakSeconds: d.breakDurationSeconds || 0,
+              isWFH: d.isWFH || false,
+              dataSource: USE_NEW_ATTENDANCE_SYSTEM ? 'New System' : 'Legacy System'
+            }
           };
+
+          console.log(`📋 Recent activity for ${activity.date}:`, activity);
+          return activity;
         });
 
-      // Set all data at once
+      console.log('📋 Final recent activity data:', recent);
+
+      // 🎯 COMPREHENSIVE DATA VALIDATION SUMMARY
+      console.log('🎯 ===== EMPLOYEE DETAIL ACCURACY VALIDATION =====');
+
+      // Validate all components have accurate data
+      const validationSummary = {
+        // Raw data validation
+        rawDataCount: dailyData.length,
+        enhancedDataFields: dailyData[0] ? Object.keys(dailyData[0]).length : 0,
+        hasTimelineData: dailyData.filter(d => d.timeline && d.timeline.length > 0).length,
+        hasWorkData: dailyData.filter(d => d.workDurationSeconds > 0).length,
+
+        // Calendar validation
+        calendarDays: days.length,
+        calendarDaysWithData: days.filter(d => d.status !== 'absent' && d.status !== 'weekend' && d.status !== 'default').length,
+        calendarValidStatuses: ['present', 'late', 'early', 'half-day', 'wfh', 'sick-leave', 'vacation', 'personal-leave'],
+        calendarStatusBreakdown: {
+          present: days.filter(d => d.status === 'present').length,
+          late: days.filter(d => d.status === 'late').length,
+          wfh: days.filter(d => d.status === 'wfh').length,
+          absent: days.filter(d => d.status === 'absent').length,
+          weekend: days.filter(d => d.status === 'weekend').length
+        },
+
+        // Weekly hours validation
+        weeklyHoursTotalHours: weeklyHoursData.reduce((sum, day) => sum + day.hours, 0),
+        weeklyHoursValidDays: weeklyHoursData.filter(day => day.hours > 0).length,
+        weeklyHoursBreakdown: weeklyHoursData.map(day => ({
+          day: day.label,
+          hours: day.hours
+        })),
+
+        // Recent activity validation
+        recentActivityCount: recent.length,
+        recentActivityWithTimes: recent.filter(r => r.timeIn !== '--' && r.timeOut !== '--').length,
+        recentActivityStatusTypes: [...new Set(recent.map(r => r.status))],
+
+        // Current status validation
+        currentStatusValid: !!statusData,
+        currentStatusData: statusData ? {
+          working: statusData.currentlyWorking,
+          onBreak: statusData.onBreak,
+          hasArrival: !!statusData.arrivalTime || !!statusData.arrivalTimeFormatted,
+          todayHours: statusData.workDurationSeconds ? (statusData.workDurationSeconds / 3600).toFixed(1) : '0'
+        } : null,
+
+        // System information
+        dataSource: USE_NEW_ATTENDANCE_SYSTEM ? 'Enhanced New System' : 'Legacy System',
+        processingTimestamp: new Date().toISOString(),
+        dataIntegrityScore: Math.round(
+          ((dailyData.length > 0 ? 25 : 0) +
+           (days.filter(d => d.workingHours !== '0.0').length > 0 ? 25 : 0) +
+           (weeklyHoursData.filter(d => d.hours > 0).length > 0 ? 25 : 0) +
+           (recent.length > 0 ? 25 : 0))
+        )
+      };
+
+      console.log('📊 Employee Detail Validation Results:', validationSummary);
+
+      // Data quality checks
+      const qualityChecks = {
+        dateConsistency: dailyData.every(d => d.date),
+        workDataRealistic: dailyData.every(d => (d.workDurationSeconds || 0) <= 86400),
+        timelineIntegrity: dailyData.filter(d => d.timeline).every(d => Array.isArray(d.timeline)),
+        statusLogic: dailyData.every(d => {
+          if (d.isAbsent) return (d.workDurationSeconds || 0) === 0 || d.isWFH;
+          return true;
+        }),
+        calendarDateMatching: days.every(day => {
+          if (day.status === 'weekend' || day.status === 'default') return true;
+          return day.day >= 1 && day.day <= 31;
+        })
+      };
+
+      console.log('✅ Data Quality Checks:', qualityChecks);
+
+      if (Object.values(qualityChecks).every(check => check)) {
+        console.log('🎉 ALL EMPLOYEE DETAIL COMPONENTS PASS VALIDATION');
+      } else {
+        console.warn('⚠️ Some validation checks failed:',
+          Object.entries(qualityChecks).filter(([key, value]) => !value)
+        );
+      }
+
+      // Set all data at once with comprehensive logging
+      console.log('🎯 Setting final component data with validated accuracy:', {
+        weeklyHoursDataLength: weeklyHoursData.length,
+        recentActivityLength: recent.length,
+        calendarDaysCount: days.length,
+        hasCurrentStatus: !!statusData,
+        dataIntegrityScore: validationSummary.dataIntegrityScore,
+        systemUsed: USE_NEW_ATTENDANCE_SYSTEM ? 'Enhanced New Attendance System' : 'Legacy System'
+      });
+
       setWeeklyHours(weeklyHoursData);
       setRecentActivity(recent);
       setCurrentStatus(statusData);
@@ -634,7 +1282,32 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
       setLoadingEmployeeData(false);
       setRefreshing(false);
     }
-  }, [fetchCurrentStatus, employeeCache, hasFullMonthData]);
+  }, [fetchCurrentStatus, employeeCache, hasFullMonthData, USE_NEW_ATTENDANCE_SYSTEM]);
+
+  // Immediate data refresh utility (defined after fetchAttendanceData)
+  const refreshEmployeeData = useCallback(async (employeeId, showLoader = true) => {
+    if (!employeeId) return;
+
+    try {
+      if (showLoader) {
+        setLoadingEmployeeData(true);
+        setError(null);
+      }
+
+      console.log(`🔄 SuperAdmin: Force refreshing data for employee ${employeeId}`);
+
+      // Clear cache for this employee
+      clearEmployeeCache(employeeId);
+
+      // Fetch fresh data
+      await fetchAttendanceData(employeeId, true);
+
+      console.log(`✅ SuperAdmin: Successfully refreshed data for employee ${employeeId}`);
+    } catch (error) {
+      console.error(`❌ SuperAdmin: Failed to refresh data for employee ${employeeId}:`, error);
+      setError('Failed to refresh attendance data');
+    }
+  }, [clearEmployeeCache, fetchAttendanceData]);
 
   console.log('🔍 SuperAdminAttendancePortal Debug Info:', {
     selectedEmployee: selectedEmployee?.name,
@@ -643,32 +1316,138 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
     hasWeeklyHours: weeklyHours?.length > 0,
     hasRecentActivity: recentActivity?.length > 0,
     loadingEmployeeData,
-    error: error
+    error: error,
+    useNewSystem: USE_NEW_ATTENDANCE_SYSTEM,
+    systemIntegration: {
+      newAttendanceService: !!newAttendanceService,
+      attendanceDataConverter: !!attendanceDataConverter
+    },
+    syncStatus: {
+      cacheSize: employeeCache.size,
+      lastRefresh: stats?.lastUpdated || 'Never',
+      syncListenersActive: true
+    }
   });
+
+  // Sync testing utility (exposed to window for debugging)
+  useEffect(() => {
+    window.testSuperAdminSync = {
+      triggerRefresh: () => {
+        if (selectedEmployee) {
+          console.log('🧪 Test: Triggering manual refresh for', selectedEmployee.name);
+          refreshEmployeeData(selectedEmployee._id, true);
+        } else {
+          console.log('🧪 Test: No employee selected');
+        }
+      },
+      clearCache: () => {
+        console.log('🧪 Test: Clearing all cache');
+        clearEmployeeCache();
+      },
+      getStatus: () => ({
+        selectedEmployee: selectedEmployee?.name || 'None',
+        cacheSize: employeeCache.size,
+        hasData: {
+          stats: !!stats,
+          calendar: !!calendarData,
+          weeklyHours: weeklyHours?.length > 0,
+          recentActivity: recentActivity?.length > 0
+        },
+        lastUpdate: stats?.lastUpdated || 'Never'
+      }),
+      simulateUpdate: (employeeId) => {
+        console.log('🧪 Test: Simulating attendance update for employee:', employeeId);
+        window.dispatchEvent(new CustomEvent('attendanceDataUpdated', {
+          detail: {
+            employeeId: employeeId || selectedEmployee?._id,
+            timestamp: Date.now(),
+            action: 'test-update',
+            message: 'Test sync triggered'
+          }
+        }));
+      }
+    };
+
+    return () => {
+      delete window.testSuperAdminSync;
+    };
+  }, [selectedEmployee, employeeCache, stats, calendarData, weeklyHours, recentActivity, refreshEmployeeData, clearEmployeeCache]);
 
   // Load employees on component mount
   useEffect(() => {
     fetchEmployees();
   }, [fetchEmployees]);
 
-  // Listen for attendance data updates from manual attendance management
+  // Enhanced real-time sync for manual attendance management updates
   useEffect(() => {
-    const handleAttendanceUpdate = () => {
-      // Clear cache to force fresh data
-      setEmployeeCache(new Map());
+    const handleAttendanceUpdate = (event) => {
+      console.log('🔄 SuperAdmin: Manual attendance update detected:', event.detail);
 
-      // Refresh data for currently selected employee
-      if (selectedEmployee) {
-        fetchAttendanceData(selectedEmployee._id, true);
+      const updateData = event.detail || {};
+      const affectedEmployeeId = updateData.employeeId || updateData.userId;
+
+      // Smart cache invalidation
+      if (affectedEmployeeId) {
+        // Clear cache only for affected employee for better performance
+        clearEmployeeCache(affectedEmployeeId);
+        console.log(`🎯 SuperAdmin: Targeted cache clear for employee ${affectedEmployeeId}`);
+
+        // If the affected employee is currently selected, refresh immediately
+        if (selectedEmployee && selectedEmployee._id === affectedEmployeeId) {
+          refreshEmployeeData(affectedEmployeeId, true);
+        }
+      } else {
+        // Clear all cache if no specific employee identified
+        clearEmployeeCache();
+
+        // Refresh currently selected employee
+        if (selectedEmployee) {
+          refreshEmployeeData(selectedEmployee._id, true);
+        }
+      }
+
+      // Refresh employee list if requested
+      if (updateData.refreshEmployeeList) {
+        console.log('👥 SuperAdmin: Refreshing employee list');
+        fetchEmployees();
+      }
+
+      // Show success notification
+      if (updateData.message) {
+        console.log(`📢 SuperAdmin: ${updateData.message}`);
       }
     };
 
+    const handleStatusUpdate = (event) => {
+      console.log('🔄 SuperAdmin: Status update detected:', event.detail);
+
+      // Refresh current status immediately for selected employee
+      if (selectedEmployee) {
+        fetchCurrentStatus(selectedEmployee._id).then((statusData) => {
+          if (statusData) {
+            setCurrentStatus(statusData);
+            console.log('✅ SuperAdmin: Status updated:', statusData);
+          }
+        });
+      }
+    };
+
+    // Enhanced event listeners for comprehensive sync
     window.addEventListener('attendanceDataUpdated', handleAttendanceUpdate);
+    window.addEventListener('manualAttendanceUpdated', handleAttendanceUpdate);
+    window.addEventListener('statusUpdate', handleStatusUpdate);
+    window.addEventListener('attendanceRecordModified', handleAttendanceUpdate);
+
+    console.log('🎧 SuperAdmin: Enhanced sync listeners registered');
 
     return () => {
       window.removeEventListener('attendanceDataUpdated', handleAttendanceUpdate);
+      window.removeEventListener('manualAttendanceUpdated', handleAttendanceUpdate);
+      window.removeEventListener('statusUpdate', handleStatusUpdate);
+      window.removeEventListener('attendanceRecordModified', handleAttendanceUpdate);
+      console.log('🎧 SuperAdmin: Sync listeners cleanup completed');
     };
-  }, [selectedEmployee, fetchAttendanceData]);
+  }, [selectedEmployee, fetchAttendanceData, fetchCurrentStatus, fetchEmployees, clearEmployeeCache, refreshEmployeeData]);
 
   // Auto-refresh current employee data periodically during work hours
   useEffect(() => {

@@ -29,13 +29,13 @@ router.get(
   statusControllerNew.getEmployeeTodayStatus
 );
 
-// Manual sync to DailyWork (admin only)
-router.post(
-  '/status/sync/:userId?',
-  protect,
-  authorize('admin', 'super-admin', 'hr'),
-  statusControllerNew.syncDailyWork
-);
+// Manual sync to DailyWork (admin only) - DISABLED: DailyWork removed
+// router.post(
+//   '/status/sync/:userId?',
+//   protect,
+//   authorize('admin', 'super-admin', 'hr'),
+//   statusControllerNew.syncDailyWork
+// );
 
 // ======================
 // Summary Routes (Employee & Admin)

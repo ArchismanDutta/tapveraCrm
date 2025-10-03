@@ -3,7 +3,8 @@
 
 const User = require("../models/User");
 const UserStatus = require("../models/UserStatus");
-const DailyWork = require("../models/DailyWork");
+// const DailyWork = require("../models/DailyWork"); // REMOVED - Using new AttendanceRecord system
+const AttendanceRecord = require("../models/AttendanceRecord");
 const LeaveRequest = require("../models/LeaveRequest");
 const FlexibleShiftRequest = require("../models/FlexibleShiftRequest");
 
@@ -574,64 +575,11 @@ async function checkLeaveStatus(userId, date) {
 }
 
 /**
- * Sync UserStatus to DailyWork with transactional safety
- * This ensures data consistency between the two models
+ * DEPRECATED: syncToDailyWorkSafely function removed
+ * DailyWork model has been replaced with AttendanceRecord system
+ * Use AttendanceService.recordPunchEvent() instead
  */
-async function syncToDailyWorkSafely(userId, date = null) {
-  const session = await UserStatus.startSession();
-
-  try {
-    await session.withTransaction(async () => {
-      const targetDate = date ? new Date(date) : new Date();
-      targetDate.setHours(0, 0, 0, 0);
-
-      // Get unified attendance data
-      const attendanceData = await getUnifiedAttendanceData(userId, targetDate);
-
-      // Prepare DailyWork record
-      const dailyWorkData = {
-        userId,
-        date: targetDate,
-        shift: {
-          name: attendanceData.effectiveShift.shiftName,
-          start: attendanceData.effectiveShift.start,
-          end: attendanceData.effectiveShift.end,
-          isFlexible: attendanceData.effectiveShift.isFlexible,
-          durationHours: attendanceData.effectiveShift.durationHours,
-        },
-        shiftType: attendanceData.effectiveShift.type,
-        workDurationSeconds: attendanceData.workDurationSeconds,
-        breakDurationSeconds: attendanceData.breakDurationSeconds,
-        workedSessions: attendanceData.workedSessions,
-        breakSessions: attendanceData.breakSessions,
-        timeline: attendanceData.timeline,
-        arrivalTime: attendanceData.arrivalTime,
-        departureTime: attendanceData.departureTime,
-        isLate: attendanceData.isLate,
-        isHalfDay: attendanceData.isHalfDay,
-        isAbsent: attendanceData.isAbsent,
-        isOnLeave: Boolean(attendanceData.leaveInfo),
-        isWFH: attendanceData.isWFH,
-      };
-
-      // Upsert DailyWork record
-      await DailyWork.findOneAndUpdate(
-        { userId, date: targetDate },
-        dailyWorkData,
-        { upsert: true, new: true, session }
-      );
-    });
-
-    console.log(`✅ Successfully synced attendance data for user ${userId} on ${date || 'today'}`);
-    return true;
-
-  } catch (error) {
-    console.error("Error syncing to DailyWork:", error);
-    throw error;
-  } finally {
-    await session.endSession();
-  }
-}
+// Function removed - functionality moved to new AttendanceRecord system
 
 /**
  * Format seconds to human readable format
@@ -668,7 +616,7 @@ module.exports = {
   validatePunchInTime,
 
   // Sync functions
-  syncToDailyWorkSafely,
+  // syncToDailyWorkSafely, // REMOVED - functionality moved to AttendanceRecord system
   checkLeaveStatus,
 
   // Utility functions
