@@ -1,8 +1,6 @@
 // src/services/newAttendanceService.js
 // Service for the new date-centric attendance system
 
-import attendanceDataConverter from './attendanceDataConverter.js';
-
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
 
 class NewAttendanceService {
@@ -157,27 +155,6 @@ class NewAttendanceService {
     });
 
     return await this.apiCall(`/my-weekly?${params}`);
-  }
-
-  /**
-   * Convert new system response to legacy format for compatibility
-   */
-  convertToLegacyFormat(newResponse) {
-    return attendanceDataConverter.convertAttendanceToLegacy(newResponse.data);
-  }
-
-  /**
-   * Convert weekly data to legacy format
-   */
-  convertWeeklyToLegacyFormat(newWeeklyResponse) {
-    return attendanceDataConverter.convertWeeklyDataToLegacy(newWeeklyResponse);
-  }
-
-  /**
-   * Convert legacy event type to new system format
-   */
-  convertLegacyEventType(legacyType) {
-    return attendanceDataConverter.extractEventType(legacyType);
   }
 
   /**

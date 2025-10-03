@@ -12,27 +12,48 @@ router.get("/today", protect, async (req, res) => {
 
     console.log(`Fetching celebrations for ${todayMonth}/${todayDay}`);
 
-    // Find all users with birthdays or anniversaries today
-    const users = await User.find({
-      $or: [
-        {
-          $expr: {
-            $and: [
-              { $eq: [{ $month: "$dob" }, todayMonth] },
-              { $eq: [{ $dayOfMonth: "$dob" }, todayDay] }
-            ]
+    // FIXED: Get all users first, then filter in JavaScript to handle string dates
+    // This prevents BSON type conversion errors
+    const allUsers = await User.find({
+      status: "active" // Only active employees
+    }).select("name designation department dob doj avatar").lean();
+
+    console.log(`Found ${allUsers.length} active users to check for celebrations`);
+
+    const users = allUsers.filter(user => {
+      let hasBirthday = false;
+      let hasAnniversary = false;
+
+      // Check birthday - handle both Date objects and strings
+      if (user.dob) {
+        try {
+          const dobDate = new Date(user.dob);
+          if (!isNaN(dobDate.getTime())) {
+            const dobMonth = dobDate.getMonth() + 1;
+            const dobDay = dobDate.getDate();
+            hasBirthday = (dobMonth === todayMonth && dobDay === todayDay);
           }
-        },
-        {
-          $expr: {
-            $and: [
-              { $eq: [{ $month: "$doj" }, todayMonth] },
-              { $eq: [{ $dayOfMonth: "$doj" }, todayDay] }
-            ]
-          }
+        } catch (err) {
+          console.warn(`Invalid dob for user ${user.name}:`, user.dob);
         }
-      ]
-    }).select("name designation department dob doj avatar");
+      }
+
+      // Check work anniversary - handle both Date objects and strings
+      if (user.doj) {
+        try {
+          const dojDate = new Date(user.doj);
+          if (!isNaN(dojDate.getTime())) {
+            const dojMonth = dojDate.getMonth() + 1;
+            const dojDay = dojDate.getDate();
+            hasAnniversary = (dojMonth === todayMonth && dojDay === todayDay);
+          }
+        } catch (err) {
+          console.warn(`Invalid doj for user ${user.name}:`, user.doj);
+        }
+      }
+
+      return hasBirthday || hasAnniversary;
+    });
 
     const celebrations = [];
 

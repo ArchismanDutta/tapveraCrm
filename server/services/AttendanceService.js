@@ -502,9 +502,18 @@ class AttendanceService {
       const employee = record.getEmployee(userId);
 
       if (employee) {
+        // Format calculated data to ensure dates are ISO strings, not Date objects
+        const calculated = { ...employee.calculated };
+        if (calculated.arrivalTime instanceof Date) {
+          calculated.arrivalTime = calculated.arrivalTime.toISOString();
+        }
+        if (calculated.departureTime instanceof Date) {
+          calculated.departureTime = calculated.departureTime.toISOString();
+        }
+
         attendance.push({
-          date: record.date,
-          ...employee.calculated,
+          date: this.formatDateKey(record.date), // Return as YYYY-MM-DD string to avoid timezone issues
+          ...calculated,
           events: employee.events,
           shift: employee.assignedShift,
           leave: employee.leaveInfo,
@@ -651,7 +660,11 @@ class AttendanceService {
   }
 
   formatDateKey(date) {
-    return this.normalizeDate(date).toISOString().split('T')[0];
+    const d = new Date(date);
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
   }
 
   isSameDate(date1, date2) {

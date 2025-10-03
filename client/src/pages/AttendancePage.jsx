@@ -21,6 +21,8 @@ const AttendancePage = ({ onLogout }) => {
   const [refreshing, setRefreshing] = useState(false);
   const [currentStatus, setCurrentStatus] = useState(null);
   const [activityFilter, setActivityFilter] = useState('5days'); // Default to last 5 days
+  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
 
   // OPTIMIZATION: Add caching for expensive data
   const [cachedLeaves, setCachedLeaves] = useState(null);
@@ -30,9 +32,6 @@ const AttendancePage = ({ onLogout }) => {
   const token = localStorage.getItem("token");
   const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
   const MIN_PRESENT_SECONDS = 5 * 3600; // 5 hours minimum for present status
-
-  // Feature flag for new attendance system
-  const USE_NEW_ATTENDANCE_SYSTEM = import.meta.env.VITE_USE_NEW_ATTENDANCE === 'true' || true;
 
   // Enhanced axios configuration with proper error handling
   const apiClient = axios.create({
@@ -175,51 +174,65 @@ const AttendancePage = ({ onLogout }) => {
   // Fetch current user status
   const fetchCurrentStatus = useCallback(async () => {
     try {
-      let statusData;
+      console.log("🆕 Fetching current attendance status");
+      const response = await newAttendanceService.getTodayStatus();
 
-      if (USE_NEW_ATTENDANCE_SYSTEM) {
-        console.log("🆕 AttendancePage: Using new attendance system for current status");
-        const response = await newAttendanceService.getTodayStatus();
-
-        if (response.success && response.data) {
-          const attendanceData = response.data.attendance;
-
-          // Convert to format expected by existing components
-          statusData = {
-            userId: attendanceData?.userId,
-            currentlyWorking: attendanceData?.currentlyWorking || false,
-            onBreak: attendanceData?.onBreak || false,
-            workDuration: attendanceData?.workDuration || '0h 0m',
-            breakDuration: attendanceData?.breakDuration || '0h 0m',
-            workDurationSeconds: attendanceData?.workDurationSeconds || 0,
-            breakDurationSeconds: attendanceData?.breakDurationSeconds || 0,
-            arrivalTime: attendanceData?.arrivalTime,
-            isLate: attendanceData?.isLate || false,
-            isPresent: attendanceData?.isPresent || false,
-            timeline: attendanceData?.events?.map(event => {
-              const typeMap = {
-                'PUNCH_IN': 'Punch In',
-                'PUNCH_OUT': 'Punch Out',
-                'BREAK_START': 'Break Start',
-                'BREAK_END': 'Break End'
-              };
-              return {
-                type: typeMap[event.type] || event.type,
-                time: event.timestamp,
-                location: event.location
-              };
-            }) || []
-          };
-        } else {
-          throw new Error('Invalid response from new attendance system');
-        }
-      } else {
-        console.log("📍 AttendancePage: Using legacy attendance system");
-        const response = await apiClient.get('/api/status/today', {
-          params: { _t: Date.now() } // Cache-busting parameter
-        });
-        statusData = response.data;
+      if (!response.success || !response.data) {
+        throw new Error('Invalid response from attendance system');
       }
+
+      const attendanceData = response.data.attendance;
+
+      console.log("📊 Current status response:", {
+        hasAttendance: !!attendanceData,
+        currentlyWorking: attendanceData?.currentlyWorking,
+        onBreak: attendanceData?.onBreak,
+        arrivalTime: attendanceData?.arrivalTime,
+        workDuration: attendanceData?.workDuration
+      });
+
+      // Convert to format expected by existing components
+      // Format arrival time for display
+      let formattedArrivalTime = null;
+      if (attendanceData?.arrivalTime) {
+        try {
+          const arrivalDate = new Date(attendanceData.arrivalTime);
+          formattedArrivalTime = arrivalDate.toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+            hour12: true
+          });
+        } catch (e) {
+          console.error('Error formatting arrival time:', e);
+        }
+      }
+
+      const statusData = {
+        userId: attendanceData?.userId,
+        currentlyWorking: attendanceData?.currentlyWorking || false,
+        onBreak: attendanceData?.onBreak || false,
+        workDuration: attendanceData?.workDuration || '0h 0m',
+        breakDuration: attendanceData?.breakDuration || '0h 0m',
+        workDurationSeconds: attendanceData?.workDurationSeconds || 0,
+        breakDurationSeconds: attendanceData?.breakDurationSeconds || 0,
+        arrivalTime: formattedArrivalTime, // Use formatted time
+        arrivalTimeRaw: attendanceData?.arrivalTime, // Keep raw for calculations
+        isLate: attendanceData?.isLate || false,
+        isPresent: attendanceData?.isPresent || false,
+        timeline: attendanceData?.events?.map(event => {
+          const typeMap = {
+            'PUNCH_IN': 'Punch In',
+            'PUNCH_OUT': 'Punch Out',
+            'BREAK_START': 'Break Start',
+            'BREAK_END': 'Break End'
+          };
+          return {
+            type: typeMap[event.type] || event.type,
+            time: event.timestamp,
+            location: event.location
+          };
+        }) || []
+      };
 
       setCurrentStatus(statusData);
       return statusData;
@@ -227,7 +240,7 @@ const AttendancePage = ({ onLogout }) => {
       console.error('Error fetching current status:', error);
       return null;
     }
-  }, [USE_NEW_ATTENDANCE_SYSTEM]);
+  }, []);
 
   // Fetch team members on leave
   const fetchTeamOnLeave = useCallback(async () => {
@@ -261,6 +274,12 @@ const AttendancePage = ({ onLogout }) => {
   const handleActivityFilterChange = useCallback((filter) => {
     setActivityFilter(filter);
     fetchAttendanceData(true); // Refresh data with new filter
+  }, []);
+
+  // Handle month change
+  const handleMonthChange = useCallback((newDate) => {
+    setSelectedMonth(newDate.getMonth());
+    setSelectedYear(newDate.getFullYear());
   }, []);
 
   // Get date range based on activity filter
@@ -306,10 +325,10 @@ const AttendancePage = ({ onLogout }) => {
 
       const now = new Date();
 
-      // Calculate month range for calendar and summary
-      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      // Calculate month range for calendar and summary using selected month/year
+      const monthStart = new Date(selectedYear, selectedMonth, 1);
       monthStart.setHours(0, 0, 0, 0);
-      const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+      const monthEnd = new Date(selectedYear, selectedMonth + 1, 0);
       monthEnd.setHours(23, 59, 59, 999);
 
       // Get activity date range based on filter
@@ -320,47 +339,19 @@ const AttendancePage = ({ onLogout }) => {
         activityStart.getTime() !== monthStart.getTime() ||
         activityEnd.getTime() !== monthEnd.getTime();
 
-      // Fetch data - optimize to avoid duplicate calls
+      // Fetch data using new attendance system
+      console.log("🆕 Fetching attendance data");
+      const user = JSON.parse(localStorage.getItem('user') || '{}');
       const fetchPromises = [];
 
-      if (USE_NEW_ATTENDANCE_SYSTEM) {
-        console.log("🆕 AttendancePage: Using new attendance system for data fetching");
-        // Use new attendance system APIs
-        const user = JSON.parse(localStorage.getItem('user') || '{}');
-        fetchPromises.push(
-          // Monthly attendance data
-          newAttendanceService.getEmployeeMonthlyAttendance(user.id || user._id, now.getFullYear(), now.getMonth() + 1),
-          fetchCurrentStatus()
-        );
-      } else {
-        console.log("📍 AttendancePage: Using legacy attendance system");
-        // Monthly data for calendar and stats
-        fetchPromises.push(
-          apiClient.get('/api/summary/week', {
-            params: {
-              startDate: monthStart.toISOString(),
-              endDate: monthEnd.toISOString(),
-              _t: Date.now(), // Cache-busting parameter
-            },
-          }),
-          fetchCurrentStatus()
-        );
-      }
+      // Monthly attendance data for calendar and stats
+      fetchPromises.push(
+        newAttendanceService.getEmployeeMonthlyAttendance(user.id || user._id, selectedYear, selectedMonth + 1),
+        fetchCurrentStatus()
+      );
 
-      // Only fetch separate activity data if needed
-      if (needSeparateActivityCall && !USE_NEW_ATTENDANCE_SYSTEM) {
-        fetchPromises.push(
-          apiClient.get('/api/summary/week', {
-            params: {
-              startDate: activityStart.toISOString(),
-              endDate: activityEnd.toISOString(),
-              _t: Date.now(), // Cache-busting parameter
-            },
-          })
-        );
-      } else if (needSeparateActivityCall && USE_NEW_ATTENDANCE_SYSTEM) {
-        // For new system, fetch activity range data
-        const user = JSON.parse(localStorage.getItem('user') || '{}');
+      // Only fetch separate activity data if range differs from month
+      if (needSeparateActivityCall) {
         fetchPromises.push(
           newAttendanceService.getEmployeeAttendanceRange(user.id || user._id, activityStart, activityEnd)
         );
@@ -381,85 +372,105 @@ const AttendancePage = ({ onLogout }) => {
 
       const results = await Promise.all(fetchPromises);
 
-      let weeklyRes, statusRes, activityRes;
+      // Parse responses from new attendance system
+      const monthlyAttendanceRes = results[0];
+      const statusRes = results[1];
       let leavesRes = { data: [] };
       let holidaysRes = { data: [] };
 
-      if (USE_NEW_ATTENDANCE_SYSTEM) {
-        // Parse new system responses
-        const monthlyAttendanceRes = results[0];
-        statusRes = results[1];
+      // Convert monthly attendance response
+      let weeklyRes;
+      if (monthlyAttendanceRes.success && monthlyAttendanceRes.data) {
+        const monthlyData = monthlyAttendanceRes.data;
 
-        // Convert new system response to format expected by existing code
-        if (monthlyAttendanceRes.success && monthlyAttendanceRes.data) {
-          const monthlyData = monthlyAttendanceRes.data;
-          weeklyRes = {
-            data: {
-              dailyData: monthlyData.attendance?.map(day => ({
-                date: day.date,
-                workDurationSeconds: day.calculated?.workDurationSeconds || 0,
-                breakDurationSeconds: day.calculated?.breakDurationSeconds || 0,
-                isAbsent: !day.calculated?.isPresent,
-                isLate: day.calculated?.isLate || false,
-                isHalfDay: day.calculated?.workDurationSeconds < (4 * 3600), // Less than 4 hours
-                isWFH: false, // TODO: Add WFH support in new system
-                arrivalTime: day.calculated?.arrivalTime,
-                timeline: day.events?.map(event => ({
-                  type: event.type === 'PUNCH_IN' ? 'Punch In' :
-                        event.type === 'PUNCH_OUT' ? 'Punch Out' :
-                        event.type === 'BREAK_START' ? 'Break Start' :
-                        event.type === 'BREAK_END' ? 'Break End' : event.type,
-                  time: event.timestamp,
-                  location: event.location
-                })) || []
+        console.log("📊 Raw monthly data from backend:", monthlyData);
+
+        // The backend returns "data" not "attendance"
+        const attendanceArray = monthlyData.data || [];
+
+        weeklyRes = {
+          data: {
+            dailyData: attendanceArray.map(day => ({
+              date: day.date,
+              workDurationSeconds: day.workDurationSeconds || 0,
+              breakDurationSeconds: day.breakDurationSeconds || 0,
+              isAbsent: day.isAbsent || false,
+              isLate: day.isLate || false,
+              isPresent: day.isPresent || false,
+              isHalfDay: day.isHalfDay || (day.workDurationSeconds < (4 * 3600)),
+              isWFH: false, // TODO: Add WFH support in new system
+              // CRITICAL: Format times as strings to prevent React rendering Date objects
+              arrivalTime: day.arrivalTime ? (typeof day.arrivalTime === 'string' ? day.arrivalTime : new Date(day.arrivalTime).toISOString()) : null,
+              departureTime: day.departureTime ? (typeof day.departureTime === 'string' ? day.departureTime : new Date(day.departureTime).toISOString()) : null,
+              currentlyWorking: day.currentlyWorking || false,
+              onBreak: day.onBreak || false,
+              timeline: day.events?.map(event => ({
+                type: event.type === 'PUNCH_IN' ? 'Punch In' :
+                      event.type === 'PUNCH_OUT' ? 'Punch Out' :
+                      event.type === 'BREAK_START' ? 'Break Start' :
+                      event.type === 'BREAK_END' ? 'Break End' : event.type,
+                time: event.timestamp,
+                location: event.location
               })) || [],
-              weeklySummary: {
-                presentDays: monthlyData.summary?.totalPresent || 0,
-                onTimeRate: Math.round((monthlyData.summary?.onTimeRate || 0) * 100) + '%',
-                quickStats: {
-                  lateArrivals: monthlyData.summary?.totalLate || 0
-                }
+              // Add sessions for compatibility
+              workedSessions: [], // Can be computed from events if needed
+              breakSessions: []
+            })),
+            weeklySummary: {
+              presentDays: monthlyData.summary?.presentDays || 0,
+              onTimeRate: (monthlyData.summary?.punctualityRate || 0) + '%',
+              quickStats: {
+                lateArrivals: monthlyData.summary?.lateDays || 0
               }
             }
-          };
-        } else {
-          // Fallback to empty data structure
-          weeklyRes = {
-            data: {
-              dailyData: [],
-              weeklySummary: {
-                presentDays: 0,
-                onTimeRate: '0%',
-                quickStats: { lateArrivals: 0 }
-              }
-            }
-          };
-        }
-        activityRes = weeklyRes; // Use same data for activity
+          }
+        };
+
+        console.log("✅ Converted weekly data:", {
+          dailyDataCount: weeklyRes.data.dailyData.length,
+          presentDays: weeklyRes.data.weeklySummary.presentDays,
+          onTimeRate: weeklyRes.data.weeklySummary.onTimeRate
+        });
       } else {
-        // Legacy system
-        weeklyRes = results[0];
-        statusRes = results[1];
-        activityRes = weeklyRes; // Default to same data
+        // Fallback to empty data structure
+        weeklyRes = {
+          data: {
+            dailyData: [],
+            weeklySummary: {
+              presentDays: 0,
+              onTimeRate: '0%',
+              quickStats: { lateArrivals: 0 }
+            }
+          }
+        };
       }
 
-      // Parse results based on what was fetched
-      let resultIndex = USE_NEW_ATTENDANCE_SYSTEM ? 2 : 2;
+      // Use monthly data as default for activity
+      let activityRes = weeklyRes;
+
+      // Parse separate activity data if fetched
+      let resultIndex = 2;
       if (needSeparateActivityCall) {
         const separateActivityRes = results[resultIndex];
-        if (USE_NEW_ATTENDANCE_SYSTEM && separateActivityRes.success && separateActivityRes.data) {
-          // Convert new system activity response
+        if (separateActivityRes.success && separateActivityRes.data) {
+          // The backend returns "data" array directly
+          const activityArray = separateActivityRes.data.data || [];
+
+          // Convert activity range response
           activityRes = {
             data: {
-              dailyData: separateActivityRes.data.attendance?.map(day => ({
+              dailyData: activityArray.map(day => ({
                 date: day.date,
-                workDurationSeconds: day.calculated?.workDurationSeconds || 0,
-                breakDurationSeconds: day.calculated?.breakDurationSeconds || 0,
-                isAbsent: !day.calculated?.isPresent,
-                isLate: day.calculated?.isLate || false,
-                isHalfDay: day.calculated?.workDurationSeconds < (4 * 3600),
+                workDurationSeconds: day.workDurationSeconds || 0,
+                breakDurationSeconds: day.breakDurationSeconds || 0,
+                isAbsent: day.isAbsent || false,
+                isLate: day.isLate || false,
+                isPresent: day.isPresent || false,
+                isHalfDay: day.isHalfDay || (day.workDurationSeconds < (4 * 3600)),
                 isWFH: false, // TODO: Add WFH support
-                arrivalTime: day.calculated?.arrivalTime,
+                // CRITICAL: Format times as strings to prevent React rendering Date objects
+                arrivalTime: day.arrivalTime ? (typeof day.arrivalTime === 'string' ? day.arrivalTime : new Date(day.arrivalTime).toISOString()) : null,
+                departureTime: day.departureTime ? (typeof day.departureTime === 'string' ? day.departureTime : new Date(day.departureTime).toISOString()) : null,
                 timeline: day.events?.map(event => ({
                   type: event.type === 'PUNCH_IN' ? 'Punch In' :
                         event.type === 'PUNCH_OUT' ? 'Punch Out' :
@@ -467,12 +478,16 @@ const AttendancePage = ({ onLogout }) => {
                         event.type === 'BREAK_END' ? 'Break End' : event.type,
                   time: event.timestamp,
                   location: event.location
-                })) || []
-              })) || []
+                })) || [],
+                workedSessions: [],
+                breakSessions: []
+              }))
             }
           };
-        } else if (!USE_NEW_ATTENDANCE_SYSTEM) {
-          activityRes = separateActivityRes;
+
+          console.log("✅ Converted activity data:", {
+            activityDataCount: activityRes.data.dailyData.length
+          });
         }
         resultIndex++;
       }
@@ -541,6 +556,11 @@ const AttendancePage = ({ onLogout }) => {
       const averageHoursPerDay = presentDaysCount > 0 ?
         Math.min(24, (totalWorkHours / presentDaysCount)) : 0;
 
+      // Determine period text based on selected month
+      const isCurrentMonth = selectedMonth === new Date().getMonth() && selectedYear === new Date().getFullYear();
+      const periodText = isCurrentMonth ? "This month" :
+        `${new Date(selectedYear, selectedMonth).toLocaleString('default', { month: 'long', year: 'numeric' })}`;
+
       setStats({
         attendanceRate: Math.round(attendanceRate),
         presentDays: Math.max(0, presentDaysCount),
@@ -548,10 +568,10 @@ const AttendancePage = ({ onLogout }) => {
         workingHours: Math.max(0, totalWorkHours).toFixed(1),
         onTimeRate: Math.round(onTimeRate),
         lastUpdated: new Date().toLocaleString(),
-        period: "This month",
+        period: periodText,
         averageHoursPerDay: averageHoursPerDay.toFixed(1),
         lateDays: Math.max(0, weeklySummary.quickStats?.lateArrivals || 0),
-        currentStatus: statusRes ? {
+        currentStatus: isCurrentMonth && statusRes ? {
           isWorking: Boolean(statusRes.currentlyWorking),
           onBreak: Boolean(statusRes.onBreak),
           todayHours: calculateHoursFromSeconds(statusRes.workDurationSeconds || 0).toFixed(1),
@@ -560,9 +580,10 @@ const AttendancePage = ({ onLogout }) => {
       });
 
       // Process calendar data (enhanced with more status types)
-      const month = now.toLocaleString("default", { month: "long" });
-      const year = now.getFullYear();
-      const monthIndex = now.getMonth();
+      const tempDate = new Date(selectedYear, selectedMonth, 1);
+      const month = tempDate.toLocaleString("default", { month: "long" });
+      const year = selectedYear;
+      const monthIndex = selectedMonth;
 
       // Create leave days set for current month
       const leaveDaysSet = new Set();
@@ -598,20 +619,22 @@ const AttendancePage = ({ onLogout }) => {
       // Map daily attendance data
       const attendanceDaysMap = {};
       dailyData.forEach(d => {
-        // Fix timezone issue: extract date safely without timezone conversion
-        let dayNum;
+        // Fix timezone issue: ALWAYS extract date from string to avoid UTC conversion
+        let dateString;
         if (typeof d.date === 'string') {
-          dayNum = d.date.includes('T') ?
-            parseInt(d.date.split('T')[0].split('-')[2], 10) :
-            parseInt(d.date.split('-')[2], 10);
+          dateString = d.date.includes('T') ? d.date.split('T')[0] : d.date;
         } else {
-          // d.date is a Date object - extract date safely
-          dayNum = parseInt(d.date.toISOString().split('T')[0].split('-')[2], 10);
+          // Convert Date object to ISO string and extract date part
+          dateString = d.date.toISOString().split('T')[0];
         }
 
-        // Debug logging to track date mapping (temporary)
-        console.log(`📅 Mapping attendance data: ${d.date} -> day ${dayNum}`, {
+        // Extract day number from YYYY-MM-DD format (always correct, no timezone shift)
+        const dayNum = parseInt(dateString.split('-')[2], 10);
+
+        // Debug logging to track date mapping
+        console.log(`📅 Mapping attendance data: ${d.date} -> ${dateString} -> day ${dayNum}`, {
           originalDate: d.date,
+          dateString,
           dayNum,
           workHours: ((d.workDurationSeconds || 0) / 3600).toFixed(1),
           isAbsent: d.isAbsent,
@@ -660,8 +683,9 @@ const AttendancePage = ({ onLogout }) => {
           day: dayNum,
           status,
           workingHours: displayHours,
-          arrivalTime,
-          departureTime: punchOutTime,
+          // Format Date objects to ISO strings for calendar compatibility
+          arrivalTime: arrivalTime ? arrivalTime.toISOString() : null,
+          departureTime: punchOutTime ? punchOutTime.toISOString() : null,
           name: d.isWFH ? "Work From Home" :
                 d.leaveInfo ? `${d.leaveInfo.type} Leave` : null,
           metadata: {
@@ -843,31 +867,75 @@ const AttendancePage = ({ onLogout }) => {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [fetchCurrentStatus, fetchTeamOnLeave, getActivityDateRange]);
+  }, [fetchCurrentStatus, fetchTeamOnLeave, getActivityDateRange, selectedMonth, selectedYear]);
 
   useEffect(() => {
     fetchAttendanceData();
 
-    // OPTIMIZATION: Smarter real-time updates based on user activity
+    // OPTIMIZATION: Smarter real-time updates based on user's actual working status
     const intervalId = setInterval(() => {
       if (document.visibilityState === 'visible') {
-        // Only refresh if user is likely working (9 AM to 6 PM on weekdays)
         const now = new Date();
         const hour = now.getHours();
-        const isWeekday = now.getDay() >= 1 && now.getDay() <= 5;
-        const isWorkingHours = hour >= 9 && hour <= 18;
+        const minute = now.getMinutes();
+        const currentMinutes = hour * 60 + minute;
 
-        if (isWeekday && isWorkingHours) {
-          fetchAttendanceData(true); // Frequent updates during work hours
+        // Get user's shift from localStorage (set during login)
+        const user = JSON.parse(localStorage.getItem('user') || '{}');
+        const assignedShift = user.assignedShift || user.standardShiftType;
+
+        // Determine if user is likely working based on their shift or current status
+        let isLikelyWorking = false;
+
+        // Check if user has an active shift today
+        if (assignedShift) {
+          // Parse shift times (format: "09:00" or "HH:MM")
+          const shiftStart = assignedShift.start || assignedShift.startTime || "09:00";
+          const shiftEnd = assignedShift.end || assignedShift.endTime || "18:00";
+
+          const [startHour, startMin] = shiftStart.split(':').map(Number);
+          const [endHour, endMin] = shiftEnd.split(':').map(Number);
+
+          const shiftStartMinutes = startHour * 60 + startMin;
+          let shiftEndMinutes = endHour * 60 + endMin;
+
+          // Handle night shifts (end time < start time means crosses midnight)
+          if (shiftEndMinutes < shiftStartMinutes) {
+            shiftEndMinutes += 24 * 60; // Add 24 hours
+          }
+
+          // Allow 1 hour before shift start and 2 hours after shift end
+          const earlyArrivalBuffer = 60; // minutes
+          const lateStayBuffer = 120; // minutes
+
+          const effectiveStart = shiftStartMinutes - earlyArrivalBuffer;
+          const effectiveEnd = shiftEndMinutes + lateStayBuffer;
+
+          isLikelyWorking = currentMinutes >= effectiveStart && currentMinutes <= effectiveEnd;
+        }
+
+        // If no shift info, check if user is currently working based on status
+        if (!isLikelyWorking && currentStatus) {
+          isLikelyWorking = currentStatus.currentlyWorking || currentStatus.onBreak;
+        }
+
+        // Fallback: if no shift and no current status, only poll during standard business hours
+        if (!assignedShift && !currentStatus) {
+          const isWeekday = now.getDay() >= 1 && now.getDay() <= 5;
+          isLikelyWorking = isWeekday && hour >= 7 && hour <= 20; // Broader window
+        }
+
+        if (isLikelyWorking) {
+          fetchAttendanceData(true); // Full refresh when user is working
         } else {
-          // Less frequent updates outside work hours (only fetch current status)
+          // Minimal updates outside working hours (only fetch current status)
           fetchCurrentStatus();
         }
       }
     }, 300000); // Update every 5 minutes when page is visible
 
     return () => clearInterval(intervalId);
-  }, [fetchAttendanceData, fetchCurrentStatus]);
+  }, [fetchAttendanceData, fetchCurrentStatus, selectedMonth, selectedYear]); // Added month/year to refetch when changed
 
   // Listen for attendance updates
   useEffect(() => {
@@ -958,11 +1026,11 @@ const AttendancePage = ({ onLogout }) => {
               <div className="flex items-center gap-4 bg-[#161c2c] rounded-lg px-4 py-2 border border-[#232945]">
                 <div className="flex items-center gap-2">
                   <div className={`w-2 h-2 rounded-full ${
-                    currentStatus.currentlyWorking ? 'bg-green-500 animate-pulse' : 
+                    currentStatus.currentlyWorking ? 'bg-green-500 animate-pulse' :
                     currentStatus.onBreak ? 'bg-yellow-500 animate-pulse' : 'bg-gray-500'
                   }`}></div>
                   <span className="text-sm font-medium">
-                    {currentStatus.currentlyWorking ? 'Working' : 
+                    {currentStatus.currentlyWorking ? 'Working' :
                      currentStatus.onBreak ? 'On Break' : 'Offline'}
                   </span>
                 </div>
@@ -973,7 +1041,10 @@ const AttendancePage = ({ onLogout }) => {
                   </div>
                 )}
                 <div className="text-sm text-blue-400">
-                  Today: {stats.currentStatus?.todayHours || '0.0'}h
+                  Work: {currentStatus.workDuration || '0h 0m'}
+                </div>
+                <div className="text-sm text-orange-400">
+                  Break: {currentStatus.breakDuration || '0h 0m'}
                 </div>
               </div>
             )}
@@ -1005,7 +1076,7 @@ const AttendancePage = ({ onLogout }) => {
         
         <div className="grid lg:grid-cols-3 grid-cols-1 gap-6">
           <div className="lg:col-span-2 flex flex-col space-y-6">
-            <AttendanceCalendar data={calendarData} />
+            <AttendanceCalendar data={calendarData} onMonthChange={handleMonthChange} />
             <RecentActivityTable
               activities={recentActivity}
               onDateFilterChange={handleActivityFilterChange}

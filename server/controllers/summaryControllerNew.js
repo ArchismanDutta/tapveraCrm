@@ -236,6 +236,11 @@ function calculateWeeklySummary(dailyData) {
   const expectedWeeklyHours = expectedDailyHours * workingDays;
   const efficiency = expectedWeeklyHours > 0 ? Math.round((totalWorkHours / expectedWeeklyHours) * 100) : 0;
 
+  // Calculate total breaks taken from daily data
+  const breaksTaken = dailyData.reduce((total, day) => {
+    return total + (day.breakDurationSeconds > 0 ? 1 : 0);
+  }, 0);
+
   return {
     // Summary counts
     presentDays,
@@ -247,24 +252,33 @@ function calculateWeeklySummary(dailyData) {
     workingDays,
     totalDays: dailyData.length,
 
-    // Time totals
-    totalWorkHours: Math.round(totalWorkHours * 100) / 100, // Round to 2 decimal places
+    // Time totals (decimal hours)
+    totalWorkHours: Math.round(totalWorkHours * 100) / 100,
     totalBreakHours: Math.round(secondsToHours(totalBreakSeconds) * 100) / 100,
     averageDailyHours: Math.round(averageDailyHours * 100) / 100,
 
-    // Formatted durations
+    // Formatted durations (for SummaryCard compatibility)
+    totalWork: formatDuration(totalWorkSeconds),
+    totalBreak: formatDuration(totalBreakSeconds),
+    avgDailyWork: formatDuration(Math.floor(totalWorkSeconds / Math.max(presentDays, 1))),
+    avgDailyBreak: formatDuration(Math.floor(totalBreakSeconds / Math.max(presentDays, 1))),
+    breaksTaken: breaksTaken,
+    onTimeRate: onTimeRate + '%',
+
+    // Legacy field names for backward compatibility
     totalWorkDuration: formatDuration(totalWorkSeconds),
     totalBreakDuration: formatDuration(totalBreakSeconds),
     averageDailyDuration: formatDuration(Math.floor(totalWorkSeconds / Math.max(workingDays, 1))),
+    totalWorkTime: formatDuration(totalWorkSeconds),
+    totalBreakTime: formatDuration(totalBreakSeconds),
 
     // Rates and percentages
     attendanceRate,
-    onTimeRate,
     efficiency: Math.min(efficiency, 100), // Cap at 100%
 
     // Quick stats for dashboard
     quickStats: {
-      earlyArrivals: 0, // Could be enhanced based on arrival time analysis
+      earlyArrivals: presentDays - lateDays, // On-time arrivals
       lateArrivals: lateDays,
       perfectDays: presentDays - lateDays - halfDays,
     },

@@ -11,15 +11,11 @@ import PunchOutConfirmPopup from "../components/workstatus/PunchOutConfirmPopup"
 import { toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import newAttendanceService from "../services/newAttendanceService";
-import attendanceDataConverter from "../services/attendanceDataConverter";
 
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
 const SIDEBAR_WIDTH_EXPANDED = 288;
 const SIDEBAR_WIDTH_COLLAPSED = 80;
-
-// Feature flag for new attendance system
-const USE_NEW_ATTENDANCE_SYSTEM = import.meta.env.VITE_USE_NEW_ATTENDANCE === 'true' || true;
 
 // Event types constants for consistency
 const EVENT_TYPES = {
@@ -159,63 +155,34 @@ const TodayStatusPage = ({ onLogout }) => {
     setDataErrors(prev => ({ ...prev, status: null }));
 
     try {
-      let statusData;
+      // Use new attendance system
+      console.log("🆕 Fetching today's attendance status");
+      const response = await newAttendanceService.getTodayStatus();
 
-      if (USE_NEW_ATTENDANCE_SYSTEM) {
-        // Use new attendance system
-        console.log("🆕 Using new attendance system API");
-        const response = await newAttendanceService.getTodayStatus();
-
-        if (response.success && response.data) {
-          // Use the service's conversion method for better consistency
-          statusData = newAttendanceService.convertToLegacyFormat(response);
-
-          // Add summary data from response
-          if (response.data.summary) {
-            statusData = { ...statusData, ...response.data.summary };
-          }
-
-          console.log("✅ Successfully fetched new attendance status:", statusData);
-        } else {
-          throw new Error('Invalid response format from new attendance API');
-        }
-      } else {
-        // Use old attendance system (fallback)
-        console.log("📍 Using legacy attendance system API");
-        const res = await axios.get(
-          `${API_BASE}/api/status/today`,
-          {
-            ...getAxiosConfig(),
-            params: {
-              _timestamp: Date.now(), // Cache-busting
-              _retry: retryCount
-            },
-            timeout: 15000 // 15 second timeout
-          }
-        );
-
-        console.log("✅ Successfully fetched legacy status:", res.data);
-
-        // Validate critical data
-        if (res.data && typeof res.data === 'object') {
-          statusData = { ...res.data };
-
-          // If server sends arrivalTime in UTC, convert to local formatted time
-          if (statusData.arrivalTime && !statusData.arrivalTimeFormatted) {
-            const arrivalDate = new Date(statusData.arrivalTime);
-            if (!isNaN(arrivalDate.getTime())) {
-              statusData.arrivalTimeFormatted = arrivalDate.toLocaleTimeString([], {
-                hour: "2-digit",
-                minute: "2-digit",
-                hour12: true,
-              });
-              console.log("🕒 Converted legacy UTC arrival time to local:", statusData.arrivalTimeFormatted);
-            }
-          }
-        } else {
-          throw new Error('Invalid status data received from legacy API');
-        }
+      if (!response.success || !response.data) {
+        throw new Error('Invalid response format from attendance API');
       }
+
+      // Extract attendance data from nested structure
+      let statusData = response.data.attendance || {};
+
+      // Map events to timeline for Timeline component compatibility
+      if (statusData.events && !statusData.timeline) {
+        statusData.timeline = statusData.events.map(event => ({
+          type: event.type,
+          time: event.timestamp,
+          location: event.location,
+          manual: event.manual,
+          notes: event.notes
+        }));
+      }
+
+      // Add summary data from response
+      if (response.data.summary) {
+        statusData = { ...statusData, ...response.data.summary };
+      }
+
+      console.log("✅ Successfully fetched attendance status:", statusData);
 
       setStatus(statusData);
       setDataLoadingStates(prev => ({ ...prev, status: false }));
@@ -282,123 +249,84 @@ const TodayStatusPage = ({ onLogout }) => {
       sunday.setDate(monday.getDate() + 6);
       sunday.setHours(23, 59, 59, 999);
 
-      let weeklySummaryData, dailyDataArray;
+      // Fetch weekly summary using new attendance system
+      console.log("🆕 Fetching weekly summary");
+      const response = await newAttendanceService.getMyWeeklySummary(monday, sunday);
 
-      if (USE_NEW_ATTENDANCE_SYSTEM) {
-        // Use new attendance system (employee-accessible endpoint)
-        console.log("🆕 Using new attendance system for weekly summary");
-        const response = await newAttendanceService.getMyWeeklySummary(monday, sunday);
-
-        if (response.success && response.data) {
-          console.log("📊 Raw weekly summary response:", response.data);
-
-          // Try to convert new weekly data to legacy format using the converter
-          const convertedData = attendanceDataConverter.convertWeeklyDataToLegacy(response);
-
-          if (convertedData && convertedData.data) {
-            weeklySummaryData = convertedData.data.weeklySummary;
-            dailyDataArray = convertedData.data.dailyData;
-            console.log("✅ Using converted weekly data:", {
-              presentDays: weeklySummaryData.presentDays,
-              totalWork: weeklySummaryData.totalWork,
-              totalBreak: weeklySummaryData.totalBreak,
-              avgDailyWork: weeklySummaryData.avgDailyWork,
-              onTimeRate: weeklySummaryData.onTimeRate,
-              dailyCount: dailyDataArray.length
-            });
-          } else {
-            // Fallback: Try to extract data directly from response
-            console.log("⚠️ Conversion failed, trying direct extraction");
-            const rawData = response.data;
-
-            // Try different possible structures for summary data
-            const summarySource = rawData.weeklyTotals || rawData.summary || rawData.totals || {};
-
-            weeklySummaryData = {
-              presentDays: summarySource.presentDays || summarySource.totalPresent || 0,
-              totalWork: summarySource.totalWorkTime || summarySource.totalWork || '0h 0m',
-              totalBreak: summarySource.totalBreakTime || summarySource.totalBreak || '0h 0m',
-              avgDailyWork: summarySource.avgDailyWork || '0h 0m',
-              avgDailyBreak: summarySource.avgDailyBreak || '0h 0m',
-              onTimeRate: summarySource.onTimePercentage ?
-                Math.round(summarySource.onTimePercentage) + '%' : '0%',
-              breaksTaken: summarySource.breaksTaken || 0,
-              quickStats: {
-                earlyArrivals: summarySource.earlyArrivals || 0,
-                lateArrivals: summarySource.lateArrivals || summarySource.totalLate || 0,
-                perfectDays: summarySource.perfectDays || 0
-              },
-              // Legacy compatibility
-              totalWorkTime: summarySource.totalWorkTime || summarySource.totalWork || '0h 0m',
-              totalBreakTime: summarySource.totalBreakTime || summarySource.totalBreak || '0h 0m'
-            };
-
-            dailyDataArray = rawData.dailyData || rawData.attendance || [];
-
-            console.log("📋 Fallback weekly data:", {
-              presentDays: weeklySummaryData.presentDays,
-              dailyCount: dailyDataArray.length,
-              summarySource: Object.keys(summarySource)
-            });
-          }
-
-          // Validate the final data - if everything is zero, something might be wrong
-          if (weeklySummaryData.presentDays === 0 &&
-              weeklySummaryData.totalWorkTime === '0h 0m' &&
-              dailyDataArray.length === 0) {
-            console.warn("⚠️ All weekly summary values are zero - possible data issue");
-
-            // Keep previous values if available, or set reasonable defaults
-            if (!weeklySummary || (weeklySummary.presentDays === 0 && dailyData.length === 0)) {
-              console.log("📝 Setting comprehensive fallback data for SummaryCard");
-              weeklySummaryData = {
-                presentDays: 0,
-                totalWork: '0h 0m',
-                totalBreak: '0h 0m',
-                avgDailyWork: '0h 0m',
-                avgDailyBreak: '0h 0m',
-                onTimeRate: '0%',
-                breaksTaken: 0,
-                quickStats: {
-                  earlyArrivals: 0,
-                  lateArrivals: 0,
-                  perfectDays: 0
-                },
-                // Legacy compatibility
-                totalWorkTime: '0h 0m',
-                totalBreakTime: '0h 0m'
-              };
-            } else {
-              console.log("📋 Preserving previous valid data");
-              weeklySummaryData = weeklySummary;
-              dailyDataArray = dailyData;
-            }
-          }
-
-          console.log("✅ Final weekly summary data:", weeklySummaryData);
-        } else {
-          throw new Error('Invalid response from new weekly summary API');
-        }
-      } else {
-        // Use old system
-        console.log("📍 Using legacy system for weekly summary");
-        const res = await axios.get(`${API_BASE}/api/summary/week`, {
-          ...getAxiosConfig(),
-          params: {
-            startDate: monday.toISOString(),
-            endDate: sunday.toISOString(),
-            _timestamp: Date.now(), // Cache-busting
-            _retry: retryCount
-          },
-          timeout: 12000 // 12 second timeout
-        });
-
-        console.log("✅ Successfully fetched legacy weekly summary:", res.data);
-
-        // Validate and set data with fallbacks
-        weeklySummaryData = res.data?.weeklySummary || null;
-        dailyDataArray = Array.isArray(res.data?.dailyData) ? res.data.dailyData : [];
+      if (!response.success || !response.data) {
+        throw new Error('Invalid response from weekly summary API');
       }
+
+      console.log("📊 Raw weekly summary response:", response.data);
+
+      // Extract data directly from response
+      let weeklySummaryData, dailyDataArray;
+      const rawData = response.data;
+
+      // Try different possible structures for summary data
+      const summarySource = rawData.weeklyTotals || rawData.summary || rawData.totals || {};
+
+      weeklySummaryData = {
+        presentDays: summarySource.presentDays || summarySource.totalPresent || summarySource.totalWorkDays || 0,
+        totalWork: summarySource.totalWorkTime || summarySource.totalWork || '0h 0m',
+        totalBreak: summarySource.totalBreakTime || summarySource.totalBreak || '0h 0m',
+        avgDailyWork: summarySource.avgDailyWork || '0h 0m',
+        avgDailyBreak: summarySource.avgDailyBreak || '0h 0m',
+        onTimeRate: summarySource.onTimeRate ||
+                   (summarySource.averagePunctualityRate ? summarySource.averagePunctualityRate + '%' : '0%'),
+        breaksTaken: summarySource.breaksTaken || 0,
+        quickStats: {
+          earlyArrivals: summarySource.earlyArrivals || 0,
+          lateArrivals: summarySource.lateArrivals || summarySource.totalLate || summarySource.daysLate || 0,
+          perfectDays: summarySource.perfectDays || 0
+        },
+        // Legacy compatibility
+        totalWorkTime: summarySource.totalWorkTime || summarySource.totalWork || '0h 0m',
+        totalBreakTime: summarySource.totalBreakTime || summarySource.totalBreak || '0h 0m'
+      };
+
+      dailyDataArray = rawData.dailyData || rawData.attendance || [];
+
+      console.log("📋 Weekly data:", {
+        presentDays: weeklySummaryData.presentDays,
+        dailyCount: dailyDataArray.length,
+        summarySource: Object.keys(summarySource)
+      });
+
+      // Validate the final data - if everything is zero, something might be wrong
+      if (weeklySummaryData.presentDays === 0 &&
+          weeklySummaryData.totalWorkTime === '0h 0m' &&
+          dailyDataArray.length === 0) {
+        console.warn("⚠️ All weekly summary values are zero - possible data issue");
+
+        // Keep previous values if available, or set reasonable defaults
+        if (!weeklySummary || (weeklySummary.presentDays === 0 && dailyData.length === 0)) {
+          console.log("📝 Setting comprehensive fallback data for SummaryCard");
+          weeklySummaryData = {
+            presentDays: 0,
+            totalWork: '0h 0m',
+            totalBreak: '0h 0m',
+            avgDailyWork: '0h 0m',
+            avgDailyBreak: '0h 0m',
+            onTimeRate: '0%',
+            breaksTaken: 0,
+            quickStats: {
+              earlyArrivals: 0,
+              lateArrivals: 0,
+              perfectDays: 0
+            },
+            // Legacy compatibility
+            totalWorkTime: '0h 0m',
+            totalBreakTime: '0h 0m'
+          };
+        } else {
+          console.log("📋 Preserving previous valid data");
+          weeklySummaryData = weeklySummary;
+          dailyDataArray = dailyData;
+        }
+      }
+
+      console.log("✅ Final weekly summary data:", weeklySummaryData);
 
       // Update state with proper logging
       console.log("📊 Setting weekly summary state:", {
@@ -589,94 +517,70 @@ const TodayStatusPage = ({ onLogout }) => {
 
       console.log("📤 Sending update payload:", payload);
 
-      let serverResponse;
+      // Use new attendance system for status update
+      console.log("🆕 Recording attendance action");
 
-      if (USE_NEW_ATTENDANCE_SYSTEM && payload.timelineEvent) {
-        // Use new attendance system
-        console.log("🆕 Using new attendance system for status update");
-
-        // Use the converter to map event types
-        const newEventType = attendanceDataConverter.extractEventType(payload.timelineEvent.type);
-
-        console.log("📝 Event type mapping:", { original: payload.timelineEvent.type, mapped: newEventType });
-
-        const response = await newAttendanceService.recordPunchAction(newEventType, {
-          location: payload.timelineEvent.location || 'Office',
-          notes: payload.timelineEvent.notes || ''
-        });
-
-        if (response.success && response.data) {
-          // CRITICAL: Protect against zero duration values during break transitions
-          const currentWork = liveWork;
-          const currentBreak = liveBreak;
-
-          // Convert new response format to legacy format
-          serverResponse = {
-            currentlyWorking: response.data.currentlyWorking,
-            onBreak: response.data.onBreak,
-            currentStatus: response.data.currentStatus,
-            workDuration: response.data.workDuration,
-            breakDuration: response.data.breakDuration,
-            // PROTECTION: Never let server zeros override good timer values
-            workDurationSeconds: Math.max(response.data.workDurationSeconds || 0, currentWork || 0),
-            breakDurationSeconds: Math.max(response.data.breakDurationSeconds || 0, currentBreak || 0),
-            arrivalTime: response.data.arrivalTime,
-            departureTime: response.data.departureTime,
-            isLate: response.data.isLate,
-            timeline: status.timeline, // Keep existing timeline, will be refreshed by fetchStatus
-            // Add the new event to timeline optimistically
-            lastEvent: {
-              type: payload.timelineEvent.type,
-              time: payload.timelineEvent.time,
-              location: payload.timelineEvent.location
-            }
-          };
-
-          console.log("🛡️ Protected server response:", {
-            serverWork: response.data.workDurationSeconds,
-            currentWork,
-            finalWork: serverResponse.workDurationSeconds,
-            serverBreak: response.data.breakDurationSeconds,
-            currentBreak,
-            finalBreak: serverResponse.breakDurationSeconds
-          });
-        } else {
-          throw new Error(response.message || 'New attendance system call failed');
-        }
-      } else {
-        // Use old attendance system
-        console.log("📍 Using legacy attendance system for status update");
-        const res = await axios.put(
-          `${API_BASE}/api/status/today`,
-          payload,
-          {
-            ...getAxiosConfig(),
-            timeout: 10000 // 10 second timeout for status updates
-          }
-        );
-
-        console.log("✅ Legacy status update successful:", res.data);
-
-        // CRITICAL: Protect against zero duration values in legacy response too
-        const currentWork = liveWork;
-        const currentBreak = liveBreak;
-
-        serverResponse = {
-          ...res.data,
-          // PROTECTION: Never let server zeros override good timer values
-          workDurationSeconds: Math.max(res.data.workDurationSeconds || 0, currentWork || 0),
-          breakDurationSeconds: Math.max(res.data.breakDurationSeconds || 0, currentBreak || 0)
-        };
-
-        console.log("🛡️ Protected legacy response:", {
-          serverWork: res.data.workDurationSeconds,
-          currentWork,
-          finalWork: serverResponse.workDurationSeconds,
-          serverBreak: res.data.breakDurationSeconds,
-          currentBreak,
-          finalBreak: serverResponse.breakDurationSeconds
-        });
+      if (!payload.timelineEvent) {
+        throw new Error('Timeline event is required for attendance update');
       }
+
+      // Map event type to new format
+      const normalizeEventType = (eventType) => {
+        const normalized = String(eventType || '').toLowerCase().trim();
+        if (normalized.includes('punch') && normalized.includes('in')) return 'PUNCH_IN';
+        if (normalized.includes('punch') && normalized.includes('out')) return 'PUNCH_OUT';
+        if (normalized.includes('break') && normalized.includes('start')) return 'BREAK_START';
+        if (normalized.includes('resume')) return 'BREAK_END';
+        return 'PUNCH_IN'; // Default fallback
+      };
+
+      const newEventType = normalizeEventType(payload.timelineEvent.type);
+
+      console.log("📝 Event type mapping:", { original: payload.timelineEvent.type, mapped: newEventType });
+
+      const response = await newAttendanceService.recordPunchAction(newEventType, {
+        location: payload.timelineEvent.location || 'Office',
+        notes: payload.timelineEvent.notes || ''
+      });
+
+      if (!response.success || !response.data) {
+        throw new Error(response.message || 'Attendance system call failed');
+      }
+
+      // CRITICAL: Protect against zero duration values during break transitions
+      const currentWork = liveWork;
+      const currentBreak = liveBreak;
+
+      // Convert new response format to status object
+      const serverResponse = {
+        currentlyWorking: response.data.currentlyWorking,
+        onBreak: response.data.onBreak,
+        currentStatus: response.data.currentStatus,
+        workDuration: response.data.workDuration,
+        breakDuration: response.data.breakDuration,
+        // PROTECTION: Never let server zeros override good timer values
+        workDurationSeconds: Math.max(response.data.workDurationSeconds || 0, currentWork || 0),
+        breakDurationSeconds: Math.max(response.data.breakDurationSeconds || 0, currentBreak || 0),
+        arrivalTime: response.data.arrivalTime,
+        departureTime: response.data.departureTime,
+        isLate: response.data.isLate,
+        timeline: status.timeline, // Keep existing timeline, will be refreshed by fetchStatus
+        // Add the new event to timeline optimistically
+        lastEvent: {
+          type: payload.timelineEvent.type,
+          time: payload.timelineEvent.time,
+          location: payload.timelineEvent.location
+        }
+      };
+
+      console.log("🛡️ Protected server response:", {
+        serverWork: response.data.workDurationSeconds,
+        currentWork,
+        finalWork: serverResponse.workDurationSeconds,
+        serverBreak: response.data.breakDurationSeconds,
+        currentBreak,
+        finalBreak: serverResponse.breakDurationSeconds
+      });
 
       // Update with server response and ensure proper time formatting
       const serverStatus = { ...serverResponse };
@@ -791,7 +695,11 @@ const TodayStatusPage = ({ onLogout }) => {
       currentlyWorking: status.currentlyWorking,
       onBreak: status.onBreak,
       workDurationSeconds: status.workDurationSeconds,
-      breakDurationSeconds: status.breakDurationSeconds
+      breakDurationSeconds: status.breakDurationSeconds,
+      hasTimeline: !!status.timeline,
+      timelineLength: status.timeline?.length || 0,
+      currentLiveWork: liveWork,
+      currentLiveBreak: liveBreak
     });
 
     // Calculate current live time based on timeline instead of just using server duration
@@ -836,12 +744,83 @@ const TodayStatusPage = ({ onLogout }) => {
       }
     }
 
-    // Simplified approach: Always use server values for initialization
-    // Let the timers handle increments independently
-    const serverWorkDuration = status.workDurationSeconds || 0;
-    const serverBreakDuration = status.breakDurationSeconds || 0;
+    // Calculate actual elapsed time from timeline events
+    let calculatedWorkDuration = 0;
+    let calculatedBreakDuration = 0;
 
-    console.log("📊 Server durations:", {
+    // ALWAYS calculate from timeline to ensure accuracy across page loads
+    if (status.timeline && Array.isArray(status.timeline)) {
+      console.log("📋 Timeline events:", status.timeline);
+      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      let totalWorkSeconds = 0;
+
+      // Find all punch in/out and resume/break events
+      const events = status.timeline.filter(e => {
+        const eventDate = new Date(e.time);
+        return eventDate >= todayStart;
+      });
+
+      console.log("📋 Filtered today's events:", events.length, events);
+
+      let currentSessionStart = null;
+      for (const event of events) {
+        const eventType = event.type?.toUpperCase() || '';
+        const eventTime = new Date(event.time);
+
+        if (eventType === 'PUNCH_IN' || eventType === 'BREAK_END') {
+          currentSessionStart = eventTime;
+        } else if (eventType === 'BREAK_START' || eventType === 'PUNCH_OUT') {
+          if (currentSessionStart) {
+            totalWorkSeconds += Math.floor((eventTime - currentSessionStart) / 1000);
+            currentSessionStart = null;
+          }
+        }
+      }
+
+      // Add current active session time (only if currently working)
+      if (currentSessionStart && status.currentlyWorking) {
+        totalWorkSeconds += Math.floor((now - currentSessionStart) / 1000);
+      }
+
+      calculatedWorkDuration = totalWorkSeconds;
+      console.log("🔄 Calculated work duration from timeline:", totalWorkSeconds);
+
+      // Calculate total break time from all break sessions (same timeline)
+      let totalBreakSeconds = 0;
+
+      const breakEvents = status.timeline.filter(e => {
+        const eventDate = new Date(e.time);
+        return eventDate >= todayStart;
+      });
+
+      let currentBreakStart = null;
+      for (const event of breakEvents) {
+        const eventType = event.type?.toUpperCase() || '';
+        const eventTime = new Date(event.time);
+
+        if (eventType === 'BREAK_START') {
+          currentBreakStart = eventTime;
+        } else if (eventType === 'BREAK_END') {
+          if (currentBreakStart) {
+            totalBreakSeconds += Math.floor((eventTime - currentBreakStart) / 1000);
+            currentBreakStart = null;
+          }
+        }
+      }
+
+      // Add current active break time (only if currently on break)
+      if (currentBreakStart && status.onBreak) {
+        totalBreakSeconds += Math.floor((now - currentBreakStart) / 1000);
+      }
+
+      calculatedBreakDuration = totalBreakSeconds;
+      console.log("🔄 Calculated break duration from timeline:", totalBreakSeconds);
+    }
+
+    const serverWorkDuration = calculatedWorkDuration;
+    const serverBreakDuration = calculatedBreakDuration;
+
+    console.log("📊 Calculated durations:", {
       work: serverWorkDuration,
       break: serverBreakDuration,
       currentlyWorking: status.currentlyWorking,
@@ -850,34 +829,25 @@ const TodayStatusPage = ({ onLogout }) => {
 
     // Work timer logic - preserve values during break transitions
     setLiveWork(prev => {
-      // First initialization
+      // First initialization ONLY when prev is 0 (page load)
       if (prev === 0) {
-        // Try to restore from localStorage first (for refresh stability)
-        const stored = localStorage.getItem(`workTimer_${new Date().toDateString()}`);
-        const storedValue = stored ? parseInt(stored) : 0;
-
-        // Use stored value if it's reasonable (within 30 seconds of server)
-        if (storedValue > 0 && Math.abs(storedValue - serverWorkDuration) <= 30) {
-          console.log("🔄 Restoring work timer from localStorage:", storedValue);
-          return storedValue;
-        }
-
-        console.log("🔄 Initializing work timer from server:", serverWorkDuration);
+        console.log("🔄 Initial work timer from calculated duration:", serverWorkDuration);
         return serverWorkDuration;
       }
 
-      // CRITICAL: Don't reset work timer during break transitions
-      // Work time should NEVER decrease during break start/end
-      if (serverWorkDuration < prev && status.onBreak) {
-        console.log("🚫 Preventing work timer reset during break:", {
+      // CRITICAL: Don't reset work timer during break transitions OR status changes
+      // Work time should NEVER decrease except on page reload
+      if (serverWorkDuration < prev) {
+        console.log("🚫 Preventing work timer decrease:", {
           prev,
           server: serverWorkDuration,
-          preserving: prev
+          preserving: prev,
+          onBreak: status.onBreak
         });
-        return prev; // Keep current value
+        return prev; // Always keep current value if server value is lower
       }
 
-      // Only sync if server value is significantly higher (work progressed)
+      // Only sync if server value is significantly higher (work progressed during offline/page hidden)
       const diff = serverWorkDuration - prev;
       if (diff > 30) {
         console.log("🔄 Work timer progression sync:", {
@@ -888,69 +858,30 @@ const TodayStatusPage = ({ onLogout }) => {
         return serverWorkDuration;
       }
 
-      // Save current value to localStorage for refresh stability
-      localStorage.setItem(`workTimer_${new Date().toDateString()}`, prev.toString());
-
-      // Otherwise keep current timer value
+      // Otherwise keep current timer value (increments happen via setInterval)
       return prev;
     });
 
     setLiveBreak(prev => {
-      // Check if break status changed (transition in/out of break)
-      const previousStatus = previousStatusRef.current;
-      const wasOnBreak = previousStatus?.onBreak;
-      const isNowOnBreak = status.onBreak;
-
-      // CRITICAL: Only reset break timer if we have VALID server data
-      if (previousStatus && wasOnBreak !== isNowOnBreak) {
-        // If ending break, preserve accumulated break time (never decrease)
-        if (wasOnBreak && !isNowOnBreak) {
-          console.log("🔄 Break ended, preserving break time:", {
-            current: prev,
-            server: serverBreakDuration,
-            preserving: Math.max(prev, serverBreakDuration)
-          });
-          return Math.max(prev, serverBreakDuration); // Use higher value
-        }
-
-        // If starting break, only reset if server has reasonable data
-        if (!wasOnBreak && isNowOnBreak) {
-          if (serverBreakDuration > 0 && serverBreakDuration >= prev) {
-            console.log("🔄 Break started, using server value:", serverBreakDuration);
-            return serverBreakDuration;
-          } else {
-            console.log("🔄 Break started, preserving current value:", prev);
-            return prev; // Keep current if server data looks wrong
-          }
-        }
-      }
-
-      // First initialization - try localStorage first
+      // First initialization ONLY when prev is 0 (page load)
       if (prev === 0) {
-        const stored = localStorage.getItem(`breakTimer_${new Date().toDateString()}`);
-        const storedValue = stored ? parseInt(stored) : 0;
-
-        // Use stored value if it's reasonable (within 30 seconds of server)
-        if (storedValue > 0 && Math.abs(storedValue - serverBreakDuration) <= 30) {
-          console.log("🔄 Restoring break timer from localStorage:", storedValue);
-          return storedValue;
-        }
-
-        console.log("🔄 Initializing break timer from server:", serverBreakDuration);
+        console.log("🔄 Initial break timer from calculated duration:", serverBreakDuration);
         return serverBreakDuration;
       }
 
-      // CRITICAL: Never decrease break time except on valid progression
-      if (serverBreakDuration < prev && serverBreakDuration === 0) {
-        console.log("🚫 Preventing break timer reset to zero:", {
+      // CRITICAL: Never decrease break time during any transition
+      // Break time should NEVER decrease except on page reload
+      if (serverBreakDuration < prev) {
+        console.log("🚫 Preventing break timer decrease:", {
           prev,
           server: serverBreakDuration,
-          preserving: prev
+          preserving: prev,
+          onBreak: status.onBreak
         });
-        return prev; // Keep current value
+        return prev; // Always keep current value if server value is lower
       }
 
-      // Only sync if server value is significantly higher (break progressed)
+      // Only sync if server value is significantly higher (break progressed during offline/page hidden)
       const diff = serverBreakDuration - prev;
       if (diff > 30) {
         console.log("🔄 Break timer progression sync:", {
@@ -960,9 +891,6 @@ const TodayStatusPage = ({ onLogout }) => {
         });
         return serverBreakDuration;
       }
-
-      // Save current value to localStorage for refresh stability
-      localStorage.setItem(`breakTimer_${new Date().toDateString()}`, prev.toString());
 
       // Otherwise preserve the current timer value (let the interval handle increments)
       return prev;
@@ -1609,9 +1537,9 @@ const TodayStatusPage = ({ onLogout }) => {
 
               {/* System indicator */}
               <div className="flex items-center gap-1 px-2 py-1 rounded-md bg-gray-700/50">
-                <div className={`w-1.5 h-1.5 rounded-full ${USE_NEW_ATTENDANCE_SYSTEM ? 'bg-green-400' : 'bg-orange-400'}`}></div>
+                <div className="w-1.5 h-1.5 rounded-full bg-green-400"></div>
                 <span className="text-xs text-gray-300">
-                  {USE_NEW_ATTENDANCE_SYSTEM ? 'New System' : 'Legacy'}
+                  Live
                 </span>
               </div>
               {(() => {

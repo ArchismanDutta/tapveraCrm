@@ -8,7 +8,6 @@ const attendanceService = require("../services/attendanceCalculationService");
 // -----------------------
 // Constants
 // -----------------------
-const EARLY_PUNCH_MINUTES = 120; // allow punch-in up to 120 min before shift start
 const MIN_HALF_DAY_SECONDS = 5 * 3600; // 5 hours
 const MIN_FULL_DAY_SECONDS = 8 * 3600; // 8 hours
 

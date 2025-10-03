@@ -2,6 +2,10 @@ const User = require("../models/User");
 const UserStatus = require("../models/UserStatus");
 const AttendanceRecord = require("../models/AttendanceRecord");
 const { getEffectiveShift, getAttendanceData } = require("../services/attendanceCalculationService");
+const unifiedAttendanceService = require("../services/unifiedAttendanceService");
+
+// CRITICAL: Use enhanced attendance system for all manual attendance
+const USE_ENHANCED_ATTENDANCE_SYSTEM = true;
 
 /**
  * Create manual attendance entry for an employee on a specific date
@@ -21,6 +25,11 @@ const createManualAttendance = async (req, res) => {
       isHoliday = false,
       overrideExisting = false
     } = req.body;
+
+    // CRITICAL: Route to enhanced attendance system
+    if (USE_ENHANCED_ATTENDANCE_SYSTEM) {
+      return await createManualAttendanceEnhanced(req, res);
+    }
 
     // Validate required fields
     if (!userId || !date) {
@@ -761,10 +770,357 @@ const getAttendanceByUserAndDate = async (req, res) => {
   }
 };
 
+/**
+ * Create manual attendance using ENHANCED ATTENDANCE SYSTEM
+ * Uses AttendanceRecord with enhanced fields and unifiedAttendanceService for calculations
+ */
+const createManualAttendanceEnhanced = async (req, res) => {
+  try {
+    const {
+      userId,
+      date,
+      punchInTime,
+      punchOutTime,
+      breakSessions = [],
+      notes = "",
+      isOnLeave = false,
+      isHoliday = false,
+      overrideExisting = false
+    } = req.body;
+
+    console.log("📝 Creating manual attendance with ENHANCED system:", {
+      userId,
+      date,
+      punchInTime,
+      punchOutTime,
+      breakSessionsCount: breakSessions.length,
+      overrideExisting
+    });
+
+    // Validate required fields
+    if (!userId || !date) {
+      return res.status(400).json({
+        success: false,
+        error: "User ID and date are required"
+      });
+    }
+
+    // Validate user exists
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: "User not found"
+      });
+    }
+
+    // Parse and validate date
+    const targetDate = new Date(date);
+    if (isNaN(targetDate.getTime())) {
+      return res.status(400).json({
+        success: false,
+        error: "Invalid date format"
+      });
+    }
+
+    targetDate.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(targetDate);
+    endOfDay.setHours(23, 59, 59, 999);
+
+    // Find or create the date-based AttendanceRecord
+    let attendanceRecord = await AttendanceRecord.findOne({
+      date: { $gte: targetDate, $lte: endOfDay }
+    });
+
+    // Check if this employee already has attendance for this date
+    const existingEmployeeData = attendanceRecord?.employees?.find(
+      emp => emp.userId.toString() === userId.toString()
+    );
+
+    if (existingEmployeeData && !overrideExisting) {
+      return res.status(409).json({
+        success: false,
+        error: "Attendance record already exists for this employee on this date. Set overrideExisting=true to replace it.",
+        existingRecords: {
+          hasAttendanceRecord: true
+        }
+      });
+    }
+
+    // Validate punch times
+    let punchIn = null;
+    let punchOut = null;
+
+    if (punchInTime) {
+      punchIn = new Date(punchInTime);
+      if (isNaN(punchIn.getTime())) {
+        return res.status(400).json({
+          success: false,
+          error: "Invalid punch in time format"
+        });
+      }
+    }
+
+    if (punchOutTime) {
+      punchOut = new Date(punchOutTime);
+      if (isNaN(punchOut.getTime())) {
+        return res.status(400).json({
+          success: false,
+          error: "Invalid punch out time format"
+        });
+      }
+    }
+
+    if (punchIn && punchOut && punchOut <= punchIn) {
+      return res.status(400).json({
+        success: false,
+        error: "Punch out time must be after punch in time"
+      });
+    }
+
+    // Process break sessions
+    const processedBreakSessions = [];
+    let totalBreakSeconds = 0;
+
+    for (const breakSession of breakSessions) {
+      const breakStart = new Date(breakSession.start);
+      const breakEnd = new Date(breakSession.end);
+
+      if (isNaN(breakStart.getTime()) || isNaN(breakEnd.getTime())) {
+        return res.status(400).json({
+          success: false,
+          error: "Invalid break session time format"
+        });
+      }
+
+      if (breakEnd <= breakStart) {
+        return res.status(400).json({
+          success: false,
+          error: "Break end time must be after break start time"
+        });
+      }
+
+      const breakDuration = Math.floor((breakEnd - breakStart) / 1000);
+      totalBreakSeconds += breakDuration;
+
+      processedBreakSessions.push({
+        start: breakStart,
+        end: breakEnd,
+        duration: breakDuration,
+        type: breakSession.type || "break"
+      });
+    }
+
+    // Calculate work duration
+    let totalWorkSeconds = 0;
+    const workSessions = [];
+
+    if (punchIn && punchOut && !isOnLeave && !isHoliday) {
+      if (processedBreakSessions.length === 0) {
+        totalWorkSeconds = Math.floor((punchOut - punchIn) / 1000);
+        workSessions.push({
+          start: punchIn,
+          end: punchOut,
+          duration: totalWorkSeconds
+        });
+      } else {
+        let currentStart = punchIn;
+        const sortedBreaks = processedBreakSessions.sort((a, b) => a.start - b.start);
+
+        for (const breakSession of sortedBreaks) {
+          if (currentStart < breakSession.start) {
+            const workDuration = Math.floor((breakSession.start - currentStart) / 1000);
+            if (workDuration > 0) {
+              totalWorkSeconds += workDuration;
+              workSessions.push({
+                start: currentStart,
+                end: breakSession.start,
+                duration: workDuration
+              });
+            }
+          }
+          currentStart = breakSession.end;
+        }
+
+        if (currentStart < punchOut) {
+          const workDuration = Math.floor((punchOut - currentStart) / 1000);
+          if (workDuration > 0) {
+            totalWorkSeconds += workDuration;
+            workSessions.push({
+              start: currentStart,
+              end: punchOut,
+              duration: workDuration
+            });
+          }
+        }
+      }
+    }
+
+    // Get effective shift and calculate status
+    const effectiveShift = await getEffectiveShift(userId, targetDate);
+    const attendanceData = await unifiedAttendanceService.getUnifiedAttendanceData(
+      userId,
+      targetDate,
+      workSessions,
+      processedBreakSessions,
+      punchIn,
+      effectiveShift
+    );
+
+    // Build events array (using PunchEventSchema format)
+    const events = [];
+    if (punchIn && !isOnLeave && !isHoliday) {
+      events.push({
+        type: "PUNCH_IN",
+        timestamp: punchIn,
+        manual: true,
+        approvedBy: req.user._id,
+        notes: notes || 'Manual entry'
+      });
+    }
+    processedBreakSessions.forEach(breakSession => {
+      events.push({
+        type: "BREAK_START",
+        timestamp: breakSession.start,
+        manual: true,
+        approvedBy: req.user._id
+      });
+      events.push({
+        type: "BREAK_END",
+        timestamp: breakSession.end,
+        manual: true,
+        approvedBy: req.user._id
+      });
+    });
+    if (punchOut && !isOnLeave && !isHoliday) {
+      events.push({
+        type: "PUNCH_OUT",
+        timestamp: punchOut,
+        manual: true,
+        approvedBy: req.user._id,
+        notes: notes || 'Manual entry'
+      });
+    }
+
+    // Build employee attendance data
+    const employeeData = {
+      userId,
+      events,
+      calculated: {
+        arrivalTime: punchIn,
+        departureTime: punchOut,
+        workDurationSeconds: totalWorkSeconds,
+        breakDurationSeconds: totalBreakSeconds,
+        totalDurationSeconds: totalWorkSeconds + totalBreakSeconds,
+        workDuration: `${Math.floor(totalWorkSeconds / 3600)}h ${Math.floor((totalWorkSeconds % 3600) / 60)}m`,
+        breakDuration: `${Math.floor(totalBreakSeconds / 3600)}h ${Math.floor((totalBreakSeconds % 3600) / 60)}m`,
+        isPresent: !isOnLeave && !isHoliday && punchIn !== null,
+        isAbsent: isOnLeave || isHoliday || (!punchIn && !punchOut),
+        isLate: attendanceData.isLate || false,
+        isHalfDay: attendanceData.isHalfDay || false,
+        isFullDay: totalWorkSeconds >= (6.5 * 3600),
+        currentlyWorking: false,
+        onBreak: false,
+        currentStatus: 'FINISHED',
+        totalWorkSessions: workSessions.length,
+        totalBreakSessions: processedBreakSessions.length
+      },
+      assignedShift: effectiveShift ? {
+        name: effectiveShift.name || 'Standard',
+        startTime: effectiveShift.start,
+        endTime: effectiveShift.end,
+        durationHours: effectiveShift.durationHours || 9,
+        // Map shift types to valid enum values: STANDARD, FLEXIBLE, NIGHT, SPLIT
+        type: (() => {
+          const shiftType = effectiveShift.type?.toLowerCase() || 'standard';
+          if (shiftType.includes('flexible')) return 'FLEXIBLE';
+          if (shiftType === 'night') return 'NIGHT';
+          if (shiftType === 'split') return 'SPLIT';
+          return 'STANDARD';
+        })(),
+        isFlexible: effectiveShift.type?.toLowerCase().includes('flexible') || false
+      } : undefined,
+      leaveInfo: {
+        isOnLeave,
+        isHoliday
+      },
+      metadata: {
+        manualEntry: true,
+        enteredBy: req.user._id,
+        notes
+      }
+    };
+
+    // Create or update the date record
+    if (!attendanceRecord) {
+      // Create new date record
+      attendanceRecord = new AttendanceRecord({
+        date: targetDate,
+        employees: [employeeData],
+        dailyStats: {
+          totalEmployees: 1,
+          present: employeeData.calculated.isPresent ? 1 : 0,
+          absent: employeeData.calculated.isAbsent ? 1 : 0,
+          late: employeeData.calculated.isLate ? 1 : 0,
+          halfDay: employeeData.calculated.isHalfDay ? 1 : 0,
+          fullDay: employeeData.calculated.isFullDay ? 1 : 0,
+          onLeave: isOnLeave ? 1 : 0,
+          onHoliday: isHoliday ? 1 : 0
+        }
+      });
+    } else {
+      // Update existing date record
+      if (existingEmployeeData && overrideExisting) {
+        // Remove old employee data
+        attendanceRecord.employees = attendanceRecord.employees.filter(
+          emp => emp.userId.toString() !== userId.toString()
+        );
+      }
+      // Add new employee data
+      attendanceRecord.employees.push(employeeData);
+    }
+
+    await attendanceRecord.save();
+
+    console.log("✅ Manual attendance created/updated successfully:", {
+      attendanceRecordId: attendanceRecord._id,
+      date: attendanceRecord.date,
+      employeeCount: attendanceRecord.employees?.length || 0,
+      workDurationSeconds: totalWorkSeconds,
+      breakDurationSeconds: totalBreakSeconds,
+      eventsCount: events.length
+    });
+
+    res.status(200).json({
+      success: true,
+      message: overrideExisting ? "Manual attendance updated successfully" : "Manual attendance created successfully",
+      data: {
+        dailyWork: employeeData, // Return the employee data for frontend compatibility
+        calculatedMetrics: {
+          workHours: (totalWorkSeconds / 3600).toFixed(2),
+          breakHours: (totalBreakSeconds / 3600).toFixed(2),
+          status: attendanceData.status,
+          isLate: attendanceData.isLate,
+          isHalfDay: attendanceData.isHalfDay
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error("Error creating manual attendance (new system):", error);
+    res.status(500).json({
+      success: false,
+      error: "Internal server error",
+      details: error.message
+    });
+  }
+};
+
 module.exports = {
   createManualAttendance,
   updateManualAttendance,
   deleteManualAttendance,
   getManualAttendanceRecords,
-  getAttendanceByUserAndDate
+  getAttendanceByUserAndDate,
+  createManualAttendanceEnhanced
 };

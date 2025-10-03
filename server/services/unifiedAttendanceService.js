@@ -20,7 +20,6 @@ const ATTENDANCE_CONSTANTS = {
 
   // Time limits
   MAX_DAILY_WORK_HOURS: 24,
-  EARLY_PUNCH_ALLOWANCE_MINUTES: 120,
   LATE_THRESHOLD_MINUTES: 15,
 
   // Session validation
@@ -441,21 +440,7 @@ function validatePunchInTime(punchTime, shift, userTimeZone = "UTC") {
       return { isValid: true }; // No start time restriction
     }
 
-    const [shiftHour, shiftMinute] = shift.start.split(':').map(Number);
-    const expectedStart = new Date(now);
-    expectedStart.setHours(shiftHour, shiftMinute, 0, 0);
-
-    // Allow early punch in within allowance
-    const earliestAllowed = new Date(expectedStart);
-    earliestAllowed.setMinutes(earliestAllowed.getMinutes() - ATTENDANCE_CONSTANTS.EARLY_PUNCH_ALLOWANCE_MINUTES);
-
-    if (now < earliestAllowed) {
-      return {
-        isValid: false,
-        message: `Cannot punch in more than ${ATTENDANCE_CONSTANTS.EARLY_PUNCH_ALLOWANCE_MINUTES} minutes before shift start time`,
-      };
-    }
-
+    // Allow punch in at any time - no early restriction
     return { isValid: true };
 
   } catch (error) {
