@@ -1,5 +1,6 @@
 const User = require("../models/User");
-const DailyWork = require("../models/DailyWork");
+// const DailyWork = require("../models/DailyWork"); // REMOVED - Using new AttendanceRecord system
+const AttendanceRecord = require("../models/AttendanceRecord");
 const LeaveRequest = require("../models/LeaveRequest");
 const Holiday = require("../models/Holiday");
 
@@ -49,8 +50,8 @@ exports.getEmployeeSummary = async (req, res) => {
     const end = new Date(endDate);
     end.setHours(23, 59, 59, 999);
 
-    // Fetch DailyWork records
-    const dailyData = await DailyWork.find({
+    // Fetch AttendanceRecord records
+    const dailyData = await AttendanceRecord.find({
       userId: employeeId,
       date: { $gte: start, $lte: end },
     })

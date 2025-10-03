@@ -302,21 +302,46 @@ const ManualAttendanceForm = ({
         if (successCount > 0) {
           onSuccess?.();
 
-          // Emit event to notify attendance calendar to refresh
-          // Add a small delay to ensure database transactions are committed
-          console.log("🔄 Dispatching attendanceDataUpdated event for multi-date...");
+          // Enhanced event dispatch for multi-date creation
+          console.log("🔄 Dispatching enhanced events for multi-date creation...");
           setTimeout(() => {
+            // Main event for legacy compatibility
             window.dispatchEvent(new CustomEvent('attendanceDataUpdated', {
               detail: {
                 timestamp: Date.now(),
                 userId: formData.userId,
+                employeeId: formData.userId,
                 dates: formData.selectedDates,
                 action: 'multi-create',
                 successCount,
-                forceRefresh: true
+                forceRefresh: true,
+                message: `${successCount} attendance records created successfully`
               }
             }));
-          }, 500); // 500ms delay to ensure database consistency
+
+            // Enhanced events for specific components
+            window.dispatchEvent(new CustomEvent('manualAttendanceUpdated', {
+              detail: {
+                type: 'MULTI_CREATE',
+                employeeId: formData.userId,
+                affectedDates: formData.selectedDates,
+                successCount,
+                timestamp: Date.now(),
+                source: 'ManualAttendanceForm'
+              }
+            }));
+
+            window.dispatchEvent(new CustomEvent('attendanceRecordModified', {
+              detail: {
+                operation: 'MULTI_CREATE',
+                employeeId: formData.userId,
+                recordCount: successCount,
+                timestamp: Date.now()
+              }
+            }));
+
+            console.log(`📢 Manual Form: Multi-date events dispatched for ${successCount} records`);
+          }, 100); // 500ms delay to ensure database consistency
 
           handleClose();
         }
@@ -356,21 +381,47 @@ const ManualAttendanceForm = ({
           );
           onSuccess?.(result.data);
 
-          // Emit event to notify attendance calendar to refresh
-          // Add a small delay to ensure database transactions are committed
-          console.log("🔄 Dispatching attendanceDataUpdated event...");
+          // Enhanced event dispatch for single record operation
+          console.log("🔄 Dispatching enhanced events for single record operation...");
           setTimeout(() => {
+            // Main event for legacy compatibility
             window.dispatchEvent(new CustomEvent('attendanceDataUpdated', {
               detail: {
                 timestamp: Date.now(),
                 recordId: result.data?.dailyWork?._id,
                 userId: formData.userId,
+                employeeId: formData.userId,
                 date: formData.date || formData.selectedDates,
                 action: isEdit ? 'update' : 'create',
-                forceRefresh: true
+                forceRefresh: true,
+                message: isEdit ? "Attendance record updated successfully" : "Manual attendance record created successfully"
               }
             }));
-          }, 500); // 500ms delay to ensure database consistency
+
+            // Enhanced events for specific components
+            window.dispatchEvent(new CustomEvent('manualAttendanceUpdated', {
+              detail: {
+                type: isEdit ? 'UPDATE' : 'CREATE',
+                operation: isEdit ? 'EDIT' : 'ADD',
+                employeeId: formData.userId,
+                recordId: result.data?.dailyWork?._id,
+                date: formData.date,
+                timestamp: Date.now(),
+                source: 'ManualAttendanceForm'
+              }
+            }));
+
+            window.dispatchEvent(new CustomEvent('attendanceRecordModified', {
+              detail: {
+                operation: isEdit ? 'UPDATE' : 'CREATE',
+                employeeId: formData.userId,
+                recordId: result.data?.dailyWork?._id,
+                timestamp: Date.now()
+              }
+            }));
+
+            console.log(`📢 Manual Form: Single record events dispatched for ${isEdit ? 'update' : 'create'}`);
+          }, 100); // 500ms delay to ensure database consistency
 
           handleClose();
         } else {

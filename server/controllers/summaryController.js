@@ -1,10 +1,10 @@
 // controllers/summaryController.js
-const DailyWork = require("../models/DailyWork");
 const UserStatus = require("../models/UserStatus");
 const User = require("../models/User");
 const LeaveRequest = require("../models/LeaveRequest");
 const { getEffectiveShift } = require("./statusController");
 const attendanceService = require("../services/attendanceCalculationService");
+const AttendanceRecord = require("../models/AttendanceRecord");
 
 // ======================
 // Helper: Convert seconds to "Hh Mm" format
@@ -58,11 +58,11 @@ exports.getWeeklySummary = async (req, res) => {
     const startTime = Date.now();
     console.log(`Starting attendance summary for user ${userId}, date range: ${startDate.toISOString()} to ${endDate.toISOString()}`);
 
-    // Fetch DailyWork, UserStatus, and Leave data with optimized queries
+    // Fetch AttendanceRecord, UserStatus, and Leave data with optimized queries
     const [rawDailyData, userStatusData, leaveData] = await Promise.all([
-      DailyWork.find({
-        userId,
+      AttendanceRecord.find({
         date: { $gte: startDate, $lte: endDate },
+        'employees.userId': userId
       }).sort({ date: 1 }).lean(), // Use lean() for better performance
       UserStatus.find({
         userId,
@@ -76,7 +76,7 @@ exports.getWeeklySummary = async (req, res) => {
       }).lean()
     ]);
 
-    console.log(`Database queries completed in ${Date.now() - startTime}ms. Found ${rawDailyData.length} DailyWork records, ${userStatusData.length} UserStatus records, ${leaveData.length} leave records`);
+    console.log(`Database queries completed in ${Date.now() - startTime}ms. Found ${rawDailyData.length} AttendanceRecord records, ${userStatusData.length} UserStatus records, ${leaveData.length} leave records`);
 
     // Helper function to find leave for a specific date
     const findLeaveForDate = (date) => {
@@ -215,11 +215,9 @@ exports.getWeeklySummary = async (req, res) => {
         // Sync DailyWork if it doesn't exist or is outdated
         if (!dailyWorkRecord) {
           try {
-            dailyWorkRecord = new DailyWork({
+            dailyWorkRecord = new AttendanceRecord({
               userId,
-              userStatusId: userStatusRecord._id,
               date: dateToProcess,
-              expectedStartTime: effectiveShift.isFlexible ? null : effectiveShift.start,
               shift: {
                 name: effectiveShift.shiftName,
                 start: effectiveShift.start,
@@ -235,6 +233,8 @@ exports.getWeeklySummary = async (req, res) => {
               workedSessions,
               timeline,
               arrivalTime,
+              currentStatus: 'FINISHED', // Set appropriate status for completed records
+              migratedFrom: 'legacy-summary-controller' // Track the source
             });
             await dailyWorkRecord.save();
           } catch (syncError) {

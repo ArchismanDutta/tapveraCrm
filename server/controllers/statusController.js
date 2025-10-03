@@ -1,7 +1,6 @@
 // controllers/statusController.js
 // Replaced date-fns-tz with native Intl-based TZ conversion helpers
 const UserStatus = require("../models/UserStatus");
-const DailyWork = require("../models/DailyWork");
 const User = require("../models/User");
 const FlexibleShiftRequest = require("../models/FlexibleShiftRequest");
 const attendanceService = require("../services/attendanceCalculationService");
@@ -218,6 +217,8 @@ function getWorkDurationSeconds(workedSessions, currentlyWorking) {
     total = 86400;
   }
 
+  // Handle ongoing work session - count when currently working
+  // When on break, the current work session should be closed, so this won't add ongoing time
   if (currentlyWorking && uniqueSessions.length) {
     const last = uniqueSessions[uniqueSessions.length - 1];
     if (last && last.start && !last.end) {
@@ -253,28 +254,56 @@ function getWorkDurationSeconds(workedSessions, currentlyWorking) {
 }
 
 function getBreakDurationSeconds(breakSessions, onBreak, breakStart) {
-  if (!Array.isArray(breakSessions)) return 0;
+  console.log("🔍 getBreakDurationSeconds called with:", {
+    breakSessionsLength: Array.isArray(breakSessions) ? breakSessions.length : 'not array',
+    breakSessions: breakSessions,
+    onBreak,
+    breakStart
+  });
 
-  let total = breakSessions.reduce((sum, s) => {
-    if (s && s.start && s.end)
-      return (
-        sum + (new Date(s.end).getTime() - new Date(s.start).getTime()) / 1000
-      );
-    return sum;
-  }, 0);
+  if (!Array.isArray(breakSessions)) {
+    console.log("❌ Break sessions not array, returning 0");
+    return 0;
+  }
+
+  let total = 0;
+  for (let i = 0; i < breakSessions.length; i++) {
+    const s = breakSessions[i];
+    if (s && s.start && s.end) {
+      const sessionDuration = (new Date(s.end).getTime() - new Date(s.start).getTime()) / 1000;
+      console.log(`📊 Break session ${i}:`, {
+        start: s.start,
+        end: s.end,
+        duration: sessionDuration
+      });
+      total += sessionDuration;
+    } else {
+      console.log(`⚠️ Incomplete break session ${i}:`, s);
+    }
+  }
+
+  console.log("📊 Completed break sessions total:", total);
 
   if (onBreak) {
     const last = breakSessions.length
       ? breakSessions[breakSessions.length - 1]
       : null;
+    console.log("🔍 Currently on break, checking for ongoing session:", last);
+
     if (last && last.start && !last.end) {
-      total += (Date.now() - new Date(last.start).getTime()) / 1000;
+      const ongoingDuration = (Date.now() - new Date(last.start).getTime()) / 1000;
+      console.log("⏰ Adding ongoing break duration:", ongoingDuration);
+      total += ongoingDuration;
     } else if (breakStart) {
-      total += (Date.now() - new Date(breakStart).getTime()) / 1000;
+      const fallbackDuration = (Date.now() - new Date(breakStart).getTime()) / 1000;
+      console.log("⏰ Using fallback breakStart time:", fallbackDuration);
+      total += fallbackDuration;
     }
   }
 
-  return Math.floor(total);
+  const finalTotal = Math.floor(total);
+  console.log("✅ Final break duration:", finalTotal);
+  return finalTotal;
 }
 
 function secToHMS(sec) {
@@ -429,105 +458,7 @@ async function getEffectiveShift(userId, date) {
 // -----------------------
 // Sync DailyWork with enhanced timeline data
 // -----------------------
-async function syncDailyWork(userId, todayStatus, userTimeZone = "UTC") {
-  const todayLocal = new Date();
-  todayLocal.setHours(0, 0, 0, 0);
-  const todayUTC = zonedTimeToUtc(todayLocal, userTimeZone);
-
-  // Use the new attendance service for comprehensive calculations
-  const attendanceData = await attendanceService.getAttendanceData(
-    userId,
-    todayUTC,
-    todayStatus.workedSessions || [],
-    todayStatus.breakSessions || [],
-    todayStatus.arrivalTime
-  );
-
-  if (attendanceData.error) {
-    console.warn(`Error getting attendance data for user ${userId} on ${todayUTC}:`, attendanceData.error);
-    return null;
-  }
-
-  const { effectiveShift, attendanceStatus } = attendanceData;
-
-  const shiftObj = {
-    name: effectiveShift.shiftName || "",
-    start: effectiveShift.start || "00:00",
-    end: effectiveShift.end || "23:59",
-    isFlexible: Boolean(
-      effectiveShift.isFlexible || effectiveShift.isFlexiblePermanent
-    ),
-    durationHours: effectiveShift.durationHours || 9,
-  };
-
-  // Get arrival time - always use timeline as source of truth
-  let arrivalTime = todayStatus.arrivalTime;
-  if (todayStatus.timeline) {
-    const timelineArrival = getFirstPunchInTime(todayStatus.timeline);
-    if (timelineArrival) {
-      // Use timeline as source of truth
-      arrivalTime = timelineArrival;
-      // Update todayStatus if different
-      if (!todayStatus.arrivalTime || timelineArrival.getTime() !== new Date(todayStatus.arrivalTime).getTime()) {
-        todayStatus.arrivalTime = timelineArrival;
-      }
-    }
-  }
-
-  let dailyWork = await DailyWork.findOne({ userId, date: todayUTC });
-
-  // Determine shift type based on effective shift
-  let computedShiftType = "standard";
-  if (effectiveShift.isFlexiblePermanent) {
-    computedShiftType = "flexiblePermanent";
-  } else if (effectiveShift.isFlexible || effectiveShift.isOneDayFlexibleOverride) {
-    computedShiftType = "flexible";
-  }
-
-  if (!dailyWork) {
-    dailyWork = new DailyWork({
-      userId,
-      userStatusId: todayStatus._id,
-      date: todayUTC,
-      expectedStartTime:
-        effectiveShift.isFlexiblePermanent || effectiveShift.isFlexible || effectiveShift.isOneDayFlexibleOverride
-          ? null
-          : effectiveShift.start,
-      shift: shiftObj,
-      shiftType: computedShiftType,
-      workDurationSeconds: attendanceData.workDurationSeconds || 0,
-      breakDurationSeconds: attendanceData.breakDurationSeconds || 0,
-      breakSessions: todayStatus.breakSessions || [],
-      workedSessions: todayStatus.workedSessions || [],
-      timeline: todayStatus.timeline || [],
-      arrivalTime: arrivalTime,
-      weekSummary: todayStatus.weekSummary || {},
-      quickStats: todayStatus.quickStats || {},
-    });
-  } else {
-    dailyWork.shift = shiftObj;
-    dailyWork.expectedStartTime =
-      effectiveShift.isFlexiblePermanent || effectiveShift.isFlexible || effectiveShift.isOneDayFlexibleOverride
-        ? null
-        : effectiveShift.start;
-    dailyWork.shiftType = computedShiftType;
-    dailyWork.userStatusId = todayStatus._id;
-    dailyWork.workDurationSeconds = attendanceData.workDurationSeconds || 0;
-    dailyWork.breakDurationSeconds = attendanceData.breakDurationSeconds || 0;
-    dailyWork.breakSessions = todayStatus.breakSessions || [];
-    dailyWork.workedSessions = todayStatus.workedSessions || [];
-    dailyWork.timeline = todayStatus.timeline || [];
-    dailyWork.arrivalTime = arrivalTime;
-  }
-
-  // Use the new attendance status calculations
-  dailyWork.isLate = attendanceStatus.isLate || false;
-  dailyWork.isHalfDay = attendanceStatus.isHalfDay || false;
-  dailyWork.isAbsent = attendanceStatus.isAbsent || false;
-
-  await dailyWork.save();
-  return dailyWork;
-}
+// Note: syncDailyWork function removed - functionality moved to new AttendanceRecord system
 
 // -----------------------
 // Get Today's Status
@@ -913,7 +844,7 @@ async function updateTodayStatus(req, res) {
           });
         }
 
-        // Close current break session
+        // Close current break session BEFORE updating status flags
         if (bs.length && !bs[bs.length - 1].end) {
           bs[bs.length - 1].end = now;
         }
@@ -923,6 +854,7 @@ async function updateTodayStatus(req, res) {
           ws.push({ start: now });
         }
 
+        // Update status flags after break session is properly closed
         todayStatus.currentlyWorking = true;
         todayStatus.onBreak = false;
         todayStatus.breakStartTime = null;
@@ -962,7 +894,11 @@ async function updateTodayStatus(req, res) {
       }
     }
 
-    // Update calculated durations
+    // Update sessions arrays first
+    todayStatus.workedSessions = ws;
+    todayStatus.breakSessions = bs;
+
+    // Then calculate durations based on updated sessions
     todayStatus.workDurationSeconds = getWorkDurationSeconds(
       ws,
       todayStatus.currentlyWorking
@@ -972,9 +908,15 @@ async function updateTodayStatus(req, res) {
       todayStatus.onBreak,
       todayStatus.breakStartTime
     );
+
+    console.log("🔍 Break duration calculation:", {
+      breakDurationSeconds: todayStatus.breakDurationSeconds,
+      onBreak: todayStatus.onBreak,
+      breakStartTime: todayStatus.breakStartTime,
+      breakSessionsCount: bs.length,
+      eventType: req.body.timelineEvent?.type
+    });
     todayStatus.totalWorkMs = todayStatus.workDurationSeconds * 1000;
-    todayStatus.workedSessions = ws;
-    todayStatus.breakSessions = bs;
 
     // Save status with enhanced error handling
     try {
@@ -993,15 +935,7 @@ async function updateTodayStatus(req, res) {
       });
     }
 
-    // Sync daily work data
-    const dailyWork = await syncDailyWork(
-      userId,
-      todayStatus,
-      userTimeZone
-    ).catch((e) => {
-      console.error("syncDailyWork error:", e);
-      return null;
-    });
+    // Note: DailyWork sync removed - using new AttendanceRecord system
 
     // Get updated attendance data after all operations
     const finalAttendanceData = await attendanceService.getAttendanceData(
@@ -1201,7 +1135,6 @@ module.exports = {
   getTodayStatus,
   getEmployeeTodayStatus,
   updateTodayStatus,
-  syncDailyWork,
   getEffectiveShift,
   getFirstPunchInTime,
   getLastPunchOutTime,
