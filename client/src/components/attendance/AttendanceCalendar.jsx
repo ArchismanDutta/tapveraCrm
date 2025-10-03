@@ -419,11 +419,11 @@ const AttendanceCalendar = ({ data, onDateFilterChange, onMonthChange }) => {
                 <div className="flex justify-between">
                   <span className="text-gray-400">Time In:</span>
                   <span className="text-green-400 font-medium">
-                    {new Date(hoveredDay.arrivalTime).toLocaleTimeString([], {
-                      hour: '2-digit',
-                      minute: '2-digit',
-                      hour12: true
-                    })}
+                    {typeof hoveredDay.arrivalTime === 'string' ?
+                      (hoveredDay.arrivalTime.includes('T') ?
+                        new Date(hoveredDay.arrivalTime).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit', hour12: true})
+                        : hoveredDay.arrivalTime)
+                      : '--'}
                   </span>
                 </div>
               )}
@@ -432,11 +432,11 @@ const AttendanceCalendar = ({ data, onDateFilterChange, onMonthChange }) => {
                 <div className="flex justify-between">
                   <span className="text-gray-400">Time Out:</span>
                   <span className="text-red-400 font-medium">
-                    {new Date(hoveredDay.departureTime).toLocaleTimeString([], {
-                      hour: '2-digit',
-                      minute: '2-digit',
-                      hour12: true
-                    })}
+                    {typeof hoveredDay.departureTime === 'string' ?
+                      (hoveredDay.departureTime.includes('T') ?
+                        new Date(hoveredDay.departureTime).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit', hour12: true})
+                        : hoveredDay.departureTime)
+                      : '--'}
                   </span>
                 </div>
               )}
@@ -555,12 +555,12 @@ const AttendanceCalendar = ({ data, onDateFilterChange, onMonthChange }) => {
                   </span>
                   <span className="text-green-400 font-semibold">
                     {selectedDay.arrivalTime ?
-                      new Date(selectedDay.arrivalTime).toLocaleTimeString([], {
-                        hour: '2-digit',
-                        minute: '2-digit',
-                        hour12: true
-                      }) : '--'
-                    }
+                      (typeof selectedDay.arrivalTime === 'string' ?
+                        (selectedDay.arrivalTime.includes('T') ?
+                          new Date(selectedDay.arrivalTime).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit', hour12: true})
+                          : selectedDay.arrivalTime)
+                        : '--')
+                      : '--'}
                   </span>
                 </div>
 
@@ -572,12 +572,12 @@ const AttendanceCalendar = ({ data, onDateFilterChange, onMonthChange }) => {
                   </span>
                   <span className="text-red-400 font-semibold">
                     {selectedDay.departureTime ?
-                      new Date(selectedDay.departureTime).toLocaleTimeString([], {
-                        hour: '2-digit',
-                        minute: '2-digit',
-                        hour12: true
-                      }) : selectedDay.arrivalTime ? 'Still Working' : '--'
-                    }
+                      (typeof selectedDay.departureTime === 'string' ?
+                        (selectedDay.departureTime.includes('T') ?
+                          new Date(selectedDay.departureTime).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit', hour12: true})
+                          : selectedDay.departureTime)
+                        : '--')
+                      : (selectedDay.arrivalTime ? 'Still Working' : '--')}
                   </span>
                 </div>
 

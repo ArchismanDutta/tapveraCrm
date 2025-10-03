@@ -42,27 +42,49 @@ router.get("/employees-today", async (req, res) => {
     }).lean();
     console.log(`Found ${users.length} users with roles: employee, admin, hr`);
 
+    // OPTIMIZATION: Fetch the date record ONCE for all employees
+    const dateRecord = await AttendanceRecord.findOne({
+      date: { $gte: startOfDay, $lte: endOfDay }
+    });
+    console.log(`Date record found: ${!!dateRecord}, employees in record: ${dateRecord?.employees?.length || 0}`);
+
     const data = await Promise.all(
       users.map(async (user) => {
         try {
-          // Get user status for the date
+          // Get user status for the date (legacy real-time tracking)
           const status = await UserStatus.findOne({
             userId: user._id,
             today: { $gte: startOfDay, $lte: endOfDay },
           });
 
-          // Get attendance record info
-          const attendanceRecord = await AttendanceRecord.findOne({
-            userId: user._id,
-            date: { $gte: startOfDay, $lte: endOfDay },
-          });
+          // Extract this employee's data from the date record
+          let attendanceRecord = null;
+          if (dateRecord) {
+            const employeeData = dateRecord.employees?.find(
+              emp => emp.userId.toString() === user._id.toString()
+            );
+            if (employeeData) {
+              // Flatten the structure for backward compatibility
+              attendanceRecord = {
+                userId: user._id,
+                date: dateRecord.date,
+                workDurationSeconds: employeeData.calculated?.workDurationSeconds || 0,
+                breakDurationSeconds: employeeData.calculated?.breakDurationSeconds || 0,
+                arrivalTime: employeeData.calculated?.arrivalTime,
+                departureTime: employeeData.calculated?.departureTime,
+                isPresent: employeeData.calculated?.isPresent || false,
+                isLate: employeeData.calculated?.isLate || false,
+                isHalfDay: employeeData.calculated?.isHalfDay || false,
+                events: employeeData.events || [],
+                timeline: employeeData.events || [], // Map events to timeline for compatibility
+                assignedShift: employeeData.assignedShift
+              };
+            }
+          }
 
           // Log missing data for debugging
-          if (!status) {
-            console.log(`No UserStatus found for ${user.name} (${user.employeeId}) on ${targetDate.toDateString()}`);
-          }
-          if (!attendanceRecord) {
-            console.log(`No AttendanceRecord found for ${user.name} (${user.employeeId}) on ${targetDate.toDateString()}`);
+          if (!status && !attendanceRecord) {
+            console.log(`No data found for ${user.name} (${user.employeeId}) on ${targetDate.toDateString()}`);
           }
 
         // Work duration string - calculate real-time for accuracy

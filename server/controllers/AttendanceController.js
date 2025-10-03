@@ -156,14 +156,36 @@ class AttendanceController {
         });
       });
 
+      // Calculate average daily hours
+      const avgDailyWorkHours = daysPresent > 0 ? (totalWorkSeconds / 3600 / daysPresent) : 0;
+      const avgDailyBreakHours = daysPresent > 0 ? (totalBreakSeconds / 3600 / daysPresent) : 0;
+
+      // Helper to convert decimal hours to "Xh Ym" format
+      const formatHoursToTimeString = (decimalHours) => {
+        const hours = Math.floor(decimalHours);
+        const minutes = Math.round((decimalHours - hours) * 60);
+        return `${hours}h ${minutes}m`;
+      };
+
       const weeklyTotals = {
         totalWorkDays: daysPresent,
         totalWorkHours: Math.round((totalWorkSeconds / 3600) * 100) / 100,
         totalBreakHours: Math.round((totalBreakSeconds / 3600) * 100) / 100,
+        // Add formatted time strings for frontend compatibility
+        totalWorkTime: formatHoursToTimeString(totalWorkSeconds / 3600),
+        totalBreakTime: formatHoursToTimeString(totalBreakSeconds / 3600),
+        avgDailyWork: formatHoursToTimeString(avgDailyWorkHours),
+        avgDailyBreak: formatHoursToTimeString(avgDailyBreakHours),
         averageAttendanceRate: daysPresent > 0 ? 100 : 0, // For single user, it's binary
         averagePunctualityRate: daysPresent > 0 ? Math.round((daysOnTime / daysPresent) * 100) : 0,
+        onTimeRate: daysPresent > 0 ? Math.round((daysOnTime / daysPresent) * 100) + '%' : '0%',
         daysLate: daysLate,
-        daysOnTime: daysOnTime
+        daysOnTime: daysOnTime,
+        // Calculate total breaks from daily data
+        breaksTaken: dailyData.reduce((total, day) => {
+          // Count events if available, otherwise estimate from break duration
+          return total + (day.breakDurationSeconds > 0 ? 1 : 0);
+        }, 0)
       };
 
       // Calculate quick stats for employee
