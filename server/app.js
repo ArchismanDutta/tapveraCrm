@@ -35,6 +35,8 @@ const newAttendanceRoutes = require("./routes/newAttendanceRoutes"); // New date
 const superAdminRoutes = require("./routes/superAdminRoutes"); // Make sure this file exists
 const payslipRoutes = require("./routes/payslipRoutes");
 const celebrationRoutes = require("./routes/celebrationRoutes");
+const leadRoutes = require("./routes/leadRoutes");
+const callbackRoutes = require("./routes/callbackRoutes");
 
 // Controllers
 const ChatController = require("./controllers/chatController");
@@ -108,6 +110,8 @@ app.use("/api/attendance-new", newAttendanceRoutes); // New date-centric attenda
 app.use("/api/super-admin", superAdminRoutes); // Super admin route added
 app.use("/api/payslips", payslipRoutes);
 app.use("/api/celebrations", celebrationRoutes);
+app.use("/api/leads", leadRoutes);
+app.use("/api/callbacks", callbackRoutes);
 
 
 
