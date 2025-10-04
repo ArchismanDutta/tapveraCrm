@@ -11,6 +11,8 @@ import {
   Calendar,
   Clock,
   DollarSign,
+  TrendingUp,
+  PhoneCall,
 } from "lucide-react";
 import { FaChevronCircleRight, FaTrophy } from "react-icons/fa";
 
@@ -27,6 +29,8 @@ const menuConfig = {
     { to: "/profile", icon: <User size={18} />, label: "My Profile" },
     { to: "/today-status", icon: <ClipboardList size={18} />, label: "Punch In/Out" },
     { to: "/attendance", icon: <ClipboardList size={18} />, label: "My Attendance" },
+    { to: "/leads", icon: <TrendingUp size={18} />, label: "My Leads" },
+    { to: "/callbacks", icon: <PhoneCall size={18} />, label: "My Callbacks" },
     { to: "/todo", icon: <ClipboardList size={18} />, label: "Todo" },
     { to: "/messages", icon: <MessageCircle size={18} />, label: "Messages" },
     { to: "/leaves", icon: <FileText size={18} />, label: "Leave Requests" },
@@ -36,6 +40,8 @@ const menuConfig = {
   hr: [
     { to: "/hrdashboard", icon: <LayoutDashboard size={18} />, label: "HR Dashboard" },
     { to: "/today-status", icon: <ClipboardList size={18} />, label: "Punch In/Out" },
+    // { to: "/leads", icon: <TrendingUp size={18} />, label: "Lead Management" },
+    // { to: "/callbacks", icon: <PhoneCall size={18} />, label: "Callback Management" },
     { to: "/tasks", icon: <ClipboardList size={18} />, label: "Tasks" },
     { to: "/todo", icon: <ClipboardList size={18} />, label: "Todo" },
     { to: "/admin/leaves", icon: <FileText size={18} />, label: "Leave Requests" },
@@ -69,6 +75,8 @@ const menuConfig = {
   ],
   "super-admin": [
     { to: "/hrdashboard", icon: <LayoutDashboard size={18} />, label: "Dashboard" },
+    { to: "/leads", icon: <TrendingUp size={18} />, label: "Lead Management" },
+    { to: "/callbacks", icon: <PhoneCall size={18} />, label: "Callback Management" },
     { to: "/admin/tasks", icon: <LayoutDashboard size={18} />, label: "Assign Task" },
     { to: "/admin/leaves", icon: <FileText size={18} />, label: "Leave Requests" },
     { to: "/directory", icon: <Users size={18} />, label: "Employee Details" },
@@ -98,10 +106,12 @@ const Sidebar = ({ collapsed, setCollapsed, onLogout, userRole }) => {
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [role, setRole] = useState("employee");
   const [chatUnread, setChatUnread] = useState(0);
+  const [userDepartment, setUserDepartment] = useState("");
   const { showAchievementsDashboard, openAchievementsDashboard, closeAchievementsDashboard } = useAchievements();
 
   useEffect(() => {
     let resolvedRole = normalizeRole(userRole || "employee");
+    let department = "";
     try {
       const userStr = localStorage.getItem("user");
       if (userStr) {
@@ -109,11 +119,15 @@ const Sidebar = ({ collapsed, setCollapsed, onLogout, userRole }) => {
         if (parsed.role) {
           resolvedRole = normalizeRole(parsed.role);
         }
+        if (parsed.department) {
+          department = parsed.department;
+        }
       }
     } catch (e) {
       // fallback silently
     }
     setRole(resolvedRole);
+    setUserDepartment(department);
   }, [userRole]);
 
   // Listen for chat unread total to show badge on Messages item
@@ -137,7 +151,15 @@ const Sidebar = ({ collapsed, setCollapsed, onLogout, userRole }) => {
     return () => window.removeEventListener("chat-unread-total", handler);
   }, []);
 
-  const menuItems = menuConfig[role] || menuConfig["employee"];
+  // Filter menu items based on role and department
+  const rawMenuItems = menuConfig[role] || menuConfig["employee"];
+  const menuItems = rawMenuItems.filter(item => {
+    // Allow access to leads/callbacks only for super-admin or marketingAndSales employees
+    if (item.to === "/leads" || item.to === "/callbacks") {
+      return role === "super-admin" || userDepartment === "marketingAndSales";
+    }
+    return true;
+  });
 
   return (
     <>

@@ -1,0 +1,108 @@
+/* Global Native Scrollbar Styling (Fallback) */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(30, 41, 59, 0.5);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(135deg, #06b6d4 0%, #3b82f6 100%);
+  border-radius: 4px;
+  transition: background 0.3s ease;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(135deg, #0891b2 0%, #2563eb 100%);
+}
+
+/* Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #06b6d4 rgba(30, 41, 59, 0.5);
+}
+
+/* Custom Scrollbar Styles for SimpleBar */
+
+/* Scrollbar track */
+.simplebar-track.simplebar-vertical {
+  width: 8px;
+  background-color: rgba(30, 41, 59, 0.5);
+  border-radius: 4px;
+  right: 2px;
+}
+
+.simplebar-track.simplebar-horizontal {
+  height: 8px;
+  background-color: rgba(30, 41, 59, 0.5);
+  border-radius: 4px;
+  bottom: 2px;
+}
+
+/* Scrollbar thumb */
+.simplebar-scrollbar::before {
+  background: linear-gradient(135deg, #06b6d4 0%, #3b82f6 100%);
+  border-radius: 4px;
+  opacity: 0.6;
+  transition: opacity 0.3s ease;
+}
+
+.simplebar-scrollbar:hover::before {
+  opacity: 0.9;
+}
+
+/* For green-themed scrollbars (callbacks) */
+.callback-scrollbar .simplebar-scrollbar::before {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+}
+
+.callback-scrollbar .simplebar-scrollbar:hover::before {
+  background: linear-gradient(135deg, #059669 0%, #047857 100%);
+}
+
+/* Scrollbar visible state */
+.simplebar-track.simplebar-visible .simplebar-scrollbar::before {
+  opacity: 0.8;
+}
+
+/* Hide scrollbar when not needed */
+.simplebar-track.simplebar-vertical .simplebar-scrollbar {
+  width: 6px;
+}
+
+.simplebar-track.simplebar-horizontal .simplebar-scrollbar {
+  height: 6px;
+}
+
+/* Smooth scrolling */
+.simplebar-content-wrapper {
+  scrollbar-width: thin;
+}
+
+/* Custom wrapper styling */
+.simplebar-wrapper {
+  margin: 0;
+}
+
+.simplebar-height-auto-observer-wrapper {
+  box-sizing: inherit !important;
+}
+
+/* Make sure the scrollbar doesn't overlap content */
+.simplebar-content {
+  padding-right: 4px !important;
+}
+
+/* Animation for scrollbar appearance */
+.simplebar-scrollbar {
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+/* Hover effect on track */
+.simplebar-track:hover .simplebar-scrollbar::before {
+  opacity: 1;
+  transform: scaleX(1.2);
+}

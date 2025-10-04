@@ -11,6 +11,7 @@ import {
 import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import "./styles/toastify-custom.css";
+import "./styles/custom-scrollbar.css";
 
 // Achievement System
 import { AchievementProvider } from "./contexts/AchievementContext";
@@ -43,6 +44,12 @@ import SuperAdminAttendancePortal from "./pages/SuperAdminAttendancePortal";
 import ShiftManagement from "./components/humanResource/ShiftManagement";
 import ManualAttendanceManagement from "./pages/admin/ManualAttendanceManagement";
 import SalaryManagement from "./pages/admin/SalaryManagement";
+
+// Lead and Callback Management
+import ViewLeads from "./pages/ViewLeads";
+import AddLead from "./pages/AddLead";
+import ViewCallbacks from "./pages/ViewCallbacks";
+import AddCallback from "./pages/AddCallback";
 
 import { resetChat } from "./store/slices/chatSlice";
 import { useDispatch } from "react-redux";
@@ -163,6 +170,13 @@ const AppWrapper = () => {
   const isAdmin = roleNorm === "admin" || isSuperAdmin;
   const isHR = roleNorm === "hr";
 
+  // Check if user can access Lead/Callback Management
+  const canAccessLeadManagement = () => {
+    if (isSuperAdmin) return true;
+    if (currentUser?.department === "marketingAndSales") return true;
+    return false;
+  };
+
   return (
     <>
       <Routes>
@@ -228,6 +242,70 @@ const AppWrapper = () => {
               <ChatPage onLogout={handleLogout} currentUser={currentUser} />
             ) : (
               <Navigate to="/login" replace />
+            )
+          }
+        />
+
+        {/* Lead Management - Only for Super Admin and Marketing & Sales */}
+        <Route
+          path="/leads"
+          element={
+            isAuthenticated && canAccessLeadManagement() ? (
+              <ViewLeads onLogout={handleLogout} />
+            ) : (
+              <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />
+            )
+          }
+        />
+        <Route
+          path="/leads/add"
+          element={
+            isAuthenticated && canAccessLeadManagement() ? (
+              <AddLead onLogout={handleLogout} />
+            ) : (
+              <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />
+            )
+          }
+        />
+        <Route
+          path="/leads/edit/:id"
+          element={
+            isAuthenticated && canAccessLeadManagement() ? (
+              <AddLead onLogout={handleLogout} />
+            ) : (
+              <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />
+            )
+          }
+        />
+
+        {/* Callback Management - Only for Super Admin and Marketing & Sales */}
+        <Route
+          path="/callbacks"
+          element={
+            isAuthenticated && canAccessLeadManagement() ? (
+              <ViewCallbacks onLogout={handleLogout} />
+            ) : (
+              <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />
+            )
+          }
+        />
+        <Route
+          path="/callbacks/add"
+          element={
+            isAuthenticated && canAccessLeadManagement() ? (
+              <AddCallback onLogout={handleLogout} />
+            ) : (
+              <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />
+            )
+          }
+        />
+        <Route
+          path="/callbacks/edit/:id"
+          element={
+            isAuthenticated && canAccessLeadManagement() ? (
+              <AddCallback onLogout={handleLogout} />
+            ) : (
+              <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />
             )
           }
         />

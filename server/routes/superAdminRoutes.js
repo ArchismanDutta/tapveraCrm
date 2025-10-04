@@ -75,6 +75,8 @@ router.get("/employees-today", async (req, res) => {
                 isPresent: employeeData.calculated?.isPresent || false,
                 isLate: employeeData.calculated?.isLate || false,
                 isHalfDay: employeeData.calculated?.isHalfDay || false,
+                currentlyWorking: employeeData.calculated?.currentlyWorking || false,
+                onBreak: employeeData.calculated?.onBreak || false,
                 events: employeeData.events || [],
                 timeline: employeeData.events || [], // Map events to timeline for compatibility
                 assignedShift: employeeData.assignedShift
@@ -261,6 +263,10 @@ router.get("/employees-today", async (req, res) => {
             });
           }
 
+          // Prioritize AttendanceRecord data over UserStatus (new system over legacy)
+          const currentlyWorking = attendanceRecord?.currentlyWorking ?? status?.currentlyWorking ?? false;
+          const onBreak = attendanceRecord?.onBreak ?? status?.onBreak ?? false;
+
           return {
             userId: user._id,
             employeeId: user.employeeId || `EMP${user._id.toString().slice(-4)}`,
@@ -268,11 +274,11 @@ router.get("/employees-today", async (req, res) => {
             role: user.role,
             arrivalTime: punchInTime,
             punchOutTime,
-            onBreak: status?.onBreak || false,
+            onBreak,
             breakDurationMinutes: breakMinutes,
             breakType, // include break type
             workDuration: workDurationStr,
-            currentlyWorking: status?.currentlyWorking || false,
+            currentlyWorking,
             // Add debug fields
             hasStatus: !!status,
             hasAttendanceRecord: !!attendanceRecord,
@@ -280,7 +286,9 @@ router.get("/employees-today", async (req, res) => {
             calculationSource: {
               workFromTimeline: totalWorkMinutes > Math.floor(workSeconds / 60),
               breakFromTimeline: breakMinutes > Math.round((attendanceRecord?.breakDurationSeconds || 0) / 60),
-              lastCalculated: new Date().toISOString()
+              lastCalculated: new Date().toISOString(),
+              usingAttendanceRecord: !!attendanceRecord,
+              usingUserStatus: !!status && !attendanceRecord
             }
           };
         } catch (error) {
