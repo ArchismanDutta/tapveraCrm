@@ -956,16 +956,8 @@ const createManualAttendanceEnhanced = async (req, res) => {
       }
     }
 
-    // Get effective shift and calculate status
-    const effectiveShift = await getEffectiveShift(userId, targetDate);
-    const attendanceData = await unifiedAttendanceService.getUnifiedAttendanceData(
-      userId,
-      targetDate,
-      workSessions,
-      processedBreakSessions,
-      punchIn,
-      effectiveShift
-    );
+    // Get effective shift
+    const effectiveShift = await unifiedAttendanceService.getEffectiveShift(userId, targetDate);
 
     // Build events array (using PunchEventSchema format)
     const events = [];
@@ -1002,22 +994,37 @@ const createManualAttendanceEnhanced = async (req, res) => {
       });
     }
 
+    // Calculate attendance status from events using unified service
+    const timeline = events.map(e => ({
+      type: e.type === 'PUNCH_IN' ? 'Punch In' :
+            e.type === 'PUNCH_OUT' ? 'Punch Out' :
+            e.type === 'BREAK_START' ? 'Break Start' :
+            e.type === 'BREAK_END' ? 'Break End' : e.type,
+      time: e.timestamp
+    }));
+
+    const attendanceStatus = unifiedAttendanceService.calculateAttendanceStatusFromTimeline(
+      timeline,
+      effectiveShift,
+      totalWorkSeconds
+    );
+
     // Build employee attendance data
     const employeeData = {
       userId,
       events,
       calculated: {
-        arrivalTime: punchIn,
-        departureTime: punchOut,
+        arrivalTime: attendanceStatus.arrivalTime || punchIn,
+        departureTime: attendanceStatus.departureTime || punchOut,
         workDurationSeconds: totalWorkSeconds,
         breakDurationSeconds: totalBreakSeconds,
         totalDurationSeconds: totalWorkSeconds + totalBreakSeconds,
         workDuration: `${Math.floor(totalWorkSeconds / 3600)}h ${Math.floor((totalWorkSeconds % 3600) / 60)}m`,
         breakDuration: `${Math.floor(totalBreakSeconds / 3600)}h ${Math.floor((totalBreakSeconds % 3600) / 60)}m`,
         isPresent: !isOnLeave && !isHoliday && punchIn !== null,
-        isAbsent: isOnLeave || isHoliday || (!punchIn && !punchOut),
-        isLate: attendanceData.isLate || false,
-        isHalfDay: attendanceData.isHalfDay || false,
+        isAbsent: attendanceStatus.isAbsent || isOnLeave || isHoliday || (!punchIn && !punchOut),
+        isLate: attendanceStatus.isLate || false,
+        isHalfDay: attendanceStatus.isHalfDay || false,
         isFullDay: totalWorkSeconds >= (6.5 * 3600),
         currentlyWorking: false,
         onBreak: false,
@@ -1099,10 +1106,11 @@ const createManualAttendanceEnhanced = async (req, res) => {
         calculatedMetrics: {
           workHours: (totalWorkSeconds / 3600).toFixed(2),
           breakHours: (totalBreakSeconds / 3600).toFixed(2),
-          status: attendanceData.status,
-          isLate: attendanceData.isLate,
-          isHalfDay: attendanceData.isHalfDay
-        }
+          isLate: attendanceStatus.isLate || false,
+          isHalfDay: attendanceStatus.isHalfDay || false,
+          isAbsent: attendanceStatus.isAbsent || false
+        },
+        effectiveShift
       }
     });
 

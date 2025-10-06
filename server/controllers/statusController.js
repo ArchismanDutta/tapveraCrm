@@ -436,6 +436,7 @@ function calculateLateAndHalfDay(
     const shiftStartLocal = new Date(arrivalLocal);
     shiftStartLocal.setHours(h || 0, m || 0, 0, 0);
 
+    // No grace period - any lateness counts as late
     if (arrivalLocal > shiftStartLocal) result.isLate = true;
   }
 

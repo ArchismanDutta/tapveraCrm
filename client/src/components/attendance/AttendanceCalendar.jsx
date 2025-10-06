@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from "react";
-import { Calendar, Clock, AlertTriangle, CheckCircle, Filter, ChevronLeft, ChevronRight, CalendarDays, Timer, XCircle } from "lucide-react";
+import { Calendar, Clock, AlertTriangle, CheckCircle, Filter, ChevronLeft, ChevronRight, CalendarDays, Timer, XCircle, Activity } from "lucide-react";
 
 const STATUS_COLOR = {
   present: "bg-gradient-to-br from-green-600 to-green-700 text-green-100 border-green-500",
@@ -7,7 +7,7 @@ const STATUS_COLOR = {
   holiday: "bg-gradient-to-br from-blue-600 to-blue-700 text-blue-100 border-blue-500",
   weekend: "bg-gradient-to-br from-gray-600 to-gray-700 text-gray-300 border-gray-500",
   leave: "bg-gradient-to-br from-purple-600 to-purple-700 text-purple-100 border-purple-500",
-  late: "bg-gradient-to-br from-orange-600 to-orange-700 text-orange-100 border-orange-500",
+  late: "bg-gradient-to-br from-rose-500 to-rose-600 text-rose-100 border-rose-400",
   "half-day": "bg-gradient-to-br from-yellow-600 to-yellow-700 text-yellow-100 border-yellow-500",
   "half-day-leave": "bg-gradient-to-br from-yellow-600 to-yellow-700 text-yellow-100 border-yellow-500",
   "approved-leave": "bg-gradient-to-br from-purple-600 to-purple-700 text-purple-100 border-purple-500",
@@ -355,7 +355,7 @@ const AttendanceCalendar = ({ data, onDateFilterChange, onMonthChange }) => {
 
                 {/* Status Indicator */}
                 {dayData.status !== 'default' && (
-                  <div className="absolute top-1 right-1">
+                  <div className={`absolute top-1 right-1 ${dayData.status === 'late' ? 'animate-pulse hover:scale-125 transition-transform duration-200' : ''}`}>
                     {getStatusIcon(dayData.status)}
                   </div>
                 )}
@@ -399,7 +399,7 @@ const AttendanceCalendar = ({ data, onDateFilterChange, onMonthChange }) => {
               </div>
               <div className={`text-xs px-2 py-1 rounded ${
                 hoveredDay.status === 'present' ? 'bg-green-600/30 text-green-300' :
-                hoveredDay.status === 'late' ? 'bg-orange-600/30 text-orange-300' :
+                hoveredDay.status === 'late' ? 'bg-rose-600/30 text-rose-300' :
                 hoveredDay.status === 'absent' ? 'bg-red-600/30 text-red-300' :
                 hoveredDay.status === 'half-day' ? 'bg-yellow-600/30 text-yellow-300' :
                 'bg-gray-600/30 text-gray-300'
@@ -744,26 +744,101 @@ const AttendanceCalendar = ({ data, onDateFilterChange, onMonthChange }) => {
         </div>
       </div>
 
-      {/* Summary Stats */}
+      {/* Enhanced Summary Stats */}
       {data.monthlyStats && (
         <div className="mt-6 pt-4 border-t border-slate-600/30">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="text-center">
+          <h4 className="text-sm font-semibold text-gray-300 mb-4 flex items-center gap-2">
+            <CalendarDays className="w-4 h-4 text-cyan-400" />
+            Monthly Summary
+          </h4>
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-4 gap-4">
+            {/* Present Days */}
+            <div className="bg-gradient-to-br from-green-600/20 to-green-800/20 backdrop-blur-sm border border-green-500/20 rounded-xl p-4 hover:border-green-400/40 transition-all duration-300">
+              <div className="flex items-center gap-2 mb-2">
+                <CheckCircle className="w-4 h-4 text-green-400" />
+                <span className="text-xs text-gray-400">Present</span>
+              </div>
               <div className="text-2xl font-bold text-green-400">{data.monthlyStats.totalPresent}</div>
-              <div className="text-sm text-gray-400">Present Days</div>
+              <div className="text-xs text-green-300 mt-1">days worked</div>
             </div>
-            <div className="text-center">
+
+            {/* Late Days */}
+            <div className="bg-gradient-to-br from-yellow-600/20 to-yellow-800/20 backdrop-blur-sm border border-yellow-500/20 rounded-xl p-4 hover:border-yellow-400/40 transition-all duration-300">
+              <div className="flex items-center gap-2 mb-2">
+                <Clock className="w-4 h-4 text-yellow-400" />
+                <span className="text-xs text-gray-400">Late</span>
+              </div>
               <div className="text-2xl font-bold text-yellow-400">{data.monthlyStats.totalLate}</div>
-              <div className="text-sm text-gray-400">Late Days</div>
+              <div className="text-xs text-yellow-300 mt-1">late arrivals</div>
             </div>
-            <div className="text-center">
+
+            {/* Absent Days */}
+            <div className="bg-gradient-to-br from-red-600/20 to-red-800/20 backdrop-blur-sm border border-red-500/20 rounded-xl p-4 hover:border-red-400/40 transition-all duration-300">
+              <div className="flex items-center gap-2 mb-2">
+                <XCircle className="w-4 h-4 text-red-400" />
+                <span className="text-xs text-gray-400">Absent</span>
+              </div>
               <div className="text-2xl font-bold text-red-400">{data.monthlyStats.totalAbsent}</div>
-              <div className="text-sm text-gray-400">Absent Days</div>
+              <div className="text-xs text-red-300 mt-1">days absent</div>
             </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-purple-400">{data.monthlyStats.totalLeave}</div>
-              <div className="text-sm text-gray-400">Leave Days</div>
+
+            {/* Leave Days */}
+            <div className="bg-gradient-to-br from-purple-600/20 to-purple-800/20 backdrop-blur-sm border border-purple-500/20 rounded-xl p-4 hover:border-purple-400/40 transition-all duration-300">
+              <div className="flex items-center gap-2 mb-2">
+                <Calendar className="w-4 h-4 text-purple-400" />
+                <span className="text-xs text-gray-400">Leave</span>
+              </div>
+              <div className="text-2xl font-bold text-purple-400">{data.monthlyStats.totalLeave || 0}</div>
+              <div className="text-xs text-purple-300 mt-1">approved leaves</div>
             </div>
+
+            {/* Half Days (if available) */}
+            {data.monthlyStats.totalHalfDay !== undefined && (
+              <div className="bg-gradient-to-br from-orange-600/20 to-orange-800/20 backdrop-blur-sm border border-orange-500/20 rounded-xl p-4 hover:border-orange-400/40 transition-all duration-300">
+                <div className="flex items-center gap-2 mb-2">
+                  <Timer className="w-4 h-4 text-orange-400" />
+                  <span className="text-xs text-gray-400">Half Day</span>
+                </div>
+                <div className="text-2xl font-bold text-orange-400">{data.monthlyStats.totalHalfDay}</div>
+                <div className="text-xs text-orange-300 mt-1">partial days</div>
+              </div>
+            )}
+
+            {/* WFH Days (if available) */}
+            {data.monthlyStats.totalWFH !== undefined && data.monthlyStats.totalWFH > 0 && (
+              <div className="bg-gradient-to-br from-blue-600/20 to-blue-800/20 backdrop-blur-sm border border-blue-500/20 rounded-xl p-4 hover:border-blue-400/40 transition-all duration-300">
+                <div className="flex items-center gap-2 mb-2">
+                  <Activity className="w-4 h-4 text-blue-400" />
+                  <span className="text-xs text-gray-400">WFH</span>
+                </div>
+                <div className="text-2xl font-bold text-blue-400">{data.monthlyStats.totalWFH}</div>
+                <div className="text-xs text-blue-300 mt-1">work from home</div>
+              </div>
+            )}
+
+            {/* Holidays (if available) */}
+            {data.monthlyStats.totalHolidays !== undefined && data.monthlyStats.totalHolidays > 0 && (
+              <div className="bg-gradient-to-br from-cyan-600/20 to-cyan-800/20 backdrop-blur-sm border border-cyan-500/20 rounded-xl p-4 hover:border-cyan-400/40 transition-all duration-300">
+                <div className="flex items-center gap-2 mb-2">
+                  <CalendarDays className="w-4 h-4 text-cyan-400" />
+                  <span className="text-xs text-gray-400">Holidays</span>
+                </div>
+                <div className="text-2xl font-bold text-cyan-400">{data.monthlyStats.totalHolidays}</div>
+                <div className="text-xs text-cyan-300 mt-1">public holidays</div>
+              </div>
+            )}
+
+            {/* Total Work Hours (if available) */}
+            {data.monthlyStats.totalWorkHours !== undefined && (
+              <div className="bg-gradient-to-br from-indigo-600/20 to-indigo-800/20 backdrop-blur-sm border border-indigo-500/20 rounded-xl p-4 hover:border-indigo-400/40 transition-all duration-300">
+                <div className="flex items-center gap-2 mb-2">
+                  <Clock className="w-4 h-4 text-indigo-400" />
+                  <span className="text-xs text-gray-400">Total Hours</span>
+                </div>
+                <div className="text-2xl font-bold text-indigo-400">{data.monthlyStats.totalWorkHours}h</div>
+                <div className="text-xs text-indigo-300 mt-1">hours worked</div>
+              </div>
+            )}
           </div>
         </div>
       )}

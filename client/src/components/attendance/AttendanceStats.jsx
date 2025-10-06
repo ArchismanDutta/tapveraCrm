@@ -8,6 +8,7 @@ import {
   Timer,
   Filter,
   CalendarDays,
+  XCircle,
 } from "lucide-react";
 
 const AttendanceStats = ({ stats, onDateFilterChange }) => {
@@ -237,12 +238,81 @@ const AttendanceStats = ({ stats, onDateFilterChange }) => {
           <div className="flex items-center justify-between mb-2">
             <Calendar className="w-5 h-5 text-emerald-400 group-hover:scale-110 transition-transform duration-200" />
             <span className="font-bold text-2xl text-emerald-400">
-              {Math.round(parseFloat(filteredStats.workingHours) / 8)}
+              {filteredStats.fullDays ?? Math.round(parseFloat(filteredStats.workingHours) / 8)}
             </span>
           </div>
           <div className="space-y-1">
             <p className="text-sm text-gray-300 font-medium">Full Days</p>
             <p className="text-xs text-emerald-300">8+ hours worked</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Secondary Stats Row - Late Days, On-Time Rate, Half Days, Absent Days */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 mb-6">
+        {/* Late Days */}
+        <div className="bg-gradient-to-br from-yellow-600/20 to-yellow-800/20 backdrop-blur-sm border border-yellow-500/20 rounded-xl px-6 py-4 hover:border-yellow-400/40 transition-all duration-300 group">
+          <div className="flex items-center justify-between mb-2">
+            <Clock className="w-5 h-5 text-yellow-400 group-hover:scale-110 transition-transform duration-200" />
+            <span className="font-bold text-2xl text-yellow-400">
+              {filteredStats.lateDays || 0}
+            </span>
+          </div>
+          <div className="space-y-1">
+            <p className="text-sm text-gray-300 font-medium">Late Arrivals</p>
+            <p className="text-xs text-yellow-300">Punch-in after shift start time</p>
+          </div>
+        </div>
+
+        {/* On-Time Rate */}
+        <div className="bg-gradient-to-br from-cyan-600/20 to-cyan-800/20 backdrop-blur-sm border border-cyan-500/20 rounded-xl px-6 py-4 hover:border-cyan-400/40 transition-all duration-300 group">
+          <div className="flex items-center justify-between mb-2">
+            <CheckCircle className="w-5 h-5 text-cyan-400 group-hover:scale-110 transition-transform duration-200" />
+            <span className="font-bold text-2xl text-cyan-400">
+              {filteredStats.onTimeRate || 0}%
+            </span>
+          </div>
+          <div className="space-y-1">
+            <p className="text-sm text-gray-300 font-medium">On-Time Rate</p>
+            <p className="text-xs text-cyan-300">Punctuality percentage</p>
+            {filteredStats.presentDays > 0 && (
+              <div className="w-full bg-gray-700 rounded-full h-1.5">
+                <div
+                  className="h-1.5 bg-cyan-500 rounded-full transition-all duration-300"
+                  style={{
+                    width: `${Math.min(filteredStats.onTimeRate || 0, 100)}%`,
+                  }}
+                ></div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Half Days */}
+        <div className="bg-gradient-to-br from-orange-600/20 to-orange-800/20 backdrop-blur-sm border border-orange-500/20 rounded-xl px-6 py-4 hover:border-orange-400/40 transition-all duration-300 group">
+          <div className="flex items-center justify-between mb-2">
+            <Timer className="w-5 h-5 text-orange-400 group-hover:scale-110 transition-transform duration-200" />
+            <span className="font-bold text-2xl text-orange-400">
+              {filteredStats.halfDays || 0}
+            </span>
+          </div>
+          <div className="space-y-1">
+            <p className="text-sm text-gray-300 font-medium">Half Days</p>
+            <p className="text-xs text-orange-300">4-8 hours worked</p>
+          </div>
+        </div>
+
+        {/* Absent Days */}
+        <div className="bg-gradient-to-br from-red-600/20 to-red-800/20 backdrop-blur-sm border border-red-500/20 rounded-xl px-6 py-4 hover:border-red-400/40 transition-all duration-300 group">
+          <div className="flex items-center justify-between mb-2">
+            <XCircle className="w-5 h-5 text-red-400 group-hover:scale-110 transition-transform duration-200" />
+            <span className="font-bold text-2xl text-red-400">
+              {filteredStats.absentDays || 0}
+            </span>
+          </div>
+          <div className="space-y-1">
+            <p className="text-sm text-gray-300 font-medium">Absent Days</p>
+            <p className="text-xs text-red-300">Days not present</p>
           </div>
         </div>
       </div>

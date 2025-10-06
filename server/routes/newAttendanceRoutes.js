@@ -53,6 +53,13 @@ router.get('/employee/:userId/monthly/:year/:month', protect, attendanceControll
 // ======================
 
 /**
+ * Force recalculate attendance for a user on a specific date
+ * @route PUT /api/attendance-new/recalculate/:userId/:date
+ * @access Private (employees can recalculate own data, admins can recalculate any)
+ */
+router.put('/recalculate/:userId/:date', protect, attendanceController.recalculateAttendance.bind(attendanceController));
+
+/**
  * Get daily attendance report for all employees
  * @route GET /api/attendance-new/daily/:date
  * @access Admin, HR, Super-Admin

@@ -545,6 +545,75 @@ class AttendanceController {
     }
   }
 
+  /**
+   * Force recalculate attendance for a specific date
+   * PUT /api/attendance/recalculate/:userId/:date
+   */
+  async recalculateAttendance(req, res) {
+    try {
+      const { userId, date } = req.params;
+
+      // Allow employees to recalculate only their own attendance
+      if (userId !== req.user._id.toString() && !['admin', 'super-admin', 'hr'].includes(req.user.role)) {
+        return res.status(403).json({
+          success: false,
+          error: 'Access denied. You can only recalculate your own attendance.'
+        });
+      }
+
+      const targetDate = this.service.normalizeDate(new Date(date));
+      const record = await this.service.getAttendanceRecord(targetDate);
+
+      const employee = record.getEmployee(userId);
+      if (!employee) {
+        return res.status(404).json({
+          success: false,
+          error: 'No attendance record found for this user on this date'
+        });
+      }
+
+      // Fetch fresh shift data before recalculation
+      const freshShift = await this.service.getUserShift(userId, targetDate);
+      employee.assignedShift = freshShift;
+
+      console.log('🔄 Recalculating with fresh shift:', freshShift);
+
+      // Force recalculation
+      this.service.recalculateEmployeeData(employee);
+      this.service.updateDailyStats(record);
+      await record.save();
+
+      console.log(`✅ Recalculated attendance for user ${userId} on ${date}:`, {
+        isLate: employee.calculated.isLate,
+        arrivalTime: employee.calculated.arrivalTime,
+        workHours: (employee.calculated.workDurationSeconds / 3600).toFixed(2)
+      });
+
+      res.json({
+        success: true,
+        message: 'Attendance recalculated successfully',
+        data: {
+          isLate: employee.calculated.isLate,
+          isHalfDay: employee.calculated.isHalfDay,
+          isPresent: employee.calculated.isPresent,
+          workDurationSeconds: employee.calculated.workDurationSeconds
+        },
+        debug: {
+          arrivalTime: employee.calculated.arrivalTime,
+          shiftInfo: freshShift,
+          hasShiftStartTime: !!freshShift?.startTime,
+          shiftStartTime: freshShift?.startTime
+        }
+      });
+    } catch (error) {
+      console.error('Error recalculating attendance:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message
+      });
+    }
+  }
+
   // Helper methods
 
   /**

@@ -231,9 +231,12 @@ router.get("/employees-today", async (req, res) => {
           if (lastPunchOut) punchOutTime = lastPunchOut.time;
         }
 
-        // Fallbacks
+        // Fallbacks - use AttendanceRecord data if UserStatus timeline doesn't have it
         if (!punchInTime)
           punchInTime = status?.arrivalTime || attendanceRecord?.arrivalTime || null;
+
+        if (!punchOutTime)
+          punchOutTime = attendanceRecord?.departureTime || null;
 
         // Break type from latest break start event
         let breakType = null;
