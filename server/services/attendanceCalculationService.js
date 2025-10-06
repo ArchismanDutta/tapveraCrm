@@ -13,7 +13,10 @@ const ATTENDANCE_RULES = {
   FLEXIBLE_MIN_FULL_DAY_TOTAL_HOURS: 9, // 8 work + 1 break
 
   // Early punch allowance (minutes before shift start)
-  EARLY_PUNCH_ALLOWANCE_MINUTES: 120
+  EARLY_PUNCH_ALLOWANCE_MINUTES: 120,
+
+  // Late threshold (minutes after shift start)
+  LATE_THRESHOLD_MINUTES: 15
 };
 
 /**
@@ -237,7 +240,7 @@ function calculateEarlyLateArrival(arrivalTime, shiftStartTime, userTimeZone = "
 
     return {
       isEarly: diffMinutes < -ATTENDANCE_RULES.EARLY_PUNCH_ALLOWANCE_MINUTES ? false : diffMinutes < 0,
-      isLate: diffMinutes > 0,
+      isLate: diffMinutes > 0, // No grace period - any lateness counts
       minutesDifference: diffMinutes
     };
   } catch (error) {
@@ -561,9 +564,9 @@ async function getAttendanceData(userId, date, workedSessions = [], breakSession
     // Calculate attendance status including leave information
     const attendanceStatus = calculateAttendanceStatus(workDurationSeconds, breakDurationSeconds, effectiveShift, leaveInfo);
 
-    // Calculate early/late arrival for standard shifts
+    // Calculate early/late arrival for ALL shifts (including flexible)
     let earlyLateInfo = { isEarly: false, isLate: false, minutesDifference: 0 };
-    if (!effectiveShift.isFlexible && !effectiveShift.isFlexiblePermanent && !effectiveShift.isOneDayFlexibleOverride) {
+    if (effectiveShift.start && arrivalTime) {
       earlyLateInfo = calculateEarlyLateArrival(arrivalTime, effectiveShift.start);
     }
 

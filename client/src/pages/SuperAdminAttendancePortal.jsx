@@ -220,6 +220,18 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
       // Only use cache if it's fresh
       if (cacheAge < MAX_CACHE_AGE) {
         console.log(`📦 Using cached data for employee ${employeeId} (age: ${Math.round(cacheAge / 1000)}s)`);
+        console.log(`📦 CACHED STATS:`, {
+          lateDays: cachedData.stats?.lateDays,
+          breakdown: cachedData.stats?.breakdown,
+          presentDays: cachedData.stats?.presentDays
+        });
+        console.log(`📦 CACHED CALENDAR DATA (late days):`,
+          cachedData.calendarData?.days?.filter(d => d.status === 'late').map(d => ({
+            day: d.day,
+            status: d.status,
+            arrivalTime: d.arrivalTime
+          }))
+        );
         setStats(cachedData.stats);
         setCalendarData(cachedData.calendarData);
         setWeeklyHours(cachedData.weeklyHours);
@@ -304,8 +316,18 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
               fields: Object.keys(rawDailyData[0]),
               hasEvents: !!rawDailyData[0].events,
               hasCalculated: !!rawDailyData[0].calculated,
-              hasTimeline: !!rawDailyData[0].timeline
-            } : null
+              hasTimeline: !!rawDailyData[0].timeline,
+              isLate: rawDailyData[0].isLate,
+              'calculated.isLate': rawDailyData[0].calculated?.isLate,
+              arrivalTime: rawDailyData[0].arrivalTime || rawDailyData[0].calculated?.arrivalTime,
+              shiftStart: rawDailyData[0].shift?.startTime
+            } : null,
+            allDaysWithIsLate: rawDailyData.map(d => ({
+              date: d.date,
+              isLate: d.isLate,
+              'calc.isLate': d.calculated?.isLate,
+              arrival: d.arrivalTime || d.calculated?.arrivalTime
+            }))
           });
 
           // Enhanced data processing for SuperAdmin with full detail preservation
@@ -321,6 +343,21 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
               isAbsent: day.isAbsent !== false, // Default to absent if not explicitly present
               isPresent: day.isPresent || day.calculated?.isPresent || false,
               isLate: day.isLate || day.calculated?.isLate || false,
+            };
+
+            // Debug: Log isLate source
+            if (day.isLate || day.calculated?.isLate) {
+              console.log(`🔍 Late detection for ${day.date}:`, {
+                'day.isLate': day.isLate,
+                'day.calculated?.isLate': day.calculated?.isLate,
+                'enhanced.isLate': enhanced.isLate,
+                arrivalTime: day.arrivalTime || day.calculated?.arrivalTime,
+                shiftStart: day.expectedStartTime || day.calculated?.expectedStartTime
+              });
+            }
+
+            const enhancedWithRest = {
+              ...enhanced,
               isHalfDay: day.isHalfDay || day.calculated?.isHalfDay || false,
               isWFH: day.isWFH || day.calculated?.isWFH || false,
               isEarly: day.isEarly || day.calculated?.isEarly || false,
@@ -354,22 +391,22 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
               metadata: day.metadata || {}
             };
 
-            console.log(`📅 Enhanced data for ${enhanced.date}:`, {
-              workHours: (enhanced.workDurationSeconds / 3600).toFixed(1),
+            console.log(`📅 Enhanced data for ${enhancedWithRest.date}:`, {
+              workHours: (enhancedWithRest.workDurationSeconds / 3600).toFixed(1),
               status: {
-                present: enhanced.isPresent,
-                absent: enhanced.isAbsent,
-                late: enhanced.isLate,
-                wfh: enhanced.isWFH
+                present: enhancedWithRest.isPresent,
+                absent: enhancedWithRest.isAbsent,
+                late: enhancedWithRest.isLate,
+                wfh: enhancedWithRest.isWFH
               },
               times: {
-                arrival: enhanced.arrivalTime,
-                departure: enhanced.departureTime
+                arrival: enhancedWithRest.arrivalTime,
+                departure: enhancedWithRest.departureTime
               },
-              eventCount: enhanced.timeline?.length || 0
+              eventCount: enhancedWithRest.timeline?.length || 0
             });
 
-            return enhanced;
+            return enhancedWithRest;
           });
 
           // Create a weekly-like response structure for legacy compatibility
@@ -491,14 +528,15 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
         }
       });
 
-      console.log('Enhanced stats calculated:', {
+      console.log('📊 Enhanced stats calculated:', {
         presentDaysCount,
         lateDaysCount,
         halfDayCount,
         absentDaysCount,
         wfhDaysCount,
         totalWorkHours: totalWorkHours.toFixed(1),
-        dataSourceSystem: USE_NEW_ATTENDANCE_SYSTEM ? 'New System' : 'Legacy System'
+        dataSourceSystem: USE_NEW_ATTENDANCE_SYSTEM ? 'New System' : 'Legacy System',
+        lateDaysDetected: dailyData.filter(d => d.isLate).map(d => ({ date: d.date, isLate: d.isLate }))
       });
 
       // Fetch additional data in parallel with shorter timeouts
@@ -743,10 +781,11 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
             }
           } else if (attendanceData.isAbsent && !attendanceData.isPresent) {
             status = "absent";
+          } else if (attendanceData.isLate && attendanceData.isPresent) {
+            // Late takes priority over half-day
+            status = "late";
           } else if (attendanceData.isHalfDay && attendanceData.isPresent) {
             status = "half-day";
-          } else if (attendanceData.isLate && attendanceData.isPresent) {
-            status = "late";
           } else if (attendanceData.isEarly && attendanceData.isPresent) {
             status = "early";
           } else if (attendanceData.isPresent || (attendanceData.workDurationSeconds && attendanceData.workDurationSeconds > 0)) {
@@ -1022,13 +1061,15 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
 
       // Calculate enhanced monthly stats
       const monthlyStats = {
-        totalPresent: days.filter(d => d.status === "present").length,
+        // Present includes: on-time, late, wfh, and half-day (all non-absent working days)
+        totalPresent: days.filter(d => ["present", "late", "wfh", "half-day"].includes(d.status)).length,
         totalLate: days.filter(d => d.status === "late").length,
         totalHalfDay: days.filter(d => d.status === "half-day").length,
         totalAbsent: days.filter(d => d.status === "absent").length,
         totalWeekend: days.filter(d => d.status === "weekend").length,
-        totalLeave: 0, // Could be enhanced later
-        totalHolidays: 0, // Could be enhanced later
+        totalLeave: days.filter(d => ["leave", "half-day-leave", "approved-leave", "sick-leave", "vacation", "personal-leave"].includes(d.status)).length,
+        totalHolidays: days.filter(d => d.status === "holiday").length,
+        totalWFH: days.filter(d => d.status === "wfh").length,
         totalWorkingDays: days.filter(d => !["weekend", "default"].includes(d.status)).length,
         totalWorkHours: days.reduce((sum, d) => sum + parseFloat(d.workingHours || 0), 0).toFixed(1)
       };

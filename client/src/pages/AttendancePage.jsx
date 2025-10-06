@@ -384,6 +384,15 @@ const AttendancePage = ({ onLogout }) => {
         const monthlyData = monthlyAttendanceRes.data;
 
         console.log("📊 Raw monthly data from backend:", monthlyData);
+        console.log("📊 Monthly summary lateDays:", monthlyData.summary?.lateDays);
+        console.log("📊 Monthly summary full:", monthlyData.summary);
+        console.log("📊 Monthly data array with isLate:", monthlyData.data?.map(d => ({
+          date: d.date,
+          isLate: d.isLate,
+          arrivalTime: d.arrivalTime,
+          shiftStart: d.shift?.startTime,
+          allFields: Object.keys(d)
+        })));
 
         // The backend returns "data" not "attendance"
         const attendanceArray = monthlyData.data || [];
@@ -429,7 +438,8 @@ const AttendancePage = ({ onLogout }) => {
         console.log("✅ Converted weekly data:", {
           dailyDataCount: weeklyRes.data.dailyData.length,
           presentDays: weeklyRes.data.weeklySummary.presentDays,
-          onTimeRate: weeklyRes.data.weeklySummary.onTimeRate
+          onTimeRate: weeklyRes.data.weeklySummary.onTimeRate,
+          lateArrivals: weeklyRes.data.weeklySummary.quickStats?.lateArrivals
         });
       } else {
         // Fallback to empty data structure
@@ -561,7 +571,20 @@ const AttendancePage = ({ onLogout }) => {
       const periodText = isCurrentMonth ? "This month" :
         `${new Date(selectedYear, selectedMonth).toLocaleString('default', { month: 'long', year: 'numeric' })}`;
 
-      setStats({
+      // Calculate actual full days and half days from backend data
+      const fullDaysCount = dailyData.filter(d => {
+        const workHours = (d.workDurationSeconds || 0) / 3600;
+        return !d.isAbsent && workHours >= 8;
+      }).length;
+
+      const halfDaysCount = dailyData.filter(d => {
+        const workHours = (d.workDurationSeconds || 0) / 3600;
+        return d.isHalfDay || (!d.isAbsent && workHours >= 4 && workHours < 8);
+      }).length;
+
+      const absentDaysCount = dailyData.filter(d => d.isAbsent).length;
+
+      const calculatedStats = {
         attendanceRate: Math.round(attendanceRate),
         presentDays: Math.max(0, presentDaysCount),
         totalDays: Math.max(0, weekWorkingDays),
@@ -571,13 +594,19 @@ const AttendancePage = ({ onLogout }) => {
         period: periodText,
         averageHoursPerDay: averageHoursPerDay.toFixed(1),
         lateDays: Math.max(0, weeklySummary.quickStats?.lateArrivals || 0),
+        fullDays: Math.max(0, fullDaysCount),
+        halfDays: Math.max(0, halfDaysCount),
+        absentDays: Math.max(0, absentDaysCount),
         currentStatus: isCurrentMonth && statusRes ? {
           isWorking: Boolean(statusRes.currentlyWorking),
           onBreak: Boolean(statusRes.onBreak),
           todayHours: calculateHoursFromSeconds(statusRes.workDurationSeconds || 0).toFixed(1),
           arrivalTime: statusRes.arrivalTimeFormatted || null
         } : null
-      });
+      };
+
+      console.log("📊 Final stats being set:", calculatedStats);
+      setStats(calculatedStats);
 
       // Process calendar data (enhanced with more status types)
       const tempDate = new Date(selectedYear, selectedMonth, 1);
@@ -646,6 +675,7 @@ const AttendancePage = ({ onLogout }) => {
 
         let status = "absent";
         // Use backend calculated status with WFH support
+        // Priority: WFH > Absent/Leave > Late > Half-day > Present
         if (d.isWFH) {
           status = "wfh";
         } else if (d.isAbsent) {
@@ -655,11 +685,13 @@ const AttendancePage = ({ onLogout }) => {
           } else {
             status = "absent";
           }
+        } else if (d.isLate) {
+          // Late takes priority over half-day
+          status = "late";
+          console.log(`🔴 LATE DAY DETECTED: ${d.date}`, {isLate: d.isLate, isHalfDay: d.isHalfDay, status, arrivalTime: d.arrivalTime});
         } else if (d.isHalfDay) {
           // Check if it's half-day leave or just worked half day
           status = d.leaveInfo && d.leaveInfo.type === 'halfDay' ? "half-day-leave" : "half-day";
-        } else if (d.isLate) {
-          status = "late";
         } else {
           status = "present";
         }
@@ -757,7 +789,8 @@ const AttendancePage = ({ onLogout }) => {
         days,
         startDayOfWeek,
         monthlyStats: {
-          totalPresent: days.filter(d => ["present", "wfh"].includes(d.status)).length,
+          // Present includes: on-time, late, wfh, and half-day (all non-absent working days)
+          totalPresent: days.filter(d => ["present", "late", "wfh", "half-day"].includes(d.status)).length,
           totalLate: days.filter(d => d.status === "late").length,
           totalAbsent: days.filter(d => d.status === "absent").length,
           totalLeave: days.filter(d => ["leave", "half-day-leave", "approved-leave"].includes(d.status)).length,

@@ -137,10 +137,12 @@ class AttendanceService {
       if (!user) return this.STANDARD_SHIFTS.MORNING;
 
       // Use the new integrated shift system from User model
-      const effectiveShift = user.getEffectiveShift(date);
+      const effectiveShift = await user.getEffectiveShift(date);
+
+      console.log('🔍 getUserShift - effectiveShift:', effectiveShift);
 
       if (effectiveShift) {
-        return {
+        const shiftData = {
           name: effectiveShift.name,
           startTime: effectiveShift.start,
           endTime: effectiveShift.end,
@@ -148,6 +150,8 @@ class AttendanceService {
           isFlexible: effectiveShift.isFlexible,
           type: effectiveShift.isFlexible ? "FLEXIBLE" : "STANDARD"
         };
+        console.log('🔍 getUserShift - returning:', shiftData);
+        return shiftData;
       }
 
       // Fallback to legacy system if no effective shift found
@@ -686,14 +690,42 @@ class AttendanceService {
   }
 
   calculateIsLate(arrivalTime, shift) {
-    if (!arrivalTime || !shift?.startTime) return false;
+    console.log('🔍 calculateIsLate called with:', {
+      arrivalTime,
+      shift,
+      hasStartTime: !!shift?.startTime
+    });
+
+    if (!arrivalTime || !shift?.startTime) {
+      console.log('❌ calculateIsLate: Missing data - RETURNING FALSE', {
+        arrivalTime,
+        shiftStartTime: shift?.startTime,
+        shiftObject: shift
+      });
+      return false;
+    }
 
     const arrival = new Date(arrivalTime);
     const [shiftHour, shiftMin] = shift.startTime.split(':').map(Number);
     const shiftStart = new Date(arrival);
     shiftStart.setHours(shiftHour, shiftMin, 0, 0);
 
-    return arrival > new Date(shiftStart.getTime() + this.CONSTANTS.LATE_THRESHOLD_MINUTES * 60000);
+    // No grace period - any lateness counts as late
+    const isLate = arrival > shiftStart;
+    const minutesLate = Math.round((arrival - shiftStart) / 60000);
+
+    console.log('🕐 calculateIsLate RESULT:', {
+      arrivalTime: arrival.toISOString(),
+      arrivalLocal: arrival.toLocaleString(),
+      shiftStartTime: shift.startTime,
+      shiftStartCalculated: shiftStart.toISOString(),
+      shiftStartLocal: shiftStart.toLocaleString(),
+      comparison: `${arrival.toISOString()} > ${shiftStart.toISOString()}`,
+      isLate,
+      minutesLate
+    });
+
+    return isLate;
   }
 
   calculateLateMinutes(arrivalTime, shiftStartTime) {

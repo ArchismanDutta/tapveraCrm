@@ -389,17 +389,25 @@ function calculateAttendanceStatusFromTimeline(timeline = [], shift, workDuratio
   const arrivalTime = new Date(firstPunchIn.time);
   const departureTime = lastPunchOut ? new Date(lastPunchOut.time) : null;
 
-  // Calculate lateness
+  // Calculate lateness - applies to all shift types
+  // No grace period - any lateness counts as late
   let isLate = false;
-  if (shift && shift.start && !shift.isFlexible) {
+  if (shift && shift.start && arrivalTime) {
     const [shiftHour, shiftMinute] = shift.start.split(':').map(Number);
     const expectedStart = new Date(arrivalTime);
     expectedStart.setHours(shiftHour, shiftMinute, 0, 0);
 
-    const lateThreshold = new Date(expectedStart);
-    lateThreshold.setMinutes(lateThreshold.getMinutes() + ATTENDANCE_CONSTANTS.LATE_THRESHOLD_MINUTES);
+    // Employee is late if arrival time is after shift start (no grace period)
+    isLate = arrivalTime > expectedStart;
 
-    isLate = arrivalTime > lateThreshold;
+    console.log('🕐 unifiedAttendanceService - Late Calculation:', {
+      userId,
+      arrivalTime: arrivalTime.toISOString(),
+      shiftStart: shift.start,
+      expectedStartCalculated: expectedStart.toISOString(),
+      isLate,
+      minutesLate: Math.round((arrivalTime - expectedStart) / 60000)
+    });
   }
 
   // Determine if half day or full day based on work hours

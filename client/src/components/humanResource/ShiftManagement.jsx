@@ -338,7 +338,7 @@ const ShiftManagement = ({ onLogout }) => {
 
       // Get system health first
       const healthResponse = await newAttendanceService.getSystemHealth();
-      if (!healthResponse.success) {
+      if (!healthResponse || healthResponse.status !== 'healthy') {
         throw new Error('New attendance system is not available');
       }
 
