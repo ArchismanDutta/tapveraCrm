@@ -23,8 +23,9 @@ const noticeRoutes = require("./routes/noticeRoutes");
 const leaveRoutes = require("./routes/leaveRoutes");
 const todoTaskRoutes = require("./routes/todoTaskRoutes");
 const chatRoutes = require("./routes/chatRoutes");
-const statusRoutes = require("./routes/statusRoutes");
-const summaryRoutes = require("./routes/summaryRoutes");
+// OLD SYSTEM ROUTES - DEPRECATED
+// const statusRoutes = require("./routes/statusRoutes");
+// const summaryRoutes = require("./routes/summaryRoutes");
 const wishRoutes = require("./routes/wishRoutes");
 const flexibleShiftRoutes = require("./routes/flexibleShiftRoutes");
 const shiftRoutes = require("./routes/shiftRoutes");
@@ -96,8 +97,9 @@ app.use("/api/test", testRoutes);
 app.use("/api/email", emailRoutes);
 app.use("/api/leaves", leaveRoutes);
 app.use("/api/todos", todoTaskRoutes);
-app.use("/api/status", statusRoutes);
-app.use("/api/summary", summaryRoutes);
+// OLD SYSTEM ROUTES - DEPRECATED - Use /api/attendance-new instead
+// app.use("/api/status", statusRoutes);
+// app.use("/api/summary", summaryRoutes);
 app.use("/api/notices", noticeRoutes);
 app.use("/api/chat", chatRoutes);
 app.use("/api/wishes", wishRoutes);

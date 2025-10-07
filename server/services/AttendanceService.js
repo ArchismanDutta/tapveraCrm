@@ -2,6 +2,7 @@
 // Complete business logic for the new date-centric attendance system
 const AttendanceRecord = require("../models/AttendanceRecord");
 const User = require("../models/User");
+const Shift = require("../models/Shift");
 const LeaveRequest = require("../models/LeaveRequest");
 const Holiday = require("../models/Holiday");
 const FlexibleShiftRequest = require("../models/FlexibleShiftRequest");
@@ -56,9 +57,20 @@ class AttendanceService {
    */
   async recordPunchEvent(userId, eventType, options = {}) {
     const now = new Date();
-    const today = this.normalizeDate(now);
 
-    // Get attendance record for today
+    // IMPORTANT: For night shifts, determine the correct date
+    // First, get user's shift to determine correct date
+    const userShift = await this.getUserShift(userId, now);
+    const today = this.getAttendanceDateForPunch(now, userShift);
+
+    console.log(`📅 Recording punch event:`);
+    console.log(`   User: ${userId}`);
+    console.log(`   Event: ${eventType}`);
+    console.log(`   Punch time: ${now.toLocaleString()}`);
+    console.log(`   User shift: ${userShift?.startTime}-${userShift?.endTime}`);
+    console.log(`   Assigned to date: ${today.toISOString().split('T')[0]}`);
+
+    // Get attendance record for the determined date
     const record = await this.getAttendanceRecord(today);
 
     // Find or create employee record
@@ -87,7 +99,7 @@ class AttendanceService {
     employee.events.push(punchEvent);
 
     // Recalculate all derived data
-    this.recalculateEmployeeData(employee);
+    this.recalculateEmployeeData(employee, today);
 
     // Update daily statistics
     this.updateDailyStats(record);
@@ -312,8 +324,10 @@ class AttendanceService {
 
   /**
    * Recalculate all derived data from events
+   * @param {Object} employee - The employee record
+   * @param {Date} attendanceDate - The attendance date (for night shift late calculation)
    */
-  recalculateEmployeeData(employee) {
+  recalculateEmployeeData(employee, attendanceDate = null) {
     const events = employee.events.sort((a, b) =>
       new Date(a.timestamp) - new Date(b.timestamp)
     );
@@ -412,7 +426,7 @@ class AttendanceService {
 
       isPresent: workSeconds > 0,
       isAbsent: workSeconds === 0,
-      isLate: this.calculateIsLate(arrivalTime, employee.assignedShift),
+      isLate: this.calculateIsLate(arrivalTime, employee.assignedShift, attendanceDate),
       isHalfDay: workHours >= this.CONSTANTS.MIN_HALF_DAY_HOURS && workHours < this.CONSTANTS.MIN_FULL_DAY_HOURS,
       isFullDay: workHours >= this.CONSTANTS.MIN_FULL_DAY_HOURS,
       isOvertime: workHours > this.CONSTANTS.MAX_WORK_HOURS,
@@ -658,12 +672,77 @@ class AttendanceService {
 
   // Helper methods
   normalizeDate(date) {
+    // Keep using local timezone for backward compatibility with existing records
+    // The date represents midnight in the server's local timezone
     const d = new Date(date);
     d.setHours(0, 0, 0, 0);
     return d;
   }
 
+  /**
+   * Get the correct attendance date for a punch event
+   * For night shifts, punches after midnight belong to the PREVIOUS day's shift
+   */
+  getAttendanceDateForPunch(punchTime, shift) {
+    const punch = new Date(punchTime);
+    const punchHour = punch.getHours();
+
+    // If no shift or not a night shift, use the punch date
+    if (!shift || !shift.startTime || !shift.endTime) {
+      return this.normalizeDate(punch);
+    }
+
+    const [startHour] = shift.startTime.split(':').map(Number);
+    const [endHour] = shift.endTime.split(':').map(Number);
+
+    // Check if this is a night shift (shift that crosses midnight)
+    const isNightShift = endHour < startHour;
+
+    if (isNightShift) {
+      // For night shifts, if punch is BEFORE shift end time AND after midnight,
+      // it belongs to PREVIOUS day's shift
+      // Example: Shift 20:00-05:00
+      //   - Punch at 18:00 = Sept 10 → Record for Sept 10 ✅
+      //   - Punch at 22:00 = Sept 10 → Record for Sept 10 ✅
+      //   - Punch at 02:00 = Sept 11 → Record for Sept 10 ✅ (belongs to previous shift)
+      //   - Punch at 06:00 = Sept 11 → Record for Sept 11 ✅ (after shift ends)
+
+      if (punchHour < endHour) {
+        // Punch is in the early morning hours (00:00 - endHour)
+        // This belongs to YESTERDAY's night shift
+        const yesterday = new Date(punch);
+        yesterday.setDate(yesterday.getDate() - 1);
+        console.log(`🌙 Night shift detected: Punch at ${punch.toLocaleString()} (hour ${punchHour}) before shift end ${endHour}:00`);
+        console.log(`   Assigning to previous day: ${yesterday.toISOString().split('T')[0]}`);
+        return this.normalizeDate(yesterday);
+      } else if (punchHour >= startHour) {
+        // Punch is in the evening (after shift start)
+        // This belongs to TODAY's night shift
+        console.log(`🌙 Night shift detected: Punch at ${punch.toLocaleString()} (hour ${punchHour}) after shift start ${startHour}:00`);
+        console.log(`   Assigning to current day: ${punch.toISOString().split('T')[0]}`);
+        return this.normalizeDate(punch);
+      } else {
+        // Punch is between endHour and startHour (the "off" hours)
+        // For example, punching at 10:00 AM for a 20:00-05:00 shift
+        // This is unusual - could be early punch for today's shift
+        // Assign to today
+        console.log(`⚠️  Unusual punch time: ${punch.toLocaleString()} (hour ${punchHour}) between shift end ${endHour}:00 and start ${startHour}:00`);
+        console.log(`   Assigning to current day: ${punch.toISOString().split('T')[0]}`);
+        return this.normalizeDate(punch);
+      }
+    }
+
+    // Not a night shift, use the punch date
+    return this.normalizeDate(punch);
+  }
+
   formatDateKey(date) {
+    // IMPORTANT: Use local date components (not UTC) because normalizeDate stores dates
+    // as midnight in local timezone. This ensures the formatted date matches the intended date.
+    // For example, if record.date is "Oct 5 midnight IST" stored as 2025-10-04T18:30:00.000Z:
+    // - In IST: getFullYear/Month/Date returns Oct 5 (correct)
+    // - In UTC: would need to use the same approach
+    // Since we're using local timezone consistently, use local date methods
     const d = new Date(date);
     const year = d.getFullYear();
     const month = String(d.getMonth() + 1).padStart(2, '0');
@@ -689,10 +768,11 @@ class AttendanceService {
     return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
   }
 
-  calculateIsLate(arrivalTime, shift) {
+  calculateIsLate(arrivalTime, shift, attendanceDate = null) {
     console.log('🔍 calculateIsLate called with:', {
       arrivalTime,
       shift,
+      attendanceDate,
       hasStartTime: !!shift?.startTime
     });
 
@@ -707,8 +787,24 @@ class AttendanceService {
 
     const arrival = new Date(arrivalTime);
     const [shiftHour, shiftMin] = shift.startTime.split(':').map(Number);
-    const shiftStart = new Date(arrival);
-    shiftStart.setHours(shiftHour, shiftMin, 0, 0);
+
+    // IMPORTANT: For night shifts, use the attendance date (not arrival date) as the base
+    // for calculating shift start time
+    // Example: Night shift 20:00-05:00 on Sept 10
+    //   - Employee punches at 02:00 AM Sept 11
+    //   - Attendance date is Sept 10 (determined by getAttendanceDateForPunch)
+    //   - Shift start should be Sept 10 at 20:00, not Sept 11 at 20:00
+    const baseDate = attendanceDate ? new Date(attendanceDate) : new Date(arrival);
+
+    // CRITICAL: Extract date components to avoid timezone issues
+    // When baseDate is stored as UTC but represents a local date,
+    // we need to use its local date components, not just setHours()
+    const year = baseDate.getFullYear();
+    const month = baseDate.getMonth();
+    const day = baseDate.getDate();
+
+    // Create shift start time on the same LOCAL date
+    const shiftStart = new Date(year, month, day, shiftHour, shiftMin, 0, 0);
 
     // No grace period - any lateness counts as late
     const isLate = arrival > shiftStart;
@@ -718,6 +814,7 @@ class AttendanceService {
       arrivalTime: arrival.toISOString(),
       arrivalLocal: arrival.toLocaleString(),
       shiftStartTime: shift.startTime,
+      baseDate: baseDate.toISOString().split('T')[0],
       shiftStartCalculated: shiftStart.toISOString(),
       shiftStartLocal: shiftStart.toLocaleString(),
       comparison: `${arrival.toISOString()} > ${shiftStart.toISOString()}`,

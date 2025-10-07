@@ -1,16 +1,14 @@
-const User = require("../models/User");
-const UserStatus = require("../models/UserStatus");
-const AttendanceRecord = require("../models/AttendanceRecord");
-const { getEffectiveShift, getAttendanceData } = require("../services/attendanceCalculationService");
-const unifiedAttendanceService = require("../services/unifiedAttendanceService");
+// controllers/manualAttendanceController.NEW.js
+// Updated manual attendance controller using the NEW AttendanceService
 
-// CRITICAL: Use enhanced attendance system for all manual attendance
-const USE_ENHANCED_ATTENDANCE_SYSTEM = true;
+const User = require("../models/User");
+const AttendanceService = require("../services/AttendanceService");
+
+const attendanceService = new AttendanceService();
 
 /**
- * Create manual attendance entry for an employee on a specific date
+ * Create manual attendance entry using NEW attendance system
  * @route POST /api/admin/manual-attendance
- * @access Admin, HR, Super-Admin
  */
 const createManualAttendance = async (req, res) => {
   try {
@@ -26,775 +24,12 @@ const createManualAttendance = async (req, res) => {
       overrideExisting = false
     } = req.body;
 
-    // CRITICAL: Route to enhanced attendance system
-    if (USE_ENHANCED_ATTENDANCE_SYSTEM) {
-      return await createManualAttendanceEnhanced(req, res);
-    }
-
-    // Validate required fields
-    if (!userId || !date) {
-      return res.status(400).json({
-        success: false,
-        error: "User ID and date are required"
-      });
-    }
-
-    // Validate user exists
-    const user = await User.findById(userId);
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        error: "User not found"
-      });
-    }
-
-    // Parse and validate date
-    const targetDate = new Date(date);
-    if (isNaN(targetDate.getTime())) {
-      return res.status(400).json({
-        success: false,
-        error: "Invalid date format"
-      });
-    }
-
-    // Set date to start of day
-    targetDate.setHours(0, 0, 0, 0);
-    const endOfDay = new Date(targetDate);
-    endOfDay.setHours(23, 59, 59, 999);
-
-    // Check if attendance already exists
-    const existingUserStatus = await UserStatus.findOne({
-      userId,
-      today: { $gte: targetDate, $lte: endOfDay }
-    });
-
-    const existingAttendanceRecord = await AttendanceRecord.findOne({
-      userId,
-      date: { $gte: targetDate, $lte: endOfDay }
-    });
-
-    if ((existingUserStatus || existingAttendanceRecord) && !overrideExisting) {
-      return res.status(409).json({
-        success: false,
-        error: "Attendance record already exists for this date. Set overrideExisting=true to replace it.",
-        existingRecords: {
-          hasUserStatus: !!existingUserStatus,
-          hasAttendanceRecord: !!existingAttendanceRecord
-        }
-      });
-    }
-
-    // Get effective shift for the user and date
-    const effectiveShift = await getEffectiveShift(userId, targetDate);
-    if (!effectiveShift) {
-      return res.status(400).json({
-        success: false,
-        error: "No shift configuration found for this user and date"
-      });
-    }
-
-    // Validate punch times if provided
-    let punchIn = null;
-    let punchOut = null;
-
-    if (punchInTime) {
-      punchIn = new Date(punchInTime);
-      if (isNaN(punchIn.getTime())) {
-        return res.status(400).json({
-          success: false,
-          error: "Invalid punch in time format"
-        });
-      }
-    }
-
-    if (punchOutTime) {
-      punchOut = new Date(punchOutTime);
-      if (isNaN(punchOut.getTime())) {
-        return res.status(400).json({
-          success: false,
-          error: "Invalid punch out time format"
-        });
-      }
-    }
-
-    // Validate punch out is after punch in
-    if (punchIn && punchOut && punchOut <= punchIn) {
-      return res.status(400).json({
-        success: false,
-        error: "Punch out time must be after punch in time"
-      });
-    }
-
-    // Process break sessions
-    const processedBreakSessions = [];
-    let totalBreakSeconds = 0;
-
-    for (const breakSession of breakSessions) {
-      const breakStart = new Date(breakSession.start);
-      const breakEnd = new Date(breakSession.end);
-
-      if (isNaN(breakStart.getTime()) || isNaN(breakEnd.getTime())) {
-        return res.status(400).json({
-          success: false,
-          error: "Invalid break session time format"
-        });
-      }
-
-      if (breakEnd <= breakStart) {
-        return res.status(400).json({
-          success: false,
-          error: "Break end time must be after break start time"
-        });
-      }
-
-      const breakDuration = Math.floor((breakEnd - breakStart) / 1000);
-      totalBreakSeconds += breakDuration;
-
-      processedBreakSessions.push({
-        start: breakStart,
-        end: breakEnd,
-        type: breakSession.type || "break"
-      });
-    }
-
-    // Create work sessions based on punch times and breaks
-    const workedSessions = [];
-    let totalWorkSeconds = 0;
-
-    if (punchIn && punchOut && !isOnLeave && !isHoliday) {
-      // If no breaks, create one continuous session
-      if (processedBreakSessions.length === 0) {
-        const workDuration = Math.floor((punchOut - punchIn) / 1000);
-        totalWorkSeconds = workDuration;
-        workedSessions.push({
-          start: punchIn,
-          end: punchOut
-        });
-      } else {
-        // Split work sessions around breaks
-        let currentStart = punchIn;
-
-        // Sort breaks by start time
-        const sortedBreaks = processedBreakSessions.sort((a, b) => a.start - b.start);
-
-        for (const breakSession of sortedBreaks) {
-          if (currentStart < breakSession.start) {
-            // Work session before break
-            const workDuration = Math.floor((breakSession.start - currentStart) / 1000);
-            if (workDuration > 0) {
-              totalWorkSeconds += workDuration;
-              workedSessions.push({
-                start: currentStart,
-                end: breakSession.start
-              });
-            }
-          }
-          currentStart = breakSession.end;
-        }
-
-        // Final work session after last break
-        if (currentStart < punchOut) {
-          const workDuration = Math.floor((punchOut - currentStart) / 1000);
-          if (workDuration > 0) {
-            totalWorkSeconds += workDuration;
-            workedSessions.push({
-              start: currentStart,
-              end: punchOut
-            });
-          }
-        }
-      }
-    }
-
-    // Create timeline events
-    const timeline = [];
-    if (punchIn && !isOnLeave && !isHoliday) {
-      timeline.push({ type: "punch in", time: punchIn });
-    }
-
-    // Add break events to timeline
-    processedBreakSessions.forEach(breakSession => {
-      timeline.push({ type: "break start", time: breakSession.start });
-      timeline.push({ type: "break end", time: breakSession.end });
-    });
-
-    if (punchOut && !isOnLeave && !isHoliday) {
-      timeline.push({ type: "punch out", time: punchOut });
-    }
-
-    // Calculate attendance status using the attendance service
-    const attendanceData = await getAttendanceData(
-      userId,
-      targetDate,
-      workedSessions,
-      processedBreakSessions,
-      punchIn
-    );
-
-    // Delete existing records if overriding
-    if (overrideExisting) {
-      await UserStatus.deleteOne({
-        userId,
-        today: { $gte: targetDate, $lte: endOfDay }
-      });
-
-      await AttendanceRecord.deleteOne({
-        userId,
-        date: { $gte: targetDate, $lte: endOfDay }
-      });
-    }
-
-    // Create UserStatus record
-    const userStatusData = {
-      userId,
-      today: targetDate,
-      arrivalTime: punchIn,
-      currentlyWorking: false,
-      onBreak: false,
-      workDurationSeconds: totalWorkSeconds,
-      breakDurationSeconds: totalBreakSeconds,
-      workDuration: `${Math.floor(totalWorkSeconds / 3600)}h ${Math.floor((totalWorkSeconds % 3600) / 60)}m`,
-      breakDuration: `${Math.floor(totalBreakSeconds / 3600)}h ${Math.floor((totalBreakSeconds % 3600) / 60)}m`,
-      workedSessions,
-      breakSessions: processedBreakSessions,
-      timeline,
-      isLate: attendanceData.attendanceStatus.isLate || false,
-      isHalfDay: attendanceData.attendanceStatus.isHalfDay || false,
-      isAbsent: attendanceData.attendanceStatus.isAbsent || false,
-    };
-
-    const userStatus = new UserStatus(userStatusData);
-
-    // Create AttendanceRecord using new schema
-    const attendanceRecordData = {
-      userId,
-      date: targetDate,
-
-      // Status and presence
-      status: attendanceData.attendanceStatus.status,
-      isPresent: !attendanceData.attendanceStatus.isAbsent,
-      isAbsent: attendanceData.attendanceStatus.isAbsent || false,
-      isLate: attendanceData.attendanceStatus.isLate || false,
-      isHalfDay: attendanceData.attendanceStatus.isHalfDay || false,
-      isWFH: false, // Manual entries are typically office-based
-
-      // Times
-      arrivalTime: punchIn,
-      departureTime: punchOut,
-
-      // Duration calculations
-      workDurationSeconds: totalWorkSeconds,
-      breakDurationSeconds: totalBreakSeconds,
-
-      // Shift information
-      shiftType: effectiveShift.type === "flexiblePermanent" ? "flexiblePermanent" :
-                 effectiveShift.isFlexible ? "flexible" : "standard",
-      expectedStartTime: effectiveShift.start,
-      expectedEndTime: effectiveShift.end,
-
-      // Events converted from timeline
-      events: timeline || [],
-
-      // Leave and holiday flags
-      leaveInfo: isOnLeave ? { type: 'manual', approved: true } : null,
-      isHoliday,
-
-      // Metadata
-      metadata: {
-        createdBy: 'manual-entry',
-        source: 'manual-attendance-form',
-        isManual: true,
-        userStatusId: userStatus._id, // Keep reference for compatibility
-        originalShift: {
-          name: effectiveShift.shiftName,
-          start: effectiveShift.start,
-          end: effectiveShift.end,
-          isFlexible: effectiveShift.isFlexible,
-          durationHours: effectiveShift.durationHours
-        },
-        workedSessions,
-        breakSessions: processedBreakSessions
-      },
-
-      notes
-    };
-
-    const attendanceRecord = new AttendanceRecord(attendanceRecordData);
-
-    // Save both records in sequence to ensure consistency and referential integrity
-    await userStatus.save();
-    await attendanceRecord.save();
-
-    // Return success response
-    res.status(201).json({
-      success: true,
-      message: "Manual attendance record created successfully",
-      data: {
-        userStatus: userStatus,
-        dailyWork: attendanceRecord, // For backward compatibility
-        attendanceRecord: attendanceRecord,
-        effectiveShift,
-        attendanceStatus: attendanceData.attendanceStatus,
-        calculatedMetrics: {
-          totalWorkHours: (totalWorkSeconds / 3600).toFixed(2),
-          totalBreakHours: (totalBreakSeconds / 3600).toFixed(2),
-          workSessions: workedSessions.length,
-          breakSessions: processedBreakSessions.length
-        }
-      }
-    });
-
-  } catch (error) {
-    console.error("Error creating manual attendance:", error);
-    res.status(500).json({
-      success: false,
-      error: "Internal server error",
-      details: error.message
-    });
-  }
-};
-
-/**
- * Update existing manual attendance entry
- * @route PUT /api/admin/manual-attendance/:id
- * @access Admin, HR, Super-Admin
- */
-const updateManualAttendance = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const {
-      punchInTime,
-      punchOutTime,
-      breakSessions = [],
-      notes = "",
-      isOnLeave = false,
-      isHoliday = false
-    } = req.body;
-
-    // Find the AttendanceRecord
-    const attendanceRecord = await AttendanceRecord.findById(id).populate("userId");
-    if (!attendanceRecord) {
-      return res.status(404).json({
-        success: false,
-        error: "Attendance record not found"
-      });
-    }
-
-    const userId = attendanceRecord.userId._id;
-    const targetDate = new Date(attendanceRecord.date);
-    targetDate.setHours(0, 0, 0, 0);
-    const endOfDay = new Date(targetDate);
-    endOfDay.setHours(23, 59, 59, 999);
-
-    // Get effective shift for the user and date
-    const effectiveShift = await getEffectiveShift(userId, targetDate);
-    if (!effectiveShift) {
-      return res.status(400).json({
-        success: false,
-        error: "No shift configuration found for this user and date"
-      });
-    }
-
-    // Validate and parse punch times
-    let punchIn = null;
-    let punchOut = null;
-
-    if (punchInTime) {
-      punchIn = new Date(punchInTime);
-      if (isNaN(punchIn.getTime())) {
-        return res.status(400).json({
-          success: false,
-          error: "Invalid punch in time format"
-        });
-      }
-    }
-
-    if (punchOutTime) {
-      punchOut = new Date(punchOutTime);
-      if (isNaN(punchOut.getTime())) {
-        return res.status(400).json({
-          success: false,
-          error: "Invalid punch out time format"
-        });
-      }
-    }
-
-    // Validate punch out is after punch in
-    if (punchIn && punchOut && punchOut <= punchIn) {
-      return res.status(400).json({
-        success: false,
-        error: "Punch out time must be after punch in time"
-      });
-    }
-
-    // Process break sessions
-    const processedBreakSessions = [];
-    let totalBreakSeconds = 0;
-
-    for (const breakSession of breakSessions) {
-      const breakStart = new Date(breakSession.start);
-      const breakEnd = new Date(breakSession.end);
-
-      if (isNaN(breakStart.getTime()) || isNaN(breakEnd.getTime())) {
-        return res.status(400).json({
-          success: false,
-          error: "Invalid break session time format"
-        });
-      }
-
-      if (breakEnd <= breakStart) {
-        return res.status(400).json({
-          success: false,
-          error: "Break end time must be after break start time"
-        });
-      }
-
-      const breakDuration = Math.floor((breakEnd - breakStart) / 1000);
-      totalBreakSeconds += breakDuration;
-
-      processedBreakSessions.push({
-        start: breakStart,
-        end: breakEnd,
-        type: breakSession.type || "break"
-      });
-    }
-
-    // Create work sessions based on punch times and breaks
-    const workedSessions = [];
-    let totalWorkSeconds = 0;
-
-    if (punchIn && punchOut && !isOnLeave && !isHoliday) {
-      // If no breaks, create one continuous session
-      if (processedBreakSessions.length === 0) {
-        const workDuration = Math.floor((punchOut - punchIn) / 1000);
-        totalWorkSeconds = workDuration;
-        workedSessions.push({
-          start: punchIn,
-          end: punchOut
-        });
-      } else {
-        // Split work sessions around breaks
-        let currentStart = punchIn;
-
-        // Sort breaks by start time
-        const sortedBreaks = processedBreakSessions.sort((a, b) => a.start - b.start);
-
-        for (const breakSession of sortedBreaks) {
-          if (currentStart < breakSession.start) {
-            // Work session before break
-            const workDuration = Math.floor((breakSession.start - currentStart) / 1000);
-            if (workDuration > 0) {
-              totalWorkSeconds += workDuration;
-              workedSessions.push({
-                start: currentStart,
-                end: breakSession.start
-              });
-            }
-          }
-          currentStart = breakSession.end;
-        }
-
-        // Final work session after last break
-        if (currentStart < punchOut) {
-          const workDuration = Math.floor((punchOut - currentStart) / 1000);
-          if (workDuration > 0) {
-            totalWorkSeconds += workDuration;
-            workedSessions.push({
-              start: currentStart,
-              end: punchOut
-            });
-          }
-        }
-      }
-    }
-
-    // Create timeline events
-    const timeline = [];
-    if (punchIn && !isOnLeave && !isHoliday) {
-      timeline.push({ type: "punch in", time: punchIn });
-    }
-
-    // Add break events to timeline
-    processedBreakSessions.forEach(breakSession => {
-      timeline.push({ type: "break start", time: breakSession.start });
-      timeline.push({ type: "break end", time: breakSession.end });
-    });
-
-    if (punchOut && !isOnLeave && !isHoliday) {
-      timeline.push({ type: "punch out", time: punchOut });
-    }
-
-    // Calculate attendance status using the attendance service
-    const attendanceData = await getAttendanceData(
-      userId,
-      targetDate,
-      workedSessions,
-      processedBreakSessions,
-      punchIn
-    );
-
-    // Update UserStatus record
-    const userStatusUpdate = {
-      arrivalTime: punchIn,
-      currentlyWorking: false,
-      onBreak: false,
-      workDurationSeconds: totalWorkSeconds,
-      breakDurationSeconds: totalBreakSeconds,
-      workDuration: `${Math.floor(totalWorkSeconds / 3600)}h ${Math.floor((totalWorkSeconds % 3600) / 60)}m`,
-      breakDuration: `${Math.floor(totalBreakSeconds / 3600)}h ${Math.floor((totalBreakSeconds % 3600) / 60)}m`,
-      workedSessions,
-      breakSessions: processedBreakSessions,
-      timeline,
-      isLate: attendanceData.attendanceStatus.isLate || false,
-      isHalfDay: attendanceData.attendanceStatus.isHalfDay || false,
-      isAbsent: attendanceData.attendanceStatus.isAbsent || false,
-    };
-
-    // Update AttendanceRecord record
-    const attendanceRecordUpdate = {
-      shift: {
-        name: effectiveShift.shiftName,
-        start: effectiveShift.start,
-        end: effectiveShift.end,
-        isFlexible: effectiveShift.isFlexible,
-        durationHours: effectiveShift.durationHours
-      },
-      shiftType: effectiveShift.type === "flexiblePermanent" ? "flexiblePermanent" :
-                 effectiveShift.isFlexible ? "flexible" : "standard",
-      workDurationSeconds: totalWorkSeconds,
-      breakDurationSeconds: totalBreakSeconds,
-      workedSessions,
-      breakSessions: processedBreakSessions,
-      timeline,
-      arrivalTime: punchIn,
-      departureTime: punchOut,
-      isLate: attendanceData.attendanceStatus.isLate || false,
-      isHalfDay: attendanceData.attendanceStatus.isHalfDay || false,
-      isAbsent: attendanceData.attendanceStatus.isAbsent || false,
-      isOnLeave,
-      isHoliday,
-      notes
-    };
-
-    // Update the records
-    const [updatedUserStatus, updatedAttendanceRecord] = await Promise.all([
-      attendanceRecord.metadata?.userStatusId ?
-        UserStatus.findByIdAndUpdate(attendanceRecord.metadata.userStatusId, userStatusUpdate, { new: true }) :
-        null,
-      AttendanceRecord.findByIdAndUpdate(id, attendanceRecordUpdate, { new: true }).populate("userId")
-    ]);
-
-    // If no UserStatus record existed, create one
-    if (!updatedUserStatus && attendanceRecord.metadata?.userStatusId) {
-      const newUserStatus = new UserStatus({
-        userId,
-        today: targetDate,
-        ...userStatusUpdate
-      });
-      await newUserStatus.save();
-
-      // Update AttendanceRecord to reference the new UserStatus
-      await AttendanceRecord.findByIdAndUpdate(id, { userStatusId: newUserStatus._id });
-    }
-
-    res.status(200).json({
-      success: true,
-      message: "Manual attendance record updated successfully",
-      data: {
-        userStatus: updatedUserStatus,
-        dailyWork: updatedAttendanceRecord, // For backward compatibility
-        attendanceRecord: updatedAttendanceRecord,
-        effectiveShift,
-        attendanceStatus: attendanceData.attendanceStatus,
-        calculatedMetrics: {
-          totalWorkHours: (totalWorkSeconds / 3600).toFixed(2),
-          totalBreakHours: (totalBreakSeconds / 3600).toFixed(2),
-          workSessions: workedSessions.length,
-          breakSessions: processedBreakSessions.length
-        }
-      }
-    });
-
-  } catch (error) {
-    console.error("Error updating manual attendance:", error);
-    res.status(500).json({
-      success: false,
-      error: "Internal server error",
-      details: error.message
-    });
-  }
-};
-
-/**
- * Delete manual attendance entry
- * @route DELETE /api/admin/manual-attendance/:id
- * @access Admin, HR, Super-Admin
- */
-const deleteManualAttendance = async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    // Find the AttendanceRecord record
-    const attendanceRecord = await AttendanceRecord.findById(id);
-    if (!attendanceRecord) {
-      return res.status(404).json({
-        success: false,
-        error: "Attendance record not found"
-      });
-    }
-
-    // Delete related UserStatus record
-    if (attendanceRecord.metadata?.userStatusId) {
-      await UserStatus.findByIdAndDelete(attendanceRecord.metadata.userStatusId);
-    }
-
-    // Delete AttendanceRecord record
-    await AttendanceRecord.findByIdAndDelete(id);
-
-    res.status(200).json({
-      success: true,
-      message: "Manual attendance record deleted successfully"
-    });
-
-  } catch (error) {
-    console.error("Error deleting manual attendance:", error);
-    res.status(500).json({
-      success: false,
-      error: "Internal server error",
-      details: error.message
-    });
-  }
-};
-
-/**
- * Get manual attendance entries with filters
- * @route GET /api/admin/manual-attendance
- * @access Admin, HR, Super-Admin
- */
-const getManualAttendanceRecords = async (req, res) => {
-  try {
-    console.log("=== getManualAttendanceRecords: Function called ===");
-
-    // First test: Simple response without any model usage
-    res.status(200).json({
-      success: true,
-      data: {
-        records: [],
-        pagination: {
-          currentPage: 1,
-          totalPages: 0,
-          totalRecords: 0,
-          recordsPerPage: 20,
-          hasNextPage: false,
-          hasPrevPage: false
-        }
-      },
-      message: "Test endpoint - no database operations"
-    });
-
-  } catch (error) {
-    console.error("Error in getManualAttendanceRecords:", error);
-    console.error("Error stack:", error.stack);
-    res.status(500).json({
-      success: false,
-      error: "Internal server error",
-      details: error.message
-    });
-  }
-};
-
-/**
- * Get attendance record for a specific user and date
- * @route GET /api/admin/manual-attendance/user/:userId/date/:date
- * @access Admin, HR, Super-Admin
- */
-const getAttendanceByUserAndDate = async (req, res) => {
-  try {
-    const { userId, date } = req.params;
-
-    // Validate inputs
-    if (!userId || !date) {
-      return res.status(400).json({
-        success: false,
-        error: "User ID and date are required"
-      });
-    }
-
-    const targetDate = new Date(date);
-    if (isNaN(targetDate.getTime())) {
-      return res.status(400).json({
-        success: false,
-        error: "Invalid date format"
-      });
-    }
-
-    targetDate.setHours(0, 0, 0, 0);
-    const endOfDay = new Date(targetDate);
-    endOfDay.setHours(23, 59, 59, 999);
-
-    // Find records
-    const [attendanceRecord, userStatus] = await Promise.all([
-      AttendanceRecord.findOne({
-        userId,
-        date: { $gte: targetDate, $lte: endOfDay }
-      }).populate("userId", "name employeeId email role"),
-      UserStatus.findOne({
-        userId,
-        today: { $gte: targetDate, $lte: endOfDay }
-      })
-    ]);
-
-    if (!attendanceRecord && !userStatus) {
-      return res.status(404).json({
-        success: false,
-        error: "No attendance record found for this user and date"
-      });
-    }
-
-    res.status(200).json({
-      success: true,
-      data: {
-        attendanceRecord,
-        userStatus,
-        hasRecord: !!(attendanceRecord || userStatus)
-      }
-    });
-
-  } catch (error) {
-    console.error("Error fetching attendance by user and date:", error);
-    res.status(500).json({
-      success: false,
-      error: "Internal server error",
-      details: error.message
-    });
-  }
-};
-
-/**
- * Create manual attendance using ENHANCED ATTENDANCE SYSTEM
- * Uses AttendanceRecord with enhanced fields and unifiedAttendanceService for calculations
- */
-const createManualAttendanceEnhanced = async (req, res) => {
-  try {
-    const {
+    console.log("📝 Creating manual attendance:", {
       userId,
       date,
       punchInTime,
       punchOutTime,
-      breakSessions = [],
-      notes = "",
-      isOnLeave = false,
-      isHoliday = false,
-      overrideExisting = false
-    } = req.body;
-
-    console.log("📝 Creating manual attendance with ENHANCED system:", {
-      userId,
-      date,
-      punchInTime,
-      punchOutTime,
-      breakSessionsCount: breakSessions.length,
-      overrideExisting
+      breakSessionsCount: breakSessions.length
     });
 
     // Validate required fields
@@ -824,26 +59,17 @@ const createManualAttendanceEnhanced = async (req, res) => {
     }
 
     targetDate.setHours(0, 0, 0, 0);
-    const endOfDay = new Date(targetDate);
-    endOfDay.setHours(23, 59, 59, 999);
 
-    // Find or create the date-based AttendanceRecord
-    let attendanceRecord = await AttendanceRecord.findOne({
-      date: { $gte: targetDate, $lte: endOfDay }
-    });
+    // Get attendance record for the date
+    const attendanceRecord = await attendanceService.getAttendanceRecord(targetDate);
 
-    // Check if this employee already has attendance for this date
-    const existingEmployeeData = attendanceRecord?.employees?.find(
-      emp => emp.userId.toString() === userId.toString()
-    );
+    // Check if employee already has attendance
+    const existingEmployee = attendanceRecord.getEmployee(userId);
 
-    if (existingEmployeeData && !overrideExisting) {
+    if (existingEmployee && !overrideExisting) {
       return res.status(409).json({
         success: false,
-        error: "Attendance record already exists for this employee on this date. Set overrideExisting=true to replace it.",
-        existingRecords: {
-          hasAttendanceRecord: true
-        }
+        error: "Attendance record already exists for this employee on this date. Set overrideExisting=true to replace it."
       });
     }
 
@@ -878,10 +104,237 @@ const createManualAttendanceEnhanced = async (req, res) => {
       });
     }
 
-    // Process break sessions
-    const processedBreakSessions = [];
-    let totalBreakSeconds = 0;
+    // Validate break sessions
+    for (const breakSession of breakSessions) {
+      const breakStart = new Date(breakSession.start);
+      const breakEnd = new Date(breakSession.end);
 
+      if (isNaN(breakStart.getTime()) || isNaN(breakEnd.getTime())) {
+        return res.status(400).json({
+          success: false,
+          error: "Invalid break session time format"
+        });
+      }
+
+      if (breakEnd <= breakStart) {
+        return res.status(400).json({
+          success: false,
+          error: "Break end time must be after break start time"
+        });
+      }
+    }
+
+    // Remove existing employee data if overriding
+    if (existingEmployee && overrideExisting) {
+      attendanceRecord.employees = attendanceRecord.employees.filter(
+        emp => emp.userId.toString() !== userId.toString()
+      );
+    }
+
+    // Create employee record
+    const employeeData = await attendanceService.createEmployeeRecord(userId, targetDate);
+
+    // Add manual events
+    const events = [];
+
+    if (punchIn && !isOnLeave && !isHoliday) {
+      events.push({
+        type: "PUNCH_IN",
+        timestamp: punchIn,
+        manual: true,
+        approvedBy: req.user?._id,
+        notes: notes || 'Manual entry'
+      });
+    }
+
+    // Add break events
+    for (const breakSession of breakSessions) {
+      events.push({
+        type: "BREAK_START",
+        timestamp: new Date(breakSession.start),
+        manual: true,
+        approvedBy: req.user?._id
+      });
+      events.push({
+        type: "BREAK_END",
+        timestamp: new Date(breakSession.end),
+        manual: true,
+        approvedBy: req.user?._id
+      });
+    }
+
+    if (punchOut && !isOnLeave && !isHoliday) {
+      events.push({
+        type: "PUNCH_OUT",
+        timestamp: punchOut,
+        manual: true,
+        approvedBy: req.user?._id,
+        notes: notes || 'Manual entry'
+      });
+    }
+
+    // Sort events by timestamp
+    events.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+
+    // Add events to employee record
+    employeeData.events = events;
+
+    // Update leave info if applicable
+    if (isOnLeave) {
+      employeeData.leaveInfo.isOnLeave = true;
+      employeeData.leaveInfo.leaveType = 'manual';
+    }
+
+    if (isHoliday) {
+      employeeData.leaveInfo.isHoliday = true;
+    }
+
+    // Recalculate attendance data (pass targetDate for night shift late detection)
+    attendanceService.recalculateEmployeeData(employeeData, targetDate);
+
+    // Add employee to record
+    attendanceRecord.employees.push(employeeData);
+
+    // Update daily stats
+    attendanceService.updateDailyStats(attendanceRecord);
+
+    // Save record
+    await attendanceRecord.save();
+
+    console.log("✅ Manual attendance created successfully:", {
+      date: targetDate,
+      userId,
+      eventsCount: events.length,
+      workDurationSeconds: employeeData.calculated.workDurationSeconds
+    });
+
+    res.status(201).json({
+      success: true,
+      message: "Manual attendance record created successfully",
+      data: {
+        dailyWork: employeeData.calculated, // For frontend compatibility
+        employee: employeeData,
+        calculatedMetrics: {
+          workHours: (employeeData.calculated.workDurationSeconds / 3600).toFixed(2),
+          breakHours: (employeeData.calculated.breakDurationSeconds / 3600).toFixed(2),
+          isLate: employeeData.calculated.isLate,
+          isHalfDay: employeeData.calculated.isHalfDay,
+          isAbsent: employeeData.calculated.isAbsent
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error("Error creating manual attendance:", error);
+    res.status(500).json({
+      success: false,
+      error: "Internal server error",
+      details: error.message
+    });
+  }
+};
+
+/**
+ * Update existing manual attendance entry
+ * @route PUT /api/admin/manual-attendance/:id
+ */
+const updateManualAttendance = async (req, res) => {
+  try {
+    const { id } = req.params; // This should be userId since new system doesn't have individual IDs
+    const {
+      date,
+      punchInTime,
+      punchOutTime,
+      breakSessions = [],
+      notes = "",
+      isOnLeave = false,
+      isHoliday = false
+    } = req.body;
+
+    console.log("📝 Updating manual attendance:", {
+      userId: id,
+      date
+    });
+
+    // For update, we need userId and date
+    if (!id || !date) {
+      return res.status(400).json({
+        success: false,
+        error: "User ID and date are required for update"
+      });
+    }
+
+    // Parse date
+    const targetDate = new Date(date);
+    if (isNaN(targetDate.getTime())) {
+      return res.status(400).json({
+        success: false,
+        error: "Invalid date format"
+      });
+    }
+    targetDate.setHours(0, 0, 0, 0);
+
+    // Get attendance record
+    const attendanceRecord = await attendanceService.getAttendanceRecord(targetDate);
+
+    // Find employee
+    let employee = attendanceRecord.getEmployee(id);
+
+    if (!employee) {
+      return res.status(404).json({
+        success: false,
+        error: "Attendance record not found for this employee on this date"
+      });
+    }
+
+    // Clear existing events
+    employee.events = [];
+
+    // Validate and add new punch times
+    let punchIn = null;
+    let punchOut = null;
+
+    if (punchInTime) {
+      punchIn = new Date(punchInTime);
+      if (isNaN(punchIn.getTime())) {
+        return res.status(400).json({
+          success: false,
+          error: "Invalid punch in time format"
+        });
+      }
+    }
+
+    if (punchOutTime) {
+      punchOut = new Date(punchOutTime);
+      if (isNaN(punchOut.getTime())) {
+        return res.status(400).json({
+          success: false,
+          error: "Invalid punch out time format"
+        });
+      }
+    }
+
+    if (punchIn && punchOut && punchOut <= punchIn) {
+      return res.status(400).json({
+        success: false,
+        error: "Punch out time must be after punch in time"
+      });
+    }
+
+    // Build new events
+    const events = [];
+
+    if (punchIn && !isOnLeave && !isHoliday) {
+      events.push({
+        type: "PUNCH_IN",
+        timestamp: punchIn,
+        manual: true,
+        approvedBy: req.user?._id,
+        notes: notes || 'Manual update'
+      });
+    }
+
+    // Add break events
     for (const breakSession of breakSessions) {
       const breakStart = new Date(breakSession.start);
       const breakEnd = new Date(breakSession.end);
@@ -900,222 +353,300 @@ const createManualAttendanceEnhanced = async (req, res) => {
         });
       }
 
-      const breakDuration = Math.floor((breakEnd - breakStart) / 1000);
-      totalBreakSeconds += breakDuration;
-
-      processedBreakSessions.push({
-        start: breakStart,
-        end: breakEnd,
-        duration: breakDuration,
-        type: breakSession.type || "break"
-      });
-    }
-
-    // Calculate work duration
-    let totalWorkSeconds = 0;
-    const workSessions = [];
-
-    if (punchIn && punchOut && !isOnLeave && !isHoliday) {
-      if (processedBreakSessions.length === 0) {
-        totalWorkSeconds = Math.floor((punchOut - punchIn) / 1000);
-        workSessions.push({
-          start: punchIn,
-          end: punchOut,
-          duration: totalWorkSeconds
-        });
-      } else {
-        let currentStart = punchIn;
-        const sortedBreaks = processedBreakSessions.sort((a, b) => a.start - b.start);
-
-        for (const breakSession of sortedBreaks) {
-          if (currentStart < breakSession.start) {
-            const workDuration = Math.floor((breakSession.start - currentStart) / 1000);
-            if (workDuration > 0) {
-              totalWorkSeconds += workDuration;
-              workSessions.push({
-                start: currentStart,
-                end: breakSession.start,
-                duration: workDuration
-              });
-            }
-          }
-          currentStart = breakSession.end;
-        }
-
-        if (currentStart < punchOut) {
-          const workDuration = Math.floor((punchOut - currentStart) / 1000);
-          if (workDuration > 0) {
-            totalWorkSeconds += workDuration;
-            workSessions.push({
-              start: currentStart,
-              end: punchOut,
-              duration: workDuration
-            });
-          }
-        }
-      }
-    }
-
-    // Get effective shift
-    const effectiveShift = await unifiedAttendanceService.getEffectiveShift(userId, targetDate);
-
-    // Build events array (using PunchEventSchema format)
-    const events = [];
-    if (punchIn && !isOnLeave && !isHoliday) {
-      events.push({
-        type: "PUNCH_IN",
-        timestamp: punchIn,
-        manual: true,
-        approvedBy: req.user._id,
-        notes: notes || 'Manual entry'
-      });
-    }
-    processedBreakSessions.forEach(breakSession => {
       events.push({
         type: "BREAK_START",
-        timestamp: breakSession.start,
+        timestamp: breakStart,
         manual: true,
-        approvedBy: req.user._id
+        approvedBy: req.user?._id
       });
       events.push({
         type: "BREAK_END",
-        timestamp: breakSession.end,
+        timestamp: breakEnd,
         manual: true,
-        approvedBy: req.user._id
+        approvedBy: req.user?._id
       });
-    });
+    }
+
     if (punchOut && !isOnLeave && !isHoliday) {
       events.push({
         type: "PUNCH_OUT",
         timestamp: punchOut,
         manual: true,
-        approvedBy: req.user._id,
-        notes: notes || 'Manual entry'
+        approvedBy: req.user?._id,
+        notes: notes || 'Manual update'
       });
     }
 
-    // Calculate attendance status from events using unified service
-    const timeline = events.map(e => ({
-      type: e.type === 'PUNCH_IN' ? 'Punch In' :
-            e.type === 'PUNCH_OUT' ? 'Punch Out' :
-            e.type === 'BREAK_START' ? 'Break Start' :
-            e.type === 'BREAK_END' ? 'Break End' : e.type,
-      time: e.timestamp
-    }));
+    // Sort events
+    events.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
 
-    const attendanceStatus = unifiedAttendanceService.calculateAttendanceStatusFromTimeline(
-      timeline,
-      effectiveShift,
-      totalWorkSeconds
-    );
+    // Update employee events
+    employee.events = events;
 
-    // Build employee attendance data
-    const employeeData = {
-      userId,
-      events,
-      calculated: {
-        arrivalTime: attendanceStatus.arrivalTime || punchIn,
-        departureTime: attendanceStatus.departureTime || punchOut,
-        workDurationSeconds: totalWorkSeconds,
-        breakDurationSeconds: totalBreakSeconds,
-        totalDurationSeconds: totalWorkSeconds + totalBreakSeconds,
-        workDuration: `${Math.floor(totalWorkSeconds / 3600)}h ${Math.floor((totalWorkSeconds % 3600) / 60)}m`,
-        breakDuration: `${Math.floor(totalBreakSeconds / 3600)}h ${Math.floor((totalBreakSeconds % 3600) / 60)}m`,
-        isPresent: !isOnLeave && !isHoliday && punchIn !== null,
-        isAbsent: attendanceStatus.isAbsent || isOnLeave || isHoliday || (!punchIn && !punchOut),
-        isLate: attendanceStatus.isLate || false,
-        isHalfDay: attendanceStatus.isHalfDay || false,
-        isFullDay: totalWorkSeconds >= (6.5 * 3600),
-        currentlyWorking: false,
-        onBreak: false,
-        currentStatus: 'FINISHED',
-        totalWorkSessions: workSessions.length,
-        totalBreakSessions: processedBreakSessions.length
-      },
-      assignedShift: effectiveShift ? {
-        name: effectiveShift.name || 'Standard',
-        startTime: effectiveShift.start,
-        endTime: effectiveShift.end,
-        durationHours: effectiveShift.durationHours || 9,
-        // Map shift types to valid enum values: STANDARD, FLEXIBLE, NIGHT, SPLIT
-        type: (() => {
-          const shiftType = effectiveShift.type?.toLowerCase() || 'standard';
-          if (shiftType.includes('flexible')) return 'FLEXIBLE';
-          if (shiftType === 'night') return 'NIGHT';
-          if (shiftType === 'split') return 'SPLIT';
-          return 'STANDARD';
-        })(),
-        isFlexible: effectiveShift.type?.toLowerCase().includes('flexible') || false
-      } : undefined,
-      leaveInfo: {
-        isOnLeave,
-        isHoliday
-      },
-      metadata: {
-        manualEntry: true,
-        enteredBy: req.user._id,
-        notes
-      }
-    };
-
-    // Create or update the date record
-    if (!attendanceRecord) {
-      // Create new date record
-      attendanceRecord = new AttendanceRecord({
-        date: targetDate,
-        employees: [employeeData],
-        dailyStats: {
-          totalEmployees: 1,
-          present: employeeData.calculated.isPresent ? 1 : 0,
-          absent: employeeData.calculated.isAbsent ? 1 : 0,
-          late: employeeData.calculated.isLate ? 1 : 0,
-          halfDay: employeeData.calculated.isHalfDay ? 1 : 0,
-          fullDay: employeeData.calculated.isFullDay ? 1 : 0,
-          onLeave: isOnLeave ? 1 : 0,
-          onHoliday: isHoliday ? 1 : 0
-        }
-      });
-    } else {
-      // Update existing date record
-      if (existingEmployeeData && overrideExisting) {
-        // Remove old employee data
-        attendanceRecord.employees = attendanceRecord.employees.filter(
-          emp => emp.userId.toString() !== userId.toString()
-        );
-      }
-      // Add new employee data
-      attendanceRecord.employees.push(employeeData);
+    // Update leave info
+    if (isOnLeave) {
+      employee.leaveInfo.isOnLeave = true;
+      employee.leaveInfo.leaveType = 'manual';
     }
 
+    if (isHoliday) {
+      employee.leaveInfo.isHoliday = true;
+    }
+
+    // Recalculate (pass targetDate for night shift late detection)
+    attendanceService.recalculateEmployeeData(employee, targetDate);
+
+    // Update daily stats
+    attendanceService.updateDailyStats(attendanceRecord);
+
+    // Save
     await attendanceRecord.save();
 
-    console.log("✅ Manual attendance created/updated successfully:", {
-      attendanceRecordId: attendanceRecord._id,
-      date: attendanceRecord.date,
-      employeeCount: attendanceRecord.employees?.length || 0,
-      workDurationSeconds: totalWorkSeconds,
-      breakDurationSeconds: totalBreakSeconds,
-      eventsCount: events.length
-    });
+    console.log("✅ Manual attendance updated successfully");
 
     res.status(200).json({
       success: true,
-      message: overrideExisting ? "Manual attendance updated successfully" : "Manual attendance created successfully",
+      message: "Manual attendance record updated successfully",
       data: {
-        dailyWork: employeeData, // Return the employee data for frontend compatibility
+        dailyWork: employee.calculated,
+        employee: employee,
         calculatedMetrics: {
-          workHours: (totalWorkSeconds / 3600).toFixed(2),
-          breakHours: (totalBreakSeconds / 3600).toFixed(2),
-          isLate: attendanceStatus.isLate || false,
-          isHalfDay: attendanceStatus.isHalfDay || false,
-          isAbsent: attendanceStatus.isAbsent || false
-        },
-        effectiveShift
+          workHours: (employee.calculated.workDurationSeconds / 3600).toFixed(2),
+          breakHours: (employee.calculated.breakDurationSeconds / 3600).toFixed(2),
+          isLate: employee.calculated.isLate,
+          isHalfDay: employee.calculated.isHalfDay,
+          isAbsent: employee.calculated.isAbsent
+        }
       }
     });
 
   } catch (error) {
-    console.error("Error creating manual attendance (new system):", error);
+    console.error("Error updating manual attendance:", error);
+    res.status(500).json({
+      success: false,
+      error: "Internal server error",
+      details: error.message
+    });
+  }
+};
+
+/**
+ * Delete manual attendance entry
+ * @route DELETE /api/admin/manual-attendance/:userId/:date
+ */
+const deleteManualAttendance = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // We need to parse userId and date from the request
+    // The frontend should pass this as query params or in the URL
+    const { date } = req.query;
+
+    if (!id || !date) {
+      return res.status(400).json({
+        success: false,
+        error: "User ID and date are required for deletion"
+      });
+    }
+
+    const targetDate = new Date(date);
+    if (isNaN(targetDate.getTime())) {
+      return res.status(400).json({
+        success: false,
+        error: "Invalid date format"
+      });
+    }
+    targetDate.setHours(0, 0, 0, 0);
+
+    // Get attendance record
+    const attendanceRecord = await attendanceService.getAttendanceRecord(targetDate);
+
+    // Remove employee from record
+    const initialLength = attendanceRecord.employees.length;
+    attendanceRecord.employees = attendanceRecord.employees.filter(
+      emp => emp.userId.toString() !== id.toString()
+    );
+
+    if (attendanceRecord.employees.length === initialLength) {
+      return res.status(404).json({
+        success: false,
+        error: "Attendance record not found for this employee on this date"
+      });
+    }
+
+    // Update daily stats
+    attendanceService.updateDailyStats(attendanceRecord);
+
+    // Save
+    await attendanceRecord.save();
+
+    console.log("✅ Manual attendance deleted successfully");
+
+    res.status(200).json({
+      success: true,
+      message: "Manual attendance record deleted successfully"
+    });
+
+  } catch (error) {
+    console.error("Error deleting manual attendance:", error);
+    res.status(500).json({
+      success: false,
+      error: "Internal server error",
+      details: error.message
+    });
+  }
+};
+
+/**
+ * Get manual attendance records with filters
+ * @route GET /api/admin/manual-attendance
+ */
+const getManualAttendanceRecords = async (req, res) => {
+  try {
+    const { startDate, endDate, userId, department, page = 1, limit = 20 } = req.query;
+
+    const query = {};
+
+    if (startDate && endDate) {
+      query.date = {
+        $gte: new Date(startDate),
+        $lte: new Date(endDate)
+      };
+    }
+
+    const AttendanceRecord = require("../models/AttendanceRecord");
+
+    const records = await AttendanceRecord.find(query)
+      .sort({ date: -1 })
+      .limit(parseInt(limit))
+      .skip((parseInt(page) - 1) * parseInt(limit));
+
+    // Filter and flatten employee records
+    let manualRecords = [];
+
+    for (const record of records) {
+      for (const employee of record.employees) {
+        // Only include manual entries
+        const hasManualEvents = employee.events.some(e => e.manual);
+
+        if (hasManualEvents) {
+          // Apply userId filter if specified
+          if (userId && employee.userId.toString() !== userId.toString()) {
+            continue;
+          }
+
+          const User = require("../models/User");
+          const user = await User.findById(employee.userId).select('name email department profileImage');
+
+          manualRecords.push({
+            _id: `${employee.userId}_${record.date.toISOString().split('T')[0]}`, // Composite ID
+            userId: employee.userId,
+            user: user,
+            date: record.date,
+            calculated: employee.calculated,
+            events: employee.events,
+            shift: employee.assignedShift,
+            leave: employee.leaveInfo,
+            metadata: employee.metadata
+          });
+        }
+      }
+    }
+
+    // Apply department filter if specified
+    if (department) {
+      manualRecords = manualRecords.filter(r => r.user?.department === department);
+    }
+
+    const totalRecords = manualRecords.length;
+    const totalPages = Math.ceil(totalRecords / parseInt(limit));
+
+    res.status(200).json({
+      success: true,
+      data: {
+        records: manualRecords,
+        pagination: {
+          currentPage: parseInt(page),
+          totalPages,
+          totalRecords,
+          recordsPerPage: parseInt(limit),
+          hasNextPage: parseInt(page) < totalPages,
+          hasPrevPage: parseInt(page) > 1
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error("Error fetching manual attendance records:", error);
+    res.status(500).json({
+      success: false,
+      error: "Internal server error",
+      details: error.message
+    });
+  }
+};
+
+/**
+ * Get attendance record for a specific user and date
+ * @route GET /api/admin/manual-attendance/user/:userId/date/:date
+ */
+const getAttendanceByUserAndDate = async (req, res) => {
+  try {
+    const { userId, date } = req.params;
+
+    if (!userId || !date) {
+      return res.status(400).json({
+        success: false,
+        error: "User ID and date are required"
+      });
+    }
+
+    const targetDate = new Date(date);
+    if (isNaN(targetDate.getTime())) {
+      return res.status(400).json({
+        success: false,
+        error: "Invalid date format"
+      });
+    }
+    targetDate.setHours(0, 0, 0, 0);
+
+    // Get attendance record
+    const attendanceRecord = await attendanceService.getAttendanceRecord(targetDate);
+
+    // Find employee
+    const employee = attendanceRecord.getEmployee(userId);
+
+    if (!employee) {
+      return res.status(404).json({
+        success: false,
+        error: "No attendance record found for this user and date"
+      });
+    }
+
+    // Get user info
+    const User = require("../models/User");
+    const user = await User.findById(userId).select('name email department profileImage');
+
+    res.status(200).json({
+      success: true,
+      data: {
+        attendanceRecord: {
+          _id: `${userId}_${targetDate.toISOString().split('T')[0]}`,
+          userId,
+          user,
+          date: targetDate,
+          calculated: employee.calculated,
+          events: employee.events,
+          shift: employee.assignedShift,
+          leave: employee.leaveInfo,
+          metadata: employee.metadata
+        },
+        hasRecord: true
+      }
+    });
+
+  } catch (error) {
+    console.error("Error fetching attendance by user and date:", error);
     res.status(500).json({
       success: false,
       error: "Internal server error",
@@ -1129,6 +660,5 @@ module.exports = {
   updateManualAttendance,
   deleteManualAttendance,
   getManualAttendanceRecords,
-  getAttendanceByUserAndDate,
-  createManualAttendanceEnhanced
+  getAttendanceByUserAndDate
 };

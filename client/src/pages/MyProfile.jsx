@@ -5,6 +5,7 @@ import StatCard from "../components/profile/StatCard";
 import ProfileHeader from "../components/profile/ProfileHeader";
 import PayslipModal from "../components/payslip/PayslipModal";
 import axios from "axios";
+import newAttendanceService from "../services/newAttendanceService";
 
 // Add fade-in animation styles
 const fadeInStyle = `
@@ -78,31 +79,39 @@ const MyProfile = ({ userType = "employee", onLogout }) => {
         return;
       }
 
-      // Fetch multiple data sources in parallel
-      const [userRes, attendanceRes, statusRes] = await Promise.all([
-        axios.get(`${API_BASE}/api/users/me`, {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
-        axios.get(`${API_BASE}/api/summary/week`, {
-          headers: { Authorization: `Bearer ${token}` },
-        }).catch(() => ({ data: { weeklySummary: {} } })),
-        axios.get(`${API_BASE}/api/status/today`, {
-          headers: { Authorization: `Bearer ${token}` },
-        }).catch(() => ({ data: {} })),
+      // Fetch user data
+      const userRes = await axios.get(`${API_BASE}/api/users/me`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      // Fetch attendance data using new system
+      const now = new Date();
+      const diffToMonday = (now.getDay() + 6) % 7;
+      const monday = new Date(now);
+      monday.setDate(now.getDate() - diffToMonday);
+      monday.setHours(0, 0, 0, 0);
+
+      const sunday = new Date(monday);
+      sunday.setDate(monday.getDate() + 6);
+      sunday.setHours(23, 59, 59, 999);
+
+      const [attendanceRes, statusRes] = await Promise.all([
+        newAttendanceService.getMyWeeklySummary(monday, sunday).catch(() => ({ success: false, data: { weeklyTotals: {} } })),
+        newAttendanceService.getTodayStatus().catch(() => ({ success: false, data: { attendance: {} } })),
       ]);
 
       const tapveraImg = "/favicon.png";
       const user = userRes.data;
-      const attendance = attendanceRes.data.weeklySummary || {};
-      const currentStatus = statusRes.data;
+      const attendance = attendanceRes.success ? attendanceRes.data.weeklyTotals : {};
+      const currentStatus = (statusRes.success && statusRes.data.attendance) ? statusRes.data.attendance : {};
       // Enhanced profile data with comprehensive information
       setProfileData({
         avatar: tapveraImg,
         name: capitalize(user.name),
         role: capitalize(userType),
         team: capitalize(user.team || user.designation),
-        status: currentStatus.currentlyWorking ? "Working" : currentStatus.onBreak ? "On Break" : "Offline",
-        lastSeen: currentStatus.lastActivity || "N/A",
+        status: currentStatus?.currentlyWorking ? "Working" : currentStatus?.onBreak ? "On Break" : "Offline",
+        lastSeen: currentStatus?.lastActivity || "N/A",
         contact: {
           email: user.email,
           phone: user.contact || "N/A",

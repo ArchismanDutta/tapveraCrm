@@ -413,6 +413,8 @@ const AttendancePage = ({ onLogout }) => {
               departureTime: day.departureTime ? (typeof day.departureTime === 'string' ? day.departureTime : new Date(day.departureTime).toISOString()) : null,
               currentlyWorking: day.currentlyWorking || false,
               onBreak: day.onBreak || false,
+              // CRITICAL: Include shift data from backend
+              shift: day.shift,
               timeline: day.events?.map(event => ({
                 type: event.type === 'PUNCH_IN' ? 'Punch In' :
                       event.type === 'PUNCH_OUT' ? 'Punch Out' :
@@ -582,6 +584,8 @@ const AttendancePage = ({ onLogout }) => {
         return d.isHalfDay || (!d.isAbsent && workHours >= 4 && workHours < 8);
       }).length;
 
+      // Calculate absent days from backend data
+      // For now, use the basic calculation - will be updated when calendar is built
       const absentDaysCount = dailyData.filter(d => d.isAbsent).length;
 
       const calculatedStats = {
@@ -696,13 +700,66 @@ const AttendancePage = ({ onLogout }) => {
           status = "present";
         }
 
-        const expectedStart = d.effectiveShift?.start || d.expectedStartTime || "09:00";
-        const [expH, expM] = expectedStart.split(":").map(Number);
-        const expectedDate = arrivalTime ? new Date(arrivalTime) : new Date(d.date);
-        expectedDate.setHours(expH, expM, 0, 0);
+        // Get shift start time - backend returns it as "shift" property
+        // Debug logging to see all available shift-related properties
+        if (d.isLate) {
+          console.log(`🔍 ALL PROPERTIES for late day ${d.date}:`, {
+            'keys': Object.keys(d),
+            'd.shift': d.shift,
+            'd.assignedShift': d.assignedShift,
+            'd.effectiveShift': d.effectiveShift,
+            'd.expectedStartTime': d.expectedStartTime,
+            'full d': d
+          });
+        }
 
-        const lateMinutes = (!d.effectiveShift?.isFlexible && arrivalTime && arrivalTime > expectedDate) ?
+        const shiftData = d.shift || d.assignedShift || d.effectiveShift;
+        const expectedStart = shiftData?.startTime || d.effectiveShift?.start || d.expectedStartTime || "09:00";
+        const [expH, expM] = expectedStart.split(":").map(Number);
+
+        // Debug logging for shift data
+        if (d.isLate) {
+          console.log(`🔍 Processing late day ${d.date}:`, {
+            'shiftData': shiftData,
+            'expectedStart': expectedStart,
+            'expH': expH,
+            'expM': expM,
+            'arrivalTime': arrivalTime ? arrivalTime.toISOString() : null
+          });
+        }
+
+        // CRITICAL FIX: Extract date components to avoid timezone issues
+        // The backend stores dates as midnight in server timezone
+        // We need to extract the date portion and construct shift time in local browser timezone
+        // This ensures calculations work the same regardless of server timezone (local IST vs AWS UTC)
+        let recordDate;
+        if (typeof d.date === 'string') {
+          // If date is a string like "2025-10-05", parse it as local date
+          const [year, month, day] = d.date.split('-').map(Number);
+          recordDate = new Date(year, month - 1, day);
+        } else {
+          // If date is a Date object, extract local date components
+          recordDate = new Date(d.date);
+        }
+
+        const expectedDate = new Date(
+          recordDate.getFullYear(),
+          recordDate.getMonth(),
+          recordDate.getDate(),
+          expH,
+          expM,
+          0,
+          0
+        );
+
+        // Only show late minutes if backend confirms isLate is true
+        const isFlexible = shiftData?.isFlexible || d.effectiveShift?.isFlexible || false;
+        const lateMinutes = (d.isLate && !isFlexible && arrivalTime && arrivalTime > expectedDate) ?
           Math.floor((arrivalTime - expectedDate) / (1000 * 60)) : 0;
+
+        if (d.isLate) {
+          console.log(`✅ Calculated late minutes for ${d.date}: ${lateMinutes} min (shift start: ${expH}:${String(expM).padStart(2, '0')})`);
+        }
 
         // For WFH, set standard working hours if no actual logged hours
         let displayHours = calculateHoursFromSeconds(d.workDurationSeconds || 0).toFixed(1);
@@ -723,12 +780,13 @@ const AttendancePage = ({ onLogout }) => {
           metadata: {
             totalBreakTime: calculateHoursFromSeconds(d.breakDurationSeconds || 0).toFixed(1),
             breakSessions: d.breakSessions?.length || 0,
-            isFlexible: d.effectiveShift?.isFlexible || false,
+            isFlexible,
             lateMinutes,
             workDurationSeconds: d.workDurationSeconds || 0,
             breakDurationSeconds: d.breakDurationSeconds || 0,
             shiftType: d.shiftType || 'standard',
             effectiveShift: d.effectiveShift,
+            assignedShift: shiftData, // Use the shift data we extracted
             isLate: d.isLate || false,
             isHalfDay: d.isHalfDay || false,
             isAbsent: d.isAbsent || false,
@@ -783,22 +841,30 @@ const AttendancePage = ({ onLogout }) => {
       const firstDayOfMonth = new Date(year, monthIndex, 1);
       const startDayOfWeek = firstDayOfMonth.getDay();
 
+      const monthlyStats = {
+        // Present includes: on-time, late, wfh, and half-day (all non-absent working days)
+        totalPresent: days.filter(d => ["present", "late", "wfh", "half-day"].includes(d.status)).length,
+        totalLate: days.filter(d => d.status === "late").length,
+        totalAbsent: days.filter(d => d.status === "absent").length,
+        totalLeave: days.filter(d => ["leave", "half-day-leave", "approved-leave"].includes(d.status)).length,
+        totalWFH: days.filter(d => d.status === "wfh").length,
+        totalHolidays: days.filter(d => d.status === "holiday").length,
+        totalHalfDay: days.filter(d => ["half-day", "half-day-leave"].includes(d.status)).length
+      };
+
       setCalendarData({
         month,
         year,
         days,
         startDayOfWeek,
-        monthlyStats: {
-          // Present includes: on-time, late, wfh, and half-day (all non-absent working days)
-          totalPresent: days.filter(d => ["present", "late", "wfh", "half-day"].includes(d.status)).length,
-          totalLate: days.filter(d => d.status === "late").length,
-          totalAbsent: days.filter(d => d.status === "absent").length,
-          totalLeave: days.filter(d => ["leave", "half-day-leave", "approved-leave"].includes(d.status)).length,
-          totalWFH: days.filter(d => d.status === "wfh").length,
-          totalHolidays: days.filter(d => d.status === "holiday").length,
-          totalHalfDay: days.filter(d => ["half-day", "half-day-leave"].includes(d.status)).length
-        }
+        monthlyStats
       });
+
+      // Update stats with correct absent days from calendar
+      setStats(prevStats => ({
+        ...prevStats,
+        absentDays: monthlyStats.totalAbsent
+      }));
 
       // Weekly hours chart data
       const weekDays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
