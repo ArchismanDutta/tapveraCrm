@@ -280,53 +280,6 @@ const RecentActivityTable = ({ activities = [], onDateFilterChange, currentFilte
         </div>
       )}
 
-      {/* Summary cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <div className="bg-gradient-to-br from-blue-600/20 to-blue-800/20 backdrop-blur-sm border border-blue-500/20 rounded-xl p-4 hover:border-blue-400/40 transition-all duration-300 group">
-          <div className="flex items-center gap-2 mb-1">
-            <Calendar className="w-4 h-4 text-blue-400 group-hover:scale-110 transition-transform duration-200" />
-            <span className="text-xs text-gray-400">Total Days</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span className="text-lg font-bold text-blue-400">{summary.totalDays}</span>
-            <span className="text-xs text-blue-300">{summary.period}</span>
-          </div>
-        </div>
-
-        <div className="bg-gradient-to-br from-green-600/20 to-green-800/20 backdrop-blur-sm border border-green-500/20 rounded-xl p-4 hover:border-green-400/40 transition-all duration-300 group">
-          <div className="flex items-center gap-2 mb-1">
-            <CheckCircle className="w-4 h-4 text-green-400 group-hover:scale-110 transition-transform duration-200" />
-            <span className="text-xs text-gray-400">Present</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span className="text-lg font-bold text-green-400">{summary.presentDays}</span>
-            <span className="text-xs text-green-300">days</span>
-          </div>
-        </div>
-
-        <div className="bg-gradient-to-br from-orange-600/20 to-orange-800/20 backdrop-blur-sm border border-orange-500/20 rounded-xl p-4 hover:border-orange-400/40 transition-all duration-300 group">
-          <div className="flex items-center gap-2 mb-1">
-            <AlertTriangle className="w-4 h-4 text-orange-400 group-hover:scale-110 transition-transform duration-200" />
-            <span className="text-xs text-gray-400">Late</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span className="text-lg font-bold text-orange-400">{summary.lateDays}</span>
-            <span className="text-xs text-orange-300">days</span>
-          </div>
-        </div>
-
-        <div className="bg-gradient-to-br from-purple-600/20 to-purple-800/20 backdrop-blur-sm border border-purple-500/20 rounded-xl p-4 hover:border-purple-400/40 transition-all duration-300 group">
-          <div className="flex items-center gap-2 mb-1">
-            <Timer className="w-4 h-4 text-purple-400 group-hover:scale-110 transition-transform duration-200" />
-            <span className="text-xs text-gray-400">Total Hours</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span className="text-lg font-bold text-purple-400">{summary.totalHours.toFixed(1)}h</span>
-            <span className="text-xs text-purple-300">worked</span>
-          </div>
-        </div>
-      </div>
-
       {/* Table */}
       <div className="bg-slate-700/20 rounded-xl border border-slate-600/20 overflow-hidden">
         <div className="overflow-x-auto">

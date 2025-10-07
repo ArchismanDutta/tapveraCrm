@@ -345,14 +345,17 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
               isLate: day.isLate || day.calculated?.isLate || false,
             };
 
-            // Debug: Log isLate source
+            // Debug: Log isLate source and shift data
             if (day.isLate || day.calculated?.isLate) {
               console.log(`🔍 Late detection for ${day.date}:`, {
                 'day.isLate': day.isLate,
                 'day.calculated?.isLate': day.calculated?.isLate,
                 'enhanced.isLate': enhanced.isLate,
                 arrivalTime: day.arrivalTime || day.calculated?.arrivalTime,
-                shiftStart: day.expectedStartTime || day.calculated?.expectedStartTime
+                shiftStart: day.expectedStartTime || day.calculated?.expectedStartTime,
+                'day.shift': day.shift,
+                'day.assignedShift': day.assignedShift,
+                'day.calculated?.shift': day.calculated?.shift
               });
             }
 
@@ -368,6 +371,7 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
 
               // Extended details preserved
               shiftType: day.shiftType || day.calculated?.shiftType || 'standard',
+              assignedShift: day.assignedShift || day.shift || day.calculated?.shift,
               expectedStartTime: day.expectedStartTime || day.calculated?.expectedStartTime,
               expectedEndTime: day.expectedEndTime || day.calculated?.expectedEndTime,
 
@@ -457,19 +461,6 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
         } else {
           throw new Error('Invalid response from new attendance system');
         }
-      } else {
-        console.log("📍 SuperAdmin: Using legacy attendance system");
-        weeklyRes = await Promise.race([
-          apiClient.get('/api/summary/week', {
-            params: {
-              userId: employeeId,
-              startDate: dataStart.toISOString(),
-              endDate: dataEnd.toISOString(),
-              _t: Date.now(), // Cache-busting parameter
-            },
-          }),
-          timeoutPromise
-        ]);
       }
 
       console.log('Weekly data response:', weeklyRes.data);
@@ -936,19 +927,59 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
 
           // Calculate "late by" minutes
           let lateMinutes = 0;
-          if (attendanceData.isLate && attendanceData.arrivalTime && attendanceData.expectedStartTime) {
+          // Get shift start time from assignedShift (preferred) or fallback to expectedStartTime
+          const shiftStartTime = attendanceData.assignedShift?.startTime || attendanceData.expectedStartTime;
+
+          console.log('🕐 Late calculation debug:', {
+            date: targetDateStr,
+            isLate: attendanceData.isLate,
+            arrivalTime: attendanceData.arrivalTime,
+            'assignedShift': attendanceData.assignedShift,
+            'expectedStartTime': attendanceData.expectedStartTime,
+            'shiftStartTime': shiftStartTime
+          });
+
+          // Only calculate late minutes if we have the actual shift start time
+          // If shiftStartTime is undefined/null, we cannot accurately calculate late minutes
+          if (attendanceData.isLate && attendanceData.arrivalTime && shiftStartTime) {
             try {
               const arrivalDate = new Date(attendanceData.arrivalTime);
-              const [expHour, expMin] = attendanceData.expectedStartTime.split(':').map(Number);
-              const expectedDate = new Date(arrivalDate);
-              expectedDate.setHours(expHour, expMin, 0, 0);
+              const [expHour, expMin] = shiftStartTime.split(':').map(Number);
 
-              if (!isNaN(arrivalDate.getTime()) && !isNaN(expectedDate.getTime()) && arrivalDate > expectedDate) {
-                lateMinutes = Math.round((arrivalDate - expectedDate) / 60000);
+              // Validate that we got valid hour/minute values
+              if (isNaN(expHour) || isNaN(expMin)) {
+                console.warn(`Invalid shift start time format: ${shiftStartTime}`);
+              } else {
+                // CRITICAL FIX: Extract date components to avoid timezone issues
+                // Parse date string to ensure consistent behavior across timezones
+                let recordDate;
+                if (typeof attendanceData.date === 'string') {
+                  const [year, month, day] = attendanceData.date.split('-').map(Number);
+                  recordDate = new Date(year, month - 1, day);
+                } else {
+                  recordDate = new Date(attendanceData.date);
+                }
+
+                const expectedDate = new Date(
+                  recordDate.getFullYear(),
+                  recordDate.getMonth(),
+                  recordDate.getDate(),
+                  expHour,
+                  expMin,
+                  0,
+                  0
+                );
+
+                if (!isNaN(arrivalDate.getTime()) && !isNaN(expectedDate.getTime()) && arrivalDate > expectedDate) {
+                  lateMinutes = Math.round((arrivalDate - expectedDate) / 60000);
+                  console.log(`✅ Calculated late minutes: ${lateMinutes} (${expHour}:${String(expMin).padStart(2, '0')} shift start)`);
+                }
               }
             } catch (err) {
               console.warn('Error calculating late minutes:', err);
             }
+          } else if (attendanceData.isLate && !shiftStartTime) {
+            console.warn(`⚠️ Cannot calculate late minutes - no shift start time available for ${targetDateStr}`);
           }
 
           // Calculate net hours (work + break)
@@ -1084,6 +1115,17 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
         startDayOfWeek,
         monthlyStats
       });
+
+      // Update stats with correct absent days from calendar (not from dailyData)
+      // dailyData only contains days with attendance records, so it can't count truly absent days
+      setStats(prevStats => ({
+        ...prevStats,
+        absentDays: monthlyStats.totalAbsent,
+        breakdown: {
+          ...prevStats.breakdown,
+          absent: monthlyStats.totalAbsent
+        }
+      }));
 
       // Enhanced weekly hours processing with accurate calculations
       const weekDays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];

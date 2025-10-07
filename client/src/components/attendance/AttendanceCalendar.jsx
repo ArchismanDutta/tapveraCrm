@@ -7,9 +7,9 @@ const STATUS_COLOR = {
   holiday: "bg-gradient-to-br from-blue-600 to-blue-700 text-blue-100 border-blue-500",
   weekend: "bg-gradient-to-br from-gray-600 to-gray-700 text-gray-300 border-gray-500",
   leave: "bg-gradient-to-br from-purple-600 to-purple-700 text-purple-100 border-purple-500",
-  late: "bg-gradient-to-br from-rose-500 to-rose-600 text-rose-100 border-rose-400",
-  "half-day": "bg-gradient-to-br from-yellow-600 to-yellow-700 text-yellow-100 border-yellow-500",
-  "half-day-leave": "bg-gradient-to-br from-yellow-600 to-yellow-700 text-yellow-100 border-yellow-500",
+  late: "bg-gradient-to-br from-yellow-500 to-yellow-600 text-yellow-100 border-yellow-400",
+  "half-day": "bg-gradient-to-br from-violet-600 to-violet-700 text-violet-100 border-violet-500",
+  "half-day-leave": "bg-gradient-to-br from-violet-600 to-violet-700 text-violet-100 border-violet-500",
   "approved-leave": "bg-gradient-to-br from-purple-600 to-purple-700 text-purple-100 border-purple-500",
   wfh: "bg-gradient-to-br from-orange-500 to-orange-600 text-orange-100 border-orange-400",
   default: "bg-gradient-to-br from-slate-600 to-slate-700 text-slate-300 border-slate-500",
@@ -93,70 +93,51 @@ const AttendanceCalendar = ({ data, onDateFilterChange, onMonthChange }) => {
 
   // Calculate optimal tooltip position with smart positioning and error handling
   const calculateTooltipPosition = useCallback((event) => {
-    try {
-      // Safety checks
-      if (!event || typeof event.clientX !== 'number' || typeof event.clientY !== 'number') {
-        console.warn('Invalid event object for tooltip positioning');
-        return { x: 100, y: 100 }; // Default safe position
-      }
-
-      const tooltipWidth = 200;
-      const tooltipHeight = 180;
-      const offset = 15;
-
-      const viewportWidth = window.innerWidth || 1024; // Fallback
-      const viewportHeight = window.innerHeight || 768; // Fallback
-      const scrollY = window.scrollY || 0; // Fallback
-
-      console.log('Viewport info:', { viewportWidth, viewportHeight, scrollY });
-      console.log('Event coordinates:', { clientX: event.clientX, clientY: event.clientY });
-
-      // For fixed positioning, use clientX/Y directly (no scrollY needed)
-      let x = event.clientX;
-      let y = event.clientY;
-
-      console.log('Calculated base position:', { x, y });
-
-      // Preferred position: to the right and slightly below cursor
-      let preferredX = x + offset;
-      let preferredY = y + offset;
-
-      // Check if tooltip fits on the right side
-      if (preferredX + tooltipWidth > viewportWidth - offset) {
-        // Position to the left of cursor
-        preferredX = x - tooltipWidth - offset;
-      }
-
-      // If still doesn't fit, center horizontally with some margin
-      if (preferredX < offset) {
-        preferredX = Math.max(offset, Math.min(viewportWidth - tooltipWidth - offset, x - tooltipWidth / 2));
-      }
-
-      // Check vertical positioning
-      if (preferredY + tooltipHeight > viewportHeight - offset) {
-        // Position above cursor
-        preferredY = y - tooltipHeight - offset;
-      }
-
-      // Ensure tooltip stays within viewport vertically
-      if (preferredY < offset) {
-        preferredY = offset;
-      }
-
-      // Final bounds check with safety
-      const finalX = Math.max(offset, Math.min(viewportWidth - tooltipWidth - offset, preferredX));
-      const finalY = Math.max(offset, Math.min(viewportHeight - tooltipHeight - offset, preferredY));
-
-      // Ensure we return valid numbers
-      return {
-        x: isNaN(finalX) ? 100 : finalX,
-        y: isNaN(finalY) ? 100 : finalY
-      };
-    } catch (error) {
-      console.error('Error calculating tooltip position:', error);
-      return { x: 100, y: 100 }; // Safe fallback position
+  try {
+    if (!event || typeof event.clientX !== 'number' || typeof event.clientY !== 'number') {
+      console.warn('Invalid event object for tooltip positioning');
+      return { x: 10, y: 10 };
     }
-  }, []);
+
+    const tooltipWidth = 200;
+    const tooltipHeight = 180;
+    const offset = 8; // Slightly larger for better separation
+
+    // const viewportWidth = window.innerWidth || 1024;
+    // const viewportHeight = window.innerHeight || 768;
+    const viewportWidth = 512;
+    const viewportHeight = 384;
+
+    let x = event.clientX + offset;
+    let y = event.clientY - offset;
+
+    // If tooltip would overflow right edge, move to left of cursor
+    if (x + tooltipWidth > viewportWidth) {
+      x = event.clientX - tooltipWidth - offset;
+    }
+    // If tooltip would overflow left edge, snap to left margin
+    if (x < offset) {
+      x = offset;
+    }
+    // If tooltip would overflow bottom, move above cursor
+    if (y + tooltipHeight > viewportHeight) {
+      y = event.clientY - tooltipHeight - offset;
+    }
+    // If tooltip would overflow top, snap to top margin
+    if (y < offset) {
+      y = offset;
+    }
+
+    return {
+      x: isNaN(x) ? 10 : x,
+      y: isNaN(y) ? 10 : y,
+    };
+  } catch (error) {
+    console.error('Error calculating tooltip position:', error);
+    return { x: 10, y: 10 };
+  }
+}, []);
+
 
   const getStatusIcon = (status) => {
     switch (status) {
@@ -355,7 +336,7 @@ const AttendanceCalendar = ({ data, onDateFilterChange, onMonthChange }) => {
 
                 {/* Status Indicator */}
                 {dayData.status !== 'default' && (
-                  <div className={`absolute top-1 right-1 ${dayData.status === 'late' ? 'animate-pulse hover:scale-125 transition-transform duration-200' : ''}`}>
+                  <div className={`absolute top-1 right-1 ${dayData.status === 'late' ? 'animate-pulse' : ''}`}>
                     {getStatusIcon(dayData.status)}
                   </div>
                 )}
@@ -399,9 +380,9 @@ const AttendanceCalendar = ({ data, onDateFilterChange, onMonthChange }) => {
               </div>
               <div className={`text-xs px-2 py-1 rounded ${
                 hoveredDay.status === 'present' ? 'bg-green-600/30 text-green-300' :
-                hoveredDay.status === 'late' ? 'bg-rose-600/30 text-rose-300' :
+                hoveredDay.status === 'late' ? 'bg-yellow-600/30 text-yellow-300' :
                 hoveredDay.status === 'absent' ? 'bg-red-600/30 text-red-300' :
-                hoveredDay.status === 'half-day' ? 'bg-yellow-600/30 text-yellow-300' :
+                hoveredDay.status === 'half-day' ? 'bg-violet-600/30 text-violet-300' :
                 'bg-gray-600/30 text-gray-300'
               }`}>
                 {getStatusLabel(hoveredDay.status)}
@@ -453,7 +434,7 @@ const AttendanceCalendar = ({ data, onDateFilterChange, onMonthChange }) => {
               {hoveredDay.metadata?.lateMinutes > 0 && (
                 <div className="flex justify-between">
                   <span className="text-gray-400">Late by:</span>
-                  <span className="text-orange-400 font-medium">{hoveredDay.metadata.lateMinutes} min</span>
+                  <span className="text-yellow-400 font-medium">{hoveredDay.metadata.lateMinutes} min</span>
                 </div>
               )}
 
@@ -593,7 +574,7 @@ const AttendanceCalendar = ({ data, onDateFilterChange, onMonthChange }) => {
                 {selectedDay.metadata?.lateMinutes > 0 && (
                   <div className="flex items-center justify-between">
                     <span className="text-gray-400">Late By:</span>
-                    <span className="text-orange-400 font-semibold">
+                    <span className="text-yellow-400 font-semibold">
                       {selectedDay.metadata.lateMinutes} min
                     </span>
                   </div>
@@ -612,8 +593,8 @@ const AttendanceCalendar = ({ data, onDateFilterChange, onMonthChange }) => {
                   <span className="text-gray-400">Status:</span>
                   <span className={`font-semibold ${
                     selectedDay.metadata?.isAbsent ? 'text-red-400' :
-                    selectedDay.metadata?.isHalfDay ? 'text-yellow-400' :
-                    selectedDay.metadata?.isLate ? 'text-orange-400' :
+                    selectedDay.metadata?.isHalfDay ? 'text-violet-400' :
+                    selectedDay.metadata?.isLate ? 'text-yellow-400' :
                     'text-green-400'
                   }`}>
                     {selectedDay.metadata?.isAbsent ? 'Absent' :
@@ -794,13 +775,13 @@ const AttendanceCalendar = ({ data, onDateFilterChange, onMonthChange }) => {
 
             {/* Half Days (if available) */}
             {data.monthlyStats.totalHalfDay !== undefined && (
-              <div className="bg-gradient-to-br from-orange-600/20 to-orange-800/20 backdrop-blur-sm border border-orange-500/20 rounded-xl p-4 hover:border-orange-400/40 transition-all duration-300">
+              <div className="bg-gradient-to-br from-violet-600/20 to-violet-800/20 backdrop-blur-sm border border-violet-500/20 rounded-xl p-4 hover:border-violet-400/40 transition-all duration-300">
                 <div className="flex items-center gap-2 mb-2">
-                  <Timer className="w-4 h-4 text-orange-400" />
+                  <Timer className="w-4 h-4 text-violet-400" />
                   <span className="text-xs text-gray-400">Half Day</span>
                 </div>
-                <div className="text-2xl font-bold text-orange-400">{data.monthlyStats.totalHalfDay}</div>
-                <div className="text-xs text-orange-300 mt-1">partial days</div>
+                <div className="text-2xl font-bold text-violet-400">{data.monthlyStats.totalHalfDay}</div>
+                <div className="text-xs text-violet-300 mt-1">partial days</div>
               </div>
             )}
 

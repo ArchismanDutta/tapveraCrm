@@ -578,8 +578,8 @@ class AttendanceController {
 
       console.log('🔄 Recalculating with fresh shift:', freshShift);
 
-      // Force recalculation
-      this.service.recalculateEmployeeData(employee);
+      // Force recalculation (pass targetDate for night shift late detection)
+      this.service.recalculateEmployeeData(employee, targetDate);
       this.service.updateDailyStats(record);
       await record.save();
 

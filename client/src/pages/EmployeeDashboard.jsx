@@ -29,6 +29,7 @@ import DynamicNotificationOverlay from "../components/notifications/DynamicNotif
 import notificationManager from "../utils/browserNotifications";
 import CelebrationPopup from "../components/common/CelebrationPopup";
 import useCelebrationNotifications from "../hooks/useCelebrationNotifications";
+import newAttendanceService from "../services/newAttendanceService";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
 const TASK_POLL_INTERVAL_MS = 10000;
@@ -219,18 +220,39 @@ const EmployeeDashboard = ({ onLogout }) => {
     }
   }, [navigate]);
 
-  // Fetch work status
+  // Fetch work status using new attendance system
   const fetchWorkStatus = useCallback(async () => {
     const token = localStorage.getItem("token");
     if (!token) return;
 
     setDataLoading(prev => ({ ...prev, status: true }));
     try {
-      const res = await axios.get(`${API_BASE}/api/status/today`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      setWorkStatus(res.data);
-      setErrors(prev => ({ ...prev, status: null }));
+      const response = await newAttendanceService.getTodayStatus();
+
+      if (response.success && response.data) {
+        // Extract attendance data from new system response
+        const attendanceData = response.data.attendance || {};
+
+        // Map to format expected by dashboard components
+        const mappedStatus = {
+          currentlyWorking: attendanceData.currentlyWorking || false,
+          onBreak: attendanceData.onBreak || false,
+          workDuration: attendanceData.workDuration || "0h 0m",
+          breakDuration: attendanceData.breakDuration || "0h 0m",
+          workDurationSeconds: attendanceData.workDurationSeconds || 0,
+          breakDurationSeconds: attendanceData.breakDurationSeconds || 0,
+          arrivalTime: attendanceData.arrivalTime,
+          arrivalTimeFormatted: attendanceData.arrivalTimeFormatted,
+          isLate: attendanceData.isLate || false,
+          timeline: attendanceData.events ? attendanceData.events.map(e => ({
+            type: e.type,
+            time: e.timestamp
+          })) : []
+        };
+
+        setWorkStatus(mappedStatus);
+        setErrors(prev => ({ ...prev, status: null }));
+      }
     } catch (err) {
       console.error("Error fetching work status:", err);
       setErrors(prev => ({ ...prev, status: err.message }));
@@ -239,7 +261,7 @@ const EmployeeDashboard = ({ onLogout }) => {
     }
   }, []);
 
-  // Fetch weekly statistics
+  // Fetch weekly statistics using new attendance system
   const fetchWeeklyStats = useCallback(async () => {
     const token = localStorage.getItem("token");
     if (!token) return;
@@ -256,15 +278,12 @@ const EmployeeDashboard = ({ onLogout }) => {
       sunday.setDate(monday.getDate() + 6);
       sunday.setHours(23, 59, 59, 999);
 
-      const res = await axios.get(`${API_BASE}/api/summary/week`, {
-        headers: { Authorization: `Bearer ${token}` },
-        params: {
-          startDate: monday.toISOString(),
-          endDate: sunday.toISOString()
-        }
-      });
-      setWeeklyStats(res.data);
-      setErrors(prev => ({ ...prev, stats: null }));
+      const response = await newAttendanceService.getMyWeeklySummary(monday, sunday);
+
+      if (response.success && response.data) {
+        setWeeklyStats(response.data);
+        setErrors(prev => ({ ...prev, stats: null }));
+      }
     } catch (err) {
       console.error("Error fetching weekly stats:", err);
       setErrors(prev => ({ ...prev, stats: err.message }));
@@ -416,103 +435,79 @@ const EmployeeDashboard = ({ onLogout }) => {
     setLastRefresh(new Date());
   };
 
-  // Handle punch in action
+  // Handle punch in action using new attendance system
   const handlePunchIn = async () => {
     const token = localStorage.getItem("token");
     if (!token) return;
 
     try {
-      await axios.put(`${API_BASE}/api/status/today`, {
-        currentlyWorking: true,
-        onBreak: false,
-        timelineEvent: {
-          type: "Punch In",
-          time: new Date().toISOString(),
-        },
-      }, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const response = await newAttendanceService.punchIn('Office');
 
-      // Refresh work status
-      await fetchWorkStatus();
+      if (response.success) {
+        // Refresh work status
+        await fetchWorkStatus();
 
-      // Emit event for other components to sync
-      window.dispatchEvent(new CustomEvent('attendanceDataUpdated', {
-        detail: { type: 'punch_in', userId: userInfo?._id }
-      }));
+        // Emit event for other components to sync
+        window.dispatchEvent(new CustomEvent('attendanceDataUpdated', {
+          detail: { type: 'punch_in', userId: userInfo?._id }
+        }));
 
-      notificationManager.showGeneral("Punched In", "Successfully punched in for today!");
+        notificationManager.showGeneral("Punched In", response.message || "Successfully punched in for today!");
+      }
     } catch (err) {
       console.error("Error punching in:", err);
-      notificationManager.showGeneral("Error", "Failed to punch in. Please try again.");
+      notificationManager.showGeneral("Error", err.message || "Failed to punch in. Please try again.");
     }
   };
 
-  // Handle break action
+  // Handle break action using new attendance system
   const handleTakeBreak = async () => {
     const token = localStorage.getItem("token");
     if (!token) return;
 
     try {
-      await axios.put(`${API_BASE}/api/status/today`, {
-        currentlyWorking: false,
-        onBreak: true,
-        breakStartTime: new Date().toISOString(),
-        timelineEvent: {
-          type: "Break Start (Coffee)",
-          time: new Date().toISOString(),
-        },
-        breakType: "Coffee",
-      }, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const response = await newAttendanceService.startBreak('Break Room', 'Coffee break');
 
-      // Refresh work status
-      await fetchWorkStatus();
+      if (response.success) {
+        // Refresh work status
+        await fetchWorkStatus();
 
-      // Emit event for other components to sync
-      window.dispatchEvent(new CustomEvent('attendanceDataUpdated', {
-        detail: { type: 'break_start', userId: userInfo?._id }
-      }));
+        // Emit event for other components to sync
+        window.dispatchEvent(new CustomEvent('attendanceDataUpdated', {
+          detail: { type: 'break_start', userId: userInfo?._id }
+        }));
 
-      notificationManager.showGeneral("Break Started", "Enjoy your break!");
+        notificationManager.showGeneral("Break Started", response.message || "Enjoy your break!");
+      }
     } catch (err) {
       console.error("Error starting break:", err);
-      notificationManager.showGeneral("Error", "Failed to start break. Please try again.");
+      notificationManager.showGeneral("Error", err.message || "Failed to start break. Please try again.");
     }
   };
 
 
-  // Handle resume work action
+  // Handle resume work action using new attendance system
   const handleResumeWork = async () => {
     const token = localStorage.getItem("token");
     if (!token) return;
 
     try {
-      await axios.put(`${API_BASE}/api/status/today`, {
-        currentlyWorking: true,
-        onBreak: false,
-        breakStartTime: null,
-        timelineEvent: {
-          type: "Resume Work",
-          time: new Date().toISOString(),
-        },
-      }, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const response = await newAttendanceService.endBreak('Office');
 
-      // Refresh work status
-      await fetchWorkStatus();
+      if (response.success) {
+        // Refresh work status
+        await fetchWorkStatus();
 
-      // Emit event for other components to sync
-      window.dispatchEvent(new CustomEvent('attendanceDataUpdated', {
-        detail: { type: 'work_resume', userId: userInfo?._id }
-      }));
+        // Emit event for other components to sync
+        window.dispatchEvent(new CustomEvent('attendanceDataUpdated', {
+          detail: { type: 'work_resume', userId: userInfo?._id }
+        }));
 
-      notificationManager.showGeneral("Work Resumed", "Welcome back to work!");
+        notificationManager.showGeneral("Work Resumed", response.message || "Welcome back to work!");
+      }
     } catch (err) {
       console.error("Error resuming work:", err);
-      notificationManager.showGeneral("Error", "Failed to resume work. Please try again.");
+      notificationManager.showGeneral("Error", err.message || "Failed to resume work. Please try again.");
     }
   };
 
