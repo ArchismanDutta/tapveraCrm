@@ -38,6 +38,7 @@ const payslipRoutes = require("./routes/payslipRoutes");
 const celebrationRoutes = require("./routes/celebrationRoutes");
 const leadRoutes = require("./routes/leadRoutes");
 const callbackRoutes = require("./routes/callbackRoutes");
+const notepadRoutes = require("./routes/notepadRoutes");
 
 // Controllers
 const ChatController = require("./controllers/chatController");
@@ -114,6 +115,7 @@ app.use("/api/payslips", payslipRoutes);
 app.use("/api/celebrations", celebrationRoutes);
 app.use("/api/leads", leadRoutes);
 app.use("/api/callbacks", callbackRoutes);
+app.use("/api/notepad", notepadRoutes);
 
 
 

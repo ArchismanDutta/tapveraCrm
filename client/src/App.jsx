@@ -51,6 +51,10 @@ import AddLead from "./pages/AddLead";
 import ViewCallbacks from "./pages/ViewCallbacks";
 import AddCallback from "./pages/AddCallback";
 
+// Notepad
+import NotepadPage from "./pages/NotepadPage";
+import SuperAdminNotepadViewer from "./pages/SuperAdminNotepadViewer";
+
 import { resetChat } from "./store/slices/chatSlice";
 import { useDispatch } from "react-redux";
 import useGlobalChatNotifications from "./hooks/useGlobalChatNotifications";
@@ -216,6 +220,18 @@ const AppWrapper = () => {
           element={
             isAuthenticated && (isHR || isSuperAdmin) ? (
               <SuperAdminAttendancePortal onLogout={handleLogout} />
+            ) : (
+              <Navigate to="/login" replace />
+            )
+          }
+        />
+
+        {/* Super Admin Notepad Viewer */}
+        <Route
+          path="/super-admin/notepad"
+          element={
+            isAuthenticated && isSuperAdmin ? (
+              <SuperAdminNotepadViewer onLogout={handleLogout} />
             ) : (
               <Navigate to="/login" replace />
             )
@@ -520,6 +536,16 @@ const AppWrapper = () => {
         />
 
         {/* Employee pages */}
+        <Route
+          path="/notepad"
+          element={
+            isAuthenticated ? (
+              <NotepadPage onLogout={handleLogout} />
+            ) : (
+              <Navigate to="/login" replace />
+            )
+          }
+        />
         <Route
           path="/tasks"
           element={

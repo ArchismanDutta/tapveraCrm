@@ -196,13 +196,28 @@ exports.assignShiftToEmployee = async (req, res) => {
 
     // Check if user has required fields for shift assignment
     if (!user.employeeId || !user.doj) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         message: "Employee profile is incomplete. Please complete the employee profile (Employee ID and Date of Joining are required) before assigning shifts.",
         missingFields: {
           employeeId: !user.employeeId,
           doj: !user.doj
         }
       });
+    }
+
+    // Fix salary field if it's a primitive value (migration fix)
+    if (user.salary && typeof user.salary === 'number') {
+      user.salary = {
+        basic: user.salary,
+        total: user.salary,
+        paymentMode: 'bank'
+      };
+    } else if (!user.salary || typeof user.salary !== 'object') {
+      user.salary = {
+        basic: 0,
+        total: 0,
+        paymentMode: 'bank'
+      };
     }
 
     if (shiftType === "flexiblePermanent") {

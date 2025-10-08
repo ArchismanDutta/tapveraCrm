@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { Calendar, Clock, AlertTriangle, CheckCircle, Filter, ChevronLeft, ChevronRight, CalendarDays, Timer, XCircle, Activity } from "lucide-react";
+import timeUtils from "../../utils/timeUtils";
 
 const STATUS_COLOR = {
   present: "bg-gradient-to-br from-green-600 to-green-700 text-green-100 border-green-500",
@@ -402,7 +403,7 @@ const AttendanceCalendar = ({ data, onDateFilterChange, onMonthChange }) => {
                   <span className="text-green-400 font-medium">
                     {typeof hoveredDay.arrivalTime === 'string' ?
                       (hoveredDay.arrivalTime.includes('T') ?
-                        new Date(hoveredDay.arrivalTime).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit', hour12: true})
+                        timeUtils.formatTime(hoveredDay.arrivalTime)
                         : hoveredDay.arrivalTime)
                       : '--'}
                   </span>
@@ -415,7 +416,7 @@ const AttendanceCalendar = ({ data, onDateFilterChange, onMonthChange }) => {
                   <span className="text-red-400 font-medium">
                     {typeof hoveredDay.departureTime === 'string' ?
                       (hoveredDay.departureTime.includes('T') ?
-                        new Date(hoveredDay.departureTime).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit', hour12: true})
+                        timeUtils.formatTime(hoveredDay.departureTime)
                         : hoveredDay.departureTime)
                       : '--'}
                   </span>
@@ -538,7 +539,7 @@ const AttendanceCalendar = ({ data, onDateFilterChange, onMonthChange }) => {
                     {selectedDay.arrivalTime ?
                       (typeof selectedDay.arrivalTime === 'string' ?
                         (selectedDay.arrivalTime.includes('T') ?
-                          new Date(selectedDay.arrivalTime).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit', hour12: true})
+                          timeUtils.formatTime(selectedDay.arrivalTime)
                           : selectedDay.arrivalTime)
                         : '--')
                       : '--'}
@@ -555,7 +556,7 @@ const AttendanceCalendar = ({ data, onDateFilterChange, onMonthChange }) => {
                     {selectedDay.departureTime ?
                       (typeof selectedDay.departureTime === 'string' ?
                         (selectedDay.departureTime.includes('T') ?
-                          new Date(selectedDay.departureTime).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit', hour12: true})
+                          timeUtils.formatTime(selectedDay.departureTime)
                           : selectedDay.departureTime)
                         : '--')
                       : (selectedDay.arrivalTime ? 'Still Working' : '--')}

@@ -105,7 +105,8 @@ const ShiftManagement = ({ onLogout }) => {
         console.log("Shifts data:", shiftsRes.data);
         console.log("Employees data:", employeesRes.data);
         setShifts(shiftsRes.data);
-        setEmployees(employeesRes.data.filter(user => user.role === "employee"));
+        // Include employees, admins, and HR users for shift assignment
+        setEmployees(employeesRes.data.filter(user => ["employee", "admin", "hr", "super-admin"].includes(user.role)));
       } catch (err) {
         console.error("Failed to fetch data:", err);
         toast.error("Failed to load data");
@@ -130,7 +131,8 @@ const ShiftManagement = ({ onLogout }) => {
   const fetchEmployees = async () => {
     try {
       const res = await axios.get(`${API_BASE}/api/users`, axiosConfig);
-      setEmployees(res.data.filter(user => user.role === "employee"));
+      // Include employees, admins, and HR users for shift assignment
+      setEmployees(res.data.filter(user => ["employee", "admin", "hr", "super-admin"].includes(user.role)));
     } catch (err) {
       console.error("Failed to fetch employees:", err);
       toast.error("Failed to load employees");

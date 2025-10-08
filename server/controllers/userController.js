@@ -3,13 +3,7 @@
 const User = require("../models/User");
 const Task = require("../models/Task");
 const LeaveRequest = require("../models/LeaveRequest");
-
-// Predefined standard shifts constant
-const STANDARD_SHIFTS = {
-  MORNING: { name: "Morning Shift", start: "09:00", end: "18:00", durationHours: 9 },
-  NIGHT: { name: "Night Shift", start: "20:00", end: "05:00", durationHours: 9 },
-  EARLY: { name: "Early Shift", start: "05:30", end: "14:20", durationHours: 8.83 }
-};
+const Shift = require("../models/Shift");
 
 
 // =========================
@@ -87,8 +81,9 @@ exports.createEmployee = async (req, res) => {
       jobLevel: jobLevel || "junior",
     };
 
-    // Updated shift handling based on shiftType
+    // Dynamic shift handling based on shiftType
     if (shiftType === "flexiblePermanent") {
+      // Flexible permanent employees don't need a specific shift
       userData.shiftType = "flexiblePermanent";
       userData.assignedShift = null;
       userData.standardShiftType = null;
@@ -101,32 +96,91 @@ exports.createEmployee = async (req, res) => {
         shiftId: null
       };
     } else if (shiftType === "standard") {
+      // For standard shifts, query from database
       userData.shiftType = "standard";
-      // Use standardShiftType if provided, otherwise default to MORNING
-      const shiftKey = (standardShiftType || "MORNING").toUpperCase();
-      const predefinedShift = STANDARD_SHIFTS[shiftKey] || STANDARD_SHIFTS.MORNING;
 
-      userData.standardShiftType = shiftKey.toLowerCase();
-      userData.shift = {
-        name: predefinedShift.name,
-        start: predefinedShift.start,
-        end: predefinedShift.end,
-        durationHours: predefinedShift.durationHours,
-        isFlexible: false,
-        shiftId: null
-      };
-    } else if (shiftType === "standard" && shift?.start && shift?.end) {
-      // Fallback if custom shift object is sent with standard shift type
-      userData.shift = {
-        name: shift.name || `Custom Shift ${shift.start}-${shift.end}`,
-        start: shift.start,
-        end: shift.end,
-        durationHours: shift.durationHours || 9,
-        isFlexible: false,
-        shiftId: shift.shiftId || null
-      };
-      userData.shiftType = "standard";
-      userData.standardShiftType = null;
+      // If shiftId is provided, use it directly
+      if (shift?.shiftId) {
+        const foundShift = await Shift.findById(shift.shiftId);
+        if (!foundShift) {
+          return res.status(400).json({ message: "Selected shift not found in database" });
+        }
+
+        userData.assignedShift = foundShift._id;
+        userData.shift = {
+          name: foundShift.name,
+          start: foundShift.start,
+          end: foundShift.end,
+          durationHours: foundShift.durationHours,
+          isFlexible: false,
+          shiftId: foundShift._id
+        };
+      }
+      // If standardShiftType is provided (for backward compatibility), try to find by name
+      else if (standardShiftType) {
+        const shiftName = standardShiftType.toLowerCase() === 'morning' ? 'Morning Shift' :
+                          standardShiftType.toLowerCase() === 'evening' ? 'Evening Shift' :
+                          standardShiftType.toLowerCase() === 'night' ? 'Night Shift' :
+                          standardShiftType.toLowerCase() === 'early' ? 'Early Shift' :
+                          standardShiftType;
+
+        const foundShift = await Shift.findOne({ name: shiftName, isActive: true });
+
+        if (!foundShift) {
+          return res.status(400).json({
+            message: `Shift "${shiftName}" not found. Please initialize default shifts or create custom shifts first.`,
+            hint: "Use the shift management page to initialize default shifts"
+          });
+        }
+
+        userData.assignedShift = foundShift._id;
+        userData.standardShiftType = standardShiftType.toLowerCase();
+        userData.shift = {
+          name: foundShift.name,
+          start: foundShift.start,
+          end: foundShift.end,
+          durationHours: foundShift.durationHours,
+          isFlexible: false,
+          shiftId: foundShift._id
+        };
+      }
+      // If custom shift object is provided with times
+      else if (shift?.start && shift?.end) {
+        // Try to find matching shift in database
+        const foundShift = await Shift.findOne({
+          start: shift.start,
+          end: shift.end,
+          isActive: true
+        });
+
+        if (foundShift) {
+          userData.assignedShift = foundShift._id;
+          userData.shift = {
+            name: foundShift.name,
+            start: foundShift.start,
+            end: foundShift.end,
+            durationHours: foundShift.durationHours,
+            isFlexible: false,
+            shiftId: foundShift._id
+          };
+        } else {
+          // If no matching shift found, create inline shift (for backward compatibility)
+          userData.shift = {
+            name: shift.name || `Custom Shift ${shift.start}-${shift.end}`,
+            start: shift.start,
+            end: shift.end,
+            durationHours: shift.durationHours || 9,
+            isFlexible: false,
+            shiftId: null
+          };
+        }
+      } else {
+        // No shift information provided - require it
+        return res.status(400).json({
+          message: "For standard shift type, please provide either shiftId, standardShiftType, or shift details (start/end times)",
+          hint: "Use the shift management page to view available shifts"
+        });
+      }
     }
 
     const user = new User(userData);

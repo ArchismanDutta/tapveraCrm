@@ -43,6 +43,8 @@ class AttendanceController {
           currentStatus: result.employee.calculated.currentStatus,
           workDuration: result.employee.calculated.workDuration,
           breakDuration: result.employee.calculated.breakDuration,
+          workDurationSeconds: result.employee.calculated.workDurationSeconds,
+          breakDurationSeconds: result.employee.calculated.breakDurationSeconds,
           arrivalTime: result.employee.calculated.arrivalTime,
           departureTime: result.employee.calculated.departureTime,
           isLate: result.employee.calculated.isLate,

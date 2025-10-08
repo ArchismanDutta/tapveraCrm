@@ -1,19 +1,14 @@
 // src/components/workstatus/Timeline.jsx
 import React from "react";
+import timeUtils from "../../utils/timeUtils";
 
-// Helper: format ISO timestamp to "hh:mm AM/PM" in local time
+// Helper: format ISO timestamp to "hh:mm AM/PM" using Option C (UTC extraction)
 export const formatLocalTime = (isoString) => {
   if (!isoString) return "--";
   try {
-    const date = new Date(isoString);
-    if (isNaN(date.getTime())) return "--";
-
-    // Use consistent formatting with the rest of the app
-    return date.toLocaleTimeString([], {
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: true,
-    });
+    // CRITICAL: Use timeUtils.formatTime which extracts UTC components
+    // This is Option C approach - timestamps are stored as local time in UTC format
+    return timeUtils.formatTime(isoString);
   } catch (error) {
     console.error("Error formatting time:", error);
     return "--";

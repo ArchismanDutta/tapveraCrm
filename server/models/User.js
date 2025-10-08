@@ -131,7 +131,7 @@ userSchema.index({ status: 1 });
 // ======================
 // Pre-save hook to ensure consistent shift data
 // ======================
-userSchema.pre("save", function (next) {
+userSchema.pre("save", async function (next) {
   // Ensure shift consistency based on shiftType
   if (this.shiftType === "flexiblePermanent") {
     // For flexible permanent employees
@@ -146,9 +146,25 @@ userSchema.pre("save", function (next) {
       shiftId: null
     };
   } else if (this.shiftType === "standard" && this.assignedShift) {
-    // For standard shift employees, ensure legacy shift field is updated
-    // This will be populated by the shift assignment controller
-    // Don't set default values here - let the assignment controller handle it
+    // For standard shift employees, sync legacy shift field with assignedShift
+    // This ensures backward compatibility
+    try {
+      const Shift = require("./Shift");
+      const assignedShift = await Shift.findById(this.assignedShift);
+      if (assignedShift) {
+        this.shift = {
+          name: assignedShift.name,
+          start: assignedShift.start,
+          end: assignedShift.end,
+          durationHours: assignedShift.durationHours,
+          isFlexible: false,
+          shiftId: assignedShift._id
+        };
+      }
+    } catch (error) {
+      console.error("Error syncing shift data in pre-save hook:", error);
+      // Continue without throwing - let the save proceed
+    }
   }
 
   next();
