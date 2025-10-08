@@ -20,6 +20,7 @@ import {
   User
 } from "lucide-react";
 import { toast } from "react-toastify";
+import timeUtils from "../../utils/timeUtils";
 import Sidebar from "../../components/dashboard/Sidebar";
 import ManualAttendanceForm from "../../components/admin/ManualAttendanceForm";
 
@@ -65,7 +66,8 @@ const ManualAttendanceManagement = ({ onLogout }) => {
 
       if (response.ok) {
         const data = await response.json();
-        setUsers(data.filter(user => ["employee", "admin", "hr"].includes(user.role)));
+        // Include employees, admins, and HR users
+        setUsers(data.filter(user => ["employee", "admin", "hr", "super-admin"].includes(user.role)));
       }
     } catch (error) {
       console.error("Error fetching users:", error);
@@ -243,24 +245,13 @@ const ManualAttendanceManagement = ({ onLogout }) => {
     setShowForm(true);
   };
 
+  // Use centralized time utilities for consistent timezone handling
   const formatDateTime = (dateTime) => {
-    if (!dateTime) return "—";
-    return new Date(dateTime).toLocaleString("en-US", {
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit"
-    });
+    return timeUtils.formatDateTime(dateTime);
   };
 
   const formatDate = (date) => {
-    if (!date) return "—";
-    return new Date(date).toLocaleDateString("en-US", {
-      weekday: "short",
-      month: "short",
-      day: "numeric",
-      year: "numeric"
-    });
+    return timeUtils.formatDate(date);
   };
 
   const getStatusBadge = (record) => {
@@ -594,6 +585,7 @@ const ManualAttendanceManagement = ({ onLogout }) => {
                   <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Punch Out</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Work Hours</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Status</th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Created By</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Actions</th>
                 </tr>
               </thead>
@@ -643,6 +635,16 @@ const ManualAttendanceManagement = ({ onLogout }) => {
                     </td>
                     <td className="px-6 py-4">
                       {getStatusBadge(record)}
+                    </td>
+                    <td className="px-6 py-4">
+                      {record.approvedBy ? (
+                        <div>
+                          <div className="font-medium text-white">{record.approvedBy.name}</div>
+                          <div className="text-sm text-gray-400 capitalize">{record.approvedBy.role}</div>
+                        </div>
+                      ) : (
+                        <span className="text-gray-500 italic">—</span>
+                      )}
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-2">

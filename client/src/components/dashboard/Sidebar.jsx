@@ -13,6 +13,7 @@ import {
   DollarSign,
   TrendingUp,
   PhoneCall,
+  BookOpen,
 } from "lucide-react";
 import { FaChevronCircleRight, FaTrophy } from "react-icons/fa";
 
@@ -31,6 +32,7 @@ const menuConfig = {
     { to: "/attendance", icon: <ClipboardList size={18} />, label: "My Attendance" },
     { to: "/leads", icon: <TrendingUp size={18} />, label: "My Leads" },
     { to: "/callbacks", icon: <PhoneCall size={18} />, label: "My Callbacks" },
+    { to: "/notepad", icon: <BookOpen size={18} />, label: "My Notepad" },
     { to: "/todo", icon: <ClipboardList size={18} />, label: "Todo" },
     { to: "/messages", icon: <MessageCircle size={18} />, label: "Messages" },
     { to: "/leaves", icon: <FileText size={18} />, label: "Leave Requests" },
@@ -40,9 +42,8 @@ const menuConfig = {
   hr: [
     { to: "/hrdashboard", icon: <LayoutDashboard size={18} />, label: "HR Dashboard" },
     { to: "/today-status", icon: <ClipboardList size={18} />, label: "Punch In/Out" },
-    // { to: "/leads", icon: <TrendingUp size={18} />, label: "Lead Management" },
-    // { to: "/callbacks", icon: <PhoneCall size={18} />, label: "Callback Management" },
     { to: "/tasks", icon: <ClipboardList size={18} />, label: "Tasks" },
+    { to: "/notepad", icon: <BookOpen size={18} />, label: "My Notepad" },
     { to: "/todo", icon: <ClipboardList size={18} />, label: "Todo" },
     { to: "/admin/leaves", icon: <FileText size={18} />, label: "Leave Requests" },
     { to: "/leaves", icon: <FileText size={18} />, label: "My Leaves" },
@@ -59,7 +60,10 @@ const menuConfig = {
   ],
   admin: [
     { to: "/dashboard", icon: <LayoutDashboard size={18} />, label: "Admin Dashboard" },
+    { to: "/leads", icon: <TrendingUp size={18} />, label: "Lead Management" },
+    { to: "/callbacks", icon: <PhoneCall size={18} />, label: "Callback Management" },
     { to: "/today-status", icon: <ClipboardList size={18} />, label: "Punch In/Out" },
+    { to: "/notepad", icon: <BookOpen size={18} />, label: "My Notepad" },
     { to: "/todo", icon: <ClipboardList size={18} />, label: "Todo" },
     { to: "/tasks", icon: <ClipboardList size={18} />, label: "Tasks" },
     { to: "/leaves", icon: <FileText size={18} />, label: "My Leaves" },
@@ -90,6 +94,7 @@ const menuConfig = {
     { to: "/profile", icon: <User size={18} />, label: "My Profile" },
     { to: "/super-admin", icon: <ClipboardList size={18} />, label: "Employees Current Status" },
     { to: "/super-admin/attendance", icon: <Calendar size={18} />, label: "Employee Attendance Portal" },
+    { to: "/super-admin/notepad", icon: <BookOpen size={18} />, label: "Employee Notepads" },
     { type: "achievements", icon: <FaTrophy size={18} />, label: "Achievements" },
   ],
 };
@@ -154,9 +159,9 @@ const Sidebar = ({ collapsed, setCollapsed, onLogout, userRole }) => {
   // Filter menu items based on role and department
   const rawMenuItems = menuConfig[role] || menuConfig["employee"];
   const menuItems = rawMenuItems.filter(item => {
-    // Allow access to leads/callbacks only for super-admin or marketingAndSales employees
+    // Allow access to leads/callbacks for super-admin, admin, or marketingAndSales employees
     if (item.to === "/leads" || item.to === "/callbacks") {
-      return role === "super-admin" || userDepartment === "marketingAndSales";
+      return role === "super-admin" || role === "admin" || userDepartment === "marketingAndSales";
     }
     return true;
   });

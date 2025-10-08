@@ -16,6 +16,7 @@ import {
   CalendarDays
 } from "lucide-react";
 import { toast } from "react-toastify";
+import timeUtils from "../../utils/timeUtils";
 
 const ManualAttendanceForm = ({
   isOpen,
@@ -64,14 +65,35 @@ const ManualAttendanceForm = ({
       setFormData(prev => ({ ...prev, date: selectedDate }));
     }
     if (editData) {
+      // Helper function to convert UTC datetime to datetime-local format in user's timezone
+      const utcToDateTimeLocal = (utcDateTime) => {
+        if (!utcDateTime) return "";
+        try {
+          const date = new Date(utcDateTime);
+          if (isNaN(date.getTime())) return "";
+
+          // Convert UTC to local time (browser automatically handles timezone)
+          const year = date.getFullYear();
+          const month = String(date.getMonth() + 1).padStart(2, '0');
+          const day = String(date.getDate()).padStart(2, '0');
+          const hours = String(date.getHours()).padStart(2, '0');
+          const minutes = String(date.getMinutes()).padStart(2, '0');
+          return `${year}-${month}-${day}T${hours}:${minutes}`;
+        } catch (error) {
+          console.error('Error converting UTC to datetime-local:', error);
+          return "";
+        }
+      };
+
       setFormData({
         userId: editData.userId._id || editData.userId,
         date: editData.date.split('T')[0], // Convert to YYYY-MM-DD format
-        punchInTime: editData.arrivalTime ? new Date(editData.arrivalTime).toISOString().slice(0, 16) : "",
-        punchOutTime: editData.departureTime ? new Date(editData.departureTime).toISOString().slice(0, 16) : "",
+        // Extract UTC components - they represent local times stored as UTC
+        punchInTime: editData.arrivalTime ? utcToDateTimeLocal(editData.arrivalTime) : "",
+        punchOutTime: editData.departureTime ? utcToDateTimeLocal(editData.departureTime) : "",
         breakSessions: editData.breakSessions?.map(session => ({
-          start: new Date(session.start).toISOString().slice(0, 16),
-          end: new Date(session.end).toISOString().slice(0, 16),
+          start: session.start ? utcToDateTimeLocal(session.start) : "",
+          end: session.end ? utcToDateTimeLocal(session.end) : "",
           type: session.type || "break"
         })) || [],
         notes: editData.notes || "",
@@ -229,21 +251,23 @@ const ManualAttendanceForm = ({
           const date = formData.selectedDates[i];
           setMultiDateProgress({ current: i + 1, total: formData.selectedDates.length });
           try {
-            // Combine date with times for multi-date records
+            // Combine date with time and convert to proper UTC
             const combineDateTime = (date, time) => {
               if (!time) return "";
-              // If time is already a full datetime, extract time part
+              // Extract time part if it's a full datetime
               const timeOnly = time.includes('T') ? time.split('T')[1] : time;
-              return `${date}T${timeOnly}`;
+              // Create date in local timezone, then convert to UTC
+              const localDateTime = new Date(`${date}T${timeOnly}`);
+              return localDateTime.toISOString();
             };
 
             const recordData = {
               userId: formData.userId,
               date: date,
-              // Combine selected date with time values
+              // Combine selected date with time values as UTC (no conversion)
               punchInTime: formData.punchInTime ? combineDateTime(date, formData.punchInTime) : "",
               punchOutTime: formData.punchOutTime ? combineDateTime(date, formData.punchOutTime) : "",
-              // Update break sessions with combined date-time
+              // Update break sessions with combined date-time as UTC
               breakSessions: formData.breakSessions.map(session => ({
                 ...session,
                 start: session.start ? combineDateTime(date, session.start) : "",
@@ -353,6 +377,15 @@ const ManualAttendanceForm = ({
 
         const method = isEdit ? "PUT" : "POST";
 
+        // Convert local datetime-local input to proper UTC
+        const convertToUTC = (dateTimeLocal) => {
+          if (!dateTimeLocal) return "";
+          // dateTimeLocal format: "2025-10-07T14:00"
+          // Create Date object in local timezone and convert to UTC
+          const localDate = new Date(dateTimeLocal);
+          return localDate.toISOString();
+        };
+
         const response = await fetch(url, {
           method,
           headers: {
@@ -361,6 +394,14 @@ const ManualAttendanceForm = ({
           },
           body: JSON.stringify({
             ...formData,
+            // Convert times to UTC ISO strings (Option C - no timezone conversion)
+            punchInTime: convertToUTC(formData.punchInTime),
+            punchOutTime: convertToUTC(formData.punchOutTime),
+            breakSessions: formData.breakSessions.map(session => ({
+              ...session,
+              start: convertToUTC(session.start),
+              end: convertToUTC(session.end)
+            })),
             overrideExisting: formData.overrideExisting || isEdit // Always override for edits
           })
         });
@@ -909,6 +950,9 @@ const ManualAttendanceForm = ({
                       className="w-full px-4 py-3 bg-slate-700/50 border border-slate-600/50 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
                       placeholder={formData.isMultiDate ? "HH:MM" : ""}
                     />
+                    <p className="mt-1 text-xs text-gray-400">
+                      Enter time as it should appear (e.g., 12:00 PM for noon)
+                    </p>
                     {errors.punchInTime && (
                       <p className="mt-1 text-sm text-red-400 flex items-center gap-1">
                         <AlertCircle className="w-4 h-4" />
@@ -943,6 +987,9 @@ const ManualAttendanceForm = ({
                       className="w-full px-4 py-3 bg-slate-700/50 border border-slate-600/50 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
                       placeholder={formData.isMultiDate ? "HH:MM" : ""}
                     />
+                    <p className="mt-1 text-xs text-gray-400">
+                      Enter time as it should appear (e.g., 12:00 PM for noon)
+                    </p>
                     {errors.punchOutTime && (
                       <p className="mt-1 text-sm text-red-400 flex items-center gap-1">
                         <AlertCircle className="w-4 h-4" />

@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback, useMemo, useRef } from "react"
 import { createPortal } from "react-dom";
 import axios from "axios";
 import { attendanceUtils } from "../api.js";
+import timeUtils from "../utils/timeUtils";
 import newAttendanceService from "../services/newAttendanceService";
 import AttendanceStats from "../components/attendance/AttendanceStats";
 import AttendanceCalendar from "../components/attendance/AttendanceCalendar";
@@ -614,11 +615,7 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
           isWorking: Boolean(statusData.currentlyWorking),
           onBreak: Boolean(statusData.onBreak),
           todayHours: ((statusData.workDurationSeconds || 0) / 3600).toFixed(1),
-          arrivalTime: statusData.arrivalTimeFormatted || (statusData.arrivalTime ? new Date(statusData.arrivalTime).toLocaleTimeString([], {
-            hour: '2-digit',
-            minute: '2-digit',
-            hour12: true
-          }) : null)
+          arrivalTime: statusData.arrivalTimeFormatted || (statusData.arrivalTime ? timeUtils.formatTime(statusData.arrivalTime) : null)
         } : null,
         // System tracking for debugging
         systemInfo: {
@@ -659,6 +656,15 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
         // Enhanced date matching with multiple fallback strategies
         let attendanceData = null;
         const targetDateStr = `${year}-${String(monthIndex + 1).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
+
+        // Check if this day is a holiday
+        const isHoliday = holidays && holidays.some(h => {
+          if (!h.date) return false;
+          const holidayDateStr = typeof h.date === 'string'
+            ? (h.date.includes('T') ? h.date.split('T')[0] : h.date)
+            : new Date(h.date).toISOString().split('T')[0];
+          return holidayDateStr === targetDateStr;
+        });
 
         // Strategy 1: Direct date string matching (most reliable)
         attendanceData = dailyData.find(d => {
@@ -736,7 +742,12 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
         let departureTime = null;
         let metadata = {};
 
-        if (attendanceData) {
+        // PRIORITY ORDER: Holiday > Absent > Late > Present > Half Day
+        if (isHoliday) {
+          // HIGHEST PRIORITY: Holiday
+          status = "holiday";
+          metadata = { isHoliday: true };
+        } else if (attendanceData) {
           // Enhanced status determination using all available enhanced data
           console.log(`📅 Processing calendar status for ${targetDateStr}:`, {
             isPresent: attendanceData.isPresent,
@@ -749,11 +760,18 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
             leaveInfo: attendanceData.leaveInfo
           });
 
-          // Priority-based status determination for accurate calendar display
-          if (attendanceData.isWFH) {
-            status = "wfh";
+          // Check if employee has flexible shift (flexible permanent employees are never marked as "late")
+          const isFlexibleEmployee = selectedEmployee?.shiftType === 'flexiblePermanent' ||
+                                     selectedEmployee?.shift?.isFlexible ||
+                                     selectedEmployee?.shift?.name?.toLowerCase().includes('flexible') ||
+                                     false;
+
+          // Priority-based status determination: Absent > Late > Present > Half Day
+          if (attendanceData.isAbsent && !attendanceData.isPresent) {
+            // PRIORITY 2: Absent
+            status = "absent";
           } else if (attendanceData.leaveInfo && attendanceData.leaveInfo.type) {
-            // Handle different leave types
+            // Handle different leave types (treated as absent with reason)
             switch (attendanceData.leaveInfo.type) {
               case 'sick':
                 status = "sick-leave";
@@ -770,17 +788,20 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
               default:
                 status = "approved-leave";
             }
-          } else if (attendanceData.isAbsent && !attendanceData.isPresent) {
-            status = "absent";
-          } else if (attendanceData.isLate && attendanceData.isPresent) {
-            // Late takes priority over half-day
+          } else if (attendanceData.isLate && attendanceData.isPresent && !isFlexibleEmployee) {
+            // PRIORITY 3: Late (only for standard shift employees, NOT flexible)
+            // Flexible permanent employees are NEVER marked as late
             status = "late";
+          } else if (attendanceData.isWFH) {
+            status = "wfh";
+          } else if (attendanceData.isPresent || (attendanceData.workDurationSeconds && attendanceData.workDurationSeconds > 0)) {
+            // PRIORITY 4: Present
+            status = "present";
           } else if (attendanceData.isHalfDay && attendanceData.isPresent) {
+            // PRIORITY 5: Half Day (lowest priority)
             status = "half-day";
           } else if (attendanceData.isEarly && attendanceData.isPresent) {
             status = "early";
-          } else if (attendanceData.isPresent || (attendanceData.workDurationSeconds && attendanceData.workDurationSeconds > 0)) {
-            status = "present";
           } else {
             status = "absent";
           }
@@ -790,36 +811,16 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
           const cappedWorkSeconds = Math.min(rawWorkSeconds, 86400); // Cap at 24 hours
           workingHours = (cappedWorkSeconds / 3600).toFixed(1);
 
-          // FIXED: Extract and format arrival/departure times properly (same logic as Recent Activity)
-          // Try direct fields first and format immediately
+          // FIXED: Extract and format arrival/departure times properly with timezone safety
+          // Parse UTC components as local time to avoid +5:30 shift on AWS
           if (attendanceData.arrivalTime) {
-            try {
-              const arrivalDate = new Date(attendanceData.arrivalTime);
-              if (!isNaN(arrivalDate.getTime())) {
-                arrivalTime = arrivalDate.toLocaleTimeString([], {
-                  hour: '2-digit',
-                  minute: '2-digit',
-                  hour12: true
-                });
-              }
-            } catch (err) {
-              console.warn('Invalid arrivalTime format:', attendanceData.arrivalTime);
-            }
+            // Use centralized time utility for consistent formatting
+            arrivalTime = timeUtils.formatTime(attendanceData.arrivalTime);
           }
 
           if (attendanceData.departureTime) {
-            try {
-              const departureDate = new Date(attendanceData.departureTime);
-              if (!isNaN(departureDate.getTime())) {
-                departureTime = departureDate.toLocaleTimeString([], {
-                  hour: '2-digit',
-                  minute: '2-digit',
-                  hour12: true
-                });
-              }
-            } catch (err) {
-              console.warn('Invalid departureTime format:', attendanceData.departureTime);
-            }
+            // Use centralized time utility for consistent formatting
+            departureTime = timeUtils.formatTime(attendanceData.departureTime);
           }
 
           // If not available, extract from timeline and format
@@ -830,18 +831,7 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
             if (punchInEvent) {
               const eventTime = punchInEvent.time || punchInEvent.timestamp;
               if (eventTime) {
-                try {
-                  const timeDate = new Date(eventTime);
-                  if (!isNaN(timeDate.getTime())) {
-                    arrivalTime = timeDate.toLocaleTimeString([], {
-                      hour: '2-digit',
-                      minute: '2-digit',
-                      hour12: true
-                    });
-                  }
-                } catch (err) {
-                  console.warn('Invalid punch in time:', eventTime);
-                }
+                arrivalTime = timeUtils.formatTime(eventTime);
               }
             }
           }
@@ -853,18 +843,7 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
             if (punchOutEvent) {
               const eventTime = punchOutEvent.time || punchOutEvent.timestamp;
               if (eventTime) {
-                try {
-                  const timeDate = new Date(eventTime);
-                  if (!isNaN(timeDate.getTime())) {
-                    departureTime = timeDate.toLocaleTimeString([], {
-                      hour: '2-digit',
-                      minute: '2-digit',
-                      hour12: true
-                    });
-                  }
-                } catch (err) {
-                  console.warn('Invalid punch out time:', eventTime);
-                }
+                departureTime = timeUtils.formatTime(eventTime);
               }
             }
           }
@@ -943,7 +922,9 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
           // If shiftStartTime is undefined/null, we cannot accurately calculate late minutes
           if (attendanceData.isLate && attendanceData.arrivalTime && shiftStartTime) {
             try {
+              // Parse arrivalTime in user's local timezone
               const arrivalDate = new Date(attendanceData.arrivalTime);
+
               const [expHour, expMin] = shiftStartTime.split(':').map(Number);
 
               // Validate that we got valid hour/minute values
@@ -1249,19 +1230,11 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
 
           // Try direct fields first
           if (d.arrivalTime) {
-            timeIn = new Date(d.arrivalTime).toLocaleTimeString([], {
-              hour: '2-digit',
-              minute: '2-digit',
-              hour12: true
-            });
+            timeIn = timeUtils.formatTime(d.arrivalTime);
           }
 
           if (d.departureTime) {
-            timeOut = new Date(d.departureTime).toLocaleTimeString([], {
-              hour: '2-digit',
-              minute: '2-digit',
-              hour12: true
-            });
+            timeOut = timeUtils.formatTime(d.departureTime);
           }
 
           // If not available, extract from timeline
@@ -1272,11 +1245,7 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
             if (punchInEvent) {
               const eventTime = punchInEvent.time || punchInEvent.timestamp;
               if (eventTime) {
-                timeIn = new Date(eventTime).toLocaleTimeString([], {
-                  hour: '2-digit',
-                  minute: '2-digit',
-                  hour12: true
-                });
+                timeIn = timeUtils.formatTime(eventTime);
               }
             }
           }
@@ -1288,11 +1257,7 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
             if (punchOutEvent) {
               const eventTime = punchOutEvent.time || punchOutEvent.timestamp;
               if (eventTime) {
-                timeOut = new Date(eventTime).toLocaleTimeString([], {
-                  hour: '2-digit',
-                  minute: '2-digit',
-                  hour12: true
-                });
+                timeOut = timeUtils.formatTime(eventTime);
               }
             }
           }

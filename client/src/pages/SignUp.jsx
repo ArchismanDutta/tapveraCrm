@@ -9,13 +9,6 @@ import "react-toastify/dist/ReactToastify.css";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://crm-be.eba-nt49vbgx.ap-south-1.elasticbeanstalk.com";
 
-// Predefined standard shifts
-const STANDARD_SHIFTS = {
-  MORNING: { name: "Morning Shift", start: "09:00", end: "18:00", description: "9:00 AM - 6:00 PM" },
-  NIGHT: { name: "Night Shift", start: "20:00", end: "05:00", description: "8:00 PM - 5:00 AM (next day)" },
-  EARLY: { name: "Early Shift", start: "05:30", end: "14:20", description: "5:30 AM - 2:20 PM" }
-};
-
 const Signup = () => {
   const navigate = useNavigate();
 
@@ -46,12 +39,14 @@ const Signup = () => {
     employmentType: "full-time",
     qualifications: [{ school: "", degree: "", marks: "", year: "" }],
     shiftType: "standard",
-    standardShiftType: "MORNING", // New predefined shift selector
+    selectedShiftId: "", // Changed from standardShiftType to selectedShiftId
   });
 
   const [skillsInput, setSkillsInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [role, setRole] = useState(null);
+  const [availableShifts, setAvailableShifts] = useState([]);
+  const [loadingShifts, setLoadingShifts] = useState(true);
 
   useEffect(() => {
     const savedRole =
@@ -69,6 +64,43 @@ const Signup = () => {
       navigate("/login");
     }
   }, [role, navigate]);
+
+  // Fetch available shifts from database
+  useEffect(() => {
+    const fetchShifts = async () => {
+      try {
+        const token = localStorage.getItem("token");
+        if (!token) return;
+
+        const response = await fetch(`${API_BASE}/api/shifts`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        if (response.ok) {
+          const shifts = await response.json();
+          setAvailableShifts(shifts);
+
+          // Set first shift as default if available
+          if (shifts.length > 0 && !form.selectedShiftId) {
+            setForm(prev => ({ ...prev, selectedShiftId: shifts[0]._id }));
+          }
+        } else {
+          console.error("Failed to fetch shifts");
+          toast.info("Please initialize shifts from the Shift Management page before registering employees with standard shifts");
+        }
+      } catch (error) {
+        console.error("Error fetching shifts:", error);
+      } finally {
+        setLoadingShifts(false);
+      }
+    };
+
+    if (role && ["hr", "admin", "super-admin"].includes(role)) {
+      fetchShifts();
+    }
+  }, [role]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -132,7 +164,7 @@ const Signup = () => {
       (q) => q.school || q.degree || q.marks || q.year
     );
 
-    // Construct payload with new shift structure
+    // Construct payload with dynamic shift structure
     const payload = {
       employeeId: String(form.employeeId).trim(),
       name: String(form.name).trim(),
@@ -161,9 +193,12 @@ const Signup = () => {
       qualifications: validQualifications,
       skills: skillsArray,
       shiftType: form.shiftType || "standard",
-      // Only include standardShiftType for standard shifts
-      ...(form.shiftType === "standard" && { standardShiftType: form.standardShiftType }),
     };
+
+    // Add shift data based on type
+    if (form.shiftType === "standard" && form.selectedShiftId) {
+      payload.shift = { shiftId: form.selectedShiftId };
+    }
 
     try {
       const token = localStorage.getItem("token");
@@ -542,19 +577,57 @@ const Signup = () => {
             {/* Show standard shift options only for standard shift type */}
             {form.shiftType === "standard" && (
               <div>
-                <label className="block text-sm text-gray-400 mb-1">Standard Shift</label>
-                <select
-                  name="standardShiftType"
-                  value={form.standardShiftType}
-                  onChange={handleChange}
-                  className="w-full px-4 py-2 bg-[#232831] text-[#f7f9fa] border border-[#31353c] rounded-md"
-                >
-                  {Object.entries(STANDARD_SHIFTS).map(([key, shift]) => (
-                    <option key={key} value={key}>
-                      {shift.name} - {shift.description}
-                    </option>
-                  ))}
-                </select>
+                <label className="block text-sm text-gray-400 mb-1">
+                  Select Shift {loadingShifts && "(Loading...)"}
+                </label>
+                {loadingShifts ? (
+                  <div className="w-full px-4 py-2 bg-[#232831] text-gray-500 border border-[#31353c] rounded-md">
+                    Loading available shifts...
+                  </div>
+                ) : availableShifts.length === 0 ? (
+                  <div className="space-y-2">
+                    <div className="w-full px-4 py-2 bg-red-900/20 text-red-400 border border-red-500/30 rounded-md text-sm">
+                      ⚠️ No shifts available. Please initialize shifts from the Shift Management page first.
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => navigate("/shift-management")}
+                      className="text-orange-400 hover:underline text-sm"
+                    >
+                      Go to Shift Management →
+                    </button>
+                  </div>
+                ) : (
+                  <select
+                    name="selectedShiftId"
+                    value={form.selectedShiftId}
+                    onChange={handleChange}
+                    className="w-full px-4 py-2 bg-[#232831] text-[#f7f9fa] border border-[#31353c] rounded-md"
+                    required={form.shiftType === "standard"}
+                  >
+                    <option value="">Choose a shift</option>
+                    {availableShifts.map((shift) => (
+                      <option key={shift._id} value={shift._id}>
+                        {shift.name} ({shift.start} - {shift.end}, {shift.durationHours}h)
+                      </option>
+                    ))}
+                  </select>
+                )}
+                {form.selectedShiftId && availableShifts.length > 0 && (
+                  <div className="mt-2 bg-green-900/20 border border-green-500/30 rounded-lg p-3">
+                    <p className="text-green-300 text-sm">
+                      {(() => {
+                        const selectedShift = availableShifts.find(s => s._id === form.selectedShiftId);
+                        return selectedShift ? (
+                          <>
+                            <strong>{selectedShift.name}</strong>: {selectedShift.start} - {selectedShift.end}
+                            {selectedShift.description && ` • ${selectedShift.description}`}
+                          </>
+                        ) : null;
+                      })()}
+                    </p>
+                  </div>
+                )}
               </div>
             )}
 
@@ -562,7 +635,7 @@ const Signup = () => {
             {form.shiftType === "flexiblePermanent" && (
               <div className="bg-blue-900/20 border border-blue-500/30 rounded-lg p-3">
                 <p className="text-blue-300 text-sm">
-                  <strong>Flexible Permanent Shift:</strong> Employee can work any 9 hours within a 24-hour period. 
+                  <strong>Flexible Permanent Shift:</strong> Employee can work any 9 hours within a 24-hour period.
                   No fixed timing required.
                 </p>
               </div>

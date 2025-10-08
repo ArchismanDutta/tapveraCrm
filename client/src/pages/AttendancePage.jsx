@@ -1,15 +1,18 @@
 
-import React, { useEffect, useState, useCallback } from "react";
-import axios from "axios";
-import AttendanceStats from "../components/attendance/AttendanceStats";
-import AttendanceCalendar from "../components/attendance/AttendanceCalendar";
-import WeeklyHoursChart from "../components/attendance/WeeklyHoursChart";
-import RecentActivityTable from "../components/attendance/RecentActivityTable";
-import Sidebar from "../components/dashboard/Sidebar";
-import { RefreshCw, AlertCircle, Clock, Users, Calendar as CalendarIcon } from "lucide-react";
-import newAttendanceService from "../services/newAttendanceService";
+import React, { useEffect, useState, useCallback } from 'react'; // Line 1
+import axios from 'axios';
+import timeUtils from '../utils/timeUtils';
+import AttendanceStats from '../components/attendance/AttendanceStats';
+import AttendanceCalendar from '../components/attendance/AttendanceCalendar';
+import WeeklyHoursChart from '../components/attendance/WeeklyHoursChart';
+import RecentActivityTable from '../components/attendance/RecentActivityTable';
+import Sidebar from '../components/dashboard/Sidebar';
+import { RefreshCw, AlertCircle, Clock, Users, Calendar as CalendarIcon } from 'lucide-react';
+import newAttendanceService from '../services/newAttendanceService';
 
 const AttendancePage = ({ onLogout }) => {
+  console.log("🎨 AttendancePage component rendering");
+
   const [collapsed, setCollapsed] = useState(false);
   const [stats, setStats] = useState(null);
   const [calendarData, setCalendarData] = useState(null);
@@ -23,11 +26,10 @@ const AttendancePage = ({ onLogout }) => {
   const [activityFilter, setActivityFilter] = useState('5days'); // Default to last 5 days
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
-
-  // OPTIMIZATION: Add caching for expensive data
   const [cachedLeaves, setCachedLeaves] = useState(null);
   const [cachedHolidays, setCachedHolidays] = useState(null);
   const [lastCacheTime, setLastCacheTime] = useState(null);
+
 
   const token = localStorage.getItem("token");
   const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
@@ -77,18 +79,9 @@ const AttendancePage = ({ onLogout }) => {
     return hours + (minutes / 60);
   };
 
+  // Use centralized time utility for consistent timezone handling
   const formatTime = (dateString) => {
-    if (!dateString) return "--";
-    try {
-      const date = new Date(dateString);
-      return date.toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-        hour12: true
-      });
-    } catch {
-      return "--";
-    }
+    return timeUtils.formatTime(dateString);
   };
 
   const isWorkingDay = (date) => {
@@ -96,48 +89,51 @@ const AttendancePage = ({ onLogout }) => {
     return day >= 1 && day <= 5; // Monday = 1, Friday = 5
   };
 
-  // Enhanced timeline parsing with better error handling
+  // OPTION C: Parse timeline without timezone conversion
+  // Times in DB are stored as UTC but represent local times
   const getPunchTimeFromTimeline = (timeline, eventType) => {
     if (!Array.isArray(timeline) || timeline.length === 0) return null;
-    
+
     try {
-      const events = timeline.filter(event => 
+      const events = timeline.filter(event =>
         event.type && event.type.toLowerCase().includes(eventType.toLowerCase())
       );
-      
+
       if (events.length === 0) return null;
-      
+
       // For punch in, get the first occurrence; for punch out, get the last
       const sortedEvents = events.sort((a, b) => new Date(a.time) - new Date(b.time));
       const targetEvent = eventType === "punch in" ? sortedEvents[0] : sortedEvents[sortedEvents.length - 1];
-      
-      return new Date(targetEvent.time);
+
+      // Return the ISO string directly - timeUtils will extract UTC components
+      return targetEvent.time;
     } catch (error) {
       console.warn(`Error parsing timeline for ${eventType}:`, error);
       return null;
     }
   };
 
+  // OPTION C: Return ISO string directly - let timeUtils handle display
   const getArrivalTime = (dailyData) => {
-    // Priority 1: Direct arrivalTime field
+    // Priority 1: Direct arrivalTime field (ISO string)
     if (dailyData.arrivalTime) {
-      return new Date(dailyData.arrivalTime);
+      return dailyData.arrivalTime;
     }
-    
-    // Priority 2: First punch in from timeline
+
+    // Priority 2: First punch in from timeline (ISO string)
     if (dailyData.timeline && Array.isArray(dailyData.timeline)) {
       const punchInTime = getPunchTimeFromTimeline(dailyData.timeline, "punch in");
       if (punchInTime) return punchInTime;
     }
-    
-    // Priority 3: First worked session start time
+
+    // Priority 3: First worked session start time (ISO string)
     if (dailyData.workedSessions && Array.isArray(dailyData.workedSessions) && dailyData.workedSessions.length > 0) {
       const firstSession = dailyData.workedSessions[0];
       if (firstSession.start) {
-        return new Date(firstSession.start);
+        return firstSession.start;
       }
     }
-    
+
     return null;
   };
 
@@ -192,19 +188,10 @@ const AttendancePage = ({ onLogout }) => {
       });
 
       // Convert to format expected by existing components
-      // Format arrival time for display
+      // Format arrival time for display using centralized time utility
       let formattedArrivalTime = null;
       if (attendanceData?.arrivalTime) {
-        try {
-          const arrivalDate = new Date(attendanceData.arrivalTime);
-          formattedArrivalTime = arrivalDate.toLocaleTimeString([], {
-            hour: "2-digit",
-            minute: "2-digit",
-            hour12: true
-          });
-        } catch (e) {
-          console.error('Error formatting arrival time:', e);
-        }
+        formattedArrivalTime = timeUtils.formatTime(attendanceData.arrivalTime);
       }
 
       const statusData = {
@@ -273,7 +260,8 @@ const AttendancePage = ({ onLogout }) => {
   // Handle activity filter change
   const handleActivityFilterChange = useCallback((filter) => {
     setActivityFilter(filter);
-    fetchAttendanceData(true); // Refresh data with new filter
+    // Note: fetchAttendanceData will automatically use the new filter value
+    // since it reads activityFilter via getActivityDateRange
   }, []);
 
   // Handle month change
@@ -315,6 +303,7 @@ const AttendancePage = ({ onLogout }) => {
   }, [activityFilter]);
 
   const fetchAttendanceData = useCallback(async (isRefresh = false) => {
+    console.log("🚀 fetchAttendanceData called", { isRefresh, selectedMonth, selectedYear, activityFilter });
     try {
       if (isRefresh) {
         setRefreshing(true);
@@ -333,29 +322,23 @@ const AttendancePage = ({ onLogout }) => {
 
       // Get activity date range based on filter
       const { startDate: activityStart, endDate: activityEnd } = getActivityDateRange();
-
-      // Determine if we need separate calls (only if activity range is different from month range)
-      const needSeparateActivityCall =
-        activityStart.getTime() !== monthStart.getTime() ||
-        activityEnd.getTime() !== monthEnd.getTime();
+      console.log(`📅 Activity Date Range (${activityFilter}):`, {
+        start: activityStart.toISOString(),
+        end: activityEnd.toISOString(),
+        filterDays: Math.ceil((activityEnd - activityStart) / (1000 * 60 * 60 * 24))
+      });
 
       // Fetch data using new attendance system
       console.log("🆕 Fetching attendance data");
       const user = JSON.parse(localStorage.getItem('user') || '{}');
       const fetchPromises = [];
 
-      // Monthly attendance data for calendar and stats
+      // Monthly attendance data for calendar, stats, AND recent activity
+      // We'll filter activity data on the frontend for better UX (instant filter switching)
       fetchPromises.push(
         newAttendanceService.getEmployeeMonthlyAttendance(user.id || user._id, selectedYear, selectedMonth + 1),
         fetchCurrentStatus()
       );
-
-      // Only fetch separate activity data if range differs from month
-      if (needSeparateActivityCall) {
-        fetchPromises.push(
-          newAttendanceService.getEmployeeAttendanceRange(user.id || user._id, activityStart, activityEnd)
-        );
-      }
 
       // OPTIMIZATION: Use cached data for leaves and holidays if recent
       const currentTime = Date.now();
@@ -377,6 +360,12 @@ const AttendancePage = ({ onLogout }) => {
       const statusRes = results[1];
       let leavesRes = { data: [] };
       let holidaysRes = { data: [] };
+
+      console.log("🔍 Backend Response - Monthly Attendance:", {
+        success: monthlyAttendanceRes?.success,
+        hasData: !!monthlyAttendanceRes?.data,
+        dataLength: monthlyAttendanceRes?.data?.data?.length || 0
+      });
 
       // Convert monthly attendance response
       let weeklyRes;
@@ -457,52 +446,14 @@ const AttendancePage = ({ onLogout }) => {
         };
       }
 
-      // Use monthly data as default for activity
+      // Use monthly data for activity (filter on frontend for instant response)
       let activityRes = weeklyRes;
+      console.log("✅ Using monthly data for Recent Activity:", {
+        totalRecords: weeklyRes.data.dailyData.length
+      });
 
-      // Parse separate activity data if fetched
+      // Update result index since we removed the separate activity call
       let resultIndex = 2;
-      if (needSeparateActivityCall) {
-        const separateActivityRes = results[resultIndex];
-        if (separateActivityRes.success && separateActivityRes.data) {
-          // The backend returns "data" array directly
-          const activityArray = separateActivityRes.data.data || [];
-
-          // Convert activity range response
-          activityRes = {
-            data: {
-              dailyData: activityArray.map(day => ({
-                date: day.date,
-                workDurationSeconds: day.workDurationSeconds || 0,
-                breakDurationSeconds: day.breakDurationSeconds || 0,
-                isAbsent: day.isAbsent || false,
-                isLate: day.isLate || false,
-                isPresent: day.isPresent || false,
-                isHalfDay: day.isHalfDay || (day.workDurationSeconds < (4 * 3600)),
-                isWFH: false, // TODO: Add WFH support
-                // CRITICAL: Format times as strings to prevent React rendering Date objects
-                arrivalTime: day.arrivalTime ? (typeof day.arrivalTime === 'string' ? day.arrivalTime : new Date(day.arrivalTime).toISOString()) : null,
-                departureTime: day.departureTime ? (typeof day.departureTime === 'string' ? day.departureTime : new Date(day.departureTime).toISOString()) : null,
-                timeline: day.events?.map(event => ({
-                  type: event.type === 'PUNCH_IN' ? 'Punch In' :
-                        event.type === 'PUNCH_OUT' ? 'Punch Out' :
-                        event.type === 'BREAK_START' ? 'Break Start' :
-                        event.type === 'BREAK_END' ? 'Break End' : event.type,
-                  time: event.timestamp,
-                  location: event.location
-                })) || [],
-                workedSessions: [],
-                breakSessions: []
-              }))
-            }
-          };
-
-          console.log("✅ Converted activity data:", {
-            activityDataCount: activityRes.data.dailyData.length
-          });
-        }
-        resultIndex++;
-      }
 
       if (!shouldUseCachedData) {
         leavesRes = results[resultIndex] || { data: [] };
@@ -674,6 +625,7 @@ const AttendancePage = ({ onLogout }) => {
           isHalfDay: d.isHalfDay,
           isLate: d.isLate
         });
+        // OPTION C: Get times as ISO strings (no conversion)
         const arrivalTime = getArrivalTime(d);
         const punchOutTime = getPunchTimeFromTimeline(d.timeline, "punch out");
 
@@ -700,65 +652,38 @@ const AttendancePage = ({ onLogout }) => {
           status = "present";
         }
 
-        // Get shift start time - backend returns it as "shift" property
-        // Debug logging to see all available shift-related properties
-        if (d.isLate) {
-          console.log(`🔍 ALL PROPERTIES for late day ${d.date}:`, {
-            'keys': Object.keys(d),
-            'd.shift': d.shift,
-            'd.assignedShift': d.assignedShift,
-            'd.effectiveShift': d.effectiveShift,
-            'd.expectedStartTime': d.expectedStartTime,
-            'full d': d
-          });
-        }
-
+        // OPTION C: Calculate late minutes using UTC time components
         const shiftData = d.shift || d.assignedShift || d.effectiveShift;
         const expectedStart = shiftData?.startTime || d.effectiveShift?.start || d.expectedStartTime || "09:00";
         const [expH, expM] = expectedStart.split(":").map(Number);
 
-        // Debug logging for shift data
-        if (d.isLate) {
-          console.log(`🔍 Processing late day ${d.date}:`, {
-            'shiftData': shiftData,
-            'expectedStart': expectedStart,
-            'expH': expH,
-            'expM': expM,
-            'arrivalTime': arrivalTime ? arrivalTime.toISOString() : null
-          });
-        }
-
-        // CRITICAL FIX: Extract date components to avoid timezone issues
-        // The backend stores dates as midnight in server timezone
-        // We need to extract the date portion and construct shift time in local browser timezone
-        // This ensures calculations work the same regardless of server timezone (local IST vs AWS UTC)
-        let recordDate;
-        if (typeof d.date === 'string') {
-          // If date is a string like "2025-10-05", parse it as local date
-          const [year, month, day] = d.date.split('-').map(Number);
-          recordDate = new Date(year, month - 1, day);
-        } else {
-          // If date is a Date object, extract local date components
-          recordDate = new Date(d.date);
-        }
-
-        const expectedDate = new Date(
-          recordDate.getFullYear(),
-          recordDate.getMonth(),
-          recordDate.getDate(),
-          expH,
-          expM,
-          0,
-          0
-        );
-
-        // Only show late minutes if backend confirms isLate is true
+        // Calculate late minutes by comparing UTC time components directly
+        let lateMinutes = 0;
         const isFlexible = shiftData?.isFlexible || d.effectiveShift?.isFlexible || false;
-        const lateMinutes = (d.isLate && !isFlexible && arrivalTime && arrivalTime > expectedDate) ?
-          Math.floor((arrivalTime - expectedDate) / (1000 * 60)) : 0;
 
-        if (d.isLate) {
-          console.log(`✅ Calculated late minutes for ${d.date}: ${lateMinutes} min (shift start: ${expH}:${String(expM).padStart(2, '0')})`);
+        // Always calculate late minutes if we have arrival time (for display purposes)
+        if (arrivalTime && !isFlexible) {
+          // Parse arrival time in user's local timezone
+          const arrivalDate = new Date(arrivalTime);
+          const arrivalHours = arrivalDate.getHours();
+          const arrivalMinutes = arrivalDate.getMinutes();
+
+          // Calculate minutes since midnight
+          const arrivalTotalMinutes = arrivalHours * 60 + arrivalMinutes;
+          const expectedTotalMinutes = expH * 60 + expM;
+
+          // Calculate difference (positive = late, negative = early)
+          const minutesDiff = arrivalTotalMinutes - expectedTotalMinutes;
+
+          // Only show as late if backend confirms isLate AND actually late (not early)
+          if (d.isLate && minutesDiff > 0) {
+            lateMinutes = minutesDiff;
+            console.log(`✅ Calculated late minutes for ${d.date}: ${lateMinutes} min (shift: ${expectedStart}, arrival: ${arrivalHours}:${String(arrivalMinutes).padStart(2, '0')})`);
+          } else if (minutesDiff <= 0) {
+            // Arrived on-time or early
+            lateMinutes = 0;
+            console.log(`✅ On-time/Early arrival for ${d.date}: ${Math.abs(minutesDiff)} min early (shift: ${expectedStart}, arrival: ${arrivalHours}:${String(arrivalMinutes).padStart(2, '0')})`);
+          }
         }
 
         // For WFH, set standard working hours if no actual logged hours
@@ -772,9 +697,9 @@ const AttendancePage = ({ onLogout }) => {
           day: dayNum,
           status,
           workingHours: displayHours,
-          // Format Date objects to ISO strings for calendar compatibility
-          arrivalTime: arrivalTime ? arrivalTime.toISOString() : null,
-          departureTime: punchOutTime ? punchOutTime.toISOString() : null,
+          // OPTION C: Store ISO strings directly (already in correct format)
+          arrivalTime: arrivalTime,
+          departureTime: punchOutTime,
           name: d.isWFH ? "Work From Home" :
                 d.leaveInfo ? `${d.leaveInfo.type} Leave` : null,
           metadata: {
@@ -893,10 +818,56 @@ const AttendancePage = ({ onLogout }) => {
 
       setWeeklyHours(weeklyHoursData);
 
+      // Get activity date range for filtering (recalculate for consistency)
+      let activityStartDate, activityEndDate;
+      try {
+        const dateRange = getActivityDateRange();
+        activityStartDate = dateRange.startDate;
+        activityEndDate = dateRange.endDate;
+      } catch (err) {
+        console.error("Error getting activity date range:", err);
+        // Fallback to month range
+        activityStartDate = monthStart;
+        activityEndDate = monthEnd;
+      }
+
+      // Filter activity data based on selected date range (frontend filtering for instant response)
+      const filteredActivityData = activityData.filter(d => {
+        try {
+          const recordDate = new Date(typeof d.date === 'string' ?
+            (d.date.includes('T') ? d.date.split('T')[0] : d.date) :
+            d.date.toISOString().split('T')[0]);
+          recordDate.setHours(0, 0, 0, 0);
+
+          return recordDate >= activityStartDate && recordDate <= activityEndDate;
+        } catch (err) {
+          console.error("Error filtering activity record:", d, err);
+          return false;
+        }
+      });
+
+      console.log(`🔍 Filtered activity data:`, {
+        totalRecords: activityData.length,
+        filteredRecords: filteredActivityData.length,
+        dateRange: activityStartDate && activityEndDate ?
+          `${activityStartDate.toISOString().split('T')[0]} to ${activityEndDate.toISOString().split('T')[0]}` :
+          'Invalid date range',
+        filter: activityFilter
+      });
+
       // Simplified recent activity data processing
-      const recent = activityData.map(d => {
+      const recent = filteredActivityData.map(d => {
         const arrivalTime = getArrivalTime(d);
         const punchOutTime = getPunchTimeFromTimeline(d.timeline, "punch out");
+
+        // Debug logging for recent activity
+        console.log(`📊 Recent Activity - Processing ${d.date}:`, {
+          arrivalTime,
+          punchOutTime,
+          workDurationSeconds: d.workDurationSeconds,
+          isLate: d.isLate,
+          isAbsent: d.isAbsent
+        });
 
         let status = "Absent";
         let statusColor = "red";
@@ -940,12 +911,17 @@ const AttendancePage = ({ onLogout }) => {
           efficiency = Math.round(((d.workDurationSeconds || 0) / (8 * 3600)) * 100);
         }
 
+        const formattedTimeIn = d.isWFH ? "WFH" : formatTime(arrivalTime);
+        const formattedTimeOut = d.isWFH ? "WFH" : formatTime(punchOutTime);
+
+        console.log(`✅ Recent Activity - Formatted times for ${d.date}: TimeIn=${formattedTimeIn}, TimeOut=${formattedTimeOut}`);
+
         return {
           date: typeof d.date === 'string' ?
             (d.date.includes('T') ? d.date.split('T')[0] : d.date) :
             d.date.toISOString().split('T')[0],
-          timeIn: d.isWFH ? "WFH" : formatTime(arrivalTime),
-          timeOut: d.isWFH ? "WFH" : formatTime(punchOutTime),
+          timeIn: formattedTimeIn,
+          timeOut: formattedTimeOut,
           status,
           statusColor,
           workingHours: displayWorkingHours.toFixed(1) + "h",
@@ -954,6 +930,7 @@ const AttendancePage = ({ onLogout }) => {
         };
       });
 
+      console.log(`🎯 Setting Recent Activity with ${recent.length} records:`, recent);
       setRecentActivity(recent);
 
       // Fetch team leave data
@@ -969,6 +946,7 @@ const AttendancePage = ({ onLogout }) => {
   }, [fetchCurrentStatus, fetchTeamOnLeave, getActivityDateRange, selectedMonth, selectedYear]);
 
   useEffect(() => {
+    console.log("📍 AttendancePage mounted, fetching initial data");
     fetchAttendanceData();
 
     // OPTIMIZATION: Smarter real-time updates based on user's actual working status
@@ -1034,14 +1012,21 @@ const AttendancePage = ({ onLogout }) => {
     }, 300000); // Update every 5 minutes when page is visible
 
     return () => clearInterval(intervalId);
-  }, [fetchAttendanceData, fetchCurrentStatus, selectedMonth, selectedYear]); // Added month/year to refetch when changed
+  }, [fetchAttendanceData, fetchCurrentStatus, selectedMonth, selectedYear, activityFilter]); // Added activityFilter to refetch when changed
 
   // Listen for attendance updates
   useEffect(() => {
-    const handleAttendanceUpdate = () => fetchAttendanceData(true);
-    const handleStatusUpdate = () => fetchCurrentStatus();
+    const handleAttendanceUpdate = () => {
+      console.log("🔔 Event: attendanceDataUpdate received - refreshing data");
+      fetchAttendanceData(true);
+    };
+    const handleStatusUpdate = () => {
+      console.log("🔔 Event: statusUpdate received - fetching status");
+      fetchCurrentStatus();
+    };
     const handleManualAttendanceUpdate = () => {
       // Refresh all data when manual attendance is updated
+      console.log("🔔 Event: attendanceDataUpdated received - full refresh");
       fetchAttendanceData(true);
       fetchCurrentStatus();
     };
@@ -1050,10 +1035,13 @@ const AttendancePage = ({ onLogout }) => {
     window.addEventListener("statusUpdate", handleStatusUpdate);
     window.addEventListener("attendanceDataUpdated", handleManualAttendanceUpdate);
 
+    console.log("✅ Attendance event listeners registered");
+
     return () => {
       window.removeEventListener("attendanceDataUpdate", handleAttendanceUpdate);
       window.removeEventListener("statusUpdate", handleStatusUpdate);
       window.removeEventListener("attendanceDataUpdated", handleManualAttendanceUpdate);
+      console.log("🗑️ Attendance event listeners removed");
     };
   }, [fetchAttendanceData, fetchCurrentStatus]);
 

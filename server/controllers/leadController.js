@@ -3,7 +3,7 @@ const User = require("../models/User");
 
 // Helper function to check if user has access to Lead Management
 const canAccessLeadManagement = (user) => {
-  return user.role === "super-admin" || user.department === "marketingAndSales";
+  return user.role === "super-admin" || user.role === "admin" || user.department === "marketingAndSales";
 };
 
 // @desc    Create a new lead
@@ -50,9 +50,9 @@ exports.createLead = async (req, res) => {
 
     // Determine who to assign the lead to
     let assignedToUser = assignedTo;
-    
-    if (req.user.role === "super-admin") {
-      // Super-admin can assign to anyone
+
+    if (req.user.role === "super-admin" || req.user.role === "admin" || req.user.role === "admin") {
+      // Super-admin and admin can assign to anyone
       if (!assignedToUser) {
         // If not provided, assign to current user
         assignedToUser = req.user._id;
@@ -64,10 +64,10 @@ exports.createLead = async (req, res) => {
         }
       }
     } else {
-      // Non-super-admin employees can only assign to themselves
+      // Regular employees can only assign to themselves
       assignedToUser = req.user._id;
       if (assignedTo && assignedTo !== req.user._id.toString()) {
-        return res.status(403).json({ message: "You can only assign leads to yourself. Super Admin can assign to anyone." });
+        return res.status(403).json({ message: "You can only assign leads to yourself. Admins can assign to anyone." });
       }
     }
 
@@ -132,7 +132,7 @@ exports.getLeads = async (req, res) => {
     const filter = {};
 
     // Role-based filtering
-    if (req.user.role !== "super-admin") {
+    if (req.user.role !== "super-admin" && req.user.role !== "admin") {
       // Non-super-admin users can only see their assigned leads
       filter.assignedTo = req.user._id;
     } else if (assignedTo) {
@@ -208,7 +208,7 @@ exports.getLeadById = async (req, res) => {
 
     // Check access permissions for assigned leads
     if (
-      req.user.role !== "super-admin" &&
+      req.user.role !== "super-admin" && req.user.role !== "admin" &&
       lead.assignedTo._id.toString() !== req.user._id.toString()
     ) {
       return res.status(403).json({ message: "Access denied. You can only view your assigned leads." });
@@ -247,7 +247,7 @@ exports.updateLead = async (req, res) => {
 
     // Check permissions
     const isAssigned = lead.assignedTo.toString() === req.user._id.toString();
-    const isSuperAdmin = req.user.role === "super-admin";
+    const isSuperAdmin = req.user.role === "super-admin" || req.user.role === "admin";
 
     if (!isAssigned && !isSuperAdmin) {
       return res.status(403).json({ message: "Access denied. You can only edit your assigned leads." });
@@ -309,7 +309,7 @@ exports.deleteLead = async (req, res) => {
     }
 
     // Only super-admin can delete
-    if (req.user.role !== "super-admin") {
+    if (req.user.role !== "super-admin" && req.user.role !== "admin") {
       return res.status(403).json({ message: "Access denied. Only Super Admin can delete leads." });
     }
 
@@ -343,7 +343,7 @@ exports.getLeadStats = async (req, res) => {
     const filter = {};
 
     // Filter by user role
-    if (req.user.role !== "super-admin") {
+    if (req.user.role !== "super-admin" && req.user.role !== "admin") {
       filter.assignedTo = req.user._id;
     }
 
@@ -385,7 +385,7 @@ exports.getLeadStats = async (req, res) => {
 exports.lookupLead = async (req, res) => {
   try {
     // Only super-admin can use lookup
-    if (req.user.role !== "super-admin") {
+    if (req.user.role !== "super-admin" && req.user.role !== "admin") {
       return res.status(403).json({
         message: "Access denied. Lead lookup is only available to Super Admin."
       });

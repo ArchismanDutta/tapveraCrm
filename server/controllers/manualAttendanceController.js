@@ -73,11 +73,15 @@ const createManualAttendance = async (req, res) => {
       });
     }
 
-    // Validate punch times
+    // OPTION C: Parse times directly as UTC ISO strings (no conversion needed)
+    // Frontend sends times in format: "2025-10-07T14:00:00.000Z"
+    // This represents the actual local time stored as UTC
     let punchIn = null;
     let punchOut = null;
 
     if (punchInTime) {
+      console.log("🔍 RAW punchInTime received from frontend:", punchInTime);
+
       punchIn = new Date(punchInTime);
       if (isNaN(punchIn.getTime())) {
         return res.status(400).json({
@@ -85,9 +89,18 @@ const createManualAttendance = async (req, res) => {
           error: "Invalid punch in time format"
         });
       }
+
+      console.log("📅 Parsed punch in (UTC):", {
+        original: punchInTime,
+        parsed: punchIn.toISOString(),
+        utcHours: punchIn.getUTCHours(),
+        utcMinutes: punchIn.getUTCMinutes()
+      });
     }
 
     if (punchOutTime) {
+      console.log("🔍 RAW punchOutTime received from frontend:", punchOutTime);
+
       punchOut = new Date(punchOutTime);
       if (isNaN(punchOut.getTime())) {
         return res.status(400).json({
@@ -95,6 +108,13 @@ const createManualAttendance = async (req, res) => {
           error: "Invalid punch out time format"
         });
       }
+
+      console.log("📅 Parsed punch out (UTC):", {
+        original: punchOutTime,
+        parsed: punchOut.toISOString(),
+        utcHours: punchOut.getUTCHours(),
+        utcMinutes: punchOut.getUTCMinutes()
+      });
     }
 
     if (punchIn && punchOut && punchOut <= punchIn) {
@@ -290,7 +310,7 @@ const updateManualAttendance = async (req, res) => {
     // Clear existing events
     employee.events = [];
 
-    // Validate and add new punch times
+    // OPTION C: Parse times directly as UTC ISO strings (no conversion needed)
     let punchIn = null;
     let punchOut = null;
 
@@ -302,6 +322,7 @@ const updateManualAttendance = async (req, res) => {
           error: "Invalid punch in time format"
         });
       }
+      console.log("📅 Parsed punch in (update, UTC):", { original: punchInTime, parsed: punchIn.toISOString() });
     }
 
     if (punchOutTime) {
@@ -312,6 +333,7 @@ const updateManualAttendance = async (req, res) => {
           error: "Invalid punch out time format"
         });
       }
+      console.log("📅 Parsed punch out (update, UTC):", { original: punchOutTime, parsed: punchOut.toISOString() });
     }
 
     if (punchIn && punchOut && punchOut <= punchIn) {
@@ -538,6 +560,13 @@ const getManualAttendanceRecords = async (req, res) => {
           const User = require("../models/User");
           const user = await User.findById(employee.userId).select('name email department profileImage');
 
+          // Get approvedBy details from the first manual event
+          let approvedByUser = null;
+          const manualEvent = employee.events.find(e => e.manual && e.approvedBy);
+          if (manualEvent && manualEvent.approvedBy) {
+            approvedByUser = await User.findById(manualEvent.approvedBy).select('name email role');
+          }
+
           manualRecords.push({
             _id: `${employee.userId}_${record.date.toISOString().split('T')[0]}`, // Composite ID
             userId: employee.userId,
@@ -547,7 +576,8 @@ const getManualAttendanceRecords = async (req, res) => {
             events: employee.events,
             shift: employee.assignedShift,
             leave: employee.leaveInfo,
-            metadata: employee.metadata
+            metadata: employee.metadata,
+            approvedBy: approvedByUser
           });
         }
       }

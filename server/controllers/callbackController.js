@@ -4,7 +4,7 @@ const User = require("../models/User");
 
 // Helper function to check if user has access to Callback Management
 const canAccessCallbackManagement = (user) => {
-  return user.role === "super-admin" || user.department === "marketingAndSales";
+  return user.role === "super-admin" || user.role === "admin" || user.department === "marketingAndSales";
 };
 
 // @desc    Create a new callback
@@ -44,7 +44,7 @@ exports.createCallback = async (req, res) => {
     }
 
     // Check if user has access to this lead
-    if (req.user.role !== "super-admin" && lead.assignedTo.toString() !== req.user._id.toString()) {
+    if (req.user.role !== "super-admin" && req.user.role !== "admin" && lead.assignedTo.toString() !== req.user._id.toString()) {
       return res.status(403).json({ message: "Access denied. You can only create callbacks for your assigned leads." });
     }
 
@@ -52,8 +52,8 @@ exports.createCallback = async (req, res) => {
     let assignedToUser = assignedTo;
     if (!assignedToUser) {
       // If not specified, assign to current user (for employees) or lead's assigned user (for super-admin)
-      assignedToUser = req.user.role === "super-admin" ? lead.assignedTo : req.user._id;
-    } else if (req.user.role !== "super-admin") {
+      assignedToUser = req.user.role === "super-admin" || req.user.role === "admin" ? lead.assignedTo : req.user._id;
+    } else if (req.user.role !== "super-admin" && req.user.role !== "admin") {
       // Non-super-admin users can only assign to themselves
       if (assignedTo !== req.user._id.toString()) {
         return res.status(403).json({ message: "You can only assign callbacks to yourself. Super Admin can assign to anyone." });
@@ -138,7 +138,7 @@ exports.getCallbacks = async (req, res) => {
     }
 
     // Role-based filtering
-    if (req.user.role !== "super-admin") {
+    if (req.user.role !== "super-admin" && req.user.role !== "admin") {
       // Non-super-admin users can only see their assigned callbacks
       filter.assignedTo = req.user._id;
     } else if (assignedTo) {
@@ -222,7 +222,7 @@ exports.getCallbackById = async (req, res) => {
 
     // Check access permissions
     if (
-      req.user.role !== "super-admin" &&
+      req.user.role !== "super-admin" && req.user.role !== "admin" &&
       callback.assignedTo._id.toString() !== req.user._id.toString()
     ) {
       return res.status(403).json({ message: "Access denied. You can only view your assigned callbacks." });
@@ -261,7 +261,7 @@ exports.updateCallback = async (req, res) => {
 
     // Check permissions
     const isAssigned = callback.assignedTo.toString() === req.user._id.toString();
-    const isSuperAdmin = req.user.role === "super-admin";
+    const isSuperAdmin = req.user.role === "super-admin" || req.user.role === "admin";
 
     if (!isAssigned && !isSuperAdmin) {
       return res.status(403).json({ message: "Access denied. You can only edit your assigned callbacks." });
@@ -334,7 +334,7 @@ exports.deleteCallback = async (req, res) => {
     }
 
     // Only super-admin can delete
-    if (req.user.role !== "super-admin") {
+    if (req.user.role !== "super-admin" && req.user.role !== "admin") {
       return res.status(403).json({ message: "Access denied. Only Super Admin can delete callbacks." });
     }
 
@@ -368,7 +368,7 @@ exports.getCallbackStats = async (req, res) => {
     const filter = {};
 
     // Filter by user role
-    if (req.user.role !== "super-admin") {
+    if (req.user.role !== "super-admin" && req.user.role !== "admin") {
       filter.assignedTo = req.user._id;
     }
 
@@ -448,7 +448,7 @@ exports.getCallbacksByLead = async (req, res) => {
 
     // Check access permissions
     if (
-      req.user.role !== "super-admin" &&
+      req.user.role !== "super-admin" && req.user.role !== "admin" &&
       lead.assignedTo.toString() !== req.user._id.toString()
     ) {
       return res.status(403).json({ message: "Access denied. You can only view callbacks for your assigned leads." });

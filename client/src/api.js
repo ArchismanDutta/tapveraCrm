@@ -1,4 +1,5 @@
 import axios from "axios";
+import timeUtils from "./utils/timeUtils";
 
 const API = axios.create({
   baseURL: import.meta.env.VITE_API_BASE || "http://localhost:5000",
@@ -197,19 +198,9 @@ export const attendanceUtils = {
     return hours + (minutes / 60);
   },
 
-  // Format time consistently
+  // Format time consistently - Using centralized time utilities
   formatTime: (dateString) => {
-    if (!dateString) return "--";
-    try {
-      const date = new Date(dateString);
-      return date.toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-        hour12: true
-      });
-    } catch {
-      return "--";
-    }
+    return timeUtils.formatTime(dateString);
   },
 
   // Standardized status determination based on work hours

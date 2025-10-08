@@ -15,19 +15,74 @@ class AttendanceService {
       MIN_HALF_DAY_HOURS: 4,
       MIN_FULL_DAY_HOURS: 8,
       MAX_WORK_HOURS: 12,
-      LATE_THRESHOLD_MINUTES: 15,
+      LATE_THRESHOLD_MINUTES: 0, // STRICT ENFORCEMENT: Even 1 minute late counts as late
       BREAK_TIME_LIMIT_MINUTES: 60,
       MAX_DAILY_WORK_HOURS: 20,
-      MIN_SESSION_DURATION_SECONDS: 30
+      MIN_SESSION_DURATION_SECONDS: 30,
+      EARLY_PUNCH_IN_ALLOWED: true, // No restriction on early punch-in
+      TIMEZONE: 'Asia/Kolkata' // IST timezone for all calculations
     };
 
-    // Standard shifts
+    // Standard shifts (all times in IST)
     this.STANDARD_SHIFTS = {
       MORNING: { name: "Day Shift (Morning Shift)", startTime: "09:00", endTime: "18:00", durationHours: 9 },
       EVENING: { name: "Evening Shift", startTime: "13:00", endTime: "22:00", durationHours: 9 },
       NIGHT: { name: "Night Shift", startTime: "20:00", endTime: "05:00", durationHours: 9 },
       EARLY: { name: "Early Morning Shift", startTime: "05:30", endTime: "14:30", durationHours: 9 }
     };
+  }
+
+  /**
+   * Convert UTC timestamp to IST time components
+   * This ensures timezone-independent calculations regardless of server timezone
+   * @param {Date} utcDate - UTC timestamp
+   * @returns {Object} { hour, minute, second } in IST
+   */
+  getISTTimeComponents(utcDate) {
+    if (!utcDate) return null;
+
+    const date = new Date(utcDate);
+
+    // Use Intl.DateTimeFormat to get IST components
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: this.CONSTANTS.TIMEZONE,
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    });
+
+    const parts = formatter.formatToParts(date);
+    const hour = parseInt(parts.find(p => p.type === 'hour').value);
+    const minute = parseInt(parts.find(p => p.type === 'minute').value);
+    const second = parseInt(parts.find(p => p.type === 'second').value);
+
+    return { hour, minute, second };
+  }
+
+  /**
+   * Get IST date components from UTC timestamp
+   * @param {Date} utcDate - UTC timestamp
+   * @returns {Object} { year, month, day } in IST
+   */
+  getISTDateComponents(utcDate) {
+    if (!utcDate) return null;
+
+    const date = new Date(utcDate);
+
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: this.CONSTANTS.TIMEZONE,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    });
+
+    const parts = formatter.formatToParts(date);
+    const year = parseInt(parts.find(p => p.type === 'year').value);
+    const month = parseInt(parts.find(p => p.type === 'month').value);
+    const day = parseInt(parts.find(p => p.type === 'day').value);
+
+    return { year, month, day };
   }
 
   /**
@@ -56,17 +111,20 @@ class AttendanceService {
    * Record punch event for employee
    */
   async recordPunchEvent(userId, eventType, options = {}) {
+    // Use actual UTC timestamp - JavaScript Date is always UTC internally
     const now = new Date();
+
+    console.log(`⏰ Recording punch event:`);
+    console.log(`   User: ${userId}`);
+    console.log(`   Event: ${eventType}`);
+    console.log(`   UTC timestamp: ${now.toISOString()}`);
+    console.log(`   Server local time: ${now.toLocaleString()}`);
 
     // IMPORTANT: For night shifts, determine the correct date
     // First, get user's shift to determine correct date
     const userShift = await this.getUserShift(userId, now);
     const today = this.getAttendanceDateForPunch(now, userShift);
 
-    console.log(`📅 Recording punch event:`);
-    console.log(`   User: ${userId}`);
-    console.log(`   Event: ${eventType}`);
-    console.log(`   Punch time: ${now.toLocaleString()}`);
     console.log(`   User shift: ${userShift?.startTime}-${userShift?.endTime}`);
     console.log(`   Assigned to date: ${today.toISOString().split('T')[0]}`);
 
@@ -84,10 +142,10 @@ class AttendanceService {
     // Validate punch event
     this.validatePunchEvent(employee, eventType, now);
 
-    // Add punch event
+    // Add punch event with actual UTC timestamp
     const punchEvent = {
       type: eventType,
-      timestamp: now,
+      timestamp: now,  // Store actual UTC timestamp
       location: options.location,
       ipAddress: options.ipAddress,
       device: options.device,
@@ -261,6 +319,9 @@ class AttendanceService {
 
   /**
    * Validate punch event against business rules
+   * @param {Object} employee - Employee record
+   * @param {String} eventType - Type of punch event
+   * @param {Date} timestamp - Timestamp of the event
    */
   validatePunchEvent(employee, eventType, timestamp) {
     const lastEvent = employee.events[employee.events.length - 1];
@@ -358,8 +419,13 @@ class AttendanceService {
         case 'BREAK_START':
           if (currentWorkStart) {
             const sessionDuration = (timestamp - currentWorkStart) / 1000;
-            workSeconds += sessionDuration;
-            longestWork = Math.max(longestWork, sessionDuration);
+            console.log(`   🔢 BREAK_START work session: ${timestamp.getTime()} - ${currentWorkStart.getTime()} = ${sessionDuration}s`);
+            if (sessionDuration > 0) {
+              workSeconds += sessionDuration;
+              longestWork = Math.max(longestWork, sessionDuration);
+            } else {
+              console.warn(`   ⚠️ Negative work session duration detected: ${sessionDuration}s - skipping`);
+            }
             currentWorkStart = null;
           }
           currentBreakStart = timestamp;
@@ -399,19 +465,37 @@ class AttendanceService {
 
     // Handle ongoing sessions (for current day)
     const now = new Date();
+
+    console.log(`⏱️ Duration Calculation Debug:`);
+    console.log(`   Current UTC time: ${now.toISOString()}`);
+    console.log(`   Arrival time: ${arrivalTime ? new Date(arrivalTime).toISOString() : 'null'}`);
+    console.log(`   Current work start: ${currentWorkStart ? new Date(currentWorkStart).toISOString() : 'null'}`);
+    console.log(`   Current break start: ${currentBreakStart ? new Date(currentBreakStart).toISOString() : 'null'}`);
+
     if (this.isSameDate(arrivalTime, now)) {
       if (currentWorkStart) {
-        workSeconds += (now - currentWorkStart) / 1000;
+        const duration = (now - currentWorkStart) / 1000;
+        console.log(`   🔢 Work duration calculation: ${duration}s`);
+        workSeconds += duration;
       }
       if (currentBreakStart) {
-        breakSeconds += (now - currentBreakStart) / 1000;
+        const duration = (now - currentBreakStart) / 1000;
+        console.log(`   🔢 Break duration calculation: ${duration}s`);
+        breakSeconds += duration;
       }
     }
+
+    console.log(`   📊 Final calculated durations: work=${workSeconds}s, break=${breakSeconds}s`);
 
     // Calculate all derived fields
     const totalSeconds = workSeconds + breakSeconds;
     const workHours = workSeconds / 3600;
     const breakHours = breakSeconds / 3600;
+
+    // Check if employee has flexible shift (flexible permanent employees are never "late")
+    const isFlexibleShift = employee.assignedShift?.isFlexible ||
+                           employee.assignedShift?.name?.toLowerCase().includes('flexible') ||
+                           false;
 
     employee.calculated = {
       arrivalTime,
@@ -426,7 +510,8 @@ class AttendanceService {
 
       isPresent: workSeconds > 0,
       isAbsent: workSeconds === 0,
-      isLate: this.calculateIsLate(arrivalTime, employee.assignedShift, attendanceDate),
+      // Flexible employees are NEVER marked as late (no shift start time to compare against)
+      isLate: isFlexibleShift ? false : this.calculateIsLate(arrivalTime, employee.assignedShift, attendanceDate),
       isHalfDay: workHours >= this.CONSTANTS.MIN_HALF_DAY_HOURS && workHours < this.CONSTANTS.MIN_FULL_DAY_HOURS,
       isFullDay: workHours >= this.CONSTANTS.MIN_FULL_DAY_HOURS,
       isOvertime: workHours > this.CONSTANTS.MAX_WORK_HOURS,
@@ -520,6 +605,10 @@ class AttendanceService {
       const employee = record.getEmployee(userId);
 
       if (employee) {
+        // CRITICAL: Recalculate data with current time to get accurate live durations
+        // This ensures ongoing work/break sessions show correct elapsed time
+        this.recalculateEmployeeData(employee, record.date);
+
         // Format calculated data to ensure dates are ISO strings, not Date objects
         const calculated = { ...employee.calculated };
         if (calculated.arrivalTime instanceof Date) {
@@ -682,10 +771,17 @@ class AttendanceService {
   /**
    * Get the correct attendance date for a punch event
    * For night shifts, punches after midnight belong to the PREVIOUS day's shift
+   * Uses IST timezone regardless of server timezone
    */
   getAttendanceDateForPunch(punchTime, shift) {
     const punch = new Date(punchTime);
-    const punchHour = punch.getHours();
+
+    // Get punch hour in IST (timezone-independent)
+    const istTime = this.getISTTimeComponents(punchTime);
+    if (!istTime) {
+      return this.normalizeDate(punch);
+    }
+    const punchHour = istTime.hour;
 
     // If no shift or not a night shift, use the punch date
     if (!shift || !shift.startTime || !shift.endTime) {
@@ -702,31 +798,31 @@ class AttendanceService {
       // For night shifts, if punch is BEFORE shift end time AND after midnight,
       // it belongs to PREVIOUS day's shift
       // Example: Shift 20:00-05:00
-      //   - Punch at 18:00 = Sept 10 → Record for Sept 10 ✅
-      //   - Punch at 22:00 = Sept 10 → Record for Sept 10 ✅
-      //   - Punch at 02:00 = Sept 11 → Record for Sept 10 ✅ (belongs to previous shift)
-      //   - Punch at 06:00 = Sept 11 → Record for Sept 11 ✅ (after shift ends)
+      //   - Punch at 18:00 IST = Sept 10 → Record for Sept 10 ✅
+      //   - Punch at 22:00 IST = Sept 10 → Record for Sept 10 ✅
+      //   - Punch at 02:00 IST = Sept 11 → Record for Sept 10 ✅ (belongs to previous shift)
+      //   - Punch at 06:00 IST = Sept 11 → Record for Sept 11 ✅ (after shift ends)
 
       if (punchHour < endHour) {
-        // Punch is in the early morning hours (00:00 - endHour)
+        // Punch is in the early morning hours (00:00 - endHour) IST
         // This belongs to YESTERDAY's night shift
         const yesterday = new Date(punch);
         yesterday.setDate(yesterday.getDate() - 1);
-        console.log(`🌙 Night shift detected: Punch at ${punch.toLocaleString()} (hour ${punchHour}) before shift end ${endHour}:00`);
+        console.log(`🌙 Night shift detected: Punch at ${punchHour}:00 IST before shift end ${endHour}:00`);
         console.log(`   Assigning to previous day: ${yesterday.toISOString().split('T')[0]}`);
         return this.normalizeDate(yesterday);
       } else if (punchHour >= startHour) {
-        // Punch is in the evening (after shift start)
+        // Punch is in the evening (after shift start) IST
         // This belongs to TODAY's night shift
-        console.log(`🌙 Night shift detected: Punch at ${punch.toLocaleString()} (hour ${punchHour}) after shift start ${startHour}:00`);
+        console.log(`🌙 Night shift detected: Punch at ${punchHour}:00 IST after shift start ${startHour}:00`);
         console.log(`   Assigning to current day: ${punch.toISOString().split('T')[0]}`);
         return this.normalizeDate(punch);
       } else {
-        // Punch is between endHour and startHour (the "off" hours)
-        // For example, punching at 10:00 AM for a 20:00-05:00 shift
+        // Punch is between endHour and startHour (the "off" hours) IST
+        // For example, punching at 10:00 AM IST for a 20:00-05:00 shift
         // This is unusual - could be early punch for today's shift
         // Assign to today
-        console.log(`⚠️  Unusual punch time: ${punch.toLocaleString()} (hour ${punchHour}) between shift end ${endHour}:00 and start ${startHour}:00`);
+        console.log(`⚠️  Unusual punch time: Punch at ${punchHour}:00 IST between shift end ${endHour}:00 and start ${startHour}:00`);
         console.log(`   Assigning to current day: ${punch.toISOString().split('T')[0]}`);
         return this.normalizeDate(punch);
       }
@@ -768,13 +864,32 @@ class AttendanceService {
     return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
   }
 
+  /**
+   * Calculate if employee is late based on shift start time
+   * STRICT ENFORCEMENT: Even 1 second late counts as late (NO GRACE PERIOD)
+   * Times are compared in IST regardless of server timezone
+   *
+   * NOTE: Flexible permanent employees are NEVER marked as late
+   *
+   * @param {Date} arrivalTime - First punch in time (UTC timestamp from database)
+   * @param {Object} shift - Employee's assigned shift { startTime, endTime, ... } (times in IST)
+   * @param {Date} attendanceDate - The attendance date (for night shift handling)
+   * @returns {Boolean} - True if late
+   */
   calculateIsLate(arrivalTime, shift, attendanceDate = null) {
     console.log('🔍 calculateIsLate called with:', {
       arrivalTime,
       shift,
       attendanceDate,
-      hasStartTime: !!shift?.startTime
+      hasStartTime: !!shift?.startTime,
+      isFlexible: shift?.isFlexible
     });
+
+    // Flexible permanent employees are NEVER late (they can work any 9 hours in 24h period)
+    if (shift?.isFlexible || shift?.name?.toLowerCase().includes('flexible')) {
+      console.log('✅ calculateIsLate: Flexible shift detected - NEVER LATE');
+      return false;
+    }
 
     if (!arrivalTime || !shift?.startTime) {
       console.log('❌ calculateIsLate: Missing data - RETURNING FALSE', {
@@ -785,57 +900,76 @@ class AttendanceService {
       return false;
     }
 
-    const arrival = new Date(arrivalTime);
+    // Parse shift start time (defined in IST)
     const [shiftHour, shiftMin] = shift.startTime.split(':').map(Number);
 
-    // IMPORTANT: For night shifts, use the attendance date (not arrival date) as the base
-    // for calculating shift start time
-    // Example: Night shift 20:00-05:00 on Sept 10
-    //   - Employee punches at 02:00 AM Sept 11
-    //   - Attendance date is Sept 10 (determined by getAttendanceDateForPunch)
-    //   - Shift start should be Sept 10 at 20:00, not Sept 11 at 20:00
-    const baseDate = attendanceDate ? new Date(attendanceDate) : new Date(arrival);
+    // Get arrival time components in IST (timezone-independent)
+    const istTime = this.getISTTimeComponents(arrivalTime);
+    if (!istTime) {
+      console.log('❌ calculateIsLate: Failed to get IST components');
+      return false;
+    }
 
-    // CRITICAL: Extract date components to avoid timezone issues
-    // When baseDate is stored as UTC but represents a local date,
-    // we need to use its local date components, not just setHours()
-    const year = baseDate.getFullYear();
-    const month = baseDate.getMonth();
-    const day = baseDate.getDate();
+    const { hour: arrivalHour, minute: arrivalMin, second: arrivalSec } = istTime;
 
-    // Create shift start time on the same LOCAL date
-    const shiftStart = new Date(year, month, day, shiftHour, shiftMin, 0, 0);
+    // Convert to total seconds since midnight IST for precise comparison
+    const arrivalTotalSeconds = arrivalHour * 3600 + arrivalMin * 60 + arrivalSec;
+    const shiftStartSeconds = shiftHour * 3600 + shiftMin * 60; // Shift starts at 0 seconds
 
-    // No grace period - any lateness counts as late
-    const isLate = arrival > shiftStart;
-    const minutesLate = Math.round((arrival - shiftStart) / 60000);
+    // STRICT ENFORCEMENT: Even 1 second late counts as late
+    // If arrival time is AFTER shift start (even by 1 second), employee is late
+    const secondsLate = arrivalTotalSeconds - shiftStartSeconds;
+    const isLate = secondsLate > 0;
+    const minutesLate = Math.max(0, Math.floor(secondsLate / 60));
 
-    console.log('🕐 calculateIsLate RESULT:', {
-      arrivalTime: arrival.toISOString(),
-      arrivalLocal: arrival.toLocaleString(),
-      shiftStartTime: shift.startTime,
-      baseDate: baseDate.toISOString().split('T')[0],
-      shiftStartCalculated: shiftStart.toISOString(),
-      shiftStartLocal: shiftStart.toLocaleString(),
-      comparison: `${arrival.toISOString()} > ${shiftStart.toISOString()}`,
+    console.log('🕐 calculateIsLate RESULT (STRICT MODE - NO GRACE PERIOD):', {
+      arrivalTimeUTC: new Date(arrivalTime).toISOString(),
+      arrivalIST: `${String(arrivalHour).padStart(2, '0')}:${String(arrivalMin).padStart(2, '0')}:${String(arrivalSec).padStart(2, '0')} IST`,
+      shiftStartTime: `${shift.startTime}:00 IST`,
+      arrivalSeconds: arrivalTotalSeconds,
+      shiftStartSeconds,
+      secondsLate,
+      minutesLate,
       isLate,
-      minutesLate
+      verdict: secondsLate < 0 ? `✅ EARLY by ${Math.abs(secondsLate)}s` :
+               secondsLate === 0 ? '✅ ON-TIME (exactly on time)' :
+               `❌ LATE by ${secondsLate}s (${minutesLate} min ${secondsLate % 60}s)`
     });
 
     return isLate;
   }
 
+  /**
+   * Calculate exact late minutes for employee
+   * STRICT ENFORCEMENT: Counts seconds and rounds up to next minute
+   * Uses IST timezone regardless of server timezone
+   *
+   * @param {Date} arrivalTime - Arrival timestamp (UTC from database)
+   * @param {String} shiftStartTime - Shift start time in HH:MM format (IST)
+   * @returns {Number} - Minutes late (0 if early/on-time)
+   */
   calculateLateMinutes(arrivalTime, shiftStartTime) {
     if (!arrivalTime || !shiftStartTime) return 0;
 
-    const arrival = new Date(arrivalTime);
+    // Parse shift start time (in IST)
     const [shiftHour, shiftMin] = shiftStartTime.split(':').map(Number);
-    const shiftStart = new Date(arrival);
-    shiftStart.setHours(shiftHour, shiftMin, 0, 0);
 
-    if (arrival <= shiftStart) return 0;
+    // Get arrival time components in IST (timezone-independent)
+    const istTime = this.getISTTimeComponents(arrivalTime);
+    if (!istTime) return 0;
 
-    return Math.floor((arrival - shiftStart) / 60000); // Convert to minutes
+    const { hour: arrivalHour, minute: arrivalMin, second: arrivalSec } = istTime;
+
+    // Convert to total seconds since midnight IST for precise calculation
+    const arrivalTotalSeconds = arrivalHour * 3600 + arrivalMin * 60 + arrivalSec;
+    const shiftStartSeconds = shiftHour * 3600 + shiftMin * 60;
+
+    // Calculate seconds late
+    const secondsLate = Math.max(0, arrivalTotalSeconds - shiftStartSeconds);
+
+    // Round up to next minute if there are any remaining seconds
+    // Example: 1 minute 30 seconds late = 2 minutes late (rounded up)
+    return Math.ceil(secondsLate / 60);
   }
 
   updatePerformanceMetrics(employee) {

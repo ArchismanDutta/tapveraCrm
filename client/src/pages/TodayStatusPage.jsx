@@ -11,6 +11,7 @@ import PunchOutConfirmPopup from "../components/workstatus/PunchOutConfirmPopup"
 import { toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import newAttendanceService from "../services/newAttendanceService";
+import timeUtils from "../utils/timeUtils";
 
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
@@ -60,6 +61,7 @@ const TodayStatusPage = ({ onLogout }) => {
   const [status, setStatus] = useState(null);
 
   // Centralized arrival time calculation utility
+  // OPTION C: Use UTC extraction (no timezone conversion)
   const getFormattedArrivalTime = useCallback((statusData) => {
     if (!statusData) return "--";
 
@@ -76,14 +78,8 @@ const TodayStatusPage = ({ onLogout }) => {
     );
 
     if (firstPunchIn && firstPunchIn.time) {
-      const arrivalDate = new Date(firstPunchIn.time);
-      if (!isNaN(arrivalDate.getTime())) {
-        return arrivalDate.toLocaleTimeString([], {
-          hour: "2-digit",
-          minute: "2-digit",
-          hour12: true,
-        });
-      }
+      // OPTION C: Use timeUtils to extract UTC components (no timezone conversion)
+      return timeUtils.formatTime(firstPunchIn.time);
     }
 
     // Fallback to server-provided formatted time
@@ -91,16 +87,9 @@ const TodayStatusPage = ({ onLogout }) => {
       return statusData.arrivalTimeFormatted;
     }
 
-    // Last fallback: parse server UTC time to local
+    // Last fallback: parse server UTC time using timeUtils (Option C)
     if (statusData.arrivalTime) {
-      const arrivalDate = new Date(statusData.arrivalTime);
-      if (!isNaN(arrivalDate.getTime())) {
-        return arrivalDate.toLocaleTimeString([], {
-          hour: "2-digit",
-          minute: "2-digit",
-          hour12: true,
-        });
-      }
+      return timeUtils.formatTime(statusData.arrivalTime);
     }
 
     return "--";
@@ -501,14 +490,10 @@ const TodayStatusPage = ({ onLogout }) => {
           // Use current UTC time for arrival time (matches backend expectation)
           const currentUTCTime = new Date();
           optimisticStatus.arrivalTime = currentUTCTime.toISOString();
-          // Format for display using local time
-          optimisticStatus.arrivalTimeFormatted = currentUTCTime.toLocaleTimeString([], {
-            hour: "2-digit",
-            minute: "2-digit",
-            hour12: true,
-          });
+          // OPTION C: Format for display using UTC extraction (no timezone conversion)
+          optimisticStatus.arrivalTimeFormatted = timeUtils.formatTime(currentUTCTime.toISOString());
           console.log("🚀 Setting arrival time optimistically (UTC):", optimisticStatus.arrivalTime);
-          console.log("🚀 Arrival time formatted (local):", optimisticStatus.arrivalTimeFormatted);
+          console.log("🚀 Arrival time formatted (Option C):", optimisticStatus.arrivalTimeFormatted);
         }
 
         setStatus(optimisticStatus);
@@ -593,17 +578,11 @@ const TodayStatusPage = ({ onLogout }) => {
         });
       }, 100); // Very quick refresh attempt
 
-      // If server sends arrivalTime in UTC, convert to local formatted time
+      // If server sends arrivalTime in UTC, format for display using Option C
       if (serverStatus.arrivalTime && !serverStatus.arrivalTimeFormatted) {
-        const arrivalDate = new Date(serverStatus.arrivalTime);
-        if (!isNaN(arrivalDate.getTime())) {
-          serverStatus.arrivalTimeFormatted = arrivalDate.toLocaleTimeString([], {
-            hour: "2-digit",
-            minute: "2-digit",
-            hour12: true,
-          });
-          console.log("🕒 Converted server UTC arrival time to local:", serverStatus.arrivalTimeFormatted);
-        }
+        // OPTION C: Use timeUtils to extract UTC components (no timezone conversion)
+        serverStatus.arrivalTimeFormatted = timeUtils.formatTime(serverStatus.arrivalTime);
+        console.log("🕒 Formatted server arrival time (Option C):", serverStatus.arrivalTimeFormatted);
       }
 
       setStatus(serverStatus);
@@ -708,11 +687,13 @@ const TodayStatusPage = ({ onLogout }) => {
     const timers = [];
     let workStartTime = null;
     let breakStartTime = null;
+    // Use standard JavaScript Date (UTC internally)
     const now = new Date();
 
     // Calculate accurate start times and current durations from timeline if available
     if (status.timeline && Array.isArray(status.timeline)) {
-      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      // Get today's start in user's local timezone
+      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
 
       // Find the last work session start time
       const lastWorkStart = [...status.timeline]
@@ -751,7 +732,8 @@ const TodayStatusPage = ({ onLogout }) => {
     // ALWAYS calculate from timeline to ensure accuracy across page loads
     if (status.timeline && Array.isArray(status.timeline)) {
       console.log("📋 Timeline events:", status.timeline);
-      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      // Get today's start in user's local timezone
+      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
       let totalWorkSeconds = 0;
 
       // Find all punch in/out and resume/break events
