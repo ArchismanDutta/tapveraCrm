@@ -38,6 +38,7 @@ const SalaryManagement = ({ onLogout }) => {
     workingDays: "",
     paidDays: "",
     lateDays: "0",
+    halfDays: "0",
     manualDeductions: {
       tds: "0",
       other: "0",
@@ -93,6 +94,8 @@ const SalaryManagement = ({ onLogout }) => {
 
       if (response.ok) {
         const data = await response.json();
+        console.log("Salary records received:", data);
+        console.log("Sample record structure:", data[0]);
         setSalaryRecords(data);
       }
     } catch (error) {
@@ -104,7 +107,7 @@ const SalaryManagement = ({ onLogout }) => {
   };
 
   const calculatePreview = () => {
-    const { monthlySalary, workingDays, paidDays, lateDays, manualDeductions } = formData;
+    const { monthlySalary, workingDays, paidDays, lateDays, halfDays, manualDeductions } = formData;
 
     if (!monthlySalary || !workingDays || !paidDays) {
       return null;
@@ -114,6 +117,7 @@ const SalaryManagement = ({ onLogout }) => {
     const working = parseFloat(workingDays);
     const paid = parseFloat(paidDays);
     const late = parseFloat(lateDays) || 0;
+    const half = parseFloat(halfDays) || 0;
 
     // Calculate salary components (50%, 35%, 5%, 5%, 5%)
     const salaryComponents = {
@@ -139,12 +143,21 @@ const SalaryManagement = ({ onLogout }) => {
     const esiApplicable = salary <= 21000;
 
     // Calculate late deduction
-    // Every 3 lates = 1 day salary deduction
+    // No deduction for first 2 late days
+    // From 3rd late onwards: Every 3 lates = 1 day salary deduction
     // Extra lates (not in multiples of 3) = ₹200 per late
     const perDaySalary = salary / working;
-    const fullLateDays = Math.floor(late / 3); // Number of full 3-day cycles
-    const extraLateDays = late % 3; // Remaining lates (1 or 2)
-    const lateDeduction = (fullLateDays * perDaySalary) + (extraLateDays * 200);
+    let lateDeduction = 0;
+
+    if (late >= 3) {
+      const fullLateDays = Math.floor(late / 3); // Number of full 3-day cycles
+      const extraLateDays = late % 3; // Remaining lates (1 or 2)
+      lateDeduction = (fullLateDays * perDaySalary) + (extraLateDays * 200);
+    }
+
+    // Calculate half-day deduction
+    // Each half-day = 50% of per-day salary deduction
+    const halfDayDeduction = half * (perDaySalary * 0.5);
 
     // Calculate PTax
     const calculatePTax = (sal) => {
@@ -165,7 +178,8 @@ const SalaryManagement = ({ onLogout }) => {
       tds: parseFloat(manualDeductions.tds) || 0,
       other: parseFloat(manualDeductions.other) || 0,
       advance: parseFloat(manualDeductions.advance) || 0,
-      lateDeduction: lateDeduction
+      lateDeduction: lateDeduction,
+      halfDayDeduction: halfDayDeduction
     };
 
     const totalDeductions = Object.values(deductions).reduce((sum, val) => sum + val, 0);
@@ -197,7 +211,7 @@ const SalaryManagement = ({ onLogout }) => {
   useEffect(() => {
     const preview = calculatePreview();
     setPreviewData(preview);
-  }, [formData.monthlySalary, formData.workingDays, formData.paidDays, formData.lateDays, formData.manualDeductions]);
+  }, [formData.monthlySalary, formData.workingDays, formData.paidDays, formData.lateDays, formData.halfDays, formData.manualDeductions]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -213,6 +227,7 @@ const SalaryManagement = ({ onLogout }) => {
         workingDays: parseFloat(formData.workingDays),
         paidDays: parseFloat(formData.paidDays),
         lateDays: parseFloat(formData.lateDays) || 0,
+        halfDays: parseFloat(formData.halfDays) || 0,
         manualDeductions: {
           tds: parseFloat(formData.manualDeductions.tds) || 0,
           other: parseFloat(formData.manualDeductions.other) || 0,
@@ -282,6 +297,7 @@ const SalaryManagement = ({ onLogout }) => {
       workingDays: record.workingDays || "",
       paidDays: record.paidDays || "",
       lateDays: record.lateDays || "0",
+      halfDays: record.halfDays || "0",
       manualDeductions: {
         tds: record.deductions?.tds || "0",
         other: record.deductions?.other || "0",
@@ -306,6 +322,7 @@ const SalaryManagement = ({ onLogout }) => {
       workingDays: "",
       paidDays: "",
       lateDays: "0",
+      halfDays: "0",
       manualDeductions: {
         tds: "0",
         other: "0",
@@ -463,13 +480,19 @@ const SalaryManagement = ({ onLogout }) => {
                         </div>
                       </td>
                       <td className="px-6 py-4">
-                        <div className="text-green-400 font-medium">{formatCurrency(record.grossTotal)}</div>
+                        <div className="text-green-400 font-medium">
+                          {formatCurrency(record.grossTotal || record.grossSalary || 0)}
+                        </div>
                       </td>
                       <td className="px-6 py-4">
-                        <div className="text-red-400 font-medium">{formatCurrency(record.totalDeductions)}</div>
+                        <div className="text-red-400 font-medium">
+                          {formatCurrency(record.totalDeductions || 0)}
+                        </div>
                       </td>
                       <td className="px-6 py-4">
-                        <div className="text-blue-400 font-medium text-lg">{formatCurrency(record.netPayment)}</div>
+                        <div className="text-blue-400 font-medium text-lg">
+                          {formatCurrency(record.netPayment || record.netSalary || 0)}
+                        </div>
                       </td>                      <td className="px-6 py-4">
                         <div className="flex items-center gap-2">
                           <button
@@ -630,6 +653,21 @@ const SalaryManagement = ({ onLogout }) => {
                           max="31"
                         />
                       </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-2">
+                          Half Days
+                        </label>
+                        <input
+                          type="number"
+                          value={formData.halfDays}
+                          onChange={(e) => setFormData(prev => ({ ...prev, halfDays: e.target.value }))}
+                          className="w-full px-4 py-3 bg-slate-700/50 border border-slate-600/50 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-green-500"
+                          placeholder="0"
+                          min="0"
+                          max="31"
+                        />
+                      </div>
                     </div>
                   </div>
 
@@ -744,6 +782,10 @@ const SalaryManagement = ({ onLogout }) => {
                           <div>
                             <div className="text-gray-400">Late Ded.</div>
                             <div className="text-white">-{formatCurrency(previewData.deductions.lateDeduction)}</div>
+                          </div>
+                          <div>
+                            <div className="text-gray-400">Half-Day Ded.</div>
+                            <div className="text-white">-{formatCurrency(previewData.deductions.halfDayDeduction)}</div>
                           </div>
                         </div>
                         <div className="flex justify-between items-center pt-3 border-t border-red-500/30">

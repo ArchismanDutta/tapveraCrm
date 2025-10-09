@@ -11,7 +11,7 @@ const { sendNotificationToUser } = require("../utils/websocket");
  * - Medical = 5% of salary
  * - Special Allowance = 5% of salary
  */
-function calculateSalaryBreakdown(monthlySalary, workingDays, paidDays, lateDays, manualDeductions = {}) {
+function calculateSalaryBreakdown(monthlySalary, workingDays, paidDays, lateDays, halfDays, manualDeductions = {}) {
   // Step 1: Calculate salary components (monthly breakdown)
   const salaryComponents = {
     basic: monthlySalary * 0.50,
@@ -37,9 +37,11 @@ function calculateSalaryBreakdown(monthlySalary, workingDays, paidDays, lateDays
   const esiApplicable = monthlySalary <= 21000;
 
   // Step 4: Calculate late deduction
-  // Formula: Every 3 lates = 1 day salary deduction
+  // No deduction for first 2 late days
+  // From 3rd late onwards: Every 3 lates = 1 day salary deduction
   // For lates not in multiples of 3 (4, 5, 7, 8, etc.), add ₹200 per extra late day
   // Examples:
+  // 0-2 lates = No deduction
   // 3 lates = 1 day deduction
   // 4 lates = 1 day deduction + ₹200
   // 5 lates = 1 day deduction + ₹400
@@ -47,9 +49,17 @@ function calculateSalaryBreakdown(monthlySalary, workingDays, paidDays, lateDays
   // 7 lates = 2 days deduction + ₹200
   // 9 lates = 3 days deduction
   const perDaySalary = monthlySalary / workingDays;
-  const fullLateDays = Math.floor(lateDays / 3); // Number of full 3-day cycles
-  const extraLateDays = lateDays % 3; // Remaining lates (1 or 2)
-  const lateDeduction = (fullLateDays * perDaySalary) + (extraLateDays * 200);
+  let lateDeduction = 0;
+
+  if (lateDays >= 3) {
+    const fullLateDays = Math.floor(lateDays / 3); // Number of full 3-day cycles
+    const extraLateDays = lateDays % 3; // Remaining lates (1 or 2)
+    lateDeduction = (fullLateDays * perDaySalary) + (extraLateDays * 200);
+  }
+
+  // Step 4.5: Calculate half-day deduction
+  // Formula: Each half-day = 50% of per-day salary deduction
+  const halfDayDeduction = halfDays * (perDaySalary * 0.5);
 
   // Step 5: Calculate deductions
   const deductions = {
@@ -70,7 +80,10 @@ function calculateSalaryBreakdown(monthlySalary, workingDays, paidDays, lateDays
     advance: manualDeductions.advance || 0,
 
     // Late deduction
-    lateDeduction: lateDeduction
+    lateDeduction: lateDeduction,
+
+    // Half-day deduction
+    halfDayDeduction: halfDayDeduction
   };
 
   // Step 6: Calculate employer contributions
@@ -129,6 +142,7 @@ exports.createPayslip = async (req, res) => {
       workingDays,
       paidDays,
       lateDays = 0,
+      halfDays = 0,
       manualDeductions = {}, // Optional: { tds, other, advance }
       remarks = ""
     } = req.body;
@@ -141,7 +155,7 @@ exports.createPayslip = async (req, res) => {
     }
 
     // Validate numeric values
-    if (monthlySalary <= 0 || workingDays <= 0 || paidDays < 0 || lateDays < 0) {
+    if (monthlySalary <= 0 || workingDays <= 0 || paidDays < 0 || lateDays < 0 || halfDays < 0) {
       return res.status(400).json({
         error: "Invalid numeric values provided"
       });
@@ -178,6 +192,7 @@ exports.createPayslip = async (req, res) => {
       workingDays,
       paidDays,
       lateDays,
+      halfDays,
       manualDeductions
     );
 
@@ -189,6 +204,7 @@ exports.createPayslip = async (req, res) => {
       workingDays,
       paidDays,
       lateDays,
+      halfDays,
       salaryComponents: calculations.salaryComponents,
       grossComponents: calculations.grossComponents,
       grossTotal: calculations.grossTotal,
@@ -252,12 +268,61 @@ exports.updatePayslip = async (req, res) => {
     // Store employee ID before update
     const employeeId = payslip.employee.toString();
 
-    // Update the payslip
-    Object.keys(updateData).forEach(key => {
-      if (key !== 'employee' && key !== 'payPeriod') { // Prevent changing employee and period
-        payslip[key] = updateData[key];
+    // If key salary fields are being updated, recalculate everything
+    const salaryFieldsUpdated = updateData.monthlySalary || updateData.workingDays ||
+                                 updateData.paidDays || updateData.lateDays !== undefined ||
+                                 updateData.halfDays !== undefined || updateData.manualDeductions;
+
+    if (salaryFieldsUpdated) {
+      // Use updated values or keep existing ones
+      const monthlySalary = updateData.monthlySalary || payslip.monthlySalary;
+      const workingDays = updateData.workingDays || payslip.workingDays;
+      const paidDays = updateData.paidDays !== undefined ? updateData.paidDays : payslip.paidDays;
+      const lateDays = updateData.lateDays !== undefined ? updateData.lateDays : (payslip.lateDays || 0);
+      const halfDays = updateData.halfDays !== undefined ? updateData.halfDays : (payslip.halfDays || 0);
+      const manualDeductions = updateData.manualDeductions || {
+        tds: payslip.deductions?.tds || 0,
+        other: payslip.deductions?.other || 0,
+        advance: payslip.deductions?.advance || 0
+      };
+
+      // Recalculate all salary components
+      const calculations = calculateSalaryBreakdown(
+        monthlySalary,
+        workingDays,
+        paidDays,
+        lateDays,
+        halfDays,
+        manualDeductions
+      );
+
+      // Update all calculated fields
+      payslip.monthlySalary = monthlySalary;
+      payslip.workingDays = workingDays;
+      payslip.paidDays = paidDays;
+      payslip.lateDays = lateDays;
+      payslip.halfDays = halfDays;
+      payslip.salaryComponents = calculations.salaryComponents;
+      payslip.grossComponents = calculations.grossComponents;
+      payslip.grossTotal = calculations.grossTotal;
+      payslip.deductions = calculations.deductions;
+      payslip.totalDeductions = calculations.totalDeductions;
+      payslip.employerContributions = calculations.employerContributions;
+      payslip.netPayment = calculations.netPayment;
+      payslip.ctc = calculations.ctc;
+
+      // Update remarks if provided
+      if (updateData.remarks !== undefined) {
+        payslip.remarks = updateData.remarks;
       }
-    });
+    } else {
+      // Just update non-salary fields
+      Object.keys(updateData).forEach(key => {
+        if (key !== 'employee' && key !== 'payPeriod') { // Prevent changing employee and period
+          payslip[key] = updateData[key];
+        }
+      });
+    }
 
     await payslip.save();
 

@@ -28,6 +28,10 @@ const payslipSchema = new mongoose.Schema({
     type: Number,
     default: 0
   },
+  halfDays: {
+    type: Number,
+    default: 0
+  },
 
   // Salary components (calculated from monthly salary)
   salaryComponents: {
@@ -60,7 +64,8 @@ const payslipSchema = new mongoose.Schema({
     tds: { type: Number, default: 0 },            // Manual entry
     other: { type: Number, default: 0 },          // Manual entry (penalty)
     advance: { type: Number, default: 0 },        // Manual entry
-    lateDeduction: { type: Number, default: 0 }   // Auto-calculated
+    lateDeduction: { type: Number, default: 0 },  // Auto-calculated
+    halfDayDeduction: { type: Number, default: 0 } // Auto-calculated (50% of day salary per half-day)
   },
 
   totalDeductions: {
@@ -118,7 +123,8 @@ payslipSchema.pre('save', function(next) {
                         (this.deductions.tds || 0) +
                         (this.deductions.other || 0) +
                         (this.deductions.advance || 0) +
-                        (this.deductions.lateDeduction || 0);
+                        (this.deductions.lateDeduction || 0) +
+                        (this.deductions.halfDayDeduction || 0);
 
   next();
 });
