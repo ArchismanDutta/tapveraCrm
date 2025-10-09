@@ -17,6 +17,17 @@ import "./styles/custom-scrollbar.css";
 import { AchievementProvider } from "./contexts/AchievementContext";
 import AchievementNotificationContainer from "./components/achievements/AchievementNotificationContainer";
 
+// Notifications
+import NotificationToast from "./components/NotificationToast";
+
+// Redux
+import { useDispatch } from "react-redux";
+import { resetChat } from "./store/slices/chatSlice";
+
+// Custom Hooks
+import useGlobalChatNotifications from "./hooks/useGlobalChatNotifications";
+import useWebSocket from "./hooks/useWebSocket";
+
 // Pages
 import Login from "./pages/LoginPage";
 import Signup from "./pages/SignUp";
@@ -37,7 +48,6 @@ import ChatPage from "./pages/ChatPage";
 import EmployeeDirectory from "./pages/EmployeeDirectory";
 import EmployeePage from "./pages/EmployeePage";
 import HRDashboard from "./pages/HRDashboard";
-// import AdminAttendancePage from "./pages/AdminAttendancePage";
 import HolidayManagementPage from "./pages/HolidayManagementPage";
 import SuperAdminDashboard from "./pages/SuperAdminDashboard";
 import SuperAdminAttendancePortal from "./pages/SuperAdminAttendancePortal";
@@ -45,7 +55,7 @@ import ShiftManagement from "./components/humanResource/ShiftManagement";
 import ManualAttendanceManagement from "./pages/admin/ManualAttendanceManagement";
 import SalaryManagement from "./pages/admin/SalaryManagement";
 
-// Lead and Callback Management
+// Lead & Callback Management
 import ViewLeads from "./pages/ViewLeads";
 import AddLead from "./pages/AddLead";
 import ViewCallbacks from "./pages/ViewCallbacks";
@@ -55,11 +65,7 @@ import AddCallback from "./pages/AddCallback";
 import NotepadPage from "./pages/NotepadPage";
 import SuperAdminNotepadViewer from "./pages/SuperAdminNotepadViewer";
 
-import { resetChat } from "./store/slices/chatSlice";
-import { useDispatch } from "react-redux";
-import useGlobalChatNotifications from "./hooks/useGlobalChatNotifications";
-
-// Unified role normalization function
+// ------------------- Utility Functions -------------------
 const normalizeRole = (role) => {
   if (!role) return "employee";
   const r = role.toLowerCase().replace(/\s+/g, "-");
@@ -67,25 +73,31 @@ const normalizeRole = (role) => {
   return r;
 };
 
+// ------------------- App Wrapper -------------------
 const AppWrapper = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [role, setRole] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [currentUser, setCurrentUser] = useState(null);
   const dispatch = useDispatch();
 
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [role, setRole] = useState(null);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [notifications, setNotifications] = useState([]);
+
+  // Load user from localStorage
   useEffect(() => {
     const userStr = localStorage.getItem("user");
     if (userStr) setCurrentUser(JSON.parse(userStr));
   }, []);
 
+  // Check authentication & role
   useEffect(() => {
     const token = localStorage.getItem("token");
     const userStr = localStorage.getItem("user");
     let storedRole = userStr ? JSON.parse(userStr)?.role : null;
     storedRole = normalizeRole(storedRole);
+
     if (token && token.trim() !== "") {
       setIsAuthenticated(true);
       setRole(storedRole);
@@ -96,6 +108,7 @@ const AppWrapper = () => {
     setLoading(false);
   }, []);
 
+  // Login handler
   const handleLoginSuccess = () => {
     const savedUser = JSON.parse(localStorage.getItem("user"));
     setCurrentUser(savedUser);
@@ -104,6 +117,7 @@ const AppWrapper = () => {
     toast.success("✅ Login successful!");
   };
 
+  // Logout handler
   const handleLogout = () => {
     localStorage.removeItem("token");
     localStorage.removeItem("role");
@@ -116,23 +130,34 @@ const AppWrapper = () => {
     toast.info("👋 Logged out successfully!");
     navigate("/login", { replace: true });
   };
-  // Global chat notifications & unread counter hook
+
+  // Global chat notifications
   useGlobalChatNotifications(localStorage.getItem("token"));
 
-  // Clear active conversation hint when leaving Messages page
+  // Payslip notifications via WebSocket
+  const handleNotification = (notification) => {
+    if (notification.channel === "payslip") {
+      setNotifications(prev => [...prev, { ...notification, id: Date.now() }]);
+    }
+  };
+
+  useWebSocket(handleNotification);
+
+  const removeNotification = (id) => {
+    setNotifications(prev => prev.filter(n => n.id !== id));
+  };
+
+  // Clear active conversation when leaving /messages
   useEffect(() => {
-    const onRoute = () => {
-      if (location.pathname !== "/messages") {
-        window.dispatchEvent(new CustomEvent("chat-active-conversation", { detail: { conversationId: null } }));
-      }
-    };
-    onRoute();
+    if (location.pathname !== "/messages") {
+      window.dispatchEvent(
+        new CustomEvent("chat-active-conversation", { detail: { conversationId: null } })
+      );
+    }
   }, [location.pathname]);
 
-
-  // Bridge WS notifications to toast UI globally
+  // Bridge WS notifications to toast globally
   useEffect(() => {
-    // Expose toast globally for hooks/utilities
     window.toast = toast;
 
     const onWsNotification = (e) => {
@@ -141,18 +166,16 @@ const AppWrapper = () => {
         const title = n.title || "Notification";
         const body = n.body || "";
         const channel = n.channel ? ` [${n.channel}]` : "";
-        // Force unique toastId to avoid any dedupe by identical content
         const tid = `chat-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-        toast.info(`${title}${channel}: ${body}` , { toastId: tid });
+        toast.info(`${title}${channel}: ${body}`, { toastId: tid });
 
-        // Also increment global unread counter for chat notifications
         if ((n.channel || "").toLowerCase() === "chat") {
-          try {
-            const prev = Number(sessionStorage.getItem("chat_unread_total") || 0) || 0;
-            const next = prev + 1;
-            sessionStorage.setItem("chat_unread_total", String(next));
-            window.dispatchEvent(new CustomEvent("chat-unread-total", { detail: { total: next } }));
-          } catch {}
+          const prev = Number(sessionStorage.getItem("chat_unread_total") || 0) || 0;
+          const next = prev + 1;
+          sessionStorage.setItem("chat_unread_total", String(next));
+          window.dispatchEvent(
+            new CustomEvent("chat-unread-total", { detail: { total: next } })
+          );
         }
       } catch {}
     };
@@ -162,25 +185,23 @@ const AppWrapper = () => {
   }, []);
 
   if (loading) {
-    return (
-      <div className="flex justify-center items-center h-screen">
-        Loading...
-      </div>
-    );
+    return <div className="flex justify-center items-center h-screen">Loading...</div>;
   }
 
+  // Role checks
   const roleNorm = normalizeRole(role);
   const isSuperAdmin = roleNorm === "super-admin";
   const isAdmin = roleNorm === "admin" || isSuperAdmin;
   const isHR = roleNorm === "hr";
 
-  // Check if user can access Lead/Callback Management
+  // Lead/Callback access
   const canAccessLeadManagement = () => {
     if (isSuperAdmin) return true;
     if (currentUser?.department === "marketingAndSales") return true;
     return false;
   };
 
+  // ------------------- Routes -------------------
   return (
     <>
       <Routes>
@@ -202,7 +223,7 @@ const AppWrapper = () => {
           }
         />
 
-        {/* Super Admin Dashboard */}
+        {/* Super Admin */}
         <Route
           path="/super-admin"
           element={
@@ -213,8 +234,6 @@ const AppWrapper = () => {
             )
           }
         />
-
-        {/* Super Admin Attendance Portal */}
         <Route
           path="/super-admin/attendance"
           element={
@@ -225,8 +244,6 @@ const AppWrapper = () => {
             )
           }
         />
-
-        {/* Super Admin Notepad Viewer */}
         <Route
           path="/super-admin/notepad"
           element={
@@ -250,7 +267,7 @@ const AppWrapper = () => {
           }
         />
 
-        {/* ChatPage / Messages */}
+        {/* Chat */}
         <Route
           path="/messages"
           element={
@@ -262,7 +279,7 @@ const AppWrapper = () => {
           }
         />
 
-        {/* Lead Management - Only for Super Admin and Marketing & Sales */}
+        {/* Lead Management */}
         <Route
           path="/leads"
           element={
@@ -294,7 +311,7 @@ const AppWrapper = () => {
           }
         />
 
-        {/* Callback Management - Only for Super Admin and Marketing & Sales */}
+        {/* Callback Management */}
         <Route
           path="/callbacks"
           element={
@@ -326,6 +343,90 @@ const AppWrapper = () => {
           }
         />
 
+        {/* Salary/Payslip Management */}
+        <Route
+          path="/admin/salary-management"
+          element={
+            isAuthenticated && isSuperAdmin ? (
+              <SalaryManagement onLogout={handleLogout} />
+            ) : (
+              <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />
+            )
+          }
+        />
+
+        {/* Manual Attendance Management */}
+        <Route
+          path="/admin/manual-attendance"
+          element={
+            isAuthenticated && (isSuperAdmin || isHR || isAdmin) ? (
+              <ManualAttendanceManagement onLogout={handleLogout} />
+            ) : (
+              <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />
+            )
+          }
+        />
+
+        {/* Admin Task Assignment */}
+        <Route
+          path="/admin/tasks"
+          element={
+            isAuthenticated && (isSuperAdmin || isHR || isAdmin) ? (
+              <AdminTaskPage onLogout={handleLogout} />
+            ) : (
+              <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />
+            )
+          }
+        />
+
+        {/* Admin Leave Requests */}
+        <Route
+          path="/admin/leaves"
+          element={
+            isAuthenticated && (isSuperAdmin || isHR || isAdmin) ? (
+              <AdminLeaveRequests onLogout={handleLogout} />
+            ) : (
+              <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />
+            )
+          }
+        />
+
+        {/* Shift Management */}
+        <Route
+          path="/admin/shifts"
+          element={
+            isAuthenticated && (isSuperAdmin || isHR || isAdmin) ? (
+              <ShiftManagement onLogout={handleLogout} />
+            ) : (
+              <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />
+            )
+          }
+        />
+
+        {/* Notice Board */}
+        <Route
+          path="/admin/notices"
+          element={
+            isAuthenticated && (isSuperAdmin || isHR || isAdmin) ? (
+              <NoticeBoard onLogout={handleLogout} />
+            ) : (
+              <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />
+            )
+          }
+        />
+
+        {/* Holiday Management */}
+        <Route
+          path="/admin/holidays"
+          element={
+            isAuthenticated && (isSuperAdmin || isHR || isAdmin) ? (
+              <HolidayManagementPage onLogout={handleLogout} />
+            ) : (
+              <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />
+            )
+          }
+        />
+
         {/* Signup */}
         <Route
           path="/signup"
@@ -350,13 +451,7 @@ const AppWrapper = () => {
               <EmployeeDashboardPage onLogout={handleLogout} role={role} />
             ) : (
               <Navigate
-                to={
-                  isAuthenticated
-                    ? isAdmin
-                      ? "/admin/tasks"
-                      : "/login"
-                    : "/login"
-                }
+                to={isAuthenticated ? (isAdmin ? "/admin/tasks" : "/login") : "/login"}
                 replace
               />
             )
@@ -368,243 +463,51 @@ const AppWrapper = () => {
           path="/profile"
           element={
             isAuthenticated ? (
-              <MyProfile
-                onLogout={handleLogout}
-                userType={role || "employee"}
-              />
+              <MyProfile onLogout={handleLogout} userType={role || "employee"} />
             ) : (
               <Navigate to="/login" replace />
             )
           }
         />
 
-        {/* Employee Page */}
+        {/* Employee Pages */}
         <Route
           path="/employee/:id"
           element={
             isAuthenticated && (isAdmin || isHR) ? (
               <EmployeePage userRole={role} onLogout={handleLogout} />
             ) : (
-              <Navigate
-                to={isAuthenticated ? "/dashboard" : "/login"}
-                replace
-              />
-            )
-          }
-        />
-
-        {/* Admin/HR/Super Admin Routes */}
-        <Route
-          path="/admin/tasks"
-          element={
-            isAuthenticated && (isAdmin || isHR) ? (
-              <AdminTaskPage onLogout={handleLogout} />
-            ) : (
-              <Navigate
-                to={isAuthenticated ? "/dashboard" : "/login"}
-                replace
-              />
-            )
-          }
-        />
-        <Route
-          path="/admin/shift"
-          element={
-            isAuthenticated && (isAdmin || isHR) ? (
-              <ShiftManagement onLogout={handleLogout} />
-            ) : (
-              <Navigate
-                to={isAuthenticated ? "/dashboard" : "/login"}
-                replace
-              />
-            )
-          }
-        />
-        <Route
-          path="/admin/employees"
-          element={
-            isAuthenticated && (isAdmin || isHR) ? (
-              <EmployeeManagementPage onLogout={handleLogout} />
-            ) : (
-              <Navigate
-                to={isAuthenticated ? "/dashboard" : "/login"}
-                replace
-              />
-            )
-          }
-        />
-        <Route
-          path="/admin/leaves"
-          element={
-            isAuthenticated && (isAdmin || isHR) ? (
-              <AdminLeaveRequests onLogout={handleLogout} />
-            ) : (
-              <Navigate
-                to={isAuthenticated ? "/dashboard" : "/login"}
-                replace
-              />
-            )
-          }
-        />
-        <Route
-          path="/admin/notices"
-          element={
-            isAuthenticated && (isAdmin || isHR) ? (
-              <NoticeBoard onLogout={handleLogout} />
-            ) : (
-              <Navigate
-                to={isAuthenticated ? "/dashboard" : "/login"}
-                replace
-              />
-            )
-          }
-        />
-        <Route
-          path="/admin-attendance"
-          element={
-            isAuthenticated && (isAdmin || isHR) ? (
-              <SuperAdminAttendancePortal onLogout={handleLogout} />
-            ) : (
-              <Navigate
-                to={isAuthenticated ? "/dashboard" : "/login"}
-                replace
-              />
-            )
-          }
-        />
-        <Route
-          path="/admin/manual-attendance"
-          element={
-            isAuthenticated && (isAdmin || isHR) ? (
-              <ManualAttendanceManagement onLogout={handleLogout} />
-            ) : (
-              <Navigate
-                to={isAuthenticated ? "/dashboard" : "/login"}
-                replace
-              />
-            )
-          }
-        />
-        <Route
-          path="/admin/salary-management"
-          element={
-            isAuthenticated && isSuperAdmin ? (
-              <SalaryManagement onLogout={handleLogout} />
-            ) : (
-              <Navigate
-                to={isAuthenticated ? "/dashboard" : "/login"}
-                replace
-              />
-            )
-          }
-        />
-        <Route
-          path="/admin/holidays"
-          element={
-            isAuthenticated && (isAdmin || isHR) ? (
-              <HolidayManagementPage onLogout={handleLogout} />
-            ) : (
-              <Navigate
-                to={isAuthenticated ? "/dashboard" : "/login"}
-                replace
-              />
-            )
-          }
-        />
-        <Route
-          path="/admin/shifts"
-          element={
-            isAuthenticated && (isAdmin || isHR) ? (
-              <ShiftManagement onLogout={handleLogout} />
-            ) : (
-              <Navigate
-                to={isAuthenticated ? "/dashboard" : "/login"}
-                replace
-              />
-            )
-          }
-        />
-        <Route
-          path="/admin/shifts"
-          element={
-            isAuthenticated && (isAdmin || isHR) ? (
-              <ShiftManagement onLogout={handleLogout} />
-            ) : (
               <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />
-            )
-          }
-        />
-
-        {/* Employee pages */}
-        <Route
-          path="/notepad"
-          element={
-            isAuthenticated ? (
-              <NotepadPage onLogout={handleLogout} />
-            ) : (
-              <Navigate to="/login" replace />
             )
           }
         />
         <Route
           path="/tasks"
-          element={
-            isAuthenticated ? (
-              <Tasks onLogout={handleLogout} />
-            ) : (
-              <Navigate to="/login" replace />
-            )
-          }
+          element={isAuthenticated ? <Tasks onLogout={handleLogout} /> : <Navigate to="/login" replace />}
         />
         <Route
           path="/today-status"
-          element={
-            isAuthenticated ? (
-              <TodayStatusPage onLogout={handleLogout} />
-            ) : (
-              <Navigate to="/login" replace />
-            )
-          }
+          element={isAuthenticated ? <TodayStatusPage onLogout={handleLogout} /> : <Navigate to="/login" replace />}
         />
         <Route
           path="/attendance"
-          element={
-            isAuthenticated ? (
-              <AttendancePage onLogout={handleLogout} />
-            ) : (
-              <Navigate to="/login" replace />
-            )
-          }
+          element={isAuthenticated ? <AttendancePage onLogout={handleLogout} /> : <Navigate to="/login" replace />}
         />
         <Route
           path="/todo"
-          element={
-            isAuthenticated ? (
-              <TodoPage onLogout={handleLogout} />
-            ) : (
-              <Navigate to="/login" replace />
-            )
-          }
+          element={isAuthenticated ? <TodoPage onLogout={handleLogout} /> : <Navigate to="/login" replace />}
         />
         <Route
           path="/leaves"
-          element={
-            isAuthenticated ? (
-              <HolidaysAndLeaves onLogout={handleLogout} />
-            ) : (
-              <Navigate to="/login" replace />
-            )
-          }
+          element={isAuthenticated ? <HolidaysAndLeaves onLogout={handleLogout} /> : <Navigate to="/login" replace />}
         />
         <Route
           path="/directory"
-          element={
-            isAuthenticated ? (
-              <EmployeeDirectory onLogout={handleLogout} />
-            ) : (
-              <Navigate to="/login" replace />
-            )
-          }
+          element={isAuthenticated ? <EmployeeDirectory onLogout={handleLogout} /> : <Navigate to="/login" replace />}
+        />
+        <Route
+          path="/notepad"
+          element={isAuthenticated ? <NotepadPage onLogout={handleLogout} /> : <Navigate to="/login" replace />}
         />
 
         {/* Catch-All */}
@@ -630,10 +533,20 @@ const AppWrapper = () => {
       </Routes>
 
       <ToastContainer position="top-right" autoClose={3000} />
+
+      {/* Payslip Notifications */}
+      {notifications.map((notification) => (
+        <NotificationToast
+          key={notification.id}
+          notification={notification}
+          onClose={() => removeNotification(notification.id)}
+        />
+      ))}
     </>
   );
 };
 
+// ------------------- Main App -------------------
 const App = () => (
   <Router>
     <AchievementProvider>

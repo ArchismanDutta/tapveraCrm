@@ -916,10 +916,17 @@ const ViewLeads = ({ onLogout }) => {
                       <p className="text-gray-400 text-sm mb-1">Source</p>
                       <p className="text-white font-medium">{selectedLead.source}</p>
                     </div>
-                    {selectedLead.companySize && (
+                    {selectedLead.websiteUrl && (
                       <div>
-                        <p className="text-gray-400 text-sm mb-1">Company Size</p>
-                        <p className="text-white font-medium">{selectedLead.companySize}</p>
+                        <p className="text-gray-400 text-sm mb-1">Website</p>
+                        <a
+                          href={selectedLead.websiteUrl.startsWith('http') ? selectedLead.websiteUrl : `https://${selectedLead.websiteUrl}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-cyan-400 font-medium hover:underline break-all"
+                        >
+                          {selectedLead.websiteUrl}
+                        </a>
                       </div>
                     )}
                     {selectedLead.expectedRevenue && (

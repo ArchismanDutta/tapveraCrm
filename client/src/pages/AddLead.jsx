@@ -23,7 +23,7 @@ const AddLead = ({ onLogout }) => {
     status: "New",
     priority: "Medium",
     industry: "",
-    companySize: "",
+    websiteUrl: "",
     expectedRevenue: "",
     address: "",
     city: "",
@@ -306,20 +306,17 @@ const AddLead = ({ onLogout }) => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Company Size</label>
-                  <select
-                    name="companySize"
-                    value={formData.companySize}
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Website URL
+                  </label>
+                  <input
+                    type="url"
+                    name="websiteUrl"
+                    value={formData.websiteUrl}
                     onChange={handleChange}
-                    className="w-full px-4 py-3 bg-slate-700/50 border border-slate-600 rounded-lg text-white focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition-all"
-                  >
-                    <option value="">Select size</option>
-                    <option value="1-10">1-10 employees</option>
-                    <option value="11-50">11-50 employees</option>
-                    <option value="51-200">51-200 employees</option>
-                    <option value="201-500">201-500 employees</option>
-                    <option value="500+">500+ employees</option>
-                  </select>
+                    className="w-full px-4 py-3 bg-slate-700/50 border border-slate-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition-all"
+                    placeholder="https://example.com"
+                  />
                 </div>
 
                 <div>

@@ -8,10 +8,16 @@ const STATUS_COLOR = {
   holiday: "bg-gradient-to-br from-blue-600 to-blue-700 text-blue-100 border-blue-500",
   weekend: "bg-gradient-to-br from-gray-600 to-gray-700 text-gray-300 border-gray-500",
   leave: "bg-gradient-to-br from-purple-600 to-purple-700 text-purple-100 border-purple-500",
+  "paid-leave": "bg-gradient-to-br from-emerald-600 to-emerald-700 text-emerald-100 border-emerald-500",
+  "unpaid-leave": "bg-gradient-to-br from-rose-600 to-rose-700 text-rose-100 border-rose-500",
+  "sick-leave": "bg-gradient-to-br from-orange-600 to-orange-700 text-orange-100 border-orange-500",
+  "maternity-leave": "bg-gradient-to-br from-pink-600 to-pink-700 text-pink-100 border-pink-500",
   late: "bg-gradient-to-br from-yellow-500 to-yellow-600 text-yellow-100 border-yellow-400",
   "half-day": "bg-gradient-to-br from-violet-600 to-violet-700 text-violet-100 border-violet-500",
   "half-day-leave": "bg-gradient-to-br from-violet-600 to-violet-700 text-violet-100 border-violet-500",
   "approved-leave": "bg-gradient-to-br from-purple-600 to-purple-700 text-purple-100 border-purple-500",
+  vacation: "bg-gradient-to-br from-cyan-600 to-cyan-700 text-cyan-100 border-cyan-500",
+  "personal-leave": "bg-gradient-to-br from-indigo-600 to-indigo-700 text-indigo-100 border-indigo-500",
   wfh: "bg-gradient-to-br from-orange-500 to-orange-600 text-orange-100 border-orange-400",
   default: "bg-gradient-to-br from-slate-600 to-slate-700 text-slate-300 border-slate-500",
 };
@@ -168,6 +174,12 @@ const AttendanceCalendar = ({ data, onDateFilterChange, onMonthChange }) => {
       case "late": return "Late";
       case "half-day": return "Half Day";
       case "half-day-leave": return "Half Day Leave";
+      case "paid-leave": return "Paid Leave";
+      case "unpaid-leave": return "Unpaid Leave";
+      case "sick-leave": return "Sick Leave";
+      case "maternity-leave": return "Maternity Leave";
+      case "vacation": return "Vacation";
+      case "personal-leave": return "Personal Leave";
       case "approved-leave": return "Approved Leave";
       case "holiday": return "Holiday";
       case "weekend": return "Weekend";
@@ -342,6 +354,20 @@ const AttendanceCalendar = ({ data, onDateFilterChange, onMonthChange }) => {
                   </div>
                 )}
 
+                {/* WFH Indicator (Home icon badge) */}
+                {dayData.metadata?.isWFH && (
+                  <div className="absolute top-1 left-1" title="Work From Home">
+                    <div className="text-[10px] opacity-90">🏠</div>
+                  </div>
+                )}
+
+                {/* Paid Leave Indicator (Money icon badge) */}
+                {dayData.metadata?.isPaidLeave && (
+                  <div className="absolute top-1 left-1" title="Paid Leave">
+                    <div className="text-[10px] opacity-90">💰</div>
+                  </div>
+                )}
+
                 {/* Today Indicator */}
                 {dayData.isToday && (
                   <div className="absolute bottom-1 left-1/2 transform -translate-x-1/2">
@@ -378,12 +404,15 @@ const AttendanceCalendar = ({ data, onDateFilterChange, onMonthChange }) => {
             <div className="flex items-center justify-between mb-2">
               <div className="font-semibold text-white">
                 {data.month} {hoveredDay.day}, {data.year}
+                {hoveredDay.metadata?.isWFH && <span className="ml-1" title="Work From Home">🏠</span>}
+                {hoveredDay.metadata?.isPaidLeave && <span className="ml-1" title="Paid Leave">💰</span>}
               </div>
               <div className={`text-xs px-2 py-1 rounded ${
                 hoveredDay.status === 'present' ? 'bg-green-600/30 text-green-300' :
                 hoveredDay.status === 'late' ? 'bg-yellow-600/30 text-yellow-300' :
                 hoveredDay.status === 'absent' ? 'bg-red-600/30 text-red-300' :
                 hoveredDay.status === 'half-day' ? 'bg-violet-600/30 text-violet-300' :
+                hoveredDay.status === 'paid-leave' ? 'bg-emerald-600/30 text-emerald-300' :
                 'bg-gray-600/30 text-gray-300'
               }`}>
                 {getStatusLabel(hoveredDay.status)}
@@ -465,6 +494,16 @@ const AttendanceCalendar = ({ data, onDateFilterChange, onMonthChange }) => {
               <div>
                 <h4 className="text-xl font-bold text-white">
                   {data.month} {selectedDay.day}, {data.year}
+                  {selectedDay.metadata?.isWFH && (
+                    <span className="ml-2 text-sm bg-blue-600/30 text-blue-300 px-2 py-1 rounded" title="Work From Home">
+                      🏠 WFH
+                    </span>
+                  )}
+                  {selectedDay.metadata?.isPaidLeave && (
+                    <span className="ml-2 text-sm bg-emerald-600/30 text-emerald-300 px-2 py-1 rounded" title="Paid Leave">
+                      💰 Paid Leave
+                    </span>
+                  )}
                 </h4>
                 <p className="text-sm text-gray-400 mt-1">
                   {new Date(data.year, new Date(`${data.month} 1, ${data.year}`).getMonth(), selectedDay.day).toLocaleDateString('en-US', { weekday: 'long' })}
@@ -771,8 +810,20 @@ const AttendanceCalendar = ({ data, onDateFilterChange, onMonthChange }) => {
                 <span className="text-xs text-gray-400">Leave</span>
               </div>
               <div className="text-2xl font-bold text-purple-400">{data.monthlyStats.totalLeave || 0}</div>
-              <div className="text-xs text-purple-300 mt-1">approved leaves</div>
+              <div className="text-xs text-purple-300 mt-1">unpaid leaves</div>
             </div>
+
+            {/* Paid Leave Days (if available) */}
+            {data.monthlyStats.totalPaidLeave !== undefined && data.monthlyStats.totalPaidLeave > 0 && (
+              <div className="bg-gradient-to-br from-emerald-600/20 to-emerald-800/20 backdrop-blur-sm border border-emerald-500/20 rounded-xl p-4 hover:border-emerald-400/40 transition-all duration-300">
+                <div className="flex items-center gap-2 mb-2">
+                  <CheckCircle className="w-4 h-4 text-emerald-400" />
+                  <span className="text-xs text-gray-400">Paid Leave</span>
+                </div>
+                <div className="text-2xl font-bold text-emerald-400">{data.monthlyStats.totalPaidLeave}</div>
+                <div className="text-xs text-emerald-300 mt-1">paid leaves</div>
+              </div>
+            )}
 
             {/* Half Days (if available) */}
             {data.monthlyStats.totalHalfDay !== undefined && (

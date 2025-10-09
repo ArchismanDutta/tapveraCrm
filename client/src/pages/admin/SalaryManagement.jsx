@@ -33,23 +33,20 @@ const SalaryManagement = ({ onLogout }) => {
   const [selectedEmployee, setSelectedEmployee] = useState(null);
   const [formData, setFormData] = useState({
     employeeId: "",
-    month: new Date().toISOString().slice(0, 7), // YYYY-MM format
-    ctc: "",
-    basicSalary: "",
-    grossSalary: "",
-    netSalary: "",
-    deductions: {
-      pf: "",
-      esi: "",
-      ptax: "",
-      lateDeduction: "",
-      other: ""
-    },
+    payPeriod: new Date().toISOString().slice(0, 7), // YYYY-MM format
+    monthlySalary: "",
     workingDays: "",
-    presentDays: "",
-    lateDays: "",
+    paidDays: "",
+    lateDays: "0",
+    manualDeductions: {
+      tds: "0",
+      other: "0",
+      advance: "0"
+    },
     remarks: ""
   });
+
+  const [previewData, setPreviewData] = useState(null);
   const [editingId, setEditingId] = useState(null);
   const [filters, setFilters] = useState({
     search: "",
@@ -106,11 +103,117 @@ const SalaryManagement = ({ onLogout }) => {
     }
   };
 
+  const calculatePreview = () => {
+    const { monthlySalary, workingDays, paidDays, lateDays, manualDeductions } = formData;
+
+    if (!monthlySalary || !workingDays || !paidDays) {
+      return null;
+    }
+
+    const salary = parseFloat(monthlySalary);
+    const working = parseFloat(workingDays);
+    const paid = parseFloat(paidDays);
+    const late = parseFloat(lateDays) || 0;
+
+    // Calculate salary components (50%, 35%, 5%, 5%, 5%)
+    const salaryComponents = {
+      basic: salary * 0.50,
+      hra: salary * 0.35,
+      conveyance: salary * 0.05,
+      medical: salary * 0.05,
+      specialAllowance: salary * 0.05
+    };
+
+    // Calculate gross components (prorated by paid days)
+    const grossComponents = {
+      basic: (salaryComponents.basic / working) * paid,
+      hra: (salaryComponents.hra / working) * paid,
+      conveyance: (salaryComponents.conveyance / working) * paid,
+      medical: (salaryComponents.medical / working) * paid,
+      specialAllowance: (salaryComponents.specialAllowance / working) * paid
+    };
+
+    const grossTotal = Object.values(grossComponents).reduce((sum, val) => sum + val, 0);
+
+    // Calculate late deduction
+    // Every 3 lates = 1 day salary deduction
+    // Extra lates (not in multiples of 3) = ₹200 per late
+    const perDaySalary = salary / working;
+    const fullLateDays = Math.floor(late / 3); // Number of full 3-day cycles
+    const extraLateDays = late % 3; // Remaining lates (1 or 2)
+    const lateDeduction = (fullLateDays * perDaySalary) + (extraLateDays * 200);
+
+    // Calculate PTax
+    const calculatePTax = (sal) => {
+      if (sal < 10000) return 0;
+      if (sal <= 15000) return 110;
+      if (sal <= 25000) return 130;
+      if (sal <= 40000) return 150;
+      return 200;
+    };
+
+    // Calculate deductions
+    const deductions = {
+      employeePF: salaryComponents.basic <= 15000 ? salaryComponents.basic * 0.12 : 0,
+      esi: salary <= 21000 ? salary * 0.0075 : 0,
+      ptax: calculatePTax(salary),
+      tds: parseFloat(manualDeductions.tds) || 0,
+      other: parseFloat(manualDeductions.other) || 0,
+      advance: parseFloat(manualDeductions.advance) || 0,
+      lateDeduction: lateDeduction
+    };
+
+    const totalDeductions = Object.values(deductions).reduce((sum, val) => sum + val, 0);
+
+    // Employer contributions
+    const employerContributions = {
+      employerPF: salaryComponents.basic <= 15000 ? salaryComponents.basic * 0.12 : 0,
+      employerESI: salary <= 21000 ? salary * 0.0325 : 0
+    };
+
+    const netPayment = grossTotal - totalDeductions;
+    const ctc = grossTotal + employerContributions.employerPF + employerContributions.employerESI;
+
+    return {
+      salaryComponents,
+      grossComponents,
+      grossTotal,
+      deductions,
+      totalDeductions,
+      employerContributions,
+      netPayment,
+      ctc
+    };
+  };
+
+  // Auto-calculate preview when inputs change
+  useEffect(() => {
+    const preview = calculatePreview();
+    setPreviewData(preview);
+  }, [formData.monthlySalary, formData.workingDays, formData.paidDays, formData.lateDays, formData.manualDeductions]);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
 
     try {
       const token = localStorage.getItem("token");
+
+      // Prepare payload for automated calculation
+      const payload = {
+        employeeId: formData.employeeId,
+        payPeriod: formData.payPeriod,
+        monthlySalary: parseFloat(formData.monthlySalary),
+        workingDays: parseFloat(formData.workingDays),
+        paidDays: parseFloat(formData.paidDays),
+        lateDays: parseFloat(formData.lateDays) || 0,
+        manualDeductions: {
+          tds: parseFloat(formData.manualDeductions.tds) || 0,
+          other: parseFloat(formData.manualDeductions.other) || 0,
+          advance: parseFloat(formData.manualDeductions.advance) || 0
+        },
+        remarks: formData.remarks
+      };
+
       const method = editingId ? "PUT" : "POST";
       const url = editingId
         ? `${API_BASE}/api/payslips/${editingId}`
@@ -122,21 +225,21 @@ const SalaryManagement = ({ onLogout }) => {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`
         },
-        body: JSON.stringify(formData)
+        body: JSON.stringify(payload)
       });
 
       if (response.ok) {
-        toast.success(editingId ? "Salary record updated successfully" : "Salary record created successfully");
+        toast.success(editingId ? "Payslip updated successfully" : "Payslip generated successfully");
         setShowForm(false);
         resetForm();
         fetchSalaryRecords();
       } else {
         const error = await response.json();
-        toast.error(error.error || "Failed to save salary record");
+        toast.error(error.error || "Failed to save payslip");
       }
     } catch (error) {
-      console.error("Error saving salary record:", error);
-      toast.error("Error saving salary record");
+      console.error("Error saving payslip:", error);
+      toast.error("Error saving payslip");
     }
   };
 
@@ -167,16 +270,17 @@ const SalaryManagement = ({ onLogout }) => {
   const handleEdit = (record) => {
     setFormData({
       employeeId: record.employee._id,
-      month: record.payPeriod,
-      ctc: record.ctc,
-      basicSalary: record.basicSalary,
-      grossSalary: record.grossSalary,
-      netSalary: record.netSalary,
-      deductions: record.deductions,
-      workingDays: record.workingDays,
-      presentDays: record.presentDays,
-      lateDays: record.lateDays,
-      remarks: record.remarks
+      payPeriod: record.payPeriod,
+      monthlySalary: record.monthlySalary || "",
+      workingDays: record.workingDays || "",
+      paidDays: record.paidDays || "",
+      lateDays: record.lateDays || "0",
+      manualDeductions: {
+        tds: record.deductions?.tds || "0",
+        other: record.deductions?.other || "0",
+        advance: record.deductions?.advance || "0"
+      },
+      remarks: record.remarks || ""
     });
     setEditingId(record._id);
     setShowForm(true);
@@ -190,23 +294,19 @@ const SalaryManagement = ({ onLogout }) => {
   const resetForm = () => {
     setFormData({
       employeeId: "",
-      month: new Date().toISOString().slice(0, 7),
-      ctc: "",
-      basicSalary: "",
-      grossSalary: "",
-      netSalary: "",
-      deductions: {
-        pf: "",
-        esi: "",
-        ptax: "",
-        lateDeduction: "",
-        other: ""
-      },
+      payPeriod: new Date().toISOString().slice(0, 7),
+      monthlySalary: "",
       workingDays: "",
-      presentDays: "",
-      lateDays: "",
+      paidDays: "",
+      lateDays: "0",
+      manualDeductions: {
+        tds: "0",
+        other: "0",
+        advance: "0"
+      },
       remarks: ""
     });
+    setPreviewData(null);
     setEditingId(null);
   };
 
@@ -214,30 +314,10 @@ const SalaryManagement = ({ onLogout }) => {
     return new Intl.NumberFormat('en-IN', {
       style: 'currency',
       currency: 'INR',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
     }).format(amount || 0);
   };
-
-  const calculateTotalDeductions = () => {
-    const { pf, esi, ptax, lateDeduction, other } = formData.deductions;
-    return (parseFloat(pf || 0) + parseFloat(esi || 0) + parseFloat(ptax || 0) +
-            parseFloat(lateDeduction || 0) + parseFloat(other || 0));
-  };
-
-  const calculateNetSalary = () => {
-    const grossSalary = parseFloat(formData.grossSalary || 0);
-    const totalDeductions = calculateTotalDeductions();
-    return grossSalary - totalDeductions;
-  };
-
-  // Auto-calculate net salary when gross salary or deductions change
-  useEffect(() => {
-    const netSalary = calculateNetSalary();
-    if (netSalary !== parseFloat(formData.netSalary)) {
-      setFormData(prev => ({ ...prev, netSalary: netSalary.toString() }));
-    }
-  }, [formData.grossSalary, formData.deductions]);
 
   const userStr = localStorage.getItem("user");
   const userRole = userStr ? JSON.parse(userStr).role : "admin";
@@ -376,15 +456,14 @@ const SalaryManagement = ({ onLogout }) => {
                         </div>
                       </td>
                       <td className="px-6 py-4">
-                        <div className="text-green-400 font-medium">{formatCurrency(record.grossSalary)}</div>
+                        <div className="text-green-400 font-medium">{formatCurrency(record.grossTotal)}</div>
                       </td>
                       <td className="px-6 py-4">
                         <div className="text-red-400 font-medium">{formatCurrency(record.totalDeductions)}</div>
                       </td>
                       <td className="px-6 py-4">
-                        <div className="text-blue-400 font-medium text-lg">{formatCurrency(record.netSalary)}</div>
-                      </td>
-                      <td className="px-6 py-4">
+                        <div className="text-blue-400 font-medium text-lg">{formatCurrency(record.netPayment)}</div>
+                      </td>                      <td className="px-6 py-4">
                         <div className="flex items-center gap-2">
                           <button
                             onClick={() => handleViewPayslip(record.employee)}
@@ -466,8 +545,8 @@ const SalaryManagement = ({ onLogout }) => {
                       </label>
                       <input
                         type="month"
-                        value={formData.month}
-                        onChange={(e) => setFormData(prev => ({ ...prev, month: e.target.value }))}
+                        value={formData.payPeriod}
+                        onChange={(e) => setFormData(prev => ({ ...prev, payPeriod: e.target.value }))}
                         className="w-full px-4 py-3 bg-slate-700/50 border border-slate-600/50 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-green-500"
                         required
                         disabled={editingId}
@@ -475,197 +554,209 @@ const SalaryManagement = ({ onLogout }) => {
                     </div>
                   </div>
 
-                  {/* Salary Details */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2">
-                        CTC *
-                      </label>
-                      <input
-                        type="number"
-                        value={formData.ctc}
-                        onChange={(e) => setFormData(prev => ({ ...prev, ctc: e.target.value }))}
-                        className="w-full px-4 py-3 bg-slate-700/50 border border-slate-600/50 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-green-500"
-                        placeholder="0"
-                        required
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2">
-                        Basic Salary *
-                      </label>
-                      <input
-                        type="number"
-                        value={formData.basicSalary}
-                        onChange={(e) => setFormData(prev => ({ ...prev, basicSalary: e.target.value }))}
-                        className="w-full px-4 py-3 bg-slate-700/50 border border-slate-600/50 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-green-500"
-                        placeholder="0"
-                        required
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2">
-                        Gross Salary *
-                      </label>
-                      <input
-                        type="number"
-                        value={formData.grossSalary}
-                        onChange={(e) => setFormData(prev => ({ ...prev, grossSalary: e.target.value }))}
-                        className="w-full px-4 py-3 bg-slate-700/50 border border-slate-600/50 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-green-500"
-                        placeholder="0"
-                        required
-                      />
-                    </div>
-                  </div>
-
-                  {/* Deductions */}
-                  <div>
+                  {/* Required Input Fields */}
+                  <div className="bg-blue-900/10 rounded-xl p-6 border border-blue-500/20">
                     <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-                      <TrendingDown className="w-5 h-5 text-red-400" />
-                      Deductions
+                      <DollarSign className="w-5 h-5 text-blue-400" />
+                      Salary & Attendance Input
                     </h3>
-                    <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                       <div>
                         <label className="block text-sm font-medium text-gray-300 mb-2">
-                          PF Deduction
+                          Monthly Salary*
                         </label>
                         <input
                           type="number"
-                          value={formData.deductions.pf}
-                          onChange={(e) => setFormData(prev => ({
-                            ...prev,
-                            deductions: { ...prev.deductions, pf: e.target.value }
-                          }))}
+                          value={formData.monthlySalary}
+                          onChange={(e) => setFormData(prev => ({ ...prev, monthlySalary: e.target.value }))}
                           className="w-full px-4 py-3 bg-slate-700/50 border border-slate-600/50 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-green-500"
-                          placeholder="0"
+                          placeholder="50000"
+                          min="0"
+                          step="0.01"
+                          required
                         />
                       </div>
 
                       <div>
                         <label className="block text-sm font-medium text-gray-300 mb-2">
-                          ESI Deduction
+                          Working Days *
                         </label>
                         <input
                           type="number"
-                          value={formData.deductions.esi}
-                          onChange={(e) => setFormData(prev => ({
-                            ...prev,
-                            deductions: { ...prev.deductions, esi: e.target.value }
-                          }))}
+                          value={formData.workingDays}
+                          onChange={(e) => setFormData(prev => ({ ...prev, workingDays: e.target.value }))}
                           className="w-full px-4 py-3 bg-slate-700/50 border border-slate-600/50 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-green-500"
-                          placeholder="0"
+                          placeholder="22"
+                          min="1"
+                          max="31"
+                          required
                         />
                       </div>
 
                       <div>
                         <label className="block text-sm font-medium text-gray-300 mb-2">
-                          Professional Tax
+                          Paid Days *
                         </label>
                         <input
                           type="number"
-                          value={formData.deductions.ptax}
-                          onChange={(e) => setFormData(prev => ({
-                            ...prev,
-                            deductions: { ...prev.deductions, ptax: e.target.value }
-                          }))}
+                          value={formData.paidDays}
+                          onChange={(e) => setFormData(prev => ({ ...prev, paidDays: e.target.value }))}
                           className="w-full px-4 py-3 bg-slate-700/50 border border-slate-600/50 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-green-500"
-                          placeholder="0"
+                          placeholder="20"
+                          min="0"
+                          max="31"
+                          required
                         />
                       </div>
 
                       <div>
                         <label className="block text-sm font-medium text-gray-300 mb-2">
-                          Late Deduction
+                          Late Days
                         </label>
                         <input
                           type="number"
-                          value={formData.deductions.lateDeduction}
-                          onChange={(e) => setFormData(prev => ({
-                            ...prev,
-                            deductions: { ...prev.deductions, lateDeduction: e.target.value }
-                          }))}
+                          value={formData.lateDays}
+                          onChange={(e) => setFormData(prev => ({ ...prev, lateDays: e.target.value }))}
                           className="w-full px-4 py-3 bg-slate-700/50 border border-slate-600/50 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-green-500"
                           placeholder="0"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-2">
-                          Other Deductions
-                        </label>
-                        <input
-                          type="number"
-                          value={formData.deductions.other}
-                          onChange={(e) => setFormData(prev => ({
-                            ...prev,
-                            deductions: { ...prev.deductions, other: e.target.value }
-                          }))}
-                          className="w-full px-4 py-3 bg-slate-700/50 border border-slate-600/50 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-green-500"
-                          placeholder="0"
+                          min="0"
+                          max="31"
                         />
                       </div>
                     </div>
                   </div>
 
-                  {/* Attendance Details */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2">
-                        Working Days
-                      </label>
-                      <input
-                        type="number"
-                        value={formData.workingDays}
-                        onChange={(e) => setFormData(prev => ({ ...prev, workingDays: e.target.value }))}
-                        className="w-full px-4 py-3 bg-slate-700/50 border border-slate-600/50 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-green-500"
-                        placeholder="22"
-                      />
-                    </div>
+                  {/* Optional Manual Deductions */}
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-400 mb-3">Optional Manual Deductions</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div>
+                        <label className="block text-xs text-gray-400 mb-1">TDS</label>
+                        <input
+                          type="number"
+                          value={formData.manualDeductions.tds}
+                          onChange={(e) => setFormData(prev => ({
+                            ...prev,
+                            manualDeductions: { ...prev.manualDeductions, tds: e.target.value }
+                          }))}
+                          className="w-full px-3 py-2 bg-slate-700/50 border border-slate-600/50 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-green-500 text-sm"
+                          placeholder="0"
+                          min="0"
+                          step="0.01"
+                        />
+                      </div>
 
-                    <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2">
-                        Present Days
-                      </label>
-                      <input
-                        type="number"
-                        value={formData.presentDays}
-                        onChange={(e) => setFormData(prev => ({ ...prev, presentDays: e.target.value }))}
-                        className="w-full px-4 py-3 bg-slate-700/50 border border-slate-600/50 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-green-500"
-                        placeholder="20"
-                      />
-                    </div>
+                      <div>
+                        <label className="block text-xs text-gray-400 mb-1">Other/Penalty</label>
+                        <input
+                          type="number"
+                          value={formData.manualDeductions.other}
+                          onChange={(e) => setFormData(prev => ({
+                            ...prev,
+                            manualDeductions: { ...prev.manualDeductions, other: e.target.value }
+                          }))}
+                          className="w-full px-3 py-2 bg-slate-700/50 border border-slate-600/50 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-green-500 text-sm"
+                          placeholder="0"
+                          min="0"
+                          step="0.01"
+                        />
+                      </div>
 
-                    <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2">
-                        Late Days
-                      </label>
-                      <input
-                        type="number"
-                        value={formData.lateDays}
-                        onChange={(e) => setFormData(prev => ({ ...prev, lateDays: e.target.value }))}
-                        className="w-full px-4 py-3 bg-slate-700/50 border border-slate-600/50 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-green-500"
-                        placeholder="0"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Net Salary Display */}
-                  <div className="bg-blue-900/20 rounded-xl p-6 border border-blue-500/30">
-                    <div className="flex items-center justify-between">
-                      <h4 className="text-lg font-semibold text-white flex items-center gap-2">
-                        <CreditCard className="w-5 h-5 text-blue-400" />
-                        Net Salary (Auto-calculated)
-                      </h4>
-                      <div className="text-2xl font-bold text-blue-400">
-                        {formatCurrency(calculateNetSalary())}
+                      <div>
+                        <label className="block text-xs text-gray-400 mb-1">Advance</label>
+                        <input
+                          type="number"
+                          value={formData.manualDeductions.advance}
+                          onChange={(e) => setFormData(prev => ({
+                            ...prev,
+                            manualDeductions: { ...prev.manualDeductions, advance: e.target.value }
+                          }))}
+                          className="w-full px-3 py-2 bg-slate-700/50 border border-slate-600/50 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-green-500 text-sm"
+                          placeholder="0"
+                          min="0"
+                          step="0.01"
+                        />
                       </div>
                     </div>
-                    <p className="text-gray-400 text-sm mt-2">
-                      Gross Salary ({formatCurrency(formData.grossSalary || 0)}) - Total Deductions ({formatCurrency(calculateTotalDeductions())})
-                    </p>
                   </div>
+
+                  {/* Auto-Calculated Preview */}
+                  {previewData && (
+                    <div className="space-y-4">
+                      {/* Salary Breakdown */}
+                      <div className="bg-gradient-to-r from-purple-900/20 to-blue-900/20 rounded-xl p-6 border border-purple-500/20">
+                        <h4 className="text-sm font-semibold text-purple-300 mb-4">Salary Breakdown (Auto-Calculated)</h4>
+                        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 text-sm">
+                          <div>
+                            <div className="text-gray-400 text-xs">Basic (50%)</div>
+                            <div className="text-white font-medium">{formatCurrency(previewData.salaryComponents.basic)}</div>
+                          </div>
+                          <div>
+                            <div className="text-gray-400 text-xs">HRA (35%)</div>
+                            <div className="text-white font-medium">{formatCurrency(previewData.salaryComponents.hra)}</div>
+                          </div>
+                          <div>
+                            <div className="text-gray-400 text-xs">Conv. (5%)</div>
+                            <div className="text-white font-medium">{formatCurrency(previewData.salaryComponents.conveyance)}</div>
+                          </div>
+                          <div>
+                            <div className="text-gray-400 text-xs">Med. (5%)</div>
+                            <div className="text-white font-medium">{formatCurrency(previewData.salaryComponents.medical)}</div>
+                          </div>
+                          <div>
+                            <div className="text-gray-400 text-xs">Special (5%)</div>
+                            <div className="text-white font-medium">{formatCurrency(previewData.salaryComponents.specialAllowance)}</div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Gross Total */}
+                      <div className="bg-green-900/20 rounded-xl p-4 border border-green-500/30">
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm text-green-300 font-semibold">Gross Total (Prorated)</span>
+                          <span className="text-xl font-bold text-green-400">{formatCurrency(previewData.grossTotal)}</span>
+                        </div>
+                      </div>
+
+                      {/* Deductions */}
+                      <div className="bg-red-900/20 rounded-xl p-4 border border-red-500/30">
+                        <h4 className="text-sm font-semibold text-red-300 mb-3">Deductions</h4>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs mb-3">
+                          <div>
+                            <div className="text-gray-400">Emp. PF</div>
+                            <div className="text-white">-{formatCurrency(previewData.deductions.employeePF)}</div>
+                          </div>
+                          <div>
+                            <div className="text-gray-400">ESI</div>
+                            <div className="text-white">-{formatCurrency(previewData.deductions.esi)}</div>
+                          </div>
+                          <div>
+                            <div className="text-gray-400">PTax</div>
+                            <div className="text-white">-{formatCurrency(previewData.deductions.ptax)}</div>
+                          </div>
+                          <div>
+                            <div className="text-gray-400">Late Ded.</div>
+                            <div className="text-white">-{formatCurrency(previewData.deductions.lateDeduction)}</div>
+                          </div>
+                        </div>
+                        <div className="flex justify-between items-center pt-3 border-t border-red-500/30">
+                          <span className="text-sm text-red-300 font-semibold">Total Deductions</span>
+                          <span className="text-lg font-bold text-red-400">-{formatCurrency(previewData.totalDeductions)}</span>
+                        </div>
+                      </div>
+
+                      {/* Final Amount */}
+                      <div className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-xl p-6">
+                        <div className="flex justify-between items-center">
+                          <div>
+                            <div className="text-blue-100 text-sm">Net Payment (Take-Home)</div>
+                            <div className="text-xs text-blue-200 mt-1">CTC: {formatCurrency(previewData.ctc)}</div>
+                          </div>
+                          <div className="text-3xl font-bold text-white">{formatCurrency(previewData.netPayment)}</div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Remarks */}
                   <div>

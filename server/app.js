@@ -42,6 +42,7 @@ const notepadRoutes = require("./routes/notepadRoutes");
 
 // Controllers
 const ChatController = require("./controllers/chatController");
+const { setWebSocketUsers } = require("./utils/websocket");
 
 const app = express();
 const server = http.createServer(app);
@@ -178,6 +179,9 @@ wss.on("connection", (ws) => {
 
           ws.send(JSON.stringify({ type: "authenticated", userId: user.id }));
           console.log(`User authenticated: ${user.id}`);
+
+          // Update WebSocket utility with current users
+          setWebSocketUsers(users);
         } catch (err) {
           ws.send(JSON.stringify({ type: "auth_failed", message: "Invalid Token" }));
           ws.close();
@@ -324,6 +328,9 @@ wss.on("connection", (ws) => {
           delete conversationMembersOnline[convId];
         }
       }
+
+      // Update WebSocket utility
+      setWebSocketUsers(users);
     }
   });
 });

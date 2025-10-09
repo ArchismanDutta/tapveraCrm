@@ -10,60 +10,80 @@ const payslipSchema = new mongoose.Schema({
     type: String, // Format: "YYYY-MM"
     required: true
   },
-  ctc: {
+
+  // Input fields (entered by Super Admin)
+  monthlySalary: {
     type: Number,
     required: true
-  },
-  basicSalary: {
-    type: Number,
-    required: true
-  },
-  grossSalary: {
-    type: Number,
-    required: true
-  },
-  netSalary: {
-    type: Number,
-    required: true
-  },
-  deductions: {
-    pf: {
-      type: Number,
-      default: 0
-    },
-    esi: {
-      type: Number,
-      default: 0
-    },
-    ptax: {
-      type: Number,
-      default: 0
-    },
-    lateDeduction: {
-      type: Number,
-      default: 0
-    },
-    other: {
-      type: Number,
-      default: 0
-    }
-  },
-  totalDeductions: {
-    type: Number,
-    default: 0
   },
   workingDays: {
     type: Number,
-    default: 22
+    required: true
   },
-  presentDays: {
+  paidDays: {
     type: Number,
-    default: 0
+    required: true
   },
   lateDays: {
     type: Number,
     default: 0
   },
+
+  // Salary components (calculated from monthly salary)
+  salaryComponents: {
+    basic: { type: Number, default: 0 },           // 50%
+    hra: { type: Number, default: 0 },             // 35%
+    conveyance: { type: Number, default: 0 },      // 5%
+    medical: { type: Number, default: 0 },         // 5%
+    specialAllowance: { type: Number, default: 0 } // 5%
+  },
+
+  // Gross salary components (prorated based on paid days)
+  grossComponents: {
+    basic: { type: Number, default: 0 },
+    hra: { type: Number, default: 0 },
+    conveyance: { type: Number, default: 0 },
+    medical: { type: Number, default: 0 },
+    specialAllowance: { type: Number, default: 0 }
+  },
+
+  grossTotal: {
+    type: Number,
+    required: true
+  },
+
+  // Deductions
+  deductions: {
+    employeePF: { type: Number, default: 0 },     // 12% of basic if basic <= 15000
+    esi: { type: Number, default: 0 },            // 0.75% if total <= 21000
+    ptax: { type: Number, default: 0 },           // Professional tax based on slabs
+    tds: { type: Number, default: 0 },            // Manual entry
+    other: { type: Number, default: 0 },          // Manual entry (penalty)
+    advance: { type: Number, default: 0 },        // Manual entry
+    lateDeduction: { type: Number, default: 0 }   // Auto-calculated
+  },
+
+  totalDeductions: {
+    type: Number,
+    default: 0
+  },
+
+  // Employer contributions
+  employerContributions: {
+    employerPF: { type: Number, default: 0 },     // 12% of basic if basic <= 15000
+    employerESI: { type: Number, default: 0 }     // 3.25% if total <= 21000
+  },
+
+  // Final amounts
+  netPayment: {
+    type: Number,
+    required: true
+  },
+  ctc: {
+    type: Number,
+    required: true
+  },
+
   remarks: {
     type: String,
     default: ""
@@ -92,11 +112,13 @@ payslipSchema.pre('save', function(next) {
   }
 
   // Calculate total deductions
-  this.totalDeductions = (this.deductions.pf || 0) +
+  this.totalDeductions = (this.deductions.employeePF || 0) +
                         (this.deductions.esi || 0) +
                         (this.deductions.ptax || 0) +
-                        (this.deductions.lateDeduction || 0) +
-                        (this.deductions.other || 0);
+                        (this.deductions.tds || 0) +
+                        (this.deductions.other || 0) +
+                        (this.deductions.advance || 0) +
+                        (this.deductions.lateDeduction || 0);
 
   next();
 });
