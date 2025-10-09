@@ -825,20 +825,16 @@ class AttendanceService {
   getAttendanceDateForPunch(punchTime, shift) {
     const punch = new Date(punchTime);
 
-    // Get punch time and date in IST (timezone-independent)
+    // Get punch hour in IST (timezone-independent)
     const istTime = this.getISTTimeComponents(punchTime);
-    const istDate = this.getISTDateComponents(punchTime);
-
-    if (!istTime || !istDate) {
+    if (!istTime) {
       return this.normalizeDate(punch);
     }
-
     const punchHour = istTime.hour;
 
-    // If no shift or not a night shift, use the punch date in IST
+    // If no shift or not a night shift, use the punch date
     if (!shift || !shift.startTime || !shift.endTime) {
-      // Return normalized IST date
-      return new Date(Date.UTC(istDate.year, istDate.month - 1, istDate.day, 0, 0, 0, 0));
+      return this.normalizeDate(punch);
     }
 
     const [startHour] = shift.startTime.split(':').map(Number);
@@ -848,46 +844,41 @@ class AttendanceService {
     const isNightShift = endHour < startHour;
 
     if (isNightShift) {
-      // For night shifts, if punch is BEFORE/AT shift end time AND after midnight,
+      // For night shifts, if punch is BEFORE shift end time AND after midnight,
       // it belongs to PREVIOUS day's shift
       // Example: Shift 20:00-05:00
       //   - Punch at 18:00 IST = Sept 10 → Record for Sept 10 ✅
       //   - Punch at 22:00 IST = Sept 10 → Record for Sept 10 ✅
       //   - Punch at 02:00 IST = Sept 11 → Record for Sept 10 ✅ (belongs to previous shift)
-      //   - Punch at 05:00 IST = Sept 11 → Record for Sept 10 ✅ (shift end, belongs to shift)
       //   - Punch at 06:00 IST = Sept 11 → Record for Sept 11 ✅ (after shift ends)
 
-      if (punchHour <= endHour) {
+      if (punchHour < endHour) {
         // Punch is in the early morning hours (00:00 - endHour) IST
         // This belongs to YESTERDAY's night shift
-        console.log(`🌙 Night shift detected: Punch at ${punchHour}:00 IST at/before shift end ${endHour}:00`);
-        console.log(`   Assigning to previous day: ${istDate.year}-${String(istDate.month).padStart(2, '0')}-${String(istDate.day - 1).padStart(2, '0')}`);
-
-        // Return previous day's date in IST
-        return new Date(Date.UTC(istDate.year, istDate.month - 1, istDate.day - 1, 0, 0, 0, 0));
+        const yesterday = new Date(punch);
+        yesterday.setDate(yesterday.getDate() - 1);
+        console.log(`🌙 Night shift detected: Punch at ${punchHour}:00 IST before shift end ${endHour}:00`);
+        console.log(`   Assigning to previous day: ${yesterday.toISOString().split('T')[0]}`);
+        return this.normalizeDate(yesterday);
       } else if (punchHour >= startHour) {
         // Punch is in the evening (after shift start) IST
         // This belongs to TODAY's night shift
         console.log(`🌙 Night shift detected: Punch at ${punchHour}:00 IST after shift start ${startHour}:00`);
-        console.log(`   Assigning to current day: ${istDate.year}-${String(istDate.month).padStart(2, '0')}-${String(istDate.day).padStart(2, '0')}`);
-
-        // Return current day's date in IST
-        return new Date(Date.UTC(istDate.year, istDate.month - 1, istDate.day, 0, 0, 0, 0));
+        console.log(`   Assigning to current day: ${punch.toISOString().split('T')[0]}`);
+        return this.normalizeDate(punch);
       } else {
         // Punch is between endHour and startHour (the "off" hours) IST
         // For example, punching at 10:00 AM IST for a 20:00-05:00 shift
         // This is unusual - could be early punch for today's shift
         // Assign to today
         console.log(`⚠️  Unusual punch time: Punch at ${punchHour}:00 IST between shift end ${endHour}:00 and start ${startHour}:00`);
-        console.log(`   Assigning to current day: ${istDate.year}-${String(istDate.month).padStart(2, '0')}-${String(istDate.day).padStart(2, '0')}`);
-
-        // Return current day's date in IST
-        return new Date(Date.UTC(istDate.year, istDate.month - 1, istDate.day, 0, 0, 0, 0));
+        console.log(`   Assigning to current day: ${punch.toISOString().split('T')[0]}`);
+        return this.normalizeDate(punch);
       }
     }
 
-    // Not a night shift, use the punch date in IST
-    return new Date(Date.UTC(istDate.year, istDate.month - 1, istDate.day, 0, 0, 0, 0));
+    // Not a night shift, use the punch date
+    return this.normalizeDate(punch);
   }
 
   formatDateKey(date) {
