@@ -60,7 +60,10 @@ const Tasks = ({ onLogout }) => {
           status: task.status,
           assignedTo: Array.isArray(task.assignedTo) ? task.assignedTo : [],
           assignedBy: task.assignedBy || {},
-          completedAt: task.completedAt || null, // ✅ include completedAt
+          completedAt: task.completedAt || null,
+          rejectedAt: task.rejectedAt || null, // ✅ include rejectedAt
+          rejectionReason: task.rejectionReason || null, // ✅ include rejectionReason
+          remarks: task.remarks || [], // ✅ include remarks
         }))
         .sort((a, b) => {
           // First by status hierarchy
@@ -358,6 +361,7 @@ const Tasks = ({ onLogout }) => {
                 <option value="pending">Pending</option>
                 <option value="in-progress">In Progress</option>
                 <option value="completed">Completed</option>
+                <option value="rejected">Rejected</option>
               </select>
 
               <select

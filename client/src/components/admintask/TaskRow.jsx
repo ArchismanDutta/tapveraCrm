@@ -1,6 +1,6 @@
 // File: src/components/admintask/TaskRow.jsx
 import React, { useState, useRef, useEffect } from "react";
-import { Eye, Trash2, Edit3, MessageCircle } from "lucide-react";
+import { Eye, Trash2, Edit3, MessageCircle, XCircle } from "lucide-react";
 import axios from "axios";
 
 const priorityColors = {
@@ -13,6 +13,7 @@ const statusColors = {
   pending: "bg-blue-600 text-blue-100 border border-blue-500",
   "in-progress": "bg-purple-600 text-purple-100 border border-purple-500",
   completed: "bg-green-600 text-green-100 border border-green-500",
+  rejected: "bg-red-600 text-red-100 border border-red-500",
 };
 
 const ACTIONS = [
@@ -22,7 +23,7 @@ const ACTIONS = [
   { icon: MessageCircle, key: "remarks", color: "text-yellow-400", tooltip: "Remarks" },
 ];
 
-const TaskRow = ({ task, onView, onEdit, onDelete }) => {
+const TaskRow = ({ task, onView, onEdit, onDelete, onReject, onRemarks, onViewDetails }) => {
   const [remarksOpen, setRemarksOpen] = useState(false);
   const [remarks, setRemarks] = useState(task.remarks || []);
   const [comment, setComment] = useState("");
@@ -114,14 +115,15 @@ const TaskRow = ({ task, onView, onEdit, onDelete }) => {
   return (
     <tr
       ref={rowRef}
-      className="border-b border-blue-700/60 odd:bg-[#191f33] even:bg-[#161c2c] hover:bg-[#252e4d]/80 text-sm text-blue-100"
-      style={{ tableLayout: "fixed", width: "100%" }}
+      className="border-b border-blue-700/60 odd:bg-[#191f33] even:bg-[#161c2c] hover:bg-[#252e4d]/80 text-blue-100"
     >
       {/* Task Title */}
       <td
-        className="pl-3 pr-2 py-2 font-medium cursor-help truncate max-w-[150px] relative"
+        className="px-1.5 py-2 font-medium cursor-pointer truncate relative hover:text-blue-400 transition-colors"
         onMouseEnter={handleTitleMouseEnter}
         onMouseLeave={handleTitleMouseLeave}
+        onClick={() => onViewDetails && onViewDetails(task)}
+        title="Click to view full task details"
       >
         {task.title || "Untitled Task"}
         {showTitleTooltip && (
@@ -135,36 +137,39 @@ const TaskRow = ({ task, onView, onEdit, onDelete }) => {
       </td>
 
       {/* Assigned To */}
-      <td className="px-2 py-2 flex items-center gap-1 overflow-hidden">
-        {Array.isArray(task.assignedTo) && task.assignedTo.length > 0 ? (
-          task.assignedTo.slice(0, 2).map((user, idx) => (
-            <div key={user._id || idx} className="flex items-center gap-1 truncate">
+      <td className="px-1.5 py-2">
+        <div className="flex items-center gap-0.5 overflow-hidden">
+          {Array.isArray(task.assignedTo) && task.assignedTo.length > 0 ? (
+            <>
+              {/* Show only first avatar */}
               <img
-                src={user.photo || `https://i.pravatar.cc/40?u=${user._id || idx}`}
-                alt={user.name || "User"}
-                className="w-5 h-5 rounded-full border-2 border-yellow-400 object-cover"
+                src={task.assignedTo[0].photo || `https://i.pravatar.cc/40?u=${task.assignedTo[0]._id || 0}`}
+                alt={task.assignedTo[0].name || "User"}
+                className="w-5 h-5 rounded-full border border-yellow-400 object-cover flex-shrink-0"
+                title={task.assignedTo[0].name || task.assignedTo[0].email || "Unknown"}
               />
-              <span className="text-xs truncate">
-                {user.name || user.email || "Unknown"}
+              <span className="text-[10px] truncate ml-1" title={task.assignedTo.map(u => u.name || u.email).join(", ")}>
+                {task.assignedTo[0].name || task.assignedTo[0].email || "Unknown"}
+                {task.assignedTo.length > 1 && ` +${task.assignedTo.length - 1}`}
               </span>
-            </div>
-          ))
-        ) : (
-          <span className="text-blue-400 text-xs truncate">Unassigned</span>
-        )}
+            </>
+          ) : (
+            <span className="text-blue-400 text-[10px] truncate">Unassigned</span>
+          )}
+        </div>
       </td>
 
       {/* Assigned By */}
-      <td className="px-2 py-2 text-blue-300 text-xs truncate">
+      <td className="px-1.5 py-2 text-blue-300 text-[10px] truncate">
         {task.assignedBy?.name || "N/A"}
       </td>
 
       {/* Last Edited By */}
-      <td className="px-2 py-2 text-xs truncate">
+      <td className="px-1.5 py-2 text-[10px] truncate">
         {task.lastEditedBy ? (
-          <div className="flex items-center gap-1">
-            <div className="w-2 h-2 bg-orange-400 rounded-full"></div>
-            <span className="text-orange-300 font-medium" title={`Last edited by ${task.lastEditedBy.name || task.lastEditedBy.email || 'Unknown'}`}>
+          <div className="flex items-center gap-0.5">
+            <div className="w-1.5 h-1.5 bg-orange-400 rounded-full flex-shrink-0"></div>
+            <span className="text-orange-300 font-medium truncate" title={`Last edited by ${task.lastEditedBy.name || task.lastEditedBy.email || 'Unknown'}`}>
               {task.lastEditedBy.name || task.lastEditedBy.email || 'Unknown'}
             </span>
           </div>
@@ -174,19 +179,19 @@ const TaskRow = ({ task, onView, onEdit, onDelete }) => {
       </td>
 
       {/* Due Date */}
-      <td className="px-2 py-2 text-blue-200 text-xs truncate">
+      <td className="px-1.5 py-2 text-blue-200 text-[10px] truncate">
         {task.dueDate || "No due date"}
       </td>
 
       {/* Completed At */}
-      <td className="px-2 py-2 text-blue-200 text-xs truncate">
+      <td className="px-1.5 py-2 text-blue-200 text-[10px] truncate">
         {task.completedAt || "—"}
       </td>
 
       {/* Priority */}
-      <td className="px-2 py-2 truncate">
+      <td className="px-1.5 py-2 truncate">
         <span
-          className={`px-2 py-0.5 rounded-full text-xs font-semibold whitespace-nowrap ${
+          className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold whitespace-nowrap ${
             priorityColors[task.priority] || "bg-gray-500 text-gray-100"
           }`}
         >
@@ -195,9 +200,9 @@ const TaskRow = ({ task, onView, onEdit, onDelete }) => {
       </td>
 
       {/* Status */}
-      <td className="px-2 py-2 truncate">
+      <td className="px-1.5 py-2 truncate">
         <span
-          className={`px-2 py-0.5 rounded-full text-xs font-semibold whitespace-nowrap ${
+          className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold whitespace-nowrap ${
             statusColors[task.status] || "bg-gray-500 text-gray-100"
           }`}
         >
@@ -206,10 +211,10 @@ const TaskRow = ({ task, onView, onEdit, onDelete }) => {
       </td>
 
       {/* Actions */}
-      <td className="px-2 py-2 truncate relative">
-        <div className="flex gap-1 items-center justify-center">
+      <td className="px-1.5 py-2 relative">
+        <div className="flex gap-0.5 items-center justify-center flex-nowrap">
           {ACTIONS.map((btn, idx) => (
-            <div key={btn.key} className="relative">
+            <div key={btn.key} className="relative flex-shrink-0">
               <button
                 type="button"
                 onClick={
@@ -221,18 +226,18 @@ const TaskRow = ({ task, onView, onEdit, onDelete }) => {
                     ? onDelete
                     : toggleRemarks
                 }
-                className={`rounded-lg ${btn.color} hover:bg-white/10 transition flex items-center justify-center`}
-                style={{ width: 24, height: 24 }}
+                className={`rounded ${btn.color} hover:bg-white/10 transition flex items-center justify-center`}
+                style={{ width: 20, height: 20 }}
                 onMouseEnter={(e) => handleIconMouseEnter(idx, e)}
                 onMouseLeave={handleIconMouseLeave}
               >
-                <btn.icon size={14} />
+                <btn.icon size={12} />
               </button>
 
               {/* Inline tooltip */}
               {showTooltip === idx && (
                 <div
-                  className="absolute z-50 bg-[#161c2c] text-blue-100 text-xs rounded px-2 py-1 shadow-lg -translate-x-1/2 whitespace-nowrap"
+                  className="absolute z-50 bg-[#161c2c] text-blue-100 text-[10px] rounded px-1.5 py-0.5 shadow-lg -translate-x-1/2 whitespace-nowrap"
                   style={{ top: tooltipPos.top, left: tooltipPos.left }}
                 >
                   {btn.tooltip}
@@ -240,6 +245,32 @@ const TaskRow = ({ task, onView, onEdit, onDelete }) => {
               )}
             </div>
           ))}
+
+          {/* Reject button - only show for completed tasks */}
+          {task.status === "completed" && (
+            <div className="relative flex-shrink-0">
+              <button
+                type="button"
+                onClick={() => onReject && onReject(task)}
+                className="rounded text-red-500 hover:bg-white/10 transition flex items-center justify-center"
+                style={{ width: 20, height: 20 }}
+                onMouseEnter={(e) => handleIconMouseEnter(999, e)}
+                onMouseLeave={handleIconMouseLeave}
+              >
+                <XCircle size={12} />
+              </button>
+
+              {/* Reject tooltip */}
+              {showTooltip === 999 && (
+                <div
+                  className="absolute z-50 bg-[#161c2c] text-blue-100 text-[10px] rounded px-1.5 py-0.5 shadow-lg -translate-x-1/2 whitespace-nowrap"
+                  style={{ top: tooltipPos.top, left: tooltipPos.left }}
+                >
+                  Reject Task
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Remarks Modal */}
@@ -281,6 +312,7 @@ const TaskRow = ({ task, onView, onEdit, onDelete }) => {
             </div>
           </div>
         )}
+
       </td>
     </tr>
   );

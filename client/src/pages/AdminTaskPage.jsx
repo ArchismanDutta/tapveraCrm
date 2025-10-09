@@ -532,6 +532,7 @@ const EditTaskModal = ({ task, onSave, onCancel, users }) => {
             <option value="pending">Pending</option>
             <option value="in-progress">In Progress</option>
             <option value="completed">Completed</option>
+            <option value="rejected">Rejected</option>
           </select>
         </div>
 
@@ -685,6 +686,12 @@ export default function AdminTaskPage({ onLogout }) {
     }
   };
 
+  const handleRejectTask = async (id) => {
+    // Refresh tasks after rejection
+    await fetchTasks();
+    showPopup("❌ Task rejected successfully!");
+  };
+
   // Filtered Tasks
   const today = dayjs().startOf("day");
   const currentUserId = JSON.parse(localStorage.getItem("user"))?._id;
@@ -699,10 +706,13 @@ export default function AdminTaskPage({ onLogout }) {
         return (
           t.dueDate &&
           dayjs(t.dueDate).isBefore(today, "day") &&
-          (t.status || "").toLowerCase() !== "completed"
+          (t.status || "").toLowerCase() !== "completed" &&
+          (t.status || "").toLowerCase() !== "rejected"
         );
       case "completed":
         return (t.status || "").toLowerCase() === "completed";
+      case "rejected":
+        return (t.status || "").toLowerCase() === "rejected";
       default:
         return true;
     }
@@ -719,10 +729,14 @@ export default function AdminTaskPage({ onLogout }) {
     (t) =>
       t.dueDate &&
       dayjs(t.dueDate).isBefore(today, "day") &&
-      (t.status || "").toLowerCase() !== "completed"
+      (t.status || "").toLowerCase() !== "completed" &&
+      (t.status || "").toLowerCase() !== "rejected"
   ).length;
   const completedTasksCount = tasks.filter(
     (t) => (t.status || "").toLowerCase() === "completed"
+  ).length;
+  const rejectedTasksCount = tasks.filter(
+    (t) => (t.status || "").toLowerCase() === "rejected"
   ).length;
 
   // toggle behavior: clicking the same filter again will reset to 'all'
@@ -808,7 +822,7 @@ export default function AdminTaskPage({ onLogout }) {
         </div>
 
         {/* Modern Stats Dashboard */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6 mb-12">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6 mb-12">
           {/* Total Tasks */}
           <div
             onClick={() => handleFilterAndScroll("all")}
@@ -904,6 +918,25 @@ export default function AdminTaskPage({ onLogout }) {
             </div>
             <div className="h-1 bg-gradient-to-r from-purple-500 to-indigo-600 rounded-full"></div>
           </div>
+
+          {/* Rejected */}
+          <div
+            onClick={() => handleFilterAndScroll("rejected")}
+            className="group bg-gradient-to-br from-slate-800/50 to-slate-900/50 backdrop-blur-sm border border-slate-600/30 rounded-2xl p-6 hover:border-red-400/40 transition-all duration-300 cursor-pointer hover:scale-105 hover:shadow-2xl hover:shadow-red-500/25"
+          >
+            <div className="flex items-center justify-between mb-4">
+              <div className="p-3 bg-gradient-to-br from-red-500/20 to-rose-600/20 rounded-xl">
+                <svg className="w-6 h-6 text-red-400" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div className="text-right">
+                <p className="text-3xl font-bold text-white group-hover:text-red-400 transition-colors">{rejectedTasksCount}</p>
+                <p className="text-sm text-gray-400 uppercase tracking-wide">Rejected</p>
+              </div>
+            </div>
+            <div className="h-1 bg-gradient-to-r from-red-500 to-rose-600 rounded-full"></div>
+          </div>
         </div>
 
         {/* Task Creation Section */}
@@ -973,6 +1006,7 @@ export default function AdminTaskPage({ onLogout }) {
             onViewTask={setSelectedTaskView}
             onEditTask={setEditingTask}
             onDeleteTask={handleDeleteTask}
+            onRejectTask={handleRejectTask}
           />
         </section>
 

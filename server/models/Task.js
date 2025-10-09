@@ -24,7 +24,7 @@ const taskSchema = new mongoose.Schema(
     // Status of the task
     status: {
       type: String,
-      enum: ["pending", "in-progress", "completed"],
+      enum: ["pending", "in-progress", "completed", "rejected"],
       default: "pending",
     },
 
@@ -41,6 +41,12 @@ const taskSchema = new mongoose.Schema(
     // ✅ New field: When the task was marked completed
     completedAt: { type: Date, default: null },
 
+    // ✅ New field: When the task was rejected
+    rejectedAt: { type: Date, default: null },
+
+    // ✅ New field: Rejection reason
+    rejectionReason: { type: String, default: null },
+
     // ✅ Track who last edited the task
     lastEditedBy: {
       type: mongoose.Schema.Types.ObjectId,
@@ -54,6 +60,24 @@ const taskSchema = new mongoose.Schema(
         user: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
         comment: { type: String, required: true },
         createdAt: { type: Date, default: Date.now },
+      },
+    ],
+
+    // ✅ Status change history
+    statusHistory: [
+      {
+        status: {
+          type: String,
+          enum: ["pending", "in-progress", "completed", "rejected"],
+          required: true,
+        },
+        changedBy: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "User",
+          required: true,
+        },
+        changedAt: { type: Date, default: Date.now },
+        note: { type: String }, // Optional note for the change (e.g., rejection reason)
       },
     ],
   },

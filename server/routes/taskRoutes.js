@@ -27,6 +27,9 @@ router.get("/:taskId", protect, taskController.getTaskById);
 // Only assigned users or assignedBy can update
 router.patch("/:taskId/status", protect, taskController.updateTaskStatus);
 
+// Reject task (Admin / Super-admin only)
+router.patch("/:taskId/reject", protect, authorize("admin", "super-admin"), taskController.rejectTask);
+
 // Edit task
 // Admin / Super-admin or assignedBy can edit (authorization handled in controller)
 router.put("/:taskId", protect, taskController.editTask);

@@ -7,7 +7,7 @@ const glassTheme = "bg-gradient-to-br from-[#252a43]/80 via-[#1a1d2e]/80 to-[#23
 
 const SummaryCards = ({ data }) => (
   <div className="w-full">
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6 mb-6">
       {data.map((item, idx) => {
         const Icon = item.icon;
         return (
@@ -41,6 +41,8 @@ const SummaryCards = ({ data }) => (
                     item.color === "red" ? "bg-red-500/20 text-red-400" :
                     item.color === "orange" ? "bg-orange-500/20 text-orange-400" :
                     item.color === "green" ? "bg-green-500/20 text-green-400" :
+                    item.color === "rose" ? "bg-rose-500/20 text-rose-400" :
+                    item.color === "purple" ? "bg-purple-500/20 text-purple-400" :
                     "bg-blue-500/20 text-blue-400"
                   }`}>
                     <Icon className="w-4 h-4" />

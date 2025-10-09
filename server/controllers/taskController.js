@@ -8,7 +8,8 @@ const populateTask = (query) =>
     .populate("assignedTo", "name email")
     .populate("assignedBy", "name email")
     .populate("lastEditedBy", "name email")
-    .populate("remarks.user", "name email");
+    .populate("remarks.user", "name email")
+    .populate("statusHistory.changedBy", "name email");
 
 // ------------------- CREATE TASK -------------------
 exports.createTask = async (req, res) => {
@@ -32,6 +33,12 @@ exports.createTask = async (req, res) => {
       assignedBy,
       dueDate,
       priority: validatedPriority,
+      statusHistory: [{
+        status: "pending",
+        changedBy: assignedBy,
+        changedAt: new Date(),
+        note: "Task created"
+      }]
     });
     await task.save();
 
@@ -75,7 +82,33 @@ exports.editTask = async (req, res) => {
     if (Array.isArray(assignedTo) && assignedTo.length) task.assignedTo = assignedTo;
     if (dueDate) task.dueDate = dueDate;
 
-    if (status && ["pending", "in-progress", "completed"].includes(status)) {
+    if (status && ["pending", "in-progress", "completed", "rejected"].includes(status)) {
+      const isAdmin = ["admin", "super-admin"].includes(req.user.role);
+
+      // ✅ Prevent non-admin from changing status away from completed
+      if (!isAdmin && task.status === "completed" && status !== "completed") {
+        return res.status(403).json({
+          message: "Cannot change status of completed task. Please wait for admin review."
+        });
+      }
+
+      // Prevent manually setting rejected status
+      if (status === "rejected" && !isAdmin) {
+        return res.status(403).json({
+          message: "Only admins can reject tasks"
+        });
+      }
+
+      // ✅ Track status change if status is actually changing
+      if (task.status !== status) {
+        task.statusHistory.push({
+          status: status,
+          changedBy: req.user._id,
+          changedAt: new Date(),
+          note: `Status changed from ${task.status} to ${status} via edit`
+        });
+      }
+
       // ✅ handle completedAt field
       if (status === "completed" && task.status !== "completed") {
         task.completedAt = new Date();
@@ -115,7 +148,7 @@ exports.updateTaskStatus = async (req, res) => {
     const { taskId } = req.params;
     const { status } = req.body;
 
-    if (!["pending", "in-progress", "completed"].includes(status)) {
+    if (!["pending", "in-progress", "completed", "rejected"].includes(status)) {
       return res.status(400).json({ message: "Invalid status" });
     }
 
@@ -128,6 +161,32 @@ exports.updateTaskStatus = async (req, res) => {
       !task.assignedTo.some((id) => id.toString() === req.user._id.toString())
     ) {
       return res.status(403).json({ message: "Unauthorized" });
+    }
+
+    // ✅ Prevent non-admin employees from changing status once task is completed
+    // Only admin/super-admin can change status away from "completed" or "rejected"
+    const isAdmin = ["admin", "super-admin"].includes(req.user.role);
+    if (!isAdmin && task.status === "completed" && status !== "completed") {
+      return res.status(403).json({
+        message: "Cannot change status of completed task. Please wait for admin review."
+      });
+    }
+
+    // Prevent anyone from manually setting rejected status (must use reject endpoint)
+    if (status === "rejected") {
+      return res.status(400).json({
+        message: "Use the reject endpoint to reject tasks"
+      });
+    }
+
+    // ✅ Track status change
+    if (task.status !== status) {
+      task.statusHistory.push({
+        status: status,
+        changedBy: req.user._id,
+        changedAt: new Date(),
+        note: `Status updated by ${req.user.role === 'employee' ? 'employee' : 'admin'}`
+      });
     }
 
     // ✅ set/unset completedAt
@@ -172,6 +231,17 @@ exports.getTaskById = async (req, res) => {
       ["admin", "super-admin"].includes(req.user.role);
 
     if (!isAuthorized) return res.status(403).json({ message: "Not authorized" });
+
+    // ✅ Initialize statusHistory for old tasks that don't have it
+    if (!task.statusHistory || task.statusHistory.length === 0) {
+      task.statusHistory = [{
+        status: task.status || "pending",
+        changedBy: task.assignedBy,
+        changedAt: task.createdAt || new Date(),
+        note: "Initial status (migrated)"
+      }];
+      await task.save();
+    }
 
     res.json(task);
   } catch (err) {
@@ -255,6 +325,83 @@ exports.getRemarks = async (req, res) => {
     res.json(task.remarks || []);
   } catch (err) {
     console.error("Error fetching remarks:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+// ------------------- REJECT TASK -------------------
+exports.rejectTask = async (req, res) => {
+  try {
+    const { taskId } = req.params;
+    const { reason } = req.body;
+
+    // ✅ Require rejection reason
+    if (!reason || !reason.trim()) {
+      return res.status(400).json({ message: "Rejection reason is required" });
+    }
+
+    const task = await Task.findById(taskId);
+    if (!task) return res.status(404).json({ message: "Task not found." });
+
+    // Only admin/super-admin can reject tasks
+    if (!["admin", "super-admin"].includes(req.user.role)) {
+      return res.status(403).json({ message: "Only admins can reject tasks" });
+    }
+
+    // Only reject tasks that are marked as completed
+    if (task.status !== "completed") {
+      return res.status(400).json({ message: "Only completed tasks can be rejected" });
+    }
+
+    // ✅ Track status change to rejected
+    task.statusHistory.push({
+      status: "rejected",
+      changedBy: req.user._id,
+      changedAt: new Date(),
+      note: `Task rejected: ${reason.trim()}`
+    });
+
+    // Update task status to rejected
+    task.status = "rejected";
+    task.rejectedAt = new Date();
+    task.rejectionReason = reason.trim();
+    task.completedAt = null; // Clear completed timestamp
+    task.lastEditedBy = req.user._id;
+
+    // Mark fields as modified to ensure they're saved
+    task.markModified('status');
+    task.markModified('rejectedAt');
+    task.markModified('rejectionReason');
+    task.markModified('completedAt');
+    task.markModified('lastEditedBy');
+
+    await task.save();
+
+    // Log to verify the data is being saved
+    console.log('Task rejected:', {
+      id: task._id,
+      status: task.status,
+      rejectionReason: task.rejectionReason,
+      rejectedAt: task.rejectedAt
+    });
+
+    const populated = await populateTask(Task.findById(taskId)).lean();
+
+    // Log to verify the populated data includes rejection fields
+    console.log('Returning rejected task to client:', {
+      id: populated._id,
+      status: populated.status,
+      rejectionReason: populated.rejectionReason,
+      rejectedAt: populated.rejectedAt
+    });
+
+    await notifyAdmins(
+      `❌ *Task Rejected*\n📌 Title: *${populated.title}*\n📝 Reason: *${populated.rejectionReason}*\n👤 Rejected By: *${req.user.name}*`
+    );
+
+    res.json(populated);
+  } catch (err) {
+    console.error("Error rejecting task:", err);
     res.status(500).json({ message: "Server error" });
   }
 };
