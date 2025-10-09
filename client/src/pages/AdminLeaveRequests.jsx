@@ -78,9 +78,10 @@ const AdminLeaveRequests = ({ onLogout }) => {
 
   const selectedRequest = requests.find((req) => String(req._id) === String(selectedId)) || null;
 
+  // Only reset remarks when selecting a different request, not on every data update
   useEffect(() => {
     setAdminRemarks(selectedRequest?.adminRemarks || "");
-  }, [selectedRequest]);
+  }, [selectedId]); // Changed from [selectedRequest] to [selectedId]
 
   // Calculate stats
   const totalRequests = requests.length;
