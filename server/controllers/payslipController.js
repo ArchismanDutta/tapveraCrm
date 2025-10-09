@@ -33,6 +33,9 @@ function calculateSalaryBreakdown(monthlySalary, workingDays, paidDays, lateDays
   // Step 3: Calculate gross total
   const grossTotal = Object.values(grossComponents).reduce((sum, val) => sum + val, 0);
 
+  // Step 3.5: Determine ESI eligibility based on monthly salary
+  const esiApplicable = monthlySalary <= 21000;
+
   // Step 4: Calculate late deduction
   // Formula: Every 3 lates = 1 day salary deduction
   // For lates not in multiples of 3 (4, 5, 7, 8, etc.), add ₹200 per extra late day
@@ -50,11 +53,13 @@ function calculateSalaryBreakdown(monthlySalary, workingDays, paidDays, lateDays
 
   // Step 5: Calculate deductions
   const deductions = {
-    // Employee PF: 12% of basic if basic <= 15000, else 0
-    employeePF: salaryComponents.basic <= 15000 ? salaryComponents.basic * 0.12 : 0,
+    // Employee PF: MIN(1800, ROUNDUP(Basic * 12%, 0)) if basic <= 15000, else 0
+    employeePF: salaryComponents.basic <= 15000
+      ? Math.min(1800, Math.ceil(salaryComponents.basic * 0.12))
+      : 0,
 
-    // ESI: 0.75% of total if total <= 21000, else 0
-    esi: monthlySalary <= 21000 ? monthlySalary * 0.0075 : 0,
+    // ESI: ROUND(Gross Total * 0.75%, 0) if salary <= 21000, else 0
+    esi: esiApplicable ? Math.round(grossTotal * 0.0075) : 0,
 
     // Professional Tax based on slabs
     ptax: calculatePTax(monthlySalary),
@@ -70,11 +75,13 @@ function calculateSalaryBreakdown(monthlySalary, workingDays, paidDays, lateDays
 
   // Step 6: Calculate employer contributions
   const employerContributions = {
-    // Employer PF: 12% of basic if basic <= 15000, else 0
-    employerPF: salaryComponents.basic <= 15000 ? salaryComponents.basic * 0.12 : 0,
+    // Employer PF: MIN(1800, ROUNDUP(Basic * 12%, 0)) if basic <= 15000, else 0
+    employerPF: salaryComponents.basic <= 15000
+      ? Math.min(1800, Math.ceil(salaryComponents.basic * 0.12))
+      : 0,
 
-    // Employer ESI: 3.25% of total if total <= 21000, else 0
-    employerESI: monthlySalary <= 21000 ? monthlySalary * 0.0325 : 0
+    // Employer ESI: ROUND(Gross Total * 3.25%, 0) if salary <= 21000, else 0
+    employerESI: esiApplicable ? Math.round(grossTotal * 0.0325) : 0
   };
 
   // Step 7: Calculate totals

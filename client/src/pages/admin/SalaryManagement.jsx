@@ -135,6 +135,9 @@ const SalaryManagement = ({ onLogout }) => {
 
     const grossTotal = Object.values(grossComponents).reduce((sum, val) => sum + val, 0);
 
+    // Determine ESI eligibility based on monthly salary
+    const esiApplicable = salary <= 21000;
+
     // Calculate late deduction
     // Every 3 lates = 1 day salary deduction
     // Extra lates (not in multiples of 3) = ₹200 per late
@@ -154,8 +157,10 @@ const SalaryManagement = ({ onLogout }) => {
 
     // Calculate deductions
     const deductions = {
-      employeePF: salaryComponents.basic <= 15000 ? salaryComponents.basic * 0.12 : 0,
-      esi: salary <= 21000 ? salary * 0.0075 : 0,
+      employeePF: salaryComponents.basic <= 15000
+        ? Math.min(1800, Math.ceil(salaryComponents.basic * 0.12))
+        : 0,
+      esi: esiApplicable ? Math.round(grossTotal * 0.0075) : 0,
       ptax: calculatePTax(salary),
       tds: parseFloat(manualDeductions.tds) || 0,
       other: parseFloat(manualDeductions.other) || 0,
@@ -167,8 +172,10 @@ const SalaryManagement = ({ onLogout }) => {
 
     // Employer contributions
     const employerContributions = {
-      employerPF: salaryComponents.basic <= 15000 ? salaryComponents.basic * 0.12 : 0,
-      employerESI: salary <= 21000 ? salary * 0.0325 : 0
+      employerPF: salaryComponents.basic <= 15000
+        ? Math.min(1800, Math.ceil(salaryComponents.basic * 0.12))
+        : 0,
+      employerESI: esiApplicable ? Math.round(grossTotal * 0.0325) : 0
     };
 
     const netPayment = grossTotal - totalDeductions;
