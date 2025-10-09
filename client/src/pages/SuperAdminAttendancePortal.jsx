@@ -385,7 +385,7 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
               events: day.events || day.timeline || [],
 
               // Leave information
-              leaveInfo: day.leaveInfo || day.calculated?.leaveInfo || null,
+              leaveInfo: day.leaveInfo || day.leave || day.calculated?.leaveInfo || null,
               leaveType: day.leaveType || day.calculated?.leaveType || null,
 
               // Raw data for debugging
@@ -766,13 +766,20 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
                                      selectedEmployee?.shift?.name?.toLowerCase().includes('flexible') ||
                                      false;
 
-          // Priority-based status determination: Absent > Late > Present > Half Day
+          // Priority-based status determination:
+          // Holiday > Absent > Leave (NOT WFH) > Half-day > Late > Present
+          // WFH is NOT treated as leave - it's a normal working day with isWFH flag
           if (attendanceData.isAbsent && !attendanceData.isPresent) {
-            // PRIORITY 2: Absent
+            // PRIORITY 2: Absent (no work done)
             status = "absent";
-          } else if (attendanceData.leaveInfo && attendanceData.leaveInfo.type) {
-            // Handle different leave types (treated as absent with reason)
+          } else if (attendanceData.leaveInfo && attendanceData.leaveInfo.type && attendanceData.leaveInfo.type !== 'workFromHome') {
+            // PRIORITY 3: Leave types (on approved leave) - EXCLUDING WFH
+            // WFH is NOT a leave type, it's a normal working day
             switch (attendanceData.leaveInfo.type) {
+              case 'paid':
+                // ⭐ Paid leave: Distinct status with different color
+                status = "paid-leave";
+                break;
               case 'sick':
                 status = "sick-leave";
                 break;
@@ -785,21 +792,31 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
               case 'halfDay':
                 status = "half-day-leave";
                 break;
+              case 'unpaid':
+                status = "unpaid-leave";
+                break;
+              case 'maternity':
+                status = "maternity-leave";
+                break;
               default:
                 status = "approved-leave";
             }
+          } else if ((attendanceData.isWFH || attendanceData.leaveInfo?.type === 'workFromHome') && attendanceData.isPresent) {
+            // PRIORITY 4: Work From Home (if worked normal hours)
+            // Show as distinct WFH status instead of Present
+            status = "wfh";
+          } else if (attendanceData.isHalfDay && attendanceData.isPresent) {
+            // PRIORITY 5: Half Day (< 4.5 hours worked)
+            // Half-day takes priority over Late and Present
+            status = "half-day";
           } else if (attendanceData.isLate && attendanceData.isPresent && !isFlexibleEmployee) {
-            // PRIORITY 3: Late (only for standard shift employees, NOT flexible)
+            // PRIORITY 6: Late (only for standard shift employees, NOT flexible)
             // Flexible permanent employees are NEVER marked as late
             status = "late";
-          } else if (attendanceData.isWFH) {
-            status = "wfh";
           } else if (attendanceData.isPresent || (attendanceData.workDurationSeconds && attendanceData.workDurationSeconds > 0)) {
-            // PRIORITY 4: Present
+            // PRIORITY 7: Present (>= 4.5 hours worked)
+            // Regular office attendance
             status = "present";
-          } else if (attendanceData.isHalfDay && attendanceData.isPresent) {
-            // PRIORITY 5: Half Day (lowest priority)
-            status = "half-day";
           } else if (attendanceData.isEarly && attendanceData.isPresent) {
             status = "early";
           } else {
@@ -986,6 +1003,7 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
             isLate: attendanceData.isLate === true,
             isEarly: attendanceData.isEarly === true,
             isWFH: attendanceData.isWFH === true,
+            isPaidLeave: attendanceData.isPaidLeave === true,
             isHalfDay: attendanceData.isHalfDay === true,
             isFullDay: rawWorkSeconds >= (6.5 * 3600),
             isFlexible: attendanceData.shiftType === 'flexible' || attendanceData.shiftType === 'flexiblePermanent',
@@ -1073,14 +1091,17 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
 
       // Calculate enhanced monthly stats
       const monthlyStats = {
-        // Present includes: on-time, late, wfh, and half-day (all non-absent working days)
-        totalPresent: days.filter(d => ["present", "late", "wfh", "half-day"].includes(d.status)).length,
+        // Present includes: on-time, late, half-day, and WFH (all non-absent working days)
+        totalPresent: days.filter(d => ["present", "late", "half-day", "wfh"].includes(d.status)).length,
         totalLate: days.filter(d => d.status === "late").length,
         totalHalfDay: days.filter(d => d.status === "half-day").length,
         totalAbsent: days.filter(d => d.status === "absent").length,
         totalWeekend: days.filter(d => d.status === "weekend").length,
-        totalLeave: days.filter(d => ["leave", "half-day-leave", "approved-leave", "sick-leave", "vacation", "personal-leave"].includes(d.status)).length,
+        // ⭐ Paid leaves counted separately from unpaid leaves
+        totalPaidLeave: days.filter(d => d.status === "paid-leave").length,
+        totalLeave: days.filter(d => ["leave", "half-day-leave", "approved-leave", "sick-leave", "vacation", "personal-leave", "unpaid-leave", "maternity-leave"].includes(d.status)).length,
         totalHolidays: days.filter(d => d.status === "holiday").length,
+        // ⭐ WFH count: days with "wfh" status (displayed as separate category)
         totalWFH: days.filter(d => d.status === "wfh").length,
         totalWorkingDays: days.filter(d => !["weekend", "default"].includes(d.status)).length,
         totalWorkHours: days.reduce((sum, d) => sum + parseFloat(d.workingHours || 0), 0).toFixed(1)

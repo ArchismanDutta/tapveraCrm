@@ -67,9 +67,10 @@ const leadSchema = new mongoose.Schema(
       trim: true,
     },
 
-    companySize: {
+    websiteUrl: {
       type: String,
-      enum: ["1-10", "11-50", "51-200", "201-500", "500+"],
+      trim: true,
+      match: [/^(https?:\/\/)?([\da-z\.-]+)\.([a-z\.]{2,6})([\/\w \.-]*)*\/?$/, "Invalid URL format"],
     },
 
     expectedRevenue: {

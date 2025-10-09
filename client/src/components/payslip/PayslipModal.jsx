@@ -76,6 +76,51 @@ const PayslipModal = ({ isOpen, onClose, employeeId = null }) => {
     });
   };
 
+  const convertToWords = (amount) => {
+    const ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine'];
+    const tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
+    const teens = ['Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
+
+    const convertGroup = (num) => {
+      if (num === 0) return '';
+      if (num < 10) return ones[num];
+      if (num < 20) return teens[num - 10];
+      if (num < 100) return tens[Math.floor(num / 10)] + (num % 10 ? ' ' + ones[num % 10] : '');
+      return ones[Math.floor(num / 100)] + ' Hundred' + (num % 100 ? ' ' + convertGroup(num % 100) : '');
+    };
+
+    if (!amount || amount === 0) return 'Zero Rupees Only';
+
+    let rupees = Math.floor(amount);
+    const paise = Math.round((amount - rupees) * 100);
+
+    let words = '';
+
+    if (rupees >= 10000000) {
+      words += convertGroup(Math.floor(rupees / 10000000)) + ' Crore ';
+      rupees %= 10000000;
+    }
+    if (rupees >= 100000) {
+      words += convertGroup(Math.floor(rupees / 100000)) + ' Lakh ';
+      rupees %= 100000;
+    }
+    if (rupees >= 1000) {
+      words += convertGroup(Math.floor(rupees / 1000)) + ' Thousand ';
+      rupees %= 1000;
+    }
+    if (rupees > 0) {
+      words += convertGroup(rupees);
+    }
+
+    words = words.trim() + ' Rupees';
+    if (paise > 0) {
+      words += ' and ' + convertGroup(paise) + ' Paise';
+    }
+    words += ' Only';
+
+    return words;
+  };
+
   const handlePrint = () => {
     window.print();
   };
@@ -113,234 +158,367 @@ const PayslipModal = ({ isOpen, onClose, employeeId = null }) => {
             body {
               background-color: #1e293b;
               color: #ffffff;
-              padding: 24px;
+              padding: 20px;
               line-height: 1.5;
             }
             .payslip-container {
               background-color: #1e293b;
-              border-radius: 16px;
-              border: 1px solid #475569;
-              overflow: hidden;
+              max-width: 800px;
+              margin: 0 auto;
             }
             .header {
-              background-color: #334155;
-              padding: 24px;
-              border-bottom: 1px solid #475569;
-            }
-            .company-name {
-              font-size: 24px;
-              font-weight: bold;
-              margin-bottom: 8px;
-            }
-            .pay-period {
-              color: #9ca3af;
-              font-size: 14px;
-            }
-            .content {
-              padding: 24px;
-            }
-            .section {
-              background-color: #334155;
+              background: linear-gradient(to right, #1e3a8a, #581c87);
+              padding: 32px;
               border-radius: 12px;
-              border: 1px solid #475569;
-              padding: 24px;
+              border: 2px solid rgba(59, 130, 246, 0.3);
               margin-bottom: 24px;
             }
-            .section-title {
-              font-size: 18px;
-              font-weight: 600;
-              margin-bottom: 16px;
-              display: flex;
+            .company-logo {
+              width: 64px;
+              height: 64px;
+              background-color: white;
+              border-radius: 8px;
+              display: inline-flex;
               align-items: center;
-              gap: 8px;
+              justify-content: center;
+              font-size: 28px;
+              font-weight: bold;
+              color: #2563eb;
+              margin-bottom: 16px;
+            }
+            .company-name {
+              font-size: 28px;
+              font-weight: bold;
+              margin-bottom: 4px;
+              letter-spacing: 0.5px;
+            }
+            .company-subtitle {
+              color: #93c5fd;
+              font-size: 14px;
+              margin-bottom: 16px;
+            }
+            .pay-period-badge {
+              display: inline-block;
+              background-color: rgba(255, 255, 255, 0.1);
+              padding: 8px 16px;
+              border-radius: 8px;
+              border: 1px solid rgba(255, 255, 255, 0.2);
+              margin-top: 8px;
+            }
+            .pay-period-label {
+              color: #93c5fd;
+              font-size: 10px;
+              text-transform: uppercase;
+              letter-spacing: 1px;
+            }
+            .pay-period-value {
+              font-weight: bold;
+              font-size: 18px;
+            }
+            .section {
+              background-color: rgba(51, 65, 85, 0.3);
+              border-radius: 12px;
+              border: 2px solid rgba(71, 85, 105, 0.3);
+              padding: 20px;
+              margin-bottom: 20px;
+            }
+            .section-title {
+              font-size: 16px;
+              font-weight: 600;
+              margin-bottom: 12px;
+              padding-bottom: 8px;
+              border-bottom: 1px solid rgba(71, 85, 105, 0.3);
+              text-transform: uppercase;
+              letter-spacing: 0.5px;
             }
             .grid-2 {
               display: grid;
               grid-template-columns: 1fr 1fr;
-              gap: 24px;
-            }
-            .grid-3 {
-              display: grid;
-              grid-template-columns: 1fr 1fr 1fr;
-              gap: 16px;
-              text-align: center;
+              gap: 32px;
             }
             .detail-row {
-              display: flex;
-              justify-content: space-between;
+              display: grid;
+              grid-template-columns: 1fr 1fr;
               margin-bottom: 8px;
-              font-size: 14px;
+              font-size: 13px;
             }
             .detail-label {
               color: #9ca3af;
-            }
-            .detail-value {
               font-weight: 500;
             }
-            .earnings-section {
-              background-color: #166534;
+            .detail-value {
+              font-weight: 600;
+              text-align: right;
             }
-            .deductions-section {
-              background-color: #991b1b;
+            .earnings-table {
+              width: 100%;
+              border-collapse: collapse;
             }
-            .net-salary-section {
-              background-color: #1e40af;
+            .earnings-table th {
+              text-align: left;
+              color: #9ca3af;
+              font-size: 11px;
+              text-transform: uppercase;
+              padding-bottom: 8px;
+              border-bottom: 1px solid rgba(71, 85, 105, 0.3);
             }
-            .total-row {
-              border-top: 1px solid #475569;
-              padding-top: 12px;
-              margin-top: 12px;
+            .earnings-table th:last-child {
+              text-align: right;
+            }
+            .earnings-table td {
+              padding: 8px 0;
+              font-size: 13px;
+              border-bottom: 1px solid rgba(71, 85, 105, 0.2);
+            }
+            .earnings-table td:first-child {
+              color: #d1d5db;
+            }
+            .earnings-table td:last-child {
+              text-align: right;
               font-weight: 600;
             }
             .earnings-total {
+              background-color: rgba(22, 101, 52, 0.1);
+              border-top: 2px solid rgba(34, 197, 94, 0.3);
+            }
+            .earnings-total td {
+              padding: 12px 0;
               color: #4ade80;
+              font-weight: bold;
+              font-size: 16px;
+              text-transform: uppercase;
+              border-bottom: none;
             }
             .deductions-total {
+              background-color: rgba(153, 27, 27, 0.1);
+              border-top: 2px solid rgba(239, 68, 68, 0.3);
+            }
+            .deductions-total td {
+              padding: 12px 0;
               color: #f87171;
-            }
-            .net-salary-amount {
-              font-size: 32px;
               font-weight: bold;
-              color: #60a5fa;
+              font-size: 16px;
+              text-transform: uppercase;
+              border-bottom: none;
             }
-            .net-salary-label {
+            .net-payment {
+              background: linear-gradient(to right, #1e40af, #1e3a8a);
+              border-radius: 12px;
+              padding: 24px;
+              border: 2px solid rgba(96, 165, 250, 0.5);
+              margin-bottom: 20px;
+            }
+            .net-payment-header {
+              font-size: 20px;
+              font-weight: bold;
+              text-transform: uppercase;
+              letter-spacing: 0.5px;
+              margin-bottom: 16px;
+            }
+            .net-payment-box {
+              background-color: rgba(255, 255, 255, 0.2);
+              padding: 16px 20px;
+              border-radius: 8px;
+              border: 2px solid rgba(255, 255, 255, 0.3);
+              text-align: center;
+            }
+            .net-payment-label {
+              color: #93c5fd;
+              font-size: 11px;
+              text-transform: uppercase;
+              letter-spacing: 1px;
+              margin-bottom: 4px;
+            }
+            .net-payment-amount {
+              font-size: 36px;
+              font-weight: bold;
+              margin-bottom: 8px;
+            }
+            .net-payment-words {
+              color: #93c5fd;
+              font-size: 11px;
+            }
+            .footer {
+              background-color: rgba(51, 65, 85, 0.3);
+              border-radius: 12px;
+              border: 1px solid rgba(71, 85, 105, 0.3);
+              padding: 16px;
+              font-size: 11px;
               color: #9ca3af;
-              font-size: 12px;
             }
           </style>
         </head>
         <body>
           <div class="payslip-container">
+            <!-- Header -->
             <div class="header">
+              <div class="company-logo">T</div>
               <div class="company-name">TAPVERA TECHNOLOGIES</div>
-              <div class="pay-period">Payslip for ${new Date(selectedMonth + '-01').toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}</div>
+              <div class="company-subtitle">Private Limited</div>
+              <div class="pay-period-badge">
+                <div class="pay-period-label">Pay Slip</div>
+                <div class="pay-period-value">${new Date(selectedMonth + '-01').toLocaleDateString('en-IN', { month: 'short', year: 'numeric' }).toUpperCase()}</div>
+              </div>
             </div>
-            <div class="content">
-              <div class="section">
-                <div class="grid-2">
-                  <div>
-                    <div class="section-title">👤 Employee Details</div>
-                    <div class="detail-row">
-                      <span class="detail-label">Name:</span>
-                      <span class="detail-value">${payslipData.employee?.name || 'N/A'}</span>
-                    </div>
-                    <div class="detail-row">
-                      <span class="detail-label">Employee ID:</span>
-                      <span class="detail-value">${payslipData.employee?.employeeId || 'N/A'}</span>
-                    </div>
-                    <div class="detail-row">
-                      <span class="detail-label">Designation:</span>
-                      <span class="detail-value">${payslipData.employee?.designation || 'N/A'}</span>
-                    </div>
-                    <div class="detail-row">
-                      <span class="detail-label">Department:</span>
-                      <span class="detail-value">${payslipData.employee?.department || 'N/A'}</span>
-                    </div>
-                  </div>
-                  <div>
-                    <div class="section-title">📅 Pay Period</div>
-                    <div class="detail-row">
-                      <span class="detail-label">Pay Period:</span>
-                      <span class="detail-value">${payslipData.payPeriod}</span>
-                    </div>
-                    <div class="detail-row">
-                      <span class="detail-label">Working Days:</span>
-                      <span class="detail-value">${payslipData.workingDays || 'N/A'}</span>
-                    </div>
-                    <div class="detail-row">
-                      <span class="detail-label">Present Days:</span>
-                      <span class="detail-value">${payslipData.presentDays || 'N/A'}</span>
-                    </div>
-                    <div class="detail-row">
-                      <span class="detail-label">Late Days:</span>
-                      <span class="detail-value">${payslipData.lateDays || 0}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
 
+            <!-- Employee Info -->
+            <div class="section">
+              <div class="section-title">👤 Employee Information</div>
               <div class="grid-2">
-                <div class="section earnings-section">
-                  <div class="section-title">📈 Earnings</div>
+                <div>
                   <div class="detail-row">
-                    <span class="detail-label">Basic Salary:</span>
-                    <span class="detail-value">${formatCurrency(payslipData.basicSalary)}</span>
+                    <span class="detail-label">Employee Name:</span>
+                    <span class="detail-value">${payslipData.employee?.name || 'N/A'}</span>
                   </div>
                   <div class="detail-row">
-                    <span class="detail-label">CTC:</span>
-                    <span class="detail-value">${formatCurrency(payslipData.ctc)}</span>
+                    <span class="detail-label">Employee ID:</span>
+                    <span class="detail-value">${payslipData.employee?.employeeId || 'N/A'}</span>
                   </div>
                   <div class="detail-row">
-                    <span class="detail-label">Gross Salary:</span>
-                    <span class="detail-value">${formatCurrency(payslipData.grossSalary)}</span>
+                    <span class="detail-label">Designation:</span>
+                    <span class="detail-value">${payslipData.employee?.designation || 'N/A'}</span>
                   </div>
-                  <div class="detail-row total-row earnings-total">
-                    <span>Total Earnings:</span>
-                    <span>${formatCurrency(payslipData.grossSalary)}</span>
+                  <div class="detail-row">
+                    <span class="detail-label">Department:</span>
+                    <span class="detail-value">${payslipData.employee?.department || 'N/A'}</span>
                   </div>
                 </div>
-
-                <div class="section deductions-section">
-                  <div class="section-title">📉 Deductions</div>
+                <div>
                   <div class="detail-row">
-                    <span class="detail-label">PF Deduction:</span>
-                    <span class="detail-value">${formatCurrency(payslipData.deductions?.pf)}</span>
+                    <span class="detail-label">Pay Period:</span>
+                    <span class="detail-value">${new Date(payslipData.payPeriod + '-01').toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}</span>
                   </div>
                   <div class="detail-row">
-                    <span class="detail-label">ESI Deduction:</span>
-                    <span class="detail-value">${formatCurrency(payslipData.deductions?.esi)}</span>
+                    <span class="detail-label">Monthly CTC:</span>
+                    <span class="detail-value">${formatCurrency(payslipData.monthlySalary)}</span>
                   </div>
                   <div class="detail-row">
-                    <span class="detail-label">Professional Tax:</span>
-                    <span class="detail-value">${formatCurrency(payslipData.deductions?.ptax)}</span>
+                    <span class="detail-label">Working Days:</span>
+                    <span class="detail-value">${payslipData.workingDays || 'N/A'}</span>
                   </div>
                   <div class="detail-row">
-                    <span class="detail-label">Late Deduction:</span>
-                    <span class="detail-value">${formatCurrency(payslipData.deductions?.lateDeduction)}</span>
+                    <span class="detail-label">Paid Days:</span>
+                    <span class="detail-value">${payslipData.paidDays || 'N/A'}</span>
                   </div>
                   <div class="detail-row">
-                    <span class="detail-label">Other Deductions:</span>
-                    <span class="detail-value">${formatCurrency(payslipData.deductions?.other)}</span>
-                  </div>
-                  <div class="detail-row total-row deductions-total">
-                    <span>Total Deductions:</span>
-                    <span>${formatCurrency(payslipData.totalDeductions)}</span>
+                    <span class="detail-label">Late Days:</span>
+                    <span class="detail-value">${payslipData.lateDays || 0}</span>
                   </div>
                 </div>
               </div>
+            </div>
 
-              <div class="section net-salary-section">
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                  <div class="section-title">💳 Net Salary</div>
-                  <div style="text-align: right;">
-                    <div class="net-salary-amount">${formatCurrency(payslipData.netSalary)}</div>
-                    <div class="net-salary-label">Amount to be credited</div>
-                  </div>
-                </div>
-                ${payslipData.remarks ? `
-                  <div style="border-top: 1px solid #475569; margin-top: 16px; padding-top: 16px;">
-                    <strong>Remarks:</strong> ${payslipData.remarks}
-                  </div>
-                ` : ''}
+            <!-- Earnings & Deductions -->
+            <div class="grid-2">
+              <div class="section">
+                <div class="section-title">📈 Earnings</div>
+                <table class="earnings-table">
+                  <thead>
+                    <tr>
+                      <th>Component</th>
+                      <th>Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td>Basic Salary (50%)</td>
+                      <td>${formatCurrency(payslipData.grossComponents?.basic)}</td>
+                    </tr>
+                    <tr>
+                      <td>House Rent Allowance (35%)</td>
+                      <td>${formatCurrency(payslipData.grossComponents?.hra)}</td>
+                    </tr>
+                    <tr>
+                      <td>Conveyance Allowance (5%)</td>
+                      <td>${formatCurrency(payslipData.grossComponents?.conveyance)}</td>
+                    </tr>
+                    <tr>
+                      <td>Medical Allowance (5%)</td>
+                      <td>${formatCurrency(payslipData.grossComponents?.medical)}</td>
+                    </tr>
+                    <tr>
+                      <td>Special Allowance (5%)</td>
+                      <td>${formatCurrency(payslipData.grossComponents?.specialAllowance)}</td>
+                    </tr>
+                    <tr class="earnings-total">
+                      <td>Gross Earnings</td>
+                      <td>${formatCurrency(payslipData.grossTotal)}</td>
+                    </tr>
+                  </tbody>
+                </table>
               </div>
 
               <div class="section">
-                <div class="section-title">🧮 Calculation Summary</div>
-                <div class="grid-3">
-                  <div>
-                    <div class="detail-label">Gross Salary</div>
-                    <div style="font-weight: 600; font-size: 18px;">${formatCurrency(payslipData.grossSalary)}</div>
-                  </div>
-                  <div>
-                    <div class="detail-label">Total Deductions</div>
-                    <div style="font-weight: 600; font-size: 18px; color: #f87171;">-${formatCurrency(payslipData.totalDeductions)}</div>
-                  </div>
-                  <div>
-                    <div class="detail-label">Net Salary</div>
-                    <div style="font-weight: 600; font-size: 18px; color: #60a5fa;">${formatCurrency(payslipData.netSalary)}</div>
-                  </div>
-                </div>
+                <div class="section-title">📉 Deductions</div>
+                <table class="earnings-table">
+                  <thead>
+                    <tr>
+                      <th>Component</th>
+                      <th>Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td>Provident Fund (Employee)</td>
+                      <td>${formatCurrency(payslipData.deductions?.employeePF)}</td>
+                    </tr>
+                    <tr>
+                      <td>ESI (Employee)</td>
+                      <td>${formatCurrency(payslipData.deductions?.esi)}</td>
+                    </tr>
+                    <tr>
+                      <td>Professional Tax</td>
+                      <td>${formatCurrency(payslipData.deductions?.ptax)}</td>
+                    </tr>
+                    <tr>
+                      <td>Late Attendance Deduction</td>
+                      <td>${formatCurrency(payslipData.deductions?.lateDeduction)}</td>
+                    </tr>
+                    ${payslipData.deductions?.tds > 0 ? `
+                    <tr>
+                      <td>Tax Deducted at Source (TDS)</td>
+                      <td>${formatCurrency(payslipData.deductions?.tds)}</td>
+                    </tr>
+                    ` : ''}
+                    ${payslipData.deductions?.other > 0 ? `
+                    <tr>
+                      <td>Other Deductions</td>
+                      <td>${formatCurrency(payslipData.deductions?.other)}</td>
+                    </tr>
+                    ` : ''}
+                    ${payslipData.deductions?.advance > 0 ? `
+                    <tr>
+                      <td>Advance Deduction</td>
+                      <td>${formatCurrency(payslipData.deductions?.advance)}</td>
+                    </tr>
+                    ` : ''}
+                    <tr class="deductions-total">
+                      <td>Total Deductions</td>
+                      <td>${formatCurrency(payslipData.totalDeductions)}</td>
+                    </tr>
+                  </tbody>
+                </table>
               </div>
+            </div>
+
+            <!-- Net Payment -->
+            <div class="net-payment">
+              <div class="net-payment-header">💳 Net Salary</div>
+              <div class="net-payment-box">
+                <div class="net-payment-label">Take Home</div>
+                <div class="net-payment-amount">${formatCurrency(payslipData.netPayment)}</div>
+                <div class="net-payment-words">In words: ${convertToWords(payslipData.netPayment)}</div>
+              </div>
+              ${payslipData.remarks ? `
+                <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid rgba(255, 255, 255, 0.2); font-size: 13px;">
+                  <strong>Remarks:</strong> ${payslipData.remarks}
+                </div>
+              ` : ''}
+            </div>
+
+            <!-- Footer -->
+            <div class="footer">
+              <strong>Note:</strong> This is a computer-generated payslip and does not require a signature.
             </div>
           </div>
         </body>
@@ -493,179 +671,250 @@ const PayslipModal = ({ isOpen, onClose, employeeId = null }) => {
               </div>
             ) : (
               <div className="space-y-6">
-                {/* Company & Employee Info */}
-                <div className="bg-slate-700/30 rounded-xl p-6 border border-slate-600/30">
-                  <div className="flex justify-between items-start mb-6">
-                    <div>
-                      <h3 className="text-xl font-bold text-white mb-2">TAPVERA TECHNOLOGIES</h3>
-                      <p className="text-gray-400 text-sm">Payslip for {new Date(selectedMonth + '-01').toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}</p>
+                {/* Professional Header with Logo */}
+                <div className="bg-gradient-to-r from-blue-900 to-purple-900 rounded-xl p-8 border-2 border-blue-500/30 shadow-xl">
+                  <div className="flex items-start justify-between mb-6">
+                    <div className="flex items-center gap-4">
+                      {/* Company Logo */}
+                      <div className="w-16 h-16 bg-white rounded-lg flex items-center justify-center shadow-lg">
+                        <div className="text-2xl font-bold text-blue-600">T</div>
+                      </div>
+                      <div>
+                        <h3 className="text-2xl font-bold text-white mb-1 tracking-wide">TAPVERA TECHNOLOGIES</h3>
+                        <p className="text-blue-200 text-sm">Private Limited</p>
+                      </div>
                     </div>
-                    <div className="text-right">
-                      <p className="text-gray-400 text-sm">Generated on:</p>
-                      <p className="text-white font-medium">{formatDate(payslipData.generatedAt || new Date())}</p>
+                    <div className="text-right bg-white/10 px-4 py-2 rounded-lg border border-white/20">
+                      <p className="text-blue-200 text-xs uppercase tracking-wider">Pay Slip</p>
+                      <p className="text-white font-bold text-lg">{new Date(selectedMonth + '-01').toLocaleDateString('en-IN', { month: 'short', year: 'numeric' }).toUpperCase()}</p>
                     </div>
                   </div>
+                </div>
 
+                {/* Employee Info Card */}
+                <div className="bg-slate-700/30 rounded-xl p-6 border-2 border-slate-600/30 shadow-lg">
+                  <div className="flex items-center gap-3 mb-4 pb-3 border-b border-slate-600/30">
+                    <User className="w-5 h-5 text-blue-400" />
+                    <h4 className="text-lg font-bold text-white uppercase tracking-wide">Employee Information</h4>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div className="space-y-3">
+                      <div className="grid grid-cols-2 gap-2">
+                        <span className="text-gray-400 text-sm font-medium">Employee Name:</span>
+                        <span className="text-white font-semibold">{payslipData.employee?.name || 'N/A'}</span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <span className="text-gray-400 text-sm font-medium">Employee ID:</span>
+                        <span className="text-white font-mono">{payslipData.employee?.employeeId || 'N/A'}</span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <span className="text-gray-400 text-sm font-medium">Designation:</span>
+                        <span className="text-white">{payslipData.employee?.designation || 'N/A'}</span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <span className="text-gray-400 text-sm font-medium">Department:</span>
+                        <span className="text-white">{payslipData.employee?.department || 'N/A'}</span>
+                      </div>
+                    </div>
+
+                    <div className="space-y-3">
+                      <div className="grid grid-cols-2 gap-2">
+                        <span className="text-gray-400 text-sm font-medium">Pay Period:</span>
+                        <span className="text-white font-semibold">{new Date(payslipData.payPeriod + '-01').toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}</span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <span className="text-gray-400 text-sm font-medium">Monthly CTC:</span>
+                        <span className="text-white font-semibold">{formatCurrency(payslipData.monthlySalary)}</span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <span className="text-gray-400 text-sm font-medium">Working Days:</span>
+                        <span className="text-white">{payslipData.workingDays || 'N/A'}</span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <span className="text-gray-400 text-sm font-medium">Paid Days:</span>
+                        <span className="text-green-400 font-semibold">{payslipData.paidDays || 'N/A'}</span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <span className="text-gray-400 text-sm font-medium">Late Days:</span>
+                        <span className="text-orange-400 font-semibold">{payslipData.lateDays || 0}</span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <span className="text-gray-400 text-sm font-medium">Pay Date:</span>
+                        <span className="text-white">{formatDate(payslipData.generatedAt || new Date())}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Earnings & Deductions Table */}
+                <div className="bg-slate-800/50 rounded-xl border-2 border-slate-600/30 overflow-hidden shadow-xl">
+                  <div className="bg-gradient-to-r from-slate-700 to-slate-800 px-6 py-3 border-b-2 border-slate-600/50">
+                    <h4 className="text-lg font-bold text-white uppercase tracking-wide flex items-center gap-2">
+                      <DollarSign className="w-5 h-5 text-green-400" />
+                      Salary Breakdown
+                    </h4>
+                  </div>
+
+                  <div className="grid grid-cols-1 lg:grid-cols-2 divide-x divide-slate-600/30">
+                    {/* Earnings Column */}
+                    <div className="p-6">
+                      <h5 className="text-sm font-bold text-green-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+                        <TrendingUp className="w-4 h-4" />
+                        Earnings
+                      </h5>
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b border-slate-600/30">
+                            <th className="text-left text-gray-400 font-semibold pb-2 uppercase text-xs">Component</th>
+                            <th className="text-right text-gray-400 font-semibold pb-2 uppercase text-xs">Amount</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-600/20">
+                          <tr>
+                            <td className="py-2 text-gray-300">Basic Salary (50%)</td>
+                            <td className="py-2 text-right text-white font-medium">{formatCurrency(payslipData.grossComponents?.basic)}</td>
+                          </tr>
+                          <tr>
+                            <td className="py-2 text-gray-300">House Rent Allowance (35%)</td>
+                            <td className="py-2 text-right text-white font-medium">{formatCurrency(payslipData.grossComponents?.hra)}</td>
+                          </tr>
+                          <tr>
+                            <td className="py-2 text-gray-300">Conveyance Allowance (5%)</td>
+                            <td className="py-2 text-right text-white font-medium">{formatCurrency(payslipData.grossComponents?.conveyance)}</td>
+                          </tr>
+                          <tr>
+                            <td className="py-2 text-gray-300">Medical Allowance (5%)</td>
+                            <td className="py-2 text-right text-white font-medium">{formatCurrency(payslipData.grossComponents?.medical)}</td>
+                          </tr>
+                          <tr>
+                            <td className="py-2 text-gray-300">Special Allowance (5%)</td>
+                            <td className="py-2 text-right text-white font-medium">{formatCurrency(payslipData.grossComponents?.specialAllowance)}</td>
+                          </tr>
+                          <tr className="border-t-2 border-green-500/30 bg-green-900/10">
+                            <td className="py-3 text-green-400 font-bold uppercase text-xs">Gross Earnings</td>
+                            <td className="py-3 text-right text-green-400 font-bold text-lg">{formatCurrency(payslipData.grossTotal)}</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Deductions Column */}
+                    <div className="p-6 bg-red-900/5">
+                      <h5 className="text-sm font-bold text-red-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+                        <TrendingDown className="w-4 h-4" />
+                        Deductions
+                      </h5>
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b border-slate-600/30">
+                            <th className="text-left text-gray-400 font-semibold pb-2 uppercase text-xs">Component</th>
+                            <th className="text-right text-gray-400 font-semibold pb-2 uppercase text-xs">Amount</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-600/20">
+                          <tr>
+                            <td className="py-2 text-gray-300">Provident Fund (Employee)</td>
+                            <td className="py-2 text-right text-white font-medium">{formatCurrency(payslipData.deductions?.employeePF)}</td>
+                          </tr>
+                          <tr>
+                            <td className="py-2 text-gray-300">ESI (Employee)</td>
+                            <td className="py-2 text-right text-white font-medium">{formatCurrency(payslipData.deductions?.esi)}</td>
+                          </tr>
+                          <tr>
+                            <td className="py-2 text-gray-300">Professional Tax</td>
+                            <td className="py-2 text-right text-white font-medium">{formatCurrency(payslipData.deductions?.ptax)}</td>
+                          </tr>
+                          <tr>
+                            <td className="py-2 text-gray-300">Late Attendance Deduction</td>
+                            <td className="py-2 text-right text-white font-medium">{formatCurrency(payslipData.deductions?.lateDeduction)}</td>
+                          </tr>
+                          {payslipData.deductions?.tds > 0 && (
+                            <tr>
+                              <td className="py-2 text-gray-300">Tax Deducted at Source (TDS)</td>
+                              <td className="py-2 text-right text-white font-medium">{formatCurrency(payslipData.deductions?.tds)}</td>
+                            </tr>
+                          )}
+                          {payslipData.deductions?.other > 0 && (
+                            <tr>
+                              <td className="py-2 text-gray-300">Other Deductions/Penalty</td>
+                              <td className="py-2 text-right text-white font-medium">{formatCurrency(payslipData.deductions?.other)}</td>
+                            </tr>
+                          )}
+                          {payslipData.deductions?.advance > 0 && (
+                            <tr>
+                              <td className="py-2 text-gray-300">Advance Deduction</td>
+                              <td className="py-2 text-right text-white font-medium">{formatCurrency(payslipData.deductions?.advance)}</td>
+                            </tr>
+                          )}
+                          <tr className="border-t-2 border-red-500/30 bg-red-900/10">
+                            <td className="py-3 text-red-400 font-bold uppercase text-xs">Total Deductions</td>
+                            <td className="py-3 text-right text-red-400 font-bold text-lg">{formatCurrency(payslipData.totalDeductions)}</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Employer Contributions */}
+                <div className="bg-indigo-900/20 rounded-xl p-6 border-2 border-indigo-500/30 shadow-lg">
+                  <div className="flex items-center gap-3 mb-4 pb-3 border-b border-indigo-500/30">
+                    <Building className="w-5 h-5 text-indigo-400" />
+                    <h4 className="text-lg font-bold text-white uppercase tracking-wide">Employer Contributions</h4>
+                  </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div>
-                      <h4 className="text-lg font-semibold text-white mb-3 flex items-center gap-2">
-                        <User className="w-5 h-5 text-blue-400" />
-                        Employee Details
-                      </h4>
-                      <div className="space-y-2 text-sm">
-                        <div className="flex justify-between">
-                          <span className="text-gray-400">Name:</span>
-                          <span className="text-white font-medium">{payslipData.employee?.name}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-gray-400">Employee ID:</span>
-                          <span className="text-white font-medium">{payslipData.employee?.employeeId}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-gray-400">Designation:</span>
-                          <span className="text-white font-medium">{payslipData.employee?.designation}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-gray-400">Department:</span>
-                          <span className="text-white font-medium">{payslipData.employee?.department}</span>
-                        </div>
-                      </div>
+                    <div className="bg-indigo-900/20 rounded-lg p-4 border border-indigo-500/20">
+                      <p className="text-indigo-300 text-sm mb-1">Employer PF Contribution</p>
+                      <p className="text-white font-bold text-xl">{formatCurrency(payslipData.employerContributions?.employerPF)}</p>
                     </div>
-
-                    <div>
-                      <h4 className="text-lg font-semibold text-white mb-3 flex items-center gap-2">
-                        <Calendar className="w-5 h-5 text-green-400" />
-                        Pay Period
-                      </h4>
-                      <div className="space-y-2 text-sm">
-                        <div className="flex justify-between">
-                          <span className="text-gray-400">Pay Period:</span>
-                          <span className="text-white font-medium">{payslipData.payPeriod}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-gray-400">Working Days:</span>
-                          <span className="text-white font-medium">{payslipData.workingDays || 'N/A'}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-gray-400">Present Days:</span>
-                          <span className="text-white font-medium">{payslipData.presentDays || 'N/A'}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-gray-400">Late Days:</span>
-                          <span className="text-white font-medium">{payslipData.lateDays || 0}</span>
-                        </div>
-                      </div>
+                    <div className="bg-indigo-900/20 rounded-lg p-4 border border-indigo-500/20">
+                      <p className="text-indigo-300 text-sm mb-1">Employer ESI Contribution</p>
+                      <p className="text-white font-bold text-xl">{formatCurrency(payslipData.employerContributions?.employerESI)}</p>
                     </div>
                   </div>
                 </div>
 
-                {/* Salary Breakdown */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  {/* Earnings */}
-                  <div className="bg-green-900/20 rounded-xl p-6 border border-green-500/30">
-                    <h4 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-                      <TrendingUp className="w-5 h-5 text-green-400" />
-                      Earnings
-                    </h4>
-                    <div className="space-y-3">
-                      <div className="flex justify-between">
-                        <span className="text-gray-300">Basic Salary:</span>
-                        <span className="text-white font-medium">{formatCurrency(payslipData.basicSalary)}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-300">CTC:</span>
-                        <span className="text-white font-medium">{formatCurrency(payslipData.ctc)}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-300">Gross Salary:</span>
-                        <span className="text-white font-medium">{formatCurrency(payslipData.grossSalary)}</span>
-                      </div>
-                      <div className="border-t border-green-500/30 pt-3 mt-3">
-                        <div className="flex justify-between font-semibold">
-                          <span className="text-green-400">Total Earnings:</span>
-                          <span className="text-green-400 text-lg">{formatCurrency(payslipData.grossSalary)}</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Deductions */}
-                  <div className="bg-red-900/20 rounded-xl p-6 border border-red-500/30">
-                    <h4 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-                      <TrendingDown className="w-5 h-5 text-red-400" />
-                      Deductions
-                    </h4>
-                    <div className="space-y-3">
-                      <div className="flex justify-between">
-                        <span className="text-gray-300">PF Deduction:</span>
-                        <span className="text-white font-medium">{formatCurrency(payslipData.deductions?.pf)}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-300">ESI Deduction:</span>
-                        <span className="text-white font-medium">{formatCurrency(payslipData.deductions?.esi)}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-300">Professional Tax:</span>
-                        <span className="text-white font-medium">{formatCurrency(payslipData.deductions?.ptax)}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-300">Late Deduction:</span>
-                        <span className="text-white font-medium">{formatCurrency(payslipData.deductions?.lateDeduction)}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-300">Other Deductions:</span>
-                        <span className="text-white font-medium">{formatCurrency(payslipData.deductions?.other)}</span>
-                      </div>
-                      <div className="border-t border-red-500/30 pt-3 mt-3">
-                        <div className="flex justify-between font-semibold">
-                          <span className="text-red-400">Total Deductions:</span>
-                          <span className="text-red-400 text-lg">{formatCurrency(payslipData.totalDeductions)}</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Net Salary */}
-                <div className="bg-blue-900/20 rounded-xl p-6 border border-blue-500/30">
+                {/* Net Payment - Highlighted */}
+                <div className="bg-gradient-to-r from-blue-600 to-blue-800 rounded-xl p-8 border-2 border-blue-400/50 shadow-2xl">
                   <div className="flex items-center justify-between">
-                    <h4 className="text-xl font-bold text-white flex items-center gap-3">
-                      <CreditCard className="w-6 h-6 text-blue-400" />
-                      Net Salary
-                    </h4>
-                    <div className="text-right">
-                      <p className="text-3xl font-bold text-blue-400">{formatCurrency(payslipData.netSalary)}</p>
-                      <p className="text-gray-400 text-sm">Amount to be credited</p>
+                    <div>
+                      <div className="flex items-center gap-3 mb-2">
+                        <CreditCard className="w-7 h-7 text-white" />
+                        <h4 className="text-2xl font-bold text-white uppercase tracking-wide">Net Salary</h4>
+                      </div>
+                      <p className="text-blue-100 text-sm">Amount payable for {new Date(payslipData.payPeriod + '-01').toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}</p>
+                      <p className="text-blue-200 text-xs mt-1">Total CTC: {formatCurrency(payslipData.ctc)} | Gross: {formatCurrency(payslipData.grossTotal)} | Deductions: {formatCurrency(payslipData.totalDeductions)}</p>
+                    </div>
+                    <div className="text-right bg-white/20 rounded-lg px-6 py-4 border-2 border-white/30">
+                      <p className="text-blue-100 text-xs uppercase tracking-wider mb-1">Take Home</p>
+                      <p className="text-4xl font-bold text-white">{formatCurrency(payslipData.netPayment)}</p>
+                      <p className="text-blue-100 text-xs mt-1">In words: {convertToWords(payslipData.netPayment)}</p>
                     </div>
                   </div>
 
                   {payslipData.remarks && (
-                    <div className="mt-4 pt-4 border-t border-blue-500/30">
-                      <p className="text-gray-300 text-sm">
-                        <strong>Remarks:</strong> {payslipData.remarks}
+                    <div className="mt-4 pt-4 border-t border-white/30">
+                      <p className="text-blue-100 text-sm">
+                        <strong className="text-white">Remarks:</strong> {payslipData.remarks}
                       </p>
                     </div>
                   )}
                 </div>
 
-                {/* Calculation Summary */}
+                {/* Footer with Signature */}
                 <div className="bg-slate-700/30 rounded-xl p-6 border border-slate-600/30">
-                  <h4 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-                    <Calculator className="w-5 h-5 text-purple-400" />
-                    Calculation Summary
-                  </h4>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                    <div className="text-center">
-                      <p className="text-gray-400">Gross Salary</p>
-                      <p className="text-white font-semibold text-lg">{formatCurrency(payslipData.grossSalary)}</p>
+                  <div className="flex justify-between items-end">
+                    <div className="text-xs text-gray-400 space-y-1">
+                      <p><strong className="text-gray-300">Note:</strong> This is a computer-generated payslip and does not require a signature.</p>
+                      <p>Generated on: {new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
+                      <p>For any queries, please contact HR at hr@tapvera.com</p>
                     </div>
-                    <div className="text-center">
-                      <p className="text-gray-400">Total Deductions</p>
-                      <p className="text-red-400 font-semibold text-lg">-{formatCurrency(payslipData.totalDeductions)}</p>
-                    </div>
-                    <div className="text-center">
-                      <p className="text-gray-400">Net Salary</p>
-                      <p className="text-blue-400 font-semibold text-lg">{formatCurrency(payslipData.netSalary)}</p>
+                    <div className="text-right">
+                      <div className="border-t-2 border-gray-400 pt-2 mt-8">
+                        <p className="text-sm text-gray-300 font-semibold">Authorized Signatory</p>
+                        <p className="text-xs text-gray-400">Tapvera Technologies Pvt. Ltd.</p>
+                      </div>
                     </div>
                   </div>
                 </div>

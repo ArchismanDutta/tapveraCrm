@@ -16,12 +16,12 @@ const {
 router.get("/my/:month", protect, getMyPayslip);
 
 // Admin routes (can view any employee's payslip)
-router.get("/admin", protect, authorize("admin", "hr"), getAllPayslips);
-router.get("/stats", protect, authorize("admin", "hr"), getPayslipStats);
-router.get("/:employeeId/:month", protect, authorize("admin", "hr"), getEmployeePayslip);
-router.get("/history/:employeeId", protect, authorize("admin", "hr"), getEmployeePayslipHistory);
+router.get("/admin", protect, authorize("admin", "hr", "super-admin"), getAllPayslips);
+router.get("/stats", protect, authorize("admin", "hr", "super-admin"), getPayslipStats);
+router.get("/:employeeId/:month", protect, authorize("admin", "hr", "super-admin"), getEmployeePayslip);
+router.get("/history/:employeeId", protect, authorize("admin", "hr", "super-admin"), getEmployeePayslipHistory);
 
-// Super Admin routes (can create, update, delete)
+// Super Admin routes (can create, update, delete) - Uses automated calculation
 router.post("/", protect, authorize("super-admin"), createPayslip);
 router.put("/:id", protect, authorize("super-admin"), updatePayslip);
 router.delete("/:id", protect, authorize("super-admin"), deletePayslip);

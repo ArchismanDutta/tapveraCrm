@@ -17,7 +17,8 @@ import {
   ChevronLeft,
   ChevronRight,
   CalendarDays,
-  User
+  User,
+  X
 } from "lucide-react";
 import { toast } from "react-toastify";
 import timeUtils from "../../utils/timeUtils";
@@ -55,6 +56,23 @@ const ManualAttendanceManagement = ({ onLogout }) => {
     fetchUsers();
     fetchRecords();
   }, [pagination.currentPage, filters.userId, filters.startDate, filters.endDate]);
+
+  // Listen for manual attendance updates
+  useEffect(() => {
+    const handleAttendanceUpdate = (event) => {
+      console.log('🔄 Received attendance update event:', event.detail);
+      // Refresh the records list
+      fetchRecords();
+    };
+
+    window.addEventListener('manualAttendanceUpdated', handleAttendanceUpdate);
+    window.addEventListener('attendanceDataUpdated', handleAttendanceUpdate);
+
+    return () => {
+      window.removeEventListener('manualAttendanceUpdated', handleAttendanceUpdate);
+      window.removeEventListener('attendanceDataUpdated', handleAttendanceUpdate);
+    };
+  }, []);
 
   const fetchUsers = async () => {
     try {
@@ -183,9 +201,18 @@ const ManualAttendanceManagement = ({ onLogout }) => {
   };
 
   const handleFormSuccess = () => {
-    fetchRecords();
+    // Reset to page 1 to show the new entry
+    setPagination(prev => ({ ...prev, currentPage: 1 }));
+
+    // Close form
     setShowForm(false);
+    const wasEditing = editData !== null;
     setEditData(null);
+
+    // Fetch records with slight delay to ensure backend has processed
+    setTimeout(() => {
+      fetchRecords();
+    }, 200);
 
     // Enhanced event dispatch for real-time sync after form success
     setTimeout(() => {
@@ -196,15 +223,15 @@ const ManualAttendanceManagement = ({ onLogout }) => {
           action: 'form-success',
           employeeId: null, // Will be set by form if available
           forceRefresh: true,
-          message: editData ? 'Attendance record updated successfully' : 'Attendance record created successfully'
+          message: wasEditing ? 'Attendance record updated successfully' : 'Attendance record created successfully'
         }
       }));
 
       // Additional events for specific components
       window.dispatchEvent(new CustomEvent('manualAttendanceUpdated', {
         detail: {
-          type: editData ? 'UPDATE' : 'CREATE',
-          operation: editData ? 'EDIT' : 'ADD',
+          type: wasEditing ? 'UPDATE' : 'CREATE',
+          operation: wasEditing ? 'EDIT' : 'ADD',
           timestamp: Date.now(),
           source: 'ManualAttendanceManagement',
           refreshAll: true
@@ -213,14 +240,14 @@ const ManualAttendanceManagement = ({ onLogout }) => {
 
       window.dispatchEvent(new CustomEvent('attendanceRecordModified', {
         detail: {
-          operation: editData ? 'UPDATE' : 'CREATE',
+          operation: wasEditing ? 'UPDATE' : 'CREATE',
           timestamp: Date.now(),
           requiresFullRefresh: true
         }
       }));
 
       console.log('📢 Manual Attendance: Form success events dispatched');
-    }, 100); // Reduced delay for faster sync
+    }, 300);
   };
 
   const handleEdit = (record) => {
@@ -255,7 +282,8 @@ const ManualAttendanceManagement = ({ onLogout }) => {
   };
 
   const getStatusBadge = (record) => {
-    if (record.isOnLeave) {
+    // Check leave info
+    if (record.leave?.isOnLeave || record.metadata?.isOnLeave) {
       return (
         <span className="inline-flex items-center gap-1 px-2 py-1 bg-purple-900/30 text-purple-400 border border-purple-500/30 rounded-lg text-xs font-medium">
           <User className="w-3 h-3" />
@@ -264,7 +292,8 @@ const ManualAttendanceManagement = ({ onLogout }) => {
       );
     }
 
-    if (record.isHoliday) {
+    // Check holiday
+    if (record.metadata?.isHoliday) {
       return (
         <span className="inline-flex items-center gap-1 px-2 py-1 bg-blue-900/30 text-blue-400 border border-blue-500/30 rounded-lg text-xs font-medium">
           <Calendar className="w-3 h-3" />
@@ -273,7 +302,10 @@ const ManualAttendanceManagement = ({ onLogout }) => {
       );
     }
 
-    if (record.isAbsent) {
+    // Check status from calculated field
+    const status = record.calculated?.status;
+
+    if (status === 'absent' || record.calculated?.isAbsent) {
       return (
         <span className="inline-flex items-center gap-1 px-2 py-1 bg-red-900/30 text-red-400 border border-red-500/30 rounded-lg text-xs font-medium">
           <XCircle className="w-3 h-3" />
@@ -282,7 +314,7 @@ const ManualAttendanceManagement = ({ onLogout }) => {
       );
     }
 
-    if (record.isHalfDay) {
+    if (status === 'halfDay' || record.calculated?.isHalfDay) {
       return (
         <span className="inline-flex items-center gap-1 px-2 py-1 bg-yellow-900/30 text-yellow-400 border border-yellow-500/30 rounded-lg text-xs font-medium">
           <AlertCircle className="w-3 h-3" />
@@ -291,6 +323,16 @@ const ManualAttendanceManagement = ({ onLogout }) => {
       );
     }
 
+    if (record.metadata?.isWFH) {
+      return (
+        <span className="inline-flex items-center gap-1 px-2 py-1 bg-cyan-900/30 text-cyan-400 border border-cyan-500/30 rounded-lg text-xs font-medium">
+          <CheckCircle className="w-3 h-3" />
+          WFH
+        </span>
+      );
+    }
+
+    // Default to present
     return (
       <span className="inline-flex items-center gap-1 px-2 py-1 bg-green-900/30 text-green-400 border border-green-500/30 rounded-lg text-xs font-medium">
         <CheckCircle className="w-3 h-3" />
@@ -310,8 +352,9 @@ const ManualAttendanceManagement = ({ onLogout }) => {
     if (filters.search) {
       const searchTerm = filters.search.toLowerCase();
       return (
-        record.userId?.name?.toLowerCase().includes(searchTerm) ||
-        record.userId?.employeeId?.toLowerCase().includes(searchTerm) ||
+        record.user?.name?.toLowerCase().includes(searchTerm) ||
+        record.user?.employeeId?.toLowerCase().includes(searchTerm) ||
+        record.user?.email?.toLowerCase().includes(searchTerm) ||
         record.notes?.toLowerCase().includes(searchTerm)
       );
     }
@@ -610,26 +653,32 @@ const ManualAttendanceManagement = ({ onLogout }) => {
                     </td>
                     <td className="px-6 py-4">
                       <div>
-                        <div className="font-medium text-white">{record.userId?.name}</div>
-                        <div className="text-sm text-gray-400">ID: {record.userId?.employeeId}</div>
+                        <div className="font-medium text-white">{record.user?.name || 'Unknown'}</div>
+                        <div className="text-sm text-gray-400">
+                          {record.user?.employeeId || record.user?.email || `ID: ${record.userId}`}
+                        </div>
                       </div>
                     </td>
                     <td className="px-6 py-4">
                       <div className="text-white font-medium">{formatDate(record.date)}</div>
                     </td>
                     <td className="px-6 py-4">
-                      <div className="text-gray-300">{formatDateTime(record.arrivalTime)}</div>
+                      <div className="text-gray-300">
+                        {record.calculated?.arrivalTime ? formatDateTime(record.calculated.arrivalTime) : '—'}
+                      </div>
                     </td>
                     <td className="px-6 py-4">
-                      <div className="text-gray-300">{formatDateTime(record.departureTime)}</div>
+                      <div className="text-gray-300">
+                        {record.calculated?.departureTime ? formatDateTime(record.calculated.departureTime) : '—'}
+                      </div>
                     </td>
                     <td className="px-6 py-4">
                       <div className="text-white font-medium">
-                        {calculateWorkHours(record.workDurationSeconds)}
+                        {record.calculated?.workDurationSeconds ? calculateWorkHours(record.calculated.workDurationSeconds) : '0h 0m'}
                       </div>
-                      {record.breakDurationSeconds > 0 && (
+                      {record.calculated?.breakDurationSeconds > 0 && (
                         <div className="text-sm text-orange-400">
-                          Break: {calculateWorkHours(record.breakDurationSeconds)}
+                          Break: {calculateWorkHours(record.calculated.breakDurationSeconds)}
                         </div>
                       )}
                     </td>

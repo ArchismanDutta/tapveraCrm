@@ -21,6 +21,9 @@ const createManualAttendance = async (req, res) => {
       notes = "",
       isOnLeave = false,
       isHoliday = false,
+      isWFH = false,  // ⭐ Work From Home flag
+      isPaidLeave = false,  // ⭐ Paid Leave flag
+      leaveType = "",  // Leave type
       overrideExisting = false
     } = req.body;
 
@@ -29,7 +32,10 @@ const createManualAttendance = async (req, res) => {
       date,
       punchInTime,
       punchOutTime,
-      breakSessionsCount: breakSessions.length
+      breakSessionsCount: breakSessions.length,
+      isWFH,
+      isPaidLeave,
+      leaveType
     });
 
     // Validate required fields
@@ -157,39 +163,45 @@ const createManualAttendance = async (req, res) => {
     // Add manual events
     const events = [];
 
-    if (punchIn && !isOnLeave && !isHoliday) {
+    // WFH requires punch in/out (it's a working day)
+    // Regular leave and holidays don't
+    const requiresPunchTimes = isWFH || (!isOnLeave && !isHoliday);
+
+    if (punchIn && requiresPunchTimes) {
       events.push({
         type: "PUNCH_IN",
         timestamp: punchIn,
         manual: true,
         approvedBy: req.user?._id,
-        notes: notes || 'Manual entry'
+        notes: notes || (isWFH ? 'Manual WFH entry' : 'Manual entry')
       });
     }
 
-    // Add break events
-    for (const breakSession of breakSessions) {
-      events.push({
-        type: "BREAK_START",
-        timestamp: new Date(breakSession.start),
-        manual: true,
-        approvedBy: req.user?._id
-      });
-      events.push({
-        type: "BREAK_END",
-        timestamp: new Date(breakSession.end),
-        manual: true,
-        approvedBy: req.user?._id
-      });
+    // Add break events (only if working)
+    if (requiresPunchTimes) {
+      for (const breakSession of breakSessions) {
+        events.push({
+          type: "BREAK_START",
+          timestamp: new Date(breakSession.start),
+          manual: true,
+          approvedBy: req.user?._id
+        });
+        events.push({
+          type: "BREAK_END",
+          timestamp: new Date(breakSession.end),
+          manual: true,
+          approvedBy: req.user?._id
+        });
+      }
     }
 
-    if (punchOut && !isOnLeave && !isHoliday) {
+    if (punchOut && requiresPunchTimes) {
       events.push({
         type: "PUNCH_OUT",
         timestamp: punchOut,
         manual: true,
         approvedBy: req.user?._id,
-        notes: notes || 'Manual entry'
+        notes: notes || (isWFH ? 'Manual WFH entry' : 'Manual entry')
       });
     }
 
@@ -199,14 +211,42 @@ const createManualAttendance = async (req, res) => {
     // Add events to employee record
     employeeData.events = events;
 
+    // Ensure leaveInfo is initialized
+    if (!employeeData.leaveInfo) {
+      employeeData.leaveInfo = {
+        isOnLeave: false,
+        isWFH: false,
+        isPaidLeave: false,
+        leaveType: null,
+        isHoliday: false,
+        holidayName: null
+      };
+    }
+
     // Update leave info if applicable
-    if (isOnLeave) {
+    if (isWFH) {
+      // ⭐ WFH is NOT a leave - set WFH flag
+      employeeData.leaveInfo.isWFH = true;
+      employeeData.leaveInfo.isOnLeave = false;
+      employeeData.leaveInfo.leaveType = 'workFromHome';
+      console.log('✅ Manual WFH flag set:', employeeData.leaveInfo);
+    } else if (isPaidLeave) {
+      // ⭐ Paid Leave - set both flags
       employeeData.leaveInfo.isOnLeave = true;
-      employeeData.leaveInfo.leaveType = 'manual';
+      employeeData.leaveInfo.isPaidLeave = true;
+      employeeData.leaveInfo.leaveType = leaveType || 'paid';
+      console.log('✅ Manual Paid Leave flag set:', employeeData.leaveInfo);
+    } else if (isOnLeave) {
+      // Other leaves (unpaid, sick, etc.)
+      employeeData.leaveInfo.isOnLeave = true;
+      employeeData.leaveInfo.isPaidLeave = false;
+      employeeData.leaveInfo.leaveType = leaveType || 'unpaid';
+      console.log('✅ Manual Leave flag set:', employeeData.leaveInfo);
     }
 
     if (isHoliday) {
       employeeData.leaveInfo.isHoliday = true;
+      console.log('✅ Manual Holiday flag set:', employeeData.leaveInfo);
     }
 
     // Recalculate attendance data (pass targetDate for night shift late detection)

@@ -13,6 +13,7 @@ class AttendanceService {
     // Constants for calculations
     this.CONSTANTS = {
       MIN_HALF_DAY_HOURS: 4,
+      HALF_DAY_THRESHOLD_HOURS: 4.5, // < 4.5 hours = Half Day, >= 4.5 hours = Present
       MIN_FULL_DAY_HOURS: 8,
       MAX_WORK_HOURS: 12,
       LATE_THRESHOLD_MINUTES: 0, // STRICT ENFORCEMENT: Even 1 minute late counts as late
@@ -282,16 +283,20 @@ class AttendanceService {
   /**
    * Get leave information for user on date
    */
+  /**
+   * Get leave information for user on a specific date
+   * Handles regular leaves AND Work From Home requests
+   */
   async getLeaveInfo(userId, date) {
     try {
       const normalizedDate = this.normalizeDate(date);
 
-      // Check for approved leave requests
+      // Check for approved leave requests (including WFH)
       const leaveRequest = await LeaveRequest.findOne({
-        userId,
-        startDate: { $lte: normalizedDate },
-        endDate: { $gte: normalizedDate },
-        status: 'approved'
+        'employee._id': userId,
+        'period.start': { $lte: normalizedDate },
+        'period.end': { $gte: normalizedDate },
+        status: 'Approved' // Note: Status is capitalized in LeaveRequest model
       });
 
       // Check for holidays
@@ -299,9 +304,37 @@ class AttendanceService {
         date: normalizedDate
       });
 
+      // Determine leave type
+      let isOnLeave = false;
+      let isWFH = false;
+      let isPaidLeave = false;
+      let leaveType = null;
+
+      if (leaveRequest) {
+        if (leaveRequest.type === 'workFromHome') {
+          // WFH is NOT a leave - employee should work normal hours
+          isWFH = true;
+          leaveType = 'workFromHome';
+          isOnLeave = false; // ⭐ WFH is NOT counted as leave
+          isPaidLeave = false;
+        } else if (leaveRequest.type === 'paid') {
+          // ⭐ Paid leave: Separate from unpaid leaves, still counts as leave but marked distinctly
+          isPaidLeave = true;
+          isOnLeave = true;
+          leaveType = 'paid';
+        } else {
+          // Other leaves (sick, unpaid, maternity, halfDay)
+          isOnLeave = true;
+          isPaidLeave = false;
+          leaveType = leaveRequest.type;
+        }
+      }
+
       return {
-        isOnLeave: !!leaveRequest,
-        leaveType: leaveRequest?.leaveType || null,
+        isOnLeave,      // True for all leaves (NOT for WFH)
+        isWFH,          // Separate flag for Work From Home
+        isPaidLeave,    // ⭐ NEW: Separate flag for Paid Leave
+        leaveType,      // Type: sick/paid/unpaid/maternity/halfDay/workFromHome
         isHoliday: !!holiday,
         holidayName: holiday?.name || null
       };
@@ -310,6 +343,8 @@ class AttendanceService {
       console.error('Error getting leave info:', error);
       return {
         isOnLeave: false,
+        isWFH: false,
+        isPaidLeave: false,
         leaveType: null,
         isHoliday: false,
         holidayName: null
@@ -497,6 +532,12 @@ class AttendanceService {
                            employee.assignedShift?.name?.toLowerCase().includes('flexible') ||
                            false;
 
+    // Check if employee is working from home (WFH)
+    const isWFH = employee.leaveInfo?.isWFH || false;
+
+    // Check if employee is on paid leave
+    const isPaidLeave = employee.leaveInfo?.isPaidLeave || false;
+
     employee.calculated = {
       arrivalTime,
       departureTime,
@@ -512,9 +553,12 @@ class AttendanceService {
       isAbsent: workSeconds === 0,
       // Flexible employees are NEVER marked as late (no shift start time to compare against)
       isLate: isFlexibleShift ? false : this.calculateIsLate(arrivalTime, employee.assignedShift, attendanceDate),
-      isHalfDay: workHours >= this.CONSTANTS.MIN_HALF_DAY_HOURS && workHours < this.CONSTANTS.MIN_FULL_DAY_HOURS,
+      // Half-day status: >= 4 hours AND < 4.5 hours
+      isHalfDay: workHours >= this.CONSTANTS.MIN_HALF_DAY_HOURS && workHours < this.CONSTANTS.HALF_DAY_THRESHOLD_HOURS,
       isFullDay: workHours >= this.CONSTANTS.MIN_FULL_DAY_HOURS,
       isOvertime: workHours > this.CONSTANTS.MAX_WORK_HOURS,
+      isWFH, // ⭐ Work From Home flag (from approved WFH leave request)
+      isPaidLeave, // ⭐ Paid Leave flag (from approved paid leave request)
 
       currentlyWorking: currentStatus === 'WORKING',
       onBreak: currentStatus === 'ON_BREAK',
@@ -1052,6 +1096,8 @@ class AttendanceService {
       isHalfDay: false,
       isFullDay: false,
       isOvertime: false,
+      isWFH: false, // ⭐ Work From Home flag
+      isPaidLeave: false, // ⭐ Paid Leave flag
       currentlyWorking: false,
       onBreak: false,
       currentStatus: 'NOT_STARTED',

@@ -35,6 +35,9 @@ const ManualAttendanceForm = ({
     notes: "",
     isOnLeave: false,
     isHoliday: false,
+    isWFH: false,  // ⭐ Work From Home flag
+    isPaidLeave: false,  // ⭐ Paid Leave flag
+    leaveType: "",  // Leave type (paid, unpaid, sick, etc.)
     overrideExisting: false,
     // Multi-date functionality
     isMultiDate: false,
@@ -99,6 +102,9 @@ const ManualAttendanceForm = ({
         notes: editData.notes || "",
         isOnLeave: editData.isOnLeave || false,
         isHoliday: editData.isHoliday || false,
+        isWFH: editData.isWFH || false,
+        isPaidLeave: editData.isPaidLeave || false,
+        leaveType: editData.leaveType || "",
         overrideExisting: true
       });
     }
@@ -141,7 +147,10 @@ const ManualAttendanceForm = ({
       newErrors.selectedDates = "Please select at least one date";
     }
 
-    if (!formData.isOnLeave && !formData.isHoliday) {
+    // WFH requires punch times (it's a working day), but regular leaves don't
+    const requiresPunchTimes = !formData.isOnLeave && !formData.isHoliday;
+
+    if (requiresPunchTimes) {
       if (!formData.punchInTime && !formData.punchOutTime) {
         newErrors.punchInTime = "Please provide at least punch in or punch out time";
       }
@@ -493,6 +502,9 @@ const ManualAttendanceForm = ({
       notes: "",
       isOnLeave: false,
       isHoliday: false,
+      isWFH: false,
+      isPaidLeave: false,
+      leaveType: "",
       overrideExisting: false,
       isMultiDate: false,
       selectedDates: [],
@@ -861,28 +873,124 @@ const ManualAttendanceForm = ({
             )}
 
             {/* Special Day Options */}
-            <div className="flex flex-wrap gap-4">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={formData.isOnLeave}
-                  onChange={(e) => setFormData(prev => ({ ...prev, isOnLeave: e.target.checked }))}
-                  className="w-4 h-4 text-cyan-600 bg-slate-700 border-slate-600 rounded focus:ring-cyan-500"
-                />
-                <Home className="w-4 h-4 text-purple-400" />
-                <span className="text-gray-300">On Leave</span>
-              </label>
+            <div className="space-y-4">
+              <h3 className="text-lg font-medium text-white">Special Day Options</h3>
 
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={formData.isHoliday}
-                  onChange={(e) => setFormData(prev => ({ ...prev, isHoliday: e.target.checked }))}
-                  className="w-4 h-4 text-cyan-600 bg-slate-700 border-slate-600 rounded focus:ring-cyan-500"
-                />
-                <Calendar className="w-4 h-4 text-blue-400" />
-                <span className="text-gray-300">Holiday</span>
-              </label>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Work From Home */}
+                <label className="flex items-center gap-3 p-4 bg-blue-600/10 border border-blue-600/30 rounded-lg cursor-pointer hover:bg-blue-600/20 transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={formData.isWFH}
+                    onChange={(e) => {
+                      const checked = e.target.checked;
+                      setFormData(prev => ({
+                        ...prev,
+                        isWFH: checked,
+                        // Uncheck incompatible options
+                        isOnLeave: false,
+                        isHoliday: false,
+                        isPaidLeave: false
+                      }));
+                    }}
+                    className="w-5 h-5 text-blue-600 bg-slate-700 border-slate-600 rounded focus:ring-blue-500"
+                  />
+                  <div className="flex items-center gap-2 flex-1">
+                    <Home className="w-5 h-5 text-blue-400" />
+                    <div>
+                      <span className="text-white font-medium">Work From Home</span>
+                      <p className="text-xs text-gray-400 mt-0.5">Employee works remotely (requires punch in/out)</p>
+                    </div>
+                  </div>
+                </label>
+
+                {/* Paid Leave */}
+                <label className="flex items-center gap-3 p-4 bg-emerald-600/10 border border-emerald-600/30 rounded-lg cursor-pointer hover:bg-emerald-600/20 transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={formData.isPaidLeave}
+                    onChange={(e) => {
+                      const checked = e.target.checked;
+                      setFormData(prev => ({
+                        ...prev,
+                        isPaidLeave: checked,
+                        isOnLeave: checked,  // Paid leave is still a leave
+                        leaveType: checked ? 'paid' : '',
+                        // Uncheck incompatible options
+                        isWFH: false,
+                        isHoliday: false
+                      }));
+                    }}
+                    className="w-5 h-5 text-emerald-600 bg-slate-700 border-slate-600 rounded focus:ring-emerald-500"
+                  />
+                  <div className="flex items-center gap-2 flex-1">
+                    <CheckCircle className="w-5 h-5 text-emerald-400" />
+                    <div>
+                      <span className="text-white font-medium">Paid Leave</span>
+                      <p className="text-xs text-gray-400 mt-0.5">Approved paid leave (no work required)</p>
+                    </div>
+                  </div>
+                </label>
+
+                {/* Regular Leave */}
+                <label className="flex items-center gap-3 p-4 bg-purple-600/10 border border-purple-600/30 rounded-lg cursor-pointer hover:bg-purple-600/20 transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={formData.isOnLeave && !formData.isPaidLeave}
+                    onChange={(e) => {
+                      const checked = e.target.checked;
+                      setFormData(prev => ({
+                        ...prev,
+                        isOnLeave: checked,
+                        leaveType: checked ? 'unpaid' : '',
+                        // Uncheck incompatible options
+                        isWFH: false,
+                        isHoliday: false,
+                        isPaidLeave: false
+                      }));
+                    }}
+                    className="w-5 h-5 text-purple-600 bg-slate-700 border-slate-600 rounded focus:ring-purple-500"
+                  />
+                  <div className="flex items-center gap-2 flex-1">
+                    <AlertCircle className="w-5 h-5 text-purple-400" />
+                    <div>
+                      <span className="text-white font-medium">Other Leave</span>
+                      <p className="text-xs text-gray-400 mt-0.5">Unpaid, sick, or other leave types</p>
+                    </div>
+                  </div>
+                </label>
+
+                {/* Holiday */}
+                <label className="flex items-center gap-3 p-4 bg-cyan-600/10 border border-cyan-600/30 rounded-lg cursor-pointer hover:bg-cyan-600/20 transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={formData.isHoliday}
+                    onChange={(e) => {
+                      const checked = e.target.checked;
+                      setFormData(prev => ({
+                        ...prev,
+                        isHoliday: checked,
+                        // Uncheck incompatible options
+                        isWFH: false,
+                        isOnLeave: false,
+                        isPaidLeave: false
+                      }));
+                    }}
+                    className="w-5 h-5 text-cyan-600 bg-slate-700 border-slate-600 rounded focus:ring-cyan-500"
+                  />
+                  <div className="flex items-center gap-2 flex-1">
+                    <Calendar className="w-5 h-5 text-cyan-400" />
+                    <div>
+                      <span className="text-white font-medium">Holiday</span>
+                      <p className="text-xs text-gray-400 mt-0.5">Public or company holiday</p>
+                    </div>
+                  </div>
+                </label>
+              </div>
+            </div>
+
+            {/* Override Existing Section */}
+            <div className="flex flex-wrap gap-4">
 
               {!editData && !formData.isMultiDate && (
                 <label className="flex items-center gap-2 cursor-pointer">
@@ -915,8 +1023,8 @@ const ManualAttendanceForm = ({
               )}
             </div>
 
-            {/* Work Hours - Only show if not on leave or holiday */}
-            {!formData.isOnLeave && !formData.isHoliday && (
+            {/* Work Hours - Show for normal days and WFH, but NOT for regular leaves or holidays */}
+            {((!formData.isOnLeave && !formData.isHoliday) || formData.isWFH) && (
               <div className="space-y-4">
                 <h3 className="text-lg font-medium text-white flex items-center gap-2">
                   <Clock className="w-5 h-5 text-cyan-400" />
