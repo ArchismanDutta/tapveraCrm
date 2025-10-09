@@ -1,18 +1,20 @@
 import React from "react";
-import { FaTasks, FaClock, FaCheckCircle, FaExclamationTriangle, FaChartLine } from "react-icons/fa";
+import { FaTasks, FaClock, FaCheckCircle, FaExclamationTriangle, FaChartLine, FaTimesCircle } from "react-icons/fa";
 
 const TaskStats = ({ tasks = [] }) => {
   const totalTasks = tasks.length;
   const completedTasks = tasks.filter(task => task.status === 'completed').length;
   const inProgressTasks = tasks.filter(task => task.status === 'in-progress').length;
   const pendingTasks = tasks.filter(task => task.status === 'pending').length;
+  const rejectedTasks = tasks.filter(task => task.status === 'rejected').length;
 
   // Calculate overdue tasks (due date passed and not completed)
   const now = new Date();
   const overdueTasks = tasks.filter(task =>
     task.dueDate &&
     new Date(task.dueDate) < now &&
-    task.status !== 'completed'
+    task.status !== 'completed' &&
+    task.status !== 'rejected'
   ).length;
 
   // Calculate completion rate
@@ -46,13 +48,20 @@ const TaskStats = ({ tasks = [] }) => {
       value: overdueTasks,
       color: "text-red-400",
       bgColor: "bg-red-500/10 border-red-500/20"
+    },
+    {
+      icon: FaTimesCircle,
+      label: "Rejected",
+      value: rejectedTasks,
+      color: "text-rose-400",
+      bgColor: "bg-rose-500/10 border-rose-500/20"
     }
   ];
 
   return (
     <div className="space-y-4">
       {/* Main Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
         {statsCards.map((stat, index) => (
           <div key={index} className={`bg-[#181d2a] rounded-lg shadow-lg p-4 border ${stat.bgColor} hover:scale-105 transition-all duration-200`}>
             <div className="flex items-center justify-between">

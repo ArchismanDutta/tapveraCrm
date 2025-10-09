@@ -112,10 +112,11 @@ const EmployeeDashboard = ({ onLogout }) => {
   const computeSummary = useCallback(() => {
     const today = dayjs(currentTime).startOf("day");
     const completedTasks = tasks.filter(t => t.status?.toLowerCase() === "completed");
-    const pendingTasks = tasks.filter(t => t.status?.toLowerCase() !== "completed");
-    const highPriorityTasks = tasks.filter(t => t.level === "High" && t.status?.toLowerCase() !== "completed");
+    const rejectedTasks = tasks.filter(t => t.status?.toLowerCase() === "rejected");
+    const pendingTasks = tasks.filter(t => t.status?.toLowerCase() !== "completed" && t.status?.toLowerCase() !== "rejected");
+    const highPriorityTasks = tasks.filter(t => t.level === "High" && t.status?.toLowerCase() !== "completed" && t.status?.toLowerCase() !== "rejected");
     const dueTodayTasks = tasks.filter(
-      (t) => t.dueDate && dayjs(t.dueDate).isSame(today, "day") && t.status?.toLowerCase() !== "completed"
+      (t) => t.dueDate && dayjs(t.dueDate).isSame(today, "day") && t.status?.toLowerCase() !== "completed" && t.status?.toLowerCase() !== "rejected"
     );
 
     setSummaryData([
@@ -146,6 +147,12 @@ const EmployeeDashboard = ({ onLogout }) => {
         icon: Target,
         color: "green",
         trend: tasks.length > 0 ? Math.floor((completedTasks.length / tasks.length) * 100) + "%" : "0%"
+      },
+      {
+        label: "Rejected",
+        count: rejectedTasks.length,
+        icon: AlertTriangle,
+        color: "rose"
       }
     ]);
   }, [tasks, currentTime]);
