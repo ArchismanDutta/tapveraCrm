@@ -474,6 +474,10 @@ const PayslipModal = ({ isOpen, onClose, employeeId = null }) => {
                       <td>Late Attendance Deduction</td>
                       <td>${formatCurrency(payslipData.deductions?.lateDeduction)}</td>
                     </tr>
+                    <tr>
+                      <td>Half-Day Deduction</td>
+                      <td>${formatCurrency(payslipData.deductions?.halfDayDeduction)}</td>
+                    </tr>
                     ${payslipData.deductions?.tds > 0 ? `
                     <tr>
                       <td>Tax Deducted at Source (TDS)</td>
@@ -828,6 +832,10 @@ const PayslipModal = ({ isOpen, onClose, employeeId = null }) => {
                           <tr>
                             <td className="py-2 text-gray-300">Late Attendance Deduction</td>
                             <td className="py-2 text-right text-white font-medium">{formatCurrency(payslipData.deductions?.lateDeduction)}</td>
+                          </tr>
+                          <tr>
+                            <td className="py-2 text-gray-300">Half-Day Deduction</td>
+                            <td className="py-2 text-right text-white font-medium">{formatCurrency(payslipData.deductions?.halfDayDeduction)}</td>
                           </tr>
                           {payslipData.deductions?.tds > 0 && (
                             <tr>
