@@ -1,9 +1,11 @@
 import { useEffect, useRef } from "react";
+import notificationManager from "../utils/browserNotifications";
 
 // Lightweight global WebSocket listener to maintain unread counters app-wide
 const useGlobalChatNotifications = (jwtToken) => {
   const wsRef = useRef(null);
   const activeConvRef = useRef(null);
+  const conversationsRef = useRef([]);
 
   useEffect(() => {
     if (!jwtToken) return;
@@ -80,12 +82,54 @@ const useGlobalChatNotifications = (jwtToken) => {
               // Broadcast events
               window.dispatchEvent(new CustomEvent("chat-unread-total", { detail: { total } }));
               window.dispatchEvent(new CustomEvent("chat-unread-map", { detail: { map } }));
+
+              // ✅ NEW: Show browser/PC notification for incoming message
+              const conversation = conversationsRef.current.find(c => c._id === convId);
+              const conversationName = conversation?.name || "Group Chat";
+              const messagePreview = (data.message || "").substring(0, 100);
+
+              // Show browser notification
+              if (notificationManager.isEnabled()) {
+                notificationManager.showNotification(`New message in ${conversationName}`, {
+                  body: messagePreview,
+                  tag: `chat-${convId}`,
+                  icon: "/favicon.ico",
+                  data: { conversationId: convId, type: "chat" }
+                });
+              }
+
+              // Also dispatch ws-notification for toast
+              window.dispatchEvent(new CustomEvent("ws-notification", {
+                detail: {
+                  type: "notification",
+                  channel: "chat",
+                  title: `New message in ${conversationName}`,
+                  body: messagePreview,
+                  message: messagePreview,
+                  from: data.senderId,
+                  conversationId: convId
+                }
+              }));
             } catch {}
           }
 
           // Bubble notification event for toasts and update counters for chat notifications
           if (data.type === "notification") {
             window.dispatchEvent(new CustomEvent("ws-notification", { detail: data }));
+
+            // Handle task notifications
+            if ((data.channel || "").toLowerCase() === "task") {
+              if (notificationManager.isEnabled()) {
+                notificationManager.showNotification(data.title || "New Task", {
+                  body: data.body || data.message,
+                  tag: `task-${data.taskId}`,
+                  icon: "/favicon.ico",
+                  data: { taskId: data.taskId, type: "task" }
+                });
+              }
+            }
+
+            // Handle chat notifications
             if ((data.channel || "").toLowerCase() === "chat") {
               const fromSelf = String(data.from || "") === String(currentUserId || "");
               const convId = String(data.conversationId || "");
@@ -100,6 +144,18 @@ const useGlobalChatNotifications = (jwtToken) => {
                   sessionStorage.setItem("chat_unread_total", String(total));
                   window.dispatchEvent(new CustomEvent("chat-unread-total", { detail: { total } }));
                   window.dispatchEvent(new CustomEvent("chat-unread-map", { detail: { map } }));
+
+                  // ✅ Show browser notification for chat notification type
+                  if (notificationManager.isEnabled()) {
+                    const conversation = conversationsRef.current.find(c => c._id === convId);
+                    const conversationName = conversation?.name || "Group Chat";
+                    notificationManager.showNotification(data.title || `New message in ${conversationName}`, {
+                      body: data.body || data.message,
+                      tag: `chat-${convId}`,
+                      icon: "/favicon.ico",
+                      data: { conversationId: convId, type: "chat" }
+                    });
+                  }
                 } catch {}
               }
             }
@@ -123,6 +179,7 @@ const useGlobalChatNotifications = (jwtToken) => {
         if (res.ok) {
           const groups = await res.json();
           conversationIds = Array.isArray(groups) ? groups.map((g) => g._id) : [];
+          conversationsRef.current = groups; // Store conversations for lookup
         }
       } catch {}
       if (!cancelled) connect();
