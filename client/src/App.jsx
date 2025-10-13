@@ -28,6 +28,9 @@ import { resetChat } from "./store/slices/chatSlice";
 import useGlobalChatNotifications from "./hooks/useGlobalChatNotifications";
 import useWebSocket from "./hooks/useWebSocket";
 
+// Browser Notifications
+import notificationManager from "./utils/browserNotifications";
+
 // Pages
 import Login from "./pages/LoginPage";
 import Signup from "./pages/SignUp";
@@ -108,6 +111,25 @@ const AppWrapper = () => {
     setLoading(false);
   }, []);
 
+  // Request browser notification permission when authenticated
+  useEffect(() => {
+    if (isAuthenticated && !loading) {
+      // Request permission after a short delay to allow user interaction
+      const timer = setTimeout(async () => {
+        if (notificationManager.isSupported() && !notificationManager.isEnabled()) {
+          const granted = await notificationManager.requestPermission();
+          if (granted) {
+            console.log("✅ Browser notifications enabled");
+          } else {
+            console.log("⚠️ Browser notifications denied");
+          }
+        }
+      }, 1000);
+
+      return () => clearTimeout(timer);
+    }
+  }, [isAuthenticated, loading]);
+
   // Login handler
   const handleLoginSuccess = () => {
     const savedUser = JSON.parse(localStorage.getItem("user"));
@@ -134,10 +156,40 @@ const AppWrapper = () => {
   // Global chat notifications
   useGlobalChatNotifications(localStorage.getItem("token"));
 
-  // Payslip notifications via WebSocket
+  // Handle WebSocket notifications
   const handleNotification = (notification) => {
+    // Handle payslip notifications
     if (notification.channel === "payslip") {
       setNotifications(prev => [...prev, { ...notification, id: Date.now() }]);
+    }
+
+    // Handle task notifications - Show browser notifications
+    if (notification.channel === "task") {
+      // Show browser/PC notification
+      if (notificationManager.isEnabled()) {
+        notificationManager.showNotification(notification.title, {
+          body: notification.body || notification.message,
+          tag: `task-${notification.taskId}`,
+          data: notification,
+          icon: "/favicon.ico"
+        });
+      }
+
+      // Also show in-app toast
+      toast.info(`${notification.title}: ${notification.message}`);
+    }
+
+    // Handle chat notifications - Show browser notifications
+    if (notification.channel === "chat") {
+      // Show browser/PC notification
+      if (notificationManager.isEnabled()) {
+        notificationManager.showNotification(notification.title, {
+          body: notification.body || notification.message,
+          tag: `chat-${notification.from}`,
+          data: notification,
+          icon: "/favicon.ico"
+        });
+      }
     }
   };
 
@@ -156,27 +208,67 @@ const AppWrapper = () => {
     }
   }, [location.pathname]);
 
-  // Bridge WS notifications to toast globally
+  // Bridge WS notifications to toast globally and handle browser notifications
   useEffect(() => {
     window.toast = toast;
 
     const onWsNotification = (e) => {
       try {
         const n = e.detail || {};
-        const title = n.title || "Notification";
-        const body = n.body || "";
-        const channel = n.channel ? ` [${n.channel}]` : "";
-        const tid = `chat-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-        toast.info(`${title}${channel}: ${body}`, { toastId: tid });
 
+        // Handle task notifications - Show browser notifications
+        if (n.channel === "task") {
+          // Show browser/PC notification
+          if (notificationManager.isEnabled()) {
+            notificationManager.showNotification(n.title, {
+              body: n.body || n.message,
+              tag: `task-${n.taskId}`,
+              data: n,
+              icon: "/favicon.ico"
+            });
+          }
+
+          // Also show in-app toast
+          const title = n.title || "Notification";
+          const body = n.body || n.message || "";
+          toast.info(`${title}: ${body}`, { toastId: `task-${Date.now()}` });
+          return; // Don't show the generic toast below
+        }
+
+        // Handle chat notifications - Show browser notifications
         if ((n.channel || "").toLowerCase() === "chat") {
+          // Show browser/PC notification
+          if (notificationManager.isEnabled()) {
+            notificationManager.showNotification(n.title, {
+              body: n.body || n.message,
+              tag: `chat-${n.from}`,
+              data: n,
+              icon: "/favicon.ico"
+            });
+          }
+
+          // Update unread counter
           const prev = Number(sessionStorage.getItem("chat_unread_total") || 0) || 0;
           const next = prev + 1;
           sessionStorage.setItem("chat_unread_total", String(next));
           window.dispatchEvent(
             new CustomEvent("chat-unread-total", { detail: { total: next } })
           );
+
+          // Show in-app toast
+          const title = n.title || "Notification";
+          const body = n.body || "";
+          const tid = `chat-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+          toast.info(`${title}: ${body}`, { toastId: tid });
+          return; // Don't show the generic toast below
         }
+
+        // Generic notification handling (for other channels like payslip)
+        const title = n.title || "Notification";
+        const body = n.body || "";
+        const channel = n.channel ? ` [${n.channel}]` : "";
+        const tid = `notif-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        toast.info(`${title}${channel}: ${body}`, { toastId: tid });
       } catch {}
     };
 

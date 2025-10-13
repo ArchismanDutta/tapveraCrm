@@ -1,6 +1,7 @@
 // File: controllers/taskController.js
 const Task = require("../models/Task");
 const { notifyAdmins } = require("../services/whatsappService");
+const { sendNotificationToUser, sendNotificationToMultipleUsers } = require("../utils/websocket");
 
 // ------------------- Helper: populate task fields -------------------
 const populateTask = (query) =>
@@ -52,6 +53,20 @@ exports.createTask = async (req, res) => {
         populated.assignedTo.map((u) => u.name).join(", ") || "None"
       }`
     );
+
+    // WebSocket notification to assigned users
+    const assignedUserIds = populated.assignedTo.map(u => u._id.toString());
+    sendNotificationToMultipleUsers(assignedUserIds, {
+      channel: "task",
+      title: "New Task Assigned",
+      message: populated.title,
+      body: `${populated.title}\nPriority: ${populated.priority}\nDue: ${populated.dueDate || "No due date"}`,
+      taskId: populated._id,
+      priority: populated.priority,
+      dueDate: populated.dueDate,
+      assignedBy: req.user.name,
+      action: "task_assigned"
+    });
 
     res.status(201).json(populated);
   } catch (err) {
@@ -135,6 +150,24 @@ exports.editTask = async (req, res) => {
       }*\n📊 Status: *${populated.status}*\n🎯 Priority: *${populated.priority}*\n👤 Updated By: *${req.user.name}*`
     );
 
+    // WebSocket notification to assigned users and creator
+    const notifyUserIds = [
+      ...populated.assignedTo.map(u => u._id.toString()),
+      populated.assignedBy._id.toString()
+    ];
+    const uniqueUserIds = [...new Set(notifyUserIds)].filter(id => id !== req.user._id.toString());
+
+    sendNotificationToMultipleUsers(uniqueUserIds, {
+      channel: "task",
+      title: "Task Updated",
+      message: `${populated.title} was updated`,
+      body: `${populated.title}\nStatus: ${populated.status}\nPriority: ${populated.priority}\nUpdated by: ${req.user.name}`,
+      taskId: populated._id,
+      status: populated.status,
+      priority: populated.priority,
+      action: "task_updated"
+    });
+
     res.json(populated);
   } catch (err) {
     console.error("Error editing task:", err);
@@ -210,6 +243,23 @@ exports.updateTaskStatus = async (req, res) => {
     await notifyAdmins(
       `✅ *Task Status Changed*\n📌 Title: *${populated.title}*\n📊 New Status: *${status}*\n👤 Changed By: *${req.user.name}*`
     );
+
+    // WebSocket notification to assigned users and creator
+    const notifyUserIds = [
+      ...populated.assignedTo.map(u => u._id.toString()),
+      populated.assignedBy._id.toString()
+    ];
+    const uniqueUserIds = [...new Set(notifyUserIds)].filter(id => id !== req.user._id.toString());
+
+    sendNotificationToMultipleUsers(uniqueUserIds, {
+      channel: "task",
+      title: "Task Status Changed",
+      message: `${populated.title} is now ${status}`,
+      body: `${populated.title}\nNew Status: ${status}\nChanged by: ${req.user.name}`,
+      taskId: populated._id,
+      status: populated.status,
+      action: "task_status_changed"
+    });
 
     res.json(populated);
   } catch (err) {
