@@ -142,7 +142,7 @@ app.use((err, req, res, next) => {
 // WebSocket Setup
 // =====================
 const wss = new WebSocket.Server({ server });
-let users = {};
+let users = {}; // userId -> Array of WebSocket connections
 let conversationMembersOnline = {}; // conversationId -> Set of userIds
 
 wss.on("connection", (ws) => {
@@ -165,7 +165,12 @@ wss.on("connection", (ws) => {
           const user = jwt.verify(data.token, process.env.JWT_SECRET);
           ws.isAuthenticated = true;
           ws.user = user;
-          users[user.id] = ws;
+
+          // Support multiple connections per user
+          if (!users[user.id]) {
+            users[user.id] = [];
+          }
+          users[user.id].push(ws);
 
           // Track conversation membership
           if (Array.isArray(data.conversationIds)) {
@@ -224,23 +229,27 @@ wss.on("connection", (ws) => {
         }
 
         for (const userId of recipientIds) {
-          const recipientWs = users[userId];
-          if (recipientWs && recipientWs.readyState === WebSocket.OPEN) {
-            recipientWs.send(JSON.stringify(payload));
-            if (String(userId) !== String(ws.user.id)) {
-              // Lightweight notification for recipients (not the sender)
-              recipientWs.send(
-                JSON.stringify({
-                  type: "notification",
-                  channel: "chat",
-                  title: "New group message",
-                  body: savedMessage.message,
-                  from: ws.user.id,
-                  conversationId: savedMessage.conversationId,
-                  timestamp: savedMessage.timestamp,
-                })
-              );
-            }
+          const recipientConnections = users[userId];
+          if (recipientConnections && Array.isArray(recipientConnections)) {
+            recipientConnections.forEach(recipientWs => {
+              if (recipientWs && recipientWs.readyState === WebSocket.OPEN) {
+                recipientWs.send(JSON.stringify(payload));
+                if (String(userId) !== String(ws.user.id)) {
+                  // Lightweight notification for recipients (not the sender)
+                  recipientWs.send(
+                    JSON.stringify({
+                      type: "notification",
+                      channel: "chat",
+                      title: "New group message",
+                      body: savedMessage.message,
+                      from: ws.user.id,
+                      conversationId: savedMessage.conversationId,
+                      timestamp: savedMessage.timestamp,
+                    })
+                  );
+                }
+              }
+            });
           }
         }
 
@@ -293,21 +302,25 @@ wss.on("connection", (ws) => {
           ws.send(JSON.stringify(payload));
         }
 
-        // Deliver to recipient in real time
-        const recipientWs = users[recipientId];
-        if (recipientWs && recipientWs.readyState === WebSocket.OPEN) {
-          recipientWs.send(JSON.stringify(payload));
-          // Lightweight notification event
-          recipientWs.send(
-            JSON.stringify({
-              type: "notification",
-              channel: "chat",
-              title: "New message",
-              body: msg,
-              from: senderId,
-              timestamp: payload.timestamp,
-            })
-          );
+        // Deliver to recipient in real time (all connections)
+        const recipientConnections = users[recipientId];
+        if (recipientConnections && Array.isArray(recipientConnections)) {
+          recipientConnections.forEach(recipientWs => {
+            if (recipientWs && recipientWs.readyState === WebSocket.OPEN) {
+              recipientWs.send(JSON.stringify(payload));
+              // Lightweight notification event
+              recipientWs.send(
+                JSON.stringify({
+                  type: "notification",
+                  channel: "chat",
+                  title: "New message",
+                  body: msg,
+                  from: senderId,
+                  timestamp: payload.timestamp,
+                })
+              );
+            }
+          });
         }
 
         console.log(`Delivered message from ${senderId} to ${recipientId}`);
@@ -319,13 +332,24 @@ wss.on("connection", (ws) => {
 
   ws.on("close", () => {
     if (ws.user) {
-      console.log(`User disconnected: ${ws.user.id}`);
-      delete users[ws.user.id];
+      console.log(`User connection closed: ${ws.user.id}`);
 
-      for (const convId in conversationMembersOnline) {
-        conversationMembersOnline[convId].delete(ws.user.id);
-        if (conversationMembersOnline[convId].size === 0) {
-          delete conversationMembersOnline[convId];
+      // Remove this specific connection from the array
+      if (users[ws.user.id]) {
+        users[ws.user.id] = users[ws.user.id].filter(conn => conn !== ws);
+
+        // If no more connections for this user, clean up
+        if (users[ws.user.id].length === 0) {
+          delete users[ws.user.id];
+          console.log(`User fully disconnected: ${ws.user.id}`);
+
+          // Remove from conversation tracking
+          for (const convId in conversationMembersOnline) {
+            conversationMembersOnline[convId].delete(ws.user.id);
+            if (conversationMembersOnline[convId].size === 0) {
+              delete conversationMembersOnline[convId];
+            }
+          }
         }
       }
 
