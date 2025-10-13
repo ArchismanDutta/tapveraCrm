@@ -112,6 +112,9 @@ const Sidebar = ({ collapsed, setCollapsed, onLogout, userRole }) => {
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [role, setRole] = useState("employee");
   const [chatUnread, setChatUnread] = useState(0);
+  const [chatUnreadMap, setChatUnreadMap] = useState({});
+  const [conversations, setConversations] = useState([]);
+  const [showUnreadTooltip, setShowUnreadTooltip] = useState(false);
   const [userDepartment, setUserDepartment] = useState("");
   const { showAchievementsDashboard, openAchievementsDashboard, closeAchievementsDashboard } = useAchievements();
 
@@ -154,7 +157,60 @@ const Sidebar = ({ collapsed, setCollapsed, onLogout, userRole }) => {
     window.addEventListener("chat-unread-total", handler);
     // Also poll storage every 3s as a fallback in case an event is missed
     const interval = setInterval(updateFromStorage, 3000);
-    return () => window.removeEventListener("chat-unread-total", handler);
+    return () => {
+      window.removeEventListener("chat-unread-total", handler);
+      clearInterval(interval);
+    };
+  }, []);
+
+  // Listen for chat unread map to show which conversations have unread messages
+  useEffect(() => {
+    const updateMapFromStorage = () => {
+      try {
+        const raw = sessionStorage.getItem("chat_unread_map");
+        if (raw) {
+          const map = JSON.parse(raw);
+          setChatUnreadMap(map);
+        }
+      } catch {
+        setChatUnreadMap({});
+      }
+    };
+    updateMapFromStorage();
+    const handler = (e) => {
+      const map = e.detail?.map || {};
+      setChatUnreadMap(map);
+    };
+    window.addEventListener("chat-unread-map", handler);
+    const interval = setInterval(updateMapFromStorage, 3000);
+    return () => {
+      window.removeEventListener("chat-unread-map", handler);
+      clearInterval(interval);
+    };
+  }, []);
+
+  // Fetch conversations to map IDs to names
+  useEffect(() => {
+    const fetchConversations = async () => {
+      try {
+        const token = localStorage.getItem("token");
+        if (!token) return;
+        const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
+        const res = await fetch(`${API_BASE}/api/chat/groups`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setConversations(data);
+        }
+      } catch (error) {
+        console.error("Failed to fetch conversations:", error);
+      }
+    };
+    fetchConversations();
+    // Refresh conversations every 30 seconds
+    const interval = setInterval(fetchConversations, 30000);
+    return () => clearInterval(interval);
   }, []);
 
   // Filter menu items based on role and department
@@ -229,41 +285,70 @@ const Sidebar = ({ collapsed, setCollapsed, onLogout, userRole }) => {
             }
 
             return (
-              <NavLink
-                to={item.to}
+              <div
                 key={item.to}
-                className={({ isActive, isPending }) =>
-                  `group flex items-center gap-4 rounded-lg px-4 py-3 text-sm font-semibold
-                  transition-colors duration-150
-                  ${
-                    isActive
-                      ? "bg-gradient-to-r from-blue-600 to-blue-400 text-white shadow-md"
-                      : "text-blue-100 hover:text-blue-300"
-                  }
-                  ${collapsed ? "justify-center" : "justify-start"}`
-                }
-                end={item.to === "/super-admin"}
-                tabIndex={collapsed ? -1 : 0}
+                className="relative"
+                onMouseEnter={() => item.to === "/messages" && chatUnread > 0 && setShowUnreadTooltip(true)}
+                onMouseLeave={() => item.to === "/messages" && setShowUnreadTooltip(false)}
               >
-                <span className="flex items-center justify-center relative">
-                  {item.icon}
-                  {item.to === "/messages" && chatUnread > 0 && (
-                    <span className="absolute -top-1 -right-2 bg-red-500 text-white text-[10px] px-1.5 py-[1px] rounded-full min-w-[16px] text-center">
-                      {chatUnread > 99 ? "99+" : chatUnread}
-                    </span>
-                  )}
-                </span>
-                {!collapsed && (
-                  <span className="flex-1 flex items-center justify-between">
-                    {item.label}
+                <NavLink
+                  to={item.to}
+                  className={({ isActive, isPending }) =>
+                    `group flex items-center gap-4 rounded-lg px-4 py-3 text-sm font-semibold
+                    transition-colors duration-150
+                    ${
+                      isActive
+                        ? "bg-gradient-to-r from-blue-600 to-blue-400 text-white shadow-md"
+                        : "text-blue-100 hover:text-blue-300"
+                    }
+                    ${collapsed ? "justify-center" : "justify-start"}`
+                  }
+                  end={item.to === "/super-admin"}
+                  tabIndex={collapsed ? -1 : 0}
+                >
+                  <span className="flex items-center justify-center relative">
+                    {item.icon}
                     {item.to === "/messages" && chatUnread > 0 && (
-                      <span className="ml-2 bg-red-500 text-white text-[10px] px-1.5 py-[1px] rounded-full min-w-[18px] text-center">
+                      <span className="absolute -top-1 -right-2 bg-red-500 text-white text-[10px] px-1.5 py-[1px] rounded-full min-w-[16px] text-center">
                         {chatUnread > 99 ? "99+" : chatUnread}
                       </span>
                     )}
                   </span>
+                  {!collapsed && (
+                    <span className="flex-1 flex items-center justify-between">
+                      {item.label}
+                      {item.to === "/messages" && chatUnread > 0 && (
+                        <span className="ml-2 bg-red-500 text-white text-[10px] px-1.5 py-[1px] rounded-full min-w-[18px] text-center">
+                          {chatUnread > 99 ? "99+" : chatUnread}
+                        </span>
+                      )}
+                    </span>
+                  )}
+                </NavLink>
+
+                {/* Unread Messages Tooltip */}
+                {item.to === "/messages" && showUnreadTooltip && chatUnread > 0 && (
+                  <div className={`absolute ${collapsed ? "left-16" : "left-56"} top-0 z-50 w-64 bg-gray-800 border border-gray-600 rounded-lg shadow-xl p-3 text-sm`}>
+                    <div className="font-semibold text-white mb-2 border-b border-gray-600 pb-2">
+                      Unread Messages ({chatUnread})
+                    </div>
+                    <div className="space-y-2 max-h-64 overflow-y-auto">
+                      {Object.entries(chatUnreadMap).filter(([_, count]) => count > 0).map(([convId, count]) => {
+                        const conversation = conversations.find(c => c._id === convId);
+                        const name = conversation?.name || "Unknown Group";
+                        return (
+                          <div key={convId} className="flex items-center justify-between py-1 px-2 bg-gray-700 rounded hover:bg-gray-600 transition-colors">
+                            <span className="text-gray-200 truncate flex-1">{name}</span>
+                            <span className="ml-2 bg-blue-500 text-white text-[10px] px-2 py-1 rounded-full min-w-[20px] text-center">
+                              {count > 99 ? "99+" : count}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
                 )}
-              </NavLink>
+              </div>
             );
           })}
         </nav>
