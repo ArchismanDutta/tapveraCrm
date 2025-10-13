@@ -7,3 +7,36 @@
   -ms-overflow-style: none;  /* IE/Edge */
   scrollbar-width: none;     /* Firefox */
 }
+
+/* Custom SimpleBar Scrollbar Styling */
+.custom-scrollbar .simplebar-scrollbar::before {
+  background: linear-gradient(135deg, #bf6f2f 0%, #d48843 100%);
+  border-radius: 6px;
+  opacity: 0.8;
+  transition: opacity 0.2s ease;
+}
+
+.custom-scrollbar .simplebar-scrollbar:hover::before {
+  opacity: 1;
+}
+
+.custom-scrollbar .simplebar-scrollbar.simplebar-visible::before {
+  opacity: 0.9;
+}
+
+.custom-scrollbar .simplebar-track.simplebar-vertical {
+  width: 10px;
+  background: rgba(84, 123, 209, 0.1);
+  border-radius: 6px;
+}
+
+.custom-scrollbar .simplebar-track.simplebar-horizontal {
+  height: 10px;
+  background: rgba(84, 123, 209, 0.1);
+  border-radius: 6px;
+}
+
+.custom-scrollbar .simplebar-content-wrapper {
+  scrollbar-width: thin;
+  scrollbar-color: #bf6f2f rgba(84, 123, 209, 0.1);
+}

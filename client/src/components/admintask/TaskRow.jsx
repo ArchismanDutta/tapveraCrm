@@ -119,7 +119,7 @@ const TaskRow = ({ task, onView, onEdit, onDelete, onReject, onRemarks, onViewDe
     >
       {/* Task Title */}
       <td
-        className="px-1.5 py-2 font-medium cursor-pointer truncate relative hover:text-blue-400 transition-colors"
+        className="px-4 py-3 font-medium cursor-pointer truncate relative hover:text-blue-400 transition-colors"
         onMouseEnter={handleTitleMouseEnter}
         onMouseLeave={handleTitleMouseLeave}
         onClick={() => onViewDetails && onViewDetails(task)}
@@ -128,7 +128,7 @@ const TaskRow = ({ task, onView, onEdit, onDelete, onReject, onRemarks, onViewDe
         {task.title || "Untitled Task"}
         {showTitleTooltip && (
           <div
-            className="absolute z-50 bg-[#161c2c] text-blue-100 text-xs rounded px-2 py-1 shadow-lg whitespace-normal w-60 -translate-x-1/2"
+            className="absolute z-50 bg-[#161c2c] text-blue-100 text-sm rounded-lg px-3 py-2 shadow-xl whitespace-normal w-72 -translate-x-1/2"
             style={{ top: titleTooltipPos.top, left: titleTooltipPos.left }}
           >
             {truncateDescription(task.description)}
@@ -137,38 +137,38 @@ const TaskRow = ({ task, onView, onEdit, onDelete, onReject, onRemarks, onViewDe
       </td>
 
       {/* Assigned To */}
-      <td className="px-1.5 py-2">
-        <div className="flex items-center gap-0.5 overflow-hidden">
+      <td className="px-4 py-3">
+        <div className="flex items-center gap-2 overflow-hidden">
           {Array.isArray(task.assignedTo) && task.assignedTo.length > 0 ? (
             <>
               {/* Show only first avatar */}
               <img
                 src={task.assignedTo[0].photo || `https://i.pravatar.cc/40?u=${task.assignedTo[0]._id || 0}`}
                 alt={task.assignedTo[0].name || "User"}
-                className="w-5 h-5 rounded-full border border-yellow-400 object-cover flex-shrink-0"
+                className="w-7 h-7 rounded-full border-2 border-yellow-400 object-cover flex-shrink-0"
                 title={task.assignedTo[0].name || task.assignedTo[0].email || "Unknown"}
               />
-              <span className="text-[10px] truncate ml-1" title={task.assignedTo.map(u => u.name || u.email).join(", ")}>
+              <span className="text-sm truncate" title={task.assignedTo.map(u => u.name || u.email).join(", ")}>
                 {task.assignedTo[0].name || task.assignedTo[0].email || "Unknown"}
                 {task.assignedTo.length > 1 && ` +${task.assignedTo.length - 1}`}
               </span>
             </>
           ) : (
-            <span className="text-blue-400 text-[10px] truncate">Unassigned</span>
+            <span className="text-blue-400 text-sm truncate">Unassigned</span>
           )}
         </div>
       </td>
 
       {/* Assigned By */}
-      <td className="px-1.5 py-2 text-blue-300 text-[10px] truncate">
+      <td className="px-4 py-3 text-blue-300 text-sm truncate">
         {task.assignedBy?.name || "N/A"}
       </td>
 
       {/* Last Edited By */}
-      <td className="px-1.5 py-2 text-[10px] truncate">
+      <td className="px-4 py-3 text-sm truncate">
         {task.lastEditedBy ? (
-          <div className="flex items-center gap-0.5">
-            <div className="w-1.5 h-1.5 bg-orange-400 rounded-full flex-shrink-0"></div>
+          <div className="flex items-center gap-1.5">
+            <div className="w-2 h-2 bg-orange-400 rounded-full flex-shrink-0"></div>
             <span className="text-orange-300 font-medium truncate" title={`Last edited by ${task.lastEditedBy.name || task.lastEditedBy.email || 'Unknown'}`}>
               {task.lastEditedBy.name || task.lastEditedBy.email || 'Unknown'}
             </span>
@@ -179,19 +179,19 @@ const TaskRow = ({ task, onView, onEdit, onDelete, onReject, onRemarks, onViewDe
       </td>
 
       {/* Due Date */}
-      <td className="px-1.5 py-2 text-blue-200 text-[10px] truncate">
+      <td className="px-4 py-3 text-blue-200 text-sm truncate">
         {task.dueDate || "No due date"}
       </td>
 
       {/* Completed At */}
-      <td className="px-1.5 py-2 text-blue-200 text-[10px] truncate">
+      <td className="px-4 py-3 text-blue-200 text-sm truncate">
         {task.completedAt || "—"}
       </td>
 
       {/* Priority */}
-      <td className="px-1.5 py-2 truncate">
+      <td className="px-4 py-3 truncate">
         <span
-          className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold whitespace-nowrap ${
+          className={`px-3 py-1 rounded-full text-sm font-semibold whitespace-nowrap ${
             priorityColors[task.priority] || "bg-gray-500 text-gray-100"
           }`}
         >
@@ -200,9 +200,9 @@ const TaskRow = ({ task, onView, onEdit, onDelete, onReject, onRemarks, onViewDe
       </td>
 
       {/* Status */}
-      <td className="px-1.5 py-2 truncate">
+      <td className="px-4 py-3 truncate">
         <span
-          className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold whitespace-nowrap ${
+          className={`px-3 py-1 rounded-full text-sm font-semibold whitespace-nowrap ${
             statusColors[task.status] || "bg-gray-500 text-gray-100"
           }`}
         >
@@ -211,8 +211,8 @@ const TaskRow = ({ task, onView, onEdit, onDelete, onReject, onRemarks, onViewDe
       </td>
 
       {/* Actions */}
-      <td className="px-1.5 py-2 relative">
-        <div className="flex gap-0.5 items-center justify-center flex-nowrap">
+      <td className="px-4 py-3 relative">
+        <div className="flex gap-2 items-center justify-center flex-nowrap">
           {ACTIONS.map((btn, idx) => (
             <div key={btn.key} className="relative flex-shrink-0">
               <button
@@ -226,18 +226,18 @@ const TaskRow = ({ task, onView, onEdit, onDelete, onReject, onRemarks, onViewDe
                     ? onDelete
                     : toggleRemarks
                 }
-                className={`rounded ${btn.color} hover:bg-white/10 transition flex items-center justify-center`}
-                style={{ width: 20, height: 20 }}
+                className={`rounded-lg ${btn.color} hover:bg-white/10 transition flex items-center justify-center`}
+                style={{ width: 32, height: 32 }}
                 onMouseEnter={(e) => handleIconMouseEnter(idx, e)}
                 onMouseLeave={handleIconMouseLeave}
               >
-                <btn.icon size={12} />
+                <btn.icon size={16} />
               </button>
 
               {/* Inline tooltip */}
               {showTooltip === idx && (
                 <div
-                  className="absolute z-50 bg-[#161c2c] text-blue-100 text-[10px] rounded px-1.5 py-0.5 shadow-lg -translate-x-1/2 whitespace-nowrap"
+                  className="absolute z-50 bg-[#161c2c] text-blue-100 text-xs rounded-lg px-2 py-1 shadow-lg -translate-x-1/2 whitespace-nowrap"
                   style={{ top: tooltipPos.top, left: tooltipPos.left }}
                 >
                   {btn.tooltip}
@@ -252,18 +252,18 @@ const TaskRow = ({ task, onView, onEdit, onDelete, onReject, onRemarks, onViewDe
               <button
                 type="button"
                 onClick={() => onReject && onReject(task)}
-                className="rounded text-red-500 hover:bg-white/10 transition flex items-center justify-center"
-                style={{ width: 20, height: 20 }}
+                className="rounded-lg text-red-500 hover:bg-white/10 transition flex items-center justify-center"
+                style={{ width: 32, height: 32 }}
                 onMouseEnter={(e) => handleIconMouseEnter(999, e)}
                 onMouseLeave={handleIconMouseLeave}
               >
-                <XCircle size={12} />
+                <XCircle size={16} />
               </button>
 
               {/* Reject tooltip */}
               {showTooltip === 999 && (
                 <div
-                  className="absolute z-50 bg-[#161c2c] text-blue-100 text-[10px] rounded px-1.5 py-0.5 shadow-lg -translate-x-1/2 whitespace-nowrap"
+                  className="absolute z-50 bg-[#161c2c] text-blue-100 text-xs rounded-lg px-2 py-1 shadow-lg -translate-x-1/2 whitespace-nowrap"
                   style={{ top: tooltipPos.top, left: tooltipPos.left }}
                 >
                   Reject Task

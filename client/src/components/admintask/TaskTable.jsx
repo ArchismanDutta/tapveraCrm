@@ -2,6 +2,8 @@
 import React, { useState, useMemo } from "react";
 import axios from "axios";
 import { XCircle } from "lucide-react";
+import SimpleBar from "simplebar-react";
+import "simplebar-react/dist/simplebar.min.css";
 import TaskRow from "./TaskRow";
 import TaskRemarksModal from "../task/TaskRemarksModal";
 import TaskDetailModal from "./TaskDetailModal";
@@ -136,6 +138,7 @@ const TaskTable = ({ tasks = [], onViewTask, onEditTask, onDeleteTask, onRejectT
   };
 
   return (
+    <>
     <div className="rounded-xl relative">
       {/* Filters */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-4 gap-2">
@@ -159,57 +162,65 @@ const TaskTable = ({ tasks = [], onViewTask, onEditTask, onDeleteTask, onRejectT
         </select>
       </div>
 
-      {/* Table */}
-      <div className="rounded-s border border-[rgba(84,123,209,0.4)] shadow-lg overflow-x-auto">
-        <table className="w-full border-collapse text-blue-100">
-          <thead className="bg-[rgba(191,111,47,0.15)]">
-            <tr className="text-left text-[10px] uppercase tracking-wide text-[#bf6f2f]">
-              <th className="px-1.5 py-2">Task Title</th>
-              <th className="px-1.5 py-2">Assigned To</th>
-              <th className="px-1.5 py-2">Assigned By</th>
-              <th className="px-1.5 py-2">Last Edited</th>
-              <th className="px-1.5 py-2">Due Date</th>
-              <th className="px-1.5 py-2">Completed</th>
-              <th className="px-1.5 py-2">Priority</th>
-              <th className="px-1.5 py-2">Status</th>
-              <th className="px-1.5 py-2 text-center">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="text-[11px]">
-            {filteredTasks.length > 0 ? (
-              filteredTasks.map((task, index) => (
-                <TaskRow
-                  key={task._id || index}
-                  task={{
-                    ...task,
-                    assignedTo: Array.isArray(task.assignedTo)
-                      ? task.assignedTo
-                      : [],
-                    assignedBy: task.assignedBy || null,
-                    lastEditedBy: task.lastEditedBy || null,
-                    dueDate: formatDateTime(task?.dueDate),
-                    completedAt: formatDateTime(task?.completedAt),
-                  }}
-                  onView={() => onViewTask(task)}
-                  onEdit={() => onEditTask(task)}
-                  onDelete={() => onDeleteTask(task._id)}
-                  onRemarks={openRemarksModal}
-                  onReject={setRejectingTask}
-                  onViewDetails={() => openDetailModal(task)}
-                />
-              ))
-            ) : (
-              <tr>
-                <td
-                  colSpan={9}
-                  className="p-4 text-center text-blue-400 italic"
-                >
-                  No tasks found.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+      {/* Table with Modern Scrollbar */}
+      <div className="rounded-xl border border-[rgba(84,123,209,0.4)] shadow-lg overflow-hidden">
+        <SimpleBar
+          style={{ maxHeight: "600px" }}
+          autoHide={false}
+          className="custom-scrollbar"
+        >
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse text-blue-100 min-w-max">
+              <thead className="bg-[rgba(191,111,47,0.15)] sticky top-0 z-10">
+                <tr className="text-left text-sm uppercase tracking-wide text-[#bf6f2f]">
+                  <th className="px-4 py-3 font-semibold">Task Title</th>
+                  <th className="px-4 py-3 font-semibold">Assigned To</th>
+                  <th className="px-4 py-3 font-semibold">Assigned By</th>
+                  <th className="px-4 py-3 font-semibold">Last Edited</th>
+                  <th className="px-4 py-3 font-semibold">Due Date</th>
+                  <th className="px-4 py-3 font-semibold">Completed</th>
+                  <th className="px-4 py-3 font-semibold">Priority</th>
+                  <th className="px-4 py-3 font-semibold">Status</th>
+                  <th className="px-4 py-3 text-center font-semibold">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="text-sm">
+                {filteredTasks.length > 0 ? (
+                  filteredTasks.map((task, index) => (
+                    <TaskRow
+                      key={task._id || index}
+                      task={{
+                        ...task,
+                        assignedTo: Array.isArray(task.assignedTo)
+                          ? task.assignedTo
+                          : [],
+                        assignedBy: task.assignedBy || null,
+                        lastEditedBy: task.lastEditedBy || null,
+                        dueDate: formatDateTime(task?.dueDate),
+                        completedAt: formatDateTime(task?.completedAt),
+                      }}
+                      onView={() => onViewTask(task)}
+                      onEdit={() => onEditTask(task)}
+                      onDelete={() => onDeleteTask(task._id)}
+                      onRemarks={openRemarksModal}
+                      onReject={setRejectingTask}
+                      onViewDetails={() => openDetailModal(task)}
+                    />
+                  ))
+                ) : (
+                  <tr>
+                    <td
+                      colSpan={9}
+                      className="p-6 text-center text-blue-400 italic text-base"
+                    >
+                      No tasks found.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </SimpleBar>
       </div>
 
       {/* Remarks Modal */}
@@ -295,14 +306,16 @@ const TaskTable = ({ tasks = [], onViewTask, onEditTask, onDeleteTask, onRejectT
         </div>
       )}
 
-      {/* Task Detail Modal */}
-      {detailTask && (
-        <TaskDetailModal
-          task={detailTask}
-          onClose={() => setDetailTask(null)}
-        />
-      )}
     </div>
+
+    {/* Task Detail Modal - Rendered outside table to prevent z-index issues */}
+    {detailTask && (
+      <TaskDetailModal
+        task={detailTask}
+        onClose={() => setDetailTask(null)}
+      />
+    )}
+    </>
   );
 };
 

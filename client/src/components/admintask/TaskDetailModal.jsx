@@ -49,7 +49,7 @@ const TaskDetailModal = ({ task, onClose }) => {
   }, [onClose]);
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xl overflow-y-auto">
+    <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-xl overflow-y-auto">
       <div className="min-h-screen flex items-start justify-center p-4 pt-8">
         <div
           ref={modalRef}
