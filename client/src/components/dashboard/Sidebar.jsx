@@ -7,16 +7,38 @@ import {
   MessageCircle,
   FileText,
   Flag,
-  Users,
   Calendar,
   Clock,
   DollarSign,
   TrendingUp,
   PhoneCall,
   BookOpen,
+  Briefcase,
+  FolderKanban,
 } from "lucide-react";
 import { FaChevronCircleRight, FaTrophy } from "react-icons/fa";
-
+import { Users } from "@/components/animate-ui/icons/users";
+import { Brush } from "@/components/animate-ui/icons/brush";
+import { MessageSquareQuote } from "@/components/animate-ui/icons/message-square-quote";
+import { ChevronUp } from "@/components/animate-ui/icons/chevron-up";
+import { ChartNoAxesColumnDecreasing } from "@/components/animate-ui/icons/chart-no-axes-column-decreasing";
+import { Gauge  } from "@/components/animate-ui/icons/gauge";
+import { LogIn  } from "@/components/animate-ui/icons/log-in";
+import { CircleCheckBig   } from "@/components/animate-ui/icons/circle-check-big";
+import { Clock10 as AnimatedClock10 } from "@/components/animate-ui/icons/clock-10";
+import { Send   } from "@/components/animate-ui/icons/send";
+import { PanelLeft   } from "@/components/animate-ui/icons/panel-left";
+import { PartyPopper   } from "@/components/animate-ui/icons/party-popper";
+import { Gavel   } from "@/components/animate-ui/icons/gavel";
+import { Disc3   } from "@/components/animate-ui/icons/disc-3";
+import { ChartBar   } from "@/components/animate-ui/icons/chart-bar";
+import { Fingerprint   } from "@/components/animate-ui/icons/fingerprint";
+import { User as AnimatedUser } from "@/components/animate-ui/icons/user";
+import { Pin  } from "@/components/animate-ui/icons/pin";
+import { Plus  } from "@/components/animate-ui/icons/plus";
+import { Compass  } from "@/components/animate-ui/icons/compass";
+import { RotateCw  } from "@/components/animate-ui/icons/rotate-cw";
+import { ClipboardCheck  } from "@/components/animate-ui/icons/clipboard-check";
 import Modal from "../modal";
 import DailyEmailSender from "../DailyEmailSender";
 import AchievementsDashboard from "../achievements/AchievementsDashboard";
@@ -26,77 +48,85 @@ import tapveraLogo from "../../assets/tapvera.png";
 // Role → Menu mapping
 const menuConfig = {
   employee: [
-    { to: "/dashboard", icon: <LayoutDashboard size={18} />, label: "Employee Dashboard" },
-    { to: "/profile", icon: <User size={18} />, label: "My Profile" },
-    { to: "/today-status", icon: <ClipboardList size={18} />, label: "Punch In/Out" },
-    { to: "/attendance", icon: <ClipboardList size={18} />, label: "My Attendance" },
-    { to: "/leads", icon: <TrendingUp size={18} />, label: "My Leads" },
-    { to: "/callbacks", icon: <PhoneCall size={18} />, label: "My Callbacks" },
-    { to: "/notepad", icon: <BookOpen size={18} />, label: "My Notepad" },
-    { to: "/todo", icon: <ClipboardList size={18} />, label: "Todo" },
-    { to: "/messages", icon: <MessageCircle size={18} />, label: "Messages" },
-    { to: "/leaves", icon: <FileText size={18} />, label: "Leave Requests" },
-    { to: "/tasks", icon: <ClipboardList size={18} />, label: "Tasks" },
-    { type: "achievements", icon: <FaTrophy size={18} />, label: "Achievements" },
+    { to: "/today-status", icon: <LogIn size={18} animateOnHover />, label: "Punch In/Out" },
+    { to: "/dashboard", icon: <Gauge size={18}  animateOnHover />, label: "Employee Dashboard" },
+    { to: "/tasks", icon: <CircleCheckBig size={18} animateOnHover />, label: "My Tasks" },
+    { to: "/attendance", icon: <AnimatedClock10 size={18} animateOnHover />, label: "My Attendance" },
+    { to: "/leaves", icon: <Send  size={18} animateOnHover />, label: "Leave Requests" },
+    { to: "/todo", icon: <Brush size={18} animateOnHover />, label: "Todo" },
+    { to: "/messages", icon: <MessageSquareQuote size={18} animateOnHover />, label: "Messages" },
+    { to: "/notepad", icon: <PanelLeft size={18} animateOnHover />, label: "My Notepad" },
+    { to: "/profile", icon: <AnimatedUser size={18} animateOnHover />, label: "My Profile" },
+    { type: "achievements", icon: <PartyPopper size={18} animateOnHover/>, label: "Achievements" },
+    { to: "/leads", icon: <ChevronUp size={18} animateOnHover />, label: "My Leads" },
+    { to: "/callbacks", icon: <Gavel size={18} animateOnHover />, label: "My Callbacks" },
+    
+    
+    
+    
+    
   ],
   hr: [
-    { to: "/hrdashboard", icon: <LayoutDashboard size={18} />, label: "HR Dashboard" },
-    { to: "/today-status", icon: <ClipboardList size={18} />, label: "Punch In/Out" },
-    { to: "/tasks", icon: <ClipboardList size={18} />, label: "Tasks" },
-    { to: "/notepad", icon: <BookOpen size={18} />, label: "My Notepad" },
-    { to: "/todo", icon: <ClipboardList size={18} />, label: "Todo" },
-    { to: "/admin/leaves", icon: <FileText size={18} />, label: "Leave Requests" },
+    { to: "/hrdashboard", icon: <Gauge size={18}  animateOnHover />, label: "HR Dashboard" },
+    { to: "/today-status", icon: <LogIn size={18} animateOnHover />, label: "Punch In/Out" },
+    { to: "/tasks", icon: <CircleCheckBig size={18} animateOnHover />, label: "My Tasks" },
+    { to: "/notepad", icon: <PanelLeft size={18} animateOnHover />, label: "My Notepad" },
+    { to: "/todo", icon: <Brush size={18} animateOnHover />, label: "Todo" },
+    { to: "/admin/leaves", icon: <Send  size={18} animateOnHover />, label: "Leave Requests" },
     { to: "/leaves", icon: <FileText size={18} />, label: "My Leaves" },
-    { to: "/attendance", icon: <ClipboardList size={18} />, label: "My Attendance" },
-    { to: "/directory", icon: <Users size={18} />, label: "Employee Details" },
+    { to: "/attendance", icon: <AnimatedClock10 size={18} animateOnHover />, label: "My Attendance" },
+    { to: "/directory", icon: <Users size={18} animateOnHover />, label: "Employee Details" },
     { to: "/admin/shifts", icon: <Clock size={18} />, label: "Shift Management" },
-    { to: "/admin/manual-attendance", icon: <Calendar size={18} />, label: "Manual Attendance" },
+    { to: "/admin/manual-attendance", icon: <Disc3  size={18} animateOnHover />, label: "Manual Attendance" },
     { to: "/admin/notices", icon: <Flag size={18} />, label: "Notice Board" },
-    { to: "/admin/holidays", icon: <Calendar size={18} />, label: "Holidays List" },
-    { to: "/messages", icon: <MessageCircle size={18} />, label: "Messages" },
-    { to: "/profile", icon: <User size={18} />, label: "My Profile" },
+    { to: "/admin/holidays", icon: <ChartBar  size={18} animateOnHover />, label: "Holidays List" },
+    { to: "/messages", icon: <MessageSquareQuote size={18} animateOnHover />, label: "Messages" },
+    { to: "/profile", icon: <AnimatedUser size={18} animateOnHover />, label: "My Profile" },
     { to: "/super-admin", icon: <ClipboardList size={18} />, label: "Employees Current Status" },
-    { type: "achievements", icon: <FaTrophy size={18} />, label: "Achievements" },
+    { type: "achievements", icon: <PartyPopper size={18} animateOnHover/>, label: "Achievements" },
   ],
   admin: [
-    { to: "/dashboard", icon: <LayoutDashboard size={18} />, label: "Admin Dashboard" },
-    { to: "/leads", icon: <TrendingUp size={18} />, label: "Lead Management" },
-    { to: "/callbacks", icon: <PhoneCall size={18} />, label: "Callback Management" },
-    { to: "/today-status", icon: <ClipboardList size={18} />, label: "Punch In/Out" },
-    { to: "/notepad", icon: <BookOpen size={18} />, label: "My Notepad" },
-    { to: "/todo", icon: <ClipboardList size={18} />, label: "Todo" },
-    { to: "/tasks", icon: <ClipboardList size={18} />, label: "Tasks" },
+     { to: "/today-status", icon: <LogIn size={18} animateOnHover />, label: "Punch In/Out" },
+    { to: "/dashboard", icon: <Gauge size={18}  animateOnHover />, label: "Admin Dashboard" },
+    { to: "/notepad", icon: <PanelLeft size={18} animateOnHover />, label: "My Notepad" },
+    { to: "/todo", icon: <Brush size={18} animateOnHover />, label: "Todo" },
+    { to: "/tasks", icon: <CircleCheckBig size={18} animateOnHover />, label: "My Tasks" },
     { to: "/leaves", icon: <FileText size={18} />, label: "My Leaves" },
-    { to: "/messages", icon: <MessageCircle size={18} />, label: "Messages" },
-    { to: "/admin/shifts", icon: <Clock size={18} />, label: "Shift Management" },
+    { to: "/messages", icon: <MessageSquareQuote size={18} animateOnHover />, label: "Messages" },
+    // { to: "/admin/shifts", icon: <Clock size={18} />, label: "Shift Management" },
     // { to: "/admin/manual-attendance", icon: <Calendar size={18} />, label: "Manual Attendance" },
     { to: "/admin/holidays", icon: <Calendar size={18} />, label: "Holidays List" },
-    { to: "/attendance", icon: <ClipboardList size={18} />, label: "My Attendance" },
-    { to: "/profile", icon: <User size={18} />, label: "My Profile" },
-    { to: "/admin/notices", icon: <Flag size={18} />, label: "Notice Board" },
+    { to: "/attendance", icon: <AnimatedClock10 size={18} animateOnHover />, label: "My Attendance" },
+    { to: "/profile", icon: <AnimatedUser size={18} animateOnHover />, label: "My Profile" },
+    // { to: "/admin/notices", icon: <Flag size={18} />, label: "Notice Board" },
   //   { to: "/super-admin", icon: <ClipboardList size={18} />, label: "Employees Current Status" },
-    { type: "achievements", icon: <FaTrophy size={18} />, label: "Achievements" },
+     { to: "/leads", icon: <ChevronUp size={18} animateOnHover />, label: "Lead Management" },
+    { to: "/callbacks", icon: <RotateCw size={18} animateOnHover />, label: "Callback Management" },
+    { type: "achievements", icon: <PartyPopper size={18} animateOnHover/>, label: "Achievements" },
   ],
   "super-admin": [
-    { to: "/hrdashboard", icon: <LayoutDashboard size={18} />, label: "Dashboard" },
-    { to: "/leads", icon: <TrendingUp size={18} />, label: "Lead Management" },
-    { to: "/callbacks", icon: <PhoneCall size={18} />, label: "Callback Management" },
-    { to: "/admin/tasks", icon: <ClipboardList size={18} />, label: "Task Management" },
-    { to: "/tasks", icon: <ClipboardList size={18} />, label: "My Tasks" },
-    { to: "/admin/leaves", icon: <FileText size={18} />, label: "Leave Requests" },
-    { to: "/directory", icon: <Users size={18} />, label: "Employee Details" },
-    { to: "/admin/shifts", icon: <Clock size={18} />, label: "Shift Management" },
-    { to: "/admin/manual-attendance", icon: <Calendar size={18} />, label: "Manual Attendance" },
-    { to: "/admin/salary-management", icon: <DollarSign size={18} />, label: "Salary Management" },
-    { to: "/todo", icon: <ClipboardList size={18} />, label: "Todo" },
+    { to: "/hrdashboard", icon: <Gauge size={18}  animateOnHover />, label: "Dashboard" },
+    { to: "/super-admin", icon: <ChartNoAxesColumnDecreasing size={18} animateOnHover />, label: "Employees Current Status" },
+    { to: "/super-admin/attendance", icon: <Pin  size={18} animateOnHover />, label: "Employee Attendance Portal" },
+    { to: "/admin/tasks", icon: <ClipboardList size={18}  animateOnHover />, label: "Task Management" },
+    { to: "/admin/leaves", icon: <Send  size={18} animateOnHover />, label: "Leave Requests" },
+     { to: "/admin/shifts", icon: <Compass  size={18} animateOnHover />, label: "Shift Management" },
+    { to: "/admin/manual-attendance", icon: <Disc3  size={18} animateOnHover />, label: "Manual Attendance" },
+    { to: "/admin/salary-management", icon: <Fingerprint size={18} animateOnHover />, label: "Salary Management" },
+    { to: "/todo", icon: <Brush size={18} animateOnHover />, label: "Todo" },
+      { to: "/messages", icon: <MessageSquareQuote size={18} animateOnHover />, label: "Messages" },
+    { to: "/leads", icon: <ChevronUp  size={18} animateOnHover />, label: "Lead Management" },
+    { to: "/callbacks", icon: <RotateCw size={18} animateOnHover />, label: "Callback Management" },
+    // { to: "/clients", icon: <Plus size={18} animateOnHover />, label: "Client Management" },
+    // { to: "/projects", icon: <ClipboardCheck size={18} animateOnHover />, label: "Project Management" },
+        { to: "/tasks", icon: <CircleCheckBig size={18} animateOnHover />, label: "My Tasks" },
+
+    { to: "/directory", icon: <Users size={18} animateOnHover />, label: "Employee Details" },
     { to: "/admin/notices", icon: <Flag size={18} />, label: "Notice Board" },
-    { to: "/messages", icon: <MessageCircle size={18} />, label: "Messages" },
-    { to: "/admin/holidays", icon: <Calendar size={18} />, label: "Holidays List" },
-    { to: "/profile", icon: <User size={18} />, label: "My Profile" },
-    { to: "/super-admin", icon: <ClipboardList size={18} />, label: "Employees Current Status" },
-    { to: "/super-admin/attendance", icon: <Calendar size={18} />, label: "Employee Attendance Portal" },
+    { to: "/admin/holidays", icon: <ChartBar  size={18} animateOnHover />, label: "Holidays List" },
+    { to: "/profile", icon: <AnimatedUser size={18} animateOnHover />, label: "My Profile" },
     { to: "/super-admin/notepad", icon: <BookOpen size={18} />, label: "Employee Notepads" },
-    { type: "achievements", icon: <FaTrophy size={18} />, label: "Achievements" },
+    { type: "achievements", icon: <PartyPopper size={18} animateOnHover/>, label: "Achievements" },
   ],
 };
 
@@ -116,6 +146,7 @@ const Sidebar = ({ collapsed, setCollapsed, onLogout, userRole }) => {
   const [conversations, setConversations] = useState([]);
   const [showUnreadTooltip, setShowUnreadTooltip] = useState(false);
   const [userDepartment, setUserDepartment] = useState("");
+  const [hoveredItem, setHoveredItem] = useState(null);
   const { showAchievementsDashboard, openAchievementsDashboard, closeAchievementsDashboard } = useAchievements();
 
   useEffect(() => {
@@ -157,7 +188,7 @@ const Sidebar = ({ collapsed, setCollapsed, onLogout, userRole }) => {
     window.addEventListener("chat-unread-total", handler);
     // Also poll storage every 3s as a fallback in case an event is missed
     const interval = setInterval(updateFromStorage, 3000);
-    return () => {
+    return () => { 
       window.removeEventListener("chat-unread-total", handler);
       clearInterval(interval);
     };
@@ -223,6 +254,19 @@ const Sidebar = ({ collapsed, setCollapsed, onLogout, userRole }) => {
     return true;
   });
 
+  // Helper to add hover trigger to animated icons
+  const renderIconWithHover = (icon, itemKey, isHovered) => {
+    // Check if the icon has animateOnHover prop
+    if (icon.props?.animateOnHover) {
+      // Clone the icon, remove animateOnHover, and add animate prop to trigger on parent hover
+      return React.cloneElement(icon, {
+        animateOnHover: undefined, // Remove the default hover detection
+        animate: isHovered // Trigger animation based on parent hover state
+      });
+    }
+    return icon;
+  };
+
   return (
     <>
       <aside
@@ -267,8 +311,8 @@ const Sidebar = ({ collapsed, setCollapsed, onLogout, userRole }) => {
                   key={`achievements-${index}`}
                   onClick={openAchievementsDashboard}
                   className={`group flex items-center gap-4 rounded-lg px-4 py-3 text-sm font-semibold
-                    transition-colors duration-150 w-full text-left
-                    text-blue-100 hover:text-blue-300 hover:bg-white/10
+                    transition-all duration-150 w-full text-left
+                    text-blue-100 hover:text-blue-300 hover:bg-white/10 hover:font-bold
                     ${collapsed ? "justify-center" : "justify-start"}`}
                   tabIndex={collapsed ? -1 : 0}
                 >
@@ -288,18 +332,24 @@ const Sidebar = ({ collapsed, setCollapsed, onLogout, userRole }) => {
               <div
                 key={item.to}
                 className="relative"
-                onMouseEnter={() => item.to === "/messages" && chatUnread > 0 && setShowUnreadTooltip(true)}
-                onMouseLeave={() => item.to === "/messages" && setShowUnreadTooltip(false)}
+                onMouseEnter={() => {
+                  setHoveredItem(item.to);
+                  if (item.to === "/messages" && chatUnread > 0) setShowUnreadTooltip(true);
+                }}
+                onMouseLeave={() => {
+                  setHoveredItem(null);
+                  if (item.to === "/messages") setShowUnreadTooltip(false);
+                }}
               >
                 <NavLink
                   to={item.to}
                   className={({ isActive, isPending }) =>
                     `group flex items-center gap-4 rounded-lg px-4 py-3 text-sm font-semibold
-                    transition-colors duration-150
+                    transition-all duration-150
                     ${
                       isActive
                         ? "bg-gradient-to-r from-blue-600 to-blue-400 text-white shadow-md"
-                        : "text-blue-100 hover:text-blue-300"
+                        : "text-blue-100 hover:text-blue-300 hover:font-bold"
                     }
                     ${collapsed ? "justify-center" : "justify-start"}`
                   }
@@ -307,7 +357,7 @@ const Sidebar = ({ collapsed, setCollapsed, onLogout, userRole }) => {
                   tabIndex={collapsed ? -1 : 0}
                 >
                   <span className="flex items-center justify-center relative">
-                    {item.icon}
+                    {renderIconWithHover(item.icon, item.to, hoveredItem === item.to)}
                     {item.to === "/messages" && chatUnread > 0 && (
                       <span className="absolute -top-1 -right-2 bg-red-500 text-white text-[10px] px-1.5 py-[1px] rounded-full min-w-[16px] text-center">
                         {chatUnread > 99 ? "99+" : chatUnread}
@@ -400,3 +450,4 @@ const Sidebar = ({ collapsed, setCollapsed, onLogout, userRole }) => {
 };
 
 export default Sidebar;
+

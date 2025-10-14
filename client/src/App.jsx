@@ -57,7 +57,8 @@ import SuperAdminAttendancePortal from "./pages/SuperAdminAttendancePortal";
 import ShiftManagement from "./components/humanResource/ShiftManagement";
 import ManualAttendanceManagement from "./pages/admin/ManualAttendanceManagement";
 import SalaryManagement from "./pages/admin/SalaryManagement";
-
+import ClientsPage from "./pages/ClientsPage";
+import ProjectsPage from "./pages/ProjectsPage";
 // Lead & Callback Management
 import ViewLeads from "./pages/ViewLeads";
 import AddLead from "./pages/AddLead";
@@ -600,6 +601,30 @@ const AppWrapper = () => {
         <Route
           path="/notepad"
           element={isAuthenticated ? <NotepadPage onLogout={handleLogout} /> : <Navigate to="/login" replace />}
+        />
+
+        {/* Client Management */}
+        <Route
+          path="/clients"
+          element={
+            isAuthenticated && isSuperAdmin ? (
+              <ClientsPage onLogout={handleLogout} />
+            ) : (
+              <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />
+            )
+          }
+        />
+
+        {/* Project Management */}
+        <Route
+          path="/projects"
+          element={
+            isAuthenticated && isSuperAdmin ? (
+              <ProjectsPage onLogout={handleLogout} />
+            ) : (
+              <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />
+            )
+          }
         />
 
         {/* Catch-All */}

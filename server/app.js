@@ -39,6 +39,8 @@ const celebrationRoutes = require("./routes/celebrationRoutes");
 const leadRoutes = require("./routes/leadRoutes");
 const callbackRoutes = require("./routes/callbackRoutes");
 const notepadRoutes = require("./routes/notepadRoutes");
+const clientRoutes = require("./routes/clientRoutes");
+const projectRoutes = require("./routes/projectRoutes");
 
 // Controllers
 const ChatController = require("./controllers/chatController");
@@ -117,6 +119,8 @@ app.use("/api/celebrations", celebrationRoutes);
 app.use("/api/leads", leadRoutes);
 app.use("/api/callbacks", callbackRoutes);
 app.use("/api/notepad", notepadRoutes);
+app.use("/api/clients", clientRoutes);
+app.use("/api/projects", projectRoutes);
 
 
 
