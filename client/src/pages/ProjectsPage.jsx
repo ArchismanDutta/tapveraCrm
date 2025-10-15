@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import axios from "axios";
+import { useNavigate } from "react-router-dom";
 import {
   FolderKanban,
   Plus,
@@ -25,7 +26,8 @@ import {
   FileText,
   Eye,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  MessageSquare
 } from "lucide-react";
 import Sidebar from "../components/dashboard/Sidebar";
 
@@ -52,6 +54,7 @@ const PROJECT_TYPE_COLORS = {
 };
 
 const ProjectsPage = ({ onLogout }) => {
+  const navigate = useNavigate();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [projects, setProjects] = useState([]);
   const [clients, setClients] = useState([]);
@@ -77,6 +80,9 @@ const ProjectsPage = ({ onLogout }) => {
   });
 
   const [showEmployeeDropdown, setShowEmployeeDropdown] = useState(false);
+  const [employeeSearchTerm, setEmployeeSearchTerm] = useState("");
+  const [showEditEmployeeDropdown, setShowEditEmployeeDropdown] = useState(false);
+  const [editEmployeeSearchTerm, setEditEmployeeSearchTerm] = useState("");
 
   // Filter state
   const [searchTerm, setSearchTerm] = useState("");
@@ -198,6 +204,9 @@ const ProjectsPage = ({ onLogout }) => {
       priority: "Medium"
     });
     setShowEmployeeDropdown(false);
+    setEmployeeSearchTerm("");
+    setShowEditEmployeeDropdown(false);
+    setEditEmployeeSearchTerm("");
   };
 
   const showNotification = (message, type) => {
@@ -488,7 +497,7 @@ const ProjectsPage = ({ onLogout }) => {
                   </div>
                 )}
               </div>
-            );
+            );  
           })}
         </div>
 
@@ -647,14 +656,11 @@ const ProjectsPage = ({ onLogout }) => {
                         <td className="p-4">
                           <div className="flex items-center gap-2">
                             <button
-                              onClick={() => {
-                                setSelectedProject(project);
-                                setShowViewModal(true);
-                              }}
+                              onClick={() => navigate(`/project/${project._id}`)}
                               className="p-2 rounded-lg text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 transition-all"
-                              title="View details"
+                              title="View details & chat"
                             >
-                              <Eye className="w-4 h-4" />
+                              <MessageSquare className="w-4 h-4" />
                             </button>
                             <button
                               onClick={() => openEditModal(project)}
@@ -809,32 +815,57 @@ const ProjectsPage = ({ onLogout }) => {
                 </div>
 
                 {showEmployeeDropdown && (
-                  <div className="absolute z-10 w-full mt-2 bg-[#0f1419] border border-[#232945] rounded-lg shadow-2xl max-h-64 overflow-y-auto">
-                    {employees.map((emp) => (
-                      <label
-                        key={emp._id}
-                        className="flex items-center gap-3 px-4 py-3 hover:bg-[#191f2b] cursor-pointer transition-colors border-b border-[#232945] last:border-b-0"
-                      >
+                  <div className="absolute z-10 w-full mt-2 bg-[#0f1419] border border-[#232945] rounded-lg shadow-2xl max-h-64 overflow-hidden">
+                    {/* Search Input */}
+                    <div className="p-3 border-b border-[#232945] sticky top-0 bg-[#0f1419]">
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-500" />
                         <input
-                          type="checkbox"
-                          checked={form.assignedTo.includes(emp._id)}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setForm({ ...form, assignedTo: [...form.assignedTo, emp._id] });
-                            } else {
-                              setForm({ ...form, assignedTo: form.assignedTo.filter(id => id !== emp._id) });
-                            }
-                          }}
-                          className="w-4 h-4 rounded border-[#232945] bg-[#0f1419] text-purple-600 focus:ring-purple-500 focus:ring-offset-0"
+                          type="text"
+                          placeholder="Search employees..."
+                          value={employeeSearchTerm}
+                          onChange={(e) => setEmployeeSearchTerm(e.target.value)}
+                          onClick={(e) => e.stopPropagation()}
+                          className="w-full pl-10 pr-4 py-2 bg-[#141a21] border border-[#232945] rounded-lg text-white text-sm placeholder-gray-500 focus:outline-none focus:border-purple-500"
                         />
-                        <div className="flex items-center gap-2">
-                          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white text-xs font-semibold">
-                            {emp.name.charAt(0).toUpperCase()}
-                          </div>
-                          <span className="text-white text-sm">{emp.name}</span>
+                      </div>
+                    </div>
+
+                    {/* Employee List */}
+                    <div className="max-h-48 overflow-y-auto">
+                      {employees
+                        .filter(emp => emp.name.toLowerCase().includes(employeeSearchTerm.toLowerCase()))
+                        .map((emp) => (
+                          <label
+                            key={emp._id}
+                            className="flex items-center gap-3 px-4 py-3 hover:bg-[#191f2b] cursor-pointer transition-colors border-b border-[#232945] last:border-b-0"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={form.assignedTo.includes(emp._id)}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setForm({ ...form, assignedTo: [...form.assignedTo, emp._id] });
+                                } else {
+                                  setForm({ ...form, assignedTo: form.assignedTo.filter(id => id !== emp._id) });
+                                }
+                              }}
+                              className="w-4 h-4 rounded border-[#232945] bg-[#0f1419] text-purple-600 focus:ring-purple-500 focus:ring-offset-0"
+                            />
+                            <div className="flex items-center gap-2">
+                              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white text-xs font-semibold">
+                                {emp.name.charAt(0).toUpperCase()}
+                              </div>
+                              <span className="text-white text-sm">{emp.name}</span>
+                            </div>
+                          </label>
+                        ))}
+                      {employees.filter(emp => emp.name.toLowerCase().includes(employeeSearchTerm.toLowerCase())).length === 0 && (
+                        <div className="px-4 py-6 text-center text-gray-500 text-sm">
+                          No employees found
                         </div>
-                      </label>
-                    ))}
+                      )}
+                    </div>
                   </div>
                 )}
 
@@ -994,20 +1025,95 @@ const ProjectsPage = ({ onLogout }) => {
                   />
                 </div>
 
-                <div>
+                <div className="relative">
                   <label className="block text-sm text-gray-400 mb-2">Assign To *</label>
-                  <select
-                    multiple
-                    value={form.assignedTo}
-                    onChange={(e) => setForm({ ...form, assignedTo: Array.from(e.target.selectedOptions, option => option.value) })}
-                    className="w-full px-4 py-3 bg-[#0f1419] border border-[#232945] rounded-lg text-white focus:outline-none focus:border-purple-500 h-32"
-                    required
+                  <div
+                    onClick={() => setShowEditEmployeeDropdown(!showEditEmployeeDropdown)}
+                    className="w-full px-4 py-3 bg-[#0f1419] border border-[#232945] rounded-lg text-white focus:outline-none focus:border-purple-500 cursor-pointer flex items-center justify-between"
                   >
-                    {employees.map(emp => (
-                      <option key={emp._id} value={emp._id}>{emp.name}</option>
-                    ))}
-                  </select>
-                  <p className="text-xs text-gray-500 mt-1">Hold Ctrl/Cmd to select multiple</p>
+                    <span className="text-gray-300">
+                      {form.assignedTo.length === 0
+                        ? "Select employees..."
+                        : `${form.assignedTo.length} employee${form.assignedTo.length > 1 ? "s" : ""} selected`}
+                    </span>
+                    <ChevronDown className={`w-4 h-4 transition-transform ${showEditEmployeeDropdown ? "rotate-180" : ""}`} />
+                  </div>
+
+                  {showEditEmployeeDropdown && (
+                    <div className="absolute z-10 w-full mt-2 bg-[#0f1419] border border-[#232945] rounded-lg shadow-2xl max-h-64 overflow-hidden">
+                      {/* Search Input */}
+                      <div className="p-3 border-b border-[#232945] sticky top-0 bg-[#0f1419]">
+                        <div className="relative">
+                          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-500" />
+                          <input
+                            type="text"
+                            placeholder="Search employees..."
+                            value={editEmployeeSearchTerm}
+                            onChange={(e) => setEditEmployeeSearchTerm(e.target.value)}
+                            onClick={(e) => e.stopPropagation()}
+                            className="w-full pl-10 pr-4 py-2 bg-[#141a21] border border-[#232945] rounded-lg text-white text-sm placeholder-gray-500 focus:outline-none focus:border-purple-500"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Employee List */}
+                      <div className="max-h-48 overflow-y-auto">
+                        {employees
+                          .filter(emp => emp.name.toLowerCase().includes(editEmployeeSearchTerm.toLowerCase()))
+                          .map((emp) => (
+                            <label
+                              key={emp._id}
+                              className="flex items-center gap-3 px-4 py-3 hover:bg-[#191f2b] cursor-pointer transition-colors border-b border-[#232945] last:border-b-0"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={form.assignedTo.includes(emp._id)}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setForm({ ...form, assignedTo: [...form.assignedTo, emp._id] });
+                                  } else {
+                                    setForm({ ...form, assignedTo: form.assignedTo.filter(id => id !== emp._id) });
+                                  }
+                                }}
+                                className="w-4 h-4 rounded border-[#232945] bg-[#0f1419] text-purple-600 focus:ring-purple-500 focus:ring-offset-0"
+                              />
+                              <div className="flex items-center gap-2">
+                                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white text-xs font-semibold">
+                                  {emp.name.charAt(0).toUpperCase()}
+                                </div>
+                                <span className="text-white text-sm">{emp.name}</span>
+                              </div>
+                            </label>
+                          ))}
+                        {employees.filter(emp => emp.name.toLowerCase().includes(editEmployeeSearchTerm.toLowerCase())).length === 0 && (
+                          <div className="px-4 py-6 text-center text-gray-500 text-sm">
+                            No employees found
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {form.assignedTo.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mt-3">
+                      {form.assignedTo.map((empId) => {
+                        const emp = employees.find(e => e._id === empId);
+                        if (!emp) return null;
+                        return (
+                          <div key={empId} className="flex items-center gap-2 px-3 py-1 bg-purple-600/20 border border-purple-500/30 rounded-full text-sm text-purple-300">
+                            <span>{emp.name}</span>
+                            <button
+                              type="button"
+                              onClick={() => setForm({ ...form, assignedTo: form.assignedTo.filter(id => id !== empId) })}
+                              className="hover:text-purple-100 transition-colors"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               </div>
 
