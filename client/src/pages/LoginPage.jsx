@@ -39,6 +39,8 @@ const Login = ({ onLoginSuccess }) => {
       const data = await res.json();
 
       console.log("Login response:", data);
+      console.log("User role from response:", data.user.role);
+      console.log("User type from response:", data.userType);
 
       if (!res.ok) {
         setError(data.message || "Invalid email or password.");
@@ -51,7 +53,12 @@ const Login = ({ onLoginSuccess }) => {
       localStorage.setItem("role", data.user.role);
 
       const role = data.user.role?.toLowerCase();
-      if (role === "admin" || role === "super-admin") {
+      console.log("Normalized role for navigation:", role);
+
+      // Redirect based on user role
+      if (role === "client") {
+        navigate("/client-portal");
+      } else if (role === "admin" || role === "super-admin") {
         navigate("/admin/tasks");
       } else {
         navigate("/dashboard");
