@@ -217,7 +217,9 @@ wss.on("connection", (ws) => {
         const savedMessage = await ChatController.saveMessage(
           data.conversationId,
           ws.user.id,
-          data.message
+          data.message,
+          data.attachments || [],
+          data.replyTo || null
         );
 
         const payload = {
@@ -227,6 +229,8 @@ wss.on("connection", (ws) => {
           senderId: savedMessage.senderId,
           message: savedMessage.message,
           timestamp: savedMessage.timestamp,
+          attachments: savedMessage.attachments || [],
+          replyTo: savedMessage.replyTo || null,
         };
 
         // Determine recipients: prefer actual conversation members from DB, fallback to tracked set
@@ -288,6 +292,36 @@ wss.on("connection", (ws) => {
         }
       } catch (err) {
         console.error("Failed to save/broadcast group message:", err);
+      }
+      return;
+    }
+
+    // Handle project messages
+    if (data.type === "project_message" && data.projectId) {
+      try {
+        const payload = {
+          type: "project_message",
+          projectId: data.projectId,
+          message: data.messageData,
+          timestamp: Date.now(),
+        };
+
+        // Broadcast to all users connected to this project
+        // The client should filter based on their project access
+        for (const userId in users) {
+          const userConnections = users[userId];
+          if (userConnections && Array.isArray(userConnections)) {
+            userConnections.forEach((userWs) => {
+              if (userWs && userWs.readyState === WebSocket.OPEN) {
+                userWs.send(JSON.stringify(payload));
+              }
+            });
+          }
+        }
+
+        console.log(`Broadcasted project message for project: ${data.projectId}`);
+      } catch (err) {
+        console.error("Error broadcasting project message:", err);
       }
       return;
     }

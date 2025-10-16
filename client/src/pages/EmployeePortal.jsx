@@ -1,4 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import rehypeRaw from "rehype-raw";
 import {
   Calendar,
   Clock,
@@ -20,6 +23,8 @@ import {
   Image as ImageIcon,
   File,
   Video,
+  Type,
+  Smile,
 } from "lucide-react";
 import Sidebar from "../components/dashboard/Sidebar";
 
@@ -35,12 +40,66 @@ const EmployeePortal = ({ onLogout }) => {
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [replyingTo, setReplyingTo] = useState(null);
   const [copiedText, setCopiedText] = useState(null);
+  const [messageSearchTerm, setMessageSearchTerm] = useState("");
+  const [searchSender, setSearchSender] = useState("");
+  const [dateFilter, setDateFilter] = useState({ start: "", end: "" });
+  const [showFilters, setShowFilters] = useState(false);
+  const [showFormatting, setShowFormatting] = useState(false);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(null); // messageId or null
   const fileInputRef = useRef(null);
+  const textareaRef = useRef(null);
+  const wsRef = useRef(null);
+  const messagesEndRef = useRef(null);
+  const prevMessagesLengthRef = useRef(0);
+
+  const commonEmojis = ["👍", "❤️", "😂", "😮", "😢", "🎉", "🔥", "👏"];
 
   // Fetch projects assigned to the employee
   useEffect(() => {
     fetchEmployeeProjects();
   }, []);
+
+  // WebSocket connection for real-time messages
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    const ws = new WebSocket(`ws://localhost:5000`);
+    wsRef.current = ws;
+
+    ws.onopen = () => {
+      console.log("WebSocket connected for employee portal");
+      ws.send(JSON.stringify({ type: "authenticate", token }));
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+
+        if (data.type === "authenticated") {
+          console.log("WebSocket authenticated");
+        } else if (data.type === "project_message" && data.projectId === selectedProject) {
+          console.log("Received real-time project message");
+          fetchProjectMessages(selectedProject);
+        }
+      } catch (error) {
+        console.error("WebSocket message error:", error);
+      }
+    };
+
+    ws.onerror = (error) => {
+      console.error("WebSocket error:", error);
+    };
+
+    ws.onclose = () => {
+      console.log("WebSocket disconnected");
+    };
+
+    return () => {
+      if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+        ws.close();
+      }
+      wsRef.current = null;
+    };
+  }, [selectedProject]);
 
   const fetchEmployeeProjects = async () => {
     try {
@@ -70,7 +129,16 @@ const EmployeePortal = ({ onLogout }) => {
   const fetchProjectMessages = async (projectId) => {
     try {
       const token = localStorage.getItem("token");
-      const response = await fetch(`http://localhost:5000/api/projects/${projectId}/messages`, {
+      const params = new URLSearchParams();
+      if (messageSearchTerm) params.append("search", messageSearchTerm);
+      if (searchSender) params.append("senderName", searchSender);
+      if (dateFilter.start) params.append("startDate", dateFilter.start);
+      if (dateFilter.end) params.append("endDate", dateFilter.end);
+
+      const queryString = params.toString();
+      const url = `http://localhost:5000/api/projects/${projectId}/messages${queryString ? `?${queryString}` : ""}`;
+
+      const response = await fetch(url, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -87,6 +155,27 @@ const EmployeePortal = ({ onLogout }) => {
       console.error("Error fetching messages:", error);
       setMessages([]);
     }
+  };
+
+  // Re-fetch when filters change
+  useEffect(() => {
+    if (selectedProject) {
+      fetchProjectMessages(selectedProject);
+    }
+  }, [messageSearchTerm, searchSender, dateFilter]);
+
+  // Auto-scroll only when new messages are added (not when reactions update)
+  useEffect(() => {
+    if (messages.length > prevMessagesLengthRef.current) {
+      scrollToBottom();
+    }
+    prevMessagesLengthRef.current = messages.length;
+  }, [messages]);
+
+  const clearFilters = () => {
+    setMessageSearchTerm("");
+    setSearchSender("");
+    setDateFilter({ start: "", end: "" });
   };
 
   const getStatusColor = (status) => {
@@ -121,10 +210,118 @@ const EmployeePortal = ({ onLogout }) => {
     setReplyingTo(message);
   };
 
+  const scrollToMessage = (messageId) => {
+    const element = document.getElementById(`message-${messageId}`);
+    if (element) {
+      element.scrollIntoView({ behavior: "smooth", block: "center" });
+      // Highlight the message briefly
+      element.classList.add("bg-blue-500", "bg-opacity-20");
+      setTimeout(() => {
+        element.classList.remove("bg-blue-500", "bg-opacity-20");
+      }, 2000);
+    }
+  };
+
   const copyToClipboard = (text) => {
     navigator.clipboard.writeText(text);
     setCopiedText(text);
     setTimeout(() => setCopiedText(null), 2000);
+  };
+
+  // Format text helpers
+  const insertFormatting = (before, after = before) => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const selectedText = newMessage.substring(start, end);
+    const beforeText = newMessage.substring(0, start);
+    const afterText = newMessage.substring(end);
+
+    const newText = beforeText + before + selectedText + after + afterText;
+    setNewMessage(newText);
+
+    setTimeout(() => {
+      textarea.focus();
+      const newPos = start + before.length + selectedText.length;
+      textarea.setSelectionRange(newPos, newPos);
+    }, 0);
+  };
+
+  const formatBold = () => insertFormatting("**");
+  const formatItalic = () => insertFormatting("*");
+  const formatCode = () => insertFormatting("`");
+  const formatStrikethrough = () => insertFormatting("~~");
+  const formatHeading = () => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    const start = textarea.selectionStart;
+    const lineStart = newMessage.lastIndexOf("\n", start - 1) + 1;
+    const beforeLine = newMessage.substring(0, lineStart);
+    const afterLine = newMessage.substring(lineStart);
+    setNewMessage(beforeLine + "## " + afterLine);
+    setTimeout(() => {
+      textarea.focus();
+      textarea.setSelectionRange(lineStart + 3, lineStart + 3);
+    }, 0);
+  };
+  const formatBullet = () => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    const start = textarea.selectionStart;
+    const lineStart = newMessage.lastIndexOf("\n", start - 1) + 1;
+    const beforeLine = newMessage.substring(0, lineStart);
+    const afterLine = newMessage.substring(lineStart);
+    setNewMessage(beforeLine + "- " + afterLine);
+    setTimeout(() => {
+      textarea.focus();
+      textarea.setSelectionRange(lineStart + 2, lineStart + 2);
+    }, 0);
+  };
+  const formatNumbered = () => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    const start = textarea.selectionStart;
+    const lineStart = newMessage.lastIndexOf("\n", start - 1) + 1;
+    const beforeLine = newMessage.substring(0, lineStart);
+    const afterLine = newMessage.substring(lineStart);
+    setNewMessage(beforeLine + "1. " + afterLine);
+    setTimeout(() => {
+      textarea.focus();
+      textarea.setSelectionRange(lineStart + 3, lineStart + 3);
+    }, 0);
+  };
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  const handleReaction = async (messageId, emoji) => {
+    try {
+      const token = localStorage.getItem("token");
+      const response = await fetch(
+        `http://localhost:5000/api/projects/${selectedProject}/messages/${messageId}/react`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ emoji })
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error('Failed to add reaction');
+      }
+
+      // Refresh messages to show updated reactions
+      await fetchProjectMessages(selectedProject);
+      setShowEmojiPicker(null);
+    } catch (error) {
+      console.error("Error adding reaction:", error);
+    }
   };
 
   const getFileIcon = (fileType) => {
@@ -170,6 +367,17 @@ const EmployeePortal = ({ onLogout }) => {
 
       if (!response.ok) {
         throw new Error('Failed to send message');
+      }
+
+      const messageData = await response.json();
+
+      // Broadcast via WebSocket for real-time updates
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+        wsRef.current.send(JSON.stringify({
+          type: "project_message",
+          projectId: selectedProject,
+          messageData: messageData
+        }));
       }
 
       // Refresh messages and clear form
@@ -433,13 +641,77 @@ const EmployeePortal = ({ onLogout }) => {
               style={{ height: "calc(100vh - 300px)" }}
             >
               {/* Messages Header */}
-              <div className="p-4 border-b border-[#232945]">
-                <h3 className="text-base sm:text-lg font-semibold text-white">
-                  Project Updates & Messages
-                </h3>
-                <p className="text-xs sm:text-sm text-blue-300 mt-1">
-                  Chat with team members and client
-                </p>
+              <div className="p-4 border-b border-[#232945] space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-base sm:text-lg font-semibold text-white">
+                      Project Updates & Messages
+                    </h3>
+                    <p className="text-xs sm:text-sm text-blue-300 mt-1">
+                      {messages.length} message{messages.length !== 1 ? "s" : ""}
+                    </p>
+                  </div>
+
+                  <button
+                    onClick={() => setShowFilters(!showFilters)}
+                    className="flex items-center gap-2 px-3 py-2 rounded-lg bg-blue-600/20 hover:bg-blue-600/40 text-blue-400 border border-blue-500/30 transition-colors text-sm"
+                    title="Toggle filters"
+                  >
+                    <Filter className="w-4 h-4" />
+                    <span className="hidden sm:inline">Filters</span>
+                  </button>
+                </div>
+
+                {/* Search and Filters */}
+                {showFilters && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-3 border-t border-[#232945]">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                      <input
+                        type="text"
+                        placeholder="Search messages..."
+                        value={messageSearchTerm}
+                        onChange={(e) => setMessageSearchTerm(e.target.value)}
+                        className="w-full pl-10 pr-4 py-2 bg-[#0f1419] border border-[#232945] rounded-lg text-white text-sm placeholder-gray-500 focus:outline-none focus:border-purple-500"
+                      />
+                    </div>
+
+                    <input
+                      type="text"
+                      placeholder="Filter by sender..."
+                      value={searchSender}
+                      onChange={(e) => setSearchSender(e.target.value)}
+                      className="px-4 py-2 bg-[#0f1419] border border-[#232945] rounded-lg text-white text-sm placeholder-gray-500 focus:outline-none focus:border-purple-500"
+                    />
+
+                    <input
+                      type="date"
+                      placeholder="Start date"
+                      value={dateFilter.start}
+                      onChange={(e) => setDateFilter({ ...dateFilter, start: e.target.value })}
+                      className="px-4 py-2 bg-[#0f1419] border border-[#232945] rounded-lg text-white text-sm focus:outline-none focus:border-purple-500"
+                    />
+
+                    <div className="flex gap-2">
+                      <input
+                        type="date"
+                        placeholder="End date"
+                        value={dateFilter.end}
+                        onChange={(e) => setDateFilter({ ...dateFilter, end: e.target.value })}
+                        className="flex-1 px-4 py-2 bg-[#0f1419] border border-[#232945] rounded-lg text-white text-sm focus:outline-none focus:border-purple-500"
+                      />
+                      {(messageSearchTerm || searchSender || dateFilter.start || dateFilter.end) && (
+                        <button
+                          onClick={clearFilters}
+                          className="px-3 py-2 bg-red-600/20 hover:bg-red-600/40 text-red-400 rounded-lg border border-red-500/30 transition-colors"
+                          title="Clear filters"
+                        >
+                          <XCircle className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Messages List */}
@@ -466,11 +738,17 @@ const EmployeePortal = ({ onLogout }) => {
                       >
                         {/* Reply Preview */}
                         {msg.replyTo && (
-                          <div className="mb-2 p-2 bg-black/20 rounded border-l-2 border-white/30">
-                            <div className="text-xs text-gray-300 font-semibold mb-1">
+                          <div className="mb-2 p-2 bg-black/20 rounded border-l-2 border-white/30 overflow-hidden" style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
+                            <div className="text-xs text-gray-300 font-semibold mb-1 truncate">
                               {msg.replyTo.sentBy?.name || msg.replyTo.sentBy?.clientName || "Unknown"}
                             </div>
-                            <div className="text-xs text-gray-400 truncate">
+                            <div className="text-xs text-gray-400 overflow-hidden" style={{
+                              display: '-webkit-box',
+                              WebkitLineClamp: 2,
+                              WebkitBoxOrient: 'vertical',
+                              wordBreak: 'break-word',
+                              overflowWrap: 'anywhere'
+                            }}>
                               {msg.replyTo.message}
                             </div>
                           </div>
@@ -495,9 +773,38 @@ const EmployeePortal = ({ onLogout }) => {
                             })}
                           </span>
                         </div>
-                        <p className="text-sm sm:text-base break-words">
-                          {msg.message}
-                        </p>
+
+                        {/* Message with Markdown rendering */}
+                        {msg.message && (
+                          <div className="text-sm sm:text-base break-words prose prose-invert prose-sm max-w-none">
+                            <ReactMarkdown
+                              remarkPlugins={[remarkGfm]}
+                              rehypePlugins={[rehypeRaw]}
+                              components={{
+                                p: ({ children }) => <p className="mb-1 last:mb-0">{children}</p>,
+                                h1: ({ children }) => <h1 className="text-lg font-bold mb-1">{children}</h1>,
+                                h2: ({ children }) => <h2 className="text-base font-bold mb-1">{children}</h2>,
+                                h3: ({ children }) => <h3 className="text-sm font-bold mb-1">{children}</h3>,
+                                ul: ({ children }) => <ul className="list-disc list-inside mb-1">{children}</ul>,
+                                ol: ({ children }) => <ol className="list-decimal list-inside mb-1">{children}</ol>,
+                                li: ({ children }) => <li className="ml-2">{children}</li>,
+                                code: ({ inline, children }) =>
+                                  inline ? (
+                                    <code className="bg-black/30 px-1 rounded text-xs">{children}</code>
+                                  ) : (
+                                    <code className="block bg-black/30 p-2 rounded text-xs overflow-x-auto">{children}</code>
+                                  ),
+                                strong: ({ children }) => <strong className="font-bold">{children}</strong>,
+                                em: ({ children }) => <em className="italic">{children}</em>,
+                                a: ({ href, children }) => (
+                                  <a href={href} target="_blank" rel="noopener noreferrer" className="text-blue-300 underline hover:text-blue-200">{children}</a>
+                                ),
+                              }}
+                            >
+                              {msg.message}
+                            </ReactMarkdown>
+                          </div>
+                        )}
 
                         {/* Attachments */}
                         {msg.attachments && msg.attachments.length > 0 && (
@@ -537,6 +844,32 @@ const EmployeePortal = ({ onLogout }) => {
                           </div>
                         )}
 
+                        {/* Reactions */}
+                        {msg.reactions && msg.reactions.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-2">
+                            {msg.reactions.map((reaction, idx) => {
+                              const userReacted = reaction.users?.some(
+                                (u) => u.user === user._id || u.user?._id === user._id
+                              );
+                              return (
+                                <button
+                                  key={idx}
+                                  onClick={() => handleReaction(msg._id, reaction.emoji)}
+                                  className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs transition-colors ${
+                                    userReacted
+                                      ? "bg-blue-500/30 border border-blue-400"
+                                      : "bg-black/20 hover:bg-black/30"
+                                  }`}
+                                  title={`${reaction.users?.length || 0} reaction${reaction.users?.length !== 1 ? 's' : ''}`}
+                                >
+                                  <span>{reaction.emoji}</span>
+                                  <span className="text-gray-300">{reaction.users?.length || 0}</span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
+
                         <div className="flex items-center justify-between mt-2">
                           <span
                             className={`text-xs ${
@@ -548,25 +881,49 @@ const EmployeePortal = ({ onLogout }) => {
                             {new Date(msg.createdAt).toLocaleDateString()}
                           </span>
 
-                          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <div className="flex gap-1 relative">
                             <button
                               onClick={() => handleReply(msg)}
-                              className="p-1 rounded hover:bg-white/10"
+                              className="p-1 rounded hover:bg-white/10 transition-colors"
                               title="Reply to message"
                             >
-                              <Reply className="w-3 h-3 text-gray-400" />
+                              <Reply className="w-3 h-3 text-gray-400 hover:text-purple-400" />
                             </button>
                             <button
                               onClick={() => copyToClipboard(msg.message)}
-                              className="p-1 rounded hover:bg-white/10"
+                              className="p-1 rounded hover:bg-white/10 transition-colors"
                               title="Copy message"
                             >
                               {copiedText === msg.message ? (
                                 <Check className="w-3 h-3 text-green-400" />
                               ) : (
-                                <Copy className="w-3 h-3 text-gray-400" />
+                                <Copy className="w-3 h-3 text-gray-400 hover:text-blue-400" />
                               )}
                             </button>
+                            <button
+                              onClick={() => setShowEmojiPicker(showEmojiPicker === msg._id ? null : msg._id)}
+                              className="p-1 rounded hover:bg-white/10 transition-colors"
+                              title="Add reaction"
+                            >
+                              <Smile className="w-3 h-3 text-gray-400 hover:text-yellow-400" />
+                            </button>
+
+                            {/* Emoji Picker Popup */}
+                            {showEmojiPicker === msg._id && (
+                              <div className={`absolute ${isOwnMessage ? 'right-0' : 'left-0'} bottom-full mb-1 p-2 bg-[#1a2332] border border-[#232945] rounded-lg shadow-xl z-50`}>
+                                <div className="flex gap-1">
+                                  {commonEmojis.map((emoji) => (
+                                    <button
+                                      key={emoji}
+                                      onClick={() => handleReaction(msg._id, emoji)}
+                                      className="p-1 hover:bg-white/10 rounded text-lg transition-transform hover:scale-125"
+                                    >
+                                      {emoji}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -579,25 +936,32 @@ const EmployeePortal = ({ onLogout }) => {
                     </p>
                   </div>
                 )}
+                <div ref={messagesEndRef} />
               </div>
 
               {/* Message Input */}
               <div className="p-4 border-t border-[#232945]">
                 {/* Reply Preview */}
                 {replyingTo && (
-                  <div className="mb-3 p-3 bg-blue-600/20 border border-blue-500/30 rounded-lg flex items-start justify-between">
-                    <div className="flex-1">
+                  <div className="mb-3 p-3 bg-blue-600/20 border border-blue-500/30 rounded-lg flex items-start justify-between overflow-hidden">
+                    <div className="flex-1 min-w-0 overflow-hidden">
                       <div className="flex items-center gap-2 text-sm text-blue-300 mb-1">
-                        <Reply className="w-3 h-3" />
-                        <span>Replying to {replyingTo.sentBy?.name || replyingTo.sentBy?.clientName}</span>
+                        <Reply className="w-3 h-3 flex-shrink-0" />
+                        <span className="truncate">Replying to {replyingTo.sentBy?.name || replyingTo.sentBy?.clientName}</span>
                       </div>
-                      <div className="text-xs text-gray-400 truncate">
+                      <div className="text-xs text-gray-400 overflow-hidden" style={{
+                        display: '-webkit-box',
+                        WebkitLineClamp: 2,
+                        WebkitBoxOrient: 'vertical',
+                        wordBreak: 'break-word',
+                        overflowWrap: 'anywhere'
+                      }}>
                         {replyingTo.message}
                       </div>
                     </div>
                     <button
                       onClick={() => setReplyingTo(null)}
-                      className="p-1 hover:bg-white/10 rounded"
+                      className="p-1 hover:bg-white/10 rounded flex-shrink-0"
                     >
                       <XCircle className="w-4 h-4 text-gray-400" />
                     </button>
@@ -627,6 +991,25 @@ const EmployeePortal = ({ onLogout }) => {
                   </div>
                 )}
 
+                {/* Formatting Toolbar */}
+                {showFormatting && (
+                  <div className="mb-3 p-3 bg-[#0f1419] border border-[#232945] rounded-lg">
+                    <div className="flex flex-wrap gap-2 mb-2">
+                      <button type="button" onClick={formatBold} className="px-2 py-1 bg-[#232945] hover:bg-[#2a3142] rounded text-xs font-bold text-white" title="Bold (Ctrl+B)">B</button>
+                      <button type="button" onClick={formatItalic} className="px-2 py-1 bg-[#232945] hover:bg-[#2a3142] rounded text-xs italic text-white" title="Italic (Ctrl+I)">I</button>
+                      <button type="button" onClick={formatStrikethrough} className="px-2 py-1 bg-[#232945] hover:bg-[#2a3142] rounded text-xs line-through text-white" title="Strikethrough (Ctrl+U)">S</button>
+                      <button type="button" onClick={formatCode} className="px-2 py-1 bg-[#232945] hover:bg-[#2a3142] rounded text-xs font-mono text-white" title="Code (Ctrl+E)">&lt;/&gt;</button>
+                      <button type="button" onClick={formatHeading} className="px-2 py-1 bg-[#232945] hover:bg-[#2a3142] rounded text-xs font-bold text-white" title="Heading (Ctrl+D)">H</button>
+                      <button type="button" onClick={formatBullet} className="px-2 py-1 bg-[#232945] hover:bg-[#2a3142] rounded text-xs text-white" title="Bullet List (Ctrl+L)">• List</button>
+                      <button type="button" onClick={formatNumbered} className="px-2 py-1 bg-[#232945] hover:bg-[#2a3142] rounded text-xs text-white" title="Numbered List (Ctrl+Shift+L)">1. List</button>
+                    </div>
+                    <div className="text-xs text-gray-500 space-y-1">
+                      <p><strong>Keyboard Shortcuts:</strong> Ctrl+B (Bold) • Ctrl+I (Italic) • Ctrl+U (Strike) • Ctrl+E/K (Code) • Ctrl+D (Heading) • Ctrl+L (Bullet) • Ctrl+Shift+L (Numbered)</p>
+                      <p><strong>Markdown:</strong> **bold** *italic* ~~strikethrough~~ `code` ## Heading - Bullet 1. Numbered</p>
+                    </div>
+                  </div>
+                )}
+
                 <form onSubmit={handleSendMessage} className="flex gap-2">
                   <input
                     ref={fileInputRef}
@@ -646,12 +1029,101 @@ const EmployeePortal = ({ onLogout }) => {
                     <Paperclip className="w-5 h-5" />
                   </button>
 
-                  <input
-                    type="text"
+                  <button
+                    type="button"
+                    onClick={() => setShowFormatting(!showFormatting)}
+                    className="flex-shrink-0 px-3 py-2 bg-gray-600/20 hover:bg-gray-600/40 text-gray-300 rounded-lg transition-colors"
+                    title="Text formatting"
+                  >
+                    <Type className="w-5 h-5" />
+                  </button>
+
+                  <textarea
+                    ref={textareaRef}
                     value={newMessage}
-                    onChange={(e) => setNewMessage(e.target.value)}
-                    placeholder="Type your message..."
-                    className="flex-1 px-3 sm:px-4 py-2 bg-[#232945] border border-[#232945] text-white placeholder-gray-400 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm sm:text-base"
+                    onChange={(e) => {
+                      setNewMessage(e.target.value);
+                      // Auto-scroll to bottom when typing
+                      scrollToBottom();
+                    }}
+                    onFocus={() => {
+                      // Scroll to bottom when focused
+                      scrollToBottom();
+                    }}
+                    onKeyDown={(e) => {
+                      // Send message on Enter (without Shift)
+                      if (e.key === "Enter" && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
+                        e.preventDefault();
+                        handleSendMessage(e);
+                        return;
+                      }
+
+                      // Keyboard shortcuts (Ctrl/Cmd + key)
+                      const isMac = /Mac|iPad|iPhone|iPod/.test(navigator.platform);
+                      const isCtrlOrCmd = isMac ? e.metaKey : e.ctrlKey;
+
+                      if (isCtrlOrCmd) {
+                        const key = e.key.toLowerCase();
+                        let handled = false;
+
+                        if (e.shiftKey) {
+                          if (key === 'l') {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            formatNumbered();
+                            handled = true;
+                          }
+                        } else {
+                          switch (key) {
+                            case 'b':
+                              e.preventDefault();
+                              e.stopPropagation();
+                              formatBold();
+                              handled = true;
+                              break;
+                            case 'i':
+                              e.preventDefault();
+                              e.stopPropagation();
+                              formatItalic();
+                              handled = true;
+                              break;
+                            case 'u':
+                              e.preventDefault();
+                              e.stopPropagation();
+                              formatStrikethrough();
+                              handled = true;
+                              break;
+                            case 'e':
+                            case 'k':
+                              e.preventDefault();
+                              e.stopPropagation();
+                              formatCode();
+                              handled = true;
+                              break;
+                            case 'd':
+                              e.preventDefault();
+                              e.stopPropagation();
+                              formatHeading();
+                              handled = true;
+                              break;
+                            case 'l':
+                              e.preventDefault();
+                              e.stopPropagation();
+                              formatBullet();
+                              handled = true;
+                              break;
+                          }
+                        }
+
+                        if (handled) {
+                          return false;
+                        }
+                      }
+                    }}
+                    placeholder="Type your message... (Shift+Enter for new line, Ctrl+B for bold)"
+                    className="flex-1 px-3 sm:px-4 py-2 bg-[#232945] border border-[#232945] text-white placeholder-gray-400 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm sm:text-base resize-none overflow-y-auto"
+                    rows="2"
+                    style={{ maxHeight: "150px" }}
                   />
                   <button
                     type="submit"
@@ -663,7 +1135,7 @@ const EmployeePortal = ({ onLogout }) => {
                   </button>
                 </form>
                 <p className="text-xs text-gray-500 mt-2">
-                  Max 5 files per message • Images, documents, videos supported
+                  Max 5 files • Supports formatting: **bold** *italic* `code` ## heading - lists
                 </p>
               </div>
             </div>
