@@ -277,4 +277,85 @@ router.get(
   }
 );
 
+// Add or remove reaction to a message
+router.post(
+  "/api/projects/:projectId/messages/:messageId/react",
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const { messageId } = req.params;
+      const { emoji } = req.body;
+      const userId = req.user.id;
+      const userRole = req.user.role;
+
+      if (!emoji) {
+        return res.status(400).json({ message: "Emoji is required" });
+      }
+
+      const message = await Message.findById(messageId);
+      if (!message) {
+        return res.status(404).json({ message: "Message not found" });
+      }
+
+      const userModel = userRole === "client" ? "Client" : "User";
+
+      // Find if this emoji already exists
+      const emojiReaction = message.reactions.find((r) => r.emoji === emoji);
+
+      if (emojiReaction) {
+        // Check if user already reacted with this emoji
+        const userReactionIndex = emojiReaction.users.findIndex(
+          (u) => u.user.toString() === userId
+        );
+
+        if (userReactionIndex > -1) {
+          // Remove user's reaction
+          emojiReaction.users.splice(userReactionIndex, 1);
+
+          // If no users left, remove the emoji entirely
+          if (emojiReaction.users.length === 0) {
+            message.reactions = message.reactions.filter((r) => r.emoji !== emoji);
+          }
+        } else {
+          // Add user's reaction
+          emojiReaction.users.push({
+            user: userId,
+            userModel: userModel,
+          });
+        }
+      } else {
+        // Create new emoji reaction
+        message.reactions.push({
+          emoji: emoji,
+          users: [
+            {
+              user: userId,
+              userModel: userModel,
+            },
+          ],
+        });
+      }
+
+      await message.save();
+
+      // Populate and return updated message
+      await message.populate([
+        {
+          path: "sentBy",
+          select: "name email clientName",
+        },
+        {
+          path: "reactions.users.user",
+          select: "name email clientName",
+        },
+      ]);
+
+      res.json(message);
+    } catch (error) {
+      console.error("Error adding reaction:", error);
+      res.status(500).json({ message: "Server error" });
+    }
+  }
+);
+
 module.exports = router;

@@ -626,4 +626,84 @@ router.post("/:id/messages", protect, uploadToS3.array("files", 5), async (req, 
   }
 });
 
+// @route   POST /api/projects/:id/messages/:messageId/react
+// @desc    Add or remove reaction to a message
+// @access  Private
+router.post("/:id/messages/:messageId/react", protect, async (req, res) => {
+  try {
+    const Message = require("../models/Message");
+    const { emoji } = req.body;
+
+    if (!emoji) {
+      return res.status(400).json({ message: "Emoji is required" });
+    }
+
+    const message = await Message.findById(req.params.messageId);
+
+    if (!message) {
+      return res.status(404).json({ message: "Message not found" });
+    }
+
+    // Verify message belongs to the project
+    if (message.project.toString() !== req.params.id) {
+      return res.status(403).json({ message: "Message does not belong to this project" });
+    }
+
+    const userId = req.user._id.toString();
+    const userModel = req.user.role === "client" ? "Client" : "User";
+
+    // Find if this emoji already exists
+    const emojiReaction = message.reactions.find((r) => r.emoji === emoji);
+
+    if (emojiReaction) {
+      // Check if user already reacted with this emoji
+      const userReactionIndex = emojiReaction.users.findIndex(
+        (u) => u.user.toString() === userId
+      );
+
+      if (userReactionIndex > -1) {
+        // Remove user's reaction
+        emojiReaction.users.splice(userReactionIndex, 1);
+
+        // If no users left, remove the emoji entirely
+        if (emojiReaction.users.length === 0) {
+          message.reactions = message.reactions.filter((r) => r.emoji !== emoji);
+        }
+      } else {
+        // Add user's reaction
+        emojiReaction.users.push({
+          user: userId,
+          userModel: userModel,
+        });
+      }
+    } else {
+      // Create new emoji reaction
+      message.reactions.push({
+        emoji: emoji,
+        users: [
+          {
+            user: userId,
+            userModel: userModel,
+          },
+        ],
+      });
+    }
+
+    await message.save();
+
+    // Populate and return updated message
+    const populatedMessage = await Message.findById(message._id)
+      .populate("sentBy", "name email clientName")
+      .populate({
+        path: "reactions.users.user",
+        select: "name email clientName",
+      });
+
+    res.json(populatedMessage);
+  } catch (error) {
+    console.error("Error adding reaction:", error);
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
+});
+
 module.exports = router;

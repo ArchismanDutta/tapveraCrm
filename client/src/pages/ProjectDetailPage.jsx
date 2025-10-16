@@ -1,5 +1,8 @@
 import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import rehypeRaw from "rehype-raw";
 import {
   ArrowLeft,
   Globe,
@@ -27,6 +30,8 @@ import {
   Search,
   Filter,
   XCircle,
+  Type,
+  Smile,
 } from "lucide-react";
 
 const API_BASE = "http://localhost:5000";
@@ -89,21 +94,69 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
   const [searchSender, setSearchSender] = useState("");
   const [dateFilter, setDateFilter] = useState({ start: "", end: "" });
   const [showFilters, setShowFilters] = useState(false);
+  const [showFormatting, setShowFormatting] = useState(false);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(null);
+  const commonEmojis = ["👍", "❤️", "😂", "😮", "😢", "🎉", "🔥", "👏"];
   const messagesEndRef = useRef(null);
   const chatContainerRef = useRef(null);
   const fileInputRef = useRef(null);
+  const textareaRef = useRef(null);
+  const wsRef = useRef(null);
+  const prevMessagesLengthRef = useRef(0);
 
   useEffect(() => {
     fetchProjectDetails();
     fetchMessages();
 
-    // Poll for new messages every 5 seconds
-    const interval = setInterval(fetchMessages, 5000);
-    return () => clearInterval(interval);
+    // WebSocket connection for real-time messages
+    const token = localStorage.getItem("token");
+    const ws = new WebSocket(`ws://localhost:5000`);
+    wsRef.current = ws;
+
+    ws.onopen = () => {
+      console.log("WebSocket connected for project messages");
+      // Authenticate
+      ws.send(JSON.stringify({ type: "authenticate", token }));
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+
+        if (data.type === "authenticated") {
+          console.log("WebSocket authenticated");
+        } else if (data.type === "project_message" && data.projectId === projectId) {
+          // Received a new message for this project, refresh messages
+          console.log("Received real-time project message");
+          fetchMessages();
+        }
+      } catch (error) {
+        console.error("WebSocket message error:", error);
+      }
+    };
+
+    ws.onerror = (error) => {
+      console.error("WebSocket error:", error);
+    };
+
+    ws.onclose = () => {
+      console.log("WebSocket disconnected");
+    };
+
+    return () => {
+      if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+        ws.close();
+      }
+      wsRef.current = null;
+    };
   }, [projectId]);
 
+  // Auto-scroll only when new messages are added (not when reactions update)
   useEffect(() => {
-    scrollToBottom();
+    if (messages.length > prevMessagesLengthRef.current) {
+      scrollToBottom();
+    }
+    prevMessagesLengthRef.current = messages.length;
   }, [messages]);
 
   const scrollToBottom = () => {
@@ -175,7 +228,7 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
         formData.append("files", file);
       });
 
-      await axios.post(
+      const response = await axios.post(
         `${API_BASE}/api/projects/${projectId}/messages`,
         formData,
         {
@@ -185,6 +238,15 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
           },
         }
       );
+
+      // Broadcast via WebSocket for real-time updates
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+        wsRef.current.send(JSON.stringify({
+          type: "project_message",
+          projectId: projectId,
+          messageData: response.data
+        }));
+      }
 
       setNewMessage("");
       setSelectedFiles([]);
@@ -215,6 +277,34 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
   const handleReply = (message) => {
     setReplyingTo(message);
     document.querySelector('textarea')?.focus();
+  };
+
+  const handleReaction = async (messageId, emoji) => {
+    try {
+      const token = localStorage.getItem("token");
+      const response = await fetch(
+        `${API_BASE}/api/projects/${projectId}/messages/${messageId}/react`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ emoji }),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to add reaction");
+      }
+
+      // Refresh messages to show updated reactions
+      await fetchMessages();
+      setShowEmojiPicker(null);
+    } catch (error) {
+      console.error("Error adding reaction:", error);
+      showNotification("Failed to add reaction", "error");
+    }
   };
 
   const clearFilters = () => {
@@ -255,6 +345,71 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
     setCopiedText(text);
     setTimeout(() => setCopiedText(null), 2000);
     showNotification("Copied to clipboard!", "success");
+  };
+
+  // Format text helpers
+  const insertFormatting = (before, after = before) => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const selectedText = newMessage.substring(start, end);
+    const beforeText = newMessage.substring(0, start);
+    const afterText = newMessage.substring(end);
+
+    const newText = beforeText + before + selectedText + after + afterText;
+    setNewMessage(newText);
+
+    setTimeout(() => {
+      textarea.focus();
+      const newPos = start + before.length + selectedText.length;
+      textarea.setSelectionRange(newPos, newPos);
+    }, 0);
+  };
+
+  const formatBold = () => insertFormatting("**");
+  const formatItalic = () => insertFormatting("*");
+  const formatCode = () => insertFormatting("`");
+  const formatStrikethrough = () => insertFormatting("~~");
+  const formatHeading = () => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    const start = textarea.selectionStart;
+    const lineStart = newMessage.lastIndexOf("\n", start - 1) + 1;
+    const beforeLine = newMessage.substring(0, lineStart);
+    const afterLine = newMessage.substring(lineStart);
+    setNewMessage(beforeLine + "## " + afterLine);
+    setTimeout(() => {
+      textarea.focus();
+      textarea.setSelectionRange(lineStart + 3, lineStart + 3);
+    }, 0);
+  };
+  const formatBullet = () => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    const start = textarea.selectionStart;
+    const lineStart = newMessage.lastIndexOf("\n", start - 1) + 1;
+    const beforeLine = newMessage.substring(0, lineStart);
+    const afterLine = newMessage.substring(lineStart);
+    setNewMessage(beforeLine + "- " + afterLine);
+    setTimeout(() => {
+      textarea.focus();
+      textarea.setSelectionRange(lineStart + 2, lineStart + 2);
+    }, 0);
+  };
+  const formatNumbered = () => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    const start = textarea.selectionStart;
+    const lineStart = newMessage.lastIndexOf("\n", start - 1) + 1;
+    const beforeLine = newMessage.substring(0, lineStart);
+    const afterLine = newMessage.substring(lineStart);
+    setNewMessage(beforeLine + "1. " + afterLine);
+    setTimeout(() => {
+      textarea.focus();
+      textarea.setSelectionRange(lineStart + 3, lineStart + 3);
+    }, 0);
   };
 
   const exportChat = () => {
@@ -646,23 +801,62 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                             isOwnMessage
                               ? "bg-gradient-to-r from-purple-600 to-pink-600"
                               : "bg-[#0f1419] border border-[#232945]"
-                          } rounded-lg p-3 sm:p-4`}
+                          } rounded-lg p-3 sm:p-4 overflow-hidden`}
                         >
                           {/* Reply Preview */}
                           {msg.replyTo && (
-                            <div className="mb-2 p-2 bg-black/20 rounded border-l-2 border-white/30">
-                              <div className="text-xs text-gray-300 font-semibold mb-1">
-                                {msg.replyTo.sentBy?.name || msg.replyTo.sentBy?.clientName || "Unknown"}
+                            <div className="mb-2 p-2 bg-black/20 rounded border-l-2 border-purple-400/50 overflow-hidden" style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
+                              <div className="flex items-center gap-1 mb-1">
+                                <Reply className="w-3 h-3 text-purple-400 flex-shrink-0" />
+                                <span className="text-xs text-purple-300 font-semibold truncate">
+                                  {msg.replyTo.sentBy ?
+                                    (msg.replyTo.sentBy.name || msg.replyTo.sentBy.clientName || "Unknown User") :
+                                    "Unknown User"}
+                                </span>
                               </div>
-                              <div className="text-xs text-gray-400 truncate">
-                                {msg.replyTo.message}
+                              <div className="text-xs text-gray-300 overflow-hidden" style={{
+                                display: '-webkit-box',
+                                WebkitLineClamp: 2,
+                                WebkitBoxOrient: 'vertical',
+                                wordBreak: 'break-word',
+                                overflowWrap: 'anywhere'
+                              }}>
+                                {msg.replyTo.message || "(No message content)"}
                               </div>
                             </div>
                           )}
 
-                          <p className="text-white text-sm leading-relaxed break-words">
-                            {msg.message}
-                          </p>
+                          {/* Message with Markdown rendering */}
+                          {msg.message && (
+                            <div className="text-white text-sm leading-relaxed break-words prose prose-invert prose-sm max-w-none">
+                              <ReactMarkdown
+                                remarkPlugins={[remarkGfm]}
+                                rehypePlugins={[rehypeRaw]}
+                                components={{
+                                  p: ({ children }) => <p className="mb-1 last:mb-0">{children}</p>,
+                                  h1: ({ children }) => <h1 className="text-lg font-bold mb-1">{children}</h1>,
+                                  h2: ({ children }) => <h2 className="text-base font-bold mb-1">{children}</h2>,
+                                  h3: ({ children }) => <h3 className="text-sm font-bold mb-1">{children}</h3>,
+                                  ul: ({ children }) => <ul className="list-disc list-inside mb-1">{children}</ul>,
+                                  ol: ({ children }) => <ol className="list-decimal list-inside mb-1">{children}</ol>,
+                                  li: ({ children }) => <li className="ml-2">{children}</li>,
+                                  code: ({ inline, children }) =>
+                                    inline ? (
+                                      <code className="bg-black/30 px-1 rounded text-xs">{children}</code>
+                                    ) : (
+                                      <code className="block bg-black/30 p-2 rounded text-xs overflow-x-auto">{children}</code>
+                                    ),
+                                  strong: ({ children }) => <strong className="font-bold">{children}</strong>,
+                                  em: ({ children }) => <em className="italic">{children}</em>,
+                                  a: ({ href, children }) => (
+                                    <a href={href} target="_blank" rel="noopener noreferrer" className="text-blue-300 underline hover:text-blue-200">{children}</a>
+                                  ),
+                                }}
+                              >
+                                {msg.message}
+                              </ReactMarkdown>
+                            </div>
+                          )}
 
                           {/* Attachments */}
                           {msg.attachments && msg.attachments.length > 0 && (
@@ -702,6 +896,34 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                             </div>
                           )}
 
+                          {/* Reactions Display */}
+                          {msg.reactions && msg.reactions.length > 0 && (
+                            <div className="flex flex-wrap gap-1 mt-2">
+                              {msg.reactions.map((reaction, idx) => {
+                                const userReacted = reaction.users?.some(
+                                  (u) => u.user === userId || u.user?._id === userId
+                                );
+                                return (
+                                  <button
+                                    key={idx}
+                                    onClick={() => handleReaction(msg._id, reaction.emoji)}
+                                    className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs transition-all ${
+                                      userReacted
+                                        ? "bg-blue-500/30 border border-blue-400"
+                                        : "bg-black/20 hover:bg-black/30"
+                                    }`}
+                                    title={userReacted ? "Remove reaction" : "Add reaction"}
+                                  >
+                                    <span>{reaction.emoji}</span>
+                                    <span className="text-gray-300 text-[10px]">
+                                      {reaction.users?.length || 0}
+                                    </span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
+
                           <div className="flex items-center justify-between gap-3 mt-2">
                             <span className="text-xs text-gray-400">
                               {new Date(msg.createdAt).toLocaleTimeString([], {
@@ -712,25 +934,55 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                               })}
                             </span>
 
-                            <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <div className="flex gap-1 relative">
                               <button
                                 onClick={() => handleReply(msg)}
-                                className="p-1 rounded hover:bg-white/10"
+                                className="p-1.5 rounded-md hover:bg-white/10 transition-colors"
                                 title="Reply to message"
                               >
-                                <Reply className="w-3 h-3 text-gray-400" />
+                                <Reply className="w-3.5 h-3.5 text-gray-400 hover:text-purple-400" />
+                              </button>
+                              <button
+                                onClick={() =>
+                                  setShowEmojiPicker(
+                                    showEmojiPicker === msg._id ? null : msg._id
+                                  )
+                                }
+                                className="p-1.5 rounded-md hover:bg-white/10 transition-colors"
+                                title="Add reaction"
+                              >
+                                <Smile className="w-3.5 h-3.5 text-gray-400 hover:text-yellow-400" />
                               </button>
                               <button
                                 onClick={() => copyToClipboard(msg.message)}
-                                className="p-1 rounded hover:bg-white/10"
+                                className="p-1.5 rounded-md hover:bg-white/10 transition-colors"
                                 title="Copy message"
                               >
                                 {copiedText === msg.message ? (
-                                  <Check className="w-3 h-3 text-green-400" />
+                                  <Check className="w-3.5 h-3.5 text-green-400" />
                                 ) : (
-                                  <Copy className="w-3 h-3 text-gray-400" />
+                                  <Copy className="w-3.5 h-3.5 text-gray-400 hover:text-blue-400" />
                                 )}
                               </button>
+
+                              {/* Emoji Picker Popup */}
+                              {showEmojiPicker === msg._id && (
+                                <div className={`absolute ${isOwnMessage ? 'right-0' : 'left-0'} bottom-full mb-1 p-2 bg-[#1a2332] border border-[#232945] rounded-lg shadow-xl z-10 flex gap-1`}>
+                                  {commonEmojis.map((emoji, emojiIdx) => (
+                                    <button
+                                      key={emojiIdx}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleReaction(msg._id, emoji);
+                                      }}
+                                      className="hover:bg-white/10 p-1.5 rounded transition-colors text-lg"
+                                      title={`React with ${emoji}`}
+                                    >
+                                      {emoji}
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
                             </div>
                           </div>
                         </div>
@@ -746,21 +998,32 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
             <div className="p-4 sm:p-6 border-t border-[#232945]">
               {/* Reply Preview */}
               {replyingTo && (
-                <div className="mb-3 p-3 bg-blue-600/20 border border-blue-500/30 rounded-lg flex items-start justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 text-sm text-blue-300 mb-1">
-                      <Reply className="w-3 h-3" />
-                      <span>Replying to {replyingTo.sentBy?.name || replyingTo.sentBy?.clientName}</span>
+                <div className="mb-3 p-3 bg-purple-600/20 border border-purple-500/30 rounded-lg flex items-start justify-between gap-2 overflow-hidden" style={{ maxWidth: '100%' }}>
+                  <div className="flex-1 min-w-0 overflow-hidden">
+                    <div className="flex items-center gap-2 text-sm text-purple-300 mb-1">
+                      <Reply className="w-4 h-4 flex-shrink-0" />
+                      <span className="font-medium truncate">
+                        Replying to {replyingTo.sentBy ?
+                          (replyingTo.sentBy.name || replyingTo.sentBy.clientName || "Unknown User") :
+                          "Unknown User"}
+                      </span>
                     </div>
-                    <div className="text-xs text-gray-400 truncate">
-                      {replyingTo.message}
+                    <div className="text-xs text-gray-300 overflow-hidden" style={{
+                      display: '-webkit-box',
+                      WebkitLineClamp: 3,
+                      WebkitBoxOrient: 'vertical',
+                      wordBreak: 'break-word',
+                      overflowWrap: 'anywhere'
+                    }}>
+                      {replyingTo.message || "(No message content)"}
                     </div>
                   </div>
                   <button
                     onClick={() => setReplyingTo(null)}
-                    className="p-1 hover:bg-white/10 rounded"
+                    className="p-1 hover:bg-white/10 rounded flex-shrink-0"
+                    title="Cancel reply"
                   >
-                    <XCircle className="w-4 h-4 text-gray-400" />
+                    <XCircle className="w-4 h-4 text-gray-400 hover:text-red-400" />
                   </button>
                 </div>
               )}
@@ -788,6 +1051,39 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                 </div>
               )}
 
+              {/* Formatting Toolbar */}
+              {showFormatting && (
+                <div className="mb-3 p-3 bg-[#0f1419] border border-[#232945] rounded-lg">
+                  <div className="flex flex-wrap gap-2 mb-3">
+                    <button type="button" onClick={formatBold} className="px-3 py-1.5 bg-[#232945] hover:bg-[#2a3142] rounded text-xs font-bold text-white transition-colors" title="Bold (Ctrl+B)">
+                      <span className="font-bold">B</span>
+                    </button>
+                    <button type="button" onClick={formatItalic} className="px-3 py-1.5 bg-[#232945] hover:bg-[#2a3142] rounded text-xs italic text-white transition-colors" title="Italic (Ctrl+I)">
+                      <span className="italic">I</span>
+                    </button>
+                    <button type="button" onClick={formatStrikethrough} className="px-3 py-1.5 bg-[#232945] hover:bg-[#2a3142] rounded text-xs text-white transition-colors" title="Strikethrough (Ctrl+U)">
+                      <span className="line-through">S</span>
+                    </button>
+                    <button type="button" onClick={formatCode} className="px-3 py-1.5 bg-[#232945] hover:bg-[#2a3142] rounded text-xs font-mono text-white transition-colors" title="Code (Ctrl+E)">
+                      &lt;/&gt;
+                    </button>
+                    <button type="button" onClick={formatHeading} className="px-3 py-1.5 bg-[#232945] hover:bg-[#2a3142] rounded text-xs font-bold text-white transition-colors" title="Heading (Ctrl+D)">
+                      H1
+                    </button>
+                    <button type="button" onClick={formatBullet} className="px-3 py-1.5 bg-[#232945] hover:bg-[#2a3142] rounded text-xs text-white transition-colors" title="Bullet List (Ctrl+L)">
+                      • List
+                    </button>
+                    <button type="button" onClick={formatNumbered} className="px-3 py-1.5 bg-[#232945] hover:bg-[#2a3142] rounded text-xs text-white transition-colors" title="Numbered List (Ctrl+Shift+L)">
+                      1. List
+                    </button>
+                  </div>
+                  <div className="text-xs text-gray-500 space-y-1">
+                    <div><strong>Keyboard Shortcuts:</strong> Ctrl+B (Bold) • Ctrl+I (Italic) • Ctrl+U (Strike) • Ctrl+E/K (Code) • Ctrl+D (Heading) • Ctrl+L (Bullet) • Ctrl+Shift+L (Numbered)</div>
+                    <div><strong>Markdown:</strong> **bold** *italic* ~~strikethrough~~ `code` ## Heading - Bullet 1. Numbered</div>
+                  </div>
+                </div>
+              )}
+
               <form
                 onSubmit={handleSendMessage}
                 className="flex gap-2 sm:gap-3"
@@ -810,19 +1106,106 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                   <Paperclip className="w-5 h-5" />
                 </button>
 
+                <button
+                  type="button"
+                  onClick={() => setShowFormatting(!showFormatting)}
+                  className="flex-shrink-0 px-3 py-3 bg-gray-600/20 hover:bg-gray-600/40 text-gray-300 rounded-lg transition-colors"
+                  title="Text formatting"
+                >
+                  <Type className="w-5 h-5" />
+                </button>
+
                 <div className="flex-1 relative">
                   <textarea
+                    ref={textareaRef}
                     value={newMessage}
-                    onChange={(e) => setNewMessage(e.target.value)}
+                    onChange={(e) => {
+                      setNewMessage(e.target.value);
+                      // Auto-scroll to bottom when typing
+                      scrollToBottom();
+                    }}
+                    onFocus={() => {
+                      // Scroll to bottom when focused
+                      scrollToBottom();
+                    }}
                     onKeyDown={(e) => {
-                      if (e.key === "Enter" && !e.shiftKey) {
+                      // Send message on Enter (without Shift)
+                      if (e.key === "Enter" && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
                         e.preventDefault();
                         handleSendMessage(e);
+                        return;
+                      }
+
+                      // Keyboard shortcuts (Ctrl/Cmd + key)
+                      const isMac = /Mac|iPad|iPhone|iPod/.test(navigator.platform);
+                      const isCtrlOrCmd = isMac ? e.metaKey : e.ctrlKey;
+
+                      // Check if we should handle this shortcut
+                      if (isCtrlOrCmd) {
+                        const key = e.key.toLowerCase();
+                        let handled = false;
+
+                        // Check for Ctrl+Shift combinations
+                        if (e.shiftKey) {
+                          if (key === 'l') {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            formatNumbered();
+                            handled = true;
+                          }
+                        } else {
+                          // Regular Ctrl shortcuts
+                          switch (key) {
+                            case 'b':
+                              e.preventDefault();
+                              e.stopPropagation();
+                              formatBold();
+                              handled = true;
+                              break;
+                            case 'i':
+                              e.preventDefault();
+                              e.stopPropagation();
+                              formatItalic();
+                              handled = true;
+                              break;
+                            case 'u':
+                              e.preventDefault();
+                              e.stopPropagation();
+                              formatStrikethrough();
+                              handled = true;
+                              break;
+                            case 'e':
+                            case 'k':
+                              e.preventDefault();
+                              e.stopPropagation();
+                              formatCode();
+                              handled = true;
+                              break;
+                            case 'd':
+                              // Use Ctrl+D for heading (less likely to conflict)
+                              e.preventDefault();
+                              e.stopPropagation();
+                              formatHeading();
+                              handled = true;
+                              break;
+                            case 'l':
+                              e.preventDefault();
+                              e.stopPropagation();
+                              formatBullet();
+                              handled = true;
+                              break;
+                          }
+                        }
+
+                        if (handled) {
+                          return false;
+                        }
                       }
                     }}
-                    placeholder="Type your message... (Press Enter to send)"
-                    className="w-full px-4 py-3 bg-[#0f1419] border border-[#232945] rounded-lg text-white text-sm placeholder-gray-500 focus:outline-none focus:border-purple-500 transition-colors resize-none"
+                    placeholder="Type your message... (Ctrl+B for bold, Ctrl+I for italic)"
+                    className="w-full px-4 py-3 bg-[#0f1419] border border-[#232945] rounded-lg text-white text-sm placeholder-gray-500 focus:outline-none focus:border-purple-500 transition-colors resize-none overflow-y-auto"
                     rows="2"
+                    style={{ maxHeight: "150px" }}
                   />
                 </div>
 
@@ -842,7 +1225,7 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                 </button>
               </form>
               <p className="text-xs text-gray-500 mt-2">
-                Press Enter to send, Shift+Enter for new line • Max 5 files per message
+                <span className="font-medium">Shortcuts:</span> Shift+Enter (new line) • Ctrl+B (bold) • Ctrl+I (italic) • Max 5 files • Click formatting button for more options
               </p>
             </div>
           </div>

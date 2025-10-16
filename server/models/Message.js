@@ -66,6 +66,26 @@ const messageSchema = new mongoose.Schema(
         },
       },
     ],
+    reactions: [
+      {
+        emoji: {
+          type: String,
+          required: true,
+        },
+        users: [
+          {
+            user: {
+              type: mongoose.Schema.Types.ObjectId,
+              refPath: "reactions.users.userModel",
+            },
+            userModel: {
+              type: String,
+              enum: ["User", "Client"],
+            },
+          },
+        ],
+      },
+    ],
   },
   {
     timestamps: true,

@@ -33,7 +33,11 @@ const uploadToS3 = isS3Configured ? multer({
     // Metadata removed to fix AWS SDK v3 compatibility issue
     // The metadata function was passing non-string values causing signature errors
     key: function (req, file, cb) {
-      const folder = "project-messages";
+      // Use different folders based on the endpoint
+      let folder = "chat-messages";
+      if (req.baseUrl && req.baseUrl.includes("/projects")) {
+        folder = "project-messages";
+      }
       const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
       const sanitizedFilename = file.originalname.replace(/[^a-zA-Z0-9.-]/g, "-");
       const filename = `${folder}/${uniqueSuffix}-${sanitizedFilename}`;
