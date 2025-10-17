@@ -2,6 +2,23 @@ import React, { useState, useEffect, useRef } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
+import {
+  Filter,
+  X as XCircle,
+  Copy,
+  Check,
+  Reply as ReplyIcon,
+  Image as ImageIcon,
+  File as FileIcon,
+  Video,
+  Download,
+  Search,
+  Smile,
+  Paperclip,
+  Type,
+  Send,
+} from "lucide-react";
+import MediaLightbox from "../common/MediaLightbox";
 
 const DateDivider = ({ date }) => {
   const now = new Date();
@@ -42,11 +59,16 @@ const ChatWindow = ({
   const [showFilters, setShowFilters] = useState(false);
   const [showFormatting, setShowFormatting] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(null);
+  const [copiedText, setCopiedText] = useState(null);
+  const [lightboxMedia, setLightboxMedia] = useState(null);
+  const [lightboxIndex, setLightboxIndex] = useState(0);
+  const [lightboxAllMedia, setLightboxAllMedia] = useState([]);
   const commonEmojis = ["👍", "❤️", "😂", "😮", "😢", "🎉", "🔥", "👏"];
   const chatEndRef = useRef(null);
   const fileInputRef = useRef(null);
   const textareaRef = useRef(null);
   const prevMessagesLengthRef = useRef(0);
+  const emojiPickerRef = useRef(null);
 
   const handleSendMessage = async () => {
     if (!input.trim() && selectedFiles.length === 0) return;
@@ -159,6 +181,12 @@ const ChatWindow = ({
     setDateFilter({ start: "", end: "" });
   };
 
+  const copyToClipboard = (text) => {
+    navigator.clipboard.writeText(text);
+    setCopiedText(text);
+    setTimeout(() => setCopiedText(null), 2000);
+  };
+
   // Format text helpers
   const insertFormatting = (before, after = before) => {
     const textarea = textareaRef.current;
@@ -230,8 +258,20 @@ const ChatWindow = ({
     return member ? member.name : "Unknown";
   };
 
-  // Normalize messages for consistent fields
+  const getFileIcon = (fileType) => {
+    switch (fileType) {
+      case "image":
+        return <ImageIcon className="w-4 h-4" />;
+      case "video":
+        return <Video className="w-4 h-4" />;
+      default:
+        return <FileIcon className="w-4 h-4" />;
+    }
+  };
+
+  // Normalize messages for consistent fields while preserving all original properties
   const normalizedMessages = messages.map((msg) => ({
+    ...msg, // Preserve all original properties
     messageId:
       msg.messageId || msg._id || Math.random().toString(36).substring(2, 9),
     senderId: String(
@@ -241,6 +281,7 @@ const ChatWindow = ({
     timestamp: msg.timestamp || msg.createdAt || Date.now(),
     attachments: msg.attachments || [],
     replyTo: msg.replyTo || null,
+    reactions: msg.reactions || [], // Explicitly preserve reactions
   }));
 
   // Apply filters
@@ -279,25 +320,46 @@ const ChatWindow = ({
     prevMessagesLengthRef.current = filteredMessages.length;
   }, [filteredMessages]);
 
+  // Close emoji picker when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (emojiPickerRef.current && !emojiPickerRef.current.contains(event.target)) {
+        setShowEmojiPicker(null);
+      }
+    };
+
+    if (showEmojiPicker !== null) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showEmojiPicker]);
+
   return (
     <div className="flex flex-col h-full bg-gray-900 text-gray-100">
       {/* Search and Filter Panel */}
       <div className="bg-gray-800 border-b border-gray-700">
         <button
           onClick={() => setShowFilters(!showFilters)}
-          className="w-full px-4 py-2 text-sm text-left text-gray-300 hover:bg-gray-700 transition"
+          className="w-full px-4 py-2 text-sm text-left text-gray-300 hover:bg-gray-700 transition flex items-center gap-2"
         >
-          {showFilters ? "▼" : "▶"} Search & Filters
+          <Filter className="w-4 h-4" />
+          <span>Search & Filters {showFilters ? "▼" : "▶"}</span>
         </button>
         {showFilters && (
           <div className="p-4 space-y-3 border-t border-gray-700">
-            <input
-              type="text"
-              placeholder="Search messages..."
-              value={messageSearchTerm}
-              onChange={(e) => setMessageSearchTerm(e.target.value)}
-              className="w-full px-3 py-2 bg-gray-700 text-gray-100 rounded border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-            />
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Search messages..."
+                value={messageSearchTerm}
+                onChange={(e) => setMessageSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 bg-gray-700 text-gray-100 rounded border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+              />
+            </div>
             <input
               type="text"
               placeholder="Filter by sender name..."
@@ -323,12 +385,15 @@ const ChatWindow = ({
                 className="flex-1 px-3 py-2 bg-gray-700 text-gray-100 rounded border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
               />
             </div>
-            <button
-              onClick={clearFilters}
-              className="w-full px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded text-sm transition"
-            >
-              Clear Filters
-            </button>
+            {(messageSearchTerm || searchSender || dateFilter.start || dateFilter.end) && (
+              <button
+                onClick={clearFilters}
+                className="w-full px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded text-sm transition flex items-center justify-center gap-2"
+              >
+                <XCircle className="w-4 h-4" />
+                Clear Filters
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -469,33 +534,73 @@ const ChatWindow = ({
 
                       {/* Attachments */}
                       {msg.attachments && msg.attachments.length > 0 && (
-                        <div className="mt-2 space-y-2">
-                          {msg.attachments.map((att, idx) => (
-                            <div key={idx} className="text-xs">
-                              {att.fileType === "image" ? (
-                                <img
-                                  src={att.url}
-                                  alt={att.filename}
-                                  className="max-w-full rounded border border-gray-600"
-                                />
-                              ) : att.fileType === "video" ? (
-                                <video
-                                  controls
-                                  src={att.url}
-                                  className="max-w-full rounded border border-gray-600"
-                                />
-                              ) : (
-                                <a
-                                  href={att.url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-blue-400 underline"
-                                >
-                                  {att.filename}
-                                </a>
-                              )}
-                            </div>
-                          ))}
+                        <div className="mt-3 space-y-2">
+                          {msg.attachments.map((att, attIdx) => {
+                            const isMedia = att.fileType === "image" || att.fileType === "video";
+                            const mediaAttachments = msg.attachments.filter(a => a.fileType === "image" || a.fileType === "video");
+
+                            return (
+                              <div key={attIdx}>
+                                {!isMedia && (
+                                  <div className="flex items-center gap-2 p-2 bg-black/20 rounded">
+                                    {getFileIcon(att.fileType)}
+                                    <div className="flex-1 min-w-0">
+                                      <div className="text-xs text-white truncate">
+                                        {att.filename}
+                                      </div>
+                                      <div className="text-xs text-gray-400">
+                                        {att.size ? `${(att.size / 1024).toFixed(1)} KB` : 'N/A'}
+                                      </div>
+                                    </div>
+                                    <a
+                                      href={att.url.startsWith('http') ? att.url : `http://localhost:5000${att.url}`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="p-1 hover:bg-white/10 rounded"
+                                      download
+                                    >
+                                      <Download className="w-4 h-4 text-gray-300" />
+                                    </a>
+                                  </div>
+                                )}
+
+                                {att.fileType === "image" && (
+                                  <div className="relative group">
+                                    <img
+                                      src={att.url.startsWith('http') ? att.url : `http://localhost:5000${att.url}`}
+                                      alt={att.filename}
+                                      className="w-48 h-48 object-cover rounded cursor-pointer hover:opacity-90 transition-opacity"
+                                      onClick={() => {
+                                        setLightboxAllMedia(mediaAttachments);
+                                        setLightboxIndex(mediaAttachments.indexOf(att));
+                                        setLightboxMedia(att);
+                                      }}
+                                    />
+                                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 rounded transition-colors pointer-events-none" />
+                                  </div>
+                                )}
+
+                                {att.fileType === "video" && (
+                                  <div className="relative">
+                                    <video
+                                      src={att.url.startsWith('http') ? att.url : `http://localhost:5000${att.url}`}
+                                      className="w-48 h-48 object-cover rounded cursor-pointer"
+                                      onClick={() => {
+                                        setLightboxAllMedia(mediaAttachments);
+                                        setLightboxIndex(mediaAttachments.indexOf(att));
+                                        setLightboxMedia(att);
+                                      }}
+                                    />
+                                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                      <div className="bg-black/50 rounded-full p-3">
+                                        <Video className="w-6 h-6 text-white" />
+                                      </div>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
                         </div>
                       )}
 
@@ -533,42 +638,57 @@ const ChatWindow = ({
                           })}
                         </span>
                         <div className="flex items-center gap-1 relative">
-                          {!isSelf && (
-                            <button
-                              onClick={() => handleReply(msg)}
-                              className="text-[10px] text-blue-400 hover:text-blue-300"
-                            >
-                              Reply
-                            </button>
-                          )}
+                          <button
+                            onClick={() => handleReply(msg)}
+                            className="p-1 rounded hover:bg-white/10 transition-colors"
+                            title="Reply to message"
+                          >
+                            <ReplyIcon className="w-3 h-3 text-gray-400 hover:text-purple-400" />
+                          </button>
+                          <button
+                            onClick={() => copyToClipboard(msg.message)}
+                            className="p-1 rounded hover:bg-white/10 transition-colors"
+                            title="Copy message"
+                          >
+                            {copiedText === msg.message ? (
+                              <Check className="w-3 h-3 text-green-400" />
+                            ) : (
+                              <Copy className="w-3 h-3 text-gray-400 hover:text-blue-400" />
+                            )}
+                          </button>
                           <button
                             onClick={() =>
                               setShowEmojiPicker(
                                 showEmojiPicker === msg.messageId ? null : msg.messageId
                               )
                             }
-                            className="text-sm hover:scale-110 transition-transform ml-1"
+                            className="p-1 rounded hover:bg-white/10 transition-colors"
                             title="Add reaction"
                           >
-                            😊
+                            <Smile className="w-3 h-3 text-gray-400 hover:text-yellow-400" />
                           </button>
 
                           {/* Emoji Picker Popup */}
                           {showEmojiPicker === msg.messageId && (
-                            <div className="absolute right-0 bottom-full mb-1 p-2 bg-gray-800 border border-gray-600 rounded-lg shadow-xl z-10 flex gap-1">
-                              {commonEmojis.map((emoji, emojiIdx) => (
-                                <button
-                                  key={emojiIdx}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleReaction(msg.messageId, emoji);
-                                  }}
-                                  className="hover:bg-gray-700 p-1.5 rounded transition-colors text-lg"
-                                  title={`React with ${emoji}`}
-                                >
-                                  {emoji}
-                                </button>
-                              ))}
+                            <div
+                              ref={emojiPickerRef}
+                              className={`absolute ${isSelf ? 'right-0' : 'left-0'} bottom-full mb-1 p-2 bg-gray-800 border border-gray-600 rounded-lg shadow-xl z-50`}
+                            >
+                              <div className="flex gap-1">
+                                {commonEmojis.map((emoji, emojiIdx) => (
+                                  <button
+                                    key={emojiIdx}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleReaction(msg.messageId, emoji);
+                                    }}
+                                    className="p-1 hover:bg-gray-700 rounded text-lg transition-transform hover:scale-125"
+                                    title={`React with ${emoji}`}
+                                  >
+                                    {emoji}
+                                  </button>
+                                ))}
+                              </div>
                             </div>
                           )}
                         </div>
@@ -587,8 +707,11 @@ const ChatWindow = ({
       {replyingTo && (
         <div className="bg-gray-800 border-t border-gray-700 px-4 py-2 flex justify-between items-start gap-2 overflow-hidden">
           <div className="text-sm text-gray-300 flex-1 min-w-0 overflow-hidden">
-            <span className="text-blue-400 font-medium">Replying to {getSenderName(replyingTo.senderId)}:</span>{" "}
-            <span className="text-gray-400 overflow-hidden" style={{
+            <div className="flex items-center gap-2 text-sm text-blue-400 mb-1">
+              <ReplyIcon className="w-3 h-3 flex-shrink-0" />
+              <span className="font-medium truncate">Replying to {getSenderName(replyingTo.senderId)}</span>
+            </div>
+            <div className="text-xs text-gray-400 overflow-hidden" style={{
               display: '-webkit-box',
               WebkitLineClamp: 2,
               WebkitBoxOrient: 'vertical',
@@ -596,13 +719,13 @@ const ChatWindow = ({
               overflowWrap: 'anywhere'
             }}>
               {replyingTo.message}
-            </span>
+            </div>
           </div>
           <button
             onClick={() => setReplyingTo(null)}
-            className="text-red-400 hover:text-red-300 text-sm flex-shrink-0"
+            className="p-1 hover:bg-white/10 rounded flex-shrink-0"
           >
-            ✕
+            <XCircle className="w-4 h-4 text-gray-400" />
           </button>
         </div>
       )}
@@ -619,12 +742,13 @@ const ChatWindow = ({
                 key={idx}
                 className="flex items-center gap-2 bg-gray-700 px-3 py-1 rounded text-xs"
               >
-                <span className="text-gray-300">{file.name}</span>
+                <FileIcon className="w-4 h-4 text-gray-400" />
+                <span className="text-gray-300 truncate max-w-[150px]">{file.name}</span>
                 <button
                   onClick={() => removeFile(idx)}
-                  className="text-red-400 hover:text-red-300"
+                  className="p-1 hover:bg-white/10 rounded"
                 >
-                  ✕
+                  <XCircle className="w-3 h-3 text-gray-400" />
                 </button>
               </div>
             ))}
@@ -713,14 +837,14 @@ const ChatWindow = ({
             className="px-3 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded transition flex-shrink-0"
             title="Attach files"
           >
-            📎
+            <Paperclip className="w-5 h-5" />
           </button>
           <button
             onClick={() => setShowFormatting(!showFormatting)}
             className="px-3 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded transition flex-shrink-0"
             title="Text formatting"
           >
-            <strong>A</strong>
+            <Type className="w-5 h-5" />
           </button>
           <textarea
             ref={textareaRef}
@@ -814,12 +938,31 @@ const ChatWindow = ({
           />
           <button
             onClick={handleSendMessage}
-            className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-medium shadow-md hover:shadow-lg transition flex-shrink-0"
+            disabled={!input.trim() && selectedFiles.length === 0}
+            className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-medium shadow-md hover:shadow-lg transition flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
           >
-            Send
+            <Send className="w-4 h-4" />
+            <span>Send</span>
           </button>
         </div>
+        <p className="text-xs text-gray-500 px-2 pb-2">
+          Max 5 files • Supports formatting: **bold** *italic* `code` ## heading - lists
+        </p>
       </div>
+
+      {/* Media Lightbox */}
+      {lightboxMedia && (
+        <MediaLightbox
+          media={lightboxMedia}
+          allMedia={lightboxAllMedia}
+          currentIndex={lightboxIndex}
+          onClose={() => setLightboxMedia(null)}
+          onNavigate={(newIndex) => {
+            setLightboxIndex(newIndex);
+            setLightboxMedia(lightboxAllMedia[newIndex]);
+          }}
+        />
+      )}
     </div>
   );
 };

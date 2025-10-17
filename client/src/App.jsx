@@ -67,6 +67,8 @@ import ViewLeads from "./pages/ViewLeads";
 import AddLead from "./pages/AddLead";
 import ViewCallbacks from "./pages/ViewCallbacks";
 import AddCallback from "./pages/AddCallback";
+import LeadKanban from "./pages/LeadKanban";
+import CallbackKanban from "./pages/CallbackKanban";
 
 // Notepad
 import NotepadPage from "./pages/NotepadPage";
@@ -389,6 +391,16 @@ const AppWrapper = () => {
           }
         />
         <Route
+          path="/leads/kanban"
+          element={
+            isAuthenticated && canAccessLeadManagement() ? (
+              <LeadKanban onLogout={handleLogout} />
+            ) : (
+              <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />
+            )
+          }
+        />
+        <Route
           path="/leads/add"
           element={
             isAuthenticated && canAccessLeadManagement() ? (
@@ -415,6 +427,16 @@ const AppWrapper = () => {
           element={
             isAuthenticated && canAccessLeadManagement() ? (
               <ViewCallbacks onLogout={handleLogout} />
+            ) : (
+              <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />
+            )
+          }
+        />
+        <Route
+          path="/callbacks/kanban"
+          element={
+            isAuthenticated && canAccessLeadManagement() ? (
+              <CallbackKanban onLogout={handleLogout} />
             ) : (
               <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />
             )

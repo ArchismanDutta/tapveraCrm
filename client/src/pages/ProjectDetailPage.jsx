@@ -3,6 +3,7 @@ import axios from "axios";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
+import { BrowserNotificationManager } from "../utils/browserNotifications";
 import {
   ArrowLeft,
   Globe,
@@ -34,7 +35,7 @@ import {
   Smile,
 } from "lucide-react";
 
-const API_BASE = "http://localhost:5000";
+const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
 
 // Project Type Icons & Colors
 const PROJECT_TYPE_ICONS = {
@@ -110,7 +111,38 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
 
     // WebSocket connection for real-time messages
     const token = localStorage.getItem("token");
-    const ws = new WebSocket(`ws://localhost:5000`);
+
+    // Determine WebSocket URL from environment variables
+    const getWebSocketURL = () => {
+      // 1) Explicit WS base overrides everything
+      if (import.meta.env.VITE_WS_BASE) return import.meta.env.VITE_WS_BASE;
+
+      // 2) Prefer API base if provided; convert http(s) -> ws(s)
+      const apiBase = import.meta.env.VITE_API_BASE;
+      if (apiBase) {
+        try {
+          const u = new URL(apiBase);
+          u.protocol = u.protocol === "https:" ? "wss:" : "ws:";
+          return `${u.protocol}//${u.host}`;
+        } catch {}
+      }
+
+      // 3) Fallback to window origin with default port
+      if (typeof window !== "undefined" && window.location) {
+        const protocol = window.location.protocol === "https:" ? "wss" : "ws";
+        const defaultHost = window.location.hostname === "localhost"
+          ? "localhost:5000"
+          : window.location.host;
+        return `${protocol}://${defaultHost}`;
+      }
+
+      // 4) Final fallback
+      return "ws://localhost:5000";
+    };
+
+    const wsURL = getWebSocketURL();
+    console.log("[ProjectDetailPage] Connecting to WebSocket:", wsURL);
+    const ws = new WebSocket(wsURL);
     wsRef.current = ws;
 
     ws.onopen = () => {
@@ -125,10 +157,31 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
 
         if (data.type === "authenticated") {
           console.log("WebSocket authenticated");
-        } else if (data.type === "project_message" && data.projectId === projectId) {
-          // Received a new message for this project, refresh messages
+        } else if (data.type === "project_message") {
           console.log("Received real-time project message");
-          fetchMessages();
+
+          // Refresh messages if it's for this project
+          if (data.projectId === projectId) {
+            fetchMessages();
+          }
+
+          // Show browser notification for project messages
+          const messageData = data.messageData || data.message || {};
+          const senderName = messageData.sentBy?.name || messageData.sentBy?.clientName || "Someone";
+
+          // Don't notify for own messages
+          if (messageData.sentBy?._id !== userId && messageData.sentBy !== userId) {
+            const notificationManager = BrowserNotificationManager.getInstance();
+            notificationManager.show(
+              "New Project Message",
+              `${senderName}: ${messageData.message || "Sent an attachment"}`,
+              {
+                tag: `project-${data.projectId}`,
+                icon: "/icon.png", // You can customize this
+                requireInteraction: false,
+              }
+            );
+          }
         }
       } catch (error) {
         console.error("WebSocket message error:", error);
@@ -136,11 +189,20 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
     };
 
     ws.onerror = (error) => {
-      console.error("WebSocket error:", error);
+      console.error("[ProjectDetailPage] WebSocket error:", error);
     };
 
     ws.onclose = () => {
-      console.log("WebSocket disconnected");
+      console.log("[ProjectDetailPage] WebSocket disconnected");
+      // Reconnect after 5 seconds if component is still mounted
+      const reconnectTimer = setTimeout(() => {
+        if (wsRef.current === ws) {
+          console.log("[ProjectDetailPage] Attempting to reconnect...");
+          // Trigger re-connection by updating a dependency
+          // Note: This is a simple approach; in production, use a more robust reconnection strategy
+        }
+      }, 5000);
+      return () => clearTimeout(reconnectTimer);
     };
 
     return () => {

@@ -1,22 +1,18 @@
 import React, { useState, useEffect } from "react";
 import { NavLink } from "react-router-dom";
 import {
-  LayoutDashboard,
-  User,
   ClipboardList,
-  MessageCircle,
   FileText,
   Flag,
   Calendar,
   Clock,
-  DollarSign,
   TrendingUp,
   PhoneCall,
   BookOpen,
   Briefcase,
   FolderKanban,
 } from "lucide-react";
-import { FaChevronCircleRight, FaTrophy } from "react-icons/fa";
+import { FaChevronCircleRight } from "react-icons/fa";
 import { Users } from "@/components/animate-ui/icons/users";
 import { Brush } from "@/components/animate-ui/icons/brush";
 import { MessageSquareQuote } from "@/components/animate-ui/icons/message-square-quote";
@@ -35,10 +31,8 @@ import { ChartBar } from "@/components/animate-ui/icons/chart-bar";
 import { Fingerprint } from "@/components/animate-ui/icons/fingerprint";
 import { User as AnimatedUser } from "@/components/animate-ui/icons/user";
 import { Pin } from "@/components/animate-ui/icons/pin";
-import { Plus } from "@/components/animate-ui/icons/plus";
 import { Compass } from "@/components/animate-ui/icons/compass";
 import { RotateCw } from "@/components/animate-ui/icons/rotate-cw";
-import { ClipboardCheck } from "@/components/animate-ui/icons/clipboard-check";
 import Modal from "../modal";
 import DailyEmailSender from "../DailyEmailSender";
 import AchievementsDashboard from "../achievements/AchievementsDashboard";
@@ -58,11 +52,11 @@ const menuConfig = {
       icon: <Gauge size={18} animateOnHover />,
       label: "Employee Dashboard",
     },
-    {
-      to: "/employee-portal",
-      icon: <FolderKanban size={18} />,
-      label: "My Projects",
-    },
+    // {
+    //   to: "/employee-portal",
+    //   icon: <FolderKanban size={18} />,
+    //   label: "My Projects",
+    // },
     {
       to: "/tasks",
       icon: <CircleCheckBig size={18} animateOnHover />,
@@ -104,11 +98,21 @@ const menuConfig = {
       icon: <ChevronUp size={18} animateOnHover />,
       label: "My Leads",
     },
+    // {
+    //   to: "/leads/kanban",
+    //   icon: <TrendingUp size={18} />,
+    //   label: "Lead Pipeline",
+    // },
     {
       to: "/callbacks",
       icon: <Gavel size={18} animateOnHover />,
       label: "My Callbacks",
     },
+    // {
+    //   to: "/callbacks/kanban",
+    //   icon: <PhoneCall size={18} />,
+    //   label: "Callback Pipeline",
+    // },
   ],
   hr: [
     {
@@ -196,11 +200,11 @@ const menuConfig = {
       icon: <Gauge size={18} animateOnHover />,
       label: "Admin Dashboard",
     },
-    {
-      to: "/employee-portal",
-      icon: <FolderKanban size={18} />,
-      label: "My Projects",
-    },
+    // {
+    //   to: "/employee-portal",
+    //   icon: <FolderKanban size={18} />,
+    //   label: "My Projects",
+    // },
     {
       to: "/notepad",
       icon: <PanelLeft size={18} animateOnHover />,
@@ -265,16 +269,16 @@ const menuConfig = {
       icon: <Pin size={18} animateOnHover />,
       label: "Employee Attendance Portal",
     },
-    {
-      to: "/clients",
-      icon: <Briefcase size={18} />,
-      label: "Client Management",
-    },
-    {
-      to: "/projects",
-      icon: <FolderKanban size={18} />,
-      label: "Project Management",
-    },
+    // {
+    //   to: "/clients",
+    //   icon: <Briefcase size={18} />,
+    //   label: "Client Management",
+    // },
+    // {
+    //   to: "/projects",
+    //   icon: <FolderKanban size={18} />,
+    //   label: "Project Management",
+    // },
     {
       to: "/admin/tasks",
       icon: <ClipboardList size={18} animateOnHover />,
@@ -311,11 +315,21 @@ const menuConfig = {
       icon: <ChevronUp size={18} animateOnHover />,
       label: "Lead Management",
     },
+    // {
+    //   to: "/leads/kanban",
+    //   icon: <TrendingUp size={18} />,
+    //   label: "Lead Pipeline",
+    // },
     {
       to: "/callbacks",
       icon: <RotateCw size={18} animateOnHover />,
       label: "Callback Management",
     },
+    // {
+    //   to: "/callbacks/kanban",
+    //   icon: <PhoneCall size={18} />,
+    //   label: "Callback Pipeline",
+    // },
     {
       to: "/tasks",
       icon: <CircleCheckBig size={18} animateOnHover />,
@@ -337,7 +351,7 @@ const menuConfig = {
       icon: <AnimatedUser size={18} animateOnHover />,
       label: "My Profile",
     },
-    
+
     {
       to: "/super-admin/notepad",
       icon: <BookOpen size={18} />,
@@ -349,13 +363,13 @@ const menuConfig = {
       label: "Achievements",
     },
   ],
-  client: [
-    {
-      to: "/client-portal",
-      icon: <FolderKanban size={18} />,
-      label: "My Projects",
-    },
-  ],
+  // client: [
+  //   {
+  //     to: "/client-portal",
+  //     icon: <FolderKanban size={18} />,
+  //     label: "My Projects",
+  //   },
+  // ],
 };
 
 // Convert backend role strings into something Sidebar can handle
@@ -395,7 +409,7 @@ const Sidebar = ({ collapsed, setCollapsed, onLogout, userRole }) => {
           department = parsed.department;
         }
       }
-    } catch (e) {
+    } catch {
       // fallback silently
     }
     setRole(resolvedRole);
@@ -481,7 +495,12 @@ const Sidebar = ({ collapsed, setCollapsed, onLogout, userRole }) => {
   const rawMenuItems = menuConfig[role] || menuConfig["employee"];
   const menuItems = rawMenuItems.filter((item) => {
     // Allow access to leads/callbacks for super-admin, admin, or marketingAndSales employees
-    if (item.to === "/leads" || item.to === "/callbacks") {
+    if (
+      item.to === "/leads" ||
+      item.to === "/callbacks" ||
+      item.to === "/leads/kanban" ||
+      item.to === "/callbacks/kanban"
+    ) {
       return (
         role === "super-admin" ||
         role === "admin" ||
@@ -492,7 +511,7 @@ const Sidebar = ({ collapsed, setCollapsed, onLogout, userRole }) => {
   });
 
   // Helper to add hover trigger to animated icons
-  const renderIconWithHover = (icon, itemKey, isHovered) => {
+  const renderIconWithHover = (icon, isHovered) => {
     // Check if the icon has animateOnHover prop
     if (icon.props?.animateOnHover) {
       // Clone the icon, remove animateOnHover, and add animate prop to trigger on parent hover
@@ -577,7 +596,7 @@ const Sidebar = ({ collapsed, setCollapsed, onLogout, userRole }) => {
               >
                 <NavLink
                   to={item.to}
-                  className={({ isActive, isPending }) =>
+                  className={({ isActive }) =>
                     `group flex items-center gap-4 rounded-lg px-4 py-3 text-sm font-semibold
                     transition-all duration-150
                     ${
@@ -591,11 +610,7 @@ const Sidebar = ({ collapsed, setCollapsed, onLogout, userRole }) => {
                   tabIndex={collapsed ? -1 : 0}
                 >
                   <span className="flex items-center justify-center relative">
-                    {renderIconWithHover(
-                      item.icon,
-                      item.to,
-                      hoveredItem === item.to
-                    )}
+                    {renderIconWithHover(item.icon, hoveredItem === item.to)}
                     {item.to === "/messages" && chatUnread > 0 && (
                       <span className="absolute -top-1 -right-2 bg-red-500 text-white text-[10px] px-1.5 py-[1px] rounded-full min-w-[16px] text-center">
                         {chatUnread > 99 ? "99+" : chatUnread}
@@ -628,7 +643,7 @@ const Sidebar = ({ collapsed, setCollapsed, onLogout, userRole }) => {
                       </div>
                       <div className="space-y-2 max-h-64 overflow-y-auto">
                         {Object.entries(chatUnreadMap)
-                          .filter(([_, count]) => count > 0)
+                          .filter(([, count]) => count > 0)
                           .map(([convId, count]) => {
                             const conversation = conversations.find(
                               (c) => c._id === convId
