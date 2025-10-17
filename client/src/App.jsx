@@ -59,11 +59,16 @@ import ManualAttendanceManagement from "./pages/admin/ManualAttendanceManagement
 import SalaryManagement from "./pages/admin/SalaryManagement";
 import ClientsPage from "./pages/ClientsPage";
 import ProjectsPage from "./pages/ProjectsPage";
+import ClientPortal from "./pages/ClientPortal";
+import EmployeePortal from "./pages/EmployeePortal";
+import ProjectDetailPage from "./pages/ProjectDetailPage";
 // Lead & Callback Management
 import ViewLeads from "./pages/ViewLeads";
 import AddLead from "./pages/AddLead";
 import ViewCallbacks from "./pages/ViewCallbacks";
 import AddCallback from "./pages/AddCallback";
+import LeadKanban from "./pages/LeadKanban";
+import CallbackKanban from "./pages/CallbackKanban";
 
 // Notepad
 import NotepadPage from "./pages/NotepadPage";
@@ -304,6 +309,8 @@ const AppWrapper = () => {
           element={
             !isAuthenticated ? (
               <Login onLoginSuccess={handleLoginSuccess} />
+            ) : role === "client" ? (
+              <Navigate to="/client-portal" replace />
             ) : isSuperAdmin ? (
               <Navigate to="/super-admin" replace />
             ) : isHR ? (
@@ -384,6 +391,16 @@ const AppWrapper = () => {
           }
         />
         <Route
+          path="/leads/kanban"
+          element={
+            isAuthenticated && canAccessLeadManagement() ? (
+              <LeadKanban onLogout={handleLogout} />
+            ) : (
+              <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />
+            )
+          }
+        />
+        <Route
           path="/leads/add"
           element={
             isAuthenticated && canAccessLeadManagement() ? (
@@ -410,6 +427,16 @@ const AppWrapper = () => {
           element={
             isAuthenticated && canAccessLeadManagement() ? (
               <ViewCallbacks onLogout={handleLogout} />
+            ) : (
+              <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />
+            )
+          }
+        />
+        <Route
+          path="/callbacks/kanban"
+          element={
+            isAuthenticated && canAccessLeadManagement() ? (
+              <CallbackKanban onLogout={handleLogout} />
             ) : (
               <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />
             )
@@ -540,11 +567,19 @@ const AppWrapper = () => {
         <Route
           path="/dashboard"
           element={
-            isAuthenticated && !isAdmin && !isHR ? (
+            isAuthenticated && !isAdmin && !isHR && role !== "client" ? (
               <EmployeeDashboardPage onLogout={handleLogout} role={role} />
             ) : (
               <Navigate
-                to={isAuthenticated ? (isAdmin ? "/admin/tasks" : "/login") : "/login"}
+                to={
+                  isAuthenticated
+                    ? role === "client"
+                      ? "/client-portal"
+                      : isAdmin
+                      ? "/admin/tasks"
+                      : "/login"
+                    : "/login"
+                }
                 replace
               />
             )
@@ -627,6 +662,47 @@ const AppWrapper = () => {
           }
         />
 
+        {/* Employee Portal */}
+        <Route
+          path="/employee-portal"
+          element={
+            isAuthenticated ? (
+              <EmployeePortal onLogout={handleLogout} />
+            ) : (
+              <Navigate to="/login" replace />
+            )
+          }
+        />
+
+        {/* Client Portal */}
+        <Route
+          path="/client-portal"
+          element={
+            isAuthenticated && role === "client" ? (
+              <ClientPortal onLogout={handleLogout} clientId={currentUser?._id} />
+            ) : (
+              <Navigate to="/login" replace />
+            )
+          }
+        />
+
+        {/* Project Detail Page */}
+        <Route
+          path="/project/:projectId"
+          element={
+            isAuthenticated ? (
+              <ProjectDetailPage
+                projectId={window.location.pathname.split('/').pop()}
+                userRole={role}
+                userId={currentUser?._id}
+                onBack={() => window.history.back()}
+              />
+            ) : (
+              <Navigate to="/login" replace />
+            )
+          }
+        />
+
         {/* Catch-All */}
         <Route
           path="*"
@@ -634,7 +710,9 @@ const AppWrapper = () => {
             <Navigate
               to={
                 isAuthenticated
-                  ? isSuperAdmin
+                  ? role === "client"
+                    ? "/client-portal"
+                    : isSuperAdmin
                     ? "/super-admin"
                     : isHR
                     ? "/hrdashboard"

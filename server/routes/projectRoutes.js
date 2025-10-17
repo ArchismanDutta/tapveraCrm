@@ -3,6 +3,7 @@ const express = require("express");
 const router = express.Router();
 const Project = require("../models/Project");
 const { protect, authorize } = require("../middlewares/authMiddleware");
+const { uploadToS3, getFileType, convertToCloudFrontUrl, isS3Configured } = require("../config/s3Config");
 
 // @route   GET /api/projects
 // @desc    Get all projects (with filters and population)
@@ -471,6 +472,236 @@ router.get("/client/:clientId", protect, async (req, res) => {
     res.json(projects);
   } catch (error) {
     console.error("Error fetching client projects:", error);
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
+});
+
+// @route   GET /api/projects/:id/messages
+// @desc    Get all messages for a project with search and filter support
+// @access  Private
+router.get("/:id/messages", protect, async (req, res) => {
+  try {
+    const Message = require("../models/Message");
+    const project = await Project.findById(req.params.id);
+
+    if (!project) {
+      return res.status(404).json({ message: "Project not found" });
+    }
+
+    // Check access - employees must be assigned, clients must own the project
+    if (req.user.role === "employee") {
+      const isAssigned = project.assignedTo.some(
+        (emp) => emp.toString() === req.user._id.toString()
+      );
+      if (!isAssigned) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+    }
+
+    // Extract query parameters for search
+    const { search, startDate, endDate, senderName } = req.query;
+
+    // Build filter
+    const filter = { project: req.params.id };
+
+    // Search in message text
+    if (search) {
+      filter.message = { $regex: search, $options: "i" };
+    }
+
+    // Filter by date range
+    if (startDate || endDate) {
+      filter.createdAt = {};
+      if (startDate) {
+        filter.createdAt.$gte = new Date(startDate);
+      }
+      if (endDate) {
+        filter.createdAt.$lte = new Date(endDate);
+      }
+    }
+
+    const messages = await Message.find(filter)
+      .populate("sentBy", "name email clientName")
+      .populate({
+        path: "replyTo",
+        select: "message sentBy createdAt",
+        populate: {
+          path: "sentBy",
+          select: "name email clientName",
+        },
+      })
+      .sort({ createdAt: 1 });
+
+    // Filter by sender name if provided
+    let filteredMessages = messages;
+    if (senderName) {
+      filteredMessages = messages.filter((msg) => {
+        const name = msg.sentBy?.name || msg.sentBy?.clientName || "";
+        return name.toLowerCase().includes(senderName.toLowerCase());
+      });
+    }
+
+    res.json(filteredMessages);
+  } catch (error) {
+    console.error("Error fetching messages:", error);
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
+});
+
+// @route   POST /api/projects/:id/messages
+// @desc    Send a message to a project with optional file attachments
+// @access  Private
+router.post("/:id/messages", protect, uploadToS3.array("files", 5), async (req, res) => {
+  try {
+    const Message = require("../models/Message");
+    const { message, sentBy, senderType, replyTo } = req.body;
+
+    if (!message || !message.trim()) {
+      return res.status(400).json({ message: "Message content is required" });
+    }
+
+    const project = await Project.findById(req.params.id);
+
+    if (!project) {
+      return res.status(404).json({ message: "Project not found" });
+    }
+
+    // Check access - employees must be assigned
+    if (req.user.role === "employee") {
+      const isAssigned = project.assignedTo.some(
+        (emp) => emp.toString() === req.user._id.toString()
+      );
+      if (!isAssigned) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+    }
+
+    // Determine sender model based on user type
+    const senderModel = req.user.role === "client" ? "Client" : "User";
+
+    // Process attachments from S3 or local storage
+    const attachments = [];
+    if (req.files && req.files.length > 0) {
+      for (const file of req.files) {
+        const fileUrl = isS3Configured
+          ? convertToCloudFrontUrl(file.location) // CloudFront URL
+          : `/uploads/messages/${file.filename}`; // Local URL
+
+        attachments.push({
+          filename: file.originalname,
+          url: fileUrl,
+          size: file.size,
+          mimeType: file.mimetype,
+          fileType: getFileType(file.mimetype),
+          uploadedAt: new Date(),
+        });
+      }
+    }
+
+    const newMessage = await Message.create({
+      project: req.params.id,
+      message: message.trim(),
+      sentBy: sentBy || req.user._id,
+      senderModel: senderModel,
+      senderType: senderType || req.user.role,
+      replyTo: replyTo || null,
+      attachments: attachments,
+    });
+
+    const populatedMessage = await Message.findById(newMessage._id)
+      .populate("sentBy", "name email clientName")
+      .populate({
+        path: "replyTo",
+        select: "message sentBy createdAt",
+        populate: {
+          path: "sentBy",
+          select: "name email clientName",
+        },
+      });
+
+    res.status(201).json(populatedMessage);
+  } catch (error) {
+    console.error("Error sending message:", error);
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
+});
+
+// @route   POST /api/projects/:id/messages/:messageId/react
+// @desc    Add or remove reaction to a message
+// @access  Private
+router.post("/:id/messages/:messageId/react", protect, async (req, res) => {
+  try {
+    const Message = require("../models/Message");
+    const { emoji } = req.body;
+
+    if (!emoji) {
+      return res.status(400).json({ message: "Emoji is required" });
+    }
+
+    const message = await Message.findById(req.params.messageId);
+
+    if (!message) {
+      return res.status(404).json({ message: "Message not found" });
+    }
+
+    // Verify message belongs to the project
+    if (message.project.toString() !== req.params.id) {
+      return res.status(403).json({ message: "Message does not belong to this project" });
+    }
+
+    const userId = req.user._id.toString();
+    const userModel = req.user.role === "client" ? "Client" : "User";
+
+    // Find if this emoji already exists
+    const emojiReaction = message.reactions.find((r) => r.emoji === emoji);
+
+    if (emojiReaction) {
+      // Check if user already reacted with this emoji
+      const userReactionIndex = emojiReaction.users.findIndex(
+        (u) => u.user.toString() === userId
+      );
+
+      if (userReactionIndex > -1) {
+        // Remove user's reaction
+        emojiReaction.users.splice(userReactionIndex, 1);
+
+        // If no users left, remove the emoji entirely
+        if (emojiReaction.users.length === 0) {
+          message.reactions = message.reactions.filter((r) => r.emoji !== emoji);
+        }
+      } else {
+        // Add user's reaction
+        emojiReaction.users.push({
+          user: userId,
+          userModel: userModel,
+        });
+      }
+    } else {
+      // Create new emoji reaction
+      message.reactions.push({
+        emoji: emoji,
+        users: [
+          {
+            user: userId,
+            userModel: userModel,
+          },
+        ],
+      });
+    }
+
+    await message.save();
+
+    // Populate and return updated message
+    const populatedMessage = await Message.findById(message._id)
+      .populate("sentBy", "name email clientName")
+      .populate({
+        path: "reactions.users.user",
+        select: "name email clientName",
+      });
+
+    res.json(populatedMessage);
+  } catch (error) {
+    console.error("Error adding reaction:", error);
     res.status(500).json({ message: "Server error", error: error.message });
   }
 });

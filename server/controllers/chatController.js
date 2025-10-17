@@ -5,11 +5,13 @@ const Conversation = require("../models/Conversation");
 const User = require("../models/User");
 
 // Save a message (supports one-to-one and group messages)
-exports.saveMessage = async (conversationId, senderId, message) => {
+exports.saveMessage = async (conversationId, senderId, message, attachments = [], replyTo = null) => {
   const chatMessage = new ChatMessage({
     conversationId,
     senderId,
-    message,
+    message: message || "",
+    attachments,
+    replyTo,
     readBy: [senderId], // Mark sender as having read
   });
   return await chatMessage.save();
@@ -23,7 +25,15 @@ exports.getConversationById = async (conversationId) => {
 
 // Get all messages for a conversation (ordered by time)
 exports.getMessagesByConversation = async (conversationId) => {
-  return await ChatMessage.find({ conversationId }).sort({ timestamp: 1 });
+  return await ChatMessage.find({ conversationId })
+    .populate({
+      path: "replyTo",
+      populate: {
+        path: "senderId",
+        select: "name email"
+      }
+    })
+    .sort({ timestamp: 1 });
 };
 
 // Get or create a private conversation between two users

@@ -249,4 +249,6 @@ class BrowserNotificationManager {
 // Create singleton instance
 const notificationManager = new BrowserNotificationManager();
 
+// Export both the class and the instance
+export { BrowserNotificationManager };
 export default notificationManager;

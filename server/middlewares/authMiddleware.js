@@ -1,6 +1,7 @@
 // File: middleware/authMiddleware.js
 const jwt = require("jsonwebtoken");
 const User = require("../models/User");
+const Client = require("../models/Client");
 
 /**
  * ======================
@@ -33,21 +34,42 @@ exports.protect = async (req, res, next) => {
       return res.status(401).json({ message: "Invalid token payload." });
     }
 
-    // Fetch user from DB
-    const user = await User.findById(decoded.id).select("-password");
-    if (!user) {
-      return res.status(401).json({ message: "User linked to token not found." });
-    }
+    // Fetch user from DB - check if it's a User or Client
+    const userType = decoded.userType || "User";
+    let user;
 
-    // Attach user info to request object
-    req.user = {
-      _id: user._id,
-      name: user.name,
-      email: user.email,
-      role: user.role, // e.g. hr, admin, employee, super-admin
-      department: user.department || "Unknown",
-      avatar: user.avatar || "",
-    };
+    if (userType === "Client") {
+      user = await Client.findById(decoded.id).select("-password");
+      if (!user) {
+        return res.status(401).json({ message: "Client linked to token not found." });
+      }
+
+      // Attach client info to request object
+      req.user = {
+        _id: user._id,
+        name: user.clientName,
+        email: user.email,
+        role: "client",
+        businessName: user.businessName,
+        userType: "Client",
+      };
+    } else {
+      user = await User.findById(decoded.id).select("-password");
+      if (!user) {
+        return res.status(401).json({ message: "User linked to token not found." });
+      }
+
+      // Attach user info to request object
+      req.user = {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role, // e.g. hr, admin, employee, super-admin
+        department: user.department || "Unknown",
+        avatar: user.avatar || "",
+        userType: "User",
+      };
+    }
 
     next();
   } catch (err) {

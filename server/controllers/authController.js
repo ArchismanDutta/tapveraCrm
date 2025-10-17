@@ -1,5 +1,6 @@
 // File: controllers/authController.js
 const User = require("../models/User");
+const Client = require("../models/Client");
 const jwt = require("jsonwebtoken");
 const { encrypt } = require("../utils/crypto"); // for optional Outlook password encryption
 const Token = require("../models/Token");
@@ -9,9 +10,9 @@ const crypto = require("crypto");
 // ======================
 // JWT Token generation
 // ======================
-const generateToken = (user) => {
+const generateToken = (user, userType = "User") => {
   return jwt.sign(
-    { id: user._id, role: user.role },
+    { id: user._id, role: user.role || "client", userType: userType },
     process.env.JWT_SECRET,
     { expiresIn: "1d" }
   );
@@ -132,6 +133,7 @@ exports.signup = async (req, res) => {
 
 // ======================
 // Login (plain-text password check)
+// Supports both User (employees/admin) and Client login
 // ======================
 exports.login = async (req, res) => {
   try {
@@ -144,9 +146,19 @@ exports.login = async (req, res) => {
     }
 
     const normalizedEmail = String(email).trim().toLowerCase();
-    const user = await User.findOne({ email: normalizedEmail });
+
+    // First, try to find as User (employee/admin)
+    let user = await User.findOne({ email: normalizedEmail });
+    let userType = "User";
+
+    // If not found in User, try Client
     if (!user) {
-      return res.status(401).json({ message: "Invalid credentials." });
+      user = await Client.findOne({ email: normalizedEmail });
+      userType = "Client";
+
+      if (!user) {
+        return res.status(401).json({ message: "Invalid credentials." });
+      }
     }
 
     // Plain-text password check
@@ -154,9 +166,15 @@ exports.login = async (req, res) => {
       return res.status(401).json({ message: "Invalid credentials." });
     }
 
-    const token = generateToken(user);
+    // For clients, set role as 'client'
+    if (userType === "Client") {
+      user = user.toObject();
+      user.role = "client";
+    }
 
-    res.json({ token, user });
+    const token = generateToken(user, userType);
+
+    res.json({ token, user, userType });
   } catch (err) {
     console.error("Login Error:", err);
     res.status(500).json({ message: "Server error" });
