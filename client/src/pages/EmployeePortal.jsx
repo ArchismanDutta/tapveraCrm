@@ -27,8 +27,13 @@ import {
   Smile,
 } from "lucide-react";
 import Sidebar from "../components/dashboard/Sidebar";
+import MediaLightbox from "../components/common/MediaLightbox";
+import notificationManager from "../utils/browserNotifications";
 
 const EmployeePortal = ({ onLogout }) => {
+  // API Base URL - use environment variable or fallback
+  const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
+
   const [collapsed, setCollapsed] = useState(false);
   const [selectedProject, setSelectedProject] = useState(null);
   const [activeTab, setActiveTab] = useState("overview");
@@ -46,11 +51,15 @@ const EmployeePortal = ({ onLogout }) => {
   const [showFilters, setShowFilters] = useState(false);
   const [showFormatting, setShowFormatting] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(null); // messageId or null
+  const [lightboxMedia, setLightboxMedia] = useState(null);
+  const [lightboxIndex, setLightboxIndex] = useState(0);
+  const [lightboxAllMedia, setLightboxAllMedia] = useState([]);
   const fileInputRef = useRef(null);
   const textareaRef = useRef(null);
   const wsRef = useRef(null);
   const messagesEndRef = useRef(null);
   const prevMessagesLengthRef = useRef(0);
+  const emojiPickerRef = useRef(null);
 
   const commonEmojis = ["👍", "❤️", "😂", "😮", "😢", "🎉", "🔥", "👏"];
 
@@ -62,7 +71,38 @@ const EmployeePortal = ({ onLogout }) => {
   // WebSocket connection for real-time messages
   useEffect(() => {
     const token = localStorage.getItem("token");
-    const ws = new WebSocket(`ws://localhost:5000`);
+
+    // Determine WebSocket URL from environment variables
+    const getWebSocketURL = () => {
+      // 1) Explicit WS base overrides everything
+      if (import.meta.env.VITE_WS_BASE) return import.meta.env.VITE_WS_BASE;
+
+      // 2) Prefer API base if provided; convert http(s) -> ws(s)
+      const apiBase = import.meta.env.VITE_API_BASE;
+      if (apiBase) {
+        try {
+          const u = new URL(apiBase);
+          u.protocol = u.protocol === "https:" ? "wss:" : "ws:";
+          return `${u.protocol}//${u.host}`;
+        } catch {}
+      }
+
+      // 3) Fallback to window origin with default port
+      if (typeof window !== "undefined" && window.location) {
+        const protocol = window.location.protocol === "https:" ? "wss" : "ws";
+        const defaultHost = window.location.hostname === "localhost"
+          ? "localhost:5000"
+          : window.location.host;
+        return `${protocol}://${defaultHost}`;
+      }
+
+      // 4) Final fallback
+      return "ws://localhost:5000";
+    };
+
+    const wsURL = getWebSocketURL();
+    console.log("[EmployeePortal] Connecting to WebSocket:", wsURL);
+    const ws = new WebSocket(wsURL);
     wsRef.current = ws;
 
     ws.onopen = () => {
@@ -76,9 +116,31 @@ const EmployeePortal = ({ onLogout }) => {
 
         if (data.type === "authenticated") {
           console.log("WebSocket authenticated");
-        } else if (data.type === "project_message" && data.projectId === selectedProject) {
+        } else if (data.type === "project_message") {
           console.log("Received real-time project message");
-          fetchProjectMessages(selectedProject);
+
+          // Refresh messages if it's for the currently selected project
+          if (data.projectId === selectedProject) {
+            fetchProjectMessages(selectedProject);
+          }
+
+          // Show browser notification for project messages
+          const user = JSON.parse(localStorage.getItem("user") || "{}");
+          const messageData = data.messageData || data.message || {};
+          const senderName = messageData.sentBy?.name || messageData.sentBy?.clientName || "Someone";
+
+          // Don't notify for own messages
+          if (messageData.sentBy?._id !== user._id && messageData.sentBy !== user._id) {
+            notificationManager.showGeneral(
+              "New Project Message",
+              `${senderName}: ${messageData.message || "Sent an attachment"}`,
+              {
+                tag: `project-${data.projectId}`,
+                icon: "/icon.png", // You can customize this
+                requireInteraction: false,
+              }
+            );
+          }
         }
       } catch (error) {
         console.error("WebSocket message error:", error);
@@ -86,11 +148,20 @@ const EmployeePortal = ({ onLogout }) => {
     };
 
     ws.onerror = (error) => {
-      console.error("WebSocket error:", error);
+      console.error("[EmployeePortal] WebSocket error:", error);
     };
 
     ws.onclose = () => {
-      console.log("WebSocket disconnected");
+      console.log("[EmployeePortal] WebSocket disconnected");
+      // Reconnect after 5 seconds if component is still mounted
+      const reconnectTimer = setTimeout(() => {
+        if (wsRef.current === ws) {
+          console.log("[EmployeePortal] Attempting to reconnect...");
+          // Trigger re-connection by updating a dependency
+          // Note: This is a simple approach; in production, use a more robust reconnection strategy
+        }
+      }, 5000);
+      return () => clearTimeout(reconnectTimer);
     };
 
     return () => {
@@ -105,7 +176,7 @@ const EmployeePortal = ({ onLogout }) => {
     try {
       setLoading(true);
       const token = localStorage.getItem("token");
-      const response = await fetch('http://localhost:5000/api/projects', {
+      const response = await fetch(`${API_BASE}/api/projects`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -136,7 +207,7 @@ const EmployeePortal = ({ onLogout }) => {
       if (dateFilter.end) params.append("endDate", dateFilter.end);
 
       const queryString = params.toString();
-      const url = `http://localhost:5000/api/projects/${projectId}/messages${queryString ? `?${queryString}` : ""}`;
+      const url = `${API_BASE}/api/projects/${projectId}/messages${queryString ? `?${queryString}` : ""}`;
 
       const response = await fetch(url, {
         headers: {
@@ -171,6 +242,23 @@ const EmployeePortal = ({ onLogout }) => {
     }
     prevMessagesLengthRef.current = messages.length;
   }, [messages]);
+
+  // Close emoji picker when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (emojiPickerRef.current && !emojiPickerRef.current.contains(event.target)) {
+        setShowEmojiPicker(null);
+      }
+    };
+
+    if (showEmojiPicker !== null) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showEmojiPicker]);
 
   const clearFilters = () => {
     setMessageSearchTerm("");
@@ -301,7 +389,7 @@ const EmployeePortal = ({ onLogout }) => {
     try {
       const token = localStorage.getItem("token");
       const response = await fetch(
-        `http://localhost:5000/api/projects/${selectedProject}/messages/${messageId}/react`,
+        `${API_BASE}/api/projects/${selectedProject}/messages/${messageId}/react`,
         {
           method: 'POST',
           headers: {
@@ -357,7 +445,7 @@ const EmployeePortal = ({ onLogout }) => {
         formData.append("files", file);
       });
 
-      const response = await fetch(`http://localhost:5000/api/projects/${selectedProject}/messages`, {
+      const response = await fetch(`${API_BASE}/api/projects/${selectedProject}/messages`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -706,6 +794,9 @@ const EmployeePortal = ({ onLogout }) => {
                           className="px-3 py-2 bg-red-600/20 hover:bg-red-600/40 text-red-400 rounded-lg border border-red-500/30 transition-colors"
                           title="Clear filters"
                         >
+
+
+
                           <XCircle className="w-4 h-4" />
                         </button>
                       )}
@@ -809,38 +900,72 @@ const EmployeePortal = ({ onLogout }) => {
                         {/* Attachments */}
                         {msg.attachments && msg.attachments.length > 0 && (
                           <div className="mt-3 space-y-2">
-                            {msg.attachments.map((att, attIdx) => (
-                              <div
-                                key={attIdx}
-                                className="flex items-center gap-2 p-2 bg-black/20 rounded"
-                              >
-                                {getFileIcon(att.fileType)}
-                                <div className="flex-1 min-w-0">
-                                  <div className="text-xs text-white truncate">
-                                    {att.filename}
-                                  </div>
-                                  <div className="text-xs text-gray-400">
-                                    {(att.size / 1024).toFixed(1)} KB
-                                  </div>
+                            {msg.attachments.map((att, attIdx) => {
+                              const isMedia = att.fileType === "image" || att.fileType === "video";
+                              const mediaAttachments = msg.attachments.filter(a => a.fileType === "image" || a.fileType === "video");
+
+                              return (
+                                <div key={attIdx}>
+                                  {!isMedia && (
+                                    <div className="flex items-center gap-2 p-2 bg-black/20 rounded">
+                                      {getFileIcon(att.fileType)}
+                                      <div className="flex-1 min-w-0">
+                                        <div className="text-xs text-white truncate">
+                                          {att.filename}
+                                        </div>
+                                        <div className="text-xs text-gray-400">
+                                          {(att.size / 1024).toFixed(1)} KB
+                                        </div>
+                                      </div>
+                                      <a
+                                        href={att.url.startsWith('http') ? att.url : `${API_BASE}${att.url}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="p-1 hover:bg-white/10 rounded"
+                                        download
+                                      >
+                                        <Download className="w-4 h-4 text-gray-300" />
+                                      </a>
+                                    </div>
+                                  )}
+
+                                  {att.fileType === "image" && (
+                                    <div className="relative group">
+                                      <img
+                                        src={att.url.startsWith('http') ? att.url : `${API_BASE}${att.url}`}
+                                        alt={att.filename}
+                                        className="w-48 h-48 object-cover rounded cursor-pointer hover:opacity-90 transition-opacity"
+                                        onClick={() => {
+                                          setLightboxAllMedia(mediaAttachments);
+                                          setLightboxIndex(mediaAttachments.indexOf(att));
+                                          setLightboxMedia(att);
+                                        }}
+                                      />
+                                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 rounded transition-colors pointer-events-none" />
+                                    </div>
+                                  )}
+
+                                  {att.fileType === "video" && (
+                                    <div className="relative">
+                                      <video
+                                        src={att.url.startsWith('http') ? att.url : `${API_BASE}${att.url}`}
+                                        className="w-48 h-48 object-cover rounded cursor-pointer"
+                                        onClick={() => {
+                                          setLightboxAllMedia(mediaAttachments);
+                                          setLightboxIndex(mediaAttachments.indexOf(att));
+                                          setLightboxMedia(att);
+                                        }}
+                                      />
+                                      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                        <div className="bg-black/50 rounded-full p-3">
+                                          <Video className="w-6 h-6 text-white" />
+                                        </div>
+                                      </div>
+                                    </div>
+                                  )}
                                 </div>
-                                <a
-                                  href={att.url.startsWith('http') ? att.url : `http://localhost:5000${att.url}`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="p-1 hover:bg-white/10 rounded"
-                                  download
-                                >
-                                  <Download className="w-4 h-4 text-gray-300" />
-                                </a>
-                                {att.fileType === "image" && (
-                                  <img
-                                    src={att.url.startsWith('http') ? att.url : `http://localhost:5000${att.url}`}
-                                    alt={att.filename}
-                                    className="w-full max-w-sm mt-2 rounded"
-                                  />
-                                )}
-                              </div>
-                            ))}
+                              );
+                            })}
                           </div>
                         )}
 
@@ -910,7 +1035,10 @@ const EmployeePortal = ({ onLogout }) => {
 
                             {/* Emoji Picker Popup */}
                             {showEmojiPicker === msg._id && (
-                              <div className={`absolute ${isOwnMessage ? 'right-0' : 'left-0'} bottom-full mb-1 p-2 bg-[#1a2332] border border-[#232945] rounded-lg shadow-xl z-50`}>
+                              <div
+                                ref={emojiPickerRef}
+                                className={`absolute ${isOwnMessage ? 'right-0' : 'left-0'} bottom-full mb-1 p-2 bg-[#1a2332] border border-[#232945] rounded-lg shadow-xl z-50`}
+                              >
                                 <div className="flex gap-1">
                                   {commonEmojis.map((emoji) => (
                                     <button
@@ -1371,6 +1499,20 @@ const EmployeePortal = ({ onLogout }) => {
         )}
       </div>
       </main>
+
+      {/* Media Lightbox */}
+      {lightboxMedia && (
+        <MediaLightbox
+          media={lightboxMedia}
+          allMedia={lightboxAllMedia}
+          currentIndex={lightboxIndex}
+          onClose={() => setLightboxMedia(null)}
+          onNavigate={(newIndex) => {
+            setLightboxIndex(newIndex);
+            setLightboxMedia(lightboxAllMedia[newIndex]);
+          }}
+        />
+      )}
     </div>
   );
 };

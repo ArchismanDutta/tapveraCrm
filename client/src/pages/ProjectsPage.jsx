@@ -6,15 +6,10 @@ import {
   Plus,
   Search,
   RefreshCw,
-  Filter,
   Download,
   Edit2,
   Trash2,
   X,
-  Calendar,
-  Users,
-  Building2,
-  Clock,
   AlertCircle,
   CheckCircle,
   XCircle,
@@ -24,7 +19,6 @@ import {
   Mail,
   Server,
   FileText,
-  Eye,
   ChevronDown,
   ChevronUp,
   MessageSquare
@@ -94,6 +88,7 @@ const ProjectsPage = ({ onLogout }) => {
 
   useEffect(() => {
     fetchAllData();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const fetchAllData = async () => {
@@ -118,7 +113,7 @@ const ProjectsPage = ({ onLogout }) => {
         headers: { Authorization: `Bearer ${token}` }
       });
       setProjects(res.data);
-    } catch (error) {
+    } catch {
       showNotification("Error fetching projects", "error");
     }
   };
