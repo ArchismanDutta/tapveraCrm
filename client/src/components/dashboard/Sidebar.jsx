@@ -11,6 +11,7 @@ import {
   BookOpen,
   Briefcase,
   FolderKanban,
+  Bell,
 } from "lucide-react";
 import { FaChevronCircleRight } from "react-icons/fa";
 import { Users } from "@/components/animate-ui/icons/users";
@@ -52,11 +53,12 @@ const menuConfig = {
       icon: <Gauge size={18} animateOnHover />,
       label: "Employee Dashboard",
     },
-    // {
-    //   to: "/employee-portal",
-    //   icon: <FolderKanban size={18} />,
-    //   label: "My Projects",
-    // },
+    
+    {
+      to: "/employee-portal",
+      icon: <FolderKanban size={18} />,
+      label: "My Projects",
+    },
     {
       to: "/tasks",
       icon: <CircleCheckBig size={18} animateOnHover />,
@@ -78,6 +80,11 @@ const menuConfig = {
       icon: <MessageSquareQuote size={18} animateOnHover />,
       label: "Messages",
     },
+    // {
+    //   to: "/notifications",
+    //   icon: <Bell size={18} />,
+    //   label: "Notifications",
+    // },
     {
       to: "/notepad",
       icon: <PanelLeft size={18} animateOnHover />,
@@ -173,6 +180,11 @@ const menuConfig = {
       icon: <MessageSquareQuote size={18} animateOnHover />,
       label: "Messages",
     },
+    // {
+    //   to: "/notifications",
+    //   icon: <Bell size={18} />,
+    //   label: "Notifications",
+    // },
     {
       to: "/profile",
       icon: <AnimatedUser size={18} animateOnHover />,
@@ -200,11 +212,21 @@ const menuConfig = {
       icon: <Gauge size={18} animateOnHover />,
       label: "Admin Dashboard",
     },
-    // {
-    //   to: "/employee-portal",
-    //   icon: <FolderKanban size={18} />,
-    //   label: "My Projects",
-    // },
+    {
+      to: "/clients",
+      icon: <Briefcase size={18} />,
+      label: "Client Management",
+    },
+    {
+      to: "/projects",
+      icon: <FolderKanban size={18} />,
+      label: "Project Management",
+    },
+    {
+      to: "/employee-portal",
+      icon: <FolderKanban size={18} />,
+      label: "My Projects",
+    },
     {
       to: "/notepad",
       icon: <PanelLeft size={18} animateOnHover />,
@@ -222,6 +244,11 @@ const menuConfig = {
       icon: <MessageSquareQuote size={18} animateOnHover />,
       label: "Messages",
     },
+    // {
+    //   to: "/notifications",
+    //   icon: <Bell size={18} />,
+    //   label: "Notifications",
+    // },
     {
       to: "/admin/holidays",
       icon: <Calendar size={18} />,
@@ -269,16 +296,16 @@ const menuConfig = {
       icon: <Pin size={18} animateOnHover />,
       label: "Employee Attendance Portal",
     },
-    // {
-    //   to: "/clients",
-    //   icon: <Briefcase size={18} />,
-    //   label: "Client Management",
-    // },
-    // {
-    //   to: "/projects",
-    //   icon: <FolderKanban size={18} />,
-    //   label: "Project Management",
-    // },
+    {
+      to: "/clients",
+      icon: <Briefcase size={18} />,
+      label: "Client Management",
+    },
+    {
+      to: "/projects",
+      icon: <FolderKanban size={18} />,
+      label: "Project Management",
+    },
     {
       to: "/admin/tasks",
       icon: <ClipboardList size={18} animateOnHover />,
@@ -310,6 +337,11 @@ const menuConfig = {
       icon: <MessageSquareQuote size={18} animateOnHover />,
       label: "Messages",
     },
+    // {
+    //   to: "/notifications",
+    //   icon: <Bell size={18} />,
+    //   label: "Notifications",
+    // },
     {
       to: "/leads",
       icon: <ChevronUp size={18} animateOnHover />,

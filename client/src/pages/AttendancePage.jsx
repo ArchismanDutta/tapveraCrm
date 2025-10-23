@@ -690,7 +690,7 @@ const AttendancePage = ({ onLogout }) => {
         let displayHours = calculateHoursFromSeconds(d.workDurationSeconds || 0).toFixed(1);
         if (d.isWFH && (!d.workDurationSeconds || d.workDurationSeconds === 0)) {
           // For WFH with no logged time, assume standard working hours
-          displayHours = d.leaveInfo?.type === 'halfDay' ? "4.0" : "8.0";
+          displayHours = d.leaveInfo?.type === 'halfDay' ? "4.0" : "7.5";
         }
 
         attendanceDaysMap[dayNum] = {
@@ -808,7 +808,7 @@ const AttendancePage = ({ onLogout }) => {
 
         // For WFH with no logged hours, use standard hours
         if (d.isWFH && hours === 0) {
-          hours = d.leaveInfo?.type === 'halfDay' ? 4.0 : 8.0;
+          hours = d.leaveInfo?.type === 'halfDay' ? 4.0 : 7.5;
         }
 
         if (dayOfWeek >= 0 && dayOfWeek <= 6) {
@@ -899,16 +899,16 @@ const AttendancePage = ({ onLogout }) => {
         // Calculate working hours for display, including WFH logic
         let displayWorkingHours = calculateHoursFromSeconds(d.workDurationSeconds || 0);
         if (d.isWFH && displayWorkingHours === 0) {
-          displayWorkingHours = d.leaveInfo?.type === 'halfDay' ? 4.0 : 8.0;
+          displayWorkingHours = d.leaveInfo?.type === 'halfDay' ? 4.0 : 7.5;
         }
 
         // Calculate efficiency based on actual expected hours
         let efficiency = 0;
         if (d.isWFH) {
-          const expectedHours = d.leaveInfo?.type === 'halfDay' ? 4 : 8;
+          const expectedHours = d.leaveInfo?.type === 'halfDay' ? 4 : 7.5;
           efficiency = Math.round((displayWorkingHours / expectedHours) * 100);
         } else if (d.workDurationSeconds > 0) {
-          efficiency = Math.round(((d.workDurationSeconds || 0) / (8 * 3600)) * 100);
+          efficiency = Math.round(((d.workDurationSeconds || 0) / (7.5 * 3600)) * 100);
         }
 
         const formattedTimeIn = d.isWFH ? "WFH" : formatTime(arrivalTime);

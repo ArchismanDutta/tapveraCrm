@@ -6,6 +6,7 @@ const router = express.Router();
 const { protect } = require("../middlewares/authMiddleware");
 const { authorize } = require("../middlewares/roleMiddleware");
 const User = require("../models/User");
+const { getAllEmployeesWithWorkload } = require("../services/workloadService");
 
 const {
   createEmployee,
@@ -23,6 +24,17 @@ const {
 
 // Employee Directory - accessible to all logged-in users, with optional filters & search
 router.get("/directory", protect, getEmployeeDirectory);
+
+// Get all employees with workload information - for task assignment
+router.get("/workload", protect, authorize("admin", "super-admin"), async (req, res) => {
+  try {
+    const employeesWithWorkload = await getAllEmployeesWithWorkload();
+    res.json(employeesWithWorkload);
+  } catch (error) {
+    console.error("Error fetching employee workload:", error);
+    res.status(500).json({ message: "Server error fetching employee workload" });
+  }
+});
 
 // Current logged-in user info
 router.get("/me", protect, getMe);

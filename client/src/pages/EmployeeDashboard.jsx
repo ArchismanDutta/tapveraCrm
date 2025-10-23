@@ -36,8 +36,6 @@ import notificationManager from "../utils/browserNotifications";
 import CelebrationPopup from "../components/common/CelebrationPopup";
 import useCelebrationNotifications from "../hooks/useCelebrationNotifications";
 import newAttendanceService from "../services/newAttendanceService";
-import DiwaliWelcome from "../components/common/DiwaliWelcome";
-import { useDiwaliWelcome } from "../hooks/useDiwaliWelcome";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
 const TASK_POLL_INTERVAL_MS = 10000;
@@ -58,9 +56,6 @@ const EmployeeDashboard = ({ onLogout }) => {
   );
   const [wishes, setWishes] = useState([]);
   const [showWishPopup, setShowWishPopup] = useState(false);
-
-  // Diwali Welcome
-  const { showDiwali, dismissDiwali } = useDiwaliWelcome("employee_dashboard");
 
   // New enhanced state
   const [workStatus, setWorkStatus] = useState(null);
@@ -596,9 +591,6 @@ const EmployeeDashboard = ({ onLogout }) => {
 
   return (
     <>
-      {/* Diwali Welcome Overlay */}
-      {showDiwali && <DiwaliWelcome onClose={dismissDiwali} />}
-
       <div className="flex bg-gradient-to-br from-[#141a21] via-[#191f2b] to-[#101218] font-sans text-blue-100 min-h-screen">
         <Sidebar
           collapsed={collapsed}
@@ -703,23 +695,6 @@ const EmployeeDashboard = ({ onLogout }) => {
                 title="Refresh all data"
               >
                 <RefreshCw className="w-4 h-4" />
-              </button>
-
-              {/* Browser Notification Toggle */}
-              <button
-                onClick={handleToggleBrowserNotifications}
-                className={`p-2 rounded-lg border transition-colors ${
-                  browserNotificationsEnabled
-                    ? "bg-green-600 border-green-500 text-white"
-                    : "bg-gray-600 border-gray-500 text-gray-300 hover:bg-gray-500"
-                }`}
-                title={
-                  browserNotificationsEnabled
-                    ? "Browser notifications enabled"
-                    : "Enable browser notifications"
-                }
-              >
-                🔔
               </button>
 
               <NotificationBell

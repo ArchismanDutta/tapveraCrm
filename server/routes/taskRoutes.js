@@ -30,6 +30,16 @@ router.patch("/:taskId/status", protect, taskController.updateTaskStatus);
 // Reject task (Admin / Super-admin only)
 router.patch("/:taskId/reject", protect, authorize("admin", "super-admin"), taskController.rejectTask);
 
+// ------------------- SUBMISSION ROUTES -------------------
+// Submit task details (Employee - assigned users only)
+router.post("/:taskId/submit", protect, taskController.submitTaskDetails);
+
+// Approve task submission (Admin / Super-admin only)
+router.patch("/:taskId/approve", protect, authorize("admin", "super-admin"), taskController.approveTaskSubmission);
+
+// Reject task submission (Admin / Super-admin only)
+router.patch("/:taskId/reject-submission", protect, authorize("admin", "super-admin"), taskController.rejectTaskSubmission);
+
 // Edit task
 // Admin / Super-admin or assignedBy can edit (authorization handled in controller)
 router.put("/:taskId", protect, taskController.editTask);

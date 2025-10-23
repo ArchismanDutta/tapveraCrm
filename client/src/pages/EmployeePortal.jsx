@@ -25,10 +25,14 @@ import {
   Video,
   Type,
   Smile,
+  Sparkles,
+  Lightbulb,
+  Zap,
 } from "lucide-react";
 import Sidebar from "../components/dashboard/Sidebar";
 import MediaLightbox from "../components/common/MediaLightbox";
 import notificationManager from "../utils/browserNotifications";
+import useMessageSuggestions from "../hooks/useMessageSuggestions";
 
 const EmployeePortal = ({ onLogout }) => {
   // API Base URL - use environment variable or fallback
@@ -62,6 +66,14 @@ const EmployeePortal = ({ onLogout }) => {
   const emojiPickerRef = useRef(null);
 
   const commonEmojis = ["👍", "❤️", "😂", "😮", "😢", "🎉", "🔥", "👏"];
+
+  // Message suggestions
+  const { getSuggestions, getQuickReplies } = useMessageSuggestions(selectedProject?._id, messages);
+  const [suggestions, setSuggestions] = useState([]);
+  const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(0);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [quickReplies, setQuickReplies] = useState([]);
+  const suggestionsRef = useRef(null);
 
   // Fetch projects assigned to the employee
   useEffect(() => {
@@ -249,16 +261,59 @@ const EmployeePortal = ({ onLogout }) => {
       if (emojiPickerRef.current && !emojiPickerRef.current.contains(event.target)) {
         setShowEmojiPicker(null);
       }
+      if (suggestionsRef.current && !suggestionsRef.current.contains(event.target)) {
+        setShowSuggestions(false);
+      }
     };
 
-    if (showEmojiPicker !== null) {
+    if (showEmojiPicker !== null || showSuggestions) {
       document.addEventListener('mousedown', handleClickOutside);
     }
 
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [showEmojiPicker]);
+  }, [showEmojiPicker, showSuggestions]);
+
+  // Update suggestions when input changes
+  useEffect(() => {
+    if (newMessage.trim().length >= 2) {
+      const newSuggestions = getSuggestions(newMessage, 8);
+      setSuggestions(newSuggestions);
+      setShowSuggestions(newSuggestions.length > 0);
+      setSelectedSuggestionIndex(0);
+    } else {
+      setShowSuggestions(false);
+      setSuggestions([]);
+    }
+  }, [newMessage, getSuggestions]);
+
+  // Update quick replies based on last message
+  useEffect(() => {
+    if (messages && messages.length > 0) {
+      const currentUserId = JSON.parse(localStorage.getItem("user") || "{}")._id;
+      const lastMessage = messages[messages.length - 1];
+      if (String(lastMessage.sentBy?._id || lastMessage.sentBy) !== String(currentUserId)) {
+        const replies = getQuickReplies(lastMessage.message);
+        setQuickReplies(replies);
+      } else {
+        setQuickReplies([]);
+      }
+    }
+  }, [messages, getQuickReplies]);
+
+  // Handle suggestion selection
+  const acceptSuggestion = (suggestion) => {
+    setNewMessage(suggestion.text);
+    setShowSuggestions(false);
+    textareaRef.current?.focus();
+  };
+
+  // Handle quick reply click
+  const handleQuickReply = (text) => {
+    setNewMessage(text);
+    textareaRef.current?.focus();
+  };
 
   const clearFilters = () => {
     setMessageSearchTerm("");
@@ -684,43 +739,10 @@ const EmployeePortal = ({ onLogout }) => {
           )}
 
           {activeTab === "tasks" && (
-            <div className="bg-[#191f2b]/70 rounded-lg shadow-sm border border-[#232945]">
-              <div className="p-4 sm:p-6">
-                <h3 className="text-base sm:text-lg font-semibold text-white mb-4">
-                  Project Tasks
-                </h3>
-                {project.tasks && project.tasks.length > 0 ? (
-                  <div className="space-y-3">
-                    {project.tasks.map((task) => (
-                      <div
-                        key={task.id}
-                        className="flex flex-col sm:flex-row sm:items-center justify-between p-3 sm:p-4 bg-[#232945] rounded-lg gap-2"
-                      >
-                        <div className="flex-1 min-w-0">
-                          <h4 className="text-sm sm:text-base font-medium text-white mb-1">
-                            {task.name}
-                          </h4>
-                          <p className="text-xs sm:text-sm text-blue-300">
-                            Due: {task.dueDate}
-                          </p>
-                        </div>
-                        <span
-                          className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(
-                            task.status
-                          )} whitespace-nowrap`}
-                        >
-                          {task.status}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-sm sm:text-base text-blue-300">
-                    No tasks available
-                  </p>
-                )}
-              </div>
-            </div>
+            <ProjectTasksSection
+              projectId={project._id}
+              API_BASE={API_BASE}
+            />
           )}
 
           {activeTab === "messages" && (
@@ -1119,6 +1141,29 @@ const EmployeePortal = ({ onLogout }) => {
                   </div>
                 )}
 
+                {/* Quick Replies */}
+                {quickReplies.length > 0 && newMessage.length === 0 && (
+                  <div className="mb-3 p-3 bg-[#0f1419] border border-[#232945] rounded-lg">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Zap className="w-4 h-4 text-yellow-400" />
+                      <span className="text-xs text-gray-400">Quick Replies:</span>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {quickReplies.map((reply, idx) => (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => handleQuickReply(reply)}
+                          className="px-3 py-1.5 bg-gradient-to-r from-blue-600/20 to-purple-600/20 hover:from-blue-600/30 hover:to-purple-600/30 border border-blue-500/30 rounded-full text-xs text-gray-200 transition-all hover:scale-105 flex items-center gap-1"
+                        >
+                          <Lightbulb className="w-3 h-3 text-yellow-400" />
+                          {reply}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {/* Formatting Toolbar */}
                 {showFormatting && (
                   <div className="mb-3 p-3 bg-[#0f1419] border border-[#232945] rounded-lg">
@@ -1138,7 +1183,67 @@ const EmployeePortal = ({ onLogout }) => {
                   </div>
                 )}
 
-                <form onSubmit={handleSendMessage} className="flex gap-2">
+                <div className="relative">
+                  {/* Suggestions Dropdown */}
+                  {showSuggestions && suggestions.length > 0 && (
+                    <div
+                      ref={suggestionsRef}
+                      className="absolute bottom-full left-0 right-0 mb-2 bg-gray-900 border border-[#232945] rounded-lg shadow-2xl max-h-64 overflow-y-auto z-50"
+                    >
+                      <div className="p-2 border-b border-[#232945] flex items-center gap-2 sticky top-0 bg-gray-900">
+                        <Sparkles className="w-4 h-4 text-blue-400" />
+                        <span className="text-xs text-gray-400">
+                          Suggestions ({suggestions.length}) • <kbd className="px-1 py-0.5 bg-gray-700 rounded text-[10px]">↑↓</kbd> to navigate • <kbd className="px-1 py-0.5 bg-gray-700 rounded text-[10px]">Tab</kbd> or <kbd className="px-1 py-0.5 bg-gray-700 rounded text-[10px]">Enter</kbd> to select
+                        </span>
+                      </div>
+                      {suggestions.map((suggestion, idx) => (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => acceptSuggestion(suggestion)}
+                          className={`w-full text-left px-4 py-2 hover:bg-gray-800 transition-colors border-l-2 ${
+                            idx === selectedSuggestionIndex
+                              ? "bg-gray-800 border-blue-500"
+                              : "border-transparent"
+                          }`}
+                        >
+                          <div className="flex items-start gap-2">
+                            <div className="flex-shrink-0 mt-1">
+                              {suggestion.type === "history" && (
+                                <Clock className="w-3 h-3 text-gray-400" />
+                              )}
+                              {suggestion.type === "quick" && (
+                                <Zap className="w-3 h-3 text-yellow-400" />
+                              )}
+                              {suggestion.type === "task" && (
+                                <Check className="w-3 h-3 text-green-400" />
+                              )}
+                              {suggestion.type === "project" && (
+                                <File className="w-3 h-3 text-blue-400" />
+                              )}
+                              {suggestion.type === "frequent" && (
+                                <Sparkles className="w-3 h-3 text-purple-400" />
+                              )}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm text-gray-200 truncate">
+                                {suggestion.text}
+                              </p>
+                              <p className="text-xs text-gray-500 capitalize">
+                                {suggestion.type === "history" && "From your history"}
+                                {suggestion.type === "quick" && "Quick reply"}
+                                {suggestion.type === "task" && "Task suggestion"}
+                                {suggestion.type === "project" && "Project suggestion"}
+                                {suggestion.type === "frequent" && "Frequently used"}
+                              </p>
+                            </div>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  <form onSubmit={handleSendMessage} className="flex gap-2">
                   <input
                     ref={fileInputRef}
                     type="file"
@@ -1179,10 +1284,43 @@ const EmployeePortal = ({ onLogout }) => {
                       scrollToBottom();
                     }}
                     onKeyDown={(e) => {
+                      // Handle suggestion navigation
+                      if (showSuggestions && suggestions.length > 0) {
+                        if (e.key === "ArrowDown") {
+                          e.preventDefault();
+                          setSelectedSuggestionIndex(prev =>
+                            prev < suggestions.length - 1 ? prev + 1 : 0
+                          );
+                          return;
+                        }
+                        if (e.key === "ArrowUp") {
+                          e.preventDefault();
+                          setSelectedSuggestionIndex(prev =>
+                            prev > 0 ? prev - 1 : suggestions.length - 1
+                          );
+                          return;
+                        }
+                        if (e.key === "Tab") {
+                          e.preventDefault();
+                          acceptSuggestion(suggestions[selectedSuggestionIndex]);
+                          return;
+                        }
+                        if (e.key === "Escape") {
+                          e.preventDefault();
+                          setShowSuggestions(false);
+                          return;
+                        }
+                      }
+
                       // Send message on Enter (without Shift)
                       if (e.key === "Enter" && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
                         e.preventDefault();
-                        handleSendMessage(e);
+                        // Accept suggestion if visible
+                        if (showSuggestions && suggestions.length > 0) {
+                          acceptSuggestion(suggestions[selectedSuggestionIndex]);
+                        } else {
+                          handleSendMessage(e);
+                        }
                         return;
                       }
 
@@ -1262,6 +1400,7 @@ const EmployeePortal = ({ onLogout }) => {
                     <span className="hidden sm:inline">Send</span>
                   </button>
                 </form>
+                </div>
                 <p className="text-xs text-gray-500 mt-2">
                   Max 5 files • Supports formatting: **bold** *italic* `code` ## heading - lists
                 </p>
@@ -1513,6 +1652,279 @@ const EmployeePortal = ({ onLogout }) => {
           }}
         />
       )}
+    </div>
+  );
+};
+
+// Project Tasks Section Component
+const ProjectTasksSection = ({ projectId, API_BASE }) => {
+  const [tasks, setTasks] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedTask, setSelectedTask] = useState(null);
+  const [submissionUrl, setSubmissionUrl] = useState('');
+  const [submissionText, setSubmissionText] = useState('');
+  const [submissionRemark, setSubmissionRemark] = useState('');
+
+  useEffect(() => {
+    fetchProjectTasks();
+  }, [projectId]);
+
+  const fetchProjectTasks = async () => {
+    try {
+      setLoading(true);
+      const token = localStorage.getItem("token");
+      const response = await fetch(`${API_BASE}/api/tasks`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const allTasks = await response.json();
+      // Filter tasks for this project
+      const projectTasks = allTasks.filter(t => t.project?._id === projectId);
+      setTasks(projectTasks);
+    } catch (error) {
+      console.error("Error fetching tasks:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSubmit = async (taskId) => {
+    if (!submissionUrl && !submissionText && !submissionRemark) {
+      alert('Please provide at least one field');
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem("token");
+      const response = await fetch(`${API_BASE}/api/tasks/${taskId}/submit`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ submissionUrl, submissionText, submissionRemark })
+      });
+
+      if (!response.ok) {
+        throw new Error('Submission failed');
+      }
+
+      // Clear form and refresh
+      setSubmissionUrl('');
+      setSubmissionText('');
+      setSubmissionRemark('');
+      setSelectedTask(null);
+      fetchProjectTasks();
+      alert('Submission successful!');
+    } catch (error) {
+      console.error("Error submitting:", error);
+      alert('Submission failed. Please try again.');
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="bg-[#191f2b]/70 rounded-lg shadow-sm border border-[#232945] p-8">
+        <div className="text-center py-8 text-gray-400">Loading tasks...</div>
+      </div>
+    );
+  }
+
+  if (!tasks.length) {
+    return (
+      <div className="bg-[#191f2b]/70 rounded-lg shadow-sm border border-[#232945] p-8">
+        <div className="text-center py-8 text-gray-400">No tasks for this project</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {tasks.map((task) => (
+        <div key={task._id} className="bg-[#191f2b]/70 rounded-lg p-6 border border-[#232945]">
+          {/* Task Header */}
+          <div className="flex justify-between items-start mb-4">
+            <div className="flex-1">
+              <h4 className="text-lg font-semibold text-white">{task.title}</h4>
+              {task.description && (
+                <p className="text-sm text-gray-400 mt-1">{task.description}</p>
+              )}
+              <div className="flex flex-wrap gap-3 mt-2">
+                <span className="text-xs text-gray-500">
+                  Due: {task.dueDate ? new Date(task.dueDate).toLocaleDateString() : 'No due date'}
+                </span>
+                <span className={`text-xs px-2 py-1 rounded ${
+                  task.priority === 'High' ? 'bg-red-500/20 text-red-400' :
+                  task.priority === 'Medium' ? 'bg-yellow-500/20 text-yellow-400' :
+                  'bg-green-500/20 text-green-400'
+                }`}>
+                  {task.priority} Priority
+                </span>
+                <span className={`text-xs px-2 py-1 rounded ${
+                  task.status === 'completed' ? 'bg-green-500/20 text-green-400' :
+                  task.status === 'in-progress' ? 'bg-blue-500/20 text-blue-400' :
+                  task.status === 'rejected' ? 'bg-red-500/20 text-red-400' :
+                  'bg-gray-500/20 text-gray-400'
+                }`}>
+                  {task.status}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Approval Status Badges */}
+          {task.approvalStatus !== 'none' && (
+            <div className={`mb-4 p-3 rounded-lg ${
+              task.approvalStatus === 'approved' ? 'bg-green-500/10 border border-green-500/30' :
+              task.approvalStatus === 'rejected' ? 'bg-red-500/10 border border-red-500/30' :
+              'bg-yellow-500/10 border border-yellow-500/30'
+            }`}>
+              <div className="flex items-center gap-2">
+                {task.approvalStatus === 'approved' && <span className="text-green-400 font-semibold">✅ Submission Approved</span>}
+                {task.approvalStatus === 'rejected' && <span className="text-red-400 font-semibold">❌ Submission Rejected</span>}
+                {task.approvalStatus === 'pending' && <span className="text-yellow-400 font-semibold">⏳ Pending Admin Review</span>}
+              </div>
+              {task.approvalRemark && (
+                <p className="text-sm text-gray-300 mt-2">
+                  <strong>Admin Feedback:</strong> {task.approvalRemark}
+                </p>
+              )}
+              {task.approvedBy && (
+                <p className="text-xs text-gray-500 mt-1">
+                  Reviewed by: {task.approvedBy.name} on {new Date(task.approvedAt).toLocaleString()}
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Show submitted details if exists */}
+          {task.submittedAt && (
+            <div className="mb-4 p-3 bg-blue-500/5 border border-blue-500/20 rounded-lg">
+              <p className="text-sm text-gray-400 mb-2">
+                <strong>Your Submission:</strong> {new Date(task.submittedAt).toLocaleString()}
+              </p>
+              {task.submissionUrl && (
+                <p className="text-sm text-gray-300 mb-1">
+                  <strong>URL:</strong>{' '}
+                  <a
+                    href={task.submissionUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-400 hover:underline break-all"
+                  >
+                    {task.submissionUrl}
+                  </a>
+                </p>
+              )}
+              {task.submissionText && (
+                <p className="text-sm text-gray-300 mb-1">
+                  <strong>Text:</strong> {task.submissionText}
+                </p>
+              )}
+              {task.submissionRemark && (
+                <p className="text-sm text-gray-300">
+                  <strong>Remark:</strong> {task.submissionRemark}
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Submission Form - show based on approval status */}
+          {task.approvalStatus !== 'approved' && (
+            <div className="border-t border-[#232945] pt-4">
+              {/* Show message if submission is pending admin review */}
+              {task.approvalStatus === 'pending' && task.submittedAt && (
+                <div className="p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
+                  <p className="text-sm text-yellow-400">
+                    ⏳ Your submission is pending admin review. You cannot update it until the admin approves or rejects it.
+                  </p>
+                </div>
+              )}
+
+              {/* Allow submission only if: no submission yet OR submission was rejected */}
+              {(task.approvalStatus === 'none' || task.approvalStatus === 'rejected') && (
+                <>
+                  {selectedTask === task._id ? (
+                    <div className="space-y-3">
+                      <div>
+                        <label className="block text-sm text-gray-400 mb-1">URL</label>
+                        <input
+                          type="url"
+                          placeholder="https://example.com"
+                          value={submissionUrl}
+                          onChange={(e) => setSubmissionUrl(e.target.value)}
+                          className="w-full px-4 py-2 bg-[#0f1419] border border-[#232945] rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm text-gray-400 mb-1">Additional Text/Description</label>
+                        <textarea
+                          placeholder="Describe your work, challenges faced, etc."
+                          value={submissionText}
+                          onChange={(e) => setSubmissionText(e.target.value)}
+                          rows={3}
+                          className="w-full px-4 py-2 bg-[#0f1419] border border-[#232945] rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 resize-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm text-gray-400 mb-1">Remark/Notes</label>
+                        <textarea
+                          placeholder="Any additional notes or comments"
+                          value={submissionRemark}
+                          onChange={(e) => setSubmissionRemark(e.target.value)}
+                          rows={2}
+                          className="w-full px-4 py-2 bg-[#0f1419] border border-[#232945] rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 resize-none"
+                        />
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => handleSubmit(task._id)}
+                          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors flex items-center gap-2"
+                        >
+                          <Send className="w-4 h-4" />
+                          {task.approvalStatus === 'rejected' ? 'Resubmit for Review' : 'Submit for Review'}
+                        </button>
+                        <button
+                          onClick={() => {
+                            setSelectedTask(null);
+                            setSubmissionUrl('');
+                            setSubmissionText('');
+                            setSubmissionRemark('');
+                          }}
+                          className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        setSelectedTask(task._id);
+                        // Pre-fill with existing data if resubmitting
+                        setSubmissionUrl(task.submissionUrl || '');
+                        setSubmissionText(task.submissionText || '');
+                        setSubmissionRemark(task.submissionRemark || '');
+                      }}
+                      className={`px-4 py-2 rounded-lg transition-colors flex items-center gap-2 ${
+                        task.approvalStatus === 'rejected'
+                          ? 'bg-orange-600/20 hover:bg-orange-600/40 text-orange-400 border border-orange-500/30'
+                          : 'bg-blue-600/20 hover:bg-blue-600/40 text-blue-400 border border-blue-500/30'
+                      }`}
+                    >
+                      <FileText className="w-4 h-4" />
+                      {task.submittedAt && task.approvalStatus === 'rejected'
+                        ? 'Update & Resubmit'
+                        : task.submittedAt
+                        ? 'Update Submission'
+                        : 'Submit Task Details'}
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+        </div>
+      ))}
     </div>
   );
 };

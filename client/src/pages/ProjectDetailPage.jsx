@@ -4,6 +4,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
 import { BrowserNotificationManager } from "../utils/browserNotifications";
+import useMessageSuggestions from "../hooks/useMessageSuggestions";
 import {
   ArrowLeft,
   Globe,
@@ -33,6 +34,13 @@ import {
   XCircle,
   Type,
   Smile,
+  ListTodo,
+  ExternalLink,
+  ThumbsUp,
+  ThumbsDown,
+  Sparkles,
+  Lightbulb,
+  Zap,
 } from "lucide-react";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
@@ -88,6 +96,11 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [notification, setNotification] = useState(null);
+  const [activeTab, setActiveTab] = useState("chat");
+  const [tasks, setTasks] = useState([]);
+  const [loadingTasks, setLoadingTasks] = useState(false);
+  const [selectedTask, setSelectedTask] = useState(null);
+  const [approvalRemark, setApprovalRemark] = useState("");
   const [copiedText, setCopiedText] = useState(null);
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [replyingTo, setReplyingTo] = useState(null);
@@ -104,6 +117,14 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
   const textareaRef = useRef(null);
   const wsRef = useRef(null);
   const prevMessagesLengthRef = useRef(0);
+
+  // Message suggestions
+  const { getSuggestions, getQuickReplies } = useMessageSuggestions(projectId, messages);
+  const [suggestions, setSuggestions] = useState([]);
+  const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(0);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [quickReplies, setQuickReplies] = useState([]);
+  const suggestionsRef = useRef(null);
 
   useEffect(() => {
     fetchProjectDetails();
@@ -221,6 +242,62 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
     prevMessagesLengthRef.current = messages.length;
   }, [messages]);
 
+  // Update suggestions when input changes
+  useEffect(() => {
+    if (newMessage.trim().length >= 2) {
+      const newSuggestions = getSuggestions(newMessage, 8);
+      setSuggestions(newSuggestions);
+      setShowSuggestions(newSuggestions.length > 0);
+      setSelectedSuggestionIndex(0);
+    } else {
+      setShowSuggestions(false);
+      setSuggestions([]);
+    }
+  }, [newMessage, getSuggestions]);
+
+  // Update quick replies based on last message
+  useEffect(() => {
+    if (messages && messages.length > 0) {
+      const lastMessage = messages[messages.length - 1];
+      if (String(lastMessage.sentBy?._id || lastMessage.sentBy) !== String(userId)) {
+        const replies = getQuickReplies(lastMessage.message);
+        setQuickReplies(replies);
+      } else {
+        setQuickReplies([]);
+      }
+    }
+  }, [messages, userId, getQuickReplies]);
+
+  // Handle suggestion selection
+  const acceptSuggestion = (suggestion) => {
+    setNewMessage(suggestion.text);
+    setShowSuggestions(false);
+    textareaRef.current?.focus();
+  };
+
+  // Handle quick reply click
+  const handleQuickReply = (text) => {
+    setNewMessage(text);
+    textareaRef.current?.focus();
+  };
+
+  // Close suggestions when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (suggestionsRef.current && !suggestionsRef.current.contains(event.target)) {
+        setShowSuggestions(false);
+      }
+    };
+
+    if (showSuggestions) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showSuggestions]);
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
@@ -262,12 +339,75 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
     }
   };
 
+  const fetchTasks = async () => {
+    setLoadingTasks(true);
+    try {
+      const token = localStorage.getItem("token");
+      const res = await axios.get(`${API_BASE}/api/tasks`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      // Filter tasks that belong to this project
+      const projectTasks = res.data.filter(task => task.project?._id === projectId);
+      setTasks(projectTasks);
+    } catch (error) {
+      console.error("Error fetching tasks:", error);
+      showNotification("Error loading tasks", "error");
+    } finally {
+      setLoadingTasks(false);
+    }
+  };
+
+  const handleApproveSubmission = async (taskId) => {
+    try {
+      const token = localStorage.getItem("token");
+      await axios.patch(
+        `${API_BASE}/api/tasks/${taskId}/approve`,
+        { approvalRemark },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      showNotification("Task submission approved!", "success");
+      setSelectedTask(null);
+      setApprovalRemark("");
+      fetchTasks();
+    } catch (error) {
+      showNotification(error.response?.data?.message || "Error approving task", "error");
+    }
+  };
+
+  const handleRejectSubmission = async (taskId) => {
+    if (!approvalRemark.trim()) {
+      showNotification("Please provide a rejection reason", "error");
+      return;
+    }
+    try {
+      const token = localStorage.getItem("token");
+      await axios.patch(
+        `${API_BASE}/api/tasks/${taskId}/reject-submission`,
+        { approvalRemark },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      showNotification("Task submission rejected", "success");
+      setSelectedTask(null);
+      setApprovalRemark("");
+      fetchTasks();
+    } catch (error) {
+      showNotification(error.response?.data?.message || "Error rejecting task", "error");
+    }
+  };
+
   // Re-fetch when filters change
   useEffect(() => {
     if (projectId) {
       fetchMessages();
     }
   }, [searchTerm, searchSender, dateFilter]);
+
+  // Fetch tasks when Tasks tab is active
+  useEffect(() => {
+    if (activeTab === "tasks" && projectId) {
+      fetchTasks();
+    }
+  }, [activeTab, projectId]);
 
   const handleSendMessage = async (e) => {
     e.preventDefault();
@@ -725,18 +865,59 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
         {/* Right Column - Chat/Conversation */}
         <div className="lg:col-span-2">
           <div className="bg-[#191f2b]/70 rounded-xl shadow-xl border border-[#232945] h-[calc(100vh-12rem)] lg:h-[calc(100vh-10rem)] flex flex-col">
-            {/* Chat Header */}
-            <div className="p-4 sm:p-6 border-b border-[#232945] space-y-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-base sm:text-lg font-semibold text-white flex items-center gap-2">
-                    <Mail className="w-5 h-5 text-blue-400" />
-                    Project Conversation
-                  </h2>
-                  <p className="text-xs sm:text-sm text-gray-400 mt-1">
-                    {messages.length} message{messages.length !== 1 ? "s" : ""}
-                  </p>
-                </div>
+            {/* Tabs */}
+            <div className="border-b border-[#232945]">
+              <div className="flex">
+                <button
+                  onClick={() => setActiveTab("chat")}
+                  className={`flex-1 flex items-center justify-center gap-2 px-4 py-4 font-medium transition-all ${
+                    activeTab === "chat"
+                      ? "bg-purple-600/20 text-purple-400 border-b-2 border-purple-500"
+                      : "text-gray-400 hover:text-white hover:bg-[#0f1419]"
+                  }`}
+                >
+                  <Mail className="w-5 h-5" />
+                  <span>Chat</span>
+                  {messages.length > 0 && (
+                    <span className="px-2 py-0.5 rounded-full bg-blue-600/30 text-blue-400 text-xs">
+                      {messages.length}
+                    </span>
+                  )}
+                </button>
+                <button
+                  onClick={() => setActiveTab("tasks")}
+                  className={`flex-1 flex items-center justify-center gap-2 px-4 py-4 font-medium transition-all ${
+                    activeTab === "tasks"
+                      ? "bg-purple-600/20 text-purple-400 border-b-2 border-purple-500"
+                      : "text-gray-400 hover:text-white hover:bg-[#0f1419]"
+                  }`}
+                >
+                  <ListTodo className="w-5 h-5" />
+                  <span>Tasks</span>
+                  {tasks.length > 0 && (
+                    <span className="px-2 py-0.5 rounded-full bg-green-600/30 text-green-400 text-xs">
+                      {tasks.length}
+                    </span>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* Chat Tab Content */}
+            {activeTab === "chat" && (
+              <>
+                {/* Chat Header */}
+                <div className="p-4 sm:p-6 border-b border-[#232945] space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h2 className="text-base sm:text-lg font-semibold text-white flex items-center gap-2">
+                        <Mail className="w-5 h-5 text-blue-400" />
+                        Project Conversation
+                      </h2>
+                      <p className="text-xs sm:text-sm text-gray-400 mt-1">
+                        {messages.length} message{messages.length !== 1 ? "s" : ""}
+                      </p>
+                    </div>
 
                 <div className="flex gap-2">
                   <button
@@ -1113,6 +1294,29 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                 </div>
               )}
 
+              {/* Quick Replies */}
+              {quickReplies.length > 0 && newMessage.length === 0 && (
+                <div className="mb-3 p-3 bg-[#0f1419] border border-[#232945] rounded-lg">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Zap className="w-4 h-4 text-yellow-400" />
+                    <span className="text-xs text-gray-400">Quick Replies:</span>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {quickReplies.map((reply, idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => handleQuickReply(reply)}
+                        className="px-3 py-1.5 bg-gradient-to-r from-blue-600/20 to-purple-600/20 hover:from-blue-600/30 hover:to-purple-600/30 border border-blue-500/30 rounded-full text-xs text-gray-200 transition-all hover:scale-105 flex items-center gap-1"
+                      >
+                        <Lightbulb className="w-3 h-3 text-yellow-400" />
+                        {reply}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Formatting Toolbar */}
               {showFormatting && (
                 <div className="mb-3 p-3 bg-[#0f1419] border border-[#232945] rounded-lg">
@@ -1178,6 +1382,65 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                 </button>
 
                 <div className="flex-1 relative">
+                  {/* Suggestions Dropdown */}
+                  {showSuggestions && suggestions.length > 0 && (
+                    <div
+                      ref={suggestionsRef}
+                      className="absolute bottom-full left-0 right-0 mb-2 bg-gray-900 border border-[#232945] rounded-lg shadow-2xl max-h-64 overflow-y-auto z-50"
+                    >
+                      <div className="p-2 border-b border-[#232945] flex items-center gap-2 sticky top-0 bg-gray-900">
+                        <Sparkles className="w-4 h-4 text-blue-400" />
+                        <span className="text-xs text-gray-400">
+                          Suggestions ({suggestions.length}) • <kbd className="px-1 py-0.5 bg-gray-700 rounded text-[10px]">↑↓</kbd> to navigate • <kbd className="px-1 py-0.5 bg-gray-700 rounded text-[10px]">Tab</kbd> or <kbd className="px-1 py-0.5 bg-gray-700 rounded text-[10px]">Enter</kbd> to select
+                        </span>
+                      </div>
+                      {suggestions.map((suggestion, idx) => (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => acceptSuggestion(suggestion)}
+                          className={`w-full text-left px-4 py-2 hover:bg-gray-800 transition-colors border-l-2 ${
+                            idx === selectedSuggestionIndex
+                              ? "bg-gray-800 border-blue-500"
+                              : "border-transparent"
+                          }`}
+                        >
+                          <div className="flex items-start gap-2">
+                            <div className="flex-shrink-0 mt-1">
+                              {suggestion.type === "history" && (
+                                <Clock className="w-3 h-3 text-gray-400" />
+                              )}
+                              {suggestion.type === "quick" && (
+                                <Zap className="w-3 h-3 text-yellow-400" />
+                              )}
+                              {suggestion.type === "task" && (
+                                <Check className="w-3 h-3 text-green-400" />
+                              )}
+                              {suggestion.type === "project" && (
+                                <File className="w-3 h-3 text-blue-400" />
+                              )}
+                              {suggestion.type === "frequent" && (
+                                <Sparkles className="w-3 h-3 text-purple-400" />
+                              )}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm text-gray-200 truncate">
+                                {suggestion.text}
+                              </p>
+                              <p className="text-xs text-gray-500 capitalize">
+                                {suggestion.type === "history" && "From your history"}
+                                {suggestion.type === "quick" && "Quick reply"}
+                                {suggestion.type === "task" && "Task suggestion"}
+                                {suggestion.type === "project" && "Project suggestion"}
+                                {suggestion.type === "frequent" && "Frequently used"}
+                              </p>
+                            </div>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
                   <textarea
                     ref={textareaRef}
                     value={newMessage}
@@ -1191,10 +1454,43 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                       scrollToBottom();
                     }}
                     onKeyDown={(e) => {
+                      // Handle suggestion navigation
+                      if (showSuggestions && suggestions.length > 0) {
+                        if (e.key === "ArrowDown") {
+                          e.preventDefault();
+                          setSelectedSuggestionIndex(prev =>
+                            prev < suggestions.length - 1 ? prev + 1 : 0
+                          );
+                          return;
+                        }
+                        if (e.key === "ArrowUp") {
+                          e.preventDefault();
+                          setSelectedSuggestionIndex(prev =>
+                            prev > 0 ? prev - 1 : suggestions.length - 1
+                          );
+                          return;
+                        }
+                        if (e.key === "Tab") {
+                          e.preventDefault();
+                          acceptSuggestion(suggestions[selectedSuggestionIndex]);
+                          return;
+                        }
+                        if (e.key === "Escape") {
+                          e.preventDefault();
+                          setShowSuggestions(false);
+                          return;
+                        }
+                      }
+
                       // Send message on Enter (without Shift)
                       if (e.key === "Enter" && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
                         e.preventDefault();
-                        handleSendMessage(e);
+                        // Accept suggestion if visible
+                        if (showSuggestions && suggestions.length > 0) {
+                          acceptSuggestion(suggestions[selectedSuggestionIndex]);
+                        } else {
+                          handleSendMessage(e);
+                        }
                         return;
                       }
 
@@ -1290,6 +1586,206 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                 <span className="font-medium">Shortcuts:</span> Shift+Enter (new line) • Ctrl+B (bold) • Ctrl+I (italic) • Max 5 files • Click formatting button for more options
               </p>
             </div>
+              </>
+            )}
+
+            {/* Tasks Tab Content */}
+            {activeTab === "tasks" && (
+              <div className="flex-1 overflow-y-auto p-4 sm:p-6">
+                {loadingTasks ? (
+                  <div className="flex items-center justify-center h-full">
+                    <div className="w-12 h-12 border-4 border-blue-500/20 border-t-blue-500 rounded-full animate-spin"></div>
+                  </div>
+                ) : tasks.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center h-full text-center">
+                    <ListTodo className="w-12 h-12 sm:w-16 sm:h-16 text-gray-600 mb-4" />
+                    <p className="text-gray-500 text-sm sm:text-base">No tasks for this project</p>
+                    <p className="text-gray-600 text-xs sm:text-sm mt-2">
+                      Tasks will appear here when added to this project
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {tasks.map((task) => (
+                      <div
+                        key={task._id}
+                        className="bg-[#0f1419] rounded-lg border border-[#232945] p-4 sm:p-6 hover:border-purple-500/50 transition-colors"
+                      >
+                        <div className="flex items-start justify-between gap-4 mb-4">
+                          <div className="flex-1 min-w-0">
+                            <h3 className="text-white font-semibold text-base sm:text-lg mb-2 flex items-center gap-2">
+                              {task.title}
+                              <span
+                                className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                                  task.priority === "High"
+                                    ? "bg-red-500/20 text-red-400 border border-red-500/50"
+                                    : task.priority === "Medium"
+                                    ? "bg-yellow-500/20 text-yellow-400 border border-yellow-500/50"
+                                    : "bg-blue-500/20 text-blue-400 border border-blue-500/50"
+                                }`}
+                              >
+                                {task.priority}
+                              </span>
+                            </h3>
+                            {task.description && (
+                              <p className="text-gray-400 text-sm mb-3">{task.description}</p>
+                            )}
+
+                            <div className="flex flex-wrap gap-3 text-xs text-gray-500">
+                              <div className="flex items-center gap-1">
+                                <Calendar className="w-3 h-3" />
+                                <span>Due: {task.dueDate ? new Date(task.dueDate).toLocaleDateString() : "No due date"}</span>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <Users className="w-3 h-3" />
+                                <span>{task.assignedTo?.length || 0} assigned</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          <span
+                            className={`px-3 py-1 rounded-full text-xs font-medium flex-shrink-0 ${
+                              task.status === "completed"
+                                ? "bg-green-500/20 text-green-400 border border-green-500/50"
+                                : task.status === "in-progress"
+                                ? "bg-blue-500/20 text-blue-400 border border-blue-500/50"
+                                : task.status === "rejected"
+                                ? "bg-red-500/20 text-red-400 border border-red-500/50"
+                                : "bg-gray-500/20 text-gray-400 border border-gray-500/50"
+                            }`}
+                          >
+                            {task.status}
+                          </span>
+                        </div>
+
+                        {/* Submission Details */}
+                        {task.submittedAt && (
+                          <div className="mt-4 pt-4 border-t border-[#232945]">
+                            <div className="mb-3">
+                              <p className="text-xs text-gray-500 mb-2">Submitted by: {task.assignedTo?.[0]?.name || "Unknown"}</p>
+                              <p className="text-xs text-gray-500">
+                                Submitted on: {new Date(task.submittedAt).toLocaleString()}
+                              </p>
+                            </div>
+
+                            {task.submissionUrl && (
+                              <div className="mb-2">
+                                <p className="text-xs text-gray-400 mb-1">URL:</p>
+                                <a
+                                  href={task.submissionUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-blue-400 hover:text-blue-300 text-sm flex items-center gap-1 underline"
+                                >
+                                  {task.submissionUrl}
+                                  <ExternalLink className="w-3 h-3" />
+                                </a>
+                              </div>
+                            )}
+
+                            {task.submissionText && (
+                              <div className="mb-2">
+                                <p className="text-xs text-gray-400 mb-1">Details:</p>
+                                <p className="text-white text-sm bg-black/20 p-3 rounded">{task.submissionText}</p>
+                              </div>
+                            )}
+
+                            {task.submissionRemark && (
+                              <div className="mb-2">
+                                <p className="text-xs text-gray-400 mb-1">Remark:</p>
+                                <p className="text-gray-300 text-sm italic">{task.submissionRemark}</p>
+                              </div>
+                            )}
+
+                            {/* Approval Status */}
+                            <div className="mt-4">
+                              <div className="flex items-center gap-2 mb-2">
+                                <p className="text-xs text-gray-400">Approval Status:</p>
+                                <span
+                                  className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                                    task.approvalStatus === "approved"
+                                      ? "bg-green-500/20 text-green-400"
+                                      : task.approvalStatus === "rejected"
+                                      ? "bg-red-500/20 text-red-400"
+                                      : "bg-yellow-500/20 text-yellow-400"
+                                  }`}
+                                >
+                                  {task.approvalStatus}
+                                </span>
+                              </div>
+
+                              {task.approvalRemark && (
+                                <div className="mb-3">
+                                  <p className="text-xs text-gray-400 mb-1">Admin Feedback:</p>
+                                  <p className="text-white text-sm bg-purple-600/10 p-3 rounded border border-purple-500/30">
+                                    {task.approvalRemark}
+                                  </p>
+                                </div>
+                              )}
+
+                              {/* Approval Actions (Only for admin and pending submissions) */}
+                              {(userRole === "super-admin" || userRole === "superadmin") && task.approvalStatus === "pending" && (
+                                <div className="mt-3">
+                                  {selectedTask === task._id ? (
+                                    <div className="space-y-3">
+                                      <textarea
+                                        value={approvalRemark}
+                                        onChange={(e) => setApprovalRemark(e.target.value)}
+                                        placeholder="Add feedback (optional for approval, required for rejection)..."
+                                        className="w-full px-3 py-2 bg-[#191f2b] border border-[#232945] rounded-lg text-white text-sm placeholder-gray-500 focus:outline-none focus:border-purple-500 h-20 resize-none"
+                                      />
+                                      <div className="flex gap-2">
+                                        <button
+                                          onClick={() => handleApproveSubmission(task._id)}
+                                          className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-green-600/20 hover:bg-green-600/40 text-green-400 rounded-lg border border-green-500/30 transition-colors"
+                                        >
+                                          <ThumbsUp className="w-4 h-4" />
+                                          Approve
+                                        </button>
+                                        <button
+                                          onClick={() => handleRejectSubmission(task._id)}
+                                          className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-red-600/20 hover:bg-red-600/40 text-red-400 rounded-lg border border-red-500/30 transition-colors"
+                                        >
+                                          <ThumbsDown className="w-4 h-4" />
+                                          Reject
+                                        </button>
+                                        <button
+                                          onClick={() => {
+                                            setSelectedTask(null);
+                                            setApprovalRemark("");
+                                          }}
+                                          className="px-4 py-2 bg-gray-600/20 hover:bg-gray-600/40 text-gray-400 rounded-lg transition-colors"
+                                        >
+                                          Cancel
+                                        </button>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <button
+                                      onClick={() => setSelectedTask(task._id)}
+                                      className="w-full px-4 py-2 bg-purple-600/20 hover:bg-purple-600/40 text-purple-400 rounded-lg border border-purple-500/30 transition-colors font-medium"
+                                    >
+                                      Review Submission
+                                    </button>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* No submission yet */}
+                        {!task.submittedAt && (
+                          <div className="mt-4 pt-4 border-t border-[#232945]">
+                            <p className="text-gray-500 text-sm italic">No submission yet</p>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>

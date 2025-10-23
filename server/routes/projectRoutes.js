@@ -54,6 +54,7 @@ router.get("/", protect, async (req, res) => {
       .populate("assignedTo", "name email")
       .populate("client", "clientName businessName email")
       .populate("createdBy", "name email")
+      .populate("tasks", "title status priority dueDate")  // ✅ Populate tasks for progress calculation
       .sort({ createdAt: -1 });
 
     res.json(projects);
@@ -141,7 +142,8 @@ router.get("/:id", protect, async (req, res) => {
       .populate("client", "clientName businessName email")
       .populate("createdBy", "name email")
       .populate("notes.createdBy", "name email")
-      .populate("attachments.uploadedBy", "name email");
+      .populate("attachments.uploadedBy", "name email")
+      .populate("tasks", "title description status priority dueDate assignedTo");
 
     if (!project) {
       return res.status(404).json({ message: "Project not found" });
@@ -450,6 +452,7 @@ router.get("/employee/:employeeId", protect, async (req, res) => {
     const projects = await Project.find({ assignedTo: req.params.employeeId })
       .populate("assignedTo", "name email")
       .populate("client", "clientName businessName email")
+      .populate("tasks", "title status priority dueDate")
       .sort({ createdAt: -1 });
 
     res.json(projects);
@@ -467,6 +470,7 @@ router.get("/client/:clientId", protect, async (req, res) => {
     const projects = await Project.find({ client: req.params.clientId })
       .populate("assignedTo", "name email")
       .populate("client", "clientName businessName email")
+      .populate("tasks", "title status priority dueDate")
       .sort({ createdAt: -1 });
 
     res.json(projects);

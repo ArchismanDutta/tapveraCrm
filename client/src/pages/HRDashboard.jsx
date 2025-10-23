@@ -33,8 +33,6 @@ import WishingModal from "../components/humanResource/WishingModal";
 import FlexibleRequestsModal from "../components/humanResource/FlexibleRequestsModal";
 import CelebrationPopup from "../components/common/CelebrationPopup";
 import useCelebrationNotifications from "../hooks/useCelebrationNotifications";
-import DiwaliWelcome from "../components/common/DiwaliWelcome";
-import { useDiwaliWelcome } from "../hooks/useDiwaliWelcome";
 
 const SIDEBAR_WIDTH_EXPANDED = 288;
 const SIDEBAR_WIDTH_COLLAPSED = 80;
@@ -52,9 +50,6 @@ const HRDashboard = ({ onLogout }) => {
   const [loading, setLoading] = useState(true);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [refreshing, setRefreshing] = useState(false);
-
-  // Diwali Welcome
-  const { showDiwali, dismissDiwali, loading: diwaliLoading } = useDiwaliWelcome("hr_dashboard");
 
   // Celebration notifications
   const {
@@ -299,9 +294,6 @@ const HRDashboard = ({ onLogout }) => {
 
   return (
     <>
-      {/* Diwali Welcome Overlay */}
-      {showDiwali && <DiwaliWelcome onClose={dismissDiwali} />}
-
       <div className="flex bg-[#0f1419] min-h-screen text-white relative overflow-hidden">
         {/* Animated Background */}
         <div className="absolute inset-0 bg-gradient-to-br from-slate-900/20 via-blue-900/10 to-purple-900/20"></div>

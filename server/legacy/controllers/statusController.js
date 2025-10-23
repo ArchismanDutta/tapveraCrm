@@ -9,7 +9,7 @@ const attendanceService = require("../services/attendanceCalculationService");
 // Constants
 // -----------------------
 const MIN_HALF_DAY_SECONDS = 5 * 3600; // 5 hours
-const MIN_FULL_DAY_SECONDS = 8 * 3600; // 8 hours
+const MIN_FULL_DAY_SECONDS = 7.5 * 3600; // 7.5 hours
 
 // Event types constants for consistency
 const EVENT_TYPES = {

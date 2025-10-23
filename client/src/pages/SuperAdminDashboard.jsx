@@ -29,8 +29,6 @@ import EmployeeRow from "../components/superadmin/EmployeeRow";
 import Sidebar from "../components/dashboard/Sidebar";
 import CelebrationPopup from "../components/common/CelebrationPopup";
 import useCelebrationNotifications from "../hooks/useCelebrationNotifications";
-import DiwaliWelcome from "../components/common/DiwaliWelcome";
-import { useDiwaliWelcome } from "../hooks/useDiwaliWelcome";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
 
@@ -68,9 +66,6 @@ const SuperAdminDashboard = ({ onLogout }) => {
     showPopup: showCelebrationPopup,
     closePopup: closeCelebrationPopup
   } = useCelebrationNotifications();
-
-  // Diwali Welcome
-  const { showDiwali, dismissDiwali } = useDiwaliWelcome("superadmin_dashboard");
 
   // Update time every second
   useEffect(() => {
@@ -484,9 +479,6 @@ const SuperAdminDashboard = ({ onLogout }) => {
 
   return (
     <>
-      {/* Diwali Welcome Overlay */}
-      {showDiwali && <DiwaliWelcome onClose={dismissDiwali} />}
-
       <div className="flex bg-[#0f1419] min-h-screen text-white relative overflow-hidden">
         {/* Animated Background */}
         <div className="absolute inset-0 bg-gradient-to-br from-slate-900/20 via-blue-900/10 to-purple-900/20"></div>

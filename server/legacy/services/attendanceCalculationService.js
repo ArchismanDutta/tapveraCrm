@@ -6,11 +6,11 @@ const FlexibleShiftRequest = require("../models/FlexibleShiftRequest");
 const ATTENDANCE_RULES = {
   // Standard rules for work hours (not including break)
   MIN_HALF_DAY_WORK_HOURS: 5,
-  MIN_FULL_DAY_WORK_HOURS: 8,
+  MIN_FULL_DAY_WORK_HOURS: 7.5,
 
   // FlexiblePermanent rules (total hours including break)
   FLEXIBLE_MIN_HALF_DAY_TOTAL_HOURS: 5,
-  FLEXIBLE_MIN_FULL_DAY_TOTAL_HOURS: 9, // 8 work + 1 break
+  FLEXIBLE_MIN_FULL_DAY_TOTAL_HOURS: 9, // 7.5 work + 1.5 break
 
   // Early punch allowance (minutes before shift start)
   EARLY_PUNCH_ALLOWANCE_MINUTES: 120,
