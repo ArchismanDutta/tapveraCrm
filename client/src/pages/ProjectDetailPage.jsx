@@ -46,6 +46,7 @@ import {
   Plus,
   Edit2,
   Star,
+  Briefcase,
 } from "lucide-react";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
@@ -890,19 +891,32 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                     className="flex items-center gap-3 p-3 bg-[#0f1419] rounded-lg border border-[#232945]"
                   >
                     <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white font-semibold flex-shrink-0">
-                      {(emp.name || emp._id || "U").charAt(0).toUpperCase()}
+                      {(emp.name || emp.employeeId || "U").charAt(0).toUpperCase()}
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="text-white font-medium text-sm truncate">
-                        {emp.name || emp._id || "Unknown Employee"}
-                      </p>
-                      <p className="text-xs text-gray-400 truncate">
-                        {emp.email || "No email available"}
-                      </p>
-                      {!emp.name && emp._id && (
-                        <p className="text-xs text-yellow-400 mt-1">
-                          ⚠️ User data not populated (ID: {emp._id.substring(0, 8)}...)
-                        </p>
+                      {(userRole === "admin" || userRole === "super-admin" || userRole === "superadmin") ? (
+                        // Show name for admins/super-admins
+                        <>
+                          <p className="text-white font-medium text-sm">
+                            {emp.name || "Unknown"}
+                          </p>
+                          <p className="text-xs text-blue-400">
+                            {emp.designation || "No designation"}
+                          </p>
+                        </>
+                      ) : (
+                        // Show employee ID and designation for clients
+                        <>
+                          <div className="flex items-center gap-2 mb-1">
+                            <Briefcase className="w-3 h-3 text-purple-400 flex-shrink-0" />
+                            <p className="text-white font-medium text-sm">
+                              {emp.employeeId || emp._id?.substring(0, 8) || "N/A"}
+                            </p>
+                          </div>
+                          <p className="text-xs text-blue-400">
+                            {emp.designation || "No designation"}
+                          </p>
+                        </>
                       )}
                     </div>
                   </div>
@@ -1779,10 +1793,29 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                                         key={idx}
                                         className="flex items-center gap-2 bg-purple-600/10 border border-purple-500/30 rounded-full px-3 py-1"
                                       >
-                                        <div className="w-5 h-5 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white text-xs font-semibold">
-                                          {(emp.name || "U").charAt(0).toUpperCase()}
-                                        </div>
-                                        <span className="text-white text-xs font-medium">{emp.name || "Unknown"}</span>
+                                        {(userRole === "admin" || userRole === "super-admin" || userRole === "superadmin") ? (
+                                          // Show name for admins/super-admins
+                                          <>
+                                            <div className="w-5 h-5 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white text-[10px] font-semibold flex-shrink-0">
+                                              {(emp.name || "U").charAt(0).toUpperCase()}
+                                            </div>
+                                            <span className="text-white text-xs font-medium">
+                                              {emp.name || "Unknown"}
+                                            </span>
+                                          </>
+                                        ) : (
+                                          // Show employee ID and designation for clients
+                                          <>
+                                            <Briefcase className="w-3 h-3 text-purple-400" />
+                                            <span className="text-white text-xs font-medium">
+                                              {emp.employeeId || emp._id?.substring(0, 8) || "N/A"}
+                                            </span>
+                                            <span className="text-gray-400 text-xs">|</span>
+                                            <span className="text-blue-400 text-xs">
+                                              {emp.designation || "No designation"}
+                                            </span>
+                                          </>
+                                        )}
                                       </div>
                                     ))}
                                   </div>
@@ -1810,7 +1843,13 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                         {task.submittedAt && (
                           <div className="mt-4 pt-4 border-t border-[#232945]">
                             <div className="mb-3">
-                              <p className="text-xs text-gray-500 mb-2">Submitted by: {task.assignedTo?.[0]?.name || "Unknown"}</p>
+                              <p className="text-xs text-gray-500 mb-2">
+                                Submitted by: {
+                                  (userRole === "admin" || userRole === "super-admin" || userRole === "superadmin")
+                                    ? (task.assignedTo?.[0]?.name || "Unknown")
+                                    : `${task.assignedTo?.[0]?.employeeId || task.assignedTo?.[0]?._id?.substring(0, 8) || "Unknown"} (${task.assignedTo?.[0]?.designation || "No designation"})`
+                                }
+                              </p>
                               <p className="text-xs text-gray-500">
                                 Submitted on: {new Date(task.submittedAt).toLocaleString()}
                               </p>
