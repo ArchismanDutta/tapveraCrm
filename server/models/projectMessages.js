@@ -4,13 +4,13 @@ const Message = require("../models/Message");
 const Project = require("../models/Project");
 const User = require("../models/User");
 const Client = require("../models/Client");
-const { authenticateToken } = require("../middleware/auth");
+const { protect } = require("../middlewares/authMiddleware");
 const { uploadToS3, getFileType, convertToCloudFrontUrl, isS3Configured } = require("../config/s3Config");
 
 // Get all messages for a project
 router.get(
   "/api/projects/:projectId/messages",
-  authenticateToken,
+  protect,
   async (req, res) => {
     try {
       const { projectId } = req.params;
@@ -22,7 +22,7 @@ router.get(
       }
 
       // Check if user has access to this project
-      const userId = req.user.id;
+      const userId = req.user._id;
       const userRole = req.user.role;
 
       if (userRole === "client") {
@@ -98,13 +98,13 @@ router.get(
 // Send a message with optional file attachments
 router.post(
   "/api/projects/:projectId/messages",
-  authenticateToken,
+  protect,
   uploadToS3.array("files", 5), // Allow up to 5 files
   async (req, res) => {
     try {
       const { projectId } = req.params;
       const { message, senderType, replyTo } = req.body;
-      const userId = req.user.id;
+      const userId = req.user._id;
       const userRole = req.user.role;
 
       if (!message || !message.trim()) {
@@ -142,6 +142,9 @@ router.post(
             ? convertToCloudFrontUrl(file.location) // CloudFront URL
             : `/uploads/messages/${file.filename}`; // Local URL
 
+          // Extract S3 key from file location for deletion
+          const s3Key = isS3Configured && file.key ? file.key : null;
+
           attachments.push({
             filename: file.originalname,
             url: fileUrl,
@@ -149,6 +152,8 @@ router.post(
             mimeType: file.mimetype,
             fileType: getFileType(file.mimetype),
             uploadedAt: new Date(),
+            isImportant: false, // Default to not important
+            s3Key: s3Key, // Store S3 key for future deletion
           });
         }
       }
@@ -192,11 +197,11 @@ router.post(
 // Mark messages as read
 router.patch(
   "/api/projects/:projectId/messages/mark-read",
-  authenticateToken,
+  protect,
   async (req, res) => {
     try {
       const { projectId } = req.params;
-      const userId = req.user.id;
+      const userId = req.user._id;
       const userRole = req.user.role;
 
       const senderModel = userRole === "client" ? "Client" : "User";
@@ -228,11 +233,11 @@ router.patch(
 // Delete a message (only sender or superadmin)
 router.delete(
   "/api/projects/:projectId/messages/:messageId",
-  authenticateToken,
+  protect,
   async (req, res) => {
     try {
       const { projectId, messageId } = req.params;
-      const userId = req.user.id;
+      const userId = req.user._id;
       const userRole = req.user.role;
 
       const message = await Message.findById(messageId);
@@ -257,11 +262,11 @@ router.delete(
 // Get unread message count for a project
 router.get(
   "/api/projects/:projectId/messages/unread-count",
-  authenticateToken,
+  protect,
   async (req, res) => {
     try {
       const { projectId } = req.params;
-      const userId = req.user.id;
+      const userId = req.user._id;
 
       const count = await Message.countDocuments({
         project: projectId,
@@ -280,12 +285,12 @@ router.get(
 // Add or remove reaction to a message
 router.post(
   "/api/projects/:projectId/messages/:messageId/react",
-  authenticateToken,
+  protect,
   async (req, res) => {
     try {
       const { messageId } = req.params;
       const { emoji } = req.body;
-      const userId = req.user.id;
+      const userId = req.user._id;
       const userRole = req.user.role;
 
       if (!emoji) {

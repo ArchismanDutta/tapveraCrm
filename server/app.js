@@ -42,6 +42,7 @@ const notepadRoutes = require("./routes/notepadRoutes");
 const clientRoutes = require("./routes/clientRoutes");
 const projectRoutes = require("./routes/projectRoutes");
 const notificationRoutes = require("./routes/notificationRoutes");
+const mediaRoutes = require("./routes/mediaRoutes");
 
 // Controllers
 const ChatController = require("./controllers/chatController");
@@ -130,6 +131,7 @@ app.use("/api/notepad", notepadRoutes);
 app.use("/api/clients", clientRoutes);
 app.use("/api/projects", projectRoutes);
 app.use("/api/notifications", notificationRoutes);
+app.use("/api/media", mediaRoutes);
 
 // =====================
 // Serve frontend in production
@@ -436,6 +438,16 @@ mongoose
   })
   .then(() => {
     console.log("✅ Connected to MongoDB");
+
+    // Initialize cron jobs after DB connection
+    try {
+      const { initializeCronJobs } = require("./jobs/cronJobs");
+      initializeCronJobs();
+    } catch (error) {
+      console.error("⚠️  Cron jobs initialization failed:", error.message);
+      console.log("   Install node-cron: npm install node-cron");
+    }
+
     server.listen(PORT, () =>
       console.log(`🚀 Server running at http://localhost:${PORT}`)
     );

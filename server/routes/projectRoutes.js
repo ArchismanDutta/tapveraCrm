@@ -710,4 +710,47 @@ router.post("/:id/messages/:messageId/react", protect, async (req, res) => {
   }
 });
 
+// @route   PATCH /api/projects/:id/messages/:messageId/attachments/:attachmentId/toggle-important
+// @desc    Toggle attachment importance (mark as favorite to prevent auto-deletion)
+// @access  Private
+router.patch("/:id/messages/:messageId/attachments/:attachmentId/toggle-important", protect, async (req, res) => {
+  try {
+    const Message = require("../models/Message");
+    const { messageId, attachmentId } = req.params;
+
+    const message = await Message.findById(messageId);
+    if (!message) {
+      return res.status(404).json({ message: "Message not found" });
+    }
+
+    // Verify message belongs to the project
+    if (message.project.toString() !== req.params.id) {
+      return res.status(403).json({ message: "Message does not belong to this project" });
+    }
+
+    // Find the attachment
+    const attachment = message.attachments.id(attachmentId);
+    if (!attachment) {
+      return res.status(404).json({ message: "Attachment not found" });
+    }
+
+    // Toggle the importance flag
+    attachment.isImportant = !attachment.isImportant;
+    await message.save();
+
+    // Populate and return updated message
+    const populatedMessage = await Message.findById(message._id)
+      .populate("sentBy", "name email clientName");
+
+    res.json({
+      message: "Attachment importance toggled",
+      isImportant: attachment.isImportant,
+      attachment: attachment,
+    });
+  } catch (error) {
+    console.error("Error toggling attachment importance:", error);
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
+});
+
 module.exports = router;

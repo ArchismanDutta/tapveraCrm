@@ -342,8 +342,25 @@ exports.getTaskById = async (req, res) => {
 exports.getTasks = async (req, res) => {
   try {
     let query = {};
+
+    // Role-based filtering
     if (!["admin", "super-admin"].includes(req.user.role)) {
       query = { $or: [{ assignedTo: req.user._id }, { assignedBy: req.user._id }] };
+    }
+
+    // Filter by project if provided
+    if (req.query.project) {
+      query.project = req.query.project;
+    }
+
+    // Filter by status if provided
+    if (req.query.status) {
+      query.status = req.query.status;
+    }
+
+    // Filter by priority if provided
+    if (req.query.priority) {
+      query.priority = req.query.priority;
     }
 
     const tasks = await populateTask(Task.find(query)).lean();

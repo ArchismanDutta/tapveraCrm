@@ -48,6 +48,11 @@ const messageSchema = new mongoose.Schema(
           type: Date,
           default: Date.now,
         },
+        isImportant: {
+          type: Boolean,
+          default: false,
+        },
+        s3Key: String, // AWS S3 object key for deletion
       },
     ],
     readBy: [

@@ -381,7 +381,7 @@ const AppWrapper = () => {
           }
         />
 
-        {/* Notification Center */}
+        {/*  Center */}
         <Route
           path="/notifications"
           element={

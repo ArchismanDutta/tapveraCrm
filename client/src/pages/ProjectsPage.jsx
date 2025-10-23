@@ -356,43 +356,11 @@ const ProjectsPage = ({ onLogout }) => {
       // Update the project
       await API.put(`/api/projects/${selectedProject._id}`, form);
 
-      // Handle tasks: update existing ones and create new ones
-      const validTasks = projectTasks.filter(t => t.title.trim());
-
-      for (const task of validTasks) {
-        if (task.isExisting && task._id) {
-          // Update existing task
-          if (!task.deleted) {
-            await API.put(`/api/tasks/${task._id}`, {
-              title: task.title,
-              description: task.description,
-              dueDate: task.dueDate,
-              priority: task.priority,
-              status: task.status
-            });
-          } else {
-            // Delete task if marked for deletion
-            await API.delete(`/api/tasks/${task._id}`);
-          }
-        } else if (!task.isExisting) {
-          // Create new task
-          await API.post("/api/tasks", {
-            title: task.title,
-            description: task.description,
-            assignedBy: selectedProject.createdBy,
-            assignedTo: form.assignedTo,
-            dueDate: task.dueDate,
-            priority: task.priority,
-            project: selectedProject._id
-          });
-        }
-      }
-
       setShowEditModal(false);
       setSelectedProject(null);
       resetForm();
       fetchProjects();
-      showNotification("Project and tasks updated successfully!", "success");
+      showNotification("Project updated successfully!", "success");
     } catch (error) {
       showNotification(error.response?.data?.message || "Error updating project", "error");
     } finally {
@@ -522,23 +490,6 @@ const ProjectsPage = ({ onLogout }) => {
       description: project.description || "",
       priority: project.priority || "Medium"
     });
-
-    // Fetch existing tasks for this project
-    try {
-      const res = await API.get(`/api/tasks?project=${project._id}`);
-      setProjectTasks(res.data.map(task => ({
-        _id: task._id,
-        title: task.title,
-        description: task.description || "",
-        dueDate: task.dueDate ? new Date(task.dueDate).toISOString().split('T')[0] : "",
-        priority: task.priority || "Medium",
-        status: task.status || "Pending",
-        isExisting: true
-      })));
-    } catch (error) {
-      console.error("Error fetching tasks:", error);
-      setProjectTasks([]);
-    }
 
     setShowEditModal(true);
   };
@@ -2047,166 +1998,7 @@ const ProjectsPage = ({ onLogout }) => {
 
 
 
-              {/* Project Tasks Section */}
-              <div className="border-t border-[#232945] pt-4 mt-4">
-                <div className="flex items-center justify-between mb-3">
-                  <label className="block text-sm text-gray-400">
-                    Project Tasks ({projectTasks.filter(t => !t.deleted).length})
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => setProjectTasks([...projectTasks, {
-                      title: '',
-                      description: '',
-                      dueDate: '',
-                      priority: 'Medium',
-                      status: 'Pending',
-                      isExisting: false
-                    }])}
-                    className="px-3 py-1 bg-blue-600/20 text-blue-400 rounded-lg hover:bg-blue-600/30 transition-colors text-sm flex items-center gap-1"
-                  >
-                    <Plus className="w-3 h-3" />
-                    Add Task
-                  </button>
-                </div>
-
-                {projectTasks.filter(t => !t.deleted).length > 0 ? (
-                  <div className="space-y-3 max-h-80 overflow-y-auto">
-                    {projectTasks.map((task, index) => {
-                      if (task.deleted) return null;
-                      return (
-                        <div key={index} className={`p-4 rounded-lg border ${
-                          task.isExisting
-                            ? 'bg-[#0f1419] border-[#232945]'
-                            : 'bg-blue-900/10 border-blue-500/30'
-                        }`}>
-                          <div className="flex items-start justify-between mb-3">
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs text-gray-500 font-medium">
-                                {task.isExisting ? `Task ${index + 1} (Existing)` : `Task ${index + 1} (New)`}
-                              </span>
-                              {task.isExisting && task.status && (
-                                <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                                  task.status === 'Completed' ? 'bg-green-600/20 text-green-400 border border-green-500/50' :
-                                  task.status === 'In Progress' ? 'bg-blue-600/20 text-blue-400 border border-blue-500/50' :
-                                  'bg-gray-600/20 text-gray-400 border border-gray-500/50'
-                                }`}>
-                                  {task.status}
-                                </span>
-                              )}
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                if (task.isExisting) {
-                                  // Mark existing task for deletion
-                                  const updated = [...projectTasks];
-                                  updated[index].deleted = true;
-                                  setProjectTasks(updated);
-                                } else {
-                                  // Remove new task from array
-                                  setProjectTasks(projectTasks.filter((_, i) => i !== index));
-                                }
-                              }}
-                              className="text-red-400 hover:text-red-300 transition-colors"
-                            >
-                              <X className="w-4 h-4" />
-                            </button>
-                          </div>
-
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                            <div className="md:col-span-2">
-                              <label className="block text-xs text-gray-500 mb-1">Task Title *</label>
-                              <input
-                                type="text"
-                                value={task.title}
-                                onChange={(e) => {
-                                  const updated = [...projectTasks];
-                                  updated[index].title = e.target.value;
-                                  setProjectTasks(updated);
-                                }}
-                                className="w-full px-3 py-2 bg-[#141a21] border border-[#232945] rounded-lg text-white text-sm focus:outline-none focus:border-blue-500"
-                                placeholder="Enter task title"
-                              />
-                            </div>
-
-                            <div className="md:col-span-2">
-                              <label className="block text-xs text-gray-500 mb-1">Task Description</label>
-                              <textarea
-                                value={task.description}
-                                onChange={(e) => {
-                                  const updated = [...projectTasks];
-                                  updated[index].description = e.target.value;
-                                  setProjectTasks(updated);
-                                }}
-                                className="w-full px-3 py-2 bg-[#141a21] border border-[#232945] rounded-lg text-white text-sm focus:outline-none focus:border-blue-500 h-16 resize-none"
-                                placeholder="Enter task description"
-                              ></textarea>
-                            </div>
-
-                            <div>
-                              <label className="block text-xs text-gray-500 mb-1">Due Date</label>
-                              <input
-                                type="date"
-                                value={task.dueDate}
-                                onChange={(e) => {
-                                  const updated = [...projectTasks];
-                                  updated[index].dueDate = e.target.value;
-                                  setProjectTasks(updated);
-                                }}
-                                className="w-full px-3 py-2 bg-[#141a21] border border-[#232945] rounded-lg text-white text-sm focus:outline-none focus:border-blue-500"
-                              />
-                            </div>
-
-                            <div>
-                              <label className="block text-xs text-gray-500 mb-1">Priority</label>
-                              <select
-                                value={task.priority}
-                                onChange={(e) => {
-                                  const updated = [...projectTasks];
-                                  updated[index].priority = e.target.value;
-                                  setProjectTasks(updated);
-                                }}
-                                className="w-full px-3 py-2 bg-[#141a21] border border-[#232945] rounded-lg text-white text-sm focus:outline-none focus:border-blue-500"
-                              >
-                                <option value="Low">Low</option>
-                                <option value="Medium">Medium</option>
-                                <option value="High">High</option>
-                              </select>
-                            </div>
-
-                            {task.isExisting && (
-                              <div className="md:col-span-2">
-                                <label className="block text-xs text-gray-500 mb-1">Status</label>
-                                <select
-                                  value={task.status}
-                                  onChange={(e) => {
-                                    const updated = [...projectTasks];
-                                    updated[index].status = e.target.value;
-                                    setProjectTasks(updated);
-                                  }}
-                                  className="w-full px-3 py-2 bg-[#141a21] border border-[#232945] rounded-lg text-white text-sm focus:outline-none focus:border-blue-500"
-                                >
-                                  <option value="Pending">Pending</option>
-                                  <option value="In Progress">In Progress</option>
-                                  <option value="Completed">Completed</option>
-                                  <option value="On Hold">On Hold</option>
-                                </select>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <div className="text-center py-6 text-gray-500 text-sm bg-[#0f1419] rounded-lg border border-[#232945]">
-                    No tasks added yet. Click "Add Task" to create tasks for this project.
-                  </div>
-                )}
-              </div>
-
-              <div className="flex gap-3 pt-4">
+              <div className="flex gap-3 pt-4 mt-4 border-t border-[#232945]">
                 <button
                   type="button"
                   onClick={() => { setShowEditModal(false); setSelectedProject(null); resetForm(); }}
