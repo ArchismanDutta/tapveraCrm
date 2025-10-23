@@ -17,8 +17,13 @@ import {
   Paperclip,
   Type,
   Send,
+  Sparkles,
+  Lightbulb,
+  Clock,
+  Zap,
 } from "lucide-react";
 import MediaLightbox from "../common/MediaLightbox";
+import useMessageSuggestions from "../../hooks/useMessageSuggestions";
 
 const DateDivider = ({ date }) => {
   const now = new Date();
@@ -69,6 +74,14 @@ const ChatWindow = ({
   const textareaRef = useRef(null);
   const prevMessagesLengthRef = useRef(0);
   const emojiPickerRef = useRef(null);
+
+  // Message suggestions
+  const { getSuggestions, getQuickReplies } = useMessageSuggestions(conversationId, messages);
+  const [suggestions, setSuggestions] = useState([]);
+  const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(0);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [quickReplies, setQuickReplies] = useState([]);
+  const suggestionsRef = useRef(null);
 
   const handleSendMessage = async () => {
     if (!input.trim() && selectedFiles.length === 0) return;
@@ -326,16 +339,58 @@ const ChatWindow = ({
       if (emojiPickerRef.current && !emojiPickerRef.current.contains(event.target)) {
         setShowEmojiPicker(null);
       }
+      if (suggestionsRef.current && !suggestionsRef.current.contains(event.target)) {
+        setShowSuggestions(false);
+      }
     };
 
-    if (showEmojiPicker !== null) {
+    if (showEmojiPicker !== null || showSuggestions) {
       document.addEventListener('mousedown', handleClickOutside);
     }
 
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [showEmojiPicker]);
+  }, [showEmojiPicker, showSuggestions]);
+
+  // Update suggestions when input changes
+  useEffect(() => {
+    if (input.trim().length >= 2) {
+      const newSuggestions = getSuggestions(input, 8);
+      setSuggestions(newSuggestions);
+      setShowSuggestions(newSuggestions.length > 0);
+      setSelectedSuggestionIndex(0);
+    } else {
+      setShowSuggestions(false);
+      setSuggestions([]);
+    }
+  }, [input, getSuggestions]);
+
+  // Update quick replies based on last message
+  useEffect(() => {
+    if (messages && messages.length > 0) {
+      const lastMessage = messages[messages.length - 1];
+      if (String(lastMessage.senderId || lastMessage.sender?._id) !== String(currentUserId)) {
+        const replies = getQuickReplies(lastMessage.message || lastMessage.text);
+        setQuickReplies(replies);
+      } else {
+        setQuickReplies([]);
+      }
+    }
+  }, [messages, currentUserId, getQuickReplies]);
+
+  // Handle suggestion selection
+  const acceptSuggestion = (suggestion) => {
+    setInput(suggestion.text);
+    setShowSuggestions(false);
+    textareaRef.current?.focus();
+  };
+
+  // Handle quick reply click
+  const handleQuickReply = (text) => {
+    setInput(text);
+    textareaRef.current?.focus();
+  };
 
   return (
     <div className="flex flex-col h-full bg-gray-900 text-gray-100">
@@ -821,8 +876,88 @@ const ChatWindow = ({
         </div>
       )}
 
+      {/* Quick Replies */}
+      {quickReplies.length > 0 && input.length === 0 && (
+        <div className="bg-gray-800 border-t border-gray-700 px-4 py-2">
+          <div className="flex items-center gap-2 mb-2">
+            <Zap className="w-4 h-4 text-yellow-400" />
+            <span className="text-xs text-gray-400">Quick Replies:</span>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {quickReplies.map((reply, idx) => (
+              <button
+                key={idx}
+                onClick={() => handleQuickReply(reply)}
+                className="px-3 py-1.5 bg-gradient-to-r from-blue-600/20 to-purple-600/20 hover:from-blue-600/30 hover:to-purple-600/30 border border-blue-500/30 rounded-full text-xs text-gray-200 transition-all hover:scale-105 flex items-center gap-1"
+              >
+                <Lightbulb className="w-3 h-3 text-yellow-400" />
+                {reply}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Input Area */}
-      <div className="sticky bottom-0 bg-gray-800 border-t border-gray-700">
+      <div className="sticky bottom-0 bg-gray-800 border-t border-gray-700 relative">
+        {/* Suggestions Dropdown */}
+        {showSuggestions && suggestions.length > 0 && (
+          <div
+            ref={suggestionsRef}
+            className="absolute bottom-full left-0 right-0 bg-gray-900 border-t border-l border-r border-gray-600 shadow-2xl max-h-64 overflow-y-auto"
+          >
+            <div className="p-2 border-b border-gray-700 flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-blue-400" />
+              <span className="text-xs text-gray-400">
+                Suggestions ({suggestions.length}) • <kbd className="px-1 py-0.5 bg-gray-700 rounded text-[10px]">↑↓</kbd> to navigate • <kbd className="px-1 py-0.5 bg-gray-700 rounded text-[10px]">Tab</kbd> or <kbd className="px-1 py-0.5 bg-gray-700 rounded text-[10px]">Enter</kbd> to select
+              </span>
+            </div>
+            {suggestions.map((suggestion, idx) => (
+              <button
+                key={idx}
+                onClick={() => acceptSuggestion(suggestion)}
+                className={`w-full text-left px-4 py-2 hover:bg-gray-800 transition-colors border-l-2 ${
+                  idx === selectedSuggestionIndex
+                    ? "bg-gray-800 border-blue-500"
+                    : "border-transparent"
+                }`}
+              >
+                <div className="flex items-start gap-2">
+                  <div className="flex-shrink-0 mt-1">
+                    {suggestion.type === "history" && (
+                      <Clock className="w-3 h-3 text-gray-400" />
+                    )}
+                    {suggestion.type === "quick" && (
+                      <Zap className="w-3 h-3 text-yellow-400" />
+                    )}
+                    {suggestion.type === "task" && (
+                      <Check className="w-3 h-3 text-green-400" />
+                    )}
+                    {suggestion.type === "project" && (
+                      <FileIcon className="w-3 h-3 text-blue-400" />
+                    )}
+                    {suggestion.type === "frequent" && (
+                      <Sparkles className="w-3 h-3 text-purple-400" />
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-gray-200 truncate">
+                      {suggestion.text}
+                    </p>
+                    <p className="text-xs text-gray-500 capitalize">
+                      {suggestion.type === "history" && "From your history"}
+                      {suggestion.type === "quick" && "Quick reply"}
+                      {suggestion.type === "task" && "Task suggestion"}
+                      {suggestion.type === "project" && "Project suggestion"}
+                      {suggestion.type === "frequent" && "Frequently used"}
+                    </p>
+                  </div>
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+
         <div className="flex items-start gap-2 p-2">
           <input
             type="file"
@@ -859,10 +994,43 @@ const ChatWindow = ({
               chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
             }}
             onKeyDown={(e) => {
+              // Handle suggestion navigation
+              if (showSuggestions && suggestions.length > 0) {
+                if (e.key === "ArrowDown") {
+                  e.preventDefault();
+                  setSelectedSuggestionIndex(prev =>
+                    prev < suggestions.length - 1 ? prev + 1 : 0
+                  );
+                  return;
+                }
+                if (e.key === "ArrowUp") {
+                  e.preventDefault();
+                  setSelectedSuggestionIndex(prev =>
+                    prev > 0 ? prev - 1 : suggestions.length - 1
+                  );
+                  return;
+                }
+                if (e.key === "Tab") {
+                  e.preventDefault();
+                  acceptSuggestion(suggestions[selectedSuggestionIndex]);
+                  return;
+                }
+                if (e.key === "Escape") {
+                  e.preventDefault();
+                  setShowSuggestions(false);
+                  return;
+                }
+              }
+
               // Send message on Enter (without Shift)
               if (e.key === "Enter" && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
                 e.preventDefault();
-                handleSendMessage();
+                // Accept suggestion if visible
+                if (showSuggestions && suggestions.length > 0) {
+                  acceptSuggestion(suggestions[selectedSuggestionIndex]);
+                } else {
+                  handleSendMessage();
+                }
                 return;
               }
 

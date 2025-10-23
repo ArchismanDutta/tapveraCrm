@@ -41,6 +41,7 @@ const callbackRoutes = require("./routes/callbackRoutes");
 const notepadRoutes = require("./routes/notepadRoutes");
 const clientRoutes = require("./routes/clientRoutes");
 const projectRoutes = require("./routes/projectRoutes");
+const notificationRoutes = require("./routes/notificationRoutes");
 
 // Controllers
 const ChatController = require("./controllers/chatController");
@@ -128,6 +129,7 @@ app.use("/api/callbacks", callbackRoutes);
 app.use("/api/notepad", notepadRoutes);
 app.use("/api/clients", clientRoutes);
 app.use("/api/projects", projectRoutes);
+app.use("/api/notifications", notificationRoutes);
 
 // =====================
 // Serve frontend in production

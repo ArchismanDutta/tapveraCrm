@@ -93,6 +93,13 @@ const projectSchema = new mongoose.Schema(
         },
       },
     ],
+    // ✅ Tasks related to this project
+    tasks: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Task",
+      },
+    ],
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",

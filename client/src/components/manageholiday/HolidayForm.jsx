@@ -3,10 +3,9 @@ import React, { useState, useEffect } from "react";
 const HolidayForm = ({ onAdd, onUpdate, editingHoliday, onCancelEdit }) => {
   const [form, setForm] = useState({
     name: "",
-    date: "",
+    startDate: "",
+    endDate: "",
     type: "NATIONAL",
-    recurring: false,
-    optional: false,
     shifts: ["ALL"],
   });
 
@@ -14,19 +13,17 @@ const HolidayForm = ({ onAdd, onUpdate, editingHoliday, onCancelEdit }) => {
     if (editingHoliday) {
       setForm({
         name: editingHoliday.name,
-        date: new Date(editingHoliday.date).toISOString().split('T')[0],
+        startDate: new Date(editingHoliday.date).toISOString().split('T')[0],
+        endDate: new Date(editingHoliday.date).toISOString().split('T')[0],
         type: editingHoliday.type,
-        recurring: editingHoliday.recurring,
-        optional: editingHoliday.optional,
         shifts: editingHoliday.shifts,
       });
     } else {
       setForm({
         name: "",
-        date: "",
+        startDate: "",
+        endDate: "",
         type: "NATIONAL",
-        recurring: false,
-        optional: false,
         shifts: ["ALL"],
       });
     }
@@ -45,22 +42,53 @@ const HolidayForm = ({ onAdd, onUpdate, editingHoliday, onCancelEdit }) => {
     }));
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.name || !form.date) return alert("Name and date required");
+    if (!form.name || !form.startDate) return alert("Name and start date required");
 
     if (editingHoliday) {
-      onUpdate(editingHoliday._id, form);
+      // For editing, just update the single holiday
+      onUpdate(editingHoliday._id, {
+        name: form.name,
+        date: form.startDate,
+        type: form.type,
+        shifts: form.shifts
+      });
     } else {
-      onAdd(form);
+      // For adding, check if we have a date range
+      const start = new Date(form.startDate);
+      const end = form.endDate ? new Date(form.endDate) : new Date(form.startDate);
+
+      // Validate that end date is not before start date
+      if (end < start) {
+        return alert("End date cannot be before start date");
+      }
+
+      // If it's a single date or a range, create holidays for each day
+      const dates = [];
+      const currentDate = new Date(start);
+
+      while (currentDate <= end) {
+        dates.push(new Date(currentDate).toISOString().split('T')[0]);
+        currentDate.setDate(currentDate.getDate() + 1);
+      }
+
+      // Create a holiday for each date in the range
+      for (const date of dates) {
+        await onAdd({
+          name: form.name,
+          date: date,
+          type: form.type,
+          shifts: form.shifts,
+        });
+      }
     }
 
     setForm({
       name: "",
-      date: "",
+      startDate: "",
+      endDate: "",
       type: "NATIONAL",
-      recurring: false,
-      optional: false,
       shifts: ["ALL"],
     });
   };
@@ -82,15 +110,26 @@ const HolidayForm = ({ onAdd, onUpdate, editingHoliday, onCancelEdit }) => {
           required
         />
 
-        <input
-          type="date"
-          name="date"
-          value={form.date}
-          onChange={handleChange}
-          placeholder="dd-mm-yyyy"
-          className="border border-[#232945] bg-[#141a21] text-white rounded-lg p-3 w-48 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
-          required
-        />
+        <div className="flex gap-2 items-center">
+          <input
+            type="date"
+            name="startDate"
+            value={form.startDate}
+            onChange={handleChange}
+            placeholder="Start Date"
+            className="border border-[#232945] bg-[#141a21] text-white rounded-lg p-3 w-44 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+            required
+          />
+          <span className="text-blue-300">to</span>
+          <input
+            type="date"
+            name="endDate"
+            value={form.endDate}
+            onChange={handleChange}
+            placeholder="End Date (Optional)"
+            className="border border-[#232945] bg-[#141a21] text-white rounded-lg p-3 w-44 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+          />
+        </div>
 
         <select
           name="type"
@@ -116,30 +155,8 @@ const HolidayForm = ({ onAdd, onUpdate, editingHoliday, onCancelEdit }) => {
         </select>
       </div>
 
-      {/* Row 2: Checkboxes + Button */}
-      <div className="flex flex-wrap gap-4 items-center justify-between mt-2">
-        <div className="flex gap-6">
-          <label className="flex items-center gap-2 text-blue-100 font-normal">
-            <input
-              type="checkbox"
-              name="optional"
-              checked={form.optional}
-              onChange={handleChange}
-              className="accent-blue-500 scale-125"
-            />
-            Optional
-          </label>
-          <label className="flex items-center gap-2 text-blue-100 font-normal">
-            <input
-              type="checkbox"
-              name="recurring"
-              checked={form.recurring}
-              onChange={handleChange}
-              className="accent-blue-500 scale-125"
-            />
-            Recurring
-          </label>
-        </div>
+      {/* Row 2: Button */}
+      <div className="flex flex-wrap gap-4 items-center justify-end mt-2">
         <div className="flex gap-3">
           <button
             type="submit"

@@ -216,11 +216,11 @@ export const attendanceUtils = {
     if (workHours < 5) {
       // Less than 5 hours or no punch-in = absent
       return { status: "absent", color: "red" };
-    } else if (workHours >= 5 && workHours < 8) {
-      // 5-8 hours = half day
+    } else if (workHours >= 5 && workHours < 7.5) {
+      // 5-7.5 hours = half day
       return { status: "half-day", color: "orange" };
-    } else if (workHours >= 8) {
-      // 8+ hours = full day (present)
+    } else if (workHours >= 7.5) {
+      // 7.5+ hours = full day (present)
       // Check if they were late for display purposes
       if (data.isLate === true) {
         return { status: "late", color: "yellow" };

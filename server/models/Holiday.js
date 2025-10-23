@@ -9,8 +9,6 @@ const holidaySchema = new mongoose.Schema(
       enum: ["NATIONAL", "COMPANY", "RELIGIOUS", "FESTIVAL"],
       required: true,
     },
-    recurring: { type: Boolean, default: false },
-    optional: { type: Boolean, default: false },
     shifts: [
       {
         type: String,

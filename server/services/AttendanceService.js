@@ -14,7 +14,7 @@ class AttendanceService {
     this.CONSTANTS = {
       MIN_HALF_DAY_HOURS: 4,
       HALF_DAY_THRESHOLD_HOURS: 4.5, // < 4.5 hours = Half Day, >= 4.5 hours = Present
-      MIN_FULL_DAY_HOURS: 8,
+      MIN_FULL_DAY_HOURS: 7.5,
       MAX_WORK_HOURS: 12,
       LATE_THRESHOLD_MINUTES: 0, // STRICT ENFORCEMENT: Even 1 minute late counts as late
       BREAK_TIME_LIMIT_MINUTES: 60,
@@ -1115,7 +1115,7 @@ class AttendanceService {
     if (workHours < 2) rating -= 1.5;
 
     // Bonus for good work hours
-    if (workHours >= 8 && breakRatio <= 0.15) rating += 0.2;
+    if (workHours >= 7.5 && breakRatio <= 0.15) rating += 0.2;
 
     return Math.max(1, Math.min(5, rating));
   }

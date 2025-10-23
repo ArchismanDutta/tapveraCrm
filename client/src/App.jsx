@@ -17,16 +17,15 @@ import "./styles/custom-scrollbar.css";
 import { AchievementProvider } from "./contexts/AchievementContext";
 import AchievementNotificationContainer from "./components/achievements/AchievementNotificationContainer";
 
+// WebSocket Context
+import { WebSocketProvider, useWebSocketContext } from "./contexts/WebSocketContext";
+
 // Notifications
 import NotificationToast from "./components/NotificationToast";
 
 // Redux
 import { useDispatch } from "react-redux";
 import { resetChat } from "./store/slices/chatSlice";
-
-// Custom Hooks
-import useGlobalChatNotifications from "./hooks/useGlobalChatNotifications";
-import useWebSocket from "./hooks/useWebSocket";
 
 // Browser Notifications
 import notificationManager from "./utils/browserNotifications";
@@ -73,6 +72,7 @@ import CallbackKanban from "./pages/CallbackKanban";
 // Notepad
 import NotepadPage from "./pages/NotepadPage";
 import SuperAdminNotepadViewer from "./pages/SuperAdminNotepadViewer";
+import NotificationCenterPage from "./pages/NotificationCenterPage";
 
 // ------------------- Utility Functions -------------------
 const normalizeRole = (role) => {
@@ -159,47 +159,49 @@ const AppWrapper = () => {
     navigate("/login", { replace: true });
   };
 
-  // Global chat notifications
-  useGlobalChatNotifications(localStorage.getItem("token"));
+  // Get WebSocket context
+  const { registerNotificationHandler } = useWebSocketContext();
 
-  // Handle WebSocket notifications
-  const handleNotification = (notification) => {
-    // Handle payslip notifications
-    if (notification.channel === "payslip") {
-      setNotifications(prev => [...prev, { ...notification, id: Date.now() }]);
-    }
-
-    // Handle task notifications - Show browser notifications
-    if (notification.channel === "task") {
-      // Show browser/PC notification
-      if (notificationManager.isEnabled()) {
-        notificationManager.showNotification(notification.title, {
-          body: notification.body || notification.message,
-          tag: `task-${notification.taskId}`,
-          data: notification,
-          icon: "/favicon.ico"
-        });
+  // Register WebSocket notification handler
+  useEffect(() => {
+    const handleNotification = (notification) => {
+      // Handle payslip notifications
+      if (notification.channel === "payslip") {
+        setNotifications(prev => [...prev, { ...notification, id: Date.now() }]);
       }
 
-      // Also show in-app toast
-      toast.info(`${notification.title}: ${notification.message}`);
-    }
+      // Handle task notifications - Show browser notifications
+      if (notification.channel === "task") {
+        // Show browser/PC notification
+        if (notificationManager.isEnabled()) {
+          notificationManager.showNotification(notification.title, {
+            body: notification.body || notification.message,
+            tag: `task-${notification.taskId}`,
+            data: notification,
+            icon: "/favicon.ico"
+          });
+        }
 
-    // Handle chat notifications - Show browser notifications
-    if (notification.channel === "chat") {
-      // Show browser/PC notification
-      if (notificationManager.isEnabled()) {
-        notificationManager.showNotification(notification.title, {
-          body: notification.body || notification.message,
-          tag: `chat-${notification.from}`,
-          data: notification,
-          icon: "/favicon.ico"
-        });
+        // Also show in-app toast
+        toast.info(`${notification.title}: ${notification.message}`);
       }
-    }
-  };
 
-  useWebSocket(handleNotification);
+      // Handle chat notifications - Show browser notifications
+      if (notification.channel === "chat") {
+        // Show browser/PC notification
+        if (notificationManager.isEnabled()) {
+          notificationManager.showNotification(notification.title, {
+            body: notification.body || notification.message,
+            tag: `chat-${notification.from}`,
+            data: notification,
+            icon: "/favicon.ico"
+          });
+        }
+      }
+    };
+
+    return registerNotificationHandler(handleNotification);
+  }, [registerNotificationHandler]);
 
   const removeNotification = (id) => {
     setNotifications(prev => prev.filter(n => n.id !== id));
@@ -373,6 +375,18 @@ const AppWrapper = () => {
           element={
             isAuthenticated ? (
               <ChatPage onLogout={handleLogout} currentUser={currentUser} />
+            ) : (
+              <Navigate to="/login" replace />
+            )
+          }
+        />
+
+        {/* Notification Center */}
+        <Route
+          path="/notifications"
+          element={
+            isAuthenticated ? (
+              <NotificationCenterPage onLogout={handleLogout} />
             ) : (
               <Navigate to="/login" replace />
             )
@@ -642,7 +656,7 @@ const AppWrapper = () => {
         <Route
           path="/clients"
           element={
-            isAuthenticated && isSuperAdmin ? (
+            isAuthenticated && isAdmin ? (
               <ClientsPage onLogout={handleLogout} />
             ) : (
               <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />
@@ -654,7 +668,7 @@ const AppWrapper = () => {
         <Route
           path="/projects"
           element={
-            isAuthenticated && isSuperAdmin ? (
+            isAuthenticated && isAdmin ? (
               <ProjectsPage onLogout={handleLogout} />
             ) : (
               <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />
@@ -744,10 +758,12 @@ const AppWrapper = () => {
 // ------------------- Main App -------------------
 const App = () => (
   <Router>
-    <AchievementProvider>
-      <AppWrapper />
-      <AchievementNotificationContainer />
-    </AchievementProvider>
+    <WebSocketProvider>
+      <AchievementProvider>
+        <AppWrapper />
+        <AchievementNotificationContainer />
+      </AchievementProvider>
+    </WebSocketProvider>
   </Router>
 );
 

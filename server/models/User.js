@@ -116,6 +116,43 @@ const userSchema = new mongoose.Schema(
       durationHours: { type: Number, default: 9, min: 1, max: 24 },
       isFlexible: { type: Boolean, default: false },
       shiftId: { type: mongoose.Schema.Types.ObjectId, ref: "Shift" },
+    },
+
+    // ====== WORKLOAD TRACKING ======
+    workload: {
+      // Current capacity status
+      capacity: {
+        type: String,
+        enum: ['available', 'busy', 'overloaded', 'offline'],
+        default: 'available'
+      },
+
+      // Workload percentage (0-100%)
+      workloadPercentage: {
+        type: Number,
+        default: 0,
+        min: 0,
+        max: 100
+      },
+
+      // When they'll be available next
+      nextAvailable: {
+        type: Date,
+        default: Date.now
+      },
+
+      // Count of active tasks
+      activeTaskCount: {
+        type: Number,
+        default: 0,
+        min: 0
+      },
+
+      // Last calculated timestamp
+      lastCalculated: {
+        type: Date,
+        default: Date.now
+      }
     }
   },
   { timestamps: true }

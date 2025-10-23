@@ -2,6 +2,18 @@
 const Task = require("../models/Task");
 const { notifyAdmins } = require("../services/whatsappService");
 const { sendNotificationToUser, sendNotificationToMultipleUsers } = require("../utils/websocket");
+const { updateWorkloadOnTaskChange } = require("../services/workloadService");
+const notificationService = require("../services/notificationService");
+
+// Helper: Map task priority to notification priority
+const mapTaskPriorityToNotification = (taskPriority) => {
+  const priorityMap = {
+    'High': 'high',
+    'Medium': 'normal',
+    'Low': 'low'
+  };
+  return priorityMap[taskPriority] || 'normal';
+};
 
 // ------------------- Helper: populate task fields -------------------
 const populateTask = (query) =>
@@ -10,7 +22,9 @@ const populateTask = (query) =>
     .populate("assignedBy", "name email")
     .populate("lastEditedBy", "name email")
     .populate("remarks.user", "name email")
-    .populate("statusHistory.changedBy", "name email");
+    .populate("statusHistory.changedBy", "name email")
+    .populate("project", "projectName type client")
+    .populate("approvedBy", "name email");
 
 // ------------------- CREATE TASK -------------------
 exports.createTask = async (req, res) => {
@@ -27,6 +41,9 @@ exports.createTask = async (req, res) => {
     const allowedPriorities = ["High", "Medium", "Low"];
     const validatedPriority = allowedPriorities.includes(priority) ? priority : "Medium";
 
+    // Extract project if provided
+    const { project } = req.body;
+
     const task = new Task({
       title,
       description,
@@ -34,6 +51,7 @@ exports.createTask = async (req, res) => {
       assignedBy,
       dueDate,
       priority: validatedPriority,
+      project: project || null, // ✅ Add project reference
       statusHistory: [{
         status: "pending",
         changedBy: assignedBy,
@@ -44,6 +62,11 @@ exports.createTask = async (req, res) => {
     await task.save();
 
     const populated = await populateTask(Task.findById(task._id)).lean();
+
+    // ✅ Update workload for assigned employees
+    updateWorkloadOnTaskChange(task._id).catch(err =>
+      console.error('Error updating workload:', err)
+    );
 
     // WhatsApp notification
     await notifyAdmins(
@@ -56,17 +79,22 @@ exports.createTask = async (req, res) => {
 
     // WebSocket notification to assigned users
     const assignedUserIds = populated.assignedTo.map(u => u._id.toString());
-    sendNotificationToMultipleUsers(assignedUserIds, {
-      channel: "task",
-      title: "New Task Assigned",
-      message: populated.title,
-      body: `${populated.title}\nPriority: ${populated.priority}\nDue: ${populated.dueDate || "No due date"}`,
-      taskId: populated._id,
-      priority: populated.priority,
-      dueDate: populated.dueDate,
-      assignedBy: req.user.name,
-      action: "task_assigned"
-    });
+
+    // Send notifications to all assigned users (save to DB and WebSocket)
+    for (const userId of assignedUserIds) {
+      await notificationService.createAndSend({
+        userId,
+        type: "task",
+        channel: "task",
+        title: "New Task Assigned",
+        body: `${populated.title}\nPriority: ${populated.priority}\nDue: ${populated.dueDate || "No due date"}`,
+        priority: mapTaskPriorityToNotification(populated.priority),
+        relatedData: {
+          taskId: populated._id,
+          url: "/tasks"
+        }
+      });
+    }
 
     res.status(201).json(populated);
   } catch (err) {
@@ -143,6 +171,11 @@ exports.editTask = async (req, res) => {
 
     await task.save();
     const populated = await populateTask(Task.findById(taskId)).lean();
+
+    // ✅ Update workload for assigned employees
+    updateWorkloadOnTaskChange(taskId).catch(err =>
+      console.error('Error updating workload:', err)
+    );
 
     await notifyAdmins(
       `✏️ *Task Updated*\n📌 Title: *${populated.title}*\n📅 Due: *${
@@ -239,6 +272,11 @@ exports.updateTaskStatus = async (req, res) => {
     await task.save();
 
     const populated = await populateTask(Task.findById(taskId)).lean();
+
+    // ✅ Update workload for assigned employees
+    updateWorkloadOnTaskChange(taskId).catch(err =>
+      console.error('Error updating workload:', err)
+    );
 
     await notifyAdmins(
       `✅ *Task Status Changed*\n📌 Title: *${populated.title}*\n📊 New Status: *${status}*\n👤 Changed By: *${req.user.name}*`
@@ -481,19 +519,58 @@ exports.getEmployeeTaskAnalytics = async (req, res) => {
     const completedTasks = tasks.filter(task => task.status === "completed").length;
     const inProgressTasks = tasks.filter(task => task.status === "in-progress").length;
     const pendingTasks = tasks.filter(task => task.status === "pending").length;
+    const rejectedTasks = tasks.filter(task => task.status === "rejected").length;
     const overdueTasks = tasks.filter(task => {
       const now = new Date();
       const dueDate = new Date(task.dueDate);
-      return task.status !== "completed" && dueDate < now;
+      return task.status !== "completed" && task.status !== "rejected" && dueDate < now;
     }).length;
 
     // Calculate completion rate
     const completionRate = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
 
     // Group tasks by priority
-    const highPriorityTasks = tasks.filter(task => task.priority === "high").length;
-    const mediumPriorityTasks = tasks.filter(task => task.priority === "medium").length;
-    const lowPriorityTasks = tasks.filter(task => task.priority === "low").length;
+    const highPriorityTasks = tasks.filter(task => task.priority === "High").length;
+    const mediumPriorityTasks = tasks.filter(task => task.priority === "Medium").length;
+    const lowPriorityTasks = tasks.filter(task => task.priority === "Low").length;
+
+    // ==================== QUALITY METRICS ====================
+    // Calculate rejection rate
+    const rejectionRate = totalTasks > 0 ? Math.round((rejectedTasks / totalTasks) * 100) : 0;
+
+    // Calculate reopened tasks (tasks that were completed but status changed back)
+    const reopenedTasks = tasks.filter(task => {
+      if (!task.statusHistory || task.statusHistory.length < 2) return false;
+
+      // Check if task has been completed and then status changed to something else
+      let wasCompleted = false;
+      let wasReopened = false;
+
+      for (let i = 0; i < task.statusHistory.length; i++) {
+        if (task.statusHistory[i].status === "completed") {
+          wasCompleted = true;
+        } else if (wasCompleted && task.statusHistory[i].status !== "completed" && task.statusHistory[i].status !== "rejected") {
+          wasReopened = true;
+          break;
+        }
+      }
+
+      return wasReopened;
+    }).length;
+
+    const reopenedRate = totalTasks > 0 ? Math.round((reopenedTasks / totalTasks) * 100) : 0;
+
+    // Calculate first-time completion rate (completed without being reopened)
+    const firstTimeCompletedTasks = completedTasks - reopenedTasks;
+    const firstTimeSuccessRate = completedTasks > 0 ? Math.round((firstTimeCompletedTasks / completedTasks) * 100) : 0;
+
+    const qualityMetrics = {
+      rejectedTasks,
+      rejectionRate,
+      reopenedTasks,
+      reopenedRate,
+      firstTimeSuccessRate
+    };
 
     // Recent tasks (last 10)
     const recentTasks = tasks.slice(0, 10).map(task => ({
@@ -573,6 +650,210 @@ exports.getEmployeeTaskAnalytics = async (req, res) => {
     res.json(analytics);
   } catch (err) {
     console.error("Error fetching employee task analytics:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+// ------------------- SUBMIT TASK DETAILS (Employee) -------------------
+exports.submitTaskDetails = async (req, res) => {
+  try {
+    const { taskId } = req.params;
+    const { submissionUrl, submissionText, submissionRemark } = req.body;
+
+    // Validation: at least one field must be provided
+    if (!submissionUrl && !submissionText && !submissionRemark) {
+      return res.status(400).json({
+        message: "At least one submission field (URL, text, or remark) is required"
+      });
+    }
+
+    const task = await Task.findById(taskId);
+    if (!task) return res.status(404).json({ message: "Task not found." });
+
+    // Only assigned employees can submit
+    const isAssigned = task.assignedTo.some(id => id.toString() === req.user._id.toString());
+    if (!isAssigned) {
+      return res.status(403).json({ message: "Not authorized to submit this task" });
+    }
+
+    // Update submission fields
+    if (submissionUrl) task.submissionUrl = submissionUrl.trim();
+    if (submissionText) task.submissionText = submissionText.trim();
+    if (submissionRemark) task.submissionRemark = submissionRemark.trim();
+    task.submittedAt = new Date();
+    task.approvalStatus = "pending"; // Set to pending for admin review
+    task.lastEditedBy = req.user._id;
+
+    // Mark fields as modified
+    task.markModified('submissionUrl');
+    task.markModified('submissionText');
+    task.markModified('submissionRemark');
+    task.markModified('submittedAt');
+    task.markModified('approvalStatus');
+    task.markModified('lastEditedBy');
+
+    await task.save();
+
+    const populated = await populateTask(Task.findById(taskId)).lean();
+
+    // ✅ Update workload (submission changes task status indirectly)
+    updateWorkloadOnTaskChange(taskId).catch(err =>
+      console.error('Error updating workload:', err)
+    );
+
+    // Notify admins about the submission
+    await notifyAdmins(
+      `📤 *Task Submission Received*\n📌 Title: *${populated.title}*\n👤 Submitted By: *${req.user.name}*\n📝 URL: ${submissionUrl || "N/A"}\n💬 Remark: ${submissionRemark || "N/A"}`
+    );
+
+    // WebSocket notification to task creator
+    sendNotificationToUser(populated.assignedBy._id.toString(), {
+      channel: "task",
+      title: "Task Submission",
+      message: `${req.user.name} submitted details for task: ${populated.title}`,
+      body: `Task submitted for review\nTitle: ${populated.title}\nBy: ${req.user.name}`,
+      taskId: populated._id,
+      action: "task_submitted"
+    });
+
+    res.json(populated);
+  } catch (err) {
+    console.error("Error submitting task details:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+// ------------------- APPROVE TASK SUBMISSION (Admin) -------------------
+exports.approveTaskSubmission = async (req, res) => {
+  try {
+    const { taskId } = req.params;
+    const { approvalRemark } = req.body;
+
+    const task = await Task.findById(taskId);
+    if (!task) return res.status(404).json({ message: "Task not found." });
+
+    // Only admin/super-admin can approve
+    if (!["admin", "super-admin"].includes(req.user.role)) {
+      return res.status(403).json({ message: "Only admins can approve task submissions" });
+    }
+
+    // Check if task has been submitted
+    if (task.approvalStatus === "none") {
+      return res.status(400).json({ message: "Task has not been submitted yet" });
+    }
+
+    // Update approval fields
+    task.approvalStatus = "approved";
+    task.approvedBy = req.user._id;
+    task.approvedAt = new Date();
+    if (approvalRemark) task.approvalRemark = approvalRemark.trim();
+    task.lastEditedBy = req.user._id;
+
+    // Mark fields as modified
+    task.markModified('approvalStatus');
+    task.markModified('approvedBy');
+    task.markModified('approvedAt');
+    task.markModified('approvalRemark');
+    task.markModified('lastEditedBy');
+
+    await task.save();
+
+    const populated = await populateTask(Task.findById(taskId)).lean();
+
+    // ✅ Update workload (approval may affect capacity)
+    updateWorkloadOnTaskChange(taskId).catch(err =>
+      console.error('Error updating workload:', err)
+    );
+
+    // Notify about approval
+    await notifyAdmins(
+      `✅ *Task Submission Approved*\n📌 Title: *${populated.title}*\n👤 Approved By: *${req.user.name}*\n💬 Remark: ${approvalRemark || "N/A"}`
+    );
+
+    // WebSocket notification to assigned users
+    const assignedUserIds = populated.assignedTo.map(u => u._id.toString());
+    sendNotificationToMultipleUsers(assignedUserIds, {
+      channel: "task",
+      title: "Task Approved",
+      message: `Your submission for "${populated.title}" has been approved`,
+      body: `Task approved by ${req.user.name}\nRemark: ${approvalRemark || "Great work!"}`,
+      taskId: populated._id,
+      action: "task_approved"
+    });
+
+    res.json(populated);
+  } catch (err) {
+    console.error("Error approving task submission:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+// ------------------- REJECT TASK SUBMISSION (Admin) -------------------
+exports.rejectTaskSubmission = async (req, res) => {
+  try {
+    const { taskId } = req.params;
+    const { approvalRemark } = req.body;
+
+    // Rejection remark is required
+    if (!approvalRemark || !approvalRemark.trim()) {
+      return res.status(400).json({ message: "Rejection remark is required" });
+    }
+
+    const task = await Task.findById(taskId);
+    if (!task) return res.status(404).json({ message: "Task not found." });
+
+    // Only admin/super-admin can reject submissions
+    if (!["admin", "super-admin"].includes(req.user.role)) {
+      return res.status(403).json({ message: "Only admins can reject task submissions" });
+    }
+
+    // Check if task has been submitted
+    if (task.approvalStatus === "none") {
+      return res.status(400).json({ message: "Task has not been submitted yet" });
+    }
+
+    // Update approval fields
+    task.approvalStatus = "rejected";
+    task.approvedBy = req.user._id;
+    task.approvedAt = new Date();
+    task.approvalRemark = approvalRemark.trim();
+    task.lastEditedBy = req.user._id;
+
+    // Mark fields as modified
+    task.markModified('approvalStatus');
+    task.markModified('approvedBy');
+    task.markModified('approvedAt');
+    task.markModified('approvalRemark');
+    task.markModified('lastEditedBy');
+
+    await task.save();
+
+    const populated = await populateTask(Task.findById(taskId)).lean();
+
+    // ✅ Update workload (rejection means task still active)
+    updateWorkloadOnTaskChange(taskId).catch(err =>
+      console.error('Error updating workload:', err)
+    );
+
+    // Notify about rejection
+    await notifyAdmins(
+      `❌ *Task Submission Rejected*\n📌 Title: *${populated.title}*\n👤 Rejected By: *${req.user.name}*\n📝 Reason: ${approvalRemark}`
+    );
+
+    // WebSocket notification to assigned users
+    const assignedUserIds = populated.assignedTo.map(u => u._id.toString());
+    sendNotificationToMultipleUsers(assignedUserIds, {
+      channel: "task",
+      title: "Task Submission Rejected",
+      message: `Your submission for "${populated.title}" needs revision`,
+      body: `Task submission rejected by ${req.user.name}\nReason: ${approvalRemark}`,
+      taskId: populated._id,
+      action: "task_submission_rejected"
+    });
+
+    res.json(populated);
+  } catch (err) {
+    console.error("Error rejecting task submission:", err);
     res.status(500).json({ message: "Server error" });
   }
 };
