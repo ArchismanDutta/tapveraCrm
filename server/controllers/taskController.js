@@ -18,7 +18,7 @@ const mapTaskPriorityToNotification = (taskPriority) => {
 // ------------------- Helper: populate task fields -------------------
 const populateTask = (query) =>
   query
-    .populate("assignedTo", "name email")
+    .populate("assignedTo", "name email employeeId designation")
     .populate("assignedBy", "name email")
     .populate("lastEditedBy", "name email")
     .populate("remarks.user", "name email")
@@ -344,13 +344,35 @@ exports.getTasks = async (req, res) => {
     let query = {};
 
     // Role-based filtering
-    if (!["admin", "super-admin"].includes(req.user.role)) {
+    if (req.user.role === "client") {
+      // For clients: find all projects they own, then find tasks for those projects
+      const Project = require("../models/Project");
+      const clientProjects = await Project.find({ client: req.user._id }).select("_id");
+      const projectIds = clientProjects.map(p => p._id);
+      query.project = { $in: projectIds };
+    } else if (!["admin", "super-admin"].includes(req.user.role)) {
+      // For employees: show tasks assigned to them or created by them
       query = { $or: [{ assignedTo: req.user._id }, { assignedBy: req.user._id }] };
     }
 
-    // Filter by project if provided
+    // Filter by project if provided (override for admins, append for others)
     if (req.query.project) {
-      query.project = req.query.project;
+      if (req.user.role === "client") {
+        // For clients, ensure they can only see tasks from their own projects
+        const Project = require("../models/Project");
+        const projectExists = await Project.findOne({
+          _id: req.query.project,
+          client: req.user._id
+        });
+        if (projectExists) {
+          query.project = req.query.project;
+        } else {
+          // Client trying to access a project that's not theirs
+          return res.json([]);
+        }
+      } else {
+        query.project = req.query.project;
+      }
     }
 
     // Filter by status if provided
@@ -528,7 +550,7 @@ exports.getEmployeeTaskAnalytics = async (req, res) => {
       assignedTo: { $in: [employeeId] }
     })
     .populate("assignedBy", "name email")
-    .populate("assignedTo", "name email")
+    .populate("assignedTo", "name email employeeId designation")
     .sort({ createdAt: -1 });
 
     // Calculate analytics
