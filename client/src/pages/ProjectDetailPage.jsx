@@ -5,6 +5,8 @@ import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
 import { BrowserNotificationManager } from "../utils/browserNotifications";
 import useMessageSuggestions from "../hooks/useMessageSuggestions";
+import ProjectTaskModal from "../components/project/ProjectTaskModal";
+import ProjectTaskEditModal from "../components/project/ProjectTaskEditModal";
 import {
   ArrowLeft,
   Globe,
@@ -41,6 +43,9 @@ import {
   Sparkles,
   Lightbulb,
   Zap,
+  Plus,
+  Edit2,
+  Star,
 } from "lucide-react";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
@@ -102,6 +107,9 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
   const [selectedTask, setSelectedTask] = useState(null);
   const [approvalRemark, setApprovalRemark] = useState("");
   const [copiedText, setCopiedText] = useState(null);
+  const [showTaskModal, setShowTaskModal] = useState(false);
+  const [showEditTaskModal, setShowEditTaskModal] = useState(false);
+  const [editingTask, setEditingTask] = useState(null);
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [replyingTo, setReplyingTo] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
@@ -395,6 +403,21 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
     }
   };
 
+  const handleTaskCreated = () => {
+    showNotification("Task created successfully!", "success");
+    fetchTasks(); // Refresh tasks list
+  };
+
+  const handleEditTask = (task) => {
+    setEditingTask(task);
+    setShowEditTaskModal(true);
+  };
+
+  const handleTaskUpdated = () => {
+    showNotification("Task updated successfully!", "success");
+    fetchTasks(); // Refresh tasks list
+  };
+
   // Re-fetch when filters change
   useEffect(() => {
     if (projectId) {
@@ -506,6 +529,38 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
     } catch (error) {
       console.error("Error adding reaction:", error);
       showNotification("Failed to add reaction", "error");
+    }
+  };
+
+  const handleToggleImportant = async (messageId, attachmentId) => {
+    try {
+      const token = localStorage.getItem("token");
+      const response = await fetch(
+        `${API_BASE}/api/projects/${projectId}/messages/${messageId}/attachments/${attachmentId}/toggle-important`,
+        {
+          method: "PATCH",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to toggle importance");
+      }
+
+      const data = await response.json();
+
+      // Refresh messages to show updated status
+      await fetchMessages();
+      showNotification(
+        data.isImportant ? "Marked as important - won't be auto-deleted" : "Removed from important files",
+        "success"
+      );
+    } catch (error) {
+      console.error("Error toggling importance:", error);
+      showNotification("Failed to update file importance", "error");
     }
   };
 
@@ -828,24 +883,36 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
             </h2>
 
             <div className="space-y-3">
-              {project.assignedTo?.map((emp, idx) => (
-                <div
-                  key={idx}
-                  className="flex items-center gap-3 p-3 bg-[#0f1419] rounded-lg border border-[#232945]"
-                >
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white font-semibold flex-shrink-0">
-                    {(emp.name || "U").charAt(0).toUpperCase()}
+              {project.assignedTo && project.assignedTo.length > 0 ? (
+                project.assignedTo.map((emp, idx) => (
+                  <div
+                    key={idx}
+                    className="flex items-center gap-3 p-3 bg-[#0f1419] rounded-lg border border-[#232945]"
+                  >
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white font-semibold flex-shrink-0">
+                      {(emp.name || emp._id || "U").charAt(0).toUpperCase()}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-white font-medium text-sm truncate">
+                        {emp.name || emp._id || "Unknown Employee"}
+                      </p>
+                      <p className="text-xs text-gray-400 truncate">
+                        {emp.email || "No email available"}
+                      </p>
+                      {!emp.name && emp._id && (
+                        <p className="text-xs text-yellow-400 mt-1">
+                          ⚠️ User data not populated (ID: {emp._id.substring(0, 8)}...)
+                        </p>
+                      )}
+                    </div>
                   </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-white font-medium text-sm truncate">
-                      {emp.name || "Unknown"}
-                    </p>
-                    <p className="text-xs text-gray-400 truncate">
-                      {emp.email || "No email"}
-                    </p>
-                  </div>
+                ))
+              ) : (
+                <div className="p-4 bg-[#0f1419] rounded-lg border border-[#232945] text-center">
+                  <Users className="w-8 h-8 text-gray-600 mx-auto mb-2" />
+                  <p className="text-gray-400 text-sm">No team members assigned</p>
                 </div>
-              ))}
+              )}
             </div>
           </div>
 
@@ -1107,31 +1174,52 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                               {msg.attachments.map((att, attIdx) => (
                                 <div
                                   key={attIdx}
-                                  className="flex items-center gap-2 p-2 bg-black/20 rounded"
+                                  className="flex flex-col gap-2"
                                 >
-                                  {getFileIcon(att.fileType)}
-                                  <div className="flex-1 min-w-0">
-                                    <div className="text-xs text-white truncate">
-                                      {att.filename}
+                                  <div className="flex items-center gap-2 p-2 bg-black/20 rounded">
+                                    {getFileIcon(att.fileType)}
+                                    <div className="flex-1 min-w-0">
+                                      <div className="flex items-center gap-2">
+                                        <div className="text-xs text-white truncate">
+                                          {att.filename}
+                                        </div>
+                                        {att.isImportant && (
+                                          <span className="text-xs text-yellow-400 flex items-center gap-1 flex-shrink-0">
+                                            <Star className="w-3 h-3 fill-yellow-400" />
+                                            Important
+                                          </span>
+                                        )}
+                                      </div>
+                                      <div className="text-xs text-gray-400">
+                                        {(att.size / 1024).toFixed(1)} KB
+                                      </div>
                                     </div>
-                                    <div className="text-xs text-gray-400">
-                                      {(att.size / 1024).toFixed(1)} KB
-                                    </div>
+                                    <button
+                                      onClick={() => handleToggleImportant(msg._id, att._id, att.isImportant)}
+                                      className={`p-1.5 rounded transition-colors ${
+                                        att.isImportant
+                                          ? "text-yellow-400 hover:bg-yellow-400/20"
+                                          : "text-gray-400 hover:text-yellow-400 hover:bg-white/10"
+                                      }`}
+                                      title={att.isImportant ? "Remove from important" : "Mark as important (won't be auto-deleted)"}
+                                    >
+                                      <Star className={`w-4 h-4 ${att.isImportant ? "fill-yellow-400" : ""}`} />
+                                    </button>
+                                    <a
+                                      href={att.url.startsWith('http') ? att.url : `${API_BASE}${att.url}`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="p-1 hover:bg-white/10 rounded"
+                                      download
+                                    >
+                                      <Download className="w-4 h-4 text-gray-300" />
+                                    </a>
                                   </div>
-                                  <a
-                                    href={att.url.startsWith('http') ? att.url : `${API_BASE}${att.url}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="p-1 hover:bg-white/10 rounded"
-                                    download
-                                  >
-                                    <Download className="w-4 h-4 text-gray-300" />
-                                  </a>
                                   {att.fileType === "image" && (
                                     <img
                                       src={att.url.startsWith('http') ? att.url : `${API_BASE}${att.url}`}
                                       alt={att.filename}
-                                      className="w-full max-w-sm mt-2 rounded"
+                                      className="w-full max-w-sm rounded"
                                     />
                                   )}
                                 </div>
@@ -1591,20 +1679,49 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
 
             {/* Tasks Tab Content */}
             {activeTab === "tasks" && (
-              <div className="flex-1 overflow-y-auto p-4 sm:p-6">
-                {loadingTasks ? (
-                  <div className="flex items-center justify-center h-full">
-                    <div className="w-12 h-12 border-4 border-blue-500/20 border-t-blue-500 rounded-full animate-spin"></div>
+              <div className="flex-1 flex flex-col overflow-hidden">
+                {/* Tasks Header with Create Button */}
+                {(userRole === "super-admin" || userRole === "superadmin" || userRole === "admin") && (
+                  <div className="p-4 sm:p-6 border-b border-[#232945]">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h2 className="text-base sm:text-lg font-semibold text-white flex items-center gap-2">
+                          <ListTodo className="w-5 h-5 text-green-400" />
+                          Project Tasks
+                        </h2>
+                        <p className="text-xs sm:text-sm text-gray-400 mt-1">
+                          {tasks.length} task{tasks.length !== 1 ? "s" : ""}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => setShowTaskModal(true)}
+                        className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white rounded-lg transition-all font-medium shadow-lg"
+                      >
+                        <Plus className="w-5 h-5" />
+                        <span className="hidden sm:inline">Create Task</span>
+                        <span className="sm:hidden">New</span>
+                      </button>
+                    </div>
                   </div>
-                ) : tasks.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center h-full text-center">
-                    <ListTodo className="w-12 h-12 sm:w-16 sm:h-16 text-gray-600 mb-4" />
-                    <p className="text-gray-500 text-sm sm:text-base">No tasks for this project</p>
-                    <p className="text-gray-600 text-xs sm:text-sm mt-2">
-                      Tasks will appear here when added to this project
-                    </p>
-                  </div>
-                ) : (
+                )}
+
+                {/* Tasks List */}
+                <div className="flex-1 overflow-y-auto p-4 sm:p-6">
+                  {loadingTasks ? (
+                    <div className="flex items-center justify-center h-full">
+                      <div className="w-12 h-12 border-4 border-blue-500/20 border-t-blue-500 rounded-full animate-spin"></div>
+                    </div>
+                  ) : tasks.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center h-full text-center">
+                      <ListTodo className="w-12 h-12 sm:w-16 sm:h-16 text-gray-600 mb-4" />
+                      <p className="text-gray-500 text-sm sm:text-base">No tasks for this project</p>
+                      <p className="text-gray-600 text-xs sm:text-sm mt-2">
+                        {(userRole === "super-admin" || userRole === "superadmin" || userRole === "admin")
+                          ? "Click 'Create Task' to assign tasks to team members"
+                          : "Tasks will appear here when assigned by your admin"}
+                      </p>
+                    </div>
+                  ) : (
                   <div className="space-y-4">
                     {tasks.map((task) => (
                       <div
@@ -1613,33 +1730,64 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                       >
                         <div className="flex items-start justify-between gap-4 mb-4">
                           <div className="flex-1 min-w-0">
-                            <h3 className="text-white font-semibold text-base sm:text-lg mb-2 flex items-center gap-2">
-                              {task.title}
-                              <span
-                                className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                                  task.priority === "High"
-                                    ? "bg-red-500/20 text-red-400 border border-red-500/50"
-                                    : task.priority === "Medium"
-                                    ? "bg-yellow-500/20 text-yellow-400 border border-yellow-500/50"
-                                    : "bg-blue-500/20 text-blue-400 border border-blue-500/50"
-                                }`}
-                              >
-                                {task.priority}
-                              </span>
-                            </h3>
+                            <div className="flex items-center justify-between mb-2">
+                              <h3 className="text-white font-semibold text-base sm:text-lg flex items-center gap-2">
+                                {task.title}
+                                <span
+                                  className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                                    task.priority === "High"
+                                      ? "bg-red-500/20 text-red-400 border border-red-500/50"
+                                      : task.priority === "Medium"
+                                      ? "bg-yellow-500/20 text-yellow-400 border border-yellow-500/50"
+                                      : "bg-blue-500/20 text-blue-400 border border-blue-500/50"
+                                  }`}
+                                >
+                                  {task.priority}
+                                </span>
+                              </h3>
+                              {/* Edit Button - Only for admins */}
+                              {(userRole === "super-admin" || userRole === "superadmin" || userRole === "admin") && (
+                                <button
+                                  onClick={() => handleEditTask(task)}
+                                  className="p-2 rounded-lg text-blue-400 hover:text-blue-300 hover:bg-blue-600/20 transition-all flex-shrink-0"
+                                  title="Edit task"
+                                >
+                                  <Edit2 className="w-4 h-4" />
+                                </button>
+                              )}
+                            </div>
                             {task.description && (
                               <p className="text-gray-400 text-sm mb-3">{task.description}</p>
                             )}
 
-                            <div className="flex flex-wrap gap-3 text-xs text-gray-500">
-                              <div className="flex items-center gap-1">
+                            <div className="space-y-3">
+                              <div className="flex items-center gap-1 text-xs text-gray-500">
                                 <Calendar className="w-3 h-3" />
                                 <span>Due: {task.dueDate ? new Date(task.dueDate).toLocaleDateString() : "No due date"}</span>
                               </div>
-                              <div className="flex items-center gap-1">
-                                <Users className="w-3 h-3" />
-                                <span>{task.assignedTo?.length || 0} assigned</span>
-                              </div>
+
+                              {/* Assigned Employees */}
+                              {task.assignedTo && task.assignedTo.length > 0 && (
+                                <div>
+                                  <p className="text-xs text-gray-500 mb-2 flex items-center gap-1">
+                                    <Users className="w-3 h-3" />
+                                    Assigned to:
+                                  </p>
+                                  <div className="flex flex-wrap gap-2">
+                                    {task.assignedTo.map((emp, idx) => (
+                                      <div
+                                        key={idx}
+                                        className="flex items-center gap-2 bg-purple-600/10 border border-purple-500/30 rounded-full px-3 py-1"
+                                      >
+                                        <div className="w-5 h-5 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white text-xs font-semibold">
+                                          {(emp.name || "U").charAt(0).toUpperCase()}
+                                        </div>
+                                        <span className="text-white text-xs font-medium">{emp.name || "Unknown"}</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
                             </div>
                           </div>
 
@@ -1784,11 +1932,35 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                     ))}
                   </div>
                 )}
+                </div>
               </div>
             )}
           </div>
         </div>
       </div>
+
+      {/* Task Creation Modal */}
+      {showTaskModal && project && (
+        <ProjectTaskModal
+          projectId={projectId}
+          projectEmployees={project.assignedTo || []}
+          onClose={() => setShowTaskModal(false)}
+          onTaskCreated={handleTaskCreated}
+        />
+      )}
+
+      {/* Task Edit Modal */}
+      {showEditTaskModal && editingTask && project && (
+        <ProjectTaskEditModal
+          task={editingTask}
+          projectEmployees={project.assignedTo || []}
+          onClose={() => {
+            setShowEditTaskModal(false);
+            setEditingTask(null);
+          }}
+          onTaskUpdated={handleTaskUpdated}
+        />
+      )}
     </div>
   );
 };
