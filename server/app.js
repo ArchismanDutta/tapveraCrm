@@ -89,30 +89,15 @@ app.use(
 );
 
 // =====================
-// Health check & Diagnostics
+// Health check
 // =====================
 app.get("/", (req, res) => {
-  const routes = [];
-  app._router.stack.forEach((middleware) => {
-    if (middleware.route) {
-      routes.push(middleware.route.path);
-    } else if (middleware.name === 'router') {
-      middleware.handle.stack.forEach((handler) => {
-        if (handler.route) {
-          routes.push(handler.route.path);
-        }
-      });
-    }
-  });
-
   res.json({
     status: "ok",
     message: "Your server is up and running",
     timestamp: Date.now(),
-    version: "v2.1-diagnostic", // Updated version
-    port: process.env.PORT || 5000,
-    nodeEnv: process.env.NODE_ENV || "development",
-    routesLoaded: routes,
+    version: "v2.2-fixed",
+    environment: process.env.NODE_ENV || "development",
   });
 });
 
