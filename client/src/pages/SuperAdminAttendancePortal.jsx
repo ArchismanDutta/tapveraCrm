@@ -890,7 +890,7 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
           const breakMinutes = Math.round(breakSeconds / 60);
           const breakHours = (breakSeconds / 3600).toFixed(1);
           const efficiency = attendanceData.workDurationSeconds > 0 ?
-            Math.round((attendanceData.workDurationSeconds / (8 * 3600)) * 100) : 0;
+            Math.round((attendanceData.workDurationSeconds / (7.5 * 3600)) * 100) : 0;
 
           console.log(`📊 Processing calendar data for ${targetDateStr}:`, {
             workSeconds: attendanceData.workDurationSeconds,
@@ -1131,7 +1131,7 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
 
       // Enhanced weekly hours processing with accurate calculations
       const weekDays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-      const weeklyHoursData = weekDays.map(label => ({ label, hours: 0, target: 8 }));
+      const weeklyHoursData = weekDays.map(label => ({ label, hours: 0, target: 7.5 }));
 
       console.log('📊 Processing weekly hours data for chart...');
 
@@ -1288,7 +1288,7 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
           const cappedWorkSeconds = Math.min(workSeconds, 86400);
           const workHours = (cappedWorkSeconds / 3600).toFixed(1);
           const breakMinutes = Math.round((d.breakDurationSeconds || 0) / 60);
-          const efficiency = workSeconds > 0 ? Math.floor((workSeconds / (8 * 3600)) * 100) : 0;
+          const efficiency = workSeconds > 0 ? Math.floor((workSeconds / (7.5 * 3600)) * 100) : 0;
 
           const activity = {
             date: typeof d.date === 'string' ?
@@ -2227,7 +2227,7 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
                     {/* Weekly Hours Chart */}
                     <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 backdrop-blur-sm border border-slate-600/30 rounded-2xl overflow-hidden hover:border-cyan-400/40 transition-all duration-300">
                       {weeklyHours.length > 0 ? (
-                        <WeeklyHoursChart weeklyHours={weeklyHours} targetHours={8} />
+                        <WeeklyHoursChart weeklyHours={weeklyHours} targetHours={7.5} />
                       ) : (
                         <div className="p-8">
                           <div className="animate-pulse">

@@ -41,6 +41,8 @@ const callbackRoutes = require("./routes/callbackRoutes");
 const notepadRoutes = require("./routes/notepadRoutes");
 const clientRoutes = require("./routes/clientRoutes");
 const projectRoutes = require("./routes/projectRoutes");
+const notificationRoutes = require("./routes/notificationRoutes");
+const mediaRoutes = require("./routes/mediaRoutes");
 
 // Controllers
 const ChatController = require("./controllers/chatController");
@@ -67,26 +69,50 @@ const frontendOrigins = [
 ].filter(Boolean);
 
 if (!frontendOrigins.length) {
-  console.warn("⚠️ No FRONTEND_ORIGIN or FRONTEND_URL set. CORS may block requests.");
+  console.warn(
+    "⚠️ No FRONTEND_ORIGIN or FRONTEND_URL set. CORS may block requests."
+  );
 }
 
 app.use(
   cors({
     origin: frontendOrigins,
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "Cache-Control", "Pragma"],
+    allowedHeaders: [
+      "Content-Type",
+      "Authorization",
+      "Cache-Control",
+      "Pragma",
+    ],
     credentials: true,
   })
 );
 
 // =====================
-// Health check
+// Health check & Diagnostics
 // =====================
 app.get("/", (req, res) => {
+  const routes = [];
+  app._router.stack.forEach((middleware) => {
+    if (middleware.route) {
+      routes.push(middleware.route.path);
+    } else if (middleware.name === 'router') {
+      middleware.handle.stack.forEach((handler) => {
+        if (handler.route) {
+          routes.push(handler.route.path);
+        }
+      });
+    }
+  });
+
   res.json({
     status: "ok",
     message: "Your server is up and running",
     timestamp: Date.now(),
+    version: "v2.1-diagnostic", // Updated version
+    port: process.env.PORT || 5000,
+    nodeEnv: process.env.NODE_ENV || "development",
+    routesLoaded: routes,
   });
 });
 
@@ -121,8 +147,8 @@ app.use("/api/callbacks", callbackRoutes);
 app.use("/api/notepad", notepadRoutes);
 app.use("/api/clients", clientRoutes);
 app.use("/api/projects", projectRoutes);
-
-
+app.use("/api/notifications", notificationRoutes);
+app.use("/api/media", mediaRoutes);
 
 // =====================
 // Serve frontend in production
@@ -192,11 +218,15 @@ wss.on("connection", (ws) => {
           // Update WebSocket utility with current users
           setWebSocketUsers(users);
         } catch (err) {
-          ws.send(JSON.stringify({ type: "auth_failed", message: "Invalid Token" }));
+          ws.send(
+            JSON.stringify({ type: "auth_failed", message: "Invalid Token" })
+          );
           ws.close();
         }
       } else {
-        ws.send(JSON.stringify({ type: "auth_required", message: "Token Required" }));
+        ws.send(
+          JSON.stringify({ type: "auth_required", message: "Token Required" })
+        );
         ws.close();
       }
       return;
@@ -208,7 +238,9 @@ wss.on("connection", (ws) => {
         const savedMessage = await ChatController.saveMessage(
           data.conversationId,
           ws.user.id,
-          data.message
+          data.message,
+          data.attachments || [],
+          data.replyTo || null
         );
 
         const payload = {
@@ -218,24 +250,30 @@ wss.on("connection", (ws) => {
           senderId: savedMessage.senderId,
           message: savedMessage.message,
           timestamp: savedMessage.timestamp,
+          attachments: savedMessage.attachments || [],
+          replyTo: savedMessage.replyTo || null,
         };
 
         // Determine recipients: prefer actual conversation members from DB, fallback to tracked set
         let recipientIds = [];
         try {
-          const conv = await ChatController.getConversationById(savedMessage.conversationId);
+          const conv = await ChatController.getConversationById(
+            savedMessage.conversationId
+          );
           if (conv && Array.isArray(conv.members)) {
             recipientIds = conv.members.map(String);
           }
         } catch {}
         if (!recipientIds.length) {
-          recipientIds = Array.from(conversationMembersOnline[data.conversationId] || []);
+          recipientIds = Array.from(
+            conversationMembersOnline[data.conversationId] || []
+          );
         }
 
         for (const userId of recipientIds) {
           const recipientConnections = users[userId];
           if (recipientConnections && Array.isArray(recipientConnections)) {
-            recipientConnections.forEach(recipientWs => {
+            recipientConnections.forEach((recipientWs) => {
               if (recipientWs && recipientWs.readyState === WebSocket.OPEN) {
                 recipientWs.send(JSON.stringify(payload));
                 if (String(userId) !== String(ws.user.id)) {
@@ -279,19 +317,56 @@ wss.on("connection", (ws) => {
       return;
     }
 
+    // Handle project messages
+    if (data.type === "project_message" && data.projectId) {
+      try {
+        const payload = {
+          type: "project_message",
+          projectId: data.projectId,
+          message: data.messageData,
+          timestamp: Date.now(),
+        };
+
+        // Broadcast to all users connected to this project
+        // The client should filter based on their project access
+        for (const userId in users) {
+          const userConnections = users[userId];
+          if (userConnections && Array.isArray(userConnections)) {
+            userConnections.forEach((userWs) => {
+              if (userWs && userWs.readyState === WebSocket.OPEN) {
+                userWs.send(JSON.stringify(payload));
+              }
+            });
+          }
+        }
+
+        console.log(`Broadcasted project message for project: ${data.projectId}`);
+      } catch (err) {
+        console.error("Error broadcasting project message:", err);
+      }
+      return;
+    }
+
     // Handle private messages
     if (data.type === "private_message") {
       const senderId = data.senderId || data.senderid || data.senderID;
-      const recipientId = data.recipientId || data.recipientid || data.recipientID;
+      const recipientId =
+        data.recipientId || data.recipientid || data.recipientID;
       const msg = data.message || data.msg;
 
       if (!senderId || !recipientId || !msg) {
-        console.error("Missing senderId, recipientId, or message in private_message");
+        console.error(
+          "Missing senderId, recipientId, or message in private_message"
+        );
         return;
       }
 
       try {
-        const saved = await ChatController.saveMessage(senderId, recipientId, msg);
+        const saved = await ChatController.saveMessage(
+          senderId,
+          recipientId,
+          msg
+        );
         const payload = {
           type: "private_message",
           _id: saved?._id,
@@ -309,7 +384,7 @@ wss.on("connection", (ws) => {
         // Deliver to recipient in real time (all connections)
         const recipientConnections = users[recipientId];
         if (recipientConnections && Array.isArray(recipientConnections)) {
-          recipientConnections.forEach(recipientWs => {
+          recipientConnections.forEach((recipientWs) => {
             if (recipientWs && recipientWs.readyState === WebSocket.OPEN) {
               recipientWs.send(JSON.stringify(payload));
               // Lightweight notification event
@@ -340,7 +415,7 @@ wss.on("connection", (ws) => {
 
       // Remove this specific connection from the array
       if (users[ws.user.id]) {
-        users[ws.user.id] = users[ws.user.id].filter(conn => conn !== ws);
+        users[ws.user.id] = users[ws.user.id].filter((conn) => conn !== ws);
 
         // If no more connections for this user, clean up
         if (users[ws.user.id].length === 0) {
@@ -374,15 +449,31 @@ if (!process.env.MONGODB_URI) {
 }
 
 mongoose
-  .connect(process.env.MONGODB_URI, { useNewUrlParser: true, useUnifiedTopology: true })
+  .connect(process.env.MONGODB_URI, {
+    useNewUrlParser: true,
+    useUnifiedTopology: true,
+  })
   .then(() => {
     console.log("✅ Connected to MongoDB");
-    server.listen(PORT, () => console.log(`🚀 Server running at http://localhost:${PORT}`));
-    console.log("🌐 FRONTEND_URL for emails:", process.env.FRONTEND_URL || "not set");
+
+    // Initialize cron jobs after DB connection
+    try {
+      const { initializeCronJobs } = require("./jobs/cronJobs");
+      initializeCronJobs();
+    } catch (error) {
+      console.error("⚠️  Cron jobs initialization failed:", error.message);
+      console.log("   Install node-cron: npm install node-cron");
+    }
+
+    server.listen(PORT, () =>
+      console.log(`🚀 Server running at http://localhost:${PORT}`)
+    );
+    console.log(
+      "🌐 FRONTEND_URL for emails:",
+      process.env.FRONTEND_URL || "not set"
+    );
   })
   .catch((err) => {
     console.error("❌ MongoDB connection error:", err.message);
     process.exit(1);
   });
-
-

@@ -21,6 +21,13 @@ const taskSchema = new mongoose.Schema(
       },
     ],
 
+    // Project reference (optional - task can be standalone or part of a project)
+    project: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Project",
+      default: null,
+    },
+
     // Status of the task
     status: {
       type: String,
@@ -53,6 +60,26 @@ const taskSchema = new mongoose.Schema(
       ref: "User",
       default: null,
     },
+
+    // ✅ Employee submission fields
+    submissionUrl: { type: String, default: null },
+    submissionText: { type: String, default: null },
+    submissionRemark: { type: String, default: null },
+    submittedAt: { type: Date, default: null },
+
+    // ✅ Admin approval status for submissions
+    approvalStatus: {
+      type: String,
+      enum: ["pending", "approved", "rejected", "none"],
+      default: "none", // "none" for tasks not yet submitted
+    },
+    approvedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+    approvedAt: { type: Date, default: null },
+    approvalRemark: { type: String, default: null },
 
     // Remarks on the task
     remarks: [

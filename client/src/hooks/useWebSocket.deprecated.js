@@ -37,8 +37,8 @@ const useWebSocket = (onNotification) => {
       return;
     }
 
-    // Use existing VITE_WS_BASE but remove the /ws path since we're connecting to root
-    const wsUrl = import.meta.env.VITE_WS_BASE?.replace('/ws', '') || "ws://localhost:5000";
+    // Use VITE_WS_BASE directly - should already be correct
+    const wsUrl = import.meta.env.VITE_WS_BASE || "ws://localhost:5000";
 
     try {
       wsRef.current = new WebSocket(wsUrl);

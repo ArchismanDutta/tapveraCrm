@@ -1,8 +1,26 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import CreateGroupModal from "../components/chat/CreateGroupModal";
 import ChatWindow from "../components/chat/chatWindow";
-import useChatWebSocket from "../hooks/useChatWebSocket";
+import { useWebSocketContext } from "../contexts/WebSocketContext";
 import Sidebar from "../components/dashboard/Sidebar";
+import { Search, Filter, X, SortAsc, Users } from "lucide-react";
+
+// Custom hook for debouncing
+const useDebounce = (value, delay) => {
+  const [debouncedValue, setDebouncedValue] = useState(value);
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedValue(value);
+    }, delay);
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [value, delay]);
+
+  return debouncedValue;
+};
 
 const ChatPage = ({ onLogout }) => {
   const [collapsed, setCollapsed] = useState(false);
@@ -16,19 +34,23 @@ const ChatPage = ({ onLogout }) => {
   // New state for tracking unread messages
   const [unreadMessages, setUnreadMessages] = useState({}); // { conversationId: count }
 
-  // Updated WebSocket hook call - make sure your hook supports these parameters
-  const webSocketResult = useChatWebSocket(
-    jwtToken,
-    selectedConversation?._id,
-    conversations // Pass conversations array if your updated hook supports it
-  );
+  // Search and filter state
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filterType, setFilterType] = useState("all"); // all, unread, read
+  const [sortBy, setSortBy] = useState("recent"); // recent, alphabetical, unread
+  const [showFilters, setShowFilters] = useState(false);
 
-  // Destructure with fallback for backward compatibility
+  // Debounced search term
+  const debouncedSearchTerm = useDebounce(searchTerm, 300);
+
+  // Use WebSocket context
   const {
-    messages: liveMessages,
-    allMessages = [], // Default to empty array if not available
+    chatMessages: liveMessages,
+    allChatMessages: allMessages,
     sendMessage,
-  } = webSocketResult;
+    setActiveConversation,
+    setConversations: updateWebSocketConversations,
+  } = useWebSocketContext();
 
   const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
   const currentUserId = JSON.parse(localStorage.getItem("user"))?._id;
@@ -173,6 +195,8 @@ const ChatPage = ({ onLogout }) => {
       if (!res.ok) throw new Error("Failed to fetch conversations");
       const data = await res.json();
       setConversations(data);
+      // Update WebSocket context with conversations
+      updateWebSocketConversations(data);
       // After conversations load, broadcast a fresh unread map event so list can render badges
       try {
         const raw = sessionStorage.getItem("chat_unread_map");
@@ -196,7 +220,10 @@ const ChatPage = ({ onLogout }) => {
       });
       if (!res.ok) throw new Error("Failed to create group");
       const newGroup = await res.json();
-      setConversations((prev) => [newGroup, ...prev]);
+      const updatedConversations = [newGroup, ...conversations];
+      setConversations(updatedConversations);
+      // Update WebSocket context with new conversations
+      updateWebSocketConversations(updatedConversations);
       setShowCreateGroup(false);
     } catch (error) {
       alert(error.message);
@@ -222,13 +249,15 @@ const ChatPage = ({ onLogout }) => {
       }
 
       // Remove deleted conversation from list
-      setConversations((prev) =>
-        prev.filter((conv) => conv._id !== conversationId)
-      );
+      const updatedConversations = conversations.filter((conv) => conv._id !== conversationId);
+      setConversations(updatedConversations);
+      // Update WebSocket context
+      updateWebSocketConversations(updatedConversations);
 
       // Clear selected conversation if deleted
       if (selectedConversation?._id === conversationId) {
         setSelectedConversation(null);
+        setActiveConversation(null);
         setInitialMessages([]);
       }
 
@@ -248,6 +277,8 @@ const ChatPage = ({ onLogout }) => {
   // Handle conversation selection and clear unread count
   const handleSelectConversation = (conv) => {
     setSelectedConversation(conv);
+    // Update WebSocket context with active conversation
+    setActiveConversation(conv._id);
 
     // Clear unread count for selected conversation
     setUnreadMessages((prev) => {
@@ -267,6 +298,52 @@ const ChatPage = ({ onLogout }) => {
     return unreadMessages[conversationId] || 0;
   };
 
+  // Filter and sort conversations
+  const filteredAndSortedConversations = useMemo(() => {
+    let filtered = [...conversations];
+
+    // Apply search filter
+    if (debouncedSearchTerm) {
+      filtered = filtered.filter((conv) => {
+        const searchLower = debouncedSearchTerm.toLowerCase();
+
+        // Search by conversation name
+        const nameMatch = (conv.name || "").toLowerCase().includes(searchLower);
+
+        // Search by member names
+        const memberMatch = conv.members?.some((member) =>
+          (member.name || "").toLowerCase().includes(searchLower)
+        );
+
+        return nameMatch || memberMatch;
+      });
+    }
+
+    // Apply unread/read filter
+    if (filterType === "unread") {
+      filtered = filtered.filter((conv) => getUnreadCount(conv._id) > 0);
+    } else if (filterType === "read") {
+      filtered = filtered.filter((conv) => getUnreadCount(conv._id) === 0);
+    }
+
+    // Apply sorting
+    filtered.sort((a, b) => {
+      switch (sortBy) {
+        case "alphabetical":
+          return (a.name || "").localeCompare(b.name || "");
+        case "unread":
+          return getUnreadCount(b._id) - getUnreadCount(a._id);
+        case "recent":
+        default:
+          // Sort by last message time (you may need to add this field)
+          // For now, keep original order
+          return 0;
+      }
+    });
+
+    return filtered;
+  }, [conversations, debouncedSearchTerm, filterType, sortBy, unreadMessages]);
+
   return (
     <div className="flex h-screen bg-[#101525] text-gray-100">
       {/* Shared Sidebar (same as AttendancePage) */}
@@ -285,12 +362,144 @@ const ChatPage = ({ onLogout }) => {
       >
         {/* Conversations Panel */}
         <div className="w-1/4 border-r border-gray-700 bg-gray-800 flex flex-col h-full ">
-          <h3 className="text-lg font-bold p-4 pb-0 text-white">
-            Conversations
-          </h3>
+          {/* Header with title and filter button */}
+          <div className="p-4 pb-3 border-b border-gray-700">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-lg font-bold text-white">Conversations</h3>
+              <button
+                onClick={() => setShowFilters(!showFilters)}
+                className={`p-2 rounded-lg transition-colors ${
+                  showFilters
+                    ? "bg-blue-600 text-white"
+                    : "bg-gray-700 text-gray-400 hover:bg-gray-600"
+                }`}
+                title="Toggle filters"
+              >
+                <Filter className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Search Bar */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Search conversations or members..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-10 py-2 bg-gray-900 border border-gray-600 rounded-lg text-white text-sm placeholder-gray-500 focus:outline-none focus:border-blue-500 transition-colors"
+              />
+              {searchTerm && (
+                <button
+                  onClick={() => setSearchTerm("")}
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-white transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+
+            {/* Filter and Sort Options */}
+            {showFilters && (
+              <div className="mt-3 space-y-2 p-3 bg-gray-900 rounded-lg border border-gray-600">
+                {/* Filter Tabs */}
+                <div>
+                  <label className="text-xs text-gray-400 mb-1.5 block">Filter</label>
+                  <div className="flex gap-2">
+                    {["all", "unread", "read"].map((type) => (
+                      <button
+                        key={type}
+                        onClick={() => setFilterType(type)}
+                        className={`flex-1 px-3 py-1.5 rounded text-xs font-medium transition-all ${
+                          filterType === type
+                            ? "bg-blue-600 text-white"
+                            : "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                        }`}
+                      >
+                        {type === "all"
+                          ? `All (${conversations.length})`
+                          : type === "unread"
+                          ? `Unread (${
+                              conversations.filter(
+                                (c) => getUnreadCount(c._id) > 0
+                              ).length
+                            })`
+                          : `Read (${
+                              conversations.filter(
+                                (c) => getUnreadCount(c._id) === 0
+                              ).length
+                            })`}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Sort Options */}
+                <div>
+                  <label className="text-xs text-gray-400 mb-1.5 block flex items-center gap-1">
+                    <SortAsc className="w-3 h-3" />
+                    Sort By
+                  </label>
+                  <select
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value)}
+                    className="w-full px-3 py-1.5 bg-gray-700 border border-gray-600 rounded text-xs text-white focus:outline-none focus:border-blue-500 transition-colors"
+                  >
+                    <option value="recent">Most Recent</option>
+                    <option value="alphabetical">Alphabetical</option>
+                    <option value="unread">Most Unread</option>
+                  </select>
+                </div>
+
+                {/* Active Filters Info */}
+                {(searchTerm || filterType !== "all" || sortBy !== "recent") && (
+                  <div className="pt-2 border-t border-gray-700">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-gray-400">
+                        Showing {filteredAndSortedConversations.length} of{" "}
+                        {conversations.length}
+                      </span>
+                      <button
+                        onClick={() => {
+                          setSearchTerm("");
+                          setFilterType("all");
+                          setSortBy("recent");
+                        }}
+                        className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
+                      >
+                        Clear all
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Conversations List */}
           <div className="flex-1 overflow-y-auto px-4 pb-2">
-            <ul className="list-none p-0 space-y-2">
-              {conversations.map((conv) => {
+            {filteredAndSortedConversations.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-full text-center px-4">
+                <Users className="w-12 h-12 text-gray-600 mb-3" />
+                <p className="text-sm text-gray-400 mb-1">
+                  {searchTerm
+                    ? "No conversations found"
+                    : filterType === "unread"
+                    ? "No unread conversations"
+                    : "No conversations yet"}
+                </p>
+                {searchTerm && (
+                  <button
+                    onClick={() => setSearchTerm("")}
+                    className="text-xs text-blue-400 hover:text-blue-300 mt-2"
+                  >
+                    Clear search
+                  </button>
+                )}
+              </div>
+            ) : (
+              <ul className="list-none p-0 space-y-2 mt-2">
+                {filteredAndSortedConversations.map((conv) => {
                 const unreadCount = getUnreadCount(conv._id);
                 const hasUnread = unreadCount > 0;
 
@@ -323,6 +532,7 @@ const ChatPage = ({ onLogout }) => {
                 );
               })}
             </ul>
+            )}
           </div>
           {(userRole === "admin" || userRole === "super-admin") && (
             <div className="p-4 pt-0">

@@ -17,16 +17,15 @@ import "./styles/custom-scrollbar.css";
 import { AchievementProvider } from "./contexts/AchievementContext";
 import AchievementNotificationContainer from "./components/achievements/AchievementNotificationContainer";
 
+// WebSocket Context
+import { WebSocketProvider, useWebSocketContext } from "./contexts/WebSocketContext";
+
 // Notifications
 import NotificationToast from "./components/NotificationToast";
 
 // Redux
 import { useDispatch } from "react-redux";
 import { resetChat } from "./store/slices/chatSlice";
-
-// Custom Hooks
-import useGlobalChatNotifications from "./hooks/useGlobalChatNotifications";
-import useWebSocket from "./hooks/useWebSocket";
 
 // Browser Notifications
 import notificationManager from "./utils/browserNotifications";
@@ -59,15 +58,21 @@ import ManualAttendanceManagement from "./pages/admin/ManualAttendanceManagement
 import SalaryManagement from "./pages/admin/SalaryManagement";
 import ClientsPage from "./pages/ClientsPage";
 import ProjectsPage from "./pages/ProjectsPage";
+import ClientPortal from "./pages/ClientPortal";
+import EmployeePortal from "./pages/EmployeePortal";
+import ProjectDetailPage from "./pages/ProjectDetailPage";
 // Lead & Callback Management
 import ViewLeads from "./pages/ViewLeads";
 import AddLead from "./pages/AddLead";
 import ViewCallbacks from "./pages/ViewCallbacks";
 import AddCallback from "./pages/AddCallback";
+import LeadKanban from "./pages/LeadKanban";
+import CallbackKanban from "./pages/CallbackKanban";
 
 // Notepad
 import NotepadPage from "./pages/NotepadPage";
 import SuperAdminNotepadViewer from "./pages/SuperAdminNotepadViewer";
+import NotificationCenterPage from "./pages/NotificationCenterPage";
 
 // ------------------- Utility Functions -------------------
 const normalizeRole = (role) => {
@@ -154,47 +159,49 @@ const AppWrapper = () => {
     navigate("/login", { replace: true });
   };
 
-  // Global chat notifications
-  useGlobalChatNotifications(localStorage.getItem("token"));
+  // Get WebSocket context
+  const { registerNotificationHandler } = useWebSocketContext();
 
-  // Handle WebSocket notifications
-  const handleNotification = (notification) => {
-    // Handle payslip notifications
-    if (notification.channel === "payslip") {
-      setNotifications(prev => [...prev, { ...notification, id: Date.now() }]);
-    }
-
-    // Handle task notifications - Show browser notifications
-    if (notification.channel === "task") {
-      // Show browser/PC notification
-      if (notificationManager.isEnabled()) {
-        notificationManager.showNotification(notification.title, {
-          body: notification.body || notification.message,
-          tag: `task-${notification.taskId}`,
-          data: notification,
-          icon: "/favicon.ico"
-        });
+  // Register WebSocket notification handler
+  useEffect(() => {
+    const handleNotification = (notification) => {
+      // Handle payslip notifications
+      if (notification.channel === "payslip") {
+        setNotifications(prev => [...prev, { ...notification, id: Date.now() }]);
       }
 
-      // Also show in-app toast
-      toast.info(`${notification.title}: ${notification.message}`);
-    }
+      // Handle task notifications - Show browser notifications
+      if (notification.channel === "task") {
+        // Show browser/PC notification
+        if (notificationManager.isEnabled()) {
+          notificationManager.showNotification(notification.title, {
+            body: notification.body || notification.message,
+            tag: `task-${notification.taskId}`,
+            data: notification,
+            icon: "/favicon.ico"
+          });
+        }
 
-    // Handle chat notifications - Show browser notifications
-    if (notification.channel === "chat") {
-      // Show browser/PC notification
-      if (notificationManager.isEnabled()) {
-        notificationManager.showNotification(notification.title, {
-          body: notification.body || notification.message,
-          tag: `chat-${notification.from}`,
-          data: notification,
-          icon: "/favicon.ico"
-        });
+        // Also show in-app toast
+        toast.info(`${notification.title}: ${notification.message}`);
       }
-    }
-  };
 
-  useWebSocket(handleNotification);
+      // Handle chat notifications - Show browser notifications
+      if (notification.channel === "chat") {
+        // Show browser/PC notification
+        if (notificationManager.isEnabled()) {
+          notificationManager.showNotification(notification.title, {
+            body: notification.body || notification.message,
+            tag: `chat-${notification.from}`,
+            data: notification,
+            icon: "/favicon.ico"
+          });
+        }
+      }
+    };
+
+    return registerNotificationHandler(handleNotification);
+  }, [registerNotificationHandler]);
 
   const removeNotification = (id) => {
     setNotifications(prev => prev.filter(n => n.id !== id));
@@ -304,6 +311,8 @@ const AppWrapper = () => {
           element={
             !isAuthenticated ? (
               <Login onLoginSuccess={handleLoginSuccess} />
+            ) : role === "client" ? (
+              <Navigate to="/client-portal" replace />
             ) : isSuperAdmin ? (
               <Navigate to="/super-admin" replace />
             ) : isHR ? (
@@ -372,12 +381,34 @@ const AppWrapper = () => {
           }
         />
 
+        {/*  Center */}
+        <Route
+          path="/notifications"
+          element={
+            isAuthenticated ? (
+              <NotificationCenterPage onLogout={handleLogout} />
+            ) : (
+              <Navigate to="/login" replace />
+            )
+          }
+        />
+
         {/* Lead Management */}
         <Route
           path="/leads"
           element={
             isAuthenticated && canAccessLeadManagement() ? (
               <ViewLeads onLogout={handleLogout} />
+            ) : (
+              <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />
+            )
+          }
+        />
+        <Route
+          path="/leads/kanban"
+          element={
+            isAuthenticated && canAccessLeadManagement() ? (
+              <LeadKanban onLogout={handleLogout} />
             ) : (
               <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />
             )
@@ -410,6 +441,16 @@ const AppWrapper = () => {
           element={
             isAuthenticated && canAccessLeadManagement() ? (
               <ViewCallbacks onLogout={handleLogout} />
+            ) : (
+              <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />
+            )
+          }
+        />
+        <Route
+          path="/callbacks/kanban"
+          element={
+            isAuthenticated && canAccessLeadManagement() ? (
+              <CallbackKanban onLogout={handleLogout} />
             ) : (
               <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />
             )
@@ -540,11 +581,19 @@ const AppWrapper = () => {
         <Route
           path="/dashboard"
           element={
-            isAuthenticated && !isAdmin && !isHR ? (
+            isAuthenticated && !isAdmin && !isHR && role !== "client" ? (
               <EmployeeDashboardPage onLogout={handleLogout} role={role} />
             ) : (
               <Navigate
-                to={isAuthenticated ? (isAdmin ? "/admin/tasks" : "/login") : "/login"}
+                to={
+                  isAuthenticated
+                    ? role === "client"
+                      ? "/client-portal"
+                      : isAdmin
+                      ? "/admin/tasks"
+                      : "/login"
+                    : "/login"
+                }
                 replace
               />
             )
@@ -607,7 +656,7 @@ const AppWrapper = () => {
         <Route
           path="/clients"
           element={
-            isAuthenticated && isSuperAdmin ? (
+            isAuthenticated && isAdmin ? (
               <ClientsPage onLogout={handleLogout} />
             ) : (
               <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />
@@ -619,10 +668,51 @@ const AppWrapper = () => {
         <Route
           path="/projects"
           element={
-            isAuthenticated && isSuperAdmin ? (
+            isAuthenticated && isAdmin ? (
               <ProjectsPage onLogout={handleLogout} />
             ) : (
               <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />
+            )
+          }
+        />
+
+        {/* Employee Portal */}
+        <Route
+          path="/employee-portal"
+          element={
+            isAuthenticated ? (
+              <EmployeePortal onLogout={handleLogout} />
+            ) : (
+              <Navigate to="/login" replace />
+            )
+          }
+        />
+
+        {/* Client Portal */}
+        <Route
+          path="/client-portal"
+          element={
+            isAuthenticated && role === "client" ? (
+              <ClientPortal onLogout={handleLogout} clientId={currentUser?._id} />
+            ) : (
+              <Navigate to="/login" replace />
+            )
+          }
+        />
+
+        {/* Project Detail Page */}
+        <Route
+          path="/project/:projectId"
+          element={
+            isAuthenticated ? (
+              <ProjectDetailPage
+                projectId={window.location.pathname.split('/').pop()}
+                userRole={role}
+                userId={currentUser?._id}
+                onBack={() => window.history.back()}
+              />
+            ) : (
+              <Navigate to="/login" replace />
             )
           }
         />
@@ -634,7 +724,9 @@ const AppWrapper = () => {
             <Navigate
               to={
                 isAuthenticated
-                  ? isSuperAdmin
+                  ? role === "client"
+                    ? "/client-portal"
+                    : isSuperAdmin
                     ? "/super-admin"
                     : isHR
                     ? "/hrdashboard"
@@ -666,10 +758,12 @@ const AppWrapper = () => {
 // ------------------- Main App -------------------
 const App = () => (
   <Router>
-    <AchievementProvider>
-      <AppWrapper />
-      <AchievementNotificationContainer />
-    </AchievementProvider>
+    <WebSocketProvider>
+      <AchievementProvider>
+        <AppWrapper />
+        <AchievementNotificationContainer />
+      </AchievementProvider>
+    </WebSocketProvider>
   </Router>
 );
 
