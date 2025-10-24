@@ -1,13 +1,14 @@
 import React, { useState, useEffect, useMemo } from "react";
-import axios from "axios";
-import { 
-  ToggleLeft, 
-  ToggleRight, 
-  UserPlus, 
-  Search, 
-  RefreshCw, 
-  Users, 
-  Building2, 
+import API from "../api";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  ToggleLeft,
+  ToggleRight,
+  UserPlus,
+  Search,
+  RefreshCw,
+  Users,
+  Building2,
   Mail,
   Edit2,
   Trash2,
@@ -26,6 +27,90 @@ import {
 } from "lucide-react";
 import Sidebar from "../components/dashboard/Sidebar";
 
+// Animation Variants
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.08,
+      delayChildren: 0.1,
+    },
+  },
+};
+
+const cardVariants = {
+  hidden: { opacity: 0, y: 20, scale: 0.95 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    scale: 1,
+    transition: {
+      type: "spring",
+      stiffness: 260,
+      damping: 20,
+    },
+  },
+};
+
+const tableRowVariants = {
+  hidden: { opacity: 0, x: -20 },
+  visible: (i) => ({
+    opacity: 1,
+    x: 0,
+    transition: {
+      delay: i * 0.03,
+      type: "spring",
+      stiffness: 300,
+      damping: 24,
+    },
+  }),
+  exit: {
+    opacity: 0,
+    x: 20,
+    transition: { duration: 0.2 },
+  },
+};
+
+const modalVariants = {
+  hidden: { opacity: 0, scale: 0.9, y: 20 },
+  visible: {
+    opacity: 1,
+    scale: 1,
+    y: 0,
+    transition: {
+      type: "spring",
+      stiffness: 300,
+      damping: 25,
+    },
+  },
+  exit: {
+    opacity: 0,
+    scale: 0.9,
+    y: 20,
+    transition: { duration: 0.2 },
+  },
+};
+
+const overlayVariants = {
+  hidden: { opacity: 0 },
+  visible: { opacity: 1, transition: { duration: 0.2 } },
+  exit: { opacity: 0, transition: { duration: 0.2 } },
+};
+
+const statCounterVariants = {
+  hidden: { scale: 0.5, opacity: 0 },
+  visible: {
+    scale: 1,
+    opacity: 1,
+    transition: {
+      type: "spring",
+      stiffness: 400,
+      damping: 15,
+    },
+  },
+};
+
 const ClientsPage = ({ onLogout }) => {
   const [clients, setClients] = useState([]);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -38,6 +123,7 @@ const ClientsPage = ({ onLogout }) => {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [selectedClient, setSelectedClient] = useState(null);
   const [notification, setNotification] = useState(null);
+  const [userRole, setUserRole] = useState("admin"); // Default to admin
   const [form, setForm] = useState({
     clientName: "",
     businessName: "",
@@ -46,13 +132,24 @@ const ClientsPage = ({ onLogout }) => {
   });
 
   useEffect(() => {
+    // Get user role from localStorage
+    try {
+      const userStr = localStorage.getItem("user");
+      if (userStr) {
+        const user = JSON.parse(userStr);
+        setUserRole(user.role || "admin");
+      }
+    } catch (error) {
+      console.error("Error parsing user data:", error);
+    }
+
     fetchClients();
   }, []);
 
   const fetchClients = async () => {
     setLoading(true);
     try {
-      const res = await axios.get("http://localhost:5000/api/clients");
+      const res = await API.get("/api/clients");
       setClients(res.data);
     } catch (error) {
       showNotification("Error fetching clients", "error");
@@ -65,7 +162,7 @@ const ClientsPage = ({ onLogout }) => {
   const handleAddClient = async (e) => {
     e.preventDefault();
     try {
-      await axios.post("http://localhost:5000/api/clients", form);
+      await API.post("/api/clients", form);
       setForm({ clientName: "", businessName: "", email: "", password: "" });
       fetchClients();
       showNotification("Client added successfully!", "success");
@@ -78,7 +175,7 @@ const ClientsPage = ({ onLogout }) => {
   const handleEditClient = async (e) => {
     e.preventDefault();
     try {
-      await axios.put(`http://localhost:5000/api/clients/${selectedClient._id}`, {
+      await API.put(`/api/clients/${selectedClient._id}`, {
         clientName: selectedClient.clientName,
         businessName: selectedClient.businessName,
         email: selectedClient.email,
@@ -95,7 +192,7 @@ const ClientsPage = ({ onLogout }) => {
 
   const handleDeleteClient = async () => {
     try {
-      await axios.delete(`http://localhost:5000/api/clients/${selectedClient._id}`);
+      await API.delete(`/api/clients/${selectedClient._id}`);
       setShowDeleteConfirm(false);
       setSelectedClient(null);
       fetchClients();
@@ -108,7 +205,7 @@ const ClientsPage = ({ onLogout }) => {
 
   const toggleStatus = async (id) => {
     try {
-      await axios.patch(`http://localhost:5000/api/clients/${id}/status`);
+      await API.patch(`/api/clients/${id}/status`);
       fetchClients();
       showNotification("Client status updated!", "success");
     } catch (error) {
@@ -194,7 +291,7 @@ const ClientsPage = ({ onLogout }) => {
         collapsed={sidebarCollapsed}
         setCollapsed={setSidebarCollapsed}
         onLogout={onLogout}
-        userRole="superadmin"
+        userRole={userRole}
       />
 
       {/* Main Content */}
@@ -252,8 +349,17 @@ const ClientsPage = ({ onLogout }) => {
         </div>
 
         {/* Enhanced Statistics Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-          <div className="bg-[#191f2b]/70 rounded-xl shadow-xl border border-[#232945] p-6 hover:border-blue-500/50 transition-all">
+        <motion.div
+          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8"
+          variants={containerVariants}
+          initial="hidden"
+          animate="visible"
+        >
+          <motion.div
+            variants={cardVariants}
+            whileHover={{ y: -5, transition: { type: "spring", stiffness: 400, damping: 10 } }}
+            className="bg-[#191f2b]/70 rounded-xl shadow-xl border border-[#232945] p-6 hover:border-blue-500/50 transition-all cursor-pointer"
+          >
             <div className="flex items-center justify-between mb-3">
               <div className="p-3 rounded-lg bg-blue-600/20">
                 <Users className="w-6 h-6 text-blue-400" />
@@ -261,11 +367,23 @@ const ClientsPage = ({ onLogout }) => {
               <TrendingUp className="w-4 h-4 text-green-400" />
             </div>
             <p className="text-sm text-gray-400 mb-1">Total Clients</p>
-            <p className="text-3xl font-bold text-white">{stats.total}</p>
+            <motion.p
+              key={stats.total}
+              variants={statCounterVariants}
+              initial="hidden"
+              animate="visible"
+              className="text-3xl font-bold text-white"
+            >
+              {stats.total}
+            </motion.p>
             <p className="text-xs text-gray-500 mt-2">All registered clients</p>
-          </div>
+          </motion.div>
 
-          <div className="bg-[#191f2b]/70 rounded-xl shadow-xl border border-[#232945] p-6 hover:border-green-500/50 transition-all">
+          <motion.div
+            variants={cardVariants}
+            whileHover={{ y: -5, transition: { type: "spring", stiffness: 400, damping: 10 } }}
+            className="bg-[#191f2b]/70 rounded-xl shadow-xl border border-[#232945] p-6 hover:border-green-500/50 transition-all cursor-pointer"
+          >
             <div className="flex items-center justify-between mb-3">
               <div className="p-3 rounded-lg bg-green-600/20">
                 <Building2 className="w-6 h-6 text-green-400" />
@@ -273,23 +391,43 @@ const ClientsPage = ({ onLogout }) => {
               <Activity className="w-4 h-4 text-green-400" />
             </div>
             <p className="text-sm text-gray-400 mb-1">Active Clients</p>
-            <p className="text-3xl font-bold text-green-400">{stats.active}</p>
+            <motion.p
+              key={stats.active}
+              variants={statCounterVariants}
+              initial="hidden"
+              animate="visible"
+              className="text-3xl font-bold text-green-400"
+            >
+              {stats.active}
+            </motion.p>
             <p className="text-xs text-gray-500 mt-2">
               {stats.total > 0 ? Math.round((stats.active / stats.total) * 100) : 0}% of total
             </p>
-          </div>
+          </motion.div>
 
-          <div className="bg-[#191f2b]/70 rounded-xl shadow-xl border border-[#232945] p-6 hover:border-red-500/50 transition-all">
+          <motion.div
+            variants={cardVariants}
+            whileHover={{ y: -5, transition: { type: "spring", stiffness: 400, damping: 10 } }}
+            className="bg-[#191f2b]/70 rounded-xl shadow-xl border border-[#232945] p-6 hover:border-red-500/50 transition-all cursor-pointer"
+          >
             <div className="flex items-center justify-between mb-3">
               <div className="p-3 rounded-lg bg-red-600/20">
                 <AlertCircle className="w-6 h-6 text-red-400" />
               </div>
             </div>
             <p className="text-sm text-gray-400 mb-1">Inactive Clients</p>
-            <p className="text-3xl font-bold text-red-400">{stats.inactive}</p>
+            <motion.p
+              key={stats.inactive}
+              variants={statCounterVariants}
+              initial="hidden"
+              animate="visible"
+              className="text-3xl font-bold text-red-400"
+            >
+              {stats.inactive}
+            </motion.p>
             <p className="text-xs text-gray-500 mt-2">Require attention</p>
-          </div>
-        </div>
+          </motion.div>
+        </motion.div>
 
         {/* Add Client Form */}
         <div className="bg-[#191f2b]/70 rounded-xl shadow-xl border border-[#232945] p-6 mb-8">

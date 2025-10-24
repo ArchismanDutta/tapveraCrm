@@ -75,53 +75,99 @@ const MyProfile = ({ userType = "employee", onLogout }) => {
       setLoading(true);
       const token = localStorage.getItem("token");
       if (!token) {
+        console.error("No token found in localStorage");
         alert("You must be logged in to view this page.");
         return;
       }
+
+      console.log("Fetching profile from:", `${API_BASE}/api/users/me`);
 
       // Fetch user data
       const userRes = await axios.get(`${API_BASE}/api/users/me`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
+      console.log("Profile API response:", userRes.data);
+
       // Fetch attendance data using new system
       const now = new Date();
-      const diffToMonday = (now.getDay() + 6) % 7;
-      const monday = new Date(now);
-      monday.setDate(now.getDate() - diffToMonday);
-      monday.setHours(0, 0, 0, 0);
+      const currentYear = now.getFullYear();
+      const currentMonth = now.getMonth() + 1; // JavaScript months are 0-indexed
+      const userId = userRes.data.id || userRes.data._id;
 
-      const sunday = new Date(monday);
-      sunday.setDate(monday.getDate() + 6);
-      sunday.setHours(23, 59, 59, 999);
+      console.log("Fetching monthly attendance for:", {
+        userId,
+        year: currentYear,
+        month: currentMonth
+      });
 
       const [attendanceRes, statusRes] = await Promise.all([
-        newAttendanceService.getMyWeeklySummary(monday, sunday).catch(() => ({ success: false, data: { weeklyTotals: {} } })),
-        newAttendanceService.getTodayStatus().catch(() => ({ success: false, data: { attendance: {} } })),
+        newAttendanceService.getEmployeeMonthlyAttendance(userId, currentYear, currentMonth).catch((err) => {
+          console.error("Failed to fetch monthly attendance:", err);
+          console.error("Error response:", err.response?.data);
+          return { success: false, data: { summary: {} }, error: err.message };
+        }),
+        newAttendanceService.getTodayStatus().catch((err) => {
+          console.error("Failed to fetch today status:", err);
+          return { success: false, data: { attendance: {} }, error: err.message };
+        }),
       ]);
 
       const tapveraImg = "/favicon.png";
       const user = userRes.data;
-      const attendance = attendanceRes.success ? attendanceRes.data.weeklyTotals : {};
-      const currentStatus = (statusRes.success && statusRes.data.attendance) ? statusRes.data.attendance : {};
+
+      console.log("User data:", user);
+      console.log("Monthly attendance response:", attendanceRes);
+      console.log("Status response:", statusRes);
+
+      // Handle monthly attendance data structure
+      // Backend returns: { success: true, data: { data: [...], summary: {...} } }
+      let monthlyData = {};
+
+      // Check if API call succeeded and has data
+      if (attendanceRes && attendanceRes.success && attendanceRes.data) {
+        console.log("Attendance data structure:", attendanceRes.data);
+        monthlyData = attendanceRes.data.summary || {};
+      } else {
+        console.warn("No monthly attendance data available:", attendanceRes);
+      }
+
+      // Safely create attendance object with fallbacks
+      const attendance = {
+        presentDays: Number(monthlyData.presentDays) || 0,
+        totalWorkHours: monthlyData.totalHours && typeof monthlyData.totalHours === 'number'
+          ? monthlyData.totalHours.toFixed(1)
+          : "0.0",
+        attendanceRate: Number(monthlyData.attendanceRate) || 0,
+        onTimeRate: monthlyData.punctualityRate && typeof monthlyData.punctualityRate === 'number'
+          ? `${Math.round(monthlyData.punctualityRate)}%`
+          : "0%",
+      };
+
+      console.log("Processed attendance data:", attendance);
+
+      const currentStatus = (statusRes && statusRes.success && statusRes.data && statusRes.data.attendance)
+        ? statusRes.data.attendance
+        : {};
+
       // Enhanced profile data with comprehensive information
       setProfileData({
         avatar: tapveraImg,
-        name: capitalize(user.name),
+        name: capitalize(user.name || ""),
         role: capitalize(userType),
-        team: capitalize(user.team || user.designation),
+        team: capitalize(user.team || user.designation || ""),
         status: currentStatus?.currentlyWorking ? "Working" : currentStatus?.onBreak ? "On Break" : "Offline",
         lastSeen: currentStatus?.lastActivity || "N/A",
         contact: {
-          email: user.email,
+          email: user.email || "N/A",
           phone: user.contact || "N/A",
-          location: capitalize(user.location),
+          location: capitalize(user.location || ""),
         },
         dob: user.dob || "N/A",
-        department: capitalize(user.department),
-        designation: capitalize(user.designation),
-        employeeId: user.employeeId || user._id?.slice(-6) || "N/A",
-        joinDate: user.createdAt || user.joinDate || "N/A",
+        department: capitalize(user.department || ""),
+        designation: capitalize(user.designation || ""),
+        employeeId: user.employeeId || user.id?.toString().slice(-6) || "N/A",
+        joinDate: user.doj || user.createdAt || "N/A",
         stats: {
           tasksCompleted: user.tasksCompleted || 0,
           ongoingProjects: user.ongoingProjects || 0,
@@ -133,17 +179,17 @@ const MyProfile = ({ userType = "employee", onLogout }) => {
         personalInfo: [
           {
             label: "Full Name",
-            value: capitalize(user.name),
+            value: capitalize(user.name || ""),
             icon: <FaUserTie className="text-cyan-400" />,
           },
           {
             label: "Employee ID",
-            value: user.employeeId || user._id?.slice(-6) || "N/A",
+            value: user.employeeId || user.id?.toString().slice(-6) || "N/A",
             icon: <FaIdCard className="text-cyan-400" />,
           },
           {
             label: "Email",
-            value: user.email,
+            value: user.email || "N/A",
             icon: <FaEnvelope className="text-cyan-400" />,
           },
           {
@@ -153,44 +199,44 @@ const MyProfile = ({ userType = "employee", onLogout }) => {
           },
           {
             label: "Location",
-            value: capitalize(user.location),
+            value: capitalize(user.location || ""),
             icon: <FaMapMarkerAlt className="text-cyan-400" />,
           },
           {
             label: "Date of Birth",
-            value: user.dob || "N/A",
+            value: user.dob ? new Date(user.dob).toLocaleDateString() : "N/A",
             icon: <FaBirthdayCake className="text-cyan-400" />,
           },
         ],
         workInfo: [
           {
             label: "Department",
-            value: capitalize(user.department),
+            value: capitalize(user.department || ""),
             icon: <FaBuilding className="text-green-400" />,
           },
           {
             label: "Designation",
-            value: capitalize(user.designation),
+            value: capitalize(user.designation || ""),
             icon: <MdWork className="text-green-400" />,
           },
           {
             label: "Role",
-            value: capitalize(userType),
+            value: capitalize(userType || user.role || ""),
             icon: <MdAdminPanelSettings className="text-green-400" />,
           },
           {
             label: "Join Date",
-            value: user.createdAt || user.joinDate || "N/A",
+            value: user.doj ? new Date(user.doj).toLocaleDateString() : user.createdAt ? new Date(user.createdAt).toLocaleDateString() : "N/A",
             icon: <FaCalendarCheck className="text-green-400" />,
           },
           {
             label: "Team",
-            value: capitalize(user.team || user.designation),
+            value: capitalize(user.team || user.designation || ""),
             icon: <FaUsers className="text-green-400" />,
           },
           {
             label: "Time Zone",
-            value: user.timeZone || "UTC",
+            value: user.timeZone || "Asia/Kolkata",
             icon: <FaGlobe className="text-green-400" />,
           },
         ],
@@ -238,7 +284,30 @@ const MyProfile = ({ userType = "employee", onLogout }) => {
       });
     } catch (err) {
       console.error("Error fetching profile:", err);
-      alert("Failed to load profile. Please try again.");
+      console.error("Error details:", {
+        message: err.message,
+        response: err.response?.data,
+        status: err.response?.status,
+        statusText: err.response?.statusText
+      });
+
+      // Provide specific error messages based on status code
+      if (err.response?.status === 401) {
+        alert("Session expired. Please log in again.");
+        localStorage.removeItem("token");
+        localStorage.removeItem("role");
+        window.location.href = "/login";
+      } else if (err.response?.status === 403) {
+        alert("You don't have permission to view this profile.");
+      } else if (err.response?.status === 404) {
+        alert("User profile not found. Please contact support.");
+      } else if (err.response?.status >= 500) {
+        alert(`Server error (${err.response.status}). Please try again later or contact support.`);
+      } else if (err.request && !err.response) {
+        alert("Network error. Please check your internet connection.");
+      } else {
+        alert(`Failed to load profile: ${err.message || "Unknown error"}. Please try again.`);
+      }
     } finally {
       setLoading(false);
     }
@@ -581,12 +650,12 @@ const MyProfile = ({ userType = "employee", onLogout }) => {
                   Last updated: <span className="font-semibold text-cyan-400">{new Date().toLocaleDateString()}</span>
                 </p>
                 <p className="text-xs mt-1">
-                  Member since <span className="font-semibold text-white">{new Date(profileData.joinDate).getFullYear() || "N/A"}</span>
+                  Member since <span className="font-semibold text-white">{profileData.joinDate && profileData.joinDate !== "N/A" ? new Date(profileData.joinDate).getFullYear() : "N/A"}</span>
                 </p>
               </div>
               <div className="flex items-center gap-3">
                 <div className="text-xs text-gray-500">
-                  Employee ID: {profileData.employeeId}
+                  Employee ID: {profileData.employeeId || "N/A"}
                 </div>
               </div>
             </div>

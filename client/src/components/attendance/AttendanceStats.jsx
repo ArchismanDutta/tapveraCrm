@@ -298,7 +298,7 @@ const AttendanceStats = ({ stats, onDateFilterChange }) => {
           </div>
           <div className="space-y-1">
             <p className="text-sm text-gray-300 font-medium">Half Days</p>
-            <p className="text-xs text-orange-300">4-8 hours worked</p>
+            <p className="text-xs text-orange-300">4-7.5 hours worked</p>
           </div>
         </div>
 

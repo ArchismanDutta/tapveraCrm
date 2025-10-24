@@ -12,11 +12,11 @@ const FlexibleShiftRequest = require("../models/FlexibleShiftRequest");
 const ATTENDANCE_CONSTANTS = {
   // Work hour thresholds
   MIN_HALF_DAY_WORK_HOURS: 5,
-  MIN_FULL_DAY_WORK_HOURS: 8,
+  MIN_FULL_DAY_WORK_HOURS: 7.5,
 
   // Flexible shift rules (total hours including break)
   FLEXIBLE_MIN_HALF_DAY_TOTAL_HOURS: 5,
-  FLEXIBLE_MIN_FULL_DAY_TOTAL_HOURS: 9, // 8 work + 1 break
+  FLEXIBLE_MIN_FULL_DAY_TOTAL_HOURS: 9, // 7.5 work + 1.5 break
 
   // Time limits
   MAX_DAILY_WORK_HOURS: 24,
