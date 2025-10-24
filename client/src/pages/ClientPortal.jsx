@@ -23,7 +23,7 @@ import {
   Clock,
 } from "lucide-react";
 
-const API_BASE = "http://localhost:5000";
+const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
 
 // Project Type Icons
 const PROJECT_TYPE_ICONS = {
