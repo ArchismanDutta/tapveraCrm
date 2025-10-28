@@ -61,9 +61,12 @@ const EmployeeAttendanceSchema = new mongoose.Schema({
     isPresent: { type: Boolean, default: false },
     isAbsent: { type: Boolean, default: true },
     isLate: { type: Boolean, default: false },
+    lateMinutes: { type: Number, default: 0 }, // ⭐ Minutes late (0 if on-time)
     isHalfDay: { type: Boolean, default: false },
     isFullDay: { type: Boolean, default: false },
     isOvertime: { type: Boolean, default: false },
+    isWFH: { type: Boolean, default: false }, // ⭐ Work From Home flag
+    isPaidLeave: { type: Boolean, default: false }, // ⭐ Paid Leave flag
 
     // Current status (for real-time tracking)
     currentlyWorking: { type: Boolean, default: false },

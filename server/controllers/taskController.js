@@ -61,6 +61,16 @@ exports.createTask = async (req, res) => {
     });
     await task.save();
 
+    // ✅ If task is linked to a project, add task ID to project's tasks array
+    if (project) {
+      const Project = require("../models/Project");
+      await Project.findByIdAndUpdate(
+        project,
+        { $addToSet: { tasks: task._id } }, // $addToSet prevents duplicates
+        { new: true }
+      );
+    }
+
     const populated = await populateTask(Task.findById(task._id)).lean();
 
     // ✅ Update workload for assigned employees
@@ -404,6 +414,16 @@ exports.deleteTask = async (req, res) => {
       task.assignedBy.toString() !== req.user._id.toString()
     ) {
       return res.status(403).json({ message: "Unauthorized" });
+    }
+
+    // ✅ If task is linked to a project, remove task ID from project's tasks array
+    if (task.project) {
+      const Project = require("../models/Project");
+      await Project.findByIdAndUpdate(
+        task.project,
+        { $pull: { tasks: task._id } }, // $pull removes the task ID from the array
+        { new: true }
+      );
     }
 
     await task.deleteOne();

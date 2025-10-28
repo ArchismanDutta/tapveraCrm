@@ -4,6 +4,7 @@ const router = express.Router();
 const Project = require("../models/Project");
 const { protect, authorize } = require("../middlewares/authMiddleware");
 const { uploadToS3, getFileType, convertToCloudFrontUrl, isS3Configured } = require("../config/s3Config");
+const emailNotificationService = require("../services/emailNotificationService");
 
 // @route   GET /api/projects
 // @desc    Get all projects (with filters and population)
@@ -73,13 +74,14 @@ router.get("/stats", protect, authorize("admin", "superadmin"), async (req, res)
 
     // Overall stats
     const totalProjects = await Project.countDocuments();
-    const activeProjects = await Project.countDocuments({ status: "Active" });
-    const inactiveProjects = await Project.countDocuments({ status: "Inactive" });
-    const completedProjects = await Project.countDocuments({ status: "Completed" });
+    const newProjects = await Project.countDocuments({ status: "new" });
+    const ongoingProjects = await Project.countDocuments({ status: "ongoing" });
+    const completedProjects = await Project.countDocuments({ status: "completed" });
+    const expiredProjects = await Project.countDocuments({ status: "expired" });
 
-    // Projects needing renewal (Active projects past end date)
+    // Projects needing renewal (projects past end date that are not completed)
     const needsRenewal = await Project.countDocuments({
-      status: "Active",
+      status: { $ne: "completed" },
       endDate: { $lt: today },
     });
 
@@ -89,20 +91,22 @@ router.get("/stats", protect, authorize("admin", "superadmin"), async (req, res)
 
     for (const type of types) {
       const typeTotal = await Project.countDocuments({ type });
-      const typeActive = await Project.countDocuments({ type, status: "Active" });
-      const typeInactive = await Project.countDocuments({ type, status: "Inactive" });
-      const typeCompleted = await Project.countDocuments({ type, status: "Completed" });
+      const typeNew = await Project.countDocuments({ type, status: "new" });
+      const typeOngoing = await Project.countDocuments({ type, status: "ongoing" });
+      const typeCompleted = await Project.countDocuments({ type, status: "completed" });
+      const typeExpired = await Project.countDocuments({ type, status: "expired" });
       const typeNeedsRenewal = await Project.countDocuments({
         type,
-        status: "Active",
+        status: { $ne: "completed" },
         endDate: { $lt: today },
       });
 
       statsByType[type] = {
         total: typeTotal,
-        active: typeActive,
-        inactive: typeInactive,
+        new: typeNew,
+        ongoing: typeOngoing,
         completed: typeCompleted,
+        expired: typeExpired,
         needsRenewal: typeNeedsRenewal,
       };
     }
@@ -111,16 +115,17 @@ router.get("/stats", protect, authorize("admin", "superadmin"), async (req, res)
     const thirtyDaysFromNow = new Date();
     thirtyDaysFromNow.setDate(today.getDate() + 30);
     const endingSoon = await Project.countDocuments({
-      status: "Active",
+      status: { $in: ["new", "ongoing"] },
       endDate: { $gte: today, $lte: thirtyDaysFromNow },
     });
 
     res.json({
       overall: {
         total: totalProjects,
-        active: activeProjects,
-        inactive: inactiveProjects,
+        new: newProjects,
+        ongoing: ongoingProjects,
         completed: completedProjects,
+        expired: expiredProjects,
         needsRenewal,
         endingSoon,
       },
@@ -179,13 +184,20 @@ router.post("/", protect, authorize("admin", "superadmin"), async (req, res) => 
       startDate,
       endDate,
       description,
+      remarks,
       budget,
       priority,
+      status,
     } = req.body;
 
     // Validation
     if (!projectName || !type || !assignedTo || !client || !startDate || !endDate) {
       return res.status(400).json({ message: "Please provide all required fields" });
+    }
+
+    // Validate that type is an array and not empty
+    if (!Array.isArray(type) || type.length === 0) {
+      return res.status(400).json({ message: "Please select at least one service type" });
     }
 
     // Validate dates
@@ -201,8 +213,10 @@ router.post("/", protect, authorize("admin", "superadmin"), async (req, res) => 
       startDate,
       endDate,
       description,
+      remarks,
       budget,
       priority: priority || "Medium",
+      status: status || "new",
       createdBy: req.user._id,
     });
 
@@ -231,6 +245,7 @@ router.put("/:id", protect, authorize("admin", "superadmin"), async (req, res) =
       startDate,
       endDate,
       description,
+      remarks,
       budget,
       priority,
       status,
@@ -249,6 +264,13 @@ router.put("/:id", protect, authorize("admin", "superadmin"), async (req, res) =
       }
     }
 
+    // Validate type if provided
+    if (type !== undefined) {
+      if (!Array.isArray(type) || type.length === 0) {
+        return res.status(400).json({ message: "Please select at least one service type" });
+      }
+    }
+
     // Update fields
     if (projectName) project.projectName = projectName;
     if (type) project.type = type;
@@ -257,11 +279,12 @@ router.put("/:id", protect, authorize("admin", "superadmin"), async (req, res) =
     if (startDate) project.startDate = startDate;
     if (endDate) project.endDate = endDate;
     if (description !== undefined) project.description = description;
+    if (remarks !== undefined) project.remarks = remarks;
     if (budget !== undefined) project.budget = budget;
     if (priority) project.priority = priority;
     if (status) {
       project.status = status;
-      if (status === "Completed" && !project.completedDate) {
+      if (status === "completed" && !project.completedDate) {
         project.completedDate = new Date();
       }
     }
@@ -281,23 +304,29 @@ router.put("/:id", protect, authorize("admin", "superadmin"), async (req, res) =
 });
 
 // @route   PATCH /api/projects/:id/status
-// @desc    Toggle project status
+// @desc    Update project status
 // @access  Private (Admin/SuperAdmin)
 router.patch("/:id/status", protect, authorize("admin", "superadmin"), async (req, res) => {
   try {
+    const { status } = req.body;
     const project = await Project.findById(req.params.id);
 
     if (!project) {
       return res.status(404).json({ message: "Project not found" });
     }
 
-    // Toggle status
-    if (project.status === "Active") {
-      project.status = "Inactive";
-    } else if (project.status === "Inactive") {
-      project.status = "Active";
-    } else {
-      project.status = "Active";
+    // Validate status
+    const validStatuses = ["new", "ongoing", "completed", "expired"];
+    if (status && !validStatuses.includes(status)) {
+      return res.status(400).json({ message: "Invalid status value" });
+    }
+
+    // Update status
+    if (status) {
+      project.status = status;
+      if (status === "completed" && !project.completedDate) {
+        project.completedDate = new Date();
+      }
     }
 
     await project.save();
@@ -308,7 +337,7 @@ router.patch("/:id/status", protect, authorize("admin", "superadmin"), async (re
 
     res.json(updatedProject);
   } catch (error) {
-    console.error("Error toggling status:", error);
+    console.error("Error updating status:", error);
     res.status(500).json({ message: "Server error", error: error.message });
   }
 });
@@ -623,6 +652,11 @@ router.post("/:id/messages", protect, uploadToS3.array("files", 5), async (req, 
         },
       });
 
+    // Send email notification (non-blocking)
+    emailNotificationService.sendProjectMessageEmail(populatedMessage).catch(err => {
+      console.error('Failed to send project message email:', err);
+    });
+
     res.status(201).json(populatedMessage);
   } catch (error) {
     console.error("Error sending message:", error);
@@ -749,6 +783,127 @@ router.patch("/:id/messages/:messageId/attachments/:attachmentId/toggle-importan
     });
   } catch (error) {
     console.error("Error toggling attachment importance:", error);
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
+});
+
+// @route   POST /api/projects/:id/messages/summarize
+// @desc    Summarize project messages using AI
+// @access  Private
+router.post("/:id/messages/summarize", protect, async (req, res) => {
+  try {
+    const { days = 7 } = req.body; // Default to last 7 days
+
+    const project = await Project.findById(req.params.id).select('name assignedTo client');
+    if (!project) {
+      return res.status(404).json({ message: "Project not found" });
+    }
+
+    const projectName = project.name || "Untitled Project";
+
+    // Authorization check - match the same logic as POST /messages
+    if (req.user.role === "employee") {
+      const isAssigned = project.assignedTo?.some(
+        (emp) => emp.toString() === req.user._id.toString()
+      );
+      if (!isAssigned) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+    }
+    // Super-admin and clients have access, admins have access
+
+    // Calculate date range
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - days);
+
+    const Message = require("../models/Message");
+
+    // Fetch messages from the last N days
+    const messages = await Message.find({
+      project: req.params.id,
+      createdAt: { $gte: startDate }
+    })
+    .sort({ createdAt: 1 })
+    .populate("sentBy", "firstName lastName email")
+    .lean();
+
+    if (!messages || messages.length === 0) {
+      return res.json({ summary: "No messages found in the selected time period." });
+    }
+
+    // Format messages for AI
+    const formattedMessages = messages.map(msg => {
+      let sender = "Unknown";
+      if (msg.sentBy) {
+        if (msg.sentBy.firstName && msg.sentBy.lastName) {
+          sender = `${msg.sentBy.firstName} ${msg.sentBy.lastName}`;
+        } else if (msg.sentBy.email) {
+          sender = msg.sentBy.email;
+        }
+      }
+
+      const timestamp = new Date(msg.createdAt).toLocaleDateString();
+      const hasAttachments = msg.attachments && msg.attachments.length > 0 ? ` [${msg.attachments.length} attachment(s)]` : "";
+      return `[${timestamp}] ${sender} (${msg.senderType}): ${msg.message}${hasAttachments}`;
+    }).join("\n");
+
+    // Call OpenRouter API with Gemma model
+    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: process.env.OPENROUTER_MODEL || "google/gemma-2-9b-it:free",
+        messages: [
+          {
+            role: "system",
+            content: `You are a helpful assistant that summarizes project conversations. Provide a clear, concise summary highlighting:
+- Key topics discussed
+- Decisions made
+- Action items and tasks
+- Important context for continuing the project
+- Client requests or concerns
+- Employee updates or blockers
+Keep it professional and organized. Use markdown formatting with headers and bullet points.`
+          },
+          {
+            role: "user",
+            content: `Please summarize the following project conversation from the last ${days} days for "${projectName}":\n\n${formattedMessages}`
+          }
+        ]
+      })
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("OpenRouter API error:", response.status, errorText);
+      return res.status(500).json({
+        message: "Failed to generate summary from AI service",
+        details: errorText,
+        status: response.status
+      });
+    }
+
+    const data = await response.json();
+    let summary = data.choices?.[0]?.message?.content || "Unable to generate summary.";
+
+    // Remove <think> tags and their content (AI reasoning artifacts)
+    summary = summary.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+
+    res.json({
+      summary,
+      messageCount: messages.length,
+      projectName: projectName,
+      dateRange: {
+        from: startDate.toISOString(),
+        to: new Date().toISOString()
+      }
+    });
+
+  } catch (error) {
+    console.error("Error summarizing project messages:", error);
     res.status(500).json({ message: "Server error", error: error.message });
   }
 });

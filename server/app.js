@@ -43,6 +43,7 @@ const clientRoutes = require("./routes/clientRoutes");
 const projectRoutes = require("./routes/projectRoutes");
 const notificationRoutes = require("./routes/notificationRoutes");
 const mediaRoutes = require("./routes/mediaRoutes");
+const aiAnalyticsRoutes = require("./routes/aiAnalyticsRoutes");
 
 // Controllers
 const ChatController = require("./controllers/chatController");
@@ -64,8 +65,7 @@ app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 const frontendOrigins = [
   process.env.FRONTEND_ORIGIN,
   process.env.FRONTEND_URL,
-  "http://localhost:5173",
-  "http://localhost:3000",
+  "http://tapvera-crm-frontend.s3-website.ap-south-1.amazonaws.com",
 ].filter(Boolean);
 
 if (!frontendOrigins.length) {
@@ -73,6 +73,8 @@ if (!frontendOrigins.length) {
     "⚠️ No FRONTEND_ORIGIN or FRONTEND_URL set. CORS may block requests."
   );
 }
+
+console.log("🌐 CORS configured for origins:", frontendOrigins);
 
 app.use(
   cors({
@@ -149,6 +151,7 @@ app.use("/api/clients", clientRoutes);
 app.use("/api/projects", projectRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/media", mediaRoutes);
+app.use("/api/ai-analytics", aiAnalyticsRoutes);
 
 // =====================
 // Serve frontend in production
@@ -464,6 +467,14 @@ mongoose
       console.error("⚠️  Cron jobs initialization failed:", error.message);
       console.log("   Install node-cron: npm install node-cron");
     }
+
+    // Initialize Email Service
+    const emailService = require('./services/email/emailService');
+    emailService.initialize().then(() => {
+      console.log('✅ Email service ready');
+    }).catch(err => {
+      console.error('❌ Email service initialization failed:', err.message);
+    });
 
     server.listen(PORT, () =>
       console.log(`🚀 Server running at http://localhost:${PORT}`)

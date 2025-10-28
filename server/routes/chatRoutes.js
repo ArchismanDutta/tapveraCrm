@@ -139,6 +139,92 @@ router.delete("/conversations/:id", protect, async (req, res) => {
   }
 });
 
+// Summarize conversation messages
+router.post("/conversations/:conversationId/summarize", protect, async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const { days = 7 } = req.body; // Default to last 7 days
+
+    // Calculate date range
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - days);
+
+    const ChatMessage = require("../models/ChatMessage");
+
+    // Fetch messages from the last N days
+    const messages = await ChatMessage.find({
+      conversationId,
+      timestamp: { $gte: startDate }
+    })
+    .sort({ timestamp: 1 })
+    .populate("senderId", "firstName lastName email")
+    .lean();
+
+    if (!messages || messages.length === 0) {
+      return res.json({ summary: "No messages found in the selected time period." });
+    }
+
+    // Format messages for AI
+    const formattedMessages = messages.map(msg => {
+      const sender = msg.senderId ? `${msg.senderId.firstName} ${msg.senderId.lastName}` : "Unknown";
+      const timestamp = new Date(msg.timestamp).toLocaleDateString();
+      const hasAttachments = msg.attachments && msg.attachments.length > 0 ? ` [${msg.attachments.length} attachment(s)]` : "";
+      return `[${timestamp}] ${sender}: ${msg.message}${hasAttachments}`;
+    }).join("\n");
+
+    // Call OpenRouter API with Gemma model
+    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: process.env.OPENROUTER_MODEL || "google/gemma-2-9b-it:free",
+        messages: [
+          {
+            role: "system",
+            content: "You are a helpful assistant that summarizes conversations. Provide a clear, concise summary highlighting key topics discussed, decisions made, action items, and important context. Keep it professional and organized."
+          },
+          {
+            role: "user",
+            content: `Please summarize the following conversation from the last ${days} days:\n\n${formattedMessages}`
+          }
+        ]
+      })
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("OpenRouter API error:", response.status, errorText);
+      return res.status(500).json({
+        error: "Failed to generate summary from AI service",
+        details: errorText,
+        status: response.status
+      });
+    }
+
+    const data = await response.json();
+    let summary = data.choices?.[0]?.message?.content || "Unable to generate summary.";
+
+    // Remove <think> tags and their content (AI reasoning artifacts)
+    summary = summary.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+
+    res.json({
+      summary,
+      messageCount: messages.length,
+      dateRange: {
+        from: startDate.toISOString(),
+        to: new Date().toISOString()
+      }
+    });
+
+  } catch (error) {
+    console.error("Error summarizing conversation:", error);
+    res.status(500).json({ error: "Failed to summarize conversation" });
+  }
+});
+
 // Add or remove reaction to a chat message
 router.post("/messages/:messageId/react", protect, async (req, res) => {
   try {

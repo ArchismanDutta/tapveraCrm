@@ -8,11 +8,11 @@ const projectSchema = new mongoose.Schema(
       required: true,
       trim: true,
     },
-    type: {
+    type: [{
       type: String,
       required: true,
       enum: ["Website", "SEO", "Google Marketing", "SMO", "Hosting", "Invoice App"],
-    },
+    }],
     assignedTo: [
       {
         type: mongoose.Schema.Types.ObjectId,
@@ -37,6 +37,10 @@ const projectSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
+    remarks: {
+      type: String,
+      trim: true,
+    },
     budget: {
       type: Number,
       min: 0,
@@ -48,8 +52,8 @@ const projectSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ["Active", "Inactive", "Completed"],
-      default: "Active",
+      enum: ["new", "completed", "expired", "ongoing"],
+      default: "new",
     },
     completedDate: {
       type: Date,
@@ -116,11 +120,11 @@ projectSchema.virtual("computedStatus").get(function () {
   const today = new Date();
   const endDate = new Date(this.endDate);
 
-  if (this.status === "Completed") return "Completed";
-  if (this.status === "Inactive") return "Inactive";
-  if (endDate < today) return "Needs Renewal";
-  if (this.status === "Active") return "Active";
-  return "Inactive";
+  if (this.status === "completed") return "completed";
+  if (endDate < today && this.status !== "completed") return "expired";
+  if (this.status === "ongoing") return "ongoing";
+  if (this.status === "new") return "new";
+  return this.status;
 });
 
 // Index for better query performance

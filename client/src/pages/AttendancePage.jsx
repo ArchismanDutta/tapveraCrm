@@ -570,14 +570,23 @@ const AttendancePage = ({ onLogout }) => {
       const monthIndex = selectedMonth;
 
       // Create leave days set for current month
+      // IMPORTANT: Exclude WFH - it's NOT a leave, it's a normal working day!
       const leaveDaysSet = new Set();
+      const wfhDaysSet = new Set(); // Track WFH days separately
+
       approvedLeaves.forEach(leave => {
         const start = new Date(leave.period?.start || leave.startDate);
         const end = new Date(leave.period?.end || leave.endDate);
-        
+
         for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
           if (d.getFullYear() === year && d.getMonth() === monthIndex) {
-            leaveDaysSet.add(d.getDate());
+            if (leave.type === 'workFromHome') {
+              // WFH days should show as WFH status (magenta), not leave
+              wfhDaysSet.add(d.getDate());
+            } else {
+              // Regular leaves (paid, unpaid, sick, etc.)
+              leaveDaysSet.add(d.getDate());
+            }
           }
         }
       });
@@ -631,8 +640,12 @@ const AttendancePage = ({ onLogout }) => {
 
         let status = "absent";
         // Use backend calculated status with WFH support
-        // Priority: WFH > Absent/Leave > Late > Half-day > Present
-        if (d.isWFH) {
+        // ⭐ Priority: WFH (DOMINATES ALL) > Absent/Leave > Late > Half-day > Present
+        // WFH DOMINATES: If employee has WFH and worked, show WFH regardless of late/early/half-day
+        if ((d.isWFH || d.leaveInfo?.type === 'workFromHome') &&
+            (!d.isAbsent && (d.workDurationSeconds > 0 || d.isPresent))) {
+          // ⭐ HIGHEST PRIORITY: Work From Home - DOMINATES over late/half-day/early
+          // If employee has WFH and worked ANY amount, show as WFH (magenta)
           status = "wfh";
         } else if (d.isAbsent) {
           // Check if it's an approved leave (not WFH)
@@ -642,7 +655,7 @@ const AttendancePage = ({ onLogout }) => {
             status = "absent";
           }
         } else if (d.isLate) {
-          // Late takes priority over half-day
+          // Late takes priority over half-day (but NOT over WFH)
           status = "late";
           console.log(`🔴 LATE DAY DETECTED: ${d.date}`, {isLate: d.isLate, isHalfDay: d.isHalfDay, status, arrivalTime: d.arrivalTime});
         } else if (d.isHalfDay) {
@@ -736,29 +749,43 @@ const AttendancePage = ({ onLogout }) => {
         if (holidayDaysMap[i]) {
           days.push(holidayDaysMap[i]);
         } else if (isWeekend) {
-          days.push({ 
-            day: i, 
-            status: "weekend", 
+          days.push({
+            day: i,
+            status: "weekend",
             workingHours: "0.0",
             name: "Weekend"
           });
+        } else if (attendanceDaysMap[i]) {
+          // Has attendance data - use actual status from punch in/out
+          days.push(attendanceDaysMap[i]);
+        } else if (wfhDaysSet.has(i)) {
+          // Approved WFH but no attendance data yet (employee hasn't punched in)
+          // Show as WFH status (magenta) to indicate WFH is approved
+          const isPast = dateObj < new Date() && dateObj.toDateString() !== new Date().toDateString();
+          days.push({
+            day: i,
+            status: isPast ? "absent" : "wfh", // If past and no work, mark absent; otherwise show as WFH
+            workingHours: "0.0",
+            name: isPast ? "Absent (WFH Not Utilized)" : "Work From Home",
+            metadata: {
+              isWFH: true
+            }
+          });
         } else if (leaveDaysSet.has(i)) {
-          days.push({ 
-            day: i, 
-            status: "leave", 
+          days.push({
+            day: i,
+            status: "leave",
             workingHours: "0.0",
             name: "Approved Leave"
           });
-        } else if (attendanceDaysMap[i]) {
-          days.push(attendanceDaysMap[i]);
         } else {
           const isToday = dateObj.toDateString() === new Date().toDateString();
           const isPast = dateObj < new Date();
-          
-          days.push({ 
-            day: i, 
-            status: isPast && !isToday ? "absent" : "default", 
-            workingHours: "0.0" 
+
+          days.push({
+            day: i,
+            status: isPast && !isToday ? "absent" : "default",
+            workingHours: "0.0"
           });
         }
       }
@@ -873,9 +900,11 @@ const AttendancePage = ({ onLogout }) => {
         let statusColor = "red";
 
         // Use backend calculated status with WFH support
-        if (d.isWFH) {
+        // ⭐ WFH DOMINATES: If employee has WFH and worked, show WFH regardless of late/half-day
+        if ((d.isWFH || d.leaveInfo?.type === 'workFromHome') &&
+            (!d.isAbsent && (d.workDurationSeconds > 0 || d.isPresent))) {
           status = "WFH";
-          statusColor = "blue";
+          statusColor = "fuchsia"; // Magenta color to match calendar
         } else if (d.isAbsent) {
           if (d.leaveInfo && d.leaveInfo.type !== 'workFromHome') {
             status = d.leaveInfo.type === 'halfDay' ? "Half Day Leave" :
