@@ -20,6 +20,7 @@
     "dayjs": "^1.11.13",
     "dotenv": "^17.2.2",
     "framer-motion": "^12.23.24",
+    "fuzzysort": "^3.1.0",
     "html2canvas": "^1.4.1",
     "jspdf": "^3.0.3",
     "jspdf-autotable": "^5.0.2",

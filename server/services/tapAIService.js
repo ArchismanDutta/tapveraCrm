@@ -1,6 +1,8 @@
 // services/tapAIService.js
 // AI Service for Tap - The CRM Assistant (Real Agent)
 
+const enhancedNLP = require('../utils/enhancedNLP');
+
 class TapAIService {
   constructor() {
     this.conversationHistory = new Map(); // userId -> messages[]
@@ -8,6 +10,9 @@ class TapAIService {
 
     // Intent patterns for direct action matching
     this.intentPatterns = this.buildIntentPatterns();
+
+    // Enhanced NLP for fuzzy matching and synonym support
+    this.nlp = enhancedNLP;
   }
 
   /**
@@ -197,9 +202,12 @@ class TapAIService {
   }
 
   /**
-   * Parse user intent from natural language
+   * Parse user intent from natural language with enhanced NLP
    */
   parseIntent(message) {
+    console.log(`🧠 Enhanced NLP parsing: "${message}"`);
+
+    // First, try traditional regex patterns for complex structured commands
     for (const pattern of this.intentPatterns) {
       const match = message.match(pattern.pattern);
       if (match) {
@@ -211,16 +219,183 @@ class TapAIService {
           parameters = { ...parameters, ...extracted };
         }
 
+        console.log(`✅ Matched via regex: ${pattern.action}`);
         return {
           action: pattern.action,
           parameters,
           matches: match,
-          originalMessage: message
+          originalMessage: message,
+          confidence: 1.0,
+          method: 'regex'
         };
       }
     }
 
+    // If no regex match, use enhanced NLP with fuzzy matching
+    console.log(`🔍 Trying fuzzy NLP matching...`);
+    const entities = this.nlp.extractEntities(message);
+
+    console.log('Extracted entities:', JSON.stringify(entities, null, 2));
+
+    if (entities.intent && entities.entity) {
+      const { intent, entity, priority, status } = entities;
+
+      // Map intent + entity to action
+      const action = this.mapIntentEntityToAction(
+        intent.intent,
+        entity.entity,
+        message
+      );
+
+      if (action) {
+        // Extract parameters using NLP
+        const parameters = this.extractParametersNLP(message, {
+          intent: intent.intent,
+          entity: entity.entity,
+          priority,
+          status
+        });
+
+        const avgConfidence = (
+          (intent.confidence || 0) +
+          (entity.confidence || 0)
+        ) / 2;
+
+        console.log(`✅ Matched via NLP: ${action} (confidence: ${(avgConfidence * 100).toFixed(1)}%)`);
+
+        return {
+          action,
+          parameters,
+          originalMessage: message,
+          confidence: avgConfidence,
+          method: 'nlp',
+          entities
+        };
+      }
+    }
+
+    // Try entity-only matching for simple commands
+    if (entities.entity) {
+      const simpleAction = this.mapEntityToAction(entities.entity.entity);
+      if (simpleAction) {
+        console.log(`✅ Matched via entity only: ${simpleAction}`);
+        return {
+          action: simpleAction,
+          parameters: {},
+          originalMessage: message,
+          confidence: entities.entity.confidence,
+          method: 'entity-only'
+        };
+      }
+    }
+
+    console.log(`❌ No match found`);
     return null;
+  }
+
+  /**
+   * Map intent + entity combination to action
+   */
+  mapIntentEntityToAction(intent, entity, message) {
+    const mapping = {
+      'create-task': 'CREATE_TASK',
+      'create-project': 'CREATE_PROJECT',
+      'create-client': 'CREATE_CLIENT',
+      'create-leave': 'CREATE_LEAVE',
+
+      'view-task': 'GET_TASKS',
+      'view-project': 'GET_PROJECTS',
+      'view-employee': 'GET_EMPLOYEES',
+      'view-client': 'GET_CLIENTS',
+      'view-attendance': 'GET_ATTENDANCE',
+      'view-leave': 'GET_LEAVES',
+      'view-analytics': 'GET_ANALYTICS',
+
+      'filter-task': 'GET_TASKS',
+      'filter-project': 'GET_PROJECTS',
+      'filter-employee': 'GET_EMPLOYEES',
+
+      'update-task': 'UPDATE_TASK_STATUS',
+      'assign-task': 'ASSIGN_TASK',
+
+      'approve-leave': 'APPROVE_LEAVE',
+      'reject-leave': 'REJECT_LEAVE',
+    };
+
+    const key = `${intent}-${entity}`;
+    return mapping[key] || null;
+  }
+
+  /**
+   * Map entity only to default action (show/list)
+   */
+  mapEntityToAction(entity) {
+    const mapping = {
+      'task': 'GET_TASKS',
+      'project': 'GET_PROJECTS',
+      'employee': 'GET_EMPLOYEES',
+      'client': 'GET_CLIENTS',
+      'attendance': 'GET_ATTENDANCE',
+      'leave': 'GET_LEAVES',
+      'analytics': 'GET_ANALYTICS',
+    };
+    return mapping[entity] || null;
+  }
+
+  /**
+   * Extract parameters using enhanced NLP
+   */
+  extractParametersNLP(message, entities) {
+    const params = {};
+
+    // Extract priority
+    if (entities.priority) {
+      params.priority = entities.priority.value;
+    }
+
+    // Extract status
+    if (entities.status) {
+      params.status = entities.status.value;
+    }
+
+    // Extract title/name/description (text after the entity)
+    const keywords = {
+      'task': ['task', 'todo'],
+      'project': ['project', 'proj'],
+      'client': ['client', 'customer'],
+      'leave': ['leave', 'vacation']
+    };
+
+    if (entities.entity && keywords[entities.entity]) {
+      const extractedText = this.nlp.extractValue(
+        message,
+        keywords[entities.entity]
+      );
+
+      if (extractedText) {
+        if (entities.entity === 'task') {
+          params.title = extractedText;
+        } else if (entities.entity === 'project') {
+          params.projectName = extractedText;
+        } else if (entities.entity === 'client') {
+          params.clientName = extractedText;
+        }
+      }
+    }
+
+    // Extract dates
+    const dateMatch = message.match(/by\s+(.+?)(?:\s+with|\s+$|$)/i);
+    if (dateMatch) {
+      params.dueDate = this.parseDate(dateMatch[1]);
+    }
+
+    // Extract "for" (assignee)
+    const forMatch = message.match(/for\s+(\w+(?:\s+\w+)?)/i);
+    if (forMatch) {
+      params.assigneeName = forMatch[1];
+    }
+
+    return params;
   }
 
   /**
