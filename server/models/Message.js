@@ -71,6 +71,19 @@ const messageSchema = new mongoose.Schema(
         },
       },
     ],
+    // Mentioned users (WhatsApp-style @mentions)
+    mentions: [
+      {
+        user: {
+          type: mongoose.Schema.Types.ObjectId,
+          refPath: "mentions.userModel",
+        },
+        userModel: {
+          type: String,
+          enum: ["User", "Client"],
+        },
+      },
+    ],
     reactions: [
       {
         emoji: {

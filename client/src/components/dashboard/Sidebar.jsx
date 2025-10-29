@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { NavLink } from "react-router-dom";
+import { NavLink, useLocation } from "react-router-dom";
 import {
   ClipboardList,
   FileText,
@@ -12,6 +12,8 @@ import {
   Briefcase,
   FolderKanban,
   Bell,
+  ChevronDown,
+  ChevronRight,
 } from "lucide-react";
 import { FaChevronCircleRight } from "react-icons/fa";
 import { Users } from "@/components/animate-ui/icons/users";
@@ -80,11 +82,11 @@ const menuConfig = {
       icon: <MessageSquareQuote size={18} animateOnHover />,
       label: "Messages",
     },
-    // {
-    //   to: "/notifications",
-    //   icon: <Bell size={18} />,
-    //   label: "Notifications",
-    // },
+    {
+      to: "/notifications",
+      icon: <Bell size={18} />,
+      label: "Notifications",
+    },
     {
       to: "/notepad",
       icon: <PanelLeft size={18} animateOnHover />,
@@ -105,21 +107,13 @@ const menuConfig = {
       icon: <ChevronUp size={18} animateOnHover />,
       label: "My Leads",
     },
-    // {
-    //   to: "/leads/kanban",
-    //   icon: <TrendingUp size={18} />,
-    //   label: "Lead Pipeline",
-    // },
+   
     {
       to: "/callbacks",
       icon: <Gavel size={18} animateOnHover />,
       label: "My Callbacks",
     },
-    // {
-    //   to: "/callbacks/kanban",
-    //   icon: <PhoneCall size={18} />,
-    //   label: "Callback Pipeline",
-    // },
+    
   ],
   hr: [
     {
@@ -180,11 +174,11 @@ const menuConfig = {
       icon: <MessageSquareQuote size={18} animateOnHover />,
       label: "Messages",
     },
-    // {
-    //   to: "/notifications",
-    //   icon: <Bell size={18} />,
-    //   label: "Notifications",
-    // },
+    {
+      to: "/notifications",
+      icon: <Bell size={18} />,
+      label: "Notifications",
+    },
     {
       to: "/profile",
       icon: <AnimatedUser size={18} animateOnHover />,
@@ -212,16 +206,35 @@ const menuConfig = {
       icon: <Gauge size={18} animateOnHover />,
       label: "Admin Dashboard",
     },
+    
+    // Business Management Dropdown
     {
-      to: "/clients",
+      label: "Business Management",
       icon: <Briefcase size={18} />,
-      label: "Client Management",
+      children: [
+        {
+          to: "/clients",
+          icon: <Briefcase size={16} />,
+          label: "Client Management",
+        },
+        {
+          to: "/projects",
+          icon: <FolderKanban size={16} />,
+          label: "Project Management",
+        },
+        {
+          to: "/leads",
+          icon: <ChevronUp size={16} animateOnHover />,
+          label: "Lead Management",
+        },
+        {
+          to: "/callbacks",
+          icon: <RotateCw size={16} animateOnHover />,
+          label: "Callback Management",
+        },
+      ],
     },
-    {
-      to: "/projects",
-      icon: <FolderKanban size={18} />,
-      label: "Project Management",
-    },
+
     {
       to: "/employee-portal",
       icon: <FolderKanban size={18} />,
@@ -244,11 +257,11 @@ const menuConfig = {
       icon: <MessageSquareQuote size={18} animateOnHover />,
       label: "Messages",
     },
-    // {
-    //   to: "/notifications",
-    //   icon: <Bell size={18} />,
-    //   label: "Notifications",
-    // },
+    {
+      to: "/notifications",
+      icon: <Bell size={18} />,
+      label: "Notifications",
+    },
     {
       to: "/admin/holidays",
       icon: <Calendar size={18} />,
@@ -265,16 +278,6 @@ const menuConfig = {
       label: "My Profile",
     },
     {
-      to: "/leads",
-      icon: <ChevronUp size={18} animateOnHover />,
-      label: "Lead Management",
-    },
-    {
-      to: "/callbacks",
-      icon: <RotateCw size={18} animateOnHover />,
-      label: "Callback Management",
-    },
-    {
       type: "achievements",
       icon: <PartyPopper size={18} animateOnHover />,
       label: "Achievements",
@@ -287,91 +290,105 @@ const menuConfig = {
       label: "Dashboard",
     },
     {
-      to: "/super-admin",
-      icon: <ChartNoAxesColumnDecreasing size={18} animateOnHover />,
-      label: "Employees Current Status",
+      to: "/tasks",
+      icon: <CircleCheckBig size={18} animateOnHover />,
+      label: "My Tasks",
     },
+
+    // 🧑‍💼 Employees Dropdown
     {
-      to: "/super-admin/attendance",
-      icon: <Pin size={18} animateOnHover />,
-      label: "Employee Attendance Portal",
+      label: "Employees",
+      icon: <Users size={18} animateOnHover />,
+      children: [
+        {
+          to: "/super-admin",
+          icon: <ChartNoAxesColumnDecreasing size={16} animateOnHover />,
+          label: "Current Status",
+        },
+        {
+          to: "/super-admin/attendance",
+          icon: <Pin size={16} animateOnHover />,
+          label: "Attendance Portal",
+        },
+        {
+          to: "/admin/tasks",
+          icon: <ClipboardList size={16} animateOnHover />,
+          label: "Task Management",
+        },
+        {
+          to: "/admin/leaves",
+          icon: <Send size={16} animateOnHover />,
+          label: "Leave Requests",
+        },
+        {
+          to: "/admin/shifts",
+          icon: <Compass size={16} animateOnHover />,
+          label: "Shift Management",
+        },
+        {
+          to: "/admin/manual-attendance",
+          icon: <Disc3 size={16} animateOnHover />,
+          label: "Manual Attendance",
+        },
+        {
+          to: "/admin/salary-management",
+          icon: <Fingerprint size={16} animateOnHover />,
+          label: "Salary Management",
+        },
+        
+        {
+          to: "/directory",
+          icon: <Users size={16} animateOnHover />,
+          label: "Employee Details",
+        },
+        {
+          to: "/super-admin/notepad",
+          icon: <BookOpen size={16} animateOnHover />,
+          label: "Employee Notepads",
+        },
+      ],
     },
+
+    // Business Management Dropdown
     {
-      to: "/clients",
+      label: "Business Management",
       icon: <Briefcase size={18} />,
-      label: "Client Management",
+      children: [
+        {
+          to: "/clients",
+          icon: <Briefcase size={16} />,
+          label: "Client Management",
+        },
+        {
+          to: "/projects",
+          icon: <FolderKanban size={16} />,
+          label: "Project Management",
+        },
+        {
+          to: "/leads",
+          icon: <ChevronUp size={16} animateOnHover />,
+          label: "Lead Management",
+        },
+        {
+          to: "/callbacks",
+          icon: <RotateCw size={16} animateOnHover />,
+          label: "Callback Management",
+        },
+      ],
     },
-    {
-      to: "/projects",
-      icon: <FolderKanban size={18} />,
-      label: "Project Management",
-    },
-    {
-      to: "/admin/tasks",
-      icon: <ClipboardList size={18} animateOnHover />,
-      label: "Task Management",
-    },
-    {
-      to: "/admin/leaves",
-      icon: <Send size={18} animateOnHover />,
-      label: "Leave Requests",
-    },
-    {
-      to: "/admin/shifts",
-      icon: <Compass size={18} animateOnHover />,
-      label: "Shift Management",
-    },
-    {
-      to: "/admin/manual-attendance",
-      icon: <Disc3 size={18} animateOnHover />,
-      label: "Manual Attendance",
-    },
-    {
-      to: "/admin/salary-management",
-      icon: <Fingerprint size={18} animateOnHover />,
-      label: "Salary Management",
-    },
+
     { to: "/todo", icon: <Brush size={18} animateOnHover />, label: "Todo" },
     {
       to: "/messages",
       icon: <MessageSquareQuote size={18} animateOnHover />,
       label: "Messages",
     },
-    // {
-    //   to: "/notifications",
-    //   icon: <Bell size={18} />,
-    //   label: "Notifications",
-    // },
     {
-      to: "/leads",
-      icon: <ChevronUp size={18} animateOnHover />,
-      label: "Lead Management",
+      to: "/notifications",
+      icon: <Bell size={18} />,
+      label: "Notifications",
     },
-    // {
-    //   to: "/leads/kanban",
-    //   icon: <TrendingUp size={18} />,
-    //   label: "Lead Pipeline",
-    // },
-    {
-      to: "/callbacks",
-      icon: <RotateCw size={18} animateOnHover />,
-      label: "Callback Management",
-    },
-    // {
-    //   to: "/callbacks/kanban",
-    //   icon: <PhoneCall size={18} />,
-    //   label: "Callback Pipeline",
-    // },
-    {
-      to: "/tasks",
-      icon: <CircleCheckBig size={18} animateOnHover />,
-      label: "My Tasks",
-    },
-    {
-      to: "/directory",
-      icon: <Users size={18} animateOnHover />,
-      label: "Employee Details",
-    },
+    
     { to: "/admin/notices", icon: <Flag size={18} />, label: "Notice Board" },
     {
       to: "/admin/holidays",
@@ -383,25 +400,12 @@ const menuConfig = {
       icon: <AnimatedUser size={18} animateOnHover />,
       label: "My Profile",
     },
-
-    {
-      to: "/super-admin/notepad",
-      icon: <BookOpen size={18} />,
-      label: "Employee Notepads",
-    },
     {
       type: "achievements",
       icon: <PartyPopper size={18} animateOnHover />,
       label: "Achievements",
     },
   ],
-  // client: [
-  //   {
-  //     to: "/client-portal",
-  //     icon: <FolderKanban size={18} />,
-  //     label: "My Projects",
-  //   },
-  // ],
 };
 
 // Convert backend role strings into something Sidebar can handle
@@ -413,6 +417,7 @@ const normalizeRole = (role) => {
 };
 
 const Sidebar = ({ collapsed, setCollapsed, onLogout, userRole }) => {
+  const location = useLocation();
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [role, setRole] = useState("employee");
   const [chatUnread, setChatUnread] = useState(0);
@@ -421,11 +426,44 @@ const Sidebar = ({ collapsed, setCollapsed, onLogout, userRole }) => {
   const [showUnreadTooltip, setShowUnreadTooltip] = useState(false);
   const [userDepartment, setUserDepartment] = useState("");
   const [hoveredItem, setHoveredItem] = useState(null);
+  const [expandedDropdowns, setExpandedDropdowns] = useState({});
   const {
     showAchievementsDashboard,
     openAchievementsDashboard,
     closeAchievementsDashboard,
   } = useAchievements();
+
+  const toggleDropdown = (label) => {
+    setExpandedDropdowns(prev => ({
+      ...prev,
+      [label]: !prev[label]
+    }));
+  };
+
+  // Auto-expand dropdowns that contain the current active route
+  useEffect(() => {
+    const rawMenuItems = menuConfig[role] || menuConfig["employee"];
+    const newExpandedState = {};
+    
+    rawMenuItems.forEach((item) => {
+      if (item.children) {
+        const hasActiveChild = item.children.some(child => {
+          // Exact match for routes
+          if (child.to === location.pathname) return true;
+          // Special handling for /super-admin to not match /super-admin/attendance etc
+          if (child.to === "/super-admin" && location.pathname === "/super-admin") return true;
+          if (child.to !== "/super-admin" && location.pathname.startsWith(child.to)) return true;
+          return false;
+        });
+        
+        if (hasActiveChild) {
+          newExpandedState[item.label] = true;
+        }
+      }
+    });
+    
+    setExpandedDropdowns(prev => ({ ...prev, ...newExpandedState }));
+  }, [location.pathname, role]);
 
   useEffect(() => {
     let resolvedRole = normalizeRole(userRole || "employee");
@@ -464,7 +502,6 @@ const Sidebar = ({ collapsed, setCollapsed, onLogout, userRole }) => {
       setChatUnread(isNaN(total) ? 0 : total);
     };
     window.addEventListener("chat-unread-total", handler);
-    // Also poll storage every 3s as a fallback in case an event is missed
     const interval = setInterval(updateFromStorage, 3000);
     return () => {
       window.removeEventListener("chat-unread-total", handler);
@@ -518,7 +555,6 @@ const Sidebar = ({ collapsed, setCollapsed, onLogout, userRole }) => {
       }
     };
     fetchConversations();
-    // Refresh conversations every 30 seconds
     const interval = setInterval(fetchConversations, 30000);
     return () => clearInterval(interval);
   }, []);
@@ -526,12 +562,29 @@ const Sidebar = ({ collapsed, setCollapsed, onLogout, userRole }) => {
   // Filter menu items based on role and department
   const rawMenuItems = menuConfig[role] || menuConfig["employee"];
   const menuItems = rawMenuItems.filter((item) => {
+    // For items with children, filter the children
+    if (item.children) {
+      item.children = item.children.filter((child) => {
+        if (
+          child.to === "/leads" ||
+          child.to === "/callbacks"
+        ) {
+          return (
+            role === "super-admin" ||
+            role === "admin" ||
+            userDepartment === "marketingAndSales"
+          );
+        }
+        return true;
+      });
+      // Only show the dropdown if it has children after filtering
+      return item.children.length > 0;
+    }
+    
     // Allow access to leads/callbacks for super-admin, admin, or marketingAndSales employees
     if (
       item.to === "/leads" ||
-      item.to === "/callbacks" ||
-      item.to === "/leads/kanban" ||
-      item.to === "/callbacks/kanban"
+      item.to === "/callbacks"
     ) {
       return (
         role === "super-admin" ||
@@ -542,14 +595,20 @@ const Sidebar = ({ collapsed, setCollapsed, onLogout, userRole }) => {
     return true;
   });
 
+  // Helper to check if a route is active
+  const isRouteActive = (path) => {
+    if (path === "/super-admin") {
+      return location.pathname === "/super-admin";
+    }
+    return location.pathname === path || location.pathname.startsWith(path + "/");
+  };
+
   // Helper to add hover trigger to animated icons
   const renderIconWithHover = (icon, isHovered) => {
-    // Check if the icon has animateOnHover prop
     if (icon.props?.animateOnHover) {
-      // Clone the icon, remove animateOnHover, and add animate prop to trigger on parent hover
       return React.cloneElement(icon, {
-        animateOnHover: undefined, // Remove the default hover detection
-        animate: isHovered, // Trigger animation based on parent hover state
+        animateOnHover: undefined,
+        animate: isHovered,
       });
     }
     return icon;
@@ -612,6 +671,72 @@ const Sidebar = ({ collapsed, setCollapsed, onLogout, userRole }) => {
               );
             }
 
+            // Handle dropdown menus
+            if (item.children) {
+              const isExpanded = expandedDropdowns[item.label];
+              const hasActiveChild = item.children.some(child => isRouteActive(child.to));
+              
+              return (
+                <div key={`dropdown-${item.label}`}>
+                  <button
+                    onClick={() => !collapsed && toggleDropdown(item.label)}
+                    className={`group flex items-center gap-4 rounded-lg px-4 py-3 text-sm font-semibold
+                      transition-all duration-150 w-full text-left
+                      ${hasActiveChild && !isExpanded
+                        ? "bg-gradient-to-r from-blue-600/50 to-blue-400/50 text-white"
+                        : "text-blue-100 hover:text-blue-300 hover:bg-white/10 hover:font-bold"
+                      }
+                      ${collapsed ? "justify-center" : "justify-between"}`}
+                    tabIndex={collapsed ? -1 : 0}
+                    onMouseEnter={() => setHoveredItem(item.label)}
+                    onMouseLeave={() => setHoveredItem(null)}
+                  >
+                    <div className="flex items-center gap-4">
+                      <span className="flex items-center justify-center">
+                        {renderIconWithHover(item.icon, hoveredItem === item.label)}
+                      </span>
+                      {!collapsed && <span>{item.label}</span>}
+                    </div>
+                    {!collapsed && (
+                      <span className="transition-transform duration-200">
+                        {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                      </span>
+                    )}
+                  </button>
+                  
+                  {/* Dropdown Items */}
+                  {!collapsed && isExpanded && (
+                    <div className="ml-4 mt-1 space-y-1 border-l-2 border-blue-500/30 pl-2">
+                      {item.children.map((child) => {
+                        const isActive = isRouteActive(child.to);
+                        return (
+                          <NavLink
+                            key={child.to}
+                            to={child.to}
+                            className={`group flex items-center gap-3 rounded-lg px-3 py-2 text-xs font-medium
+                              transition-all duration-150
+                              ${
+                                isActive
+                                  ? "bg-gradient-to-r from-blue-600 to-blue-400 text-white shadow-md"
+                                  : "text-blue-100 hover:text-blue-300 hover:bg-white/5"
+                              }`}
+                            onMouseEnter={() => setHoveredItem(child.to)}
+                            onMouseLeave={() => setHoveredItem(null)}
+                          >
+                            <span className="flex items-center justify-center">
+                              {renderIconWithHover(child.icon, hoveredItem === child.to)}
+                            </span>
+                            <span>{child.label}</span>
+                          </NavLink>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            }
+
+            // Regular menu items
             return (
               <div
                 key={item.to}
@@ -721,7 +846,7 @@ const Sidebar = ({ collapsed, setCollapsed, onLogout, userRole }) => {
           <button
             onClick={onLogout}
             className="w-full rounded-lg bg-gradient-to-r from-red-600 to-red-400
-              text-white shadow-lg hover:brightness-110 transition flex items-center justify-center"
+              text-white shadow-lg hover:brightness-110 transition flex items-center justify-center py-2"
           >
             {collapsed ? (
               <span aria-label="Logout" role="img" style={{ fontSize: 20 }}>

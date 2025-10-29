@@ -8,7 +8,10 @@ import AttendanceStats from "../components/attendance/AttendanceStats";
 import AttendanceCalendar from "../components/attendance/AttendanceCalendar";
 import WeeklyHoursChart from "../components/attendance/WeeklyHoursChart";
 import RecentActivityTable from "../components/attendance/RecentActivityTable";
+import AttendanceInsights from "../components/attendance/AttendanceInsights";
 import Sidebar from "../components/dashboard/Sidebar";
+import attendanceAnalytics from "../services/attendanceAnalytics";
+import aiAnalyticsService from "../services/aiAnalyticsService";
 import { RefreshCw, AlertCircle, Clock, Users, Calendar as CalendarIcon, User, Search, UserCheck, Activity, Building2, ChevronDown } from "lucide-react";
 
 const SuperAdminAttendancePortal = ({ onLogout }) => {
@@ -25,6 +28,7 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
   const [loading, setLoading] = useState(true);
   const [loadingEmployeeData, setLoadingEmployeeData] = useState(false);
   const [error, setError] = useState(null);
+  const [attendanceAnalysis, setAttendanceAnalysis] = useState(null);
 
   const [refreshing, setRefreshing] = useState(false);
   const [currentStatus, setCurrentStatus] = useState(null);
@@ -238,6 +242,7 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
         setWeeklyHours(cachedData.weeklyHours);
         setRecentActivity(cachedData.recentActivity);
         setCurrentStatus(cachedData.currentStatus);
+        setAttendanceAnalysis(cachedData.attendanceAnalysis || null);
         setLoadingEmployeeData(false);
         return;
       } else {
@@ -320,6 +325,8 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
               hasTimeline: !!rawDailyData[0].timeline,
               isLate: rawDailyData[0].isLate,
               'calculated.isLate': rawDailyData[0].calculated?.isLate,
+              lateMinutes: rawDailyData[0].lateMinutes,
+              'calculated.lateMinutes': rawDailyData[0].calculated?.lateMinutes,
               arrivalTime: rawDailyData[0].arrivalTime || rawDailyData[0].calculated?.arrivalTime,
               shiftStart: rawDailyData[0].shift?.startTime
             } : null,
@@ -327,7 +334,22 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
               date: d.date,
               isLate: d.isLate,
               'calc.isLate': d.calculated?.isLate,
+              lateMinutes: d.lateMinutes,
+              'calc.lateMinutes': d.calculated?.lateMinutes,
               arrival: d.arrivalTime || d.calculated?.arrivalTime
+            }))
+          });
+
+          // 🔍 CRITICAL: Check if any late days have lateMinutes
+          const lateDaysInRaw = rawDailyData.filter(d => d.isLate || d.calculated?.isLate);
+          console.log('🚨 LATE DAYS IN RAW API RESPONSE:', {
+            count: lateDaysInRaw.length,
+            lateDaysWithMinutes: lateDaysInRaw.map(d => ({
+              date: d.date,
+              isLate: d.isLate || d.calculated?.isLate,
+              lateMinutes: d.lateMinutes || d.calculated?.lateMinutes || 0,
+              hasLateMinutesField: 'lateMinutes' in d,
+              hasCalcLateMinutesField: d.calculated && 'lateMinutes' in d.calculated
             }))
           });
 
@@ -370,6 +392,9 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
               arrivalTime: day.arrivalTime || day.calculated?.arrivalTime,
               departureTime: day.departureTime || day.calculated?.departureTime,
 
+              // Late tracking
+              lateMinutes: day.lateMinutes || day.calculated?.lateMinutes || 0,
+
               // Extended details preserved
               shiftType: day.shiftType || day.calculated?.shiftType || 'standard',
               assignedShift: day.assignedShift || day.shift || day.calculated?.shift,
@@ -408,6 +433,7 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
                 arrival: enhancedWithRest.arrivalTime,
                 departure: enhancedWithRest.departureTime
               },
+              lateMinutes: enhancedWithRest.lateMinutes,
               eventCount: enhancedWithRest.timeline?.length || 0
             });
 
@@ -502,11 +528,12 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
 
       dailyData.forEach(d => {
         // Use the data directly from the converted format
-        if (d.isWFH) {
+        // ⭐ IMPORTANT: WFH only counts if employee actually worked (punched in)
+        if (d.isWFH && d.isPresent) {
           wfhDaysCount++;
-          presentDaysCount++; // WFH counts as present
+          presentDaysCount++; // WFH counts as present ONLY if they worked
         } else if (d.isAbsent) {
-          absentDaysCount++;
+          absentDaysCount++; // Includes WFH days where employee didn't work
         } else if (d.isHalfDay) {
           halfDayCount++;
           presentDaysCount++; // Half day counts as present
@@ -520,6 +547,17 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
         }
       });
 
+      // 🔍 Debug: Show detailed breakdown of late day classification
+      const lateDaysWithFlags = dailyData.filter(d => d.isLate).map(d => ({
+        date: d.date,
+        isLate: d.isLate,
+        isWFH: d.isWFH,
+        isPresent: d.isPresent,
+        isAbsent: d.isAbsent,
+        isHalfDay: d.isHalfDay,
+        countedAsLate: !(d.isWFH && d.isPresent) && !d.isAbsent && !d.isHalfDay
+      }));
+
       console.log('📊 Enhanced stats calculated:', {
         presentDaysCount,
         lateDaysCount,
@@ -528,7 +566,9 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
         wfhDaysCount,
         totalWorkHours: totalWorkHours.toFixed(1),
         dataSourceSystem: USE_NEW_ATTENDANCE_SYSTEM ? 'New System' : 'Legacy System',
-        lateDaysDetected: dailyData.filter(d => d.isLate).map(d => ({ date: d.date, isLate: d.isLate }))
+        allDaysMarkedLate: lateDaysWithFlags.length,
+        actuallyCountedAsLate: lateDaysWithFlags.filter(d => d.countedAsLate).length,
+        lateDaysBreakdown: lateDaysWithFlags
       });
 
       // Fetch additional data in parallel with shorter timeouts
@@ -767,8 +807,8 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
                                      false;
 
           // Priority-based status determination:
-          // Holiday > Absent > Leave (NOT WFH) > Half-day > Late > Present
-          // WFH is NOT treated as leave - it's a normal working day with isWFH flag
+          // Holiday > Absent > Leave (NOT WFH) > WFH (DOMINATES ALL) > Half-day > Late > Present
+          // ⭐ WFH DOMINATES: If employee has WFH and worked, show WFH regardless of late/early/half-day
           if (attendanceData.isAbsent && !attendanceData.isPresent) {
             // PRIORITY 2: Absent (no work done)
             status = "absent";
@@ -801,9 +841,11 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
               default:
                 status = "approved-leave";
             }
-          } else if ((attendanceData.isWFH || attendanceData.leaveInfo?.type === 'workFromHome') && attendanceData.isPresent) {
-            // PRIORITY 4: Work From Home (if worked normal hours)
-            // Show as distinct WFH status instead of Present
+          } else if ((attendanceData.isWFH || attendanceData.leaveInfo?.type === 'workFromHome') &&
+                     (attendanceData.isPresent || attendanceData.workDurationSeconds > 0)) {
+            // ⭐ PRIORITY 4: Work From Home - DOMINATES OVER LATE/HALF-DAY/EARLY
+            // If employee has WFH and worked ANY amount, show as WFH (magenta)
+            // This overrides late, half-day, and early statuses
             status = "wfh";
           } else if (attendanceData.isHalfDay && attendanceData.isPresent) {
             // PRIORITY 5: Half Day (< 4.5 hours worked)
@@ -1061,17 +1103,47 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
           status = "weekend";
           metadata = { isWeekend: true };
         } else {
-          // Future dates or days with no data
-          const today = new Date();
-          today.setHours(0, 0, 0, 0);
-          dateObj.setHours(0, 0, 0, 0);
+          // Check if this day has an approved WFH request (even without attendance data)
+          const hasApprovedWFH = approvedLeaves && approvedLeaves.some(leave => {
+            if (leave.type !== 'workFromHome') return false;
+            const leaveStart = new Date(leave.period?.start || leave.startDate);
+            const leaveEnd = new Date(leave.period?.end || leave.endDate);
+            leaveStart.setHours(0, 0, 0, 0);
+            leaveEnd.setHours(23, 59, 59, 999);
+            dateObj.setHours(12, 0, 0, 0); // Set to noon to avoid timezone issues
+            return dateObj >= leaveStart && dateObj <= leaveEnd;
+          });
 
-          if (dateObj > today) {
-            status = "default"; // Future date
-            metadata = { isFuture: true };
+          if (hasApprovedWFH) {
+            // Day has approved WFH but no attendance data (employee hasn't punched in)
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const checkDate = new Date(year, monthIndex, dayNum);
+            checkDate.setHours(0, 0, 0, 0);
+            const isPast = checkDate < today;
+
+            if (isPast) {
+              // Past WFH day with no work → mark as absent
+              status = "absent";
+              metadata = { isWFH: true, noData: true, wfhNotUtilized: true };
+            } else {
+              // Future/Today WFH day → show as WFH (magenta)
+              status = "wfh";
+              metadata = { isWFH: true, isFuture: checkDate > today, wfhApproved: true };
+            }
           } else {
-            status = "absent"; // Past date with no data
-            metadata = { noData: true };
+            // No WFH, check if future or past
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            dateObj.setHours(0, 0, 0, 0);
+
+            if (dateObj > today) {
+              status = "default"; // Future date
+              metadata = { isFuture: true };
+            } else {
+              status = "absent"; // Past date with no data
+              metadata = { noData: true };
+            }
           }
         }
 
@@ -1219,11 +1291,13 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
         .slice(0, 5)
         .map(d => {
           // Enhanced status determination for new system data
+          // ⭐ WFH DOMINATES: If employee has WFH and worked, show WFH regardless of late/half-day
           let status, statusColor;
 
-          if (d.isWFH) {
+          if ((d.isWFH || d.leaveInfo?.type === 'workFromHome') &&
+              (!d.isAbsent && (d.workDurationSeconds > 0 || d.isPresent))) {
             status = 'Work From Home';
-            statusColor = 'blue';
+            statusColor = 'fuchsia'; // Magenta to match calendar
           } else if (d.isAbsent) {
             if (d.leaveInfo && d.leaveInfo.type !== 'workFromHome') {
               status = d.leaveInfo.type === 'halfDay' ? 'Half Day Leave' : 'On Leave';
@@ -1413,6 +1487,64 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
       setRecentActivity(recent);
       setCurrentStatus(statusData);
 
+      // 🤖 Run AI-powered attendance analytics
+      console.log('🤖 Running AI attendance analysis on', dailyData.length, 'days of data');
+      let analysisResult = null;
+      try {
+        // Step 1: Run local statistical analysis
+        const localAnalysis = attendanceAnalytics.analyzeAttendancePatterns(dailyData, {
+          lookbackPeriod: Math.min(dailyData.length, 30), // Use available data up to 30 days
+          lateThreshold: 3,
+          overtimeThreshold: 10,
+          punctualityDropThreshold: 40,
+          minDataPoints: 5
+        });
+
+        console.log('✅ Local analysis complete:', {
+          riskScore: localAnalysis.riskScore.score,
+          riskLevel: localAnalysis.riskScore.level,
+          alertsCount: localAnalysis.alerts.length,
+          lateDays: localAnalysis.summary.lateDays,
+          hasPatterns: localAnalysis.latePatterns.hasPattern,
+          hasBurnoutSignals: localAnalysis.burnoutSignals.hasBurnoutSignals
+        });
+
+        // 🎯 VALIDATION: Verify analytics late count matches SuperAdmin count
+        console.log('🎯 LATE DAYS VALIDATION:', {
+          superAdminCount: lateDaysCount,
+          analyticsCount: localAnalysis.summary.lateDays,
+          match: lateDaysCount === localAnalysis.summary.lateDays,
+          difference: Math.abs(lateDaysCount - localAnalysis.summary.lateDays)
+        });
+
+        // Step 2: Enhance with AI insights (non-blocking)
+        try {
+          console.log('🤖 Enhancing with real AI model...');
+          const enhancedAnalysis = await aiAnalyticsService.enhanceAnalysis(
+            localAnalysis,
+            selectedEmployee.name
+          );
+
+          if (enhancedAnalysis.aiEnhanced) {
+            console.log('✅ Analysis enhanced with AI insights');
+            console.log('🤖 AI Assessment:', enhancedAnalysis.aiInsights.assessment);
+            analysisResult = enhancedAnalysis;
+          } else {
+            console.log('ℹ️ Using local analysis only (AI not available)');
+            analysisResult = localAnalysis;
+          }
+        } catch (aiError) {
+          console.warn('AI enhancement failed, using local analysis:', aiError.message);
+          analysisResult = localAnalysis;
+        }
+
+        setAttendanceAnalysis(analysisResult);
+      } catch (analysisError) {
+        console.error('Error running attendance analysis:', analysisError);
+        // Don't fail the whole operation if analysis fails
+        setAttendanceAnalysis(null);
+      }
+
       // CRITICAL: Cache data must match the exact format of enhancedStats for consistency
       // Use the EXACT same objects that were set to state to prevent any discrepancies
       setEmployeeCache(prev => {
@@ -1429,6 +1561,7 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
           weeklyHours: weeklyHoursData,
           recentActivity: recent,
           currentStatus: statusData,
+          attendanceAnalysis: analysisResult, // Cache the analysis result
           timestamp: Date.now()
         });
         console.log(`💾 Cached data for employee ${employeeId} at ${new Date().toLocaleTimeString()}`);
@@ -1672,6 +1805,7 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
       setWeeklyHours([]);
       setRecentActivity([]);
       setCurrentStatus(null);
+      setAttendanceAnalysis(null);
       
       // Then fetch the data
       fetchAttendanceData(selectedEmployee._id);
@@ -2183,7 +2317,15 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
                 <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 backdrop-blur-sm border border-slate-600/30 rounded-2xl overflow-hidden hover:border-cyan-400/40 transition-all duration-300">
                   <AttendanceStats stats={stats} />
                 </div>
-                
+
+                {/* AI-Powered Attendance Insights */}
+                {attendanceAnalysis && (
+                  <AttendanceInsights
+                    analysis={attendanceAnalysis}
+                    employeeName={selectedEmployee?.name}
+                  />
+                )}
+
                 <div className="grid lg:grid-cols-3 grid-cols-1 gap-6">
                   <div className="lg:col-span-2 flex flex-col space-y-6">
                     {/* Calendar */}

@@ -26,23 +26,29 @@ exports.createLeave = async (req, res) => {
       return res.status(400).json({ message: "Invalid start or end date" });
 
     // 🔥 Sandwich Policy Expansion
+    // ⚠️ ONLY apply to paid/unpaid/sick/maternity leaves
+    // ✅ EXCLUDE workFromHome and halfDay (they should be exact dates)
     let adjustedStart = new Date(period.start);
     let adjustedEnd = new Date(period.end);
 
-    // expand backwards
-    let checkPrev = new Date(adjustedStart);
-    checkPrev.setDate(checkPrev.getDate() - 1);
-    while (await holidayService.isHolidayOrWeekend(checkPrev)) {
-      adjustedStart = new Date(checkPrev);
-      checkPrev.setDate(checkPrev.getDate() - 1);
-    }
+    const shouldApplySandwichPolicy = !['workFromHome', 'halfDay'].includes(type);
 
-    // expand forwards
-    let checkNext = new Date(adjustedEnd);
-    checkNext.setDate(checkNext.getDate() + 1);
-    while (await holidayService.isHolidayOrWeekend(checkNext)) {
-      adjustedEnd = new Date(checkNext);
+    if (shouldApplySandwichPolicy) {
+      // expand backwards
+      let checkPrev = new Date(adjustedStart);
+      checkPrev.setDate(checkPrev.getDate() - 1);
+      while (await holidayService.isHolidayOrWeekend(checkPrev)) {
+        adjustedStart = new Date(checkPrev);
+        checkPrev.setDate(checkPrev.getDate() - 1);
+      }
+
+      // expand forwards
+      let checkNext = new Date(adjustedEnd);
       checkNext.setDate(checkNext.getDate() + 1);
+      while (await holidayService.isHolidayOrWeekend(checkNext)) {
+        adjustedEnd = new Date(checkNext);
+        checkNext.setDate(checkNext.getDate() + 1);
+      }
     }
 
     // prepare document if uploaded
@@ -179,23 +185,29 @@ exports.updateLeave = async (req, res) => {
     }
 
     // Apply sandwich policy expansion
+    // ⚠️ ONLY apply to paid/unpaid/sick/maternity leaves
+    // ✅ EXCLUDE workFromHome and halfDay (they should be exact dates)
     let adjustedStart = new Date(period.start);
     let adjustedEnd = new Date(period.end);
 
-    // expand backwards
-    let checkPrev = new Date(adjustedStart);
-    checkPrev.setDate(checkPrev.getDate() - 1);
-    while (await holidayService.isHolidayOrWeekend(checkPrev)) {
-      adjustedStart = new Date(checkPrev);
-      checkPrev.setDate(checkPrev.getDate() - 1);
-    }
+    const shouldApplySandwichPolicy = !['workFromHome', 'halfDay'].includes(type);
 
-    // expand forwards
-    let checkNext = new Date(adjustedEnd);
-    checkNext.setDate(checkNext.getDate() + 1);
-    while (await holidayService.isHolidayOrWeekend(checkNext)) {
-      adjustedEnd = new Date(checkNext);
+    if (shouldApplySandwichPolicy) {
+      // expand backwards
+      let checkPrev = new Date(adjustedStart);
+      checkPrev.setDate(checkPrev.getDate() - 1);
+      while (await holidayService.isHolidayOrWeekend(checkPrev)) {
+        adjustedStart = new Date(checkPrev);
+        checkPrev.setDate(checkPrev.getDate() - 1);
+      }
+
+      // expand forwards
+      let checkNext = new Date(adjustedEnd);
       checkNext.setDate(checkNext.getDate() + 1);
+      while (await holidayService.isHolidayOrWeekend(checkNext)) {
+        adjustedEnd = new Date(checkNext);
+        checkNext.setDate(checkNext.getDate() + 1);
+      }
     }
 
     // Prepare update object

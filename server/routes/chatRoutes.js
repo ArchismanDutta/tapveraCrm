@@ -43,8 +43,18 @@ router.get("/messages/:conversationId", protect, async (req, res) => {
 // Send a message to a conversation (with optional file attachments)
 router.post("/messages", protect, uploadToS3.array("files", 5), async (req, res) => {
   try {
-    const { conversationId, message, replyTo } = req.body;
+    const { conversationId, message, replyTo, mentions } = req.body;
     const senderId = req.user._id;
+
+    // Parse mentions if sent as JSON string (from FormData)
+    let mentionedUserIds = [];
+    if (mentions) {
+      try {
+        mentionedUserIds = typeof mentions === 'string' ? JSON.parse(mentions) : mentions;
+      } catch (e) {
+        console.warn('Failed to parse mentions:', e);
+      }
+    }
 
     // Process file attachments
     const attachments = [];
@@ -69,7 +79,8 @@ router.post("/messages", protect, uploadToS3.array("files", 5), async (req, res)
       senderId,
       message,
       attachments,
-      replyTo || null
+      replyTo || null,
+      mentionedUserIds
     );
 
     // Populate replyTo if exists
@@ -89,6 +100,7 @@ router.post("/messages", protect, uploadToS3.array("files", 5), async (req, res)
           timestamp: savedMessage.timestamp,
           attachments: savedMessage.attachments || [],
           replyTo: savedMessage.replyTo || null,
+          mentions: savedMessage.mentions || [],
         };
 
         broadcastMessageToConversation(conversationId, conversation.members, payload);
@@ -136,6 +148,92 @@ router.delete("/conversations/:id", protect, async (req, res) => {
   } catch (error) {
     console.error("Delete conversation error:", error);
     res.status(500).json({ error: "Failed to delete conversation" });
+  }
+});
+
+// Summarize conversation messages
+router.post("/conversations/:conversationId/summarize", protect, async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const { days = 7 } = req.body; // Default to last 7 days
+
+    // Calculate date range
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - days);
+
+    const ChatMessage = require("../models/ChatMessage");
+
+    // Fetch messages from the last N days
+    const messages = await ChatMessage.find({
+      conversationId,
+      timestamp: { $gte: startDate }
+    })
+    .sort({ timestamp: 1 })
+    .populate("senderId", "firstName lastName email")
+    .lean();
+
+    if (!messages || messages.length === 0) {
+      return res.json({ summary: "No messages found in the selected time period." });
+    }
+
+    // Format messages for AI
+    const formattedMessages = messages.map(msg => {
+      const sender = msg.senderId ? `${msg.senderId.firstName} ${msg.senderId.lastName}` : "Unknown";
+      const timestamp = new Date(msg.timestamp).toLocaleDateString();
+      const hasAttachments = msg.attachments && msg.attachments.length > 0 ? ` [${msg.attachments.length} attachment(s)]` : "";
+      return `[${timestamp}] ${sender}: ${msg.message}${hasAttachments}`;
+    }).join("\n");
+
+    // Call OpenRouter API with Gemma model
+    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: process.env.OPENROUTER_MODEL || "google/gemma-2-9b-it:free",
+        messages: [
+          {
+            role: "system",
+            content: "You are a helpful assistant that summarizes conversations. Provide a clear, concise summary highlighting key topics discussed, decisions made, action items, and important context. Keep it professional and organized."
+          },
+          {
+            role: "user",
+            content: `Please summarize the following conversation from the last ${days} days:\n\n${formattedMessages}`
+          }
+        ]
+      })
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("OpenRouter API error:", response.status, errorText);
+      return res.status(500).json({
+        error: "Failed to generate summary from AI service",
+        details: errorText,
+        status: response.status
+      });
+    }
+
+    const data = await response.json();
+    let summary = data.choices?.[0]?.message?.content || "Unable to generate summary.";
+
+    // Remove <think> tags and their content (AI reasoning artifacts)
+    summary = summary.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+
+    res.json({
+      summary,
+      messageCount: messages.length,
+      dateRange: {
+        from: startDate.toISOString(),
+        to: new Date().toISOString()
+      }
+    });
+
+  } catch (error) {
+    console.error("Error summarizing conversation:", error);
+    res.status(500).json({ error: "Failed to summarize conversation" });
   }
 });
 

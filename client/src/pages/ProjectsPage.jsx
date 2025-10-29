@@ -165,6 +165,8 @@ const ProjectsPage = ({ onLogout }) => {
   // Refs for click-outside detection
   const employeeDropdownRef = useRef(null);
   const editEmployeeDropdownRef = useRef(null);
+  const serviceDropdownRef = useRef(null);
+  const editServiceDropdownRef = useRef(null);
 
   // Form state
   const [showAddModal, setShowAddModal] = useState(false);
@@ -174,13 +176,15 @@ const ProjectsPage = ({ onLogout }) => {
   const [selectedProject, setSelectedProject] = useState(null);
   const [form, setForm] = useState({
     projectName: "",
-    type: "Website",
+    type: [],
     assignedTo: [],
     client: "",
     startDate: "",
     endDate: "",
     description: "",
-    priority: "Medium"
+    remarks: "",
+    priority: "Medium",
+    status: "new"
   });
   const [projectTasks, setProjectTasks] = useState([]);
 
@@ -188,6 +192,8 @@ const ProjectsPage = ({ onLogout }) => {
   const [employeeSearchTerm, setEmployeeSearchTerm] = useState("");
   const [showEditEmployeeDropdown, setShowEditEmployeeDropdown] = useState(false);
   const [editEmployeeSearchTerm, setEditEmployeeSearchTerm] = useState("");
+  const [showServiceDropdown, setShowServiceDropdown] = useState(false);
+  const [showEditServiceDropdown, setShowEditServiceDropdown] = useState(false);
 
   // Filter state
   const [searchTerm, setSearchTerm] = useState("");
@@ -251,6 +257,16 @@ const ProjectsPage = ({ onLogout }) => {
       // Close employee dropdown in Edit Modal
       if (editEmployeeDropdownRef.current && !editEmployeeDropdownRef.current.contains(event.target)) {
         setShowEditEmployeeDropdown(false);
+      }
+
+      // Close service dropdown in Add Modal
+      if (serviceDropdownRef.current && !serviceDropdownRef.current.contains(event.target)) {
+        setShowServiceDropdown(false);
+      }
+
+      // Close service dropdown in Edit Modal
+      if (editServiceDropdownRef.current && !editServiceDropdownRef.current.contains(event.target)) {
+        setShowEditServiceDropdown(false);
       }
     };
 
@@ -458,13 +474,15 @@ const ProjectsPage = ({ onLogout }) => {
   const resetForm = () => {
     setForm({
       projectName: "",
-      type: "Website",
+      type: [],
       assignedTo: [],
       client: "",
       startDate: "",
       endDate: "",
       description: "",
-      priority: "Medium"
+      remarks: "",
+      priority: "Medium",
+      status: "new"
     });
     setProjectTasks([]);
     setShowEmployeeDropdown(false);
@@ -482,13 +500,15 @@ const ProjectsPage = ({ onLogout }) => {
     setSelectedProject(project);
     setForm({
       projectName: project.projectName,
-      type: project.type,
+      type: Array.isArray(project.type) ? project.type : [project.type],
       assignedTo: project.assignedTo.map(e => e._id || e),
       client: project.client?._id || project.client,
       startDate: project.startDate ? new Date(project.startDate).toISOString().split('T')[0] : "",
       endDate: project.endDate ? new Date(project.endDate).toISOString().split('T')[0] : "",
       description: project.description || "",
-      priority: project.priority || "Medium"
+      remarks: project.remarks || "",
+      priority: project.priority || "Medium",
+      status: project.status || "new"
     });
 
     setShowEditModal(true);
@@ -498,11 +518,15 @@ const ProjectsPage = ({ onLogout }) => {
     const today = new Date();
     const endDate = new Date(project.endDate);
 
-    if (project.status === "Completed") return "completed";
-    if (project.status === "Inactive") return "inactive";
-    if (endDate < today) return "needsRenewal";
-    if (project.status === "Active") return "active";
-    return "inactive";
+    // Use the actual status from the database
+    if (project.status === "completed") return "completed";
+    if (project.status === "expired") return "expired";
+    if (project.status === "ongoing") return "ongoing";
+    if (project.status === "new") return "new";
+
+    // For legacy projects or computed status
+    if (endDate < today && project.status !== "completed") return "expired";
+    return project.status || "new";
   };
 
   // Calculate project progress based on multiple methods
@@ -528,7 +552,7 @@ const ProjectsPage = ({ onLogout }) => {
       const now = new Date().getTime();
 
       // If project is completed, return 100%
-      if (project.status === "Completed") return 100;
+      if (project.status === "completed") return 100;
 
       // If project hasn't started yet, return 0%
       if (now < start) return 0;
@@ -599,12 +623,12 @@ const ProjectsPage = ({ onLogout }) => {
     const stats = {};
 
     types.forEach(type => {
-      const typeProjects = projects.filter(p => p.type === type);
+      const typeProjects = projects.filter(p => Array.isArray(p.type) ? p.type.includes(type) : p.type === type);
       stats[type] = {
         total: typeProjects.length,
-        active: typeProjects.filter(p => getProjectStatus(p) === "active").length,
-        inactive: typeProjects.filter(p => getProjectStatus(p) === "inactive").length,
-        needsRenewal: typeProjects.filter(p => getProjectStatus(p) === "needsRenewal").length,
+        new: typeProjects.filter(p => getProjectStatus(p) === "new").length,
+        ongoing: typeProjects.filter(p => getProjectStatus(p) === "ongoing").length,
+        expired: typeProjects.filter(p => getProjectStatus(p) === "expired").length,
         completed: typeProjects.filter(p => getProjectStatus(p) === "completed").length,
       };
     });
@@ -616,9 +640,9 @@ const ProjectsPage = ({ onLogout }) => {
   const overallStats = useMemo(() => {
     return {
       total: projects.length,
-      active: projects.filter(p => getProjectStatus(p) === "active").length,
-      inactive: projects.filter(p => getProjectStatus(p) === "inactive").length,
-      needsRenewal: projects.filter(p => getProjectStatus(p) === "needsRenewal").length,
+      new: projects.filter(p => getProjectStatus(p) === "new").length,
+      ongoing: projects.filter(p => getProjectStatus(p) === "ongoing").length,
+      expired: projects.filter(p => getProjectStatus(p) === "expired").length,
       completed: projects.filter(p => getProjectStatus(p) === "completed").length,
     };
   }, [projects]);
@@ -631,14 +655,14 @@ const ProjectsPage = ({ onLogout }) => {
         p.client?.businessName?.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
         p.client?.clientName?.toLowerCase().includes(debouncedSearchTerm.toLowerCase());
 
-      const matchesType = filterType === "all" || p.type === filterType;
+      const matchesType = filterType === "all" || (Array.isArray(p.type) ? p.type.includes(filterType) : p.type === filterType);
 
       const projectStatus = getProjectStatus(p);
       const matchesStatus =
         filterStatus === "all" ||
-        (filterStatus === "active" && projectStatus === "active") ||
-        (filterStatus === "inactive" && projectStatus === "inactive") ||
-        (filterStatus === "needsRenewal" && projectStatus === "needsRenewal") ||
+        (filterStatus === "new" && projectStatus === "new") ||
+        (filterStatus === "ongoing" && projectStatus === "ongoing") ||
+        (filterStatus === "expired" && projectStatus === "expired") ||
         (filterStatus === "completed" && projectStatus === "completed");
 
       const matchesEmployee =
@@ -701,7 +725,7 @@ const ProjectsPage = ({ onLogout }) => {
       ["Project Name", "Type", "Client", "Assigned To", "Start Date", "End Date", "Status"],
       ...filteredProjects.map(p => [
         p.projectName,
-        p.type,
+        Array.isArray(p.type) ? p.type.join("; ") : p.type,
         p.client?.businessName || "N/A",
         p.assignedTo?.map(e => e.name || "Unknown").join("; ") || "N/A",
         p.startDate ? new Date(p.startDate).toLocaleDateString() : "N/A",
@@ -792,22 +816,22 @@ const ProjectsPage = ({ onLogout }) => {
 
           <div className="bg-[#191f2b]/70 rounded-xl shadow-xl border border-[#232945] p-6">
             <div className="flex items-center justify-between mb-3">
-              <div className="p-3 rounded-lg bg-green-600/20">
-                <CheckCircle className="w-6 h-6 text-green-400" />
+              <div className="p-3 rounded-lg bg-blue-600/20">
+                <Plus className="w-6 h-6 text-blue-400" />
               </div>
             </div>
-            <p className="text-sm text-gray-400 mb-1">Active</p>
-            <p className="text-3xl font-bold text-green-400">{overallStats.active}</p>
+            <p className="text-sm text-gray-400 mb-1">New</p>
+            <p className="text-3xl font-bold text-blue-400">{overallStats.new}</p>
           </div>
 
           <div className="bg-[#191f2b]/70 rounded-xl shadow-xl border border-[#232945] p-6">
             <div className="flex items-center justify-between mb-3">
-              <div className="p-3 rounded-lg bg-red-600/20">
-                <XCircle className="w-6 h-6 text-red-400" />
+              <div className="p-3 rounded-lg bg-green-600/20">
+                <CheckCircle className="w-6 h-6 text-green-400" />
               </div>
             </div>
-            <p className="text-sm text-gray-400 mb-1">Inactive</p>
-            <p className="text-3xl font-bold text-red-400">{overallStats.inactive}</p>
+            <p className="text-sm text-gray-400 mb-1">Ongoing</p>
+            <p className="text-3xl font-bold text-green-400">{overallStats.ongoing}</p>
           </div>
 
           <div className="bg-[#191f2b]/70 rounded-xl shadow-xl border border-[#232945] p-6">
@@ -816,8 +840,8 @@ const ProjectsPage = ({ onLogout }) => {
                 <AlertCircle className="w-6 h-6 text-orange-400" />
               </div>
             </div>
-            <p className="text-sm text-gray-400 mb-1">Needs Renewal</p>
-            <p className="text-3xl font-bold text-orange-400">{overallStats.needsRenewal}</p>
+            <p className="text-sm text-gray-400 mb-1">Expired</p>
+            <p className="text-3xl font-bold text-orange-400">{overallStats.expired}</p>
           </div>
 
           <div className="bg-[#191f2b]/70 rounded-xl shadow-xl border border-[#232945] p-6">
@@ -860,17 +884,17 @@ const ProjectsPage = ({ onLogout }) => {
 
                 {isExpanded && (
                   <div className="grid grid-cols-2 gap-3 mt-4 pt-4 border-t border-gray-700">
-                    <div className="text-center p-3 rounded-lg bg-green-600/10 border border-green-500/20">
-                      <p className="text-2xl font-bold text-green-400">{stats.active}</p>
-                      <p className="text-xs text-gray-400 mt-1">Active</p>
+                    <div className="text-center p-3 rounded-lg bg-blue-600/10 border border-blue-500/20">
+                      <p className="text-2xl font-bold text-blue-400">{stats.new}</p>
+                      <p className="text-xs text-gray-400 mt-1">New</p>
                     </div>
-                    <div className="text-center p-3 rounded-lg bg-red-600/10 border border-red-500/20">
-                      <p className="text-2xl font-bold text-red-400">{stats.inactive}</p>
-                      <p className="text-xs text-gray-400 mt-1">Inactive</p>
+                    <div className="text-center p-3 rounded-lg bg-green-600/10 border border-green-500/20">
+                      <p className="text-2xl font-bold text-green-400">{stats.ongoing}</p>
+                      <p className="text-xs text-gray-400 mt-1">Ongoing</p>
                     </div>
                     <div className="text-center p-3 rounded-lg bg-orange-600/10 border border-orange-500/20">
-                      <p className="text-2xl font-bold text-orange-400">{stats.needsRenewal}</p>
-                      <p className="text-xs text-gray-400 mt-1">Needs Renewal</p>
+                      <p className="text-2xl font-bold text-orange-400">{stats.expired}</p>
+                      <p className="text-xs text-gray-400 mt-1">Expired</p>
                     </div>
                     <div className="text-center p-3 rounded-lg bg-purple-600/10 border border-purple-500/20">
                       <p className="text-2xl font-bold text-purple-400">{stats.completed}</p>
@@ -926,9 +950,9 @@ const ProjectsPage = ({ onLogout }) => {
                 className="px-4 py-2 bg-[#0f1419] border border-[#232945] rounded-lg text-white focus:outline-none focus:border-blue-500 transition-colors"
               >
                 <option value="all">All Status</option>
-                <option value="active">Active</option>
-                <option value="inactive">Inactive</option>
-                <option value="needsRenewal">Needs Renewal</option>
+                <option value="new">New</option>
+                <option value="ongoing">Ongoing</option>
+                <option value="expired">Expired</option>
                 <option value="completed">Completed</option>
               </select>
 
@@ -1074,9 +1098,10 @@ const ProjectsPage = ({ onLogout }) => {
                   disabled={operationLoading.bulkDelete || operationLoading.bulkStatusUpdate}
                 >
                   <option value="">Select Action</option>
-                  <option value="Active">Set to Active</option>
-                  <option value="Inactive">Set to Inactive</option>
-                  <option value="Completed">Set to Completed</option>
+                  <option value="new">Set to New</option>
+                  <option value="ongoing">Set to Ongoing</option>
+                  <option value="expired">Set to Expired</option>
+                  <option value="completed">Set to Completed</option>
                   <option value="delete">Delete Selected</option>
                 </select>
                 <button
@@ -1123,8 +1148,11 @@ const ProjectsPage = ({ onLogout }) => {
                 ) : (
                   paginatedProjects.map((project) => {
                     const status = getProjectStatus(project);
-                    const colors = PROJECT_TYPE_COLORS[project.type];
-                    const Icon = PROJECT_TYPE_ICONS[project.type];
+                    // Handle array of types - use first type for icon/color
+                    const projectTypes = Array.isArray(project.type) ? project.type : [project.type];
+                    const firstType = projectTypes[0];
+                    const colors = PROJECT_TYPE_COLORS[firstType] || PROJECT_TYPE_COLORS["Website"];
+                    const Icon = PROJECT_TYPE_ICONS[firstType] || Globe;
                     const progress = getProjectProgress(project);
                     const health = getProjectHealth(project);
 
@@ -1148,9 +1176,16 @@ const ProjectsPage = ({ onLogout }) => {
                           </button>
                         </td>
                         <td className="p-4">
-                          <span className={`px-3 py-1 rounded-full text-xs font-medium ${colors.bg} ${colors.text} border ${colors.border}`}>
-                            {project.type}
-                          </span>
+                          <div className="flex flex-wrap gap-1">
+                            {projectTypes.map((type, idx) => {
+                              const typeColors = PROJECT_TYPE_COLORS[type] || PROJECT_TYPE_COLORS["Website"];
+                              return (
+                                <span key={idx} className={`px-3 py-1 rounded-full text-xs font-medium ${typeColors.bg} ${typeColors.text} border ${typeColors.border}`}>
+                                  {type}
+                                </span>
+                              );
+                            })}
+                          </div>
                         </td>
                         <td className="p-4 text-gray-300">
                           {project.client?.businessName || project.client?.clientName || "N/A"}
@@ -1223,15 +1258,17 @@ const ProjectsPage = ({ onLogout }) => {
                             onChange={(e) => handleStatusUpdate(project._id, e.target.value)}
                             disabled={operationLoading.statusUpdate[project._id]}
                             className={`px-3 py-1 rounded-full text-xs font-medium border cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                              (project.status || status) === "Active" || status === "active" ? "bg-green-500/20 text-green-400 border-green-500/50" :
-                              (project.status || status) === "Completed" || status === "completed" ? "bg-purple-500/20 text-purple-400 border-purple-500/50" :
-                              status === "needsRenewal" ? "bg-orange-500/20 text-orange-400 border-orange-500/50" :
-                              "bg-red-500/20 text-red-400 border-red-500/50"
+                              status === "new" ? "bg-blue-500/20 text-blue-400 border-blue-500/50" :
+                              status === "ongoing" ? "bg-green-500/20 text-green-400 border-green-500/50" :
+                              status === "completed" ? "bg-purple-500/20 text-purple-400 border-purple-500/50" :
+                              status === "expired" ? "bg-orange-500/20 text-orange-400 border-orange-500/50" :
+                              "bg-gray-500/20 text-gray-400 border-gray-500/50"
                             }`}
                           >
-                            <option value="Active">Active</option>
-                            <option value="Inactive">Inactive</option>
-                            <option value="Completed">Completed</option>
+                            <option value="new">New</option>
+                            <option value="ongoing">Ongoing</option>
+                            <option value="expired">Expired</option>
+                            <option value="completed">Completed</option>
                           </select>
                         </td>
                         <td className="p-4">
@@ -1392,15 +1429,15 @@ const ProjectsPage = ({ onLogout }) => {
       {/* Add Project Modal */}
       {showAddModal && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4 overflow-y-auto">
-          <div className="bg-[#191f2b] rounded-xl shadow-2xl border border-[#232945] p-6 max-w-2xl w-full my-8">
-            <div className="flex items-center justify-between mb-6">
+          <div className="bg-[#191f2b] rounded-xl shadow-2xl border border-[#232945] p-6 max-w-2xl w-full my-8 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-6 sticky top-0 bg-[#191f2b] z-10 pb-4 border-b border-[#232945]">
               <h3 className="text-xl font-semibold text-white">Add New Project</h3>
               <button onClick={() => { setShowAddModal(false); resetForm(); }} className="text-gray-400 hover:text-white transition-colors">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleAddProject} className="space-y-4">
+            <form onSubmit={handleAddProject} className="space-y-4 pt-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm text-gray-400 mb-2">Project Name *</label>
@@ -1413,21 +1450,61 @@ const ProjectsPage = ({ onLogout }) => {
                   />
                 </div>
 
-                <div>
-                  <label className="block text-sm text-gray-400 mb-2">Project Type *</label>
-                  <select
-                    value={form.type}
-                    onChange={(e) => setForm({ ...form, type: e.target.value })}
-                    className="w-full px-4 py-3 bg-[#0f1419] border border-[#232945] rounded-lg text-white focus:outline-none focus:border-purple-500"
-                    required
+                <div className="relative" ref={serviceDropdownRef}>
+                  <label className="block text-sm text-gray-400 mb-2">Services *</label>
+                  <div
+                    onClick={() => setShowServiceDropdown(!showServiceDropdown)}
+                    className="w-full px-4 py-3 bg-[#0f1419] border border-[#232945] rounded-lg text-white focus:outline-none focus:border-purple-500 cursor-pointer flex items-center justify-between"
                   >
-                    <option value="Website">Website</option>
-                    <option value="SEO">SEO</option>
-                    <option value="Google Marketing">Google Marketing</option>
-                    <option value="SMO">SMO</option>
-                    <option value="Hosting">Hosting</option>
-                    <option value="Invoice App">Invoice App</option>
-                  </select>
+                    <span className="text-gray-300">
+                      {form.type.length === 0
+                        ? "Select services..."
+                        : `${form.type.length} service${form.type.length > 1 ? "s" : ""} selected`}
+                    </span>
+                    <ChevronDown className={`w-4 h-4 transition-transform ${showServiceDropdown ? "rotate-180" : ""}`} />
+                  </div>
+
+                  {showServiceDropdown && (
+                    <div className="absolute z-10 w-full mt-2 bg-[#0f1419] border border-[#232945] rounded-lg shadow-2xl max-h-64 overflow-y-auto">
+                      {["Website", "SEO", "Google Marketing", "SMO", "Hosting", "Invoice App"].map((service) => (
+                        <label
+                          key={service}
+                          className="flex items-center gap-3 px-4 py-3 hover:bg-[#191f2b] cursor-pointer transition-colors border-b border-[#232945] last:border-b-0"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={form.type.includes(service)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setForm({ ...form, type: [...form.type, service] });
+                              } else {
+                                setForm({ ...form, type: form.type.filter(s => s !== service) });
+                              }
+                            }}
+                            className="w-4 h-4 rounded border-[#232945] bg-[#0f1419] text-purple-600 focus:ring-purple-500 focus:ring-offset-0"
+                          />
+                          <span className="text-white text-sm">{service}</span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+
+                  {form.type.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mt-3">
+                      {form.type.map((service) => (
+                        <div key={service} className="flex items-center gap-2 px-3 py-1 bg-purple-600/20 border border-purple-500/30 rounded-full text-sm text-purple-300">
+                          <span>{service}</span>
+                          <button
+                            type="button"
+                            onClick={() => setForm({ ...form, type: form.type.filter(s => s !== service) })}
+                            className="hover:text-purple-100 transition-colors"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 <div>
@@ -1618,6 +1695,33 @@ const ProjectsPage = ({ onLogout }) => {
                 ></textarea>
               </div>
 
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm text-gray-400 mb-2">Status *</label>
+                  <select
+                    value={form.status}
+                    onChange={(e) => setForm({ ...form, status: e.target.value })}
+                    className="w-full px-4 py-3 bg-[#0f1419] border border-[#232945] rounded-lg text-white focus:outline-none focus:border-purple-500"
+                    required
+                  >
+                    <option value="new">New</option>
+                    <option value="ongoing">Ongoing</option>
+                    <option value="completed">Completed</option>
+                    <option value="expired">Expired</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm text-gray-400 mb-2">Remarks (Optional)</label>
+                  <textarea
+                    value={form.remarks}
+                    onChange={(e) => setForm({ ...form, remarks: e.target.value })}
+                    className="w-full px-4 py-3 bg-[#0f1419] border border-[#232945] rounded-lg text-white focus:outline-none focus:border-purple-500 h-24 resize-none"
+                    placeholder="Add any additional remarks..."
+                  ></textarea>
+                </div>
+              </div>
+
               {/* Project Tasks Section */}
               <div className="border-t border-[#232945] pt-4 mt-4">
                 <div className="flex items-center justify-between mb-3">
@@ -1757,15 +1861,15 @@ const ProjectsPage = ({ onLogout }) => {
       {/* Edit Project Modal */}
       {showEditModal && selectedProject && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4 overflow-y-auto">
-          <div className="bg-[#191f2b] rounded-xl shadow-2xl border border-[#232945] p-6 max-w-2xl w-full my-8">
-            <div className="flex items-center justify-between mb-6">
+          <div className="bg-[#191f2b] rounded-xl shadow-2xl border border-[#232945] p-6 max-w-2xl w-full my-8 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-6 sticky top-0 bg-[#191f2b] z-10 pb-4 border-b border-[#232945]">
               <h3 className="text-xl font-semibold text-white">Edit Project</h3>
               <button onClick={() => { setShowEditModal(false); setSelectedProject(null); resetForm(); }} className="text-gray-400 hover:text-white transition-colors">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleEditProject} className="space-y-4">
+            <form onSubmit={handleEditProject} className="space-y-4 pt-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm text-gray-400 mb-2">Project Name *</label>
@@ -1778,21 +1882,61 @@ const ProjectsPage = ({ onLogout }) => {
                   />
                 </div>
 
-                <div>
-                  <label className="block text-sm text-gray-400 mb-2">Project Type *</label>
-                  <select
-                    value={form.type}
-                    onChange={(e) => setForm({ ...form, type: e.target.value })}
-                    className="w-full px-4 py-3 bg-[#0f1419] border border-[#232945] rounded-lg text-white focus:outline-none focus:border-purple-500"
-                    required
+                <div className="relative" ref={editServiceDropdownRef}>
+                  <label className="block text-sm text-gray-400 mb-2">Services *</label>
+                  <div
+                    onClick={() => setShowEditServiceDropdown(!showEditServiceDropdown)}
+                    className="w-full px-4 py-3 bg-[#0f1419] border border-[#232945] rounded-lg text-white focus:outline-none focus:border-purple-500 cursor-pointer flex items-center justify-between"
                   >
-                    <option value="Website">Website</option>
-                    <option value="SEO">SEO</option>
-                    <option value="Google Marketing">Google Marketing</option>
-                    <option value="SMO">SMO</option>
-                    <option value="Hosting">Hosting</option>
-                    <option value="Invoice App">Invoice App</option>
-                  </select>
+                    <span className="text-gray-300">
+                      {form.type.length === 0
+                        ? "Select services..."
+                        : `${form.type.length} service${form.type.length > 1 ? "s" : ""} selected`}
+                    </span>
+                    <ChevronDown className={`w-4 h-4 transition-transform ${showEditServiceDropdown ? "rotate-180" : ""}`} />
+                  </div>
+
+                  {showEditServiceDropdown && (
+                    <div className="absolute z-10 w-full mt-2 bg-[#0f1419] border border-[#232945] rounded-lg shadow-2xl max-h-64 overflow-y-auto">
+                      {["Website", "SEO", "Google Marketing", "SMO", "Hosting", "Invoice App"].map((service) => (
+                        <label
+                          key={service}
+                          className="flex items-center gap-3 px-4 py-3 hover:bg-[#191f2b] cursor-pointer transition-colors border-b border-[#232945] last:border-b-0"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={form.type.includes(service)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setForm({ ...form, type: [...form.type, service] });
+                              } else {
+                                setForm({ ...form, type: form.type.filter(s => s !== service) });
+                              }
+                            }}
+                            className="w-4 h-4 rounded border-[#232945] bg-[#0f1419] text-purple-600 focus:ring-purple-500 focus:ring-offset-0"
+                          />
+                          <span className="text-white text-sm">{service}</span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+
+                  {form.type.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mt-3">
+                      {form.type.map((service) => (
+                        <div key={service} className="flex items-center gap-2 px-3 py-1 bg-purple-600/20 border border-purple-500/30 rounded-full text-sm text-purple-300">
+                          <span>{service}</span>
+                          <button
+                            type="button"
+                            onClick={() => setForm({ ...form, type: form.type.filter(s => s !== service) })}
+                            className="hover:text-purple-100 transition-colors"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 <div>
@@ -1996,7 +2140,32 @@ const ProjectsPage = ({ onLogout }) => {
                 ></textarea>
               </div>
 
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm text-gray-400 mb-2">Status *</label>
+                  <select
+                    value={form.status}
+                    onChange={(e) => setForm({ ...form, status: e.target.value })}
+                    className="w-full px-4 py-3 bg-[#0f1419] border border-[#232945] rounded-lg text-white focus:outline-none focus:border-purple-500"
+                    required
+                  >
+                    <option value="new">New</option>
+                    <option value="ongoing">Ongoing</option>
+                    <option value="completed">Completed</option>
+                    <option value="expired">Expired</option>
+                  </select>
+                </div>
 
+                <div>
+                  <label className="block text-sm text-gray-400 mb-2">Remarks (Optional)</label>
+                  <textarea
+                    value={form.remarks}
+                    onChange={(e) => setForm({ ...form, remarks: e.target.value })}
+                    className="w-full px-4 py-3 bg-[#0f1419] border border-[#232945] rounded-lg text-white focus:outline-none focus:border-purple-500 h-24 resize-none"
+                    placeholder="Add any additional remarks..."
+                  ></textarea>
+                </div>
+              </div>
 
               <div className="flex gap-3 pt-4 mt-4 border-t border-[#232945]">
                 <button
@@ -2073,14 +2242,16 @@ const ProjectsPage = ({ onLogout }) => {
                 <div>
                   <p className="text-sm text-gray-400 mb-1">Status</p>
                   <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                    getProjectStatus(selectedProject) === "active" ? "bg-green-500/20 text-green-400" :
+                    getProjectStatus(selectedProject) === "new" ? "bg-blue-500/20 text-blue-400" :
+                    getProjectStatus(selectedProject) === "ongoing" ? "bg-green-500/20 text-green-400" :
                     getProjectStatus(selectedProject) === "completed" ? "bg-purple-500/20 text-purple-400" :
-                    getProjectStatus(selectedProject) === "needsRenewal" ? "bg-orange-500/20 text-orange-400" :
-                    "bg-red-500/20 text-red-400"
+                    getProjectStatus(selectedProject) === "expired" ? "bg-orange-500/20 text-orange-400" :
+                    "bg-gray-500/20 text-gray-400"
                   }`}>
-                    {getProjectStatus(selectedProject) === "active" ? "Active" :
+                    {getProjectStatus(selectedProject) === "new" ? "New" :
+                     getProjectStatus(selectedProject) === "ongoing" ? "Ongoing" :
                      getProjectStatus(selectedProject) === "completed" ? "Completed" :
-                     getProjectStatus(selectedProject) === "needsRenewal" ? "Needs Renewal" : "Inactive"}
+                     getProjectStatus(selectedProject) === "expired" ? "Expired" : "Unknown"}
                   </span>
                 </div>
               </div>

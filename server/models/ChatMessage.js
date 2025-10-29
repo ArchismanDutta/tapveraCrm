@@ -6,6 +6,8 @@ const ChatMessageSchema = new mongoose.Schema({
   message: { type: String, default: "" },
   timestamp: { type: Date, default: Date.now },
   readBy: [{ type: String }], // array of user IDs who have read the message
+  // Mentioned users (WhatsApp-style @mentions)
+  mentions: [{ type: String }], // array of user IDs who were mentioned
   // Reply to another message (WhatsApp-style)
   replyTo: {
     type: mongoose.Schema.Types.ObjectId,

@@ -18,7 +18,7 @@ const STATUS_COLOR = {
   "approved-leave": "bg-gradient-to-br from-purple-600 to-purple-700 text-purple-100 border-purple-500",
   vacation: "bg-gradient-to-br from-cyan-600 to-cyan-700 text-cyan-100 border-cyan-500",
   "personal-leave": "bg-gradient-to-br from-indigo-600 to-indigo-700 text-indigo-100 border-indigo-500",
-  wfh: "bg-gradient-to-br from-orange-500 to-orange-600 text-orange-100 border-orange-400",
+  wfh: "bg-gradient-to-br from-fuchsia-500 to-fuchsia-600 text-fuchsia-100 border-fuchsia-400",
   default: "bg-gradient-to-br from-slate-600 to-slate-700 text-slate-300 border-slate-500",
 };
 
@@ -495,7 +495,7 @@ const AttendanceCalendar = ({ data, onDateFilterChange, onMonthChange }) => {
                 <h4 className="text-xl font-bold text-white">
                   {data.month} {selectedDay.day}, {data.year}
                   {selectedDay.metadata?.isWFH && (
-                    <span className="ml-2 text-sm bg-blue-600/30 text-blue-300 px-2 py-1 rounded" title="Work From Home">
+                    <span className="ml-2 text-sm bg-fuchsia-600/30 text-fuchsia-300 px-2 py-1 rounded" title="Work From Home">
                       🏠 WFH
                     </span>
                   )}
@@ -839,13 +839,13 @@ const AttendanceCalendar = ({ data, onDateFilterChange, onMonthChange }) => {
 
             {/* WFH Days (if available) */}
             {data.monthlyStats.totalWFH !== undefined && data.monthlyStats.totalWFH > 0 && (
-              <div className="bg-gradient-to-br from-blue-600/20 to-blue-800/20 backdrop-blur-sm border border-blue-500/20 rounded-xl p-4 hover:border-blue-400/40 transition-all duration-300">
+              <div className="bg-gradient-to-br from-fuchsia-600/20 to-fuchsia-800/20 backdrop-blur-sm border border-fuchsia-500/20 rounded-xl p-4 hover:border-fuchsia-400/40 transition-all duration-300">
                 <div className="flex items-center gap-2 mb-2">
-                  <Activity className="w-4 h-4 text-blue-400" />
+                  <Activity className="w-4 h-4 text-fuchsia-400" />
                   <span className="text-xs text-gray-400">WFH</span>
                 </div>
-                <div className="text-2xl font-bold text-blue-400">{data.monthlyStats.totalWFH}</div>
-                <div className="text-xs text-blue-300 mt-1">work from home</div>
+                <div className="text-2xl font-bold text-fuchsia-400">{data.monthlyStats.totalWFH}</div>
+                <div className="text-xs text-fuchsia-300 mt-1">work from home</div>
               </div>
             )}
 

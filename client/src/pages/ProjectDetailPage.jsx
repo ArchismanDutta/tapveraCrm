@@ -7,6 +7,8 @@ import { BrowserNotificationManager } from "../utils/browserNotifications";
 import useMessageSuggestions from "../hooks/useMessageSuggestions";
 import ProjectTaskModal from "../components/project/ProjectTaskModal";
 import ProjectTaskEditModal from "../components/project/ProjectTaskEditModal";
+import UnreadMessageBadge from "../components/message/UnreadMessageBadge";
+import MessageWithMentions from "../components/message/MessageWithMentions";
 import {
   ArrowLeft,
   Globe,
@@ -120,6 +122,10 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
   const [showFormatting, setShowFormatting] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(null);
   const commonEmojis = ["👍", "❤️", "😂", "😮", "😢", "🎉", "🔥", "👏"];
+  const [showSummaryModal, setShowSummaryModal] = useState(false);
+  const [summary, setSummary] = useState("");
+  const [summaryLoading, setSummaryLoading] = useState(false);
+  const [summaryDays, setSummaryDays] = useState(7);
   const messagesEndRef = useRef(null);
   const chatContainerRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -133,6 +139,7 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
   const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(0);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [quickReplies, setQuickReplies] = useState([]);
+  const [showQuickReplies, setShowQuickReplies] = useState(true);
   const suggestionsRef = useRef(null);
 
   useEffect(() => {
@@ -356,11 +363,18 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
         headers: { Authorization: `Bearer ${token}` },
       });
       // Filter tasks that belong to this project
-      const projectTasks = res.data.filter(task => task.project?._id === projectId);
+      // Handle both cases: project as string ID or as populated object
+      const tasksData = Array.isArray(res.data) ? res.data : [];
+      const projectTasks = tasksData.filter(task => {
+        if (!task || !task.project) return false;
+        const taskProjectId = typeof task.project === 'string' ? task.project : task.project._id;
+        return taskProjectId === projectId;
+      });
       setTasks(projectTasks);
     } catch (error) {
       console.error("Error fetching tasks:", error);
       showNotification("Error loading tasks", "error");
+      setTasks([]); // Set empty array on error
     } finally {
       setLoadingTasks(false);
     }
@@ -571,6 +585,47 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
     setDateFilter({ start: "", end: "" });
   };
 
+  const handleSummarize = async () => {
+    // Use projectId prop or project._id from state
+    const currentProjectId = projectId || project?._id;
+
+    if (!currentProjectId) {
+      console.error("No project ID available");
+      return;
+    }
+
+    setSummaryLoading(true);
+    setShowSummaryModal(true);
+    setSummary("");
+
+    try {
+      const token = localStorage.getItem("token");
+      const response = await fetch(
+        `${API_BASE}/api/projects/${currentProjectId}/messages/summarize`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ days: summaryDays }),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to generate summary");
+      }
+
+      const data = await response.json();
+      setSummary(data.summary || "No summary available.");
+    } catch (error) {
+      console.error("Error generating summary:", error);
+      setSummary("Failed to generate summary. Please try again.");
+    } finally {
+      setSummaryLoading(false);
+    }
+  };
+
   const getFileIcon = (fileType) => {
     switch (fileType) {
       case "image":
@@ -588,15 +643,23 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
   };
 
   const getProjectStatus = (project) => {
-    const today = new Date();
-    const endDate = new Date(project.endDate);
+  if (!project) return "inactive";
+  
+  const today = new Date();
+  const endDate = project.endDate ? new Date(project.endDate) : null;
 
-    if (project.status === "Completed") return "completed";
-    if (project.status === "Inactive") return "inactive";
-    if (endDate < today) return "needsRenewal";
-    if (project.status === "Active") return "active";
-    return "inactive";
-  };
+  // Normalize status to lowercase for comparison
+  const status = project.status?.toLowerCase();
+
+  if (status === "completed") return "completed";
+  if (status === "inactive") return "inactive";
+  if (status === "expired") return "expired";
+  if (endDate && endDate < today && status !== "completed") return "needsRenewal";
+  if (status === "active" || status === "ongoing") return "active";
+  if (status === "new") return "active"; // Treat "new" as active
+  
+  return "inactive";
+};
 
   const copyToClipboard = (text) => {
     navigator.clipboard.writeText(text);
@@ -720,8 +783,10 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
   }
 
   const status = getProjectStatus(project);
-  const colors = PROJECT_TYPE_COLORS[project.type];
-  const Icon = PROJECT_TYPE_ICONS[project.type];
+  // Handle project.type as array (take first type) or string
+  const primaryType = Array.isArray(project.type) ? project.type[0] : project.type;
+  const colors = PROJECT_TYPE_COLORS[primaryType] || PROJECT_TYPE_COLORS["Website"]; // fallback to Website colors
+  const Icon = PROJECT_TYPE_ICONS[primaryType] || PROJECT_TYPE_ICONS["Website"]; // fallback to Website icon
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#141a21] via-[#191f2b] to-[#101218] text-blue-100">
@@ -770,7 +835,7 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
             <span
               className={`px-2 sm:px-3 py-1 rounded-full text-xs font-medium ${colors.bg} ${colors.text} border ${colors.border} flex-shrink-0`}
             >
-              {project.type}
+              {Array.isArray(project.type) ? project.type.join(", ") : project.type}
             </span>
           </div>
         </div>
@@ -945,7 +1010,7 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
 
         {/* Right Column - Chat/Conversation */}
         <div className="lg:col-span-2">
-          <div className="bg-[#191f2b]/70 rounded-xl shadow-xl border border-[#232945] h-[calc(100vh-12rem)] lg:h-[calc(100vh-10rem)] flex flex-col">
+          <div className="bg-[#191f2b]/70 rounded-xl shadow-xl border border-[#232945] h-[calc(100vh-8rem)] lg:h-[calc(100vh-7rem)] flex flex-col" style={{ minHeight: "650px" }}>
             {/* Tabs */}
             <div className="border-b border-[#232945]">
               <div className="flex">
@@ -959,11 +1024,7 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                 >
                   <Mail className="w-5 h-5" />
                   <span>Chat</span>
-                  {messages.length > 0 && (
-                    <span className="px-2 py-0.5 rounded-full bg-blue-600/30 text-blue-400 text-xs">
-                      {messages.length}
-                    </span>
-                  )}
+                  <UnreadMessageBadge projectId={projectId} refreshInterval={30000} />
                 </button>
                 <button
                   onClick={() => setActiveTab("tasks")}
@@ -1008,6 +1069,14 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                   >
                     <Filter className="w-4 h-4" />
                     <span className="hidden sm:inline">Filters</span>
+                  </button>
+                  <button
+                    onClick={handleSummarize}
+                    className="flex items-center gap-2 px-3 py-2 rounded-lg bg-purple-600/20 hover:bg-purple-600/40 text-purple-400 border border-purple-500/30 transition-colors text-sm"
+                    title="Summarize conversation"
+                  >
+                    <Sparkles className="w-4 h-4" />
+                    <span className="hidden sm:inline">Summarize</span>
                   </button>
                   <button
                     onClick={exportChat}
@@ -1152,34 +1221,55 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
 
                           {/* Message with Markdown rendering */}
                           {msg.message && (
-                            <div className="text-white text-sm leading-relaxed break-words prose prose-invert prose-sm max-w-none">
-                              <ReactMarkdown
-                                remarkPlugins={[remarkGfm]}
-                                rehypePlugins={[rehypeRaw]}
-                                components={{
-                                  p: ({ children }) => <p className="mb-1 last:mb-0">{children}</p>,
-                                  h1: ({ children }) => <h1 className="text-lg font-bold mb-1">{children}</h1>,
-                                  h2: ({ children }) => <h2 className="text-base font-bold mb-1">{children}</h2>,
-                                  h3: ({ children }) => <h3 className="text-sm font-bold mb-1">{children}</h3>,
-                                  ul: ({ children }) => <ul className="list-disc list-inside mb-1">{children}</ul>,
-                                  ol: ({ children }) => <ol className="list-decimal list-inside mb-1">{children}</ol>,
-                                  li: ({ children }) => <li className="ml-2">{children}</li>,
-                                  code: ({ inline, children }) =>
-                                    inline ? (
-                                      <code className="bg-black/30 px-1 rounded text-xs">{children}</code>
-                                    ) : (
-                                      <code className="block bg-black/30 p-2 rounded text-xs overflow-x-auto">{children}</code>
+                            <>
+                              <div className="text-white text-sm leading-relaxed break-words prose prose-invert prose-sm max-w-none">
+                                <ReactMarkdown
+                                  remarkPlugins={[remarkGfm]}
+                                  rehypePlugins={[rehypeRaw]}
+                                  components={{
+                                    p: ({ children }) => <p className="mb-1 last:mb-0">{children}</p>,
+                                    h1: ({ children }) => <h1 className="text-lg font-bold mb-1">{children}</h1>,
+                                    h2: ({ children }) => <h2 className="text-base font-bold mb-1">{children}</h2>,
+                                    h3: ({ children }) => <h3 className="text-sm font-bold mb-1">{children}</h3>,
+                                    ul: ({ children }) => <ul className="list-disc list-inside mb-1">{children}</ul>,
+                                    ol: ({ children }) => <ol className="list-decimal list-inside mb-1">{children}</ol>,
+                                    li: ({ children }) => <li className="ml-2">{children}</li>,
+                                    code: ({ inline, children }) =>
+                                      inline ? (
+                                        <code className="bg-black/30 px-1 rounded text-xs">{children}</code>
+                                      ) : (
+                                        <code className="block bg-black/30 p-2 rounded text-xs overflow-x-auto">{children}</code>
+                                      ),
+                                    strong: ({ children }) => <strong className="font-bold">{children}</strong>,
+                                    em: ({ children }) => <em className="italic">{children}</em>,
+                                    a: ({ href, children }) => (
+                                      <a href={href} target="_blank" rel="noopener noreferrer" className="text-blue-300 underline hover:text-blue-200">{children}</a>
                                     ),
-                                  strong: ({ children }) => <strong className="font-bold">{children}</strong>,
-                                  em: ({ children }) => <em className="italic">{children}</em>,
-                                  a: ({ href, children }) => (
-                                    <a href={href} target="_blank" rel="noopener noreferrer" className="text-blue-300 underline hover:text-blue-200">{children}</a>
-                                  ),
-                                }}
-                              >
-                                {msg.message}
-                              </ReactMarkdown>
-                            </div>
+                                  }}
+                                >
+                                  {msg.message}
+                                </ReactMarkdown>
+                              </div>
+                              {/* Mentioned Users */}
+                              {msg.mentions && msg.mentions.length > 0 && (
+                                <div className="flex flex-wrap gap-1 mt-2">
+                                  {msg.mentions.map((mention, idx) => (
+                                    <span
+                                      key={idx}
+                                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs ${
+                                        mention.user?._id === userId
+                                          ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30'
+                                          : 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
+                                      }`}
+                                      title={mention.user?.email || mention.user?.name}
+                                    >
+                                      <Users className="w-3 h-3" />
+                                      @{mention.user?.name || mention.user?.clientName || 'Unknown'}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                            </>
                           )}
 
                           {/* Attachments */}
@@ -1397,11 +1487,21 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
               )}
 
               {/* Quick Replies */}
-              {quickReplies.length > 0 && newMessage.length === 0 && (
+              {quickReplies.length > 0 && newMessage.length === 0 && showQuickReplies && (
                 <div className="mb-3 p-3 bg-[#0f1419] border border-[#232945] rounded-lg">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Zap className="w-4 h-4 text-yellow-400" />
-                    <span className="text-xs text-gray-400">Quick Replies:</span>
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <Zap className="w-4 h-4 text-yellow-400" />
+                      <span className="text-xs text-gray-400">Quick Replies:</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowQuickReplies(false)}
+                      className="p-1 hover:bg-[#232945] rounded transition-colors"
+                      title="Hide quick replies"
+                    >
+                      <XCircle className="w-4 h-4 text-gray-400" />
+                    </button>
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {quickReplies.map((reply, idx) => (
@@ -1999,6 +2099,148 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
           }}
           onTaskUpdated={handleTaskUpdated}
         />
+      )}
+
+      {/* AI Summary Modal */}
+      {showSummaryModal && (
+        <div
+          className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4"
+          style={{ zIndex: 9999 }}
+          onClick={() => setShowSummaryModal(false)}
+        >
+          <div
+            className="bg-[#0f1419] rounded-lg shadow-2xl max-w-3xl w-full max-h-[80vh] flex flex-col border border-[#232945]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-4 border-b border-[#232945]">
+              <div className="flex items-center gap-3">
+                <Sparkles className="w-5 h-5 text-purple-400" />
+                <h2 className="text-xl font-semibold text-white">
+                  AI Project Summary
+                </h2>
+              </div>
+              <button
+                onClick={() => setShowSummaryModal(false)}
+                className="p-2 hover:bg-[#232945] rounded-lg transition"
+              >
+                <XCircle className="w-5 h-5 text-gray-400" />
+              </button>
+            </div>
+
+            {/* Days Selector */}
+            <div className="px-4 py-3 border-b border-[#232945] bg-[#0a0e14]">
+              <div className="flex items-center gap-3">
+                <label className="text-sm text-gray-400">Time period:</label>
+                <select
+                  value={summaryDays}
+                  onChange={(e) => setSummaryDays(Number(e.target.value))}
+                  className="px-3 py-1.5 bg-[#0f1419] text-white rounded border border-[#232945] focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm"
+                >
+                  <option value={1}>Last 24 hours</option>
+                  <option value={3}>Last 3 days</option>
+                  <option value={7}>Last week</option>
+                  <option value={14}>Last 2 weeks</option>
+                  <option value={30}>Last month</option>
+                </select>
+                <button
+                  onClick={handleSummarize}
+                  disabled={summaryLoading}
+                  className="px-4 py-1.5 bg-purple-600 hover:bg-purple-500 text-white rounded text-sm transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                >
+                  <Sparkles className="w-4 h-4" />
+                  {summaryLoading ? "Generating..." : "Regenerate"}
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Body */}
+            <div className="flex-1 overflow-y-auto p-6">
+              {summaryLoading ? (
+                <div className="flex flex-col items-center justify-center h-full gap-4">
+                  <div className="relative">
+                    <div className="w-16 h-16 border-4 border-purple-500/30 border-t-purple-500 rounded-full animate-spin"></div>
+                    <Sparkles className="w-6 h-6 text-purple-400 absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2" />
+                  </div>
+                  <p className="text-gray-400 text-sm">Analyzing project messages with AI...</p>
+                </div>
+              ) : (
+                <div className="prose prose-invert prose-sm max-w-none">
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    rehypePlugins={[rehypeRaw]}
+                    components={{
+                      p: ({ children }) => (
+                        <p className="mb-3 text-gray-200 leading-relaxed">{children}</p>
+                      ),
+                      h1: ({ children }) => (
+                        <h1 className="text-2xl font-bold mb-3 text-white">{children}</h1>
+                      ),
+                      h2: ({ children }) => (
+                        <h2 className="text-xl font-bold mb-2 text-white">{children}</h2>
+                      ),
+                      h3: ({ children }) => (
+                        <h3 className="text-lg font-bold mb-2 text-white">{children}</h3>
+                      ),
+                      ul: ({ children }) => (
+                        <ul className="list-disc list-inside mb-3 space-y-1">{children}</ul>
+                      ),
+                      ol: ({ children }) => (
+                        <ol className="list-decimal list-inside mb-3 space-y-1">{children}</ol>
+                      ),
+                      li: ({ children }) => (
+                        <li className="ml-2 text-gray-200">{children}</li>
+                      ),
+                      strong: ({ children }) => (
+                        <strong className="font-bold text-purple-300">{children}</strong>
+                      ),
+                      code: ({ inline, children }) =>
+                        inline ? (
+                          <code className="bg-[#0a0e14] px-1.5 py-0.5 rounded text-purple-300 text-xs">
+                            {children}
+                          </code>
+                        ) : (
+                          <code className="block bg-[#0a0e14] p-3 rounded text-sm overflow-x-auto text-gray-300">
+                            {children}
+                          </code>
+                        ),
+                    }}
+                  >
+                    {summary}
+                  </ReactMarkdown>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 border-t border-[#232945] flex justify-between items-center bg-[#0a0e14]">
+              <div className="text-xs text-gray-500">
+                Powered by AI • Last {summaryDays} day{summaryDays !== 1 ? 's' : ''}
+              </div>
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(summary);
+                  setCopiedText(summary);
+                  setTimeout(() => setCopiedText(null), 2000);
+                }}
+                disabled={!summary || summaryLoading}
+                className="px-4 py-2 bg-[#0f1419] hover:bg-[#232945] text-gray-200 rounded transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 text-sm border border-[#232945]"
+              >
+                {copiedText === summary ? (
+                  <>
+                    <Check className="w-4 h-4" />
+                    Copied!
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-4 h-4" />
+                    Copy Summary
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

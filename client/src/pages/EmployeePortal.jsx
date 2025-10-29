@@ -58,6 +58,10 @@ const EmployeePortal = ({ onLogout }) => {
   const [lightboxMedia, setLightboxMedia] = useState(null);
   const [lightboxIndex, setLightboxIndex] = useState(0);
   const [lightboxAllMedia, setLightboxAllMedia] = useState([]);
+  const [showSummaryModal, setShowSummaryModal] = useState(false);
+  const [summary, setSummary] = useState("");
+  const [summaryLoading, setSummaryLoading] = useState(false);
+  const [summaryDays, setSummaryDays] = useState(7);
   const fileInputRef = useRef(null);
   const textareaRef = useRef(null);
   const wsRef = useRef(null);
@@ -73,6 +77,7 @@ const EmployeePortal = ({ onLogout }) => {
   const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(0);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [quickReplies, setQuickReplies] = useState([]);
+  const [showQuickReplies, setShowQuickReplies] = useState(true);
   const suggestionsRef = useRef(null);
 
   // Fetch projects assigned to the employee
@@ -321,6 +326,43 @@ const EmployeePortal = ({ onLogout }) => {
     setDateFilter({ start: "", end: "" });
   };
 
+  const handleSummarize = async () => {
+    if (!selectedProject) return;
+
+    setSummaryLoading(true);
+    setShowSummaryModal(true);
+    setSummary("");
+
+    try {
+      const token = localStorage.getItem("token");
+      const response = await fetch(
+        `${API_BASE}/api/projects/${selectedProject}/messages/summarize`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ days: summaryDays }),
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Failed to generate summary");
+      }
+
+      const data = await response.json();
+      setSummary(data.summary || "No summary available.");
+    } catch (error) {
+      console.error("Error generating summary:", error);
+      const errorMsg = error.message || "Failed to generate summary. Please try again.";
+      setSummary(`**Error:** ${errorMsg}\n\nPlease check the backend console for detailed error information.`);
+    } finally {
+      setSummaryLoading(false);
+    }
+  };
+
   const getStatusColor = (status) => {
     switch (status?.toLowerCase()) {
       case "in progress":
@@ -549,6 +591,7 @@ const EmployeePortal = ({ onLogout }) => {
     if (!project) return null;
 
     return (
+      <>
       <div className="flex bg-gradient-to-br from-[#141a21] via-[#191f2b] to-[#101218] font-sans text-blue-100 min-h-screen">
         <Sidebar
           collapsed={collapsed}
@@ -748,7 +791,7 @@ const EmployeePortal = ({ onLogout }) => {
           {activeTab === "messages" && (
             <div
               className="bg-[#191f2b]/70 rounded-lg shadow-sm border border-[#232945] flex flex-col"
-              style={{ height: "calc(100vh - 300px)" }}
+              style={{ height: "calc(100vh - 200px)", minHeight: "600px" }}
             >
               {/* Messages Header */}
               <div className="p-4 border-b border-[#232945] space-y-3">
@@ -762,14 +805,24 @@ const EmployeePortal = ({ onLogout }) => {
                     </p>
                   </div>
 
-                  <button
-                    onClick={() => setShowFilters(!showFilters)}
-                    className="flex items-center gap-2 px-3 py-2 rounded-lg bg-blue-600/20 hover:bg-blue-600/40 text-blue-400 border border-blue-500/30 transition-colors text-sm"
-                    title="Toggle filters"
-                  >
-                    <Filter className="w-4 h-4" />
-                    <span className="hidden sm:inline">Filters</span>
-                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setShowFilters(!showFilters)}
+                      className="flex items-center gap-2 px-3 py-2 rounded-lg bg-blue-600/20 hover:bg-blue-600/40 text-blue-400 border border-blue-500/30 transition-colors text-sm"
+                      title="Toggle filters"
+                    >
+                      <Filter className="w-4 h-4" />
+                      <span className="hidden sm:inline">Filters</span>
+                    </button>
+                    <button
+                      onClick={handleSummarize}
+                      className="flex items-center gap-2 px-3 py-2 rounded-lg bg-purple-600/20 hover:bg-purple-600/40 text-purple-400 border border-purple-500/30 transition-colors text-sm"
+                      title="Summarize conversation"
+                    >
+                      <Sparkles className="w-4 h-4" />
+                      <span className="hidden sm:inline">Summarize</span>
+                    </button>
+                  </div>
                 </div>
 
                 {/* Search and Filters */}
@@ -1142,11 +1195,21 @@ const EmployeePortal = ({ onLogout }) => {
                 )}
 
                 {/* Quick Replies */}
-                {quickReplies.length > 0 && newMessage.length === 0 && (
+                {quickReplies.length > 0 && newMessage.length === 0 && showQuickReplies && (
                   <div className="mb-3 p-3 bg-[#0f1419] border border-[#232945] rounded-lg">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Zap className="w-4 h-4 text-yellow-400" />
-                      <span className="text-xs text-gray-400">Quick Replies:</span>
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <Zap className="w-4 h-4 text-yellow-400" />
+                        <span className="text-xs text-gray-400">Quick Replies:</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowQuickReplies(false)}
+                        className="p-1 hover:bg-[#232945] rounded transition-colors"
+                        title="Hide quick replies"
+                      >
+                        <XCircle className="w-4 h-4 text-gray-400" />
+                      </button>
                     </div>
                     <div className="flex flex-wrap gap-2">
                       {quickReplies.map((reply, idx) => (
@@ -1411,6 +1474,111 @@ const EmployeePortal = ({ onLogout }) => {
         </div>
         </main>
       </div>
+
+      {/* AI Summary Modal */}
+      {showSummaryModal && (
+        <div
+          className="fixed inset-0 flex items-center justify-center p-4"
+          style={{ zIndex: 9999, backgroundColor: 'rgba(0, 0, 0, 0.75)' }}
+          onClick={() => setShowSummaryModal(false)}
+        >
+          <div
+            className="bg-[#0f1419] rounded-lg shadow-2xl max-w-3xl w-full max-h-[80vh] flex flex-col border border-[#232945]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between p-4 border-b border-[#232945]">
+              <div className="flex items-center gap-3">
+                <Sparkles className="w-5 h-5 text-purple-400" />
+                <h2 className="text-xl font-semibold text-white">AI Project Summary</h2>
+              </div>
+              <button onClick={() => setShowSummaryModal(false)} className="p-2 hover:bg-[#232945] rounded-lg transition">
+                <XCircle className="w-5 h-5 text-gray-400" />
+              </button>
+            </div>
+            <div className="px-4 py-3 border-b border-[#232945] bg-[#0a0e14]">
+              <div className="flex items-center gap-3">
+                <label className="text-sm text-gray-400">Time period:</label>
+                <select value={summaryDays} onChange={(e) => setSummaryDays(Number(e.target.value))} className="px-3 py-1.5 bg-[#0f1419] text-white rounded border border-[#232945] focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm">
+                  <option value={1}>Last 24 hours</option>
+                  <option value={3}>Last 3 days</option>
+                  <option value={7}>Last week</option>
+                  <option value={14}>Last 2 weeks</option>
+                  <option value={30}>Last month</option>
+                </select>
+                <button onClick={handleSummarize} disabled={summaryLoading} className="px-4 py-1.5 bg-purple-600 hover:bg-purple-500 text-white rounded text-sm transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2">
+                  <Sparkles className="w-4 h-4" />
+                  {summaryLoading ? "Generating..." : "Regenerate"}
+                </button>
+              </div>
+            </div>
+            <div className="flex-1 overflow-y-auto p-6">
+              {summaryLoading ? (
+                <div className="flex flex-col items-center justify-center h-full gap-4">
+                  <div className="relative">
+                    <div className="w-16 h-16 border-4 border-purple-500/30 border-t-purple-500 rounded-full animate-spin"></div>
+                    <Sparkles className="w-6 h-6 text-purple-400 absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2" />
+                  </div>
+                  <p className="text-gray-400 text-sm">Analyzing project messages with AI...</p>
+                </div>
+              ) : summary ? (
+                <div className="prose prose-invert prose-sm max-w-none">
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    rehypePlugins={[rehypeRaw]}
+                    components={{
+                      p: ({ children }) => (
+                        <p className="mb-3 text-gray-200 leading-relaxed">{children}</p>
+                      ),
+                      h1: ({ children }) => (
+                        <h1 className="text-2xl font-bold mb-3 text-white">{children}</h1>
+                      ),
+                      h2: ({ children }) => (
+                        <h2 className="text-xl font-bold mb-2 text-white">{children}</h2>
+                      ),
+                      h3: ({ children }) => (
+                        <h3 className="text-lg font-bold mb-2 text-white">{children}</h3>
+                      ),
+                      ul: ({ children }) => (
+                        <ul className="list-disc list-inside mb-3 space-y-1">{children}</ul>
+                      ),
+                      ol: ({ children }) => (
+                        <ol className="list-decimal list-inside mb-3 space-y-1">{children}</ol>
+                      ),
+                      li: ({ children }) => (
+                        <li className="ml-2 text-gray-200">{children}</li>
+                      ),
+                      strong: ({ children }) => (
+                        <strong className="font-bold text-purple-300">{children}</strong>
+                      ),
+                      code: ({ inline, children }) =>
+                        inline ? (
+                          <code className="bg-[#0a0e14] px-1.5 py-0.5 rounded text-purple-300 text-xs">
+                            {children}
+                          </code>
+                        ) : (
+                          <code className="block bg-[#0a0e14] p-3 rounded text-sm overflow-x-auto text-gray-300">
+                            {children}
+                          </code>
+                        ),
+                    }}
+                  >
+                    {summary}
+                  </ReactMarkdown>
+                </div>
+              ) : (
+                <div className="flex items-center justify-center h-full text-gray-400 text-sm">Click "Regenerate" to generate a summary</div>
+              )}
+            </div>
+            <div className="p-4 border-t border-[#232945] flex justify-between items-center bg-[#0a0e14]">
+              <div className="text-xs text-gray-500">Powered by AI • Last {summaryDays} day{summaryDays !== 1 ? 's' : ''}</div>
+              <button onClick={() => { navigator.clipboard.writeText(summary); setCopiedText(summary); setTimeout(() => setCopiedText(null), 2000); }} disabled={!summary || summaryLoading} className="px-4 py-2 bg-[#0f1419] hover:bg-[#232945] text-gray-200 rounded transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 text-sm border border-[#232945]">
+                {copiedText === summary ? (<><Check className="w-4 h-4" />Copied!</>) : (<><Copy className="w-4 h-4" />Copy Summary</>)}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      </>
     );
   }
 

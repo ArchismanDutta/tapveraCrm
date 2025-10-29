@@ -124,10 +124,16 @@ class AttendanceService {
     // IMPORTANT: For night shifts, determine the correct date
     // First, get user's shift to determine correct date
     const userShift = await this.getUserShift(userId, now);
+
+    // 🔍 Debug: Check IST components before date calculation
+    const istComponents = this.getISTDateComponents(now);
+    console.log(`   IST Components: ${JSON.stringify(istComponents)}`);
+
     const today = this.getAttendanceDateForPunch(now, userShift);
 
-    console.log(`   User shift: ${userShift?.startTime}-${userShift?.endTime}`);
-    console.log(`   Assigned to date: ${today.toISOString().split('T')[0]}`);
+    console.log(`   User shift: ${userShift?.startTime}-${userShift?.endTime} (isNight: ${this.isNightShift(userShift)})`);
+    console.log(`   Assigned to attendance date: ${today.toISOString().split('T')[0]}`);
+    console.log(`   Expected date (simple): ${now.toISOString().split('T')[0]}`);
 
     // Get attendance record for the determined date
     const record = await this.getAttendanceRecord(today);
@@ -509,8 +515,17 @@ class AttendanceService {
     console.log(`   Attendance date: ${attendanceDate ? new Date(attendanceDate).toISOString().split('T')[0] : 'null'}`);
     console.log(`   Is night shift: ${this.isNightShift(employee.assignedShift)}`);
 
+    // 🔍 Debug: Check if dates match
+    const shouldInclude = this.shouldIncludeInDateCalculation(now, attendanceDate, employee.assignedShift);
+    console.log(`   shouldIncludeInDateCalculation(now, attendanceDate): ${shouldInclude}`);
+    if (!shouldInclude && attendanceDate) {
+      const nowDate = this.normalizeDate(now);
+      const attDate = this.normalizeDate(attendanceDate);
+      console.log(`   ❌ Date mismatch - Now: ${nowDate.toISOString().split('T')[0]} vs Attendance: ${attDate.toISOString().split('T')[0]}`);
+    }
+
     // Use shouldIncludeInDateCalculation for night shift support
-    if (this.shouldIncludeInDateCalculation(now, attendanceDate, employee.assignedShift)) {
+    if (shouldInclude) {
       if (currentWorkStart) {
         const duration = (now - currentWorkStart) / 1000;
         console.log(`   🔢 Work duration calculation: ${duration}s`);
@@ -543,6 +558,32 @@ class AttendanceService {
     // Check if employee is on paid leave
     const isPaidLeave = employee.leaveInfo?.isPaidLeave || false;
 
+    // Calculate if late and late minutes
+    const isLate = isFlexibleShift ? false : this.calculateIsLate(arrivalTime, employee.assignedShift, attendanceDate);
+
+    // 🔍 Debug: Log late minutes condition check
+    console.log(`🔍 Late minutes condition check for ${this.formatDateKey(attendanceDate)}:`, {
+      isLate,
+      hasArrivalTime: !!arrivalTime,
+      hasAssignedShift: !!employee.assignedShift,
+      hasShiftStartTime: !!employee.assignedShift?.startTime,
+      shiftStartTime: employee.assignedShift?.startTime,
+      willCalculateLateMinutes: isLate && arrivalTime && employee.assignedShift?.startTime
+    });
+
+    const lateMinutes = (isLate && arrivalTime && employee.assignedShift?.startTime)
+      ? this.calculateLateMinutes(arrivalTime, employee.assignedShift.startTime)
+      : 0;
+
+    // 🔍 Debug: Log late minutes calculation result
+    console.log(`🔍 Late Minutes RESULT for ${this.formatDateKey(attendanceDate)}:`, {
+      isLate,
+      lateMinutes,
+      arrivalTime: arrivalTime ? arrivalTime.toISOString() : null,
+      shiftStartTime: employee.assignedShift?.startTime,
+      isFlexible: isFlexibleShift
+    });
+
     employee.calculated = {
       arrivalTime,
       departureTime,
@@ -557,7 +598,8 @@ class AttendanceService {
       isPresent: workSeconds > 0,
       isAbsent: workSeconds === 0,
       // Flexible employees are NEVER marked as late (no shift start time to compare against)
-      isLate: isFlexibleShift ? false : this.calculateIsLate(arrivalTime, employee.assignedShift, attendanceDate),
+      isLate,
+      lateMinutes, // ⭐ Minutes late (0 if on-time or flexible shift)
       // Half-day status: >= 4 hours AND < 4.5 hours
       isHalfDay: workHours >= this.CONSTANTS.MIN_HALF_DAY_HOURS && workHours < this.CONSTANTS.HALF_DAY_THRESHOLD_HOURS,
       isFullDay: workHours >= this.CONSTANTS.MIN_FULL_DAY_HOURS,
@@ -660,6 +702,17 @@ class AttendanceService {
 
         // Format calculated data to ensure dates are ISO strings, not Date objects
         const calculated = { ...employee.calculated };
+
+        // 🔍 Debug: Check if lateMinutes exists in employee.calculated BEFORE formatting
+        if (employee.calculated.isLate) {
+          console.log(`🔍 BEFORE formatting - employee.calculated for ${this.formatDateKey(record.date)}:`, {
+            isLate: employee.calculated.isLate,
+            hasLateMinutesField: 'lateMinutes' in employee.calculated,
+            lateMinutesValue: employee.calculated.lateMinutes,
+            allFields: Object.keys(employee.calculated)
+          });
+        }
+
         if (calculated.arrivalTime instanceof Date) {
           calculated.arrivalTime = calculated.arrivalTime.toISOString();
         }
@@ -667,16 +720,47 @@ class AttendanceService {
           calculated.departureTime = calculated.departureTime.toISOString();
         }
 
-        attendance.push({
+        // 🔍 Debug: Check if lateMinutes exists in calculated AFTER formatting
+        if (calculated.isLate) {
+          console.log(`🔍 AFTER formatting - calculated object for ${this.formatDateKey(record.date)}:`, {
+            isLate: calculated.isLate,
+            hasLateMinutesField: 'lateMinutes' in calculated,
+            lateMinutesValue: calculated.lateMinutes,
+            allFields: Object.keys(calculated)
+          });
+        }
+
+        const attendanceRecord = {
           date: this.formatDateKey(record.date), // Return as YYYY-MM-DD string to avoid timezone issues
           ...calculated,
           events: employee.events,
           shift: employee.assignedShift,
           leave: employee.leaveInfo,
           performance: employee.performance
-        });
+        };
+
+        // 🔍 Debug: Check if lateMinutes exists in final attendanceRecord
+        if (attendanceRecord.isLate) {
+          console.log(`🔍 FINAL attendanceRecord for ${attendanceRecord.date}:`, {
+            isLate: attendanceRecord.isLate,
+            hasLateMinutesField: 'lateMinutes' in attendanceRecord,
+            lateMinutesValue: attendanceRecord.lateMinutes,
+            willBeCountedInFilter: attendanceRecord.isLate && attendanceRecord.lateMinutes > 0
+          });
+        }
+
+        attendance.push(attendanceRecord);
       }
     }
+
+    // 🔍 Debug: Summary of late days with minutes
+    const lateDaysWithMinutes = attendance.filter(a => a.isLate && a.lateMinutes > 0);
+    console.log(`📊 getEmployeeAttendance summary for user ${userId}:`, {
+      totalDays: attendance.length,
+      lateDays: attendance.filter(a => a.isLate).length,
+      lateDaysWithMinutes: lateDaysWithMinutes.length,
+      lateMinutesData: lateDaysWithMinutes.map(a => ({ date: a.date, lateMinutes: a.lateMinutes }))
+    });
 
     return {
       userId,
@@ -1143,6 +1227,7 @@ class AttendanceService {
       isPresent: false,
       isAbsent: true,
       isLate: false,
+      lateMinutes: 0, // ⭐ Minutes late
       isHalfDay: false,
       isFullDay: false,
       isOvertime: false,
