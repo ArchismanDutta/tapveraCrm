@@ -7,6 +7,8 @@ import { BrowserNotificationManager } from "../utils/browserNotifications";
 import useMessageSuggestions from "../hooks/useMessageSuggestions";
 import ProjectTaskModal from "../components/project/ProjectTaskModal";
 import ProjectTaskEditModal from "../components/project/ProjectTaskEditModal";
+import UnreadMessageBadge from "../components/message/UnreadMessageBadge";
+import MessageWithMentions from "../components/message/MessageWithMentions";
 import {
   ArrowLeft,
   Globe,
@@ -641,15 +643,23 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
   };
 
   const getProjectStatus = (project) => {
-    const today = new Date();
-    const endDate = new Date(project.endDate);
+  if (!project) return "inactive";
+  
+  const today = new Date();
+  const endDate = project.endDate ? new Date(project.endDate) : null;
 
-    if (project.status === "Completed") return "completed";
-    if (project.status === "Inactive") return "inactive";
-    if (endDate < today) return "needsRenewal";
-    if (project.status === "Active") return "active";
-    return "inactive";
-  };
+  // Normalize status to lowercase for comparison
+  const status = project.status?.toLowerCase();
+
+  if (status === "completed") return "completed";
+  if (status === "inactive") return "inactive";
+  if (status === "expired") return "expired";
+  if (endDate && endDate < today && status !== "completed") return "needsRenewal";
+  if (status === "active" || status === "ongoing") return "active";
+  if (status === "new") return "active"; // Treat "new" as active
+  
+  return "inactive";
+};
 
   const copyToClipboard = (text) => {
     navigator.clipboard.writeText(text);
@@ -1014,11 +1024,7 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                 >
                   <Mail className="w-5 h-5" />
                   <span>Chat</span>
-                  {messages.length > 0 && (
-                    <span className="px-2 py-0.5 rounded-full bg-blue-600/30 text-blue-400 text-xs">
-                      {messages.length}
-                    </span>
-                  )}
+                  <UnreadMessageBadge projectId={projectId} refreshInterval={30000} />
                 </button>
                 <button
                   onClick={() => setActiveTab("tasks")}
@@ -1215,34 +1221,55 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
 
                           {/* Message with Markdown rendering */}
                           {msg.message && (
-                            <div className="text-white text-sm leading-relaxed break-words prose prose-invert prose-sm max-w-none">
-                              <ReactMarkdown
-                                remarkPlugins={[remarkGfm]}
-                                rehypePlugins={[rehypeRaw]}
-                                components={{
-                                  p: ({ children }) => <p className="mb-1 last:mb-0">{children}</p>,
-                                  h1: ({ children }) => <h1 className="text-lg font-bold mb-1">{children}</h1>,
-                                  h2: ({ children }) => <h2 className="text-base font-bold mb-1">{children}</h2>,
-                                  h3: ({ children }) => <h3 className="text-sm font-bold mb-1">{children}</h3>,
-                                  ul: ({ children }) => <ul className="list-disc list-inside mb-1">{children}</ul>,
-                                  ol: ({ children }) => <ol className="list-decimal list-inside mb-1">{children}</ol>,
-                                  li: ({ children }) => <li className="ml-2">{children}</li>,
-                                  code: ({ inline, children }) =>
-                                    inline ? (
-                                      <code className="bg-black/30 px-1 rounded text-xs">{children}</code>
-                                    ) : (
-                                      <code className="block bg-black/30 p-2 rounded text-xs overflow-x-auto">{children}</code>
+                            <>
+                              <div className="text-white text-sm leading-relaxed break-words prose prose-invert prose-sm max-w-none">
+                                <ReactMarkdown
+                                  remarkPlugins={[remarkGfm]}
+                                  rehypePlugins={[rehypeRaw]}
+                                  components={{
+                                    p: ({ children }) => <p className="mb-1 last:mb-0">{children}</p>,
+                                    h1: ({ children }) => <h1 className="text-lg font-bold mb-1">{children}</h1>,
+                                    h2: ({ children }) => <h2 className="text-base font-bold mb-1">{children}</h2>,
+                                    h3: ({ children }) => <h3 className="text-sm font-bold mb-1">{children}</h3>,
+                                    ul: ({ children }) => <ul className="list-disc list-inside mb-1">{children}</ul>,
+                                    ol: ({ children }) => <ol className="list-decimal list-inside mb-1">{children}</ol>,
+                                    li: ({ children }) => <li className="ml-2">{children}</li>,
+                                    code: ({ inline, children }) =>
+                                      inline ? (
+                                        <code className="bg-black/30 px-1 rounded text-xs">{children}</code>
+                                      ) : (
+                                        <code className="block bg-black/30 p-2 rounded text-xs overflow-x-auto">{children}</code>
+                                      ),
+                                    strong: ({ children }) => <strong className="font-bold">{children}</strong>,
+                                    em: ({ children }) => <em className="italic">{children}</em>,
+                                    a: ({ href, children }) => (
+                                      <a href={href} target="_blank" rel="noopener noreferrer" className="text-blue-300 underline hover:text-blue-200">{children}</a>
                                     ),
-                                  strong: ({ children }) => <strong className="font-bold">{children}</strong>,
-                                  em: ({ children }) => <em className="italic">{children}</em>,
-                                  a: ({ href, children }) => (
-                                    <a href={href} target="_blank" rel="noopener noreferrer" className="text-blue-300 underline hover:text-blue-200">{children}</a>
-                                  ),
-                                }}
-                              >
-                                {msg.message}
-                              </ReactMarkdown>
-                            </div>
+                                  }}
+                                >
+                                  {msg.message}
+                                </ReactMarkdown>
+                              </div>
+                              {/* Mentioned Users */}
+                              {msg.mentions && msg.mentions.length > 0 && (
+                                <div className="flex flex-wrap gap-1 mt-2">
+                                  {msg.mentions.map((mention, idx) => (
+                                    <span
+                                      key={idx}
+                                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs ${
+                                        mention.user?._id === userId
+                                          ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30'
+                                          : 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
+                                      }`}
+                                      title={mention.user?.email || mention.user?.name}
+                                    >
+                                      <Users className="w-3 h-3" />
+                                      @{mention.user?.name || mention.user?.clientName || 'Unknown'}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                            </>
                           )}
 
                           {/* Attachments */}

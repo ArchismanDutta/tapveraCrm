@@ -23,6 +23,13 @@ import { WebSocketProvider, useWebSocketContext } from "./contexts/WebSocketCont
 // Notifications
 import NotificationToast from "./components/NotificationToast";
 
+// Tap AI Assistant (Old - Chat-based)
+// import TapAssistant from "./components/tap/TapAssistant";
+
+// Tap Agent (New - Autonomous UI Controller)
+import { AgentProvider } from "./contexts/AgentContext";
+import TapAgent from "./components/agent/TapAgent";
+
 // Redux
 import { useDispatch } from "react-redux";
 import { resetChat } from "./store/slices/chatSlice";
@@ -760,8 +767,11 @@ const App = () => (
   <Router>
     <WebSocketProvider>
       <AchievementProvider>
-        <AppWrapper />
-        <AchievementNotificationContainer />
+        <AgentProvider>
+          <AppWrapper />
+          <AchievementNotificationContainer />
+          <TapAgent />
+        </AgentProvider>
       </AchievementProvider>
     </WebSocketProvider>
   </Router>

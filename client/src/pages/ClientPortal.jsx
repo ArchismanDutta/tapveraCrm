@@ -21,7 +21,9 @@ import {
   Menu,
   X as CloseIcon,
   Clock,
+  MessageCircle,
 } from "lucide-react";
+import UnreadMessageBadge from "../components/message/UnreadMessageBadge";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
 
@@ -69,6 +71,13 @@ const PROJECT_TYPE_COLORS = {
   },
 };
 
+// Default fallback values
+const DEFAULT_COLORS = {
+  bg: "bg-gray-600/20",
+  text: "text-gray-400",
+  border: "border-gray-500/50",
+};
+
 const ClientPortal = ({ onLogout, clientId }) => {
   const navigate = useNavigate();
   const [projects, setProjects] = useState([]);
@@ -102,14 +111,44 @@ const ClientPortal = ({ onLogout, clientId }) => {
   };
 
   const getProjectStatus = (project) => {
-    const today = new Date();
-    const endDate = new Date(project.endDate);
+  if (!project) return "inactive";
+  
+  const today = new Date();
+  const endDate = project.endDate ? new Date(project.endDate) : null;
 
-    if (project.status === "Completed") return "completed";
-    if (project.status === "Inactive") return "inactive";
-    if (endDate < today) return "needsRenewal";
-    if (project.status === "Active") return "active";
-    return "inactive";
+  // Normalize status to lowercase for comparison
+  const status = project.status?.toLowerCase();
+
+  if (status === "completed") return "completed";
+  if (status === "inactive") return "inactive";
+  if (status === "expired") return "expired";
+  if (endDate && endDate < today && status !== "completed") return "needsRenewal";
+  if (status === "active" || status === "ongoing") return "active";
+  if (status === "new") return "active"; // Treat "new" as active
+  
+  return "inactive";
+};
+
+  // Get project type safely
+  const getProjectType = (project) => {
+    if (!project || !project.type) return "Website"; // Default type
+    
+    // Handle array of types - use first type
+    if (Array.isArray(project.type)) {
+      return project.type[0] || "Website";
+    }
+    
+    return project.type;
+  };
+
+  // Get colors safely
+  const getProjectColors = (type) => {
+    return PROJECT_TYPE_COLORS[type] || DEFAULT_COLORS;
+  };
+
+  // Get icon safely
+  const getProjectIcon = (type) => {
+    return PROJECT_TYPE_ICONS[type] || Globe;
   };
 
   // Statistics
@@ -130,9 +169,12 @@ const ClientPortal = ({ onLogout, clientId }) => {
     return projects.filter((p) => {
       const matchesSearch =
         p.projectName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        p.type?.toLowerCase().includes(searchTerm.toLowerCase());
+        (Array.isArray(p.type) ? p.type.join(" ") : p.type || "")
+          .toLowerCase()
+          .includes(searchTerm.toLowerCase());
 
-      const matchesType = filterType === "all" || p.type === filterType;
+      const projectType = getProjectType(p);
+      const matchesType = filterType === "all" || projectType === filterType;
 
       const projectStatus = getProjectStatus(p);
       const matchesStatus =
@@ -361,8 +403,9 @@ const ClientPortal = ({ onLogout, clientId }) => {
                 ) : (
                   filteredProjects.map((project) => {
                     const status = getProjectStatus(project);
-                    const colors = PROJECT_TYPE_COLORS[project.type];
-                    const Icon = PROJECT_TYPE_ICONS[project.type];
+                    const projectType = getProjectType(project);
+                    const colors = getProjectColors(projectType);
+                    const Icon = getProjectIcon(projectType);
 
                     return (
                       <tr
@@ -373,7 +416,7 @@ const ClientPortal = ({ onLogout, clientId }) => {
                           <div className="flex items-center gap-2">
                             <Icon className={`w-4 h-4 ${colors.text}`} />
                             <span className="text-white font-medium">
-                              {project.projectName}
+                              {project.projectName || "Untitled Project"}
                             </span>
                           </div>
                         </td>
@@ -381,24 +424,30 @@ const ClientPortal = ({ onLogout, clientId }) => {
                           <span
                             className={`px-3 py-1 rounded-full text-xs font-medium ${colors.bg} ${colors.text} border ${colors.border}`}
                           >
-                            {project.type}
+                            {projectType}
                           </span>
                         </td>
                         <td className="p-4">
                           <div className="flex items-center gap-1">
-                            {project.assignedTo?.slice(0, 3).map((emp, idx) => (
-                              <div
-                                key={idx}
-                                className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white text-xs font-semibold"
-                                title={emp.name || "Unknown"}
-                              >
-                                {(emp.name || "U").charAt(0).toUpperCase()}
-                              </div>
-                            ))}
-                            {project.assignedTo?.length > 3 && (
-                              <div className="w-8 h-8 rounded-full bg-gray-700 flex items-center justify-center text-white text-xs font-semibold">
-                                +{project.assignedTo.length - 3}
-                              </div>
+                            {project.assignedTo && Array.isArray(project.assignedTo) && project.assignedTo.length > 0 ? (
+                              <>
+                                {project.assignedTo.slice(0, 3).map((emp, idx) => (
+                                  <div
+                                    key={idx}
+                                    className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white text-xs font-semibold"
+                                    title={emp?.name || "Unknown"}
+                                  >
+                                    {(emp?.name || "U").charAt(0).toUpperCase()}
+                                  </div>
+                                ))}
+                                {project.assignedTo.length > 3 && (
+                                  <div className="w-8 h-8 rounded-full bg-gray-700 flex items-center justify-center text-white text-xs font-semibold">
+                                    +{project.assignedTo.length - 3}
+                                  </div>
+                                )}
+                              </>
+                            ) : (
+                              <span className="text-gray-500 text-sm">No team assigned</span>
                             )}
                           </div>
                         </td>
@@ -440,13 +489,21 @@ const ClientPortal = ({ onLogout, clientId }) => {
                           </span>
                         </td>
                         <td className="p-4">
-                          <button
-                            onClick={() => navigate(`/project/${project._id}`)}
-                            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 transition-all"
-                          >
-                            <Eye className="w-4 h-4" />
-                            <span>View Details</span>
-                          </button>
+                          <div className="flex items-center gap-3">
+                            <button
+                              onClick={() => navigate(`/project/${project._id}`)}
+                              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 transition-all"
+                            >
+                              <Eye className="w-4 h-4" />
+                              <span>View Details</span>
+                            </button>
+                            <div className="relative">
+                              <MessageCircle className="w-5 h-5 text-gray-400" />
+                              <div className="absolute -top-1 -right-1">
+                                <UnreadMessageBadge projectId={project._id} refreshInterval={60000} />
+                              </div>
+                            </div>
+                          </div>
                         </td>
                       </tr>
                     );
@@ -466,8 +523,9 @@ const ClientPortal = ({ onLogout, clientId }) => {
             ) : (
               filteredProjects.map((project) => {
                 const status = getProjectStatus(project);
-                const colors = PROJECT_TYPE_COLORS[project.type];
-                const Icon = PROJECT_TYPE_ICONS[project.type];
+                const projectType = getProjectType(project);
+                const colors = getProjectColors(projectType);
+                const Icon = getProjectIcon(projectType);
 
                 return (
                   <div
@@ -480,13 +538,13 @@ const ClientPortal = ({ onLogout, clientId }) => {
                           className={`w-4 h-4 ${colors.text} flex-shrink-0`}
                         />
                         <h4 className="text-white font-medium text-sm truncate">
-                          {project.projectName}
+                          {project.projectName || "Untitled Project"}
                         </h4>
                       </div>
                       <span
                         className={`px-2 py-1 rounded-full text-xs font-medium ${colors.bg} ${colors.text} border ${colors.border} flex-shrink-0 ml-2`}
                       >
-                        {project.type}
+                        {projectType}
                       </span>
                     </div>
 
@@ -503,19 +561,25 @@ const ClientPortal = ({ onLogout, clientId }) => {
                       <div className="flex items-center gap-2">
                         <Users className="w-3 h-3 text-gray-400 flex-shrink-0" />
                         <div className="flex items-center gap-1">
-                          {project.assignedTo?.slice(0, 3).map((emp, idx) => (
-                            <div
-                              key={idx}
-                              className="w-6 h-6 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white text-xs font-semibold"
-                              title={emp.name || "Unknown"}
-                            >
-                              {(emp.name || "U").charAt(0).toUpperCase()}
-                            </div>
-                          ))}
-                          {project.assignedTo?.length > 3 && (
-                            <div className="w-6 h-6 rounded-full bg-gray-700 flex items-center justify-center text-white text-xs font-semibold">
-                              +{project.assignedTo.length - 3}
-                            </div>
+                          {project.assignedTo && Array.isArray(project.assignedTo) && project.assignedTo.length > 0 ? (
+                            <>
+                              {project.assignedTo.slice(0, 3).map((emp, idx) => (
+                                <div
+                                  key={idx}
+                                  className="w-6 h-6 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white text-xs font-semibold"
+                                  title={emp?.name || "Unknown"}
+                                >
+                                  {(emp?.name || "U").charAt(0).toUpperCase()}
+                                </div>
+                              ))}
+                              {project.assignedTo.length > 3 && (
+                                <div className="w-6 h-6 rounded-full bg-gray-700 flex items-center justify-center text-white text-xs font-semibold">
+                                  +{project.assignedTo.length - 3}
+                                </div>
+                              )}
+                            </>
+                          ) : (
+                            <span className="text-gray-500 text-xs">No team</span>
                           )}
                         </div>
                       </div>
@@ -553,13 +617,21 @@ const ClientPortal = ({ onLogout, clientId }) => {
                           : "Inactive"}
                       </span>
 
-                      <button
-                        onClick={() => navigate(`/project/${project._id}`)}
-                        className="inline-flex items-center gap-1 px-3 py-1 rounded-lg text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 transition-all text-sm"
-                      >
-                        <Eye className="w-3 h-3" />
-                        <span>View</span>
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <div className="relative">
+                          <MessageCircle className="w-4 h-4 text-gray-400" />
+                          <div className="absolute -top-1 -right-1">
+                            <UnreadMessageBadge projectId={project._id} refreshInterval={60000} className="text-[10px] min-w-[16px] h-4 px-1" />
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => navigate(`/project/${project._id}`)}
+                          className="inline-flex items-center gap-1 px-3 py-1 rounded-lg text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 transition-all text-sm"
+                        >
+                          <Eye className="w-3 h-3" />
+                          <span>View</span>
+                        </button>
+                      </div>
                     </div>
                   </div>
                 );

@@ -563,6 +563,10 @@ router.get("/:id/messages", protect, async (req, res) => {
           select: "name email clientName",
         },
       })
+      .populate({
+        path: "mentions.user",
+        select: "name email clientName",
+      })
       .sort({ createdAt: 1 });
 
     // Filter by sender name if provided
@@ -584,10 +588,47 @@ router.get("/:id/messages", protect, async (req, res) => {
 // @route   POST /api/projects/:id/messages
 // @desc    Send a message to a project with optional file attachments
 // @access  Private
+// Helper to parse @mentions from message text
+const parseMentionsFromMessage = async (messageText, projectId) => {
+  if (!messageText) return [];
+
+  const User = require("../models/User");
+  const Client = require("../models/Client");
+
+  // Match @mentions in the format @Name or @FirstName LastName
+  const mentionPattern = /@(\w+(?:\s+\w+)*)/g;
+  const matches = [...messageText.matchAll(mentionPattern)];
+
+  if (matches.length === 0) return [];
+
+  // Extract mentioned names
+  const mentionedNames = matches.map(match => match[1].toLowerCase());
+
+  // Find users and clients by name (case-insensitive)
+  const users = await User.find({
+    $or: mentionedNames.map(name => ({
+      name: { $regex: new RegExp(`^${name}$`, 'i') }
+    }))
+  }, '_id');
+
+  const clients = await Client.find({
+    $or: mentionedNames.map(name => ({
+      clientName: { $regex: new RegExp(`^${name}$`, 'i') }
+    }))
+  }, '_id');
+
+  const mentions = [
+    ...users.map(user => ({ user: user._id, userModel: 'User' })),
+    ...clients.map(client => ({ user: client._id, userModel: 'Client' }))
+  ];
+
+  return mentions;
+};
+
 router.post("/:id/messages", protect, uploadToS3.array("files", 5), async (req, res) => {
   try {
     const Message = require("../models/Message");
-    const { message, sentBy, senderType, replyTo } = req.body;
+    const { message, sentBy, senderType, replyTo, mentions } = req.body;
 
     if (!message || !message.trim()) {
       return res.status(400).json({ message: "Message content is required" });
@@ -607,6 +648,21 @@ router.post("/:id/messages", protect, uploadToS3.array("files", 5), async (req, 
       if (!isAssigned) {
         return res.status(403).json({ message: "Access denied" });
       }
+    }
+
+    // Parse mentions if sent as JSON string (from FormData)
+    let mentionedUsers = [];
+    if (mentions) {
+      try {
+        mentionedUsers = typeof mentions === 'string' ? JSON.parse(mentions) : mentions;
+      } catch (e) {
+        console.warn('Failed to parse mentions:', e);
+      }
+    }
+
+    // If no mentions provided, parse from message text
+    if (mentionedUsers.length === 0) {
+      mentionedUsers = await parseMentionsFromMessage(message, req.params.id);
     }
 
     // Determine sender model based on user type
@@ -639,6 +695,7 @@ router.post("/:id/messages", protect, uploadToS3.array("files", 5), async (req, 
       senderType: senderType || req.user.role,
       replyTo: replyTo || null,
       attachments: attachments,
+      mentions: mentionedUsers,
     });
 
     const populatedMessage = await Message.findById(newMessage._id)
@@ -650,7 +707,39 @@ router.post("/:id/messages", protect, uploadToS3.array("files", 5), async (req, 
           path: "sentBy",
           select: "name email clientName",
         },
+      })
+      .populate({
+        path: "mentions.user",
+        select: "name email clientName",
       });
+
+    // Send notifications to mentioned users
+    if (mentionedUsers.length > 0) {
+      const notificationService = require('../services/notificationService');
+      const senderName = req.user.name || req.user.clientName || 'Someone';
+
+      for (const mention of mentionedUsers) {
+        // Don't notify if user mentioned themselves
+        if (String(mention.user) !== String(req.user._id)) {
+          try {
+            await notificationService.createNotification({
+              userId: mention.user,
+              type: 'chat',
+              channel: 'mention',
+              title: `${senderName} mentioned you in ${project.name}`,
+              body: message.slice(0, 100) + (message.length > 100 ? '...' : ''),
+              relatedData: {
+                projectId: req.params.id,
+                messageId: newMessage._id
+              },
+              priority: 'high'
+            });
+          } catch (notifError) {
+            console.error('Failed to send mention notification:', notifError);
+          }
+        }
+      }
+    }
 
     // Send email notification (non-blocking)
     emailNotificationService.sendProjectMessageEmail(populatedMessage).catch(err => {

@@ -43,8 +43,18 @@ router.get("/messages/:conversationId", protect, async (req, res) => {
 // Send a message to a conversation (with optional file attachments)
 router.post("/messages", protect, uploadToS3.array("files", 5), async (req, res) => {
   try {
-    const { conversationId, message, replyTo } = req.body;
+    const { conversationId, message, replyTo, mentions } = req.body;
     const senderId = req.user._id;
+
+    // Parse mentions if sent as JSON string (from FormData)
+    let mentionedUserIds = [];
+    if (mentions) {
+      try {
+        mentionedUserIds = typeof mentions === 'string' ? JSON.parse(mentions) : mentions;
+      } catch (e) {
+        console.warn('Failed to parse mentions:', e);
+      }
+    }
 
     // Process file attachments
     const attachments = [];
@@ -69,7 +79,8 @@ router.post("/messages", protect, uploadToS3.array("files", 5), async (req, res)
       senderId,
       message,
       attachments,
-      replyTo || null
+      replyTo || null,
+      mentionedUserIds
     );
 
     // Populate replyTo if exists
@@ -89,6 +100,7 @@ router.post("/messages", protect, uploadToS3.array("files", 5), async (req, res)
           timestamp: savedMessage.timestamp,
           attachments: savedMessage.attachments || [],
           replyTo: savedMessage.replyTo || null,
+          mentions: savedMessage.mentions || [],
         };
 
         broadcastMessageToConversation(conversationId, conversation.members, payload);

@@ -44,6 +44,7 @@ const projectRoutes = require("./routes/projectRoutes");
 const notificationRoutes = require("./routes/notificationRoutes");
 const mediaRoutes = require("./routes/mediaRoutes");
 const aiAnalyticsRoutes = require("./routes/aiAnalyticsRoutes");
+const tapRoutes = require("./routes/tapRoutes");
 
 // Controllers
 const ChatController = require("./controllers/chatController");
@@ -152,6 +153,7 @@ app.use("/api/projects", projectRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/media", mediaRoutes);
 app.use("/api/ai-analytics", aiAnalyticsRoutes);
+app.use("/api/tap", tapRoutes);
 
 // =====================
 // Serve frontend in production
