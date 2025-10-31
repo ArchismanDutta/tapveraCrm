@@ -3,6 +3,7 @@
 const ChatMessage = require("../models/ChatMessage");
 const Conversation = require("../models/Conversation");
 const User = require("../models/User");
+const dailyChatNotificationService = require("../services/dailyChatNotificationService");
 
 // Parse @mentions from message text and return user IDs
 const parseMentions = async (messageText) => {
@@ -46,6 +47,16 @@ exports.saveMessage = async (conversationId, senderId, message, attachments = []
   });
 
   const savedMessage = await chatMessage.save();
+
+  // Send daily chat initiation email notifications (one per day per user)
+  // This runs in the background and won't block message saving
+  dailyChatNotificationService.processNewMessage(
+    savedMessage,
+    conversationId,
+    senderId
+  ).catch(err => {
+    console.error('Failed to process daily chat notifications:', err);
+  });
 
   // Send notifications to mentioned users
   if (mentionedUserIds.length > 0) {

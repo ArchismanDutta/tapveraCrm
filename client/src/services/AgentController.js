@@ -2,11 +2,13 @@
 // The brain of the autonomous agent - parses commands and creates workflows
 
 import UIAutomationService from './UIAutomationService';
+import enhancedNLP from '../utils/enhancedNLP';
 
 class AgentController {
   constructor() {
     this.intentPatterns = this.buildIntentPatterns();
     this.workflows = this.buildWorkflows();
+    this.nlp = enhancedNLP;
   }
 
   /**
@@ -156,9 +158,12 @@ class AgentController {
   }
 
   /**
-   * Parse user command into intent and parameters
+   * Parse user command into intent and parameters with enhanced NLP
    */
   parseCommand(command) {
+    console.log(`🧠 Enhanced NLP parsing command: "${command}"`);
+
+    // First, try exact regex patterns for structured commands
     for (const pattern of this.intentPatterns) {
       const match = command.match(pattern.pattern);
       if (match) {
@@ -168,15 +173,179 @@ class AgentController {
           parameters = pattern.extractParams(match);
         }
 
+        console.log(`✅ Matched via regex: ${pattern.intent}`);
         return {
           intent: pattern.intent,
           parameters,
-          originalCommand: command
+          originalCommand: command,
+          confidence: 1.0,
+          method: 'regex'
         };
       }
     }
 
+    // If no regex match, use enhanced NLP with fuzzy matching
+    console.log(`🔍 Trying fuzzy NLP matching...`);
+    const entities = this.nlp.extractEntities(command);
+
+    console.log('Extracted entities:', entities);
+
+    // Try to map entities to intent
+    if (entities.intent && entities.page) {
+      const intent = this.mapEntitiesToIntent(entities, command);
+
+      if (intent) {
+        const parameters = this.extractParametersNLP(command, entities);
+
+        const avgConfidence = (
+          (entities.intent.confidence || 0) +
+          (entities.page.confidence || 0)
+        ) / 2;
+
+        console.log(`✅ Matched via NLP: ${intent} (confidence: ${(avgConfidence * 100).toFixed(1)}%)`);
+
+        return {
+          intent,
+          parameters,
+          originalCommand: command,
+          confidence: avgConfidence,
+          method: 'nlp',
+          entities
+        };
+      }
+    }
+
+    // Try page-only navigation
+    if (entities.page) {
+      const intent = this.mapPageToNavigationIntent(entities.page.page);
+      if (intent) {
+        console.log(`✅ Matched via page navigation: ${intent}`);
+        return {
+          intent,
+          parameters: {},
+          originalCommand: command,
+          confidence: entities.page.confidence,
+          method: 'page-only'
+        };
+      }
+    }
+
+    console.log(`❌ No match found for command`);
     return null;
+  }
+
+  /**
+   * Map entities to intent
+   */
+  mapEntitiesToIntent(entities, command) {
+    const intent = entities.intent?.intent;
+    const page = entities.page?.page;
+
+    // Navigation intents
+    if (intent === 'navigate' || intent === 'view') {
+      const navMapping = {
+        'dashboard': 'NAVIGATE_DASHBOARD',
+        'tasks': 'NAVIGATE_TASKS',
+        'projects': 'NAVIGATE_PROJECTS',
+        'leaves': 'NAVIGATE_LEAVES',
+        'clients': 'NAVIGATE_CLIENTS',
+        'employees': 'NAVIGATE_DIRECTORY',
+        'attendance': 'NAVIGATE_ATTENDANCE',
+      };
+      return navMapping[page] || null;
+    }
+
+    // Creation intents
+    if (intent === 'create') {
+      const createMapping = {
+        'tasks': 'CREATE_TASK',
+        'projects': 'CREATE_PROJECT',
+        'clients': 'CREATE_CLIENT',
+      };
+      return createMapping[page] || null;
+    }
+
+    // Approval/Rejection intents
+    if (intent === 'approve') {
+      if (page === 'leaves' || command.toLowerCase().includes('leave')) {
+        return 'APPROVE_LEAVE';
+      }
+    }
+
+    if (intent === 'reject') {
+      if (page === 'leaves' || command.toLowerCase().includes('leave')) {
+        return 'REJECT_LEAVE';
+      }
+    }
+
+    // Filter intents
+    if (intent === 'filter' || intent === 'view') {
+      const viewMapping = {
+        'tasks': 'VIEW_TASKS',
+        'projects': 'VIEW_PROJECTS',
+        'clients': 'VIEW_CLIENTS',
+        'leaves': 'VIEW_PENDING_LEAVES',
+      };
+      return viewMapping[page] || null;
+    }
+
+    return null;
+  }
+
+  /**
+   * Map page to navigation intent
+   */
+  mapPageToNavigationIntent(page) {
+    const mapping = {
+      'dashboard': 'NAVIGATE_DASHBOARD',
+      'tasks': 'NAVIGATE_TASKS',
+      'projects': 'NAVIGATE_PROJECTS',
+      'leaves': 'NAVIGATE_LEAVES',
+      'clients': 'NAVIGATE_CLIENTS',
+      'employees': 'NAVIGATE_DIRECTORY',
+      'attendance': 'NAVIGATE_ATTENDANCE',
+    };
+    return mapping[page] || null;
+  }
+
+  /**
+   * Extract parameters using enhanced NLP
+   */
+  extractParametersNLP(command, entities) {
+    const params = {};
+
+    // Extract priority
+    if (entities.priority) {
+      params.priority = entities.priority.value;
+    }
+
+    // Extract status
+    if (entities.status) {
+      params.status = entities.status.value;
+    }
+
+    // Extract employee name
+    const employeeName = this.nlp.extractEmployeeName(command);
+    if (employeeName) {
+      params.assigneeName = employeeName;
+      params.employeeName = employeeName;
+    }
+
+    // Extract task title
+    if (entities.page?.page === 'tasks') {
+      const taskTitle = this.nlp.extractTaskTitle(command);
+      if (taskTitle) {
+        params.title = taskTitle;
+      }
+    }
+
+    // Extract dates
+    const dateMatch = command.match(/(?:by|due|before)\s+(.+?)(?:\s+with|\s+for|\s+$|$)/i);
+    if (dateMatch) {
+      params.dueDate = this.parseDate(dateMatch[1]);
+    }
+
+    return params;
   }
 
   /**

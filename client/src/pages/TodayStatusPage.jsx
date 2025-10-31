@@ -12,6 +12,8 @@ import { toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import newAttendanceService from "../services/newAttendanceService";
 import timeUtils from "../utils/timeUtils";
+import PaymentBlockOverlay from "../components/payment/PaymentBlockOverlay";
+import usePaymentCheck from "../hooks/usePaymentCheck";
 
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
@@ -57,6 +59,9 @@ const normalizeEventType = (type) => {
 
 
 const TodayStatusPage = ({ onLogout }) => {
+  // Payment blocking check
+  const { activePayment, checkingPayment, clearPayment } = usePaymentCheck();
+
   const [collapsed, setCollapsed] = useState(false);
   const [status, setStatus] = useState(null);
 
@@ -217,6 +222,13 @@ const TodayStatusPage = ({ onLogout }) => {
       return null;
     }
   }, [token, onLogout]);
+
+  // Handle payment cleared callback
+  const handlePaymentCleared = useCallback(() => {
+    clearPayment();
+    // Refresh data after payment cleared
+    fetchStatus();
+  }, [clearPayment, fetchStatus]);
 
   // Enhanced fetch weekly summary with retry logic and support for new attendance system
   const fetchWeeklySummary = useCallback(async (retryCount = 0) => {
@@ -1475,6 +1487,31 @@ const TodayStatusPage = ({ onLogout }) => {
         </div>
       </div>
     );
+
+  // Show loading state while checking payment
+  if (checkingPayment) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-[#0f1419]">
+        <div className="text-center">
+          <div className="relative">
+            <div className="w-16 h-16 border-4 border-cyan-300/40 rounded-full"></div>
+            <div className="absolute top-0 left-0 w-16 h-16 border-4 border-cyan-600 border-t-transparent rounded-full animate-spin"></div>
+          </div>
+          <p className="mt-4 text-gray-300">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show payment block overlay if there's an active payment
+  if (activePayment) {
+    return (
+      <PaymentBlockOverlay
+        payment={activePayment}
+        onPaymentCleared={handlePaymentCleared}
+      />
+    );
+  }
 
   return (
     <div className="flex min-h-screen bg-[#0f1419] text-gray-100">

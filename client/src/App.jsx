@@ -11,6 +11,7 @@ import {
 import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import "./styles/toastify-custom.css";
+import { Toaster } from "react-hot-toast";
 import "./styles/custom-scrollbar.css";
 
 // Achievement System
@@ -36,6 +37,9 @@ import { resetChat } from "./store/slices/chatSlice";
 
 // Browser Notifications
 import notificationManager from "./utils/browserNotifications";
+
+// Error Boundary
+import ErrorBoundary from "./components/ErrorBoundary";
 
 // Pages
 import Login from "./pages/LoginPage";
@@ -80,6 +84,9 @@ import CallbackKanban from "./pages/CallbackKanban";
 import NotepadPage from "./pages/NotepadPage";
 import SuperAdminNotepadViewer from "./pages/SuperAdminNotepadViewer";
 import NotificationCenterPage from "./pages/NotificationCenterPage";
+
+// Payment Management
+import EmployeePaymentManagement from "./components/payment/EmployeePaymentManagement";
 
 // ------------------- Utility Functions -------------------
 const normalizeRole = (role) => {
@@ -363,6 +370,16 @@ const AppWrapper = () => {
             )
           }
         />
+        <Route
+          path="/super-admin/payments"
+          element={
+            isAuthenticated && isSuperAdmin ? (
+              <EmployeePaymentManagement onLogout={handleLogout} />
+            ) : (
+              <Navigate to="/login" replace />
+            )
+          }
+        />
 
         {/* HR Dashboard */}
         <Route
@@ -636,7 +653,15 @@ const AppWrapper = () => {
         />
         <Route
           path="/today-status"
-          element={isAuthenticated ? <TodayStatusPage onLogout={handleLogout} /> : <Navigate to="/login" replace />}
+          element={
+            isAuthenticated ? (
+              <ErrorBoundary>
+                <TodayStatusPage onLogout={handleLogout} />
+              </ErrorBoundary>
+            ) : (
+              <Navigate to="/login" replace />
+            )
+          }
         />
         <Route
           path="/attendance"
@@ -749,6 +774,7 @@ const AppWrapper = () => {
       </Routes>
 
       <ToastContainer position="top-right" autoClose={3000} />
+      <Toaster position="top-right" />
 
       {/* Payslip Notifications */}
       {notifications.map((notification) => (

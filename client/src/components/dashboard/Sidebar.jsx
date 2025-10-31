@@ -14,6 +14,7 @@ import {
   Bell,
   ChevronDown,
   ChevronRight,
+  DollarSign,
 } from "lucide-react";
 import { FaChevronCircleRight } from "react-icons/fa";
 import { Users } from "@/components/animate-ui/icons/users";
@@ -345,6 +346,11 @@ const menuConfig = {
           to: "/super-admin/notepad",
           icon: <BookOpen size={16} animateOnHover />,
           label: "Employee Notepads",
+        },
+        {
+          to: "/super-admin/payments",
+          icon: <DollarSign size={16} />,
+          label: "Payment Management",
         },
       ],
     },

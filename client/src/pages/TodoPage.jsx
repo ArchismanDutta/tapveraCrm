@@ -686,7 +686,7 @@ const AnalyticsCard = ({
   urgent
 }) => (
   <div
-    className={`bg-gradient-to-br ${bg} backdrop-blur-sm border border-slate-600/30 rounded-2xl p-6 relative overflow-hidden group hover:scale-105 transition-all duration-300 ${urgent ? 'ring-2 ring-red-500/30 animate-pulse' : ''}`}
+    className={`bg-gradient-to-br ${bg} backdrop-blur-sm border ${urgent ? 'border-red-500/50' : 'border-slate-600/30'} rounded-2xl p-6 relative overflow-hidden group hover:scale-105 transition-all duration-300`}
   >
     <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
     <div className="relative z-10">

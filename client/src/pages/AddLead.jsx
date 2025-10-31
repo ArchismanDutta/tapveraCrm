@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "react-toastify";
 import { Building2, User, Mail, Phone, MapPin, Calendar, DollarSign, Tag } from "lucide-react";
 import Sidebar from "../components/dashboard/Sidebar";
@@ -8,6 +8,8 @@ const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
 
 const AddLead = ({ onLogout }) => {
   const navigate = useNavigate();
+  const { id: leadId } = useParams();
+  const isEditMode = !!leadId;
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [loading, setLoading] = useState(false);
   const [employees, setEmployees] = useState([]);
@@ -40,9 +42,14 @@ const AddLead = ({ onLogout }) => {
     const user = JSON.parse(localStorage.getItem("user"));
     if (user) {
       setUserRole(user.role);
-      if (user.role !== "super-admin") {
+      if (user.role !== "super-admin" && !isEditMode) {
         setFormData((prev) => ({ ...prev, assignedTo: user._id }));
       }
+    }
+
+    // Fetch lead data if editing
+    if (isEditMode) {
+      fetchLeadData();
     }
   }, []);
 
@@ -66,6 +73,51 @@ const AddLead = ({ onLogout }) => {
       setEmployees(marketingSalesEmployees);
     } catch (error) {
       console.error("Error fetching employees:", error);
+    }
+  };
+
+  const fetchLeadData = async () => {
+    try {
+      setLoading(true);
+      const token = localStorage.getItem("token");
+      const response = await fetch(`${API_BASE}/api/leads/${leadId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await response.json();
+
+      if (data.success) {
+        const lead = data.data;
+        // Pre-populate form with lead data
+        setFormData({
+          clientName: lead.clientName || "",
+          businessName: lead.businessName || "",
+          email: lead.email || "",
+          phone: lead.phone || "",
+          alternatePhone: lead.alternatePhone || "",
+          source: lead.source || "Website",
+          status: lead.status || "New",
+          priority: lead.priority || "Medium",
+          industry: lead.industry || "",
+          websiteUrl: lead.websiteUrl || "",
+          expectedRevenue: lead.expectedRevenue || "",
+          address: lead.address || "",
+          city: lead.city || "",
+          state: lead.state || "",
+          country: lead.country || "India",
+          zipCode: lead.zipCode || "",
+          assignedTo: lead.assignedTo?._id || lead.assignedTo || "",
+          notes: lead.notes || "",
+          tags: Array.isArray(lead.tags) ? lead.tags.join(", ") : "",
+          nextFollowUpDate: lead.nextFollowUpDate ? new Date(lead.nextFollowUpDate).toISOString().split("T")[0] : "",
+        });
+      } else {
+        toast.error("Failed to fetch lead data");
+      }
+    } catch (error) {
+      console.error("Error fetching lead data:", error);
+      toast.error("Failed to load lead data");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -93,8 +145,13 @@ const AddLead = ({ onLogout }) => {
         expectedRevenue: formData.expectedRevenue ? parseFloat(formData.expectedRevenue) : 0,
       };
 
-      const response = await fetch(`${API_BASE}/api/leads`, {
-        method: "POST",
+      const url = isEditMode
+        ? `${API_BASE}/api/leads/${leadId}`
+        : `${API_BASE}/api/leads`;
+      const method = isEditMode ? "PUT" : "POST";
+
+      const response = await fetch(url, {
+        method,
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
@@ -105,14 +162,14 @@ const AddLead = ({ onLogout }) => {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.message || "Failed to create lead");
+        throw new Error(data.message || `Failed to ${isEditMode ? 'update' : 'create'} lead`);
       }
 
-      toast.success("Lead created successfully!");
+      toast.success(`Lead ${isEditMode ? 'updated' : 'created'} successfully!`);
       navigate("/leads");
     } catch (error) {
-      console.error("Error creating lead:", error);
-      toast.error(error.message || "Failed to create lead");
+      console.error(`Error ${isEditMode ? 'updating' : 'creating'} lead:`, error);
+      toast.error(error.message || `Failed to ${isEditMode ? 'update' : 'create'} lead`);
     } finally {
       setLoading(false);
     }
@@ -145,9 +202,11 @@ const AddLead = ({ onLogout }) => {
               </svg>
             </button>
             <h1 className="text-4xl font-bold bg-gradient-to-r from-cyan-400 to-blue-400 bg-clip-text text-transparent mb-2">
-              Add New Lead
+              {isEditMode ? "Edit Lead" : "Add New Lead"}
             </h1>
-            <p className="text-gray-400">Create a new lead entry for tracking and follow-up</p>
+            <p className="text-gray-400">
+              {isEditMode ? "Update lead details" : "Create a new lead entry for tracking and follow-up"}
+            </p>
           </div>
 
           {/* Form */}
@@ -495,7 +554,7 @@ const AddLead = ({ onLogout }) => {
                 disabled={loading}
                 className="px-6 py-3 bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 text-white rounded-lg font-medium transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {loading ? "Creating..." : "Create Lead"}
+                {loading ? (isEditMode ? "Updating..." : "Creating...") : (isEditMode ? "Update Lead" : "Create Lead")}
               </button>
             </div>
           </form>

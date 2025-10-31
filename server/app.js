@@ -45,6 +45,8 @@ const notificationRoutes = require("./routes/notificationRoutes");
 const mediaRoutes = require("./routes/mediaRoutes");
 const aiAnalyticsRoutes = require("./routes/aiAnalyticsRoutes");
 const tapRoutes = require("./routes/tapRoutes");
+const paymentRoutes = require("./routes/paymentRoutes");
+const keywordRoutes = require("./routes/keywordRoutes");
 
 // Controllers
 const ChatController = require("./controllers/chatController");
@@ -112,11 +114,26 @@ app.get("/", (req, res) => {
     status: "ok",
     message: "Your server is up and running",
     timestamp: Date.now(),
-    version: "v2.1-diagnostic", // Updated version
+    version: "v2.3-email-service-fix", // Updated version
     port: process.env.PORT || 5000,
     nodeEnv: process.env.NODE_ENV || "development",
     routesLoaded: routes,
   });
+});
+
+// AWS Elastic Beanstalk health check endpoint
+app.get("/health", (req, res) => {
+  const healthCheck = {
+    status: "UP",
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    port: process.env.PORT || 5000,
+    database: mongoose.connection.readyState === 1 ? "connected" : "disconnected",
+  };
+
+  // Return 200 if everything is OK, 503 if database is down
+  const statusCode = mongoose.connection.readyState === 1 ? 200 : 503;
+  res.status(statusCode).json(healthCheck);
 });
 
 // =====================
@@ -154,6 +171,8 @@ app.use("/api/notifications", notificationRoutes);
 app.use("/api/media", mediaRoutes);
 app.use("/api/ai-analytics", aiAnalyticsRoutes);
 app.use("/api/tap", tapRoutes);
+app.use("/api/payments", paymentRoutes);
+app.use("/api/projects", keywordRoutes);
 
 // =====================
 // Serve frontend in production
@@ -457,6 +476,8 @@ mongoose
   .connect(process.env.MONGODB_URI, {
     useNewUrlParser: true,
     useUnifiedTopology: true,
+    serverSelectionTimeoutMS: 10000, // Timeout after 10 seconds instead of hanging
+    socketTimeoutMS: 45000, // Close sockets after 45 seconds of inactivity
   })
   .then(() => {
     console.log("✅ Connected to MongoDB");
@@ -470,17 +491,19 @@ mongoose
       console.log("   Install node-cron: npm install node-cron");
     }
 
-    // Initialize Email Service
-    const emailService = require('./services/email/emailService');
-    emailService.initialize().then(() => {
-      console.log('✅ Email service ready');
-    }).catch(err => {
-      console.error('❌ Email service initialization failed:', err.message);
-    });
+    // Start server immediately (don't wait for email service)
+    server.listen(PORT, '0.0.0.0', () => {
+      console.log(`🚀 Server running on port ${PORT}`);
+      console.log(`🔗 Environment: ${process.env.NODE_ENV || 'development'}`);
 
-    server.listen(PORT, () =>
-      console.log(`🚀 Server running at http://localhost:${PORT}`)
-    );
+      // Initialize Email Service in background (non-blocking)
+      const emailService = require('./services/email/emailService');
+      emailService.initialize().then(() => {
+        console.log('✅ Email service ready');
+      }).catch(err => {
+        console.error('❌ Email service initialization failed:', err.message);
+      });
+    });
     console.log(
       "🌐 FRONTEND_URL for emails:",
       process.env.FRONTEND_URL || "not set"

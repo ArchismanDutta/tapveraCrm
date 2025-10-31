@@ -1,6 +1,7 @@
 // jobs/cronJobs.js
 const cron = require("node-cron");
 const { cleanupOldMedia } = require("../services/mediaCleanupService");
+const dailyChatNotificationService = require("../services/dailyChatNotificationService");
 
 /**
  * Initialize all cron jobs
@@ -16,8 +17,16 @@ function initializeCronJobs() {
     await cleanupOldMedia();
   });
 
+  // Run chat notification cleanup daily at 3:00 AM
+  // Removes notifications older than 30 days
+  cron.schedule("0 3 * * *", async () => {
+    console.log("⏰ Running scheduled chat notification cleanup...");
+    await dailyChatNotificationService.cleanupOldNotifications();
+  });
+
   console.log("✅ Cron jobs initialized successfully!");
   console.log("   - Media cleanup: Daily at 2:00 AM");
+  console.log("   - Chat notification cleanup: Daily at 3:00 AM");
 }
 
 /**

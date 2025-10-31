@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams, useParams } from "react-router-dom";
 import { toast } from "react-toastify";
 import { PhoneCall, Calendar, Clock, MessageSquare, User, Building2 } from "lucide-react";
 import Sidebar from "../components/dashboard/Sidebar";
@@ -9,6 +9,8 @@ const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
 const AddCallback = ({ onLogout }) => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const { id: callbackId } = useParams();
+  const isEditMode = !!callbackId;
   const preSelectedLeadId = searchParams.get("leadId");
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -36,13 +38,18 @@ const AddCallback = ({ onLogout }) => {
     if (user) {
       setUserRole(user.role);
       setCurrentUserId(user._id);
-      if (user.role !== "super-admin") {
+      if (user.role !== "super-admin" && !isEditMode) {
         setFormData((prev) => ({ ...prev, assignedTo: user._id }));
       }
     }
     fetchLeads();
     if (["admin", "super-admin", "hr"].includes(user?.role)) {
       fetchEmployees();
+    }
+
+    // Fetch callback data if editing
+    if (isEditMode) {
+      fetchCallbackData();
     }
   }, []);
 
@@ -86,6 +93,39 @@ const AddCallback = ({ onLogout }) => {
     }
   };
 
+  const fetchCallbackData = async () => {
+    try {
+      setLoading(true);
+      const token = localStorage.getItem("token");
+      const response = await fetch(`${API_BASE}/api/callbacks/${callbackId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await response.json();
+
+      if (data.success) {
+        const callback = data.data;
+        // Pre-populate form with callback data
+        setFormData({
+          leadId: callback.leadId?._id || callback.leadId || "",
+          callbackDate: callback.callbackDate ? new Date(callback.callbackDate).toISOString().split("T")[0] : "",
+          callbackTime: callback.callbackTime || "",
+          callbackType: callback.callbackType || "Call",
+          status: callback.status || "Pending",
+          assignedTo: callback.assignedTo?._id || callback.assignedTo || "",
+          remarks: callback.remarks || "",
+          priority: callback.priority || "Medium",
+        });
+      } else {
+        toast.error("Failed to fetch callback data");
+      }
+    } catch (error) {
+      console.error("Error fetching callback data:", error);
+      toast.error("Failed to load callback data");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
@@ -104,8 +144,13 @@ const AddCallback = ({ onLogout }) => {
 
     try {
       const token = localStorage.getItem("token");
-      const response = await fetch(`${API_BASE}/api/callbacks`, {
-        method: "POST",
+      const url = isEditMode
+        ? `${API_BASE}/api/callbacks/${callbackId}`
+        : `${API_BASE}/api/callbacks`;
+      const method = isEditMode ? "PUT" : "POST";
+
+      const response = await fetch(url, {
+        method,
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
@@ -116,14 +161,14 @@ const AddCallback = ({ onLogout }) => {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.message || "Failed to create callback");
+        throw new Error(data.message || `Failed to ${isEditMode ? 'update' : 'create'} callback`);
       }
 
-      toast.success("Callback created successfully!");
+      toast.success(`Callback ${isEditMode ? 'updated' : 'created'} successfully!`);
       navigate("/callbacks");
     } catch (error) {
-      console.error("Error creating callback:", error);
-      toast.error(error.message || "Failed to create callback");
+      console.error(`Error ${isEditMode ? 'updating' : 'creating'} callback:`, error);
+      toast.error(error.message || `Failed to ${isEditMode ? 'update' : 'create'} callback`);
     } finally {
       setLoading(false);
     }
@@ -159,9 +204,11 @@ const AddCallback = ({ onLogout }) => {
               </svg>
             </button>
             <h1 className="text-4xl font-bold bg-gradient-to-r from-green-400 to-emerald-400 bg-clip-text text-transparent mb-2">
-              Add New Callback
+              {isEditMode ? "Edit Callback" : "Add New Callback"}
             </h1>
-            <p className="text-gray-400">Schedule a follow-up callback for a lead</p>
+            <p className="text-gray-400">
+              {isEditMode ? "Update callback details" : "Schedule a follow-up callback for a lead"}
+            </p>
           </div>
 
           {/* Form */}

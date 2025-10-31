@@ -161,6 +161,7 @@ const ProjectsPage = ({ onLogout }) => {
   const [loading, setLoading] = useState(false);
   const [notification, setNotification] = useState(null);
   const [userRole, setUserRole] = useState("admin"); // Default to admin
+  const [currentUserId, setCurrentUserId] = useState(null); // Current logged-in user ID
 
   // Refs for click-outside detection
   const employeeDropdownRef = useRef(null);
@@ -202,6 +203,7 @@ const ProjectsPage = ({ onLogout }) => {
   const [filterEmployee, setFilterEmployee] = useState("all");
   const [filterClient, setFilterClient] = useState("all");
   const [filterDateRange, setFilterDateRange] = useState("all"); // all, next7days, next30days, expired
+  const [showMyProjectsOnly, setShowMyProjectsOnly] = useState(false); // Filter for projects created by current user
   const [sortBy, setSortBy] = useState("createdAt");
   const [expandedStats, setExpandedStats] = useState({});
 
@@ -231,12 +233,13 @@ const ProjectsPage = ({ onLogout }) => {
   const debouncedSearchTerm = useDebounce(searchTerm, 300);
 
   useEffect(() => {
-    // Get user role from localStorage
+    // Get user role and ID from localStorage
     try {
       const userStr = localStorage.getItem("user");
       if (userStr) {
         const user = JSON.parse(userStr);
         setUserRole(user.role || "admin");
+        setCurrentUserId(user._id || user.id || null);
       }
     } catch (error) {
       console.error("Error parsing user data:", error);
@@ -684,7 +687,12 @@ const ProjectsPage = ({ onLogout }) => {
         (filterDateRange === "next30days" && daysUntilEnd >= 0 && daysUntilEnd <= 30) ||
         (filterDateRange === "expired" && daysUntilEnd < 0);
 
-      return matchesSearch && matchesType && matchesStatus && matchesEmployee && matchesClient && matchesDateRange;
+      // My Projects filter - only show projects created by current user
+      const matchesMyProjects =
+        !showMyProjectsOnly ||
+        (currentUserId && (p.createdBy?._id === currentUserId || p.createdBy === currentUserId));
+
+      return matchesSearch && matchesType && matchesStatus && matchesEmployee && matchesClient && matchesDateRange && matchesMyProjects;
     });
 
     // Sort
@@ -704,7 +712,7 @@ const ProjectsPage = ({ onLogout }) => {
     });
 
     return filtered;
-  }, [projects, debouncedSearchTerm, filterType, filterStatus, filterEmployee, filterClient, filterDateRange, sortBy]);
+  }, [projects, debouncedSearchTerm, filterType, filterStatus, filterEmployee, filterClient, filterDateRange, showMyProjectsOnly, currentUserId, sortBy]);
 
   // Paginated projects
   const paginatedProjects = useMemo(() => {
@@ -718,7 +726,7 @@ const ProjectsPage = ({ onLogout }) => {
   // Reset to page 1 when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [debouncedSearchTerm, filterType, filterStatus, filterEmployee, filterClient, filterDateRange]);
+  }, [debouncedSearchTerm, filterType, filterStatus, filterEmployee, filterClient, filterDateRange, showMyProjectsOnly]);
 
   const exportToCSV = () => {
     const csvContent = [
@@ -982,16 +990,31 @@ const ProjectsPage = ({ onLogout }) => {
 
             {/* Advanced Filters Toggle */}
             <div className="flex items-center justify-between">
-              <button
-                onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
-                className="flex items-center gap-2 px-3 py-1.5 text-sm text-blue-400 hover:text-blue-300 transition-colors"
-              >
-                <Filter className="w-4 h-4" />
-                {showAdvancedFilters ? "Hide" : "Show"} Advanced Filters
-                <ChevronDown className={`w-4 h-4 transition-transform ${showAdvancedFilters ? "rotate-180" : ""}`} />
-              </button>
+              <div className="flex items-center gap-4">
+                <button
+                  onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+                  className="flex items-center gap-2 px-3 py-1.5 text-sm text-blue-400 hover:text-blue-300 transition-colors"
+                >
+                  <Filter className="w-4 h-4" />
+                  {showAdvancedFilters ? "Hide" : "Show"} Advanced Filters
+                  <ChevronDown className={`w-4 h-4 transition-transform ${showAdvancedFilters ? "rotate-180" : ""}`} />
+                </button>
 
-              {(searchTerm || filterType !== "all" || filterStatus !== "all" || filterEmployee !== "all" || filterClient !== "all" || filterDateRange !== "all") && (
+                {/* My Projects Toggle */}
+                <button
+                  onClick={() => setShowMyProjectsOnly(!showMyProjectsOnly)}
+                  className={`flex items-center gap-2 px-3 py-1.5 text-sm rounded-lg border transition-all ${
+                    showMyProjectsOnly
+                      ? "bg-blue-500/20 border-blue-500 text-blue-300"
+                      : "bg-[#0f1419] border-[#232945] text-gray-400 hover:text-blue-400 hover:border-blue-500/50"
+                  }`}
+                >
+                  <Users className="w-4 h-4" />
+                  My Projects
+                </button>
+              </div>
+
+              {(searchTerm || filterType !== "all" || filterStatus !== "all" || filterEmployee !== "all" || filterClient !== "all" || filterDateRange !== "all" || showMyProjectsOnly) && (
                 <button
                   onClick={() => {
                     setSearchTerm("");
@@ -1000,6 +1023,7 @@ const ProjectsPage = ({ onLogout }) => {
                     setFilterEmployee("all");
                     setFilterClient("all");
                     setFilterDateRange("all");
+                    setShowMyProjectsOnly(false);
                   }}
                   className="text-sm text-red-400 hover:text-red-300 transition-colors"
                 >
