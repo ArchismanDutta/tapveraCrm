@@ -36,6 +36,8 @@ import notificationManager from "../utils/browserNotifications";
 import CelebrationPopup from "../components/common/CelebrationPopup";
 import useCelebrationNotifications from "../hooks/useCelebrationNotifications";
 import newAttendanceService from "../services/newAttendanceService";
+import PaymentBlockOverlay from "../components/payment/PaymentBlockOverlay";
+import usePaymentCheck from "../hooks/usePaymentCheck";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
 const TASK_POLL_INTERVAL_MS = 10000;
@@ -70,6 +72,9 @@ const EmployeeDashboard = ({ onLogout }) => {
   });
   const [errors, setErrors] = useState({});
   const [lastRefresh, setLastRefresh] = useState(new Date());
+
+  // Payment blocking check
+  const { activePayment, checkingPayment, clearPayment } = usePaymentCheck();
 
   // Celebration notifications
   const {
@@ -296,6 +301,14 @@ const EmployeeDashboard = ({ onLogout }) => {
       setDataLoading((prev) => ({ ...prev, status: false }));
     }
   }, []);
+
+  const handlePaymentCleared = useCallback(() => {
+    clearPayment();
+    // Refresh all data after payment is cleared
+    fetchTasks();
+    fetchUserAndWishes();
+    fetchWorkStatus();
+  }, [clearPayment, fetchTasks, fetchUserAndWishes, fetchWorkStatus]);
 
   // Enhanced data fetching on mount
   useEffect(() => {
@@ -588,6 +601,27 @@ const EmployeeDashboard = ({ onLogout }) => {
 
     return actions;
   }, [workStatus, navigate, handlePunchIn, handleTakeBreak, handleResumeWork]);
+
+  // Show payment block overlay if there's an active payment
+  if (checkingPayment) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gray-900">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-indigo-600 mx-auto"></div>
+          <p className="mt-4 text-gray-300">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (activePayment) {
+    return (
+      <PaymentBlockOverlay
+        payment={activePayment}
+        onPaymentCleared={handlePaymentCleared}
+      />
+    );
+  }
 
   return (
     <>

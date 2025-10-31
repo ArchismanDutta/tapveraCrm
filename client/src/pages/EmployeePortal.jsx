@@ -33,6 +33,8 @@ import Sidebar from "../components/dashboard/Sidebar";
 import MediaLightbox from "../components/common/MediaLightbox";
 import notificationManager from "../utils/browserNotifications";
 import useMessageSuggestions from "../hooks/useMessageSuggestions";
+import PaymentBlockOverlay from "../components/payment/PaymentBlockOverlay";
+import usePaymentCheck from "../hooks/usePaymentCheck";
 
 const EmployeePortal = ({ onLogout }) => {
   // API Base URL - use environment variable or fallback
@@ -79,6 +81,9 @@ const EmployeePortal = ({ onLogout }) => {
   const [quickReplies, setQuickReplies] = useState([]);
   const [showQuickReplies, setShowQuickReplies] = useState(true);
   const suggestionsRef = useRef(null);
+
+  // Payment check hook
+  const { activePayment, checkingPayment, clearPayment } = usePaymentCheck();
 
   // Fetch projects assigned to the employee
   useEffect(() => {
@@ -212,6 +217,12 @@ const EmployeePortal = ({ onLogout }) => {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Handle payment cleared
+  const handlePaymentCleared = () => {
+    clearPayment();
+    fetchEmployeeProjects();
   };
 
   const fetchProjectMessages = async (projectId) => {
@@ -583,6 +594,28 @@ const EmployeePortal = ({ onLogout }) => {
       project.client?.clientName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       project.client?.businessName?.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  // Show loading while checking payment
+  if (checkingPayment) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-[#0f1419]">
+        <div className="relative">
+          <div className="w-16 h-16 border-4 border-cyan-300/40 rounded-full"></div>
+          <div className="absolute top-0 left-0 w-16 h-16 border-4 border-cyan-600 border-t-transparent rounded-full animate-spin"></div>
+        </div>
+      </div>
+    );
+  }
+
+  // Show payment block if active payment exists
+  if (activePayment) {
+    return (
+      <PaymentBlockOverlay
+        payment={activePayment}
+        onPaymentCleared={handlePaymentCleared}
+      />
+    );
+  }
 
   // Project Detail View
   if (selectedProject) {

@@ -5,6 +5,8 @@ import Sidebar from "../components/dashboard/Sidebar";
 import TaskStats from "../components/task/TaskStats";
 import TaskList from "../components/task/TaskList";
 import { useAchievements } from "../contexts/AchievementContext";
+import PaymentBlockOverlay from "../components/payment/PaymentBlockOverlay";
+import usePaymentCheck from "../hooks/usePaymentCheck";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
 
@@ -22,6 +24,9 @@ const Tasks = ({ onLogout }) => {
   const [viewMode, setViewMode] = useState('list'); // 'list' or 'kanban'
   const [showKeyboardShortcuts, setShowKeyboardShortcuts] = useState(false);
   const { userProgress, triggerAchievement } = useAchievements();
+
+  // Payment check hook
+  const { activePayment, checkingPayment, clearPayment } = usePaymentCheck();
 
   // Helper: Get token from localStorage
   const getToken = () => {
@@ -176,6 +181,12 @@ const Tasks = ({ onLogout }) => {
     triggerAchievement('CUSTOM_FILTER_CREATED');
   };
 
+  // Handle payment cleared
+  const handlePaymentCleared = useCallback(() => {
+    clearPayment();
+    fetchTasks();
+  }, [clearPayment]);
+
   // Quick filter shortcuts
   const quickFilters = [
     { label: 'All', onClick: () => clearFilters() },
@@ -270,6 +281,27 @@ const Tasks = ({ onLogout }) => {
     return () => document.removeEventListener('keydown', handleKeyPress);
   }, [handleKeyPress]);
 
+  // Show loading while checking payment
+  if (checkingPayment) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-[#0f1419]">
+        <div className="relative">
+          <div className="w-16 h-16 border-4 border-cyan-300/40 rounded-full"></div>
+          <div className="absolute top-0 left-0 w-16 h-16 border-4 border-cyan-600 border-t-transparent rounded-full animate-spin"></div>
+        </div>
+      </div>
+    );
+  }
+
+  // Show payment block if active payment exists
+  if (activePayment) {
+    return (
+      <PaymentBlockOverlay
+        payment={activePayment}
+        onPaymentCleared={handlePaymentCleared}
+      />
+    );
+  }
 
   return (
     <div className="flex bg-gradient-to-br from-[#141a29] via-[#181d2a] to-[#1b2233] min-h-screen text-blue-100">

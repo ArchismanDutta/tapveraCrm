@@ -9,6 +9,8 @@ import RecentActivityTable from '../components/attendance/RecentActivityTable';
 import Sidebar from '../components/dashboard/Sidebar';
 import { RefreshCw, AlertCircle, Clock, Users, Calendar as CalendarIcon } from 'lucide-react';
 import newAttendanceService from '../services/newAttendanceService';
+import PaymentBlockOverlay from '../components/payment/PaymentBlockOverlay';
+import usePaymentCheck from '../hooks/usePaymentCheck';
 
 const AttendancePage = ({ onLogout }) => {
   console.log("🎨 AttendancePage component rendering");
@@ -29,6 +31,9 @@ const AttendancePage = ({ onLogout }) => {
   const [cachedLeaves, setCachedLeaves] = useState(null);
   const [cachedHolidays, setCachedHolidays] = useState(null);
   const [lastCacheTime, setLastCacheTime] = useState(null);
+
+  // Payment check hook
+  const { activePayment, checkingPayment, clearPayment } = usePaymentCheck();
 
 
   const token = localStorage.getItem("token");
@@ -1077,6 +1082,34 @@ const AttendancePage = ({ onLogout }) => {
   const handleRefresh = () => {
     fetchAttendanceData(true);
   };
+
+  // Handle payment cleared
+  const handlePaymentCleared = useCallback(() => {
+    clearPayment();
+    fetchAttendanceData(true);
+  }, [clearPayment, fetchAttendanceData]);
+
+  // Show loading while checking payment
+  if (checkingPayment) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-[#0f1419]">
+        <div className="relative">
+          <div className="w-16 h-16 border-4 border-cyan-300/40 rounded-full"></div>
+          <div className="absolute top-0 left-0 w-16 h-16 border-4 border-cyan-600 border-t-transparent rounded-full animate-spin"></div>
+        </div>
+      </div>
+    );
+  }
+
+  // Show payment block if active payment exists
+  if (activePayment) {
+    return (
+      <PaymentBlockOverlay
+        payment={activePayment}
+        onPaymentCleared={handlePaymentCleared}
+      />
+    );
+  }
 
   if (loading) {
     return (

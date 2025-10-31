@@ -9,6 +9,7 @@ import ProjectTaskModal from "../components/project/ProjectTaskModal";
 import ProjectTaskEditModal from "../components/project/ProjectTaskEditModal";
 import UnreadMessageBadge from "../components/message/UnreadMessageBadge";
 import MessageWithMentions from "../components/message/MessageWithMentions";
+import ProjectReportTab from "../components/project/ProjectReportTab";
 import {
   ArrowLeft,
   Globe,
@@ -49,6 +50,7 @@ import {
   Edit2,
   Star,
   Briefcase,
+  BarChart3,
 } from "lucide-react";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
@@ -1041,6 +1043,17 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                       {tasks.length}
                     </span>
                   )}
+                </button>
+                <button
+                  onClick={() => setActiveTab("report")}
+                  className={`flex-1 flex items-center justify-center gap-2 px-4 py-4 font-medium transition-all ${
+                    activeTab === "report"
+                      ? "bg-purple-600/20 text-purple-400 border-b-2 border-purple-500"
+                      : "text-gray-400 hover:text-white hover:bg-[#0f1419]"
+                  }`}
+                >
+                  <BarChart3 className="w-5 h-5" />
+                  <span>Project Report</span>
                 </button>
               </div>
             </div>
@@ -2073,6 +2086,15 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                 )}
                 </div>
               </div>
+            )}
+
+            {/* Project Report Tab Content */}
+            {activeTab === "report" && (
+              <ProjectReportTab
+                projectId={projectId}
+                userRole={userRole}
+                userId={userId}
+              />
             )}
           </div>
         </div>

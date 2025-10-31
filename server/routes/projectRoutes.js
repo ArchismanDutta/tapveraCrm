@@ -509,6 +509,118 @@ router.get("/client/:clientId", protect, async (req, res) => {
   }
 });
 
+// @route   GET /api/projects/:id/messages/unread-count
+// @desc    Get unread message count for a project
+// @access  Private
+router.get("/:id/messages/unread-count", protect, async (req, res) => {
+  try {
+    const Message = require("../models/Message");
+    const project = await Project.findById(req.params.id);
+
+    if (!project) {
+      return res.status(404).json({ message: "Project not found" });
+    }
+
+    // Check access - employees must be assigned
+    if (req.user.role === "employee") {
+      const isAssigned = project.assignedTo.some(
+        (emp) => emp.toString() === req.user._id.toString()
+      );
+      if (!isAssigned) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+    }
+
+    const userId = req.user._id.toString();
+    const userModel = req.user.role === "client" ? "Client" : "User";
+
+    // Count messages that the user hasn't read
+    const unreadCount = await Message.countDocuments({
+      project: req.params.id,
+      // Exclude messages sent by the user themselves
+      sentBy: { $ne: req.user._id },
+      // Check if user is NOT in the readBy array
+      $nor: [
+        {
+          readBy: {
+            $elemMatch: {
+              user: req.user._id,
+              userModel: userModel
+            }
+          }
+        }
+      ]
+    });
+
+    res.json({ unreadCount });
+  } catch (error) {
+    console.error("Error fetching unread count:", error);
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
+});
+
+// @route   PATCH /api/projects/:id/messages/mark-read
+// @desc    Mark all messages in a project as read
+// @access  Private
+router.patch("/:id/messages/mark-read", protect, async (req, res) => {
+  try {
+    const Message = require("../models/Message");
+    const project = await Project.findById(req.params.id);
+
+    if (!project) {
+      return res.status(404).json({ message: "Project not found" });
+    }
+
+    // Check access - employees must be assigned
+    if (req.user.role === "employee") {
+      const isAssigned = project.assignedTo.some(
+        (emp) => emp.toString() === req.user._id.toString()
+      );
+      if (!isAssigned) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+    }
+
+    const userModel = req.user.role === "client" ? "Client" : "User";
+
+    // Find all unread messages for this user in this project
+    const unreadMessages = await Message.find({
+      project: req.params.id,
+      sentBy: { $ne: req.user._id },
+      $nor: [
+        {
+          readBy: {
+            $elemMatch: {
+              user: req.user._id,
+              userModel: userModel
+            }
+          }
+        }
+      ]
+    });
+
+    // Mark each message as read
+    const updatePromises = unreadMessages.map(message => {
+      message.readBy.push({
+        user: req.user._id,
+        userModel: userModel,
+        readAt: new Date()
+      });
+      return message.save();
+    });
+
+    await Promise.all(updatePromises);
+
+    res.json({
+      message: "Messages marked as read",
+      count: unreadMessages.length
+    });
+  } catch (error) {
+    console.error("Error marking messages as read:", error);
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
+});
+
 // @route   GET /api/projects/:id/messages
 // @desc    Get all messages for a project with search and filter support
 // @access  Private
