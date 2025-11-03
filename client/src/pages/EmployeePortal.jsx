@@ -28,6 +28,7 @@ import {
   Sparkles,
   Lightbulb,
   Zap,
+  BarChart3,
 } from "lucide-react";
 import Sidebar from "../components/dashboard/Sidebar";
 import MediaLightbox from "../components/common/MediaLightbox";
@@ -35,6 +36,7 @@ import notificationManager from "../utils/browserNotifications";
 import useMessageSuggestions from "../hooks/useMessageSuggestions";
 import PaymentBlockOverlay from "../components/payment/PaymentBlockOverlay";
 import usePaymentCheck from "../hooks/usePaymentCheck";
+import ProjectReportTab from "../components/project/ProjectReportTab";
 
 const EmployeePortal = ({ onLogout }) => {
   // API Base URL - use environment variable or fallback
@@ -678,16 +680,17 @@ const EmployeePortal = ({ onLogout }) => {
         <div className="bg-[#191f2b]/70 border-b border-[#232945]">
           <div className="px-4 sm:px-6 lg:px-8">
             <div className="flex gap-2 sm:gap-6 overflow-x-auto">
-              {["overview", "tasks", "messages"].map((tab) => (
+              {["overview", "tasks", "messages", "report"].map((tab) => (
                 <button
                   key={tab}
                   onClick={() => setActiveTab(tab)}
-                  className={`py-3 sm:py-4 px-2 sm:px-4 text-sm font-medium border-b-2 whitespace-nowrap transition-colors ${
+                  className={`py-3 sm:py-4 px-2 sm:px-4 text-sm font-medium border-b-2 whitespace-nowrap transition-colors flex items-center gap-2 ${
                     activeTab === tab
                       ? "border-blue-500 text-blue-400"
                       : "border-transparent text-blue-300 hover:text-white"
                   }`}
                 >
+                  {tab === "report" && <BarChart3 className="w-4 h-4" />}
                   {tab.charAt(0).toUpperCase() + tab.slice(1)}
                 </button>
               ))}
@@ -1502,6 +1505,14 @@ const EmployeePortal = ({ onLogout }) => {
                 </p>
               </div>
             </div>
+          )}
+
+          {activeTab === "report" && (
+            <ProjectReportTab
+              projectId={selectedProject}
+              userRole="employee"
+              userId={JSON.parse(localStorage.getItem("user") || "{}")?._id}
+            />
           )}
         </div>
         </div>

@@ -561,6 +561,8 @@ export default function AdminTaskPage({ onLogout }) {
   const [collapsed, setCollapsed] = useState(false);
   const [tasks, setTasks] = useState([]);
   const [users, setUsers] = useState([]);
+  const [projects, setProjects] = useState([]); // Add projects state
+  const [selectedProject, setSelectedProject] = useState(null); // Add selected project state
   const [popupMessage, setPopupMessage] = useState("");
   const [selectedTaskView, setSelectedTaskView] = useState(null); // For general view modal
   const [editingTask, setEditingTask] = useState(null);

@@ -47,6 +47,11 @@ const aiAnalyticsRoutes = require("./routes/aiAnalyticsRoutes");
 const tapRoutes = require("./routes/tapRoutes");
 const paymentRoutes = require("./routes/paymentRoutes");
 const keywordRoutes = require("./routes/keywordRoutes");
+const blogRoutes = require("./routes/blogRoutes");
+const backlinkRoutes = require("./routes/backlinkRoutes");
+const screenshotRoutes = require("./routes/screenshotRoutes");
+const projectReportRoutes = require("./routes/projectReportRoutes");
+const clientRemarkRoutes = require("./routes/clientRemarkRoutes");
 
 // Controllers
 const ChatController = require("./controllers/chatController");
@@ -173,6 +178,11 @@ app.use("/api/ai-analytics", aiAnalyticsRoutes);
 app.use("/api/tap", tapRoutes);
 app.use("/api/payments", paymentRoutes);
 app.use("/api/projects", keywordRoutes);
+app.use("/api/projects", blogRoutes);
+app.use("/api/projects", backlinkRoutes);
+app.use("/api/projects", screenshotRoutes);
+app.use("/api/projects", projectReportRoutes);
+app.use("/api/projects", clientRemarkRoutes);
 
 // =====================
 // Serve frontend in production
