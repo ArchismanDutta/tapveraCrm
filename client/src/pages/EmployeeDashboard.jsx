@@ -37,7 +37,6 @@ import CelebrationPopup from "../components/common/CelebrationPopup";
 import useCelebrationNotifications from "../hooks/useCelebrationNotifications";
 import newAttendanceService from "../services/newAttendanceService";
 import PaymentBlockOverlay from "../components/payment/PaymentBlockOverlay";
-import usePaymentCheck from "../hooks/usePaymentCheck";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
 const TASK_POLL_INTERVAL_MS = 10000;
@@ -73,8 +72,9 @@ const EmployeeDashboard = ({ onLogout }) => {
   const [errors, setErrors] = useState({});
   const [lastRefresh, setLastRefresh] = useState(new Date());
 
-  // Payment blocking check
-  const { activePayment, checkingPayment, clearPayment } = usePaymentCheck();
+  // Payment blocking state
+  const [activePayment, setActivePayment] = useState(null);
+  const [checkingPayment, setCheckingPayment] = useState(true);
 
   // Celebration notifications
   const {
@@ -140,6 +140,7 @@ const EmployeeDashboard = ({ onLogout }) => {
         t.status?.toLowerCase() !== "completed" &&
         t.status?.toLowerCase() !== "rejected"
     );
+    
     const dueTodayTasks = tasks.filter(
       (t) =>
         t.dueDate &&
@@ -302,17 +303,44 @@ const EmployeeDashboard = ({ onLogout }) => {
     }
   }, []);
 
+  // Check for active payment (blocks all activity)
+  const checkActivePayment = useCallback(async () => {
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) return;
+
+      const response = await axios.get(`${API_BASE}/api/payments/my-active`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (response.data.success) {
+        setActivePayment(response.data.data);
+      } else {
+        setActivePayment(null);
+      }
+    } catch (error) {
+      console.error("Error checking active payment:", error);
+      setActivePayment(null);
+    } finally {
+      setCheckingPayment(false);
+    }
+  }, []);
+
   const handlePaymentCleared = useCallback(() => {
-    clearPayment();
+    setActivePayment(null);
     // Refresh all data after payment is cleared
     fetchTasks();
     fetchUserAndWishes();
     fetchWorkStatus();
-  }, [clearPayment, fetchTasks, fetchUserAndWishes, fetchWorkStatus]);
+  }, [fetchTasks, fetchUserAndWishes, fetchWorkStatus]);
 
   // Enhanced data fetching on mount
   useEffect(() => {
     const initializeDashboard = async () => {
+      // Check payment first
+      await checkActivePayment();
+
+      // Only load dashboard data if no active payment
       await Promise.all([
         fetchTasks(),
         fetchUserAndWishes(),
@@ -322,7 +350,7 @@ const EmployeeDashboard = ({ onLogout }) => {
     };
 
     initializeDashboard();
-  }, [fetchTasks, fetchUserAndWishes, fetchWorkStatus]);
+  }, [fetchTasks, fetchUserAndWishes, fetchWorkStatus, checkActivePayment]);
 
   // Auto-refresh with smart intervals
   useEffect(() => {

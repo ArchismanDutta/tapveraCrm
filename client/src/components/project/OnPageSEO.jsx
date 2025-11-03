@@ -18,6 +18,8 @@ import {
 } from "lucide-react";
 import { Line } from "react-chartjs-2";
 import KeywordCalendarHeatmap from "./KeywordCalendarHeatmap";
+import BlogUpdates from "./BlogUpdates";
+import SectionRemarks from "./SectionRemarks";
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -70,7 +72,7 @@ const OnPageSEO = ({ projectId, userRole, userId }) => {
     notes: "",
   });
 
-  const canEdit = ["admin", "super-admin", "superadmin"].includes(userRole);
+  const canEdit = ["admin", "super-admin", "superadmin", "employee"].includes(userRole);
 
   useEffect(() => {
     if (projectId) {
@@ -905,6 +907,33 @@ const OnPageSEO = ({ projectId, userRole, userId }) => {
           </div>
         </div>
       )}
+
+      {/* Client Feedback for Keywords */}
+      <SectionRemarks
+        projectId={projectId}
+        section="keywords"
+        userRole={userRole}
+        userId={userId}
+        title="Client Feedback on Keywords"
+      />
+
+      {/* Blog Updates Section */}
+      <div className="mt-12 pt-8 border-t border-[#232945]">
+        <BlogUpdates
+          projectId={projectId}
+          userRole={userRole}
+          userId={userId}
+        />
+      </div>
+
+      {/* Client Feedback for Blogs */}
+      <SectionRemarks
+        projectId={projectId}
+        section="blogs"
+        userRole={userRole}
+        userId={userId}
+        title="Client Feedback on Blog Posts"
+      />
     </div>
   );
 };

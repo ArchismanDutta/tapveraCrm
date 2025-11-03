@@ -35,6 +35,11 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
   const [employeeCache, setEmployeeCache] = useState(new Map());
+  const [activeEmployeesStats, setActiveEmployeesStats] = useState({
+    currentlyWorking: 0,
+    onBreak: 0,
+    totalActive: 0
+  });
 
   // Month/Year navigation state
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
@@ -147,12 +152,39 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
     });
   }, []);
 
+  // Fetch active employees stats (currently working count)
+  const fetchActiveEmployeesStats = useCallback(async () => {
+    try {
+      console.log('🔄 Fetching active employees stats...');
+      const response = await apiClient.get('/api/attendance-new/active');
+      console.log('✅ Active employees response:', response.data);
+      if (response.data?.success) {
+        const stats = {
+          currentlyWorking: response.data.data.currentlyWorking || 0,
+          onBreak: response.data.data.onBreak || 0,
+          totalActive: response.data.data.totalActive || 0
+        };
+        console.log('📊 Setting active employees stats:', stats);
+        setActiveEmployeesStats(stats);
+      }
+    } catch (error) {
+      console.error('❌ Error fetching active employees stats:', error);
+      console.error('Error details:', error.response?.data || error.message);
+      // Set to 0 if error
+      setActiveEmployeesStats({
+        currentlyWorking: 0,
+        onBreak: 0,
+        totalActive: 0
+      });
+    }
+  }, []);
+
   // Fetch all employees
   const fetchEmployees = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
-      
+
       // Add timestamp to prevent caching
       const timestamp = new Date().getTime();
       const response = await apiClient.get(`/api/admin/employees?t=${timestamp}`, {
@@ -161,26 +193,29 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
           'Pragma': 'no-cache'
         }
       });
-      
+
       console.log('Employees response:', response.data); // Debug log
-      
+
       // Handle the correct response structure: { success: true, data: employees }
       const employeesData = response.data?.success ? response.data.data : [];
       setEmployees(employeesData);
-      
+
       if (employeesData.length === 0) {
         console.warn('No employees found in response');
         setError('No employees found. Please check your permissions.');
       } else {
         console.log(`Loaded ${employeesData.length} employees`);
       }
+
+      // Fetch active employees stats after loading employees
+      await fetchActiveEmployeesStats();
     } catch (error) {
       console.error('Error fetching employees:', error);
       setError('Failed to load employee list: ' + (error.response?.data?.message || error.message));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [fetchActiveEmployeesStats]);
 
   // Fetch current user status for selected employee
   const fetchCurrentStatus = useCallback(async (employeeId) => {
@@ -1787,11 +1822,13 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
       if (isWeekday && isWorkingHours) {
         console.log('🔄 Auto-refresh: Fetching latest attendance data');
         fetchAttendanceData(selectedEmployee._id, true);
+        // Also refresh active employees stats
+        fetchActiveEmployeesStats();
       }
     }, 120000); // 2 minutes for more real-time updates
 
     return () => clearInterval(refreshInterval);
-  }, [selectedEmployee, fetchAttendanceData]);
+  }, [selectedEmployee, fetchAttendanceData, fetchActiveEmployeesStats]);
 
   // Load attendance data when employee is selected
   useEffect(() => {
@@ -1824,6 +1861,8 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
     if (selectedEmployee) {
       fetchAttendanceData(selectedEmployee._id, true);
     }
+    // Also refresh active employees stats
+    fetchActiveEmployeesStats();
   };
 
   const handleLoadFullMonth = () => {
@@ -1904,7 +1943,13 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
 
   // Calculate aggregate stats
   const totalEmployees = employees.length;
-  const currentlyWorking = employees.filter(emp => emp.currentStatus?.currentlyWorking).length || 0;
+  const currentlyWorking = activeEmployeesStats.currentlyWorking;
+
+  console.log('📊 Display values:', {
+    totalEmployees,
+    currentlyWorking,
+    activeEmployeesStats
+  });
   
   // Only show loading screen if we're loading employees AND have no employees yet
   if (loading && employees.length === 0) {
@@ -2053,7 +2098,7 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
               <div>
                 <p className="text-orange-200 text-sm font-medium">Current Status</p>
                 <p className="text-lg font-bold text-white mt-1">
-                  {currentStatus ? (currentStatus.currentlyWorking ? 'Working' : 'Offline') : 'Unknown'}
+                  {currentStatus ? (currentStatus.isWorking ? 'Working' : 'Offline') : 'Unknown'}
                 </p>
               </div>
               <div className="p-3 bg-orange-500/20 rounded-xl">
@@ -2196,11 +2241,11 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
                       <div className="text-right">
                         <div className="flex items-center gap-2 justify-end mb-1">
                           <div className={`w-3 h-3 rounded-full ${
-                            currentStatus.currentlyWorking ? 'bg-green-400 animate-pulse' : 
+                            currentStatus.isWorking ? 'bg-green-400 animate-pulse' :
                             currentStatus.onBreak ? 'bg-yellow-400 animate-pulse' : 'bg-gray-500'
                           }`}></div>
                           <span className="text-sm font-medium text-white">
-                            {currentStatus.currentlyWorking ? 'Working' : 
+                            {currentStatus.isWorking ? 'Working' :
                              currentStatus.onBreak ? 'On Break' : 'Offline'}
                           </span>
                         </div>
@@ -2290,11 +2335,11 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
                     <div className="flex items-center gap-6 flex-wrap">
                       <div className="flex items-center gap-3">
                         <div className={`w-4 h-4 rounded-full ${
-                          currentStatus.currentlyWorking ? 'bg-green-400 animate-pulse' : 
+                          currentStatus.isWorking ? 'bg-green-400 animate-pulse' :
                           currentStatus.onBreak ? 'bg-yellow-400 animate-pulse' : 'bg-gray-500'
                         }`}></div>
                         <span className="text-white font-semibold">
-                          {currentStatus.currentlyWorking ? 'Working' : 
+                          {currentStatus.isWorking ? 'Working' :
                            currentStatus.onBreak ? 'On Break' : 'Offline'}
                         </span>
                       </div>

@@ -80,7 +80,7 @@ const TapAgent = () => {
 
   return (
     <>
-      {/* Floating Button */}
+      {/* Floating Button - Smaller Size */}
       <motion.button
         className="tap-agent-fab"
         onClick={toggleAgent}
@@ -91,8 +91,14 @@ const TapAgent = () => {
             ? '0 0 30px rgba(255, 128, 0, 0.6)'
             : '0 4px 20px rgba(0, 0, 0, 0.3)'
         }}
+        style={{
+          width: '48px',
+          height: '48px',
+          bottom: '20px',
+          right: '20px'
+        }}
       >
-        <Bot className="tap-agent-fab-icon" />
+        <Bot className="tap-agent-fab-icon" size={22} />
         {isExecuting && (
           <motion.div
             className="tap-agent-fab-pulse"
