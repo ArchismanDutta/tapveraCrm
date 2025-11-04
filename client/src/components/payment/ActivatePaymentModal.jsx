@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { X, IndianRupee, AlertCircle, FileText } from "lucide-react";
+import { X, IndianRupee, AlertCircle, FileText, Upload, Image } from "lucide-react";
 import toast from "react-hot-toast";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
@@ -10,8 +10,41 @@ const ActivatePaymentModal = ({ employee, onClose, onSuccess }) => {
     reason: "",
     notes: "",
   });
+  const [qrCodeFile, setQrCodeFile] = useState(null);
+  const [qrCodePreview, setQrCodePreview] = useState(null);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
+
+  const handleQrCodeChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      // Validate file type
+      if (!file.type.startsWith("image/")) {
+        toast.error("Please upload an image file");
+        return;
+      }
+
+      // Validate file size (max 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error("File size should be less than 5MB");
+        return;
+      }
+
+      setQrCodeFile(file);
+
+      // Create preview
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setQrCodePreview(reader.result);
+      };
+      reader.readAsDataURL(file);
+
+      // Clear error
+      if (errors.qrCode) {
+        setErrors((prev) => ({ ...prev, qrCode: "" }));
+      }
+    }
+  };
 
   const validateForm = () => {
     const newErrors = {};
@@ -22,6 +55,10 @@ const ActivatePaymentModal = ({ employee, onClose, onSuccess }) => {
 
     if (!formData.reason || formData.reason.trim().length < 5) {
       newErrors.reason = "Please provide a reason (at least 5 characters)";
+    }
+
+    if (!qrCodeFile) {
+      newErrors.qrCode = "Please upload a QR code image";
     }
 
     setErrors(newErrors);
@@ -39,18 +76,23 @@ const ActivatePaymentModal = ({ employee, onClose, onSuccess }) => {
       setLoading(true);
       const token = localStorage.getItem("token");
 
+      // Create FormData to handle file upload
+      const formDataToSend = new FormData();
+      formDataToSend.append("employeeId", employee._id);
+      formDataToSend.append("amount", parseFloat(formData.amount));
+      formDataToSend.append("reason", formData.reason.trim());
+      if (formData.notes.trim()) {
+        formDataToSend.append("notes", formData.notes.trim());
+      }
+      formDataToSend.append("qrCode", qrCodeFile);
+
       const response = await fetch(`${API_URL}/api/payments/activate`, {
         method: "POST",
         headers: {
-          "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
+          // Don't set Content-Type - browser will set it with boundary for FormData
         },
-        body: JSON.stringify({
-          employeeId: employee._id,
-          amount: parseFloat(formData.amount),
-          reason: formData.reason.trim(),
-          notes: formData.notes.trim() || undefined,
-        }),
+        body: formDataToSend,
       });
 
       const data = await response.json();
@@ -203,6 +245,56 @@ const ActivatePaymentModal = ({ employee, onClose, onSuccess }) => {
               placeholder="Any additional information..."
               className="block w-full px-4 py-3 bg-slate-700/50 border border-slate-600/30 text-gray-200 placeholder-gray-500 rounded-xl focus:ring-2 focus:ring-cyan-500 focus:border-transparent resize-none transition-all"
             />
+          </div>
+
+          {/* QR Code Upload */}
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-1 flex items-center gap-1">
+              <Image className="w-4 h-4" />
+              Payment QR Code <span className="text-red-400">*</span>
+            </label>
+            <div className="space-y-3">
+              {/* Upload Button */}
+              <div className={`relative border-2 border-dashed ${
+                errors.qrCode ? "border-red-400" : "border-slate-600/30"
+              } rounded-xl p-6 text-center hover:border-cyan-500/50 transition-colors cursor-pointer bg-slate-700/20`}>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleQrCodeChange}
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                />
+                {!qrCodePreview ? (
+                  <div className="flex flex-col items-center gap-2">
+                    <Upload className="w-8 h-8 text-gray-400" />
+                    <p className="text-sm text-gray-400">
+                      Click to upload QR code image
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      PNG, JPG up to 5MB
+                    </p>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center gap-3">
+                    <img
+                      src={qrCodePreview}
+                      alt="QR Code Preview"
+                      className="w-48 h-48 object-contain border border-slate-600/30 rounded-lg bg-white p-2"
+                    />
+                    <p className="text-sm text-green-400 flex items-center gap-1">
+                      <AlertCircle className="w-4 h-4" />
+                      QR Code uploaded - Click to change
+                    </p>
+                  </div>
+                )}
+              </div>
+              {errors.qrCode && (
+                <p className="text-sm text-red-400 flex items-center gap-1">
+                  <AlertCircle className="w-4 h-4" />
+                  {errors.qrCode}
+                </p>
+              )}
+            </div>
           </div>
 
           {/* Warning */}

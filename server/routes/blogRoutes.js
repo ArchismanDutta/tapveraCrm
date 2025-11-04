@@ -1,5 +1,6 @@
 const express = require("express");
 const router = express.Router();
+const mongoose = require("mongoose");
 const BlogUpdate = require("../models/BlogUpdate");
 const Project = require("../models/Project");
 const { protect, authorize } = require("../middlewares/authMiddleware");
@@ -11,6 +12,11 @@ router.get("/:projectId/blogs", protect, async (req, res) => {
   try {
     const { projectId } = req.params;
     const { activeOnly = "true" } = req.query;
+
+    // Validate ObjectId
+    if (!mongoose.Types.ObjectId.isValid(projectId)) {
+      return res.status(400).json({ message: "Invalid project ID" });
+    }
 
     // Check if project exists
     const project = await Project.findById(projectId);
@@ -243,6 +249,11 @@ router.delete(
 router.get("/:projectId/blogs/stats", protect, async (req, res) => {
   try {
     const { projectId } = req.params;
+
+    // Validate ObjectId
+    if (!mongoose.Types.ObjectId.isValid(projectId)) {
+      return res.status(400).json({ message: "Invalid project ID" });
+    }
 
     // Check if project exists
     const project = await Project.findById(projectId);

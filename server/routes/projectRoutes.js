@@ -1,6 +1,7 @@
 // routes/projectRoutes.js
 const express = require("express");
 const router = express.Router();
+const fetch = require("node-fetch"); // Polyfill for Node.js < 18
 const Project = require("../models/Project");
 const { protect, authorize } = require("../middlewares/authMiddleware");
 const { uploadToS3, getFileType, convertToCloudFrontUrl, isS3Configured } = require("../config/s3Config");
@@ -51,12 +52,86 @@ router.get("/", protect, async (req, res) => {
       filter.assignedTo = req.user._id;
     }
 
+    // Region-based filtering (for admin and hr)
+    const user = req.user;
+    let accessibleClientIds = null;
+
+    console.log(`\n========== PROJECT FILTERING START ==========`);
+    console.log(`[Project Filtering] User: ${user.email}, Role: ${user.role}`);
+    console.log(`[Project Filtering] user.regions:`, user.regions);
+    console.log(`[Project Filtering] user.region:`, user.region);
+
+    // Check if user has region restrictions
+    const hasGlobalAccess = user.role === 'super-admin' || user.role === 'superadmin' ||
+                           (user.regions && user.regions.includes('Global')) ||
+                           (user.region === 'Global');
+
+    console.log(`[Project Filtering] Is super-admin: ${user.role === 'super-admin' || user.role === 'superadmin'}`);
+    console.log(`[Project Filtering] Has Global in regions array: ${user.regions && user.regions.includes('Global')}`);
+    console.log(`[Project Filtering] Has Global in region field: ${user.region === 'Global'}`);
+    console.log(`[Project Filtering] Final hasGlobalAccess: ${hasGlobalAccess}`);
+
+    if (!hasGlobalAccess) {
+      // Get clients in user's regions (strict filtering - NO Global fallback)
+      const Client = require("../models/Client");
+      let regionQuery;
+
+      if (user.regions && user.regions.length > 0) {
+        // New multi-region field - strict filtering
+        regionQuery = { region: { $in: user.regions } };
+        console.log('[Project Filtering] Strict filtering by regions:', user.regions);
+      } else if (user.region) {
+        // Fallback for old single region field (backwards compatibility)
+        regionQuery = { region: user.region };
+        console.log('[Project Filtering] Strict filtering by single region:', user.region);
+      }
+
+      if (regionQuery) {
+        console.log('[Project Filtering] Region query:', JSON.stringify(regionQuery));
+        const accessibleClients = await Client.find(regionQuery).select('_id');
+        accessibleClientIds = accessibleClients.map(c => c._id);
+
+        console.log(`[Project Filtering] Found ${accessibleClientIds.length} accessible clients:`, accessibleClientIds);
+
+        // IMPORTANT: Only skip region filtering for employees
+        // Admins/HR with region restrictions MUST have region filtering applied even if assignedTo is set
+        if (user.role === 'employee') {
+          // Employees already filtered by assignedTo on line 52, no need for region filtering
+          console.log('[Project Filtering] Employee role - skipping region filter (already filtered by assignedTo)');
+        } else {
+          // Strict filtering: ONLY show projects from clients in user's regions
+          // This applies to admins/HR even if they use assignedTo filter
+          filter.$and = filter.$and || [];
+          const projectFilter = {
+            client: { $in: accessibleClientIds }  // ONLY clients in assigned regions
+          };
+          filter.$and.push(projectFilter);
+          console.log('[Project Filtering] Applied STRICT project filter (no assignment override):', JSON.stringify(projectFilter));
+        }
+      }
+    }
+
+    console.log('[Project Filtering] Final filter:', JSON.stringify(filter));
+
     const projects = await Project.find(filter)
       .populate("assignedTo", "name email employeeId designation")
-      .populate("client", "clientName businessName email")
+      .populate("client", "clientName businessName email region")
       .populate("createdBy", "name email")
       .populate("tasks", "title status priority dueDate")  // ✅ Populate tasks for progress calculation
       .sort({ createdAt: -1 });
+
+    console.log(`[Project Filtering] Found ${projects.length} projects matching filter`);
+
+    // Log details of each project to understand why they're showing
+    console.log(`\n--- PROJECTS RETURNED ---`);
+    projects.forEach((project, index) => {
+      const clientRegion = project.client?.region || 'NO REGION';
+      const clientName = project.client?.clientName || 'NO CLIENT';
+      const isAssignedToUser = project.assignedTo?.some(emp => emp._id.toString() === user._id.toString());
+      console.log(`${index + 1}. "${project.projectName}"`);
+      console.log(`   Client: "${clientName}" | Region: "${clientRegion}" | Assigned to user: ${isAssignedToUser}`);
+    });
+    console.log(`========== PROJECT FILTERING END ==========\n`);
 
     res.json(projects);
   } catch (error) {

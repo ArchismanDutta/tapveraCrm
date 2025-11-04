@@ -8,7 +8,7 @@ const statusColors = {
   Inactive: "bg-red-100 text-red-700",
 };
 
-const EmployeeTable = ({ employees, onEdit, onDelete, onViewDetails }) => {
+const EmployeeTable = ({ employees, onEdit, onDelete, onViewDetails, regions, onRegionChange }) => {
   return (
     <div className="bg-white rounded-xl shadow overflow-x-auto">
       <table className="w-full text-left">
@@ -18,6 +18,7 @@ const EmployeeTable = ({ employees, onEdit, onDelete, onViewDetails }) => {
             <th className="p-3">Employee ID</th>
             <th className="p-3">Department</th>
             <th className="p-3">Designation</th>
+            <th className="p-3">Region</th>
             <th className="p-3">Status</th>
             <th className="p-3">Attendance</th>
             <th className="p-3">Salary</th>
@@ -38,6 +39,19 @@ const EmployeeTable = ({ employees, onEdit, onDelete, onViewDetails }) => {
               <td className="p-3">{emp.id}</td>
               <td className="p-3">{emp.department}</td>
               <td className="p-3">{emp.designation}</td>
+              <td className="p-3">
+                <select
+                  value={emp.region || 'Global'}
+                  onChange={(e) => onRegionChange(emp.id, e.target.value)}
+                  className="px-2 py-1 rounded border border-gray-300 text-sm focus:outline-none focus:border-blue-500"
+                >
+                  {regions && regions.map(region => (
+                    <option key={region} value={region}>
+                      {region === 'Global' ? '🌍 Global' : `📍 ${region}`}
+                    </option>
+                  ))}
+                </select>
+              </td>
               <td className="p-3">
                 <span
                   className={`px-2 py-1 rounded-full text-sm ${statusColors[emp.status]}`}

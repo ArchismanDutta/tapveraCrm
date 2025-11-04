@@ -72,6 +72,14 @@ const userSchema = new mongoose.Schema(
     avatar: { type: String, trim: true, default: "" },
     timeZone: { type: String, default: "Asia/Kolkata" }, // Added timezone support
 
+    // ====== REGION-BASED ACCESS CONTROL ======
+    // Array of regions the user can access (e.g., ['USA', 'Canada', 'Global'])
+    regions: {
+      type: [String],
+      default: ['Global'],
+      required: true
+    },
+
     // ====== SHIFT MANAGEMENT ======
     
     // Primary shift type

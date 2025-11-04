@@ -2,6 +2,7 @@ const Payment = require("../models/Payment");
 const User = require("../models/User");
 const Task = require("../models/Task");
 const crypto = require("crypto");
+const { convertToCloudFrontUrl, isS3Configured } = require("../config/s3Config");
 
 /**
  * Get all employees with their task statistics
@@ -99,12 +100,20 @@ exports.activatePayment = async (req, res) => {
   try {
     const { employeeId, amount, reason, notes } = req.body;
     const adminId = req.user._id;
+    const qrCodeFile = req.file;
 
     // Validate input
     if (!employeeId || !amount || !reason) {
       return res.status(400).json({
         success: false,
         message: "Employee ID, amount, and reason are required",
+      });
+    }
+
+    if (!qrCodeFile) {
+      return res.status(400).json({
+        success: false,
+        message: "QR code image is required",
       });
     }
 
@@ -161,9 +170,17 @@ exports.activatePayment = async (req, res) => {
       approvalStatus: "rejected",
     });
 
-    // Use static Paytm QR code image instead of generating dynamic QR
-    // The frontend will use the paytm.jpg from assets folder
-    const qrCodeDataUrl = "PAYTM_STATIC_QR";
+    // Get QR code URL from uploaded file
+    let qrCodeUrl;
+    if (isS3Configured) {
+      // S3 upload - convert to CloudFront URL
+      qrCodeUrl = convertToCloudFrontUrl(qrCodeFile.location);
+      console.log(`QR code uploaded to S3: ${qrCodeUrl}`);
+    } else {
+      // Local upload - use relative path
+      qrCodeUrl = `/uploads/${qrCodeFile.filename}`;
+      console.log(`QR code uploaded locally: ${qrCodeUrl}`);
+    }
 
     // Create payment record
     const payment = await Payment.create({
@@ -171,7 +188,7 @@ exports.activatePayment = async (req, res) => {
       amount,
       reason,
       transactionId,
-      qrCodeData: qrCodeDataUrl,
+      qrCodeData: qrCodeUrl,
       taskStats: {
         dueTasks,
         rejectedTasks: rejectedTasks + rejectedSubmissions,

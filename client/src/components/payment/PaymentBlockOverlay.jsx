@@ -8,7 +8,6 @@ import {
   Download,
 } from "lucide-react";
 import toast from "react-hot-toast";
-import paytmQR from "../../assets/paytm.jpg";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
 
@@ -84,13 +83,18 @@ const PaymentBlockOverlay = ({ payment, onPaymentCleared }) => {
   };
 
   const downloadQRCode = () => {
+    const qrCodeUrl = payment.qrCodeData.startsWith('http')
+      ? payment.qrCodeData
+      : `${API_BASE}${payment.qrCodeData}`;
+
     const link = document.createElement("a");
-    link.href = paytmQR;
-    link.download = `paytm-qr-${payment.transactionId}.jpg`;
+    link.href = qrCodeUrl;
+    link.download = `payment-qr-${payment.transactionId}.jpg`;
+    link.target = "_blank"; // Open in new tab for S3 URLs
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    toast.success("QR code downloaded");
+    toast.success("QR code download started");
   };
 
   return (
@@ -201,10 +205,29 @@ const PaymentBlockOverlay = ({ payment, onPaymentCleared }) => {
                 <div className="flex flex-col items-center justify-center space-y-4">
                   <div className="bg-white p-4 rounded-lg border-4 border-gray-200 shadow-lg">
                     <img
-                      src={paytmQR}
-                      alt="Paytm Payment QR Code"
+                      src={
+                        payment.qrCodeData.startsWith('http')
+                          ? payment.qrCodeData
+                          : `${API_BASE}${payment.qrCodeData}`
+                      }
+                      alt="Payment QR Code"
                       className="w-64 h-64 object-contain"
+                      onError={(e) => {
+                        console.error("Failed to load QR code:", payment.qrCodeData);
+                        e.target.style.display = 'none';
+                        e.target.nextElementSibling.style.display = 'flex';
+                      }}
                     />
+                    <div
+                      style={{ display: 'none' }}
+                      className="w-64 h-64 flex items-center justify-center bg-gray-100 text-gray-500 text-sm text-center p-4"
+                    >
+                      <div>
+                        <AlertCircle className="w-12 h-12 mx-auto mb-2" />
+                        <p>QR Code not available</p>
+                        <p className="text-xs mt-1">Contact admin for assistance</p>
+                      </div>
+                    </div>
                   </div>
                   <button
                     onClick={downloadQRCode}

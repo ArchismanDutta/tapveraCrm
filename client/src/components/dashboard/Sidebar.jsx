@@ -15,6 +15,7 @@ import {
   ChevronDown,
   ChevronRight,
   DollarSign,
+  FileSpreadsheet,
 } from "lucide-react";
 import { FaChevronCircleRight } from "react-icons/fa";
 import { Users } from "@/components/animate-ui/icons/users";
@@ -56,7 +57,7 @@ const menuConfig = {
       icon: <Gauge size={18} animateOnHover />,
       label: "Employee Dashboard",
     },
-    
+
     {
       to: "/employee-portal",
       icon: <FolderKanban size={18} />,
@@ -66,6 +67,11 @@ const menuConfig = {
       to: "/tasks",
       icon: <CircleCheckBig size={18} animateOnHover />,
       label: "My Tasks",
+    },
+    {
+      to: "/sheets",
+      icon: <FileSpreadsheet size={18} />,
+      label: "Shared Sheets",
     },
     {
       to: "/attendance",
@@ -131,6 +137,11 @@ const menuConfig = {
       to: "/tasks",
       icon: <CircleCheckBig size={18} animateOnHover />,
       label: "My Tasks",
+    },
+    {
+      to: "/sheets",
+      icon: <FileSpreadsheet size={18} />,
+      label: "Shared Sheets",
     },
     {
       to: "/notepad",
@@ -207,7 +218,7 @@ const menuConfig = {
       icon: <Gauge size={18} animateOnHover />,
       label: "Admin Dashboard",
     },
-    
+
     // Business Management Dropdown
     {
       label: "Business Management",
@@ -236,6 +247,11 @@ const menuConfig = {
       ],
     },
 
+    {
+      to: "/sheets",
+      icon: <FileSpreadsheet size={18} />,
+      label: "Sheet Manager",
+    },
     {
       to: "/employee-portal",
       icon: <FolderKanban size={18} />,
@@ -383,6 +399,11 @@ const menuConfig = {
       ],
     },
 
+    {
+      to: "/sheets",
+      icon: <FileSpreadsheet size={18} />,
+      label: "Sheet Manager",
+    },
     { to: "/todo", icon: <Brush size={18} animateOnHover />, label: "Todo" },
     {
       to: "/messages",

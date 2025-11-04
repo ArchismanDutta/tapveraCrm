@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from "react";
-import { Eye, Mail, Building2, Badge, User, Crown, ChevronDown, Loader2, X, AlertCircle } from "lucide-react";
+import { Eye, Mail, Building2, Badge, User, Crown, ChevronDown, Loader2, X, AlertCircle, Globe } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
-const EmployeeTable = ({ employees = [], currentUser, onStatusUpdate, updatingStatus }) => {
+const EmployeeTable = ({ employees = [], currentUser, onStatusUpdate, updatingStatus, regions = [], onRegionChange }) => {
   const navigate = useNavigate();
   const [hoveredRow, setHoveredRow] = useState(null);
   const [statusDropdownOpen, setStatusDropdownOpen] = useState(null);
+  const [regionDropdownOpen, setRegionDropdownOpen] = useState(null);
 
   const handleView = (emp) => {
     if (emp && emp._id) {
@@ -54,11 +55,21 @@ const EmployeeTable = ({ employees = [], currentUser, onStatusUpdate, updatingSt
     setStatusDropdownOpen(null);
   };
 
+  const handleRegionToggle = (employeeId, region) => {
+    // Don't close dropdown, allow multiple selections
+    if (onRegionChange) {
+      onRegionChange(employeeId, region);
+    }
+  };
+
   // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (statusDropdownOpen && !event.target.closest('.status-dropdown')) {
         setStatusDropdownOpen(null);
+      }
+      if (regionDropdownOpen && !event.target.closest('.region-dropdown')) {
+        setRegionDropdownOpen(null);
       }
     };
 
@@ -66,7 +77,7 @@ const EmployeeTable = ({ employees = [], currentUser, onStatusUpdate, updatingSt
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [statusDropdownOpen]);
+  }, [statusDropdownOpen, regionDropdownOpen]);
 
   const getDepartmentIcon = (department) => {
     switch (department?.toLowerCase()) {
@@ -93,6 +104,7 @@ const EmployeeTable = ({ employees = [], currentUser, onStatusUpdate, updatingSt
               <th className="p-4 text-left font-semibold">Contact</th>
               <th className="p-4 text-left font-semibold">Department</th>
               <th className="p-4 text-left font-semibold">Position</th>
+              <th className="p-4 text-center font-semibold">Region</th>
               <th className="p-4 text-center font-semibold">Status</th>
               <th className="p-4 text-center font-semibold">Actions</th>
             </tr>
@@ -100,7 +112,7 @@ const EmployeeTable = ({ employees = [], currentUser, onStatusUpdate, updatingSt
           <tbody className="divide-y divide-slate-700/30">
             {sortedEmployees.length === 0 ? (
               <tr>
-                <td colSpan={6} className="p-12 text-center">
+                <td colSpan={7} className="p-12 text-center">
                   <div className="flex flex-col items-center space-y-3">
                     <div className="w-16 h-16 bg-slate-700/30 rounded-full flex items-center justify-center">
                       <User className="w-8 h-8 text-gray-500" />
@@ -183,6 +195,84 @@ const EmployeeTable = ({ employees = [], currentUser, onStatusUpdate, updatingSt
                       <span className="text-gray-300">
                         {emp.designation || 'N/A'}
                       </span>
+                    </td>
+
+                    {/* Region */}
+                    <td className="p-4">
+                      <div className="relative region-dropdown">
+                        <div className="flex flex-wrap gap-1 items-center justify-center">
+                          {/* Display current regions as badges */}
+                          {(emp.regions && emp.regions.length > 0 ? emp.regions : [emp.region || 'Global']).map((region, idx) => (
+                            <span
+                              key={idx}
+                              className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-500/20 text-blue-300 border border-blue-500/30"
+                            >
+                              {region === 'Global' ? '🌍' : '📍'}
+                              {region}
+                            </span>
+                          ))}
+
+                          {/* Edit button */}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setRegionDropdownOpen(regionDropdownOpen === emp._id ? null : emp._id);
+                            }}
+                            className="inline-flex items-center px-2 py-1 rounded-md text-xs font-semibold transition-all duration-200 hover:scale-105 bg-slate-700/50 text-gray-300 hover:bg-slate-600/50 cursor-pointer"
+                            title="Edit regions"
+                          >
+                            <ChevronDown className="w-3 h-3" />
+                          </button>
+                        </div>
+
+                        {/* Multi-select Region Dropdown */}
+                        {regionDropdownOpen === emp._id && regions.length > 0 && (
+                          <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 bg-slate-800 border border-slate-600/50 rounded-xl shadow-2xl z-50 min-w-[180px] max-h-[250px] overflow-y-auto p-2">
+                            <div className="text-xs text-gray-400 px-2 py-1 mb-1 font-semibold">Select Regions</div>
+                            {regions.map((region) => {
+                              const empRegions = emp.regions || [emp.region || 'Global'];
+                              const isSelected = empRegions.includes(region);
+
+                              return (
+                                <label
+                                  key={region}
+                                  className="flex items-center gap-2 px-2 py-2 text-sm transition-colors duration-200 rounded-lg hover:bg-slate-700/50 cursor-pointer"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={isSelected}
+                                    onChange={(e) => {
+                                      e.stopPropagation();
+                                      handleRegionToggle(emp._id, region);
+                                    }}
+                                    className="w-4 h-4 rounded border-slate-600 text-blue-500 focus:ring-blue-500 focus:ring-offset-0 bg-slate-700 cursor-pointer"
+                                  />
+                                  <span className="flex-1 text-gray-300 flex items-center gap-1">
+                                    {region === 'Global' ? (
+                                      <Globe className="w-3 h-3" />
+                                    ) : (
+                                      <span className="text-xs">📍</span>
+                                    )}
+                                    {region}
+                                  </span>
+                                </label>
+                              );
+                            })}
+                            <div className="border-t border-slate-600/50 mt-2 pt-2">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setRegionDropdownOpen(null);
+                                }}
+                                className="w-full px-3 py-1.5 text-xs font-semibold bg-blue-500/20 text-blue-300 rounded-lg hover:bg-blue-500/30 transition-colors"
+                              >
+                                Done
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     </td>
 
                     {/* Status */}

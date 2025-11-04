@@ -17,14 +17,31 @@ const EmployeeManagement = () => {
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
+  const [regions, setRegions] = useState(['Global']);
 
   useEffect(() => {
     fetchEmployees();
+    fetchRegions();
   }, []);
 
   useEffect(() => {
     updateStats();
   }, [employees]);
+
+  const fetchRegions = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/clients/regions', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setRegions(data);
+      }
+    } catch (error) {
+      console.error('Error fetching regions:', error);
+    }
+  };
 
   const fetchEmployees = () => {
     // Dummy static data; replace with your API fetch
@@ -38,6 +55,7 @@ const EmployeeManagement = () => {
         attendance: 95,
         salary: 85000,
         avatar: "https://randomuser.me/api/portraits/women/44.jpg",
+        region: "Global",
       },
       {
         id: "EMP002",
@@ -48,6 +66,7 @@ const EmployeeManagement = () => {
         attendance: 95,
         salary: 85000,
         avatar: "https://randomuser.me/api/portraits/women/44.jpg",
+        region: "Global",
       },
       {
         id: "EMP003",
@@ -58,6 +77,7 @@ const EmployeeManagement = () => {
         attendance: 98,
         salary: 85000,
         avatar: "https://randomuser.me/api/portraits/women/44.jpg",
+        region: "Global",
       },
       {
         id: "EMP004",
@@ -68,8 +88,32 @@ const EmployeeManagement = () => {
         attendance: 100,
         salary: 200000,
         avatar: "https://randomuser.me/api/portraits/men/44.jpg",
+        region: "Global",
       },
     ]);
+  };
+
+  const handleRegionChange = async (employeeId, newRegion) => {
+    // Update locally immediately for better UX
+    setEmployees((prev) =>
+      prev.map((emp) => emp.id === employeeId ? { ...emp, region: newRegion } : emp)
+    );
+
+    // TODO: Add API call to update employee region in backend
+    // Example:
+    // try {
+    //   const token = localStorage.getItem('token');
+    //   await fetch(`/api/users/${employeeId}`, {
+    //     method: 'PUT',
+    //     headers: {
+    //       'Authorization': `Bearer ${token}`,
+    //       'Content-Type': 'application/json'
+    //     },
+    //     body: JSON.stringify({ region: newRegion })
+    //   });
+    // } catch (error) {
+    //   console.error('Error updating region:', error);
+    // }
   };
 
   const updateStats = () => {
@@ -167,6 +211,8 @@ const EmployeeManagement = () => {
               onEdit={openEditModal}
               onDelete={handleDeleteEmployee}
               onViewDetails={openDetailsModal}
+              regions={regions}
+              onRegionChange={handleRegionChange}
             />
           ) : (
             <p className="text-center text-slate-400 py-20 font-semibold  text-xl">

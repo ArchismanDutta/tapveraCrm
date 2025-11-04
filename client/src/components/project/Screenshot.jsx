@@ -277,8 +277,17 @@ const Screenshot = ({ projectId, userRole, userId }) => {
     setTimeout(() => setNotification(null), 3000);
   };
 
+  const getImageUrl = (url) => {
+    // If URL is already a full URL (starts with http/https), return as is (CloudFront/S3)
+    if (url && url.startsWith("http")) {
+      return url;
+    }
+    // Otherwise, it's a local path, prepend API_BASE
+    return `${API_BASE}${url}`;
+  };
+
   const copyImageUrl = (url) => {
-    const fullUrl = `${API_BASE}${url}`;
+    const fullUrl = getImageUrl(url);
     navigator.clipboard.writeText(fullUrl);
     setCopiedId(url);
     showNotification("Image URL copied to clipboard!", "success");
@@ -287,7 +296,7 @@ const Screenshot = ({ projectId, userRole, userId }) => {
 
   const downloadImage = (url, title) => {
     const link = document.createElement("a");
-    link.href = `${API_BASE}${url}`;
+    link.href = getImageUrl(url);
     link.download = title || "screenshot";
     document.body.appendChild(link);
     link.click();
@@ -376,7 +385,7 @@ const Screenshot = ({ projectId, userRole, userId }) => {
                 onClick={() => openViewModal(screenshot)}
               >
                 <img
-                  src={`${API_BASE}${screenshot.imageUrl}`}
+                  src={getImageUrl(screenshot.imageUrl)}
                   alt={screenshot.title}
                   className="w-full h-full object-cover"
                 />
@@ -723,7 +732,7 @@ const Screenshot = ({ projectId, userRole, userId }) => {
               <X className="w-6 h-6" />
             </button>
             <img
-              src={`${API_BASE}${selectedScreenshot.imageUrl}`}
+              src={getImageUrl(selectedScreenshot.imageUrl)}
               alt={selectedScreenshot.title}
               className="max-w-full max-h-[90vh] rounded-lg"
             />

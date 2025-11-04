@@ -1,51 +1,11 @@
 const express = require("express");
 const router = express.Router();
-const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
 const Screenshot = require("../models/Screenshot");
 const Project = require("../models/Project");
 const { protect, authorize } = require("../middlewares/authMiddleware");
-
-// Configure multer for screenshot uploads
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    const uploadDir = "uploads/screenshots";
-    // Create directory if it doesn't exist
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-    }
-    cb(null, uploadDir);
-  },
-  filename: function (req, file, cb) {
-    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-    cb(
-      null,
-      "screenshot-" + uniqueSuffix + path.extname(file.originalname)
-    );
-  },
-});
-
-const fileFilter = (req, file, cb) => {
-  // Accept images only
-  const allowedTypes = /jpeg|jpg|png|gif|webp|bmp/;
-  const extname = allowedTypes.test(
-    path.extname(file.originalname).toLowerCase()
-  );
-  const mimetype = allowedTypes.test(file.mimetype);
-
-  if (mimetype && extname) {
-    return cb(null, true);
-  } else {
-    cb(new Error("Only image files are allowed!"));
-  }
-};
-
-const upload = multer({
-  storage: storage,
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
-  fileFilter: fileFilter,
-});
+const { uploadToS3, convertToCloudFrontUrl } = require("../config/s3Config");
 
 // @route   GET /api/projects/:projectId/screenshots
 // @desc    Get all screenshots for a project
@@ -95,7 +55,7 @@ router.get("/:projectId/screenshots", protect, async (req, res) => {
 router.post(
   "/:projectId/screenshots",
   protect,
-  upload.single("screenshot"),
+  uploadToS3.single("screenshot"),
   async (req, res) => {
     try {
       const { projectId } = req.params;
@@ -135,12 +95,16 @@ router.post(
         }
       }
 
+      // Get file URL from S3 or local storage
+      const fileUrl = req.file.location || `/uploads/screenshots/${req.file.filename}`;
+      const cloudFrontUrl = convertToCloudFrontUrl(fileUrl);
+
       // Create screenshot record
       const screenshot = await Screenshot.create({
         project: projectId,
         title: title.trim(),
         description: description?.trim() || "",
-        imageUrl: `/uploads/screenshots/${req.file.filename}`,
+        imageUrl: cloudFrontUrl,
         uploadedBy: req.user._id,
         fileSize: req.file.size,
         mimeType: req.file.mimetype,
@@ -158,12 +122,6 @@ router.post(
       });
     } catch (error) {
       console.error("Error uploading screenshot:", error);
-      // Delete uploaded file if database operation fails
-      if (req.file) {
-        fs.unlink(req.file.path, (err) => {
-          if (err) console.error("Error deleting file:", err);
-        });
-      }
       res.status(500).json({ message: "Server error", error: error.message });
     }
   }

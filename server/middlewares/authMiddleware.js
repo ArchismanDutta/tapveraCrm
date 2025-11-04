@@ -68,6 +68,8 @@ exports.protect = async (req, res, next) => {
         department: user.department || "Unknown",
         avatar: user.avatar || "",
         userType: "User",
+        regions: user.regions || [user.region] || ['Global'], // CRITICAL: Include regions for filtering
+        region: user.region || 'Global', // Backwards compatibility
       };
     }
 
