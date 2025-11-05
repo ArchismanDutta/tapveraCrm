@@ -1227,7 +1227,15 @@ const ProjectsPage = ({ onLogout }) => {
                           </div>
                         </td>
                         <td className="p-4 text-gray-300">
-                          {project.client?.businessName || project.client?.clientName || "N/A"}
+                          <div className="flex flex-col gap-1.5">
+                            <span>{project.client?.businessName || project.client?.clientName || "N/A"}</span>
+                            {project.client?.region && (
+                              <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-500/20 text-blue-400 border border-blue-500/50 inline-flex items-center gap-1 w-fit">
+                                <span>🌍</span>
+                                {project.client.region}
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td className="p-4">
                           <div className="flex flex-col gap-1">
@@ -2255,7 +2263,15 @@ const ProjectsPage = ({ onLogout }) => {
                 </div>
                 <div>
                   <p className="text-sm text-gray-400 mb-1">Client</p>
-                  <p className="text-white">{selectedProject.client?.businessName || selectedProject.client?.clientName || "N/A"}</p>
+                  <div className="flex flex-col gap-1.5">
+                    <p className="text-white">{selectedProject.client?.businessName || selectedProject.client?.clientName || "N/A"}</p>
+                    {selectedProject.client?.region && (
+                      <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-500/20 text-blue-400 border border-blue-500/50 inline-flex items-center gap-1 w-fit">
+                        <span>🌍</span>
+                        {selectedProject.client.region}
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <div>
                   <p className="text-sm text-gray-400 mb-1">Priority</p>

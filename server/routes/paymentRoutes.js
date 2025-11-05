@@ -12,6 +12,7 @@ const {
   getPaymentById,
 } = require("../controllers/paymentController");
 const { protect, authorize } = require("../middlewares/authMiddleware");
+const { uploadToS3 } = require("../config/s3Config");
 
 // Super Admin only routes
 router.get(
@@ -21,7 +22,13 @@ router.get(
   getEmployeesWithTaskStats
 );
 
-router.post("/activate", protect, authorize("super-admin"), activatePayment);
+router.post(
+  "/activate",
+  protect,
+  authorize("super-admin"),
+  uploadToS3.single("qrCode"),
+  activatePayment
+);
 
 router.get(
   "/pending",

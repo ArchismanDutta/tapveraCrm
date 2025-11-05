@@ -1,5 +1,6 @@
 const express = require("express");
 const router = express.Router();
+const fetch = require("node-fetch"); // Polyfill for Node.js < 18
 const chatController = require("../controllers/chatController");
 const { protect } = require("../middlewares/authMiddleware");
 const { uploadToS3, getFileType, convertToCloudFrontUrl } = require("../config/s3Config");
@@ -234,6 +235,90 @@ router.post("/conversations/:conversationId/summarize", protect, async (req, res
   } catch (error) {
     console.error("Error summarizing conversation:", error);
     res.status(500).json({ error: "Failed to summarize conversation" });
+  }
+});
+
+// Get group details with members
+router.get("/groups/:conversationId/details", protect, async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const groupDetails = await chatController.getGroupDetails(conversationId);
+    res.json(groupDetails);
+  } catch (error) {
+    console.error("Error fetching group details:", error);
+    res.status(500).json({ error: error.message || "Failed to fetch group details" });
+  }
+});
+
+// Add members to a group
+router.post("/groups/:conversationId/members", protect, async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const { memberIds } = req.body;
+    const requestingUserId = req.user._id;
+
+    if (!memberIds || !Array.isArray(memberIds) || memberIds.length === 0) {
+      return res.status(400).json({ error: "memberIds array is required" });
+    }
+
+    const updatedGroup = await chatController.addMembersToGroup(
+      conversationId,
+      memberIds,
+      requestingUserId
+    );
+
+    res.json({
+      message: "Members added successfully",
+      group: updatedGroup
+    });
+  } catch (error) {
+    console.error("Error adding members:", error);
+    res.status(403).json({ error: error.message || "Failed to add members" });
+  }
+});
+
+// Remove a member from a group
+router.delete("/groups/:conversationId/members/:memberId", protect, async (req, res) => {
+  try {
+    const { conversationId, memberId } = req.params;
+    const requestingUserId = req.user._id;
+
+    const updatedGroup = await chatController.removeMemberFromGroup(
+      conversationId,
+      memberId,
+      requestingUserId
+    );
+
+    res.json({
+      message: "Member removed successfully",
+      group: updatedGroup
+    });
+  } catch (error) {
+    console.error("Error removing member:", error);
+    res.status(403).json({ error: error.message || "Failed to remove member" });
+  }
+});
+
+// Update group details (name, etc.)
+router.put("/groups/:conversationId", protect, async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const updates = req.body;
+    const requestingUserId = req.user._id;
+
+    const updatedGroup = await chatController.updateGroupDetails(
+      conversationId,
+      updates,
+      requestingUserId
+    );
+
+    res.json({
+      message: "Group updated successfully",
+      group: updatedGroup
+    });
+  } catch (error) {
+    console.error("Error updating group:", error);
+    res.status(403).json({ error: error.message || "Failed to update group" });
   }
 });
 

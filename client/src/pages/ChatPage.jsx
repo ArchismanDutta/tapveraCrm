@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useMemo } from "react";
 import CreateGroupModal from "../components/chat/CreateGroupModal";
+import ManageGroupModal from "../components/chat/ManageGroupModal";
 import ChatWindow from "../components/chat/chatWindow";
 import { useWebSocketContext } from "../contexts/WebSocketContext";
 import Sidebar from "../components/dashboard/Sidebar";
-import { Search, Filter, X, SortAsc, Users } from "lucide-react";
+import { Search, Filter, X, SortAsc, Users, Settings } from "lucide-react";
 
 // Custom hook for debouncing
 const useDebounce = (value, delay) => {
@@ -29,6 +30,7 @@ const ChatPage = ({ onLogout }) => {
   const [conversations, setConversations] = useState([]);
   const [selectedConversation, setSelectedConversation] = useState(null);
   const [showCreateGroup, setShowCreateGroup] = useState(false);
+  const [showManageGroup, setShowManageGroup] = useState(false);
   const [initialMessages, setInitialMessages] = useState([]);
 
   // New state for tracking unread messages
@@ -566,15 +568,25 @@ const ChatPage = ({ onLogout }) => {
                   )}
 
                   {(userRole === "admin" || userRole === "super-admin") && (
-                    <button
-                      title="Delete Conversation"
-                      onClick={() =>
-                        handleDeleteConversation(selectedConversation._id)
-                      }
-                      className="text-red-500 hover:text-red-700 transition"
-                    >
-                      🗑️
-                    </button>
+                    <>
+                      <button
+                        title="Manage Group Members"
+                        onClick={() => setShowManageGroup(true)}
+                        className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+                      >
+                        <Settings className="w-4 h-4" />
+                        Manage
+                      </button>
+                      <button
+                        title="Delete Conversation"
+                        onClick={() =>
+                          handleDeleteConversation(selectedConversation._id)
+                        }
+                        className="text-red-500 hover:text-red-700 transition"
+                      >
+                        🗑️
+                      </button>
+                    </>
                   )}
                 </div>
               </div>
@@ -598,12 +610,25 @@ const ChatPage = ({ onLogout }) => {
         </div>
       </main>
 
-      {/* Group Modal */}
+      {/* Create Group Modal */}
       <CreateGroupModal
         isOpen={showCreateGroup}
         onClose={() => setShowCreateGroup(false)}
         onCreate={handleCreateGroup}
         jwtToken={jwtToken}
+      />
+
+      {/* Manage Group Modal */}
+      <ManageGroupModal
+        isOpen={showManageGroup}
+        onClose={() => setShowManageGroup(false)}
+        conversation={selectedConversation}
+        jwtToken={jwtToken}
+        onGroupUpdated={() => {
+          // Refresh conversations list
+          const token = localStorage.getItem("token");
+          fetchConversations(token);
+        }}
       />
     </div>
   );

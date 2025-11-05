@@ -23,6 +23,7 @@ const EmployeeDirectory = ({ onLogout }) => {
   const [updatingStatus, setUpdatingStatus] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [regions, setRegions] = useState(['Global']);
 
   // Celebration notifications
   const {
@@ -36,6 +37,22 @@ const EmployeeDirectory = ({ onLogout }) => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
+
+  // Function to fetch regions
+  const fetchRegions = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      const response = await fetch(`${API_BASE}/api/clients/regions`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setRegions(data);
+      }
+    } catch (error) {
+      console.error('Error fetching regions:', error);
+    }
+  };
 
   // Function to update employee status
   const updateEmployeeStatus = async (employeeId, newStatus) => {
@@ -74,6 +91,67 @@ const EmployeeDirectory = ({ onLogout }) => {
       alert("Failed to update employee status. Please try again.");
     } finally {
       setUpdatingStatus(null);
+    }
+  };
+
+  // Function to toggle employee region (add/remove from array)
+  const updateEmployeeRegion = async (employeeId, toggleRegion) => {
+    console.log(`Toggling region "${toggleRegion}" for employee ${employeeId}`);
+
+    // Find the employee
+    const employee = employees.find(emp => emp._id === employeeId);
+    if (!employee) return;
+
+    // Get current regions array (or convert old single region to array)
+    let currentRegions = employee.regions || [employee.region || 'Global'];
+
+    // Toggle the region
+    let newRegions;
+    if (currentRegions.includes(toggleRegion)) {
+      // Remove the region (but ensure at least one region remains)
+      newRegions = currentRegions.filter(r => r !== toggleRegion);
+      if (newRegions.length === 0) {
+        alert("Employee must have at least one region assigned.");
+        return;
+      }
+    } else {
+      // Add the region
+      newRegions = [...currentRegions, toggleRegion];
+    }
+
+    console.log(`Updating regions from [${currentRegions.join(', ')}] to [${newRegions.join(', ')}]`);
+
+    try {
+      const token = localStorage.getItem("token");
+      const response = await fetch(`${API_BASE}/api/users/${employeeId}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ regions: newRegions }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error("Server response:", errorData);
+        throw new Error(errorData.message || "Failed to update employee regions");
+      }
+
+      const result = await response.json();
+      console.log("Regions update successful:", result);
+
+      // Update local state
+      setEmployees(prevEmployees =>
+        prevEmployees.map(emp =>
+          emp._id === employeeId ? { ...emp, regions: newRegions } : emp
+        )
+      );
+
+      console.log(`Employee regions successfully updated to [${newRegions.join(', ')}]`);
+    } catch (error) {
+      console.error("Error updating employee regions:", error);
+      alert("Failed to update employee regions. Please try again.");
     }
   };
 
@@ -120,6 +198,7 @@ const EmployeeDirectory = ({ onLogout }) => {
       let mappedEmployees = Array.isArray(data)
         ? data.map((emp) => {
             console.log(`Employee ${emp.name} status from DB:`, emp.status);
+            console.log(`Employee ${emp.name} regions from DB:`, emp.regions);
             return {
               _id: String(emp._id),
               name: emp.fullName || emp.name || emp.email || `Employee ${emp._id}`,
@@ -128,6 +207,8 @@ const EmployeeDirectory = ({ onLogout }) => {
               designation: emp.designation || "N/A",
               email: emp.email || "N/A",
               employeeId: emp.employeeId || "-",
+              regions: emp.regions || [emp.region] || ["Global"], // Use regions array
+              region: emp.region || "Global", // Keep for backwards compatibility
             };
           })
         : [];
@@ -144,6 +225,8 @@ const EmployeeDirectory = ({ onLogout }) => {
             designation: user.designation || "N/A",
             email: user.email || "N/A",
             employeeId: user.employeeId || "-",
+            regions: user.regions || [user.region] || ["Global"], // Use regions array
+            region: user.region || "Global", // Keep for backwards compatibility
           },
           ...mappedEmployees,
         ];
@@ -160,6 +243,7 @@ const EmployeeDirectory = ({ onLogout }) => {
 
   useEffect(() => {
     fetchEmployees();
+    fetchRegions();
   }, []); // Only fetch once on mount, filtering is now client-side
 
   useEffect(() => {
@@ -412,6 +496,8 @@ const EmployeeDirectory = ({ onLogout }) => {
               currentUser={currentUser}
               onStatusUpdate={updateEmployeeStatus}
               updatingStatus={updatingStatus}
+              regions={regions}
+              onRegionChange={updateEmployeeRegion}
             />
           )}
         </div>

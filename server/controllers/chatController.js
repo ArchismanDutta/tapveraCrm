@@ -183,4 +183,103 @@ exports.deleteConversation = async (conversationId) => {
   return deletedConversation;
 };
 
+// Add members to a group conversation
+exports.addMembersToGroup = async (conversationId, memberIds, requestingUserId) => {
+  const conversation = await Conversation.findById(conversationId);
+
+  if (!conversation || conversation.type !== "group") {
+    throw new Error("Group conversation not found");
+  }
+
+  // Check if requesting user is the creator or an admin
+  // For now, only creator can manage the group
+  if (conversation.createdBy !== requestingUserId.toString()) {
+    throw new Error("Only the group creator can add members");
+  }
+
+  // Add new members (avoid duplicates)
+  const existingMembers = new Set(conversation.members);
+  const newMembers = memberIds.filter(id => !existingMembers.has(id));
+
+  conversation.members.push(...newMembers);
+  await conversation.save();
+
+  return conversation;
+};
+
+// Remove a member from a group conversation
+exports.removeMemberFromGroup = async (conversationId, memberIdToRemove, requestingUserId) => {
+  const conversation = await Conversation.findById(conversationId);
+
+  if (!conversation || conversation.type !== "group") {
+    throw new Error("Group conversation not found");
+  }
+
+  // Check if requesting user is the creator
+  if (conversation.createdBy !== requestingUserId.toString()) {
+    throw new Error("Only the group creator can remove members");
+  }
+
+  // Don't allow removing the creator
+  if (memberIdToRemove === conversation.createdBy) {
+    throw new Error("Cannot remove the group creator");
+  }
+
+  // Remove the member
+  conversation.members = conversation.members.filter(
+    id => id !== memberIdToRemove
+  );
+
+  await conversation.save();
+
+  return conversation;
+};
+
+// Update group details (name, etc.)
+exports.updateGroupDetails = async (conversationId, updates, requestingUserId) => {
+  const conversation = await Conversation.findById(conversationId);
+
+  if (!conversation || conversation.type !== "group") {
+    throw new Error("Group conversation not found");
+  }
+
+  // Check if requesting user is the creator
+  if (conversation.createdBy !== requestingUserId.toString()) {
+    throw new Error("Only the group creator can update group details");
+  }
+
+  // Update allowed fields
+  if (updates.name) {
+    conversation.name = updates.name;
+  }
+
+  await conversation.save();
+
+  return conversation;
+};
+
+// Get group details with populated member information
+exports.getGroupDetails = async (conversationId) => {
+  const conversation = await Conversation.findById(conversationId);
+
+  if (!conversation || conversation.type !== "group") {
+    throw new Error("Group conversation not found");
+  }
+
+  // Get member details
+  const members = await User.find({
+    _id: { $in: conversation.members }
+  }).select('_id name email employeeId role');
+
+  // Get creator details
+  const creator = await User.findById(conversation.createdBy)
+    .select('_id name email employeeId');
+
+  return {
+    ...conversation.toObject(),
+    memberDetails: members,
+    creatorDetails: creator
+  };
+};
+
 

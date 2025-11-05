@@ -1,5 +1,6 @@
 const express = require("express");
 const router = express.Router();
+const mongoose = require("mongoose");
 const { protect } = require("../middlewares/authMiddleware");
 const ClientRemark = require("../models/ClientRemark");
 const Project = require("../models/Project");
@@ -11,6 +12,11 @@ router.get("/:projectId/client-remarks", protect, async (req, res) => {
   try {
     const { projectId } = req.params;
     const { section } = req.query;
+
+    // Validate ObjectId
+    if (!mongoose.Types.ObjectId.isValid(projectId)) {
+      return res.status(400).json({ message: "Invalid project ID" });
+    }
 
     // Check if project exists
     const project = await Project.findById(projectId);

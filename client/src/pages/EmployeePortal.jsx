@@ -590,11 +590,21 @@ const EmployeePortal = ({ onLogout }) => {
   };
 
   const filteredProjects = projects.filter(
-    (project) =>
-      project.projectName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      project.type?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      project.client?.clientName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      project.client?.businessName?.toLowerCase().includes(searchTerm.toLowerCase())
+    (project) => {
+      const searchLower = searchTerm.toLowerCase();
+
+      const matchesName = project.projectName?.toLowerCase().includes(searchLower);
+
+      // Handle project.type as array
+      const matchesType = Array.isArray(project.type)
+        ? project.type.some(t => t?.toLowerCase().includes(searchLower))
+        : project.type?.toLowerCase().includes(searchLower);
+
+      const matchesClientName = project.client?.clientName?.toLowerCase().includes(searchLower);
+      const matchesBusinessName = project.client?.businessName?.toLowerCase().includes(searchLower);
+
+      return matchesName || matchesType || matchesClientName || matchesBusinessName;
+    }
   );
 
   // Show loading while checking payment

@@ -217,7 +217,7 @@ exports.getEmployeeDirectory = async (req, res) => {
     }
 
     const employees = await User.find(filter)
-      .select("_id employeeId name email contact department designation jobLevel status shiftType")
+      .select("_id employeeId name email contact department designation jobLevel status shiftType regions region")
       .sort({ name: 1 });
 
     const employeesWithStatus = employees.map(emp => ({
@@ -225,6 +225,7 @@ exports.getEmployeeDirectory = async (req, res) => {
       status: emp.status, // Preserve actual status from database
       shiftType: emp.shiftType || "standard",
       jobLevel: emp.jobLevel || "junior",
+      regions: emp.regions || [emp.region] || ['Global'], // Ensure regions array exists
     }));
 
     res.json(employeesWithStatus);
@@ -389,7 +390,9 @@ exports.updateEmployee = async (req, res) => {
       "shiftType",
       "shift",
       "status",
-      "location"
+      "location",
+      "regions",       // <- Added for multi-region access control
+      "region"         // <- Keep for backwards compatibility
     ];
 
     const updateData = {};
@@ -422,8 +425,18 @@ exports.updateEmployee = async (req, res) => {
       };
     }
 
+    // Log regions update if present
+    if (updateData.regions) {
+      console.log(`[Update Employee] Updating user ${userId} regions to:`, updateData.regions);
+    }
+
     const user = await User.findByIdAndUpdate(userId, updateData, { new: true });
     if (!user) return res.status(404).json({ message: "User not found" });
+
+    // Log successful regions update
+    if (updateData.regions) {
+      console.log(`[Update Employee] Successfully updated user ${userId} regions:`, user.regions);
+    }
 
     res.json({ message: "Employee updated successfully", user });
   } catch (err) {

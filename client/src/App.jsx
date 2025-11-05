@@ -88,6 +88,9 @@ import NotificationCenterPage from "./pages/NotificationCenterPage";
 // Payment Management
 import EmployeePaymentManagement from "./components/payment/EmployeePaymentManagement";
 
+// Sheet Management
+import SheetManagerPage from "./pages/SheetManagerPage";
+
 // ------------------- Utility Functions -------------------
 const normalizeRole = (role) => {
   if (!role) return "employee";
@@ -375,6 +378,16 @@ const AppWrapper = () => {
           element={
             isAuthenticated && isSuperAdmin ? (
               <EmployeePaymentManagement onLogout={handleLogout} />
+            ) : (
+              <Navigate to="/login" replace />
+            )
+          }
+        />
+        <Route
+          path="/sheets"
+          element={
+            isAuthenticated ? (
+              <SheetManagerPage onLogout={handleLogout} />
             ) : (
               <Navigate to="/login" replace />
             )

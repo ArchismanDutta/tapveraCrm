@@ -52,6 +52,7 @@ const backlinkRoutes = require("./routes/backlinkRoutes");
 const screenshotRoutes = require("./routes/screenshotRoutes");
 const projectReportRoutes = require("./routes/projectReportRoutes");
 const clientRemarkRoutes = require("./routes/clientRemarkRoutes");
+const sheetRoutes = require("./routes/sheetRoutes");
 
 // Controllers
 const ChatController = require("./controllers/chatController");
@@ -74,7 +75,11 @@ const frontendOrigins = [
   process.env.FRONTEND_ORIGIN,
   process.env.FRONTEND_URL,
   "http://tapvera-crm-frontend.s3-website.ap-south-1.amazonaws.com",
-].filter(Boolean);
+]
+.filter(Boolean)
+.flatMap(origin => origin.split(',').map(o => o.trim()))
+.filter(Boolean);
+
 
 if (!frontendOrigins.length) {
   console.warn(
@@ -171,18 +176,22 @@ app.use("/api/leads", leadRoutes);
 app.use("/api/callbacks", callbackRoutes);
 app.use("/api/notepad", notepadRoutes);
 app.use("/api/clients", clientRoutes);
-app.use("/api/projects", projectRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/media", mediaRoutes);
 app.use("/api/ai-analytics", aiAnalyticsRoutes);
 app.use("/api/tap", tapRoutes);
 app.use("/api/payments", paymentRoutes);
+app.use("/api/sheets", sheetRoutes);
+// Mount specific project sub-routes BEFORE the main projectRoutes
+// This ensures routes like /:projectId/blogs are matched before /:id
 app.use("/api/projects", keywordRoutes);
 app.use("/api/projects", blogRoutes);
 app.use("/api/projects", backlinkRoutes);
 app.use("/api/projects", screenshotRoutes);
 app.use("/api/projects", projectReportRoutes);
 app.use("/api/projects", clientRemarkRoutes);
+// Mount general project routes LAST
+app.use("/api/projects", projectRoutes);
 
 // =====================
 // Serve frontend in production
@@ -199,7 +208,19 @@ if (process.env.NODE_ENV === "production") {
 // =====================
 app.use((err, req, res, next) => {
   console.error("❌ Unexpected error:", err.stack || err);
-  res.status(500).json({ error: "Internal Server Error" });
+  console.error("Request path:", req.path);
+  console.error("Request method:", req.method);
+
+  // In development, send more details
+  if (process.env.NODE_ENV === 'development') {
+    res.status(500).json({
+      error: "Internal Server Error",
+      message: err.message,
+      stack: err.stack
+    });
+  } else {
+    res.status(500).json({ error: "Internal Server Error" });
+  }
 });
 
 // =====================

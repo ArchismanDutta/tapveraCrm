@@ -38,6 +38,10 @@ const uploadToS3 = isS3Configured ? multer({
       if (req.baseUrl && req.baseUrl.includes("/projects")) {
         folder = "project-messages";
       }
+      // Check if it's a screenshot upload
+      if (req.route && req.route.path && req.route.path.includes("screenshots")) {
+        folder = "screenshots";
+      }
       const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
       const sanitizedFilename = file.originalname.replace(/[^a-zA-Z0-9.-]/g, "-");
       const filename = `${folder}/${uniqueSuffix}-${sanitizedFilename}`;

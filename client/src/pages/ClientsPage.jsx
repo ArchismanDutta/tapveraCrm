@@ -129,6 +129,7 @@ const ClientsPage = ({ onLogout }) => {
     businessName: "",
     email: "",
     password: "",
+    region: "Global",
   });
 
   useEffect(() => {
@@ -162,8 +163,11 @@ const ClientsPage = ({ onLogout }) => {
   const handleAddClient = async (e) => {
     e.preventDefault();
     try {
-      await API.post("/api/clients", form);
-      setForm({ clientName: "", businessName: "", email: "", password: "" });
+      await API.post("/api/clients", {
+        ...form,
+        region: form.region?.trim() || 'Global'
+      });
+      setForm({ clientName: "", businessName: "", email: "", password: "", region: "Global" });
       fetchClients();
       showNotification("Client added successfully!", "success");
     } catch (error) {
@@ -179,6 +183,7 @@ const ClientsPage = ({ onLogout }) => {
         clientName: selectedClient.clientName,
         businessName: selectedClient.businessName,
         email: selectedClient.email,
+        region: selectedClient.region?.trim() || 'Global',
       });
       setShowEditModal(false);
       setSelectedClient(null);
@@ -494,6 +499,19 @@ const ClientsPage = ({ onLogout }) => {
               </div>
             </div>
 
+            <div>
+              <label className="block text-sm text-gray-400 mb-2">Region *</label>
+              <input
+                type="text"
+                placeholder="e.g., USA, Australia, Canada"
+                value={form.region}
+                onChange={(e) => setForm({ ...form, region: e.target.value })}
+                className="w-full px-4 py-3 bg-[#0f1419] border border-[#232945] rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 transition-colors"
+                required
+              />
+              <p className="text-xs text-gray-500 mt-1">Admins assigned to this region will see this client</p>
+            </div>
+
             <button
               type="submit"
               className="md:col-span-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white py-3 rounded-lg flex items-center justify-center gap-2 font-semibold hover:from-purple-700 hover:to-pink-700 transition-all duration-200 shadow-lg hover:shadow-purple-500/50 hover:scale-[1.02]"
@@ -557,17 +575,18 @@ const ClientsPage = ({ onLogout }) => {
             <table className="w-full table-fixed">
               <thead>
                 <tr className="border-b-2 border-[#232945]">
-                  <th className="text-left pl-6 pr-4 py-4 text-base font-semibold text-gray-400 w-[20%]">Client Name</th>
-                  <th className="text-left pl-6 pr-4 py-4 text-base font-semibold text-gray-400 w-[20%]">Business Name</th>
-                  <th className="text-left pl-6 pr-4 py-4 text-base font-semibold text-gray-400 w-[25%]">Email</th>
-                  <th className="text-left pl-6 pr-4 py-4 text-base font-semibold text-gray-400 w-[18%]">Status</th>
-                  <th className="text-left pl-6 pr-4 py-4 text-base font-semibold text-gray-400 w-[17%]">Actions</th>
+                  <th className="text-left pl-6 pr-4 py-4 text-base font-semibold text-gray-400 w-[18%]">Client Name</th>
+                  <th className="text-left pl-6 pr-4 py-4 text-base font-semibold text-gray-400 w-[18%]">Business Name</th>
+                  <th className="text-left pl-6 pr-4 py-4 text-base font-semibold text-gray-400 w-[22%]">Email</th>
+                  <th className="text-left pl-6 pr-4 py-4 text-base font-semibold text-gray-400 w-[14%]">Region</th>
+                  <th className="text-left pl-6 pr-4 py-4 text-base font-semibold text-gray-400 w-[14%]">Status</th>
+                  <th className="text-left pl-6 pr-4 py-4 text-base font-semibold text-gray-400 w-[14%]">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredAndSortedClients.length === 0 ? (
                   <tr>
-                    <td colSpan="5" className="text-center py-12">
+                    <td colSpan="6" className="text-center py-12">
                       <Users className="w-12 h-12 text-gray-600 mx-auto mb-3" />
                       <p className="text-gray-500 text-base">
                         {searchTerm || filterStatus !== "all"
@@ -582,10 +601,16 @@ const ClientsPage = ({ onLogout }) => {
                       key={c._id}
                       className="border-b border-[#232945] hover:bg-[#0f1419] transition-colors"
                     >
-                      <td className="pl-6 pr-4 py-5 text-white font-semibold text-base w-[20%]">{c.clientName}</td>
-                      <td className="pl-6 pr-4 py-5 text-gray-300 text-base w-[20%]">{c.businessName}</td>
-                      <td className="pl-6 pr-4 py-5 text-gray-300 text-base w-[25%]">{c.email}</td>
-                      <td className="pl-6 pr-4 py-5 w-[18%]">
+                      <td className="pl-6 pr-4 py-5 text-white font-semibold text-base w-[18%]">{c.clientName}</td>
+                      <td className="pl-6 pr-4 py-5 text-gray-300 text-base w-[18%]">{c.businessName}</td>
+                      <td className="pl-6 pr-4 py-5 text-gray-300 text-base w-[22%]">{c.email}</td>
+                      <td className="pl-6 pr-4 py-5 w-[14%]">
+                        <span className="px-3 py-1.5 rounded-full text-xs font-semibold bg-blue-500/20 text-blue-400 border border-blue-500/50 inline-flex items-center gap-1.5">
+                          <span>🌍</span>
+                          {c.region || 'Global'}
+                        </span>
+                      </td>
+                      <td className="pl-6 pr-4 py-5 w-[14%]">
                         <div className="flex items-center">
                           <span
                             className={`px-4 py-2 rounded-full text-sm font-semibold inline-flex items-center gap-2 ${
@@ -601,7 +626,7 @@ const ClientsPage = ({ onLogout }) => {
                           </span>
                         </div>
                       </td>
-                      <td className="pl-6 pr-4 py-5 w-[17%]">
+                      <td className="pl-6 pr-4 py-5 w-[14%]">
                         <div className="flex items-center gap-3">
                           <button
                             onClick={() => toggleStatus(c._id)}
@@ -714,6 +739,19 @@ const ClientsPage = ({ onLogout }) => {
                   className="w-full px-4 py-3 bg-[#0f1419] border border-[#232945] rounded-lg text-white focus:outline-none focus:border-purple-500 transition-colors"
                   required
                 />
+              </div>
+
+              <div>
+                <label className="block text-sm text-gray-400 mb-2">Region</label>
+                <input
+                  type="text"
+                  placeholder="e.g., USA, Australia, Canada, Global"
+                  value={selectedClient.region || ''}
+                  onChange={(e) => setSelectedClient({ ...selectedClient, region: e.target.value })}
+                  className="w-full px-4 py-3 bg-[#0f1419] border border-[#232945] rounded-lg text-white focus:outline-none focus:border-purple-500 transition-colors"
+                  required
+                />
+                <p className="text-xs text-gray-500 mt-1">Enter region name (defaults to 'Global' if empty)</p>
               </div>
 
               <div className="flex gap-3 pt-4">

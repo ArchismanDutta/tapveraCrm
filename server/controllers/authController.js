@@ -12,7 +12,13 @@ const crypto = require("crypto");
 // ======================
 const generateToken = (user, userType = "User") => {
   return jwt.sign(
-    { id: user._id, role: user.role || "client", userType: userType },
+    {
+      id: user._id,
+      role: user.role || "client",
+      userType: userType,
+      regions: user.regions || [user.region] || ['Global'], // Include regions array for filtering
+      region: user.region || 'Global' // Keep old field for backwards compatibility
+    },
     process.env.JWT_SECRET,
     { expiresIn: "1d" }
   );
