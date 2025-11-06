@@ -29,7 +29,7 @@ router.get("/", protect, async (req, res) => {
     if (type) filter.type = type;
     if (status) filter.status = status;
     if (assignedTo) filter.assignedTo = assignedTo;
-    if (client) filter.client = client;
+    if (client) filter.clients = client; // Filter projects that include this client
     if (priority) filter.priority = priority;
 
     // Date range filters
@@ -103,7 +103,7 @@ router.get("/", protect, async (req, res) => {
           // This applies to admins/HR even if they use assignedTo filter
           filter.$and = filter.$and || [];
           const projectFilter = {
-            client: { $in: accessibleClientIds }  // ONLY clients in assigned regions
+            clients: { $in: accessibleClientIds }  // ONLY clients in assigned regions
           };
           filter.$and.push(projectFilter);
           console.log('[Project Filtering] Applied STRICT project filter (no assignment override):', JSON.stringify(projectFilter));
@@ -114,8 +114,8 @@ router.get("/", protect, async (req, res) => {
     console.log('[Project Filtering] Final filter:', JSON.stringify(filter));
 
     const projects = await Project.find(filter)
-      .populate("assignedTo", "name email employeeId designation")
-      .populate("client", "clientName businessName email region")
+      .populate("assignedTo", "name email employeeId designation status")
+      .populate("clients", "clientName businessName email region")
       .populate("createdBy", "name email")
       .populate("tasks", "title status priority dueDate")  // ✅ Populate tasks for progress calculation
       .sort({ createdAt: -1 });
@@ -125,11 +125,11 @@ router.get("/", protect, async (req, res) => {
     // Log details of each project to understand why they're showing
     console.log(`\n--- PROJECTS RETURNED ---`);
     projects.forEach((project, index) => {
-      const clientRegion = project.client?.region || 'NO REGION';
-      const clientName = project.client?.clientName || 'NO CLIENT';
+      const clientNames = project.clients?.map(c => c.clientName || c.businessName).join(', ') || 'NO CLIENTS';
+      const clientRegions = project.clients?.map(c => c.region).join(', ') || 'NO REGIONS';
       const isAssignedToUser = project.assignedTo?.some(emp => emp._id.toString() === user._id.toString());
       console.log(`${index + 1}. "${project.projectName}"`);
-      console.log(`   Client: "${clientName}" | Region: "${clientRegion}" | Assigned to user: ${isAssignedToUser}`);
+      console.log(`   Clients: "${clientNames}" | Regions: "${clientRegions}" | Assigned to user: ${isAssignedToUser}`);
     });
     console.log(`========== PROJECT FILTERING END ==========\n`);
 
@@ -218,8 +218,8 @@ router.get("/stats", protect, authorize("admin", "superadmin"), async (req, res)
 router.get("/:id", protect, async (req, res) => {
   try {
     const project = await Project.findById(req.params.id)
-      .populate("assignedTo", "name email role employeeId designation")
-      .populate("client", "clientName businessName email")
+      .populate("assignedTo", "name email role employeeId designation status")
+      .populate("clients", "clientName businessName email")
       .populate("createdBy", "name email")
       .populate("notes.createdBy", "name email")
       .populate("attachments.uploadedBy", "name email")
@@ -255,7 +255,7 @@ router.post("/", protect, authorize("admin", "superadmin"), async (req, res) => 
       projectName,
       type,
       assignedTo,
-      client,
+      clients,
       startDate,
       endDate,
       description,
@@ -266,8 +266,13 @@ router.post("/", protect, authorize("admin", "superadmin"), async (req, res) => 
     } = req.body;
 
     // Validation
-    if (!projectName || !type || !assignedTo || !client || !startDate || !endDate) {
+    if (!projectName || !type || !assignedTo || !clients || !startDate || !endDate) {
       return res.status(400).json({ message: "Please provide all required fields" });
+    }
+
+    // Validate that clients is an array and not empty
+    if (!Array.isArray(clients) || clients.length === 0) {
+      return res.status(400).json({ message: "Please select at least one client" });
     }
 
     // Validate that type is an array and not empty
@@ -280,11 +285,28 @@ router.post("/", protect, authorize("admin", "superadmin"), async (req, res) => 
       return res.status(400).json({ message: "End date must be after start date" });
     }
 
+    // Validate that all assigned employees are active
+    if (assignedTo && assignedTo.length > 0) {
+      const User = require("../models/User");
+      const employees = await User.find({
+        _id: { $in: assignedTo },
+        status: { $ne: "active" }
+      }).select("name status");
+
+      if (employees.length > 0) {
+        const inactiveNames = employees.map(emp => `${emp.name} (${emp.status})`).join(", ");
+        return res.status(400).json({
+          message: `Cannot assign project to inactive employees: ${inactiveNames}. Please select only active employees.`,
+          inactiveEmployees: employees
+        });
+      }
+    }
+
     const project = await Project.create({
       projectName,
       type,
       assignedTo,
-      client,
+      clients,
       startDate,
       endDate,
       description,
@@ -296,8 +318,8 @@ router.post("/", protect, authorize("admin", "superadmin"), async (req, res) => 
     });
 
     const populatedProject = await Project.findById(project._id)
-      .populate("assignedTo", "name email employeeId designation")
-      .populate("client", "clientName businessName email")
+      .populate("assignedTo", "name email employeeId designation status")
+      .populate("clients", "clientName businessName email")
       .populate("createdBy", "name email");
 
     res.status(201).json(populatedProject);
@@ -316,7 +338,7 @@ router.put("/:id", protect, authorize("admin", "superadmin"), async (req, res) =
       projectName,
       type,
       assignedTo,
-      client,
+      clients,
       startDate,
       endDate,
       description,
@@ -346,11 +368,35 @@ router.put("/:id", protect, authorize("admin", "superadmin"), async (req, res) =
       }
     }
 
+    // Validate clients if provided
+    if (clients !== undefined) {
+      if (!Array.isArray(clients) || clients.length === 0) {
+        return res.status(400).json({ message: "Please select at least one client" });
+      }
+    }
+
+    // Validate that all assigned employees are active (if assignedTo is being updated)
+    if (assignedTo && assignedTo.length > 0) {
+      const User = require("../models/User");
+      const employees = await User.find({
+        _id: { $in: assignedTo },
+        status: { $ne: "active" }
+      }).select("name status");
+
+      if (employees.length > 0) {
+        const inactiveNames = employees.map(emp => `${emp.name} (${emp.status})`).join(", ");
+        return res.status(400).json({
+          message: `Cannot assign project to inactive employees: ${inactiveNames}. Please select only active employees.`,
+          inactiveEmployees: employees
+        });
+      }
+    }
+
     // Update fields
     if (projectName) project.projectName = projectName;
     if (type) project.type = type;
     if (assignedTo) project.assignedTo = assignedTo;
-    if (client) project.client = client;
+    if (clients) project.clients = clients;
     if (startDate) project.startDate = startDate;
     if (endDate) project.endDate = endDate;
     if (description !== undefined) project.description = description;
@@ -367,8 +413,8 @@ router.put("/:id", protect, authorize("admin", "superadmin"), async (req, res) =
     await project.save();
 
     const updatedProject = await Project.findById(project._id)
-      .populate("assignedTo", "name email employeeId designation")
-      .populate("client", "clientName businessName email")
+      .populate("assignedTo", "name email employeeId designation status")
+      .populate("clients", "clientName businessName email")
       .populate("createdBy", "name email");
 
     res.json(updatedProject);
@@ -407,8 +453,8 @@ router.patch("/:id/status", protect, authorize("admin", "superadmin"), async (re
     await project.save();
 
     const updatedProject = await Project.findById(project._id)
-      .populate("assignedTo", "name email employeeId designation")
-      .populate("client", "clientName businessName email");
+      .populate("assignedTo", "name email employeeId designation status")
+      .populate("clients", "clientName businessName email");
 
     res.json(updatedProject);
   } catch (error) {
@@ -554,8 +600,8 @@ router.patch("/:id/milestones/:milestoneId", protect, async (req, res) => {
 router.get("/employee/:employeeId", protect, async (req, res) => {
   try {
     const projects = await Project.find({ assignedTo: req.params.employeeId })
-      .populate("assignedTo", "name email employeeId designation")
-      .populate("client", "clientName businessName email")
+      .populate("assignedTo", "name email employeeId designation status")
+      .populate("clients", "clientName businessName email")
       .populate("tasks", "title status priority dueDate")
       .sort({ createdAt: -1 });
 
@@ -571,9 +617,9 @@ router.get("/employee/:employeeId", protect, async (req, res) => {
 // @access  Private
 router.get("/client/:clientId", protect, async (req, res) => {
   try {
-    const projects = await Project.find({ client: req.params.clientId })
-      .populate("assignedTo", "name email employeeId designation")
-      .populate("client", "clientName businessName email")
+    const projects = await Project.find({ clients: req.params.clientId })
+      .populate("assignedTo", "name email employeeId designation status")
+      .populate("clients", "clientName businessName email")
       .populate("tasks", "title status priority dueDate")
       .sort({ createdAt: -1 });
 
@@ -900,30 +946,48 @@ router.post("/:id/messages", protect, uploadToS3.array("files", 5), async (req, 
         select: "name email clientName",
       });
 
-    // Send notifications to mentioned users
-    if (mentionedUsers.length > 0) {
-      const notificationService = require('../services/notificationService');
-      const senderName = req.user.name || req.user.clientName || 'Someone';
+    // Send notifications to all project members
+    const notificationService = require('../services/notificationService');
+    const senderName = req.user.name || req.user.clientName || 'Someone';
 
-      for (const mention of mentionedUsers) {
-        // Don't notify if user mentioned themselves
-        if (String(mention.user) !== String(req.user._id)) {
-          try {
-            await notificationService.createNotification({
-              userId: mention.user,
-              type: 'chat',
-              channel: 'mention',
-              title: `${senderName} mentioned you in ${project.name}`,
-              body: message.slice(0, 100) + (message.length > 100 ? '...' : ''),
-              relatedData: {
-                projectId: req.params.id,
-                messageId: newMessage._id
-              },
-              priority: 'high'
-            });
-          } catch (notifError) {
-            console.error('Failed to send mention notification:', notifError);
-          }
+    // Get all project members (assigned employees + clients)
+    const recipientIds = new Set();
+
+    // Add assigned employees
+    if (project.assignedTo && project.assignedTo.length > 0) {
+      project.assignedTo.forEach(userId => recipientIds.add(String(userId)));
+    }
+
+    // Add all clients
+    if (project.clients && project.clients.length > 0) {
+      project.clients.forEach(clientId => recipientIds.add(String(clientId)));
+    }
+
+    // Send notification to all members except the sender
+    for (const recipientId of recipientIds) {
+      if (String(recipientId) !== String(req.user._id)) {
+        // Check if user was mentioned for priority
+        const wasMentioned = mentionedUsers.some(m => String(m.user) === String(recipientId));
+        const priority = wasMentioned ? 'high' : 'normal';
+        const channel = wasMentioned ? 'mention' : 'message';
+
+        try {
+          await notificationService.createAndSend({
+            userId: recipientId,
+            type: 'chat',
+            channel: channel,
+            title: wasMentioned
+              ? `${senderName} mentioned you in ${project.projectName}`
+              : `New message in ${project.projectName}`,
+            body: message.slice(0, 100) + (message.length > 100 ? '...' : ''),
+            relatedData: {
+              projectId: req.params.id,
+              messageId: newMessage._id
+            },
+            priority: priority
+          });
+        } catch (notifError) {
+          console.error('Failed to send project message notification:', notifError);
         }
       }
     }
@@ -1070,7 +1134,7 @@ router.post("/:id/messages/summarize", protect, async (req, res) => {
   try {
     const { days = 7 } = req.body; // Default to last 7 days
 
-    const project = await Project.findById(req.params.id).select('name assignedTo client');
+    const project = await Project.findById(req.params.id).select('projectName assignedTo clients createdBy');
     if (!project) {
       return res.status(404).json({ message: "Project not found" });
     }

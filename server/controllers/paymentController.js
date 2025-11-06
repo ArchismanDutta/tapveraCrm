@@ -11,12 +11,12 @@ const { convertToCloudFrontUrl, isS3Configured } = require("../config/s3Config")
  */
 exports.getEmployeesWithTaskStats = async (req, res) => {
   try {
-    // Get all employees (excluding super-admin and clients)
+    // Get all employees (excluding super-admin, clients, and terminated/absconded)
     const employees = await User.find({
       role: { $in: ["employee", "admin", "hr"] },
-      status: "active",
+      status: { $nin: ['terminated', 'absconded'] }
     })
-      .select("employeeId name email department designation avatar")
+      .select("employeeId name email department designation avatar status")
       .lean();
 
     // Calculate task statistics for each employee

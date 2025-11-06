@@ -38,6 +38,21 @@ exports.createTask = async (req, res) => {
         .json({ message: "Title and at least one assigned user are required." });
     }
 
+    // Validate that all assigned employees are active
+    const User = require("../models/User");
+    const employees = await User.find({
+      _id: { $in: assignedTo },
+      status: { $ne: "active" }
+    }).select("name status");
+
+    if (employees.length > 0) {
+      const inactiveNames = employees.map(emp => `${emp.name} (${emp.status})`).join(", ");
+      return res.status(400).json({
+        message: `Cannot assign task to inactive employees: ${inactiveNames}. Please select only active employees.`,
+        inactiveEmployees: employees
+      });
+    }
+
     const allowedPriorities = ["High", "Medium", "Low"];
     const validatedPriority = allowedPriorities.includes(priority) ? priority : "Medium";
 
@@ -128,6 +143,23 @@ exports.editTask = async (req, res) => {
       task.assignedBy.toString() !== req.user._id.toString()
     ) {
       return res.status(403).json({ message: "Not authorized" });
+    }
+
+    // Validate that all assigned employees are active (if assignedTo is being updated)
+    if (Array.isArray(assignedTo) && assignedTo.length > 0) {
+      const User = require("../models/User");
+      const employees = await User.find({
+        _id: { $in: assignedTo },
+        status: { $ne: "active" }
+      }).select("name status");
+
+      if (employees.length > 0) {
+        const inactiveNames = employees.map(emp => `${emp.name} (${emp.status})`).join(", ");
+        return res.status(400).json({
+          message: `Cannot assign task to inactive employees: ${inactiveNames}. Please select only active employees.`,
+          inactiveEmployees: employees
+        });
+      }
     }
 
     if (title) task.title = title;

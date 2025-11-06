@@ -40,6 +40,9 @@ router.get("/:projectId/report/download", protect, async (req, res) => {
     // Fetch all data
     const keywords = await KeywordRank.getProjectKeywords(projectId, true);
 
+    // Fetch velocity insights
+    const velocityInsights = await KeywordRank.getVelocityInsights(projectId);
+
     const blogs = await BlogUpdate.find({
       project: projectId,
       isActive: true,
@@ -181,20 +184,34 @@ router.get("/:projectId/report/download", protect, async (req, res) => {
 
     doc.moveDown(0.5);
 
-    doc
-      .fontSize(11)
-      .fillColor("#000000")
-      .font("Helvetica-Bold")
-      .text("Client: ", 70, doc.y, { continued: true })
-      .font("Helvetica")
-      .text(project.client?.name || "N/A");
-
-    if (project.client?.email) {
+    // Handle multiple clients
+    if (project.clients && project.clients.length > 0) {
+      const clientNames = project.clients.map(c => c?.businessName || c?.clientName || c?.name || "N/A").join(", ");
       doc
+        .fontSize(11)
+        .fillColor("#000000")
         .font("Helvetica-Bold")
-        .text("Email: ", 70, doc.y, { continued: true })
+        .text("Client(s): ", 70, doc.y, { continued: true })
         .font("Helvetica")
-        .text(project.client.email);
+        .text(clientNames);
+
+      // List client emails if available
+      const clientEmails = project.clients.filter(c => c?.email).map(c => c.email);
+      if (clientEmails.length > 0) {
+        doc
+          .font("Helvetica-Bold")
+          .text("Email(s): ", 70, doc.y, { continued: true })
+          .font("Helvetica")
+          .text(clientEmails.join(", "));
+      }
+    } else {
+      doc
+        .fontSize(11)
+        .fillColor("#000000")
+        .font("Helvetica-Bold")
+        .text("Client(s): ", 70, doc.y, { continued: true })
+        .font("Helvetica")
+        .text("N/A");
     }
 
     doc.moveDown(1);
@@ -425,6 +442,195 @@ router.get("/:projectId/report/download", protect, async (req, res) => {
         yPos += rowHeight;
       });
 
+    }
+
+    // ====================
+    // VELOCITY INSIGHTS SECTION (Added to same page if space, or new page)
+    // ====================
+    if (velocityInsights) {
+      doc.moveDown(2);
+
+      // Check if we need a new page
+      if (doc.y > 650) {
+        doc.addPage();
+      }
+
+      doc
+        .fontSize(18)
+        .fillColor("#ff6b35")
+        .font("Helvetica-Bold")
+        .text("VELOCITY METRICS", 50, doc.y);
+
+      doc.moveDown(0.5);
+
+      doc
+        .fontSize(10)
+        .fillColor("#4b5563")
+        .font("Helvetica")
+        .text("7-day and 30-day keyword performance trends", 50, doc.y);
+
+      doc.moveDown(1);
+
+      const { summary, fastestImprovements, rapidDeclines, stagnantKeywords } = velocityInsights;
+
+      // Summary Stats Box
+      const summaryBoxTop = doc.y;
+      doc.roundedRect(50, summaryBoxTop, 495, 80, 8).fillAndStroke("#f9fafb", "#e5e7eb");
+
+      doc.y = summaryBoxTop + 15;
+      doc.fontSize(11).fillColor("#111827").font("Helvetica-Bold");
+
+      const summaryCol1 = 70;
+      const summaryCol2 = 200;
+      const summaryCol3 = 330;
+      const summaryCol4 = 460;
+
+      doc.text("Total", summaryCol1, doc.y);
+      doc.text("Improving", summaryCol2, doc.y);
+      doc.text("Declining", summaryCol3, doc.y);
+      doc.text("Stagnant", summaryCol4, doc.y);
+
+      doc.moveDown(0.3);
+      doc.fontSize(20).font("Helvetica-Bold");
+
+      doc.fillColor("#3b82f6").text(summary.totalKeywords.toString(), summaryCol1, doc.y);
+      doc.fillColor("#10b981").text(summary.improving.toString(), summaryCol2, doc.y);
+      doc.fillColor("#ef4444").text(summary.declining.toString(), summaryCol3, doc.y);
+      doc.fillColor("#f59e0b").text(summary.stagnant.toString(), summaryCol4, doc.y);
+
+      doc.moveDown(0.5);
+      doc.fontSize(9).fillColor("#6b7280").font("Helvetica");
+
+      doc.text("Keywords", summaryCol1, doc.y);
+      doc.text("(7 days)", summaryCol2, doc.y);
+      doc.text("(7 days)", summaryCol3, doc.y);
+      doc.text("(30 days)", summaryCol4, doc.y);
+
+      doc.y = summaryBoxTop + 85;
+      doc.moveDown(1);
+
+      // Fastest Improvements
+      if (fastestImprovements.length > 0) {
+        doc.fontSize(14).fillColor("#059669").font("Helvetica-Bold");
+        doc.text("🚀 Fastest Improvements (Top 5)", 50, doc.y);
+        doc.moveDown(0.5);
+
+        fastestImprovements.slice(0, 5).forEach((kw, index) => {
+          if (doc.y > 720) {
+            doc.addPage();
+            doc.y = 50;
+          }
+
+          const improvementBoxTop = doc.y;
+          doc.roundedRect(50, improvementBoxTop, 495, 35, 6).fillAndStroke("#d1fae5", "#a7f3d0");
+
+          doc.y = improvementBoxTop + 8;
+
+          doc.fontSize(11).fillColor("#065f46").font("Helvetica-Bold");
+          doc.text(`${index + 1}. ${kw.keyword}`, 60, doc.y, { width: 280, ellipsis: true });
+
+          doc.fontSize(10).fillColor("#047857").font("Helvetica");
+          doc.text(`Current: #${kw.currentRank || "N/A"}`, 60, doc.y + 12);
+
+          // Change indicator
+          doc.fontSize(16).fillColor("#059669").font("Helvetica-Bold");
+          const changeText = kw.velocity7Day.change > 0 ? `+${kw.velocity7Day.change}` : kw.velocity7Day.change;
+          doc.text(changeText, 450, improvementBoxTop + 8);
+
+          doc.fontSize(8).fillColor("#047857").font("Helvetica");
+          const timeText = kw.velocity7Day.isFallback
+            ? `in ${Math.round(kw.velocity7Day.daysAnalyzed)}d`
+            : "in 7 days";
+          doc.text(`positions ${timeText}`, 450, improvementBoxTop + 24, { width: 80, align: "left" });
+
+          doc.y = improvementBoxTop + 40;
+        });
+
+        doc.moveDown(0.5);
+      }
+
+      // Rapid Declines
+      if (rapidDeclines.length > 0) {
+        if (doc.y > 650) {
+          doc.addPage();
+        }
+
+        doc.fontSize(14).fillColor("#dc2626").font("Helvetica-Bold");
+        doc.text("⚠️ Rapid Declines (Needs Attention)", 50, doc.y);
+        doc.moveDown(0.5);
+
+        rapidDeclines.slice(0, 5).forEach((kw, index) => {
+          if (doc.y > 720) {
+            doc.addPage();
+            doc.y = 50;
+          }
+
+          const declineBoxTop = doc.y;
+          doc.roundedRect(50, declineBoxTop, 495, 35, 6).fillAndStroke("#fee2e2", "#fecaca");
+
+          doc.y = declineBoxTop + 8;
+
+          doc.fontSize(11).fillColor("#991b1b").font("Helvetica-Bold");
+          doc.text(`⚡ ${kw.keyword}`, 60, doc.y, { width: 280, ellipsis: true });
+
+          doc.fontSize(10).fillColor("#b91c1c").font("Helvetica");
+          doc.text(`Current: #${kw.currentRank || "N/A"}`, 60, doc.y + 12);
+
+          // Change indicator
+          doc.fontSize(16).fillColor("#dc2626").font("Helvetica-Bold");
+          doc.text(kw.velocity7Day.change.toString(), 450, declineBoxTop + 8);
+
+          doc.fontSize(8).fillColor("#b91c1c").font("Helvetica");
+          const declineTimeText = kw.velocity7Day.isFallback
+            ? `in ${Math.round(kw.velocity7Day.daysAnalyzed)}d`
+            : "in 7 days";
+          doc.text(`positions ${declineTimeText}`, 450, declineBoxTop + 24, { width: 80, align: "left" });
+
+          doc.y = declineBoxTop + 40;
+        });
+
+        doc.moveDown(0.5);
+      }
+
+      // Stagnant Keywords Summary
+      if (stagnantKeywords.length > 0) {
+        if (doc.y > 700) {
+          doc.addPage();
+        }
+
+        doc.fontSize(14).fillColor("#f59e0b").font("Helvetica-Bold");
+        doc.text("📊 Stagnant Keywords Summary", 50, doc.y);
+        doc.moveDown(0.3);
+
+        doc.fontSize(10).fillColor("#78350f").font("Helvetica");
+        doc.text(
+          `${stagnantKeywords.length} keyword${stagnantKeywords.length !== 1 ? 's' : ''} with no movement in the last 30 days. Consider updating content or building backlinks.`,
+          50,
+          doc.y,
+          { width: 495, align: "justify" }
+        );
+
+        doc.moveDown(1);
+      }
+
+      // Average Velocity
+      doc.fontSize(12).fillColor("#4b5563").font("Helvetica-Bold");
+      doc.text("Average Velocity", 50, doc.y);
+      doc.moveDown(0.3);
+
+      doc.fontSize(10).fillColor("#6b7280").font("Helvetica");
+      doc.text(
+        `7-Day Average: ${summary.averageVelocity7Day > 0 ? '+' : ''}${summary.averageVelocity7Day} positions`,
+        50,
+        doc.y
+      );
+      doc.text(
+        `30-Day Average: ${summary.averageVelocity30Day > 0 ? '+' : ''}${summary.averageVelocity30Day} positions`,
+        50,
+        doc.y
+      );
+
+      doc.moveDown(1);
     }
 
     // ====================

@@ -120,25 +120,8 @@ router.put("/mark-all-read", async (req, res) => {
   }
 });
 
-// DELETE /api/notifications/:id - Delete notification
-router.delete("/:id", async (req, res) => {
-  try {
-    await notificationService.deleteNotification(req.params.id, req.user._id);
-
-    res.json({
-      success: true,
-      message: "Notification deleted",
-    });
-  } catch (error) {
-    console.error("Error deleting notification:", error);
-    res.status(404).json({
-      success: false,
-      message: error.message || "Failed to delete notification",
-    });
-  }
-});
-
 // DELETE /api/notifications/delete-all-read - Delete all read notifications
+// IMPORTANT: This must come BEFORE /:id route to avoid matching "delete-all-read" as an ID
 router.delete("/delete-all-read", async (req, res) => {
   try {
     const count = await notificationService.deleteAllRead(req.user._id);
@@ -154,6 +137,24 @@ router.delete("/delete-all-read", async (req, res) => {
       success: false,
       message: "Failed to delete read notifications",
       error: error.message,
+    });
+  }
+});
+
+// DELETE /api/notifications/:id - Delete notification
+router.delete("/:id", async (req, res) => {
+  try {
+    await notificationService.deleteNotification(req.params.id, req.user._id);
+
+    res.json({
+      success: true,
+      message: "Notification deleted",
+    });
+  } catch (error) {
+    console.error("Error deleting notification:", error);
+    res.status(404).json({
+      success: false,
+      message: error.message || "Failed to delete notification",
     });
   }
 });

@@ -241,8 +241,16 @@ exports.getEmployeeDirectory = async (req, res) => {
 // =========================
 exports.getAllUsers = async (req, res) => {
   try {
-    const users = await User.find()
-      .select("_id name email role department designation employeeId dob doj shift shiftType jobLevel");
+    // By default, exclude terminated and absconded employees
+    // Use ?includeInactive=true to get all users including terminated/absconded
+    const includeInactive = req.query.includeInactive === 'true';
+
+    const filter = includeInactive
+      ? {}
+      : { status: { $nin: ['terminated', 'absconded'] } };
+
+    const users = await User.find(filter)
+      .select("_id name email role department designation employeeId dob doj shift shiftType jobLevel status");
     res.json(users);
   } catch (err) {
     console.error("Error fetching users:", err);

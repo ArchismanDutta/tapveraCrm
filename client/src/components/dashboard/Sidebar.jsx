@@ -16,6 +16,7 @@ import {
   ChevronRight,
   DollarSign,
   FileSpreadsheet,
+  Shield,
 } from "lucide-react";
 import { FaChevronCircleRight } from "react-icons/fa";
 import { Users } from "@/components/animate-ui/icons/users";
@@ -166,6 +167,11 @@ const menuConfig = {
       label: "Employee Details",
     },
     {
+      to: "/roles",
+      icon: <Shield size={18} />,
+      label: "Role Management",
+    },
+    {
       to: "/admin/shifts",
       icon: <Clock size={18} />,
       label: "Shift Management",
@@ -247,6 +253,11 @@ const menuConfig = {
       ],
     },
 
+    {
+      to: "/roles",
+      icon: <Shield size={18} />,
+      label: "Role Management",
+    },
     {
       to: "/sheets",
       icon: <FileSpreadsheet size={18} />,
@@ -357,6 +368,11 @@ const menuConfig = {
           to: "/directory",
           icon: <Users size={16} animateOnHover />,
           label: "Employee Details",
+        },
+        {
+          to: "/roles",
+          icon: <Shield size={16} />,
+          label: "Role Management",
         },
         {
           to: "/super-admin/notepad",

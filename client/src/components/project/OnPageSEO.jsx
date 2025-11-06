@@ -15,9 +15,12 @@ import {
   User,
   MapPin,
   Globe,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import { Line } from "react-chartjs-2";
 import KeywordCalendarHeatmap from "./KeywordCalendarHeatmap";
+import VelocityMetrics from "./VelocityMetrics";
 import BlogUpdates from "./BlogUpdates";
 import SectionRemarks from "./SectionRemarks";
 import {
@@ -51,17 +54,19 @@ const OnPageSEO = ({ projectId, userRole, userId }) => {
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showUpdateModal, setShowUpdateModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
   const [showChartModal, setShowChartModal] = useState(false);
   const [selectedKeyword, setSelectedKeyword] = useState(null);
   const [notification, setNotification] = useState(null);
   const [stats, setStats] = useState(null);
   const [selectedDate, setSelectedDate] = useState(null);
+  const [showVelocityMetrics, setShowVelocityMetrics] = useState(true);
 
   // Form states
   const [formData, setFormData] = useState({
     keyword: "",
     initialRank: "",
-    targetUrl: "",
+    keywordLink: "",
     searchEngine: "Google",
     location: "Global",
     notes: "",
@@ -70,6 +75,13 @@ const OnPageSEO = ({ projectId, userRole, userId }) => {
   const [updateFormData, setUpdateFormData] = useState({
     rank: "",
     notes: "",
+  });
+
+  const [editFormData, setEditFormData] = useState({
+    keyword: "",
+    keywordLink: "",
+    searchEngine: "Google",
+    location: "Global",
   });
 
   const canEdit = ["admin", "super-admin", "superadmin", "employee"].includes(userRole);
@@ -189,11 +201,44 @@ const OnPageSEO = ({ projectId, userRole, userId }) => {
     }
   };
 
+  const openEditModal = (keyword) => {
+    setSelectedKeyword(keyword);
+    setEditFormData({
+      keyword: keyword.keyword || "",
+      keywordLink: keyword.keywordLink || "",
+      searchEngine: keyword.searchEngine || "Google",
+      location: keyword.location || "Global",
+    });
+    setShowEditModal(true);
+  };
+
+  const handleEditKeyword = async (e) => {
+    e.preventDefault();
+    try {
+      const token = localStorage.getItem("token");
+      await axios.put(
+        `${API_BASE}/api/projects/${projectId}/keywords/${selectedKeyword._id}`,
+        editFormData,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+      showNotification("Keyword updated successfully!", "success");
+      setShowEditModal(false);
+      fetchKeywords();
+    } catch (error) {
+      showNotification(
+        error.response?.data?.message || "Error updating keyword",
+        "error"
+      );
+    }
+  };
+
   const resetForm = () => {
     setFormData({
       keyword: "",
       initialRank: "",
-      targetUrl: "",
+      keywordLink: "",
       searchEngine: "Google",
       location: "Global",
       notes: "",
@@ -356,6 +401,50 @@ const OnPageSEO = ({ projectId, userRole, userId }) => {
         </div>
       )}
 
+      {/* Velocity Metrics */}
+      {keywords.length > 0 && (
+        <div className="bg-[#0f1419] border border-[#232945] rounded-xl overflow-hidden">
+          {/* Collapsible Header */}
+          <div
+            className="flex items-center justify-between p-4 cursor-pointer hover:bg-[#1a1f2e] transition-colors"
+            onClick={() => setShowVelocityMetrics(!showVelocityMetrics)}
+          >
+            <div className="flex items-center gap-2">
+              <TrendingUp className="w-5 h-5 text-orange-400" />
+              <h4 className="text-lg font-bold text-white">Velocity Metrics</h4>
+              <span className="text-xs text-gray-400 ml-2">
+                (Click to {showVelocityMetrics ? 'collapse' : 'expand'})
+              </span>
+            </div>
+            <button
+              type="button"
+              className="p-2 hover:bg-[#232945] rounded-lg transition-colors"
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowVelocityMetrics(!showVelocityMetrics);
+              }}
+            >
+              {showVelocityMetrics ? (
+                <ChevronUp className="w-5 h-5 text-gray-400" />
+              ) : (
+                <ChevronDown className="w-5 h-5 text-gray-400" />
+              )}
+            </button>
+          </div>
+
+          {/* Collapsible Content */}
+          <div
+            className={`transition-all duration-300 ease-in-out overflow-hidden ${
+              showVelocityMetrics ? 'max-h-[5000px] opacity-100' : 'max-h-0 opacity-0'
+            }`}
+          >
+            <div className="p-6 pt-0 border-t border-[#232945]">
+              <VelocityMetrics projectId={projectId} />
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Calendar Heatmap */}
       {keywords.length > 0 && (
         <KeywordCalendarHeatmap
@@ -483,6 +572,9 @@ const OnPageSEO = ({ projectId, userRole, userId }) => {
                     Current Rank
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                    Keyword Link
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">
                     Trend
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">
@@ -546,6 +638,21 @@ const OnPageSEO = ({ projectId, userRole, userId }) => {
                       )}
                     </td>
                     <td className="px-4 py-4">
+                      {keyword.keywordLink ? (
+                        <a
+                          href={keyword.keywordLink}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-400 hover:text-blue-300 hover:underline text-sm break-all"
+                          title={keyword.keywordLink}
+                        >
+                          {keyword.keywordLink}
+                        </a>
+                      ) : (
+                        <span className="text-gray-500 text-sm">-</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-4">
                       <div className="flex items-center gap-2">
                         {getTrendIcon(keyword.rankTrend)}
                         <span className={`font-medium ${getTrendColor(keyword.rankTrend)}`}>
@@ -567,6 +674,13 @@ const OnPageSEO = ({ projectId, userRole, userId }) => {
                         </button>
                         {canEdit && (
                           <>
+                            <button
+                              onClick={() => openEditModal(keyword)}
+                              className="p-1.5 text-yellow-400 hover:bg-yellow-500/20 rounded transition-colors"
+                              title="Edit Keyword"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </button>
                             <button
                               onClick={() => {
                                 setSelectedKeyword(keyword);
@@ -648,16 +762,16 @@ const OnPageSEO = ({ projectId, userRole, userId }) => {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">
-                    Target URL
+                    Keyword Link
                   </label>
                   <input
                     type="url"
-                    value={formData.targetUrl}
+                    value={formData.keywordLink}
                     onChange={(e) =>
-                      setFormData({ ...formData, targetUrl: e.target.value })
+                      setFormData({ ...formData, keywordLink: e.target.value })
                     }
                     className="w-full px-4 py-2 bg-[#0f1419] border border-[#232945] rounded-lg text-white focus:outline-none focus:border-blue-500"
-                    placeholder="https://example.com"
+                    placeholder="https://example.com/keyword"
                   />
                 </div>
 
@@ -833,6 +947,115 @@ const OnPageSEO = ({ projectId, userRole, userId }) => {
                     className="flex-1 px-4 py-2 bg-gradient-to-r from-green-600 to-blue-600 text-white rounded-lg hover:from-green-700 hover:to-blue-700 transition-all font-medium"
                   >
                     Update Rank
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Keyword Modal */}
+      {showEditModal && selectedKeyword && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70">
+          <div className="bg-[#191f2b] rounded-xl shadow-2xl border border-[#232945] w-full max-w-md max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-xl font-bold text-white">Edit Keyword</h3>
+                <button
+                  onClick={() => {
+                    setShowEditModal(false);
+                    setSelectedKeyword(null);
+                  }}
+                  className="p-1 hover:bg-[#0f1419] rounded transition-colors"
+                >
+                  <X className="w-5 h-5 text-gray-400" />
+                </button>
+              </div>
+
+              <form onSubmit={handleEditKeyword} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Keyword *
+                  </label>
+                  <input
+                    type="text"
+                    value={editFormData.keyword}
+                    onChange={(e) =>
+                      setEditFormData({ ...editFormData, keyword: e.target.value })
+                    }
+                    className="w-full px-4 py-2 bg-[#0f1419] border border-[#232945] rounded-lg text-white focus:outline-none focus:border-blue-500"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Keyword Link
+                  </label>
+                  <input
+                    type="url"
+                    value={editFormData.keywordLink}
+                    onChange={(e) =>
+                      setEditFormData({ ...editFormData, keywordLink: e.target.value })
+                    }
+                    className="w-full px-4 py-2 bg-[#0f1419] border border-[#232945] rounded-lg text-white focus:outline-none focus:border-blue-500"
+                    placeholder="https://example.com/keyword"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Search Engine
+                    </label>
+                    <select
+                      value={editFormData.searchEngine}
+                      onChange={(e) =>
+                        setEditFormData({
+                          ...editFormData,
+                          searchEngine: e.target.value,
+                        })
+                      }
+                      className="w-full px-4 py-2 bg-[#0f1419] border border-[#232945] rounded-lg text-white focus:outline-none focus:border-blue-500"
+                    >
+                      <option value="Google">Google</option>
+                      <option value="Bing">Bing</option>
+                      <option value="Yahoo">Yahoo</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Location
+                    </label>
+                    <input
+                      type="text"
+                      value={editFormData.location}
+                      onChange={(e) =>
+                        setEditFormData({ ...editFormData, location: e.target.value })
+                      }
+                      className="w-full px-4 py-2 bg-[#0f1419] border border-[#232945] rounded-lg text-white focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex gap-3 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowEditModal(false);
+                      setSelectedKeyword(null);
+                    }}
+                    className="flex-1 px-4 py-2 bg-[#0f1419] border border-[#232945] text-white rounded-lg hover:bg-[#141a21] transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 px-4 py-2 bg-gradient-to-r from-yellow-600 to-orange-600 text-white rounded-lg hover:from-yellow-700 hover:to-orange-700 transition-all font-medium"
+                  >
+                    Save Changes
                   </button>
                 </div>
               </form>

@@ -76,10 +76,13 @@ exports.getAllUserNotepads = async (req, res) => {
       });
     }
 
-    // Get all users with their notepad info
+    // Get all users with their notepad info (exclude terminated/absconded)
     const users = await User.find(
-      { role: { $in: ["employee", "admin", "hr"] } },
-      "name email role department profileImage"
+      {
+        role: { $in: ["employee", "admin", "hr"] },
+        status: { $nin: ['terminated', 'absconded'] }
+      },
+      "name email role department profileImage status"
     ).sort({ name: 1 });
 
     // Get all notepads

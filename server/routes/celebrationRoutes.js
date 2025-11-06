@@ -14,9 +14,10 @@ router.get("/today", protect, async (req, res) => {
 
     // FIXED: Get all users first, then filter in JavaScript to handle string dates
     // This prevents BSON type conversion errors
+    // Exclude terminated and absconded employees
     const allUsers = await User.find({
-      status: "active" // Only active employees
-    }).select("name designation department dob doj avatar").lean();
+      status: { $nin: ['terminated', 'absconded'] }
+    }).select("name designation department dob doj avatar status").lean();
 
     console.log(`Found ${allUsers.length} active users to check for celebrations`);
 

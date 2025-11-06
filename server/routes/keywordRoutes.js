@@ -54,6 +54,9 @@ router.post("/:projectId/keywords", protect, async (req, res) => {
       keyword,
       initialRank,
       targetUrl,
+      keywordLink,
+      blogLink,
+      backlink,
       searchEngine,
       location,
       notes,
@@ -99,6 +102,9 @@ router.post("/:projectId/keywords", protect, async (req, res) => {
       project: projectId,
       keyword: keyword.trim(),
       targetUrl,
+      keywordLink,
+      blogLink,
+      backlink,
       searchEngine: searchEngine || "Google",
       location: location || "Global",
       rankHistory: [
@@ -191,7 +197,7 @@ router.post("/:projectId/keywords/:keywordId/rank", protect, async (req, res) =>
 router.put("/:projectId/keywords/:keywordId", protect, async (req, res) => {
   try {
     const { projectId, keywordId } = req.params;
-    const { keyword, targetUrl, searchEngine, location, isActive } = req.body;
+    const { keyword, targetUrl, keywordLink, blogLink, backlink, searchEngine, location, isActive } = req.body;
 
     // Check if project exists
     const project = await Project.findById(projectId);
@@ -224,6 +230,9 @@ router.put("/:projectId/keywords/:keywordId", protect, async (req, res) => {
     // Update fields
     if (keyword !== undefined) keywordRank.keyword = keyword.trim();
     if (targetUrl !== undefined) keywordRank.targetUrl = targetUrl;
+    if (keywordLink !== undefined) keywordRank.keywordLink = keywordLink;
+    if (blogLink !== undefined) keywordRank.blogLink = blogLink;
+    if (backlink !== undefined) keywordRank.backlink = backlink;
     if (searchEngine !== undefined) keywordRank.searchEngine = searchEngine;
     if (location !== undefined) keywordRank.location = location;
     if (isActive !== undefined) keywordRank.isActive = isActive;
@@ -340,6 +349,42 @@ router.get("/:projectId/keywords/stats", protect, async (req, res) => {
     });
   } catch (error) {
     console.error("Error fetching keyword stats:", error);
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
+});
+
+// @route   GET /api/projects/:projectId/keywords/velocity
+// @desc    Get velocity insights for keywords (fastest improvements, rapid declines, stagnant)
+// @access  Private
+router.get("/:projectId/keywords/velocity", protect, async (req, res) => {
+  try {
+    const { projectId } = req.params;
+
+    // Check if project exists
+    const project = await Project.findById(projectId);
+    if (!project) {
+      return res.status(404).json({ message: "Project not found" });
+    }
+
+    // Check access
+    if (req.user.role === "employee") {
+      const isAssigned = project.assignedTo.some(
+        (emp) => emp.toString() === req.user._id.toString()
+      );
+      if (!isAssigned) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+    }
+
+    // Get velocity insights
+    const insights = await KeywordRank.getVelocityInsights(projectId);
+
+    res.json({
+      success: true,
+      data: insights,
+    });
+  } catch (error) {
+    console.error("Error fetching velocity insights:", error);
     res.status(500).json({ message: "Server error", error: error.message });
   }
 });

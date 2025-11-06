@@ -3,7 +3,7 @@ import API from "../../api";
 import ReactDatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 
-const TaskForm = ({ onCreate }) => {
+const TaskForm = ({ onCreate, users = [] }) => {
   const [task, setTask] = useState({
     title: "",
     assignedTo: [],
@@ -12,9 +12,9 @@ const TaskForm = ({ onCreate }) => {
     priority: "",
     status: "pending",
     description: "",
+    project: null, // optional project reference
   });
 
-  const [users, setUsers] = useState([]);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const dropdownRef = useRef(null);
@@ -22,16 +22,24 @@ const TaskForm = ({ onCreate }) => {
   const [timeOpen, setTimeOpen] = useState(false);
   const timeRef = useRef(null);
 
+  // Project-related state
+  const [projects, setProjects] = useState([]);
+  const [selectedProject, setSelectedProject] = useState(null);
+  const [projectDropdownOpen, setProjectDropdownOpen] = useState(false);
+  const [projectSearchTerm, setProjectSearchTerm] = useState("");
+  const projectDropdownRef = useRef(null);
+
+  // Fetch projects based on user access
   useEffect(() => {
-    const fetchUsers = async () => {
+    const fetchProjects = async () => {
       try {
-        const res = await API.get("/api/users");
-        if (Array.isArray(res.data)) setUsers(res.data);
+        const res = await API.get("/api/projects");
+        if (Array.isArray(res.data)) setProjects(res.data);
       } catch (err) {
-        console.error("Failed to fetch users", err);
+        console.error("Failed to fetch projects", err);
       }
     };
-    fetchUsers();
+    fetchProjects();
   }, []);
 
   useEffect(() => {
@@ -41,6 +49,9 @@ const TaskForm = ({ onCreate }) => {
       }
       if (timeRef.current && !timeRef.current.contains(e.target)) {
         setTimeOpen(false);
+      }
+      if (projectDropdownRef.current && !projectDropdownRef.current.contains(e.target)) {
+        setProjectDropdownOpen(false);
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
@@ -59,6 +70,17 @@ const TaskForm = ({ onCreate }) => {
     });
   };
 
+  const handleProjectSelection = (project) => {
+    setSelectedProject(project);
+    setTask((prev) => ({
+      ...prev,
+      project: project ? project._id : null,
+      assignedTo: [], // Reset assigned users when project changes
+    }));
+    setProjectDropdownOpen(false);
+    setProjectSearchTerm("");
+  };
+
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!task.title || task.assignedTo.length === 0 || !task.dueDate) return;
@@ -74,7 +96,11 @@ const TaskForm = ({ onCreate }) => {
       combinedDueDate = dueDateOnly;
     }
 
-    const formattedTask = { ...task, dueDate: combinedDueDate };
+    const formattedTask = {
+      ...task,
+      dueDate: combinedDueDate,
+      project: task.project || undefined // Only include project if it's set
+    };
     onCreate(formattedTask);
 
     setTask({
@@ -85,12 +111,25 @@ const TaskForm = ({ onCreate }) => {
       priority: "",
       status: "pending",
       description: "",
+      project: null,
     });
     setSearchTerm("");
+    setSelectedProject(null);
+    setProjectSearchTerm("");
   };
 
-  const filteredUsers = users.filter((u) =>
+  // Filter users based on project selection
+  const availableUsers = selectedProject
+    ? selectedProject.assignedTo.filter(u => !u.status || u.status === 'active') // Use only active project employees (treat undefined as active)
+    : users; // Use all users if no project is selected (already filtered by parent)
+
+  const filteredUsers = availableUsers.filter((u) =>
     u.name.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  // Filter projects based on search term
+  const filteredProjects = projects.filter((p) =>
+    p.projectName.toLowerCase().includes(projectSearchTerm.toLowerCase())
   );
 
   const generateTimeSlots = () => {
@@ -123,6 +162,64 @@ const TaskForm = ({ onCreate }) => {
           onChange={(e) => setTask({ ...task, title: e.target.value })}
           required
         />
+      </div>
+
+      {/* Project Selection (Optional) */}
+      <div className="relative" ref={projectDropdownRef}>
+        <label className="block text-sm font-medium mb-1">
+          Project (Optional)
+        </label>
+        <div
+          className={`${commonInputClasses} cursor-pointer flex justify-between items-center`}
+          onClick={() => setProjectDropdownOpen((prev) => !prev)}
+        >
+          <span>
+            {selectedProject ? selectedProject.projectName : "Select project (optional)..."}
+          </span>
+          {selectedProject && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleProjectSelection(null);
+              }}
+              className="text-[#ff8000] hover:text-[#ffa733] font-bold ml-2"
+            >
+              ✕
+            </button>
+          )}
+        </div>
+
+        {projectDropdownOpen && (
+          <div className="absolute left-0 top-full mt-1 border border-[rgba(84,123,209,0.4)] bg-[#141a29] rounded-lg shadow-lg w-full z-50 text-blue-100 max-h-60 overflow-y-auto">
+            <div className="p-2 border-b border-[rgba(84,123,209,0.4)]">
+              <input
+                type="text"
+                placeholder="Search projects..."
+                value={projectSearchTerm}
+                onChange={(e) => setProjectSearchTerm(e.target.value)}
+                className="bg-[#141a29] border border-[rgba(84,123,209,0.4)] rounded-2xl p-2 text-blue-100 w-full focus:ring-2 focus:ring-[#ff8000] outline-none"
+              />
+            </div>
+
+            {filteredProjects.length > 0 ? (
+              filteredProjects.map((project) => (
+                <div
+                  key={project._id}
+                  className="px-3 py-2 hover:bg-[rgba(255,128,0,0.15)] cursor-pointer rounded-md"
+                  onClick={() => handleProjectSelection(project)}
+                >
+                  <div className="font-medium">{project.projectName}</div>
+                  <div className="text-xs text-blue-300">
+                    {project.assignedTo?.length || 0} employee(s) • {project.status}
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="px-3 py-2 text-sm text-blue-300">No projects found</div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Assign To */}

@@ -26,8 +26,11 @@ router.get(
       const userRole = req.user.role;
 
       if (userRole === "client") {
-        // Check if client owns this project
-        if (project.client.toString() !== userId) {
+        // Check if client is part of this project
+        const isClient = project.clients.some(
+          (clientId) => clientId.toString() === userId.toString()
+        );
+        if (!isClient) {
           return res.status(403).json({ message: "Access denied" });
         }
       } else if (userRole === "employee") {
@@ -119,7 +122,10 @@ router.post(
 
       // Verify access
       if (userRole === "client") {
-        if (project.client.toString() !== userId) {
+        const isClient = project.clients.some(
+          (clientId) => clientId.toString() === userId.toString()
+        );
+        if (!isClient) {
           return res.status(403).json({ message: "Access denied" });
         }
       } else if (userRole === "employee") {

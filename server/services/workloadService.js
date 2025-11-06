@@ -128,10 +128,11 @@ const updateWorkloadOnTaskChange = async (taskId) => {
 const getAllEmployeesWithWorkload = async () => {
   try {
     // Get all active users (employees, admins, hr, super-admin)
+    // Exclude terminated and absconded employees
     const employees = await User.find({
       role: { $in: ['employee', 'admin', 'hr', 'super-admin'] },
-      status: 'active'
-    }).select('name email role workload');
+      status: { $nin: ['terminated', 'absconded'] }
+    }).select('name email role workload status');
 
     console.log(`📊 Found ${employees.length} active users:`, employees.map(e => `${e.name} (${e.role})`));
 

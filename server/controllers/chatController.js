@@ -58,27 +58,49 @@ exports.saveMessage = async (conversationId, senderId, message, attachments = []
     console.error('Failed to process daily chat notifications:', err);
   });
 
-  // Send notifications to mentioned users
-  if (mentionedUserIds.length > 0) {
-    const notificationService = require('../services/notificationService');
-    const conversation = await Conversation.findById(conversationId);
-    const sender = await User.findById(senderId, 'name');
+  // Send notifications to all conversation members
+  const notificationService = require('../services/notificationService');
+  const conversation = await Conversation.findById(conversationId);
+  const sender = await User.findById(senderId, 'name');
 
-    for (const mentionedUserId of mentionedUserIds) {
-      // Don't notify if user mentioned themselves
-      if (String(mentionedUserId) !== String(senderId)) {
-        await notificationService.createNotification({
-          userId: mentionedUserId,
-          type: 'chat',
-          channel: 'mention',
-          title: `${sender?.name || 'Someone'} mentioned you`,
-          body: message.slice(0, 100) + (message.length > 100 ? '...' : ''),
-          relatedData: {
-            conversationId: conversationId,
-            messageId: savedMessage._id
-          },
-          priority: 'high'
-        });
+  if (conversation) {
+    // Get conversation name/title for notification
+    let conversationTitle = conversation.name;
+    if (conversation.type === 'private') {
+      // For private chats, show the other user's name
+      const otherMemberId = conversation.members.find(m => String(m) !== String(senderId));
+      if (otherMemberId) {
+        const otherUser = await User.findById(otherMemberId, 'name');
+        conversationTitle = otherUser?.name || 'Private Chat';
+      }
+    }
+
+    // Notify all members except the sender
+    for (const memberId of conversation.members) {
+      if (String(memberId) !== String(senderId)) {
+        // Check if user was mentioned for priority
+        const wasMentioned = mentionedUserIds.some(uid => String(uid) === String(memberId));
+        const priority = wasMentioned ? 'high' : 'normal';
+        const channel = wasMentioned ? 'mention' : 'message';
+
+        try {
+          await notificationService.createAndSend({
+            userId: memberId,
+            type: 'chat',
+            channel: channel,
+            title: wasMentioned
+              ? `${sender?.name || 'Someone'} mentioned you in ${conversationTitle}`
+              : `New message from ${sender?.name || 'Someone'}`,
+            body: message.slice(0, 100) + (message.length > 100 ? '...' : ''),
+            relatedData: {
+              conversationId: conversationId,
+              messageId: savedMessage._id
+            },
+            priority: priority
+          });
+        } catch (notifError) {
+          console.error('Failed to send chat notification:', notifError);
+        }
       }
     }
   }

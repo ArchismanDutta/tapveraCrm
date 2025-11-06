@@ -164,6 +164,20 @@ const TaskRow = ({ task, onView, onEdit, onDelete, onReject, onRemarks, onViewDe
         {task.assignedBy?.name || "N/A"}
       </td>
 
+      {/* Project */}
+      <td className="px-4 py-3 text-sm truncate">
+        {task.project ? (
+          <div className="flex items-center gap-1.5">
+            <div className="w-2 h-2 bg-cyan-400 rounded-full flex-shrink-0"></div>
+            <span className="text-cyan-300 font-medium truncate" title={task.project.projectName || 'Project'}>
+              {task.project.projectName || 'Unknown Project'}
+            </span>
+          </div>
+        ) : (
+          <span className="text-gray-500 italic" title="Standalone task (not linked to any project)">—</span>
+        )}
+      </td>
+
       {/* Last Edited By */}
       <td className="px-4 py-3 text-sm truncate">
         {task.lastEditedBy ? (

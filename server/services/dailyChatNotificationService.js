@@ -39,11 +39,11 @@ class DailyChatNotificationService {
 
       if (conversation.project) {
         project = await Project.findById(conversation.project._id)
-          .populate('client', '_id name email')
+          .populate('clients', '_id name businessName clientName email')
           .populate('assignedTo', '_id name email role');
 
         if (project) {
-          client = project.client;
+          client = project.clients && project.clients.length > 0 ? project.clients[0] : null;
           assignedEmployees = project.assignedTo || [];
         }
       }
@@ -94,9 +94,13 @@ class DailyChatNotificationService {
 
     // Add project participants if this is a project conversation
     if (project) {
-      // Add client
-      if (project.client && project.client._id) {
-        recipients.add(project.client._id.toString());
+      // Add all clients
+      if (project.clients && project.clients.length > 0) {
+        project.clients.forEach(client => {
+          if (client?._id) {
+            recipients.add(client._id.toString());
+          }
+        });
       }
 
       // Add assigned employees

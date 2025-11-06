@@ -23,7 +23,7 @@ const messageSchema = new mongoose.Schema(
     },
     senderType: {
       type: String,
-      enum: ["client", "employee", "super-admin"],
+      enum: ["client", "employee", "admin", "hr", "super-admin"],
       required: true,
     },
     // Reply to another message (WhatsApp-style)

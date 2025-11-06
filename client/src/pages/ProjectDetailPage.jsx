@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { useLocation } from "react-router-dom";
 import axios from "axios";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -99,6 +100,7 @@ const PROJECT_TYPE_COLORS = {
 };
 
 const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
+  const location = useLocation();
   const [project, setProject] = useState(null);
   const [messages, setMessages] = useState([]);
   const [allMessages, setAllMessages] = useState([]);
@@ -356,6 +358,22 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
       console.error("Error fetching messages:", error);
     }
   };
+
+  // Handle navigation from notification - auto-open chat tab
+  useEffect(() => {
+    if (location.state?.scrollToMessages) {
+      // Ensure chat tab is active
+      setActiveTab("chat");
+
+      // Scroll to messages after a short delay to ensure content is rendered
+      setTimeout(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+      }, 300);
+
+      // Clear navigation state
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.state]);
 
   const fetchTasks = async () => {
     setLoadingTasks(true);
@@ -830,7 +848,9 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                   {project.projectName}
                 </h1>
                 <p className="text-xs sm:text-sm text-gray-400 truncate">
-                  {project.client?.businessName || project.client?.clientName}
+                  {project.clients && project.clients.length > 0
+                    ? project.clients.map(c => c?.businessName || c?.clientName).join(", ")
+                    : "N/A"}
                 </p>
               </div>
             </div>

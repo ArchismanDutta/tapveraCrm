@@ -606,9 +606,15 @@ export default function AdminTaskPage({ onLogout }) {
       const res = await API.get("/api/users", {
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (Array.isArray(res.data)) setUsers(res.data);
-      else if (Array.isArray(res.data?.data)) setUsers(res.data.data);
-      else setUsers([]);
+
+      // Filter to only include active employees
+      let allUsers = [];
+      if (Array.isArray(res.data)) allUsers = res.data;
+      else if (Array.isArray(res.data?.data)) allUsers = res.data.data;
+
+      // Backend now filters out terminated/absconded, but keep client-side filter as safety net
+      const activeUsers = allUsers.filter(user => !user.status || user.status === 'active');
+      setUsers(activeUsers);
     } catch (err) {
       console.error(err);
       showPopup("❌ Failed to fetch users");

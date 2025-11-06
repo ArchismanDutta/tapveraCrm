@@ -87,15 +87,37 @@ const NotificationItem = ({
     // Small delay to ensure state updates
     await new Promise(resolve => setTimeout(resolve, 100));
 
-    // Navigate based on notification type
-    if (notification.relatedData?.url) {
-      navigate(notification.relatedData.url);
-    } else if (notification.relatedData?.taskId) {
-      navigate(`/tasks`);
-    } else if (notification.relatedData?.conversationId) {
-      navigate(`/messages`);
-    } else if (notification.relatedData?.payslipId) {
-      navigate(`/payslips`);
+    // Navigate based on notification type with proper context
+    try {
+      if (notification.relatedData?.url) {
+        navigate(notification.relatedData.url);
+      } else if (notification.relatedData?.taskId) {
+        navigate(`/tasks`, { state: { highlightTaskId: notification.relatedData.taskId } });
+      } else if (notification.relatedData?.conversationId) {
+        // Navigate to chat with the specific conversation ID
+        navigate(`/messages`, {
+          state: {
+            openConversationId: notification.relatedData.conversationId,
+            messageId: notification.relatedData.messageId
+          }
+        });
+      } else if (notification.relatedData?.projectId) {
+        // Navigate to project details page
+        navigate(`/project/${notification.relatedData.projectId}`, {
+          state: {
+            scrollToMessages: true,
+            messageId: notification.relatedData.messageId
+          }
+        });
+      } else if (notification.relatedData?.payslipId) {
+        navigate(`/payslips`, { state: { highlightPayslipId: notification.relatedData.payslipId } });
+      }
+    } catch (error) {
+      console.error('Navigation error:', error);
+      // If navigation fails (e.g., access denied), show a message
+      if (error.message?.includes('403') || error.message?.includes('Access denied')) {
+        alert('You do not have access to this resource.');
+      }
     }
   };
 

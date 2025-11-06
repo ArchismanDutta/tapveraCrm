@@ -45,7 +45,13 @@ router.get("/", protect, authorize("admin", "hr", "super-admin"), getAllUsers);
 // Get all users - minimal info (id, name, email, role, shift), restricted to admin/hr/super-admin
 router.get("/all", protect, authorize("admin", "hr", "super-admin"), async (req, res) => {
   try {
-    const users = await User.find({}, "_id name email role shift");
+    // Exclude terminated and absconded employees by default
+    const includeInactive = req.query.includeInactive === 'true';
+    const filter = includeInactive
+      ? {}
+      : { status: { $nin: ['terminated', 'absconded'] } };
+
+    const users = await User.find(filter, "_id name email role shift status");
     res.json(users);
   } catch (err) {
     console.error("Fetch all users error:", err);

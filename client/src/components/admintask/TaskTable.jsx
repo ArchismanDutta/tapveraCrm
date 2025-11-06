@@ -11,6 +11,7 @@ import TaskDetailModal from "./TaskDetailModal";
 const TaskTable = ({ tasks = [], onViewTask, onEditTask, onDeleteTask, onRejectTask }) => {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("All Status");
+  const [projectFilter, setProjectFilter] = useState("All Projects");
   const [selectedTask, setSelectedTask] = useState(null);
   const [loadingRemarks, setLoadingRemarks] = useState(false);
   const [rejectingTask, setRejectingTask] = useState(null);
@@ -21,16 +22,34 @@ const TaskTable = ({ tasks = [], onViewTask, onEditTask, onDeleteTask, onRejectT
   const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
   const safeTasks = Array.isArray(tasks) ? tasks : [];
 
-  // Apply search + local status filter
+  // Extract unique projects from tasks for filter dropdown
+  const uniqueProjects = useMemo(() => {
+    const projects = safeTasks
+      .filter(task => task?.project?.projectName)
+      .map(task => ({
+        id: task.project._id,
+        name: task.project.projectName
+      }));
+
+    // Remove duplicates based on project ID
+    const unique = Array.from(new Map(projects.map(p => [p.id, p])).values());
+    return unique;
+  }, [safeTasks]);
+
+  // Apply search + local status filter + project filter
   const filteredTasks = useMemo(() => {
     return safeTasks.filter((task) => {
       const titleMatch =
         (task?.title || "").toLowerCase().includes(search.toLowerCase());
       const statusMatch =
         filter === "All Status" || (task?.status || "") === filter;
-      return titleMatch && statusMatch;
+      const projectMatch =
+        projectFilter === "All Projects" ||
+        projectFilter === "Standalone" && !task?.project ||
+        (task?.project?._id || "") === projectFilter;
+      return titleMatch && statusMatch && projectMatch;
     });
-  }, [safeTasks, search, filter]);
+  }, [safeTasks, search, filter, projectFilter]);
 
   const formatDateTime = (dateValue) => {
     if (!dateValue) return null;
@@ -149,17 +168,32 @@ const TaskTable = ({ tasks = [], onViewTask, onEditTask, onDeleteTask, onRejectT
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
-        <select
-          className="bg-[rgba(22,28,48,0.8)] border border-[rgba(84,123,209,0.4)] rounded-xl px-2 py-1 text-xs w-full md:w-auto text-blue-100 focus:outline-none focus:ring-2 focus:ring-[#bf6f2f] transition duration-200"
-          value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-        >
-          <option>All Status</option>
-          <option>pending</option>
-          <option>in-progress</option>
-          <option>completed</option>
-          <option>rejected</option>
-        </select>
+        <div className="flex gap-2 w-full md:w-auto">
+          <select
+            className="bg-[rgba(22,28,48,0.8)] border border-[rgba(84,123,209,0.4)] rounded-xl px-2 py-1 text-xs w-full md:w-auto text-blue-100 focus:outline-none focus:ring-2 focus:ring-[#bf6f2f] transition duration-200"
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+          >
+            <option>All Status</option>
+            <option>pending</option>
+            <option>in-progress</option>
+            <option>completed</option>
+            <option>rejected</option>
+          </select>
+          <select
+            className="bg-[rgba(22,28,48,0.8)] border border-[rgba(84,123,209,0.4)] rounded-xl px-2 py-1 text-xs w-full md:w-auto text-blue-100 focus:outline-none focus:ring-2 focus:ring-[#bf6f2f] transition duration-200"
+            value={projectFilter}
+            onChange={(e) => setProjectFilter(e.target.value)}
+          >
+            <option>All Projects</option>
+            <option>Standalone</option>
+            {uniqueProjects.map((project) => (
+              <option key={project.id} value={project.id}>
+                {project.name}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {/* Table with Modern Scrollbar */}
@@ -176,6 +210,7 @@ const TaskTable = ({ tasks = [], onViewTask, onEditTask, onDeleteTask, onRejectT
                   <th className="px-4 py-3 font-semibold">Task Title</th>
                   <th className="px-4 py-3 font-semibold">Assigned To</th>
                   <th className="px-4 py-3 font-semibold">Assigned By</th>
+                  <th className="px-4 py-3 font-semibold">Project</th>
                   <th className="px-4 py-3 font-semibold">Last Edited</th>
                   <th className="px-4 py-3 font-semibold">Due Date</th>
                   <th className="px-4 py-3 font-semibold">Completed</th>
@@ -210,7 +245,7 @@ const TaskTable = ({ tasks = [], onViewTask, onEditTask, onDeleteTask, onRejectT
                 ) : (
                   <tr>
                     <td
-                      colSpan={9}
+                      colSpan={10}
                       className="p-6 text-center text-blue-400 italic text-base"
                     >
                       No tasks found.

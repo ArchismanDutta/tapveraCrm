@@ -21,8 +21,12 @@ exports.getEmployeeById = async (req, res) => {
 // GET /api/employees
 exports.getAllEmployees = async (req, res) => {
   try {
-    const employees = await User.find({ role: "employee" }).select(
-      "_id name"
+    // Exclude terminated and absconded employees
+    const employees = await User.find({
+      role: "employee",
+      status: { $nin: ['terminated', 'absconded'] }
+    }).select(
+      "_id name status"
     );
     res.json(employees);
   } catch (err) {

@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useCallback } from "react";
 import axios from "axios";
-import { FaDownload, FaKeyboard, FaSearch, FaTrophy } from "react-icons/fa";
+import { FaDownload, FaKeyboard, FaSearch, FaTrophy, FaSync } from "react-icons/fa";
 import Sidebar from "../components/dashboard/Sidebar";
 import TaskStats from "../components/task/TaskStats";
 import TaskList from "../components/task/TaskList";
 import { useAchievements } from "../contexts/AchievementContext";
 import PaymentBlockOverlay from "../components/payment/PaymentBlockOverlay";
 import usePaymentCheck from "../hooks/usePaymentCheck";
+import { useWebSocketContext } from "../contexts/WebSocketContext";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
 
@@ -28,6 +29,9 @@ const Tasks = ({ onLogout }) => {
   // Payment check hook
   const { activePayment, checkingPayment, clearPayment } = usePaymentCheck();
 
+  // WebSocket hook for real-time task updates
+  const { registerNotificationHandler } = useWebSocketContext();
+
   // Helper: Get token from localStorage
   const getToken = () => {
     const storedToken = localStorage.getItem("token");
@@ -38,7 +42,7 @@ const Tasks = ({ onLogout }) => {
   };
 
   // Fetch tasks from API
-  const fetchTasks = async () => {
+  const fetchTasks = useCallback(async () => {
     try {
       setLoading(true);
       const token = getToken();
@@ -87,7 +91,7 @@ const Tasks = ({ onLogout }) => {
       console.error("Error fetching tasks:", err.response?.data || err.message);
       setLoading(false);
     }
-  };
+  }, []); // Empty deps - fetchTasks doesn't depend on any state
 
 
   // Filter tasks based on current filters
@@ -131,12 +135,33 @@ const Tasks = ({ onLogout }) => {
     setFilteredTasks(filtered);
   }, [tasks, filters]);
 
-  // Polling: fetch tasks on mount and every 30s
+  // Fetch tasks on mount and set up periodic refresh
   useEffect(() => {
-    fetchTasks();
-    const interval = setInterval(fetchTasks, 30000); // every 30 seconds
-    return () => clearInterval(interval);
-  }, []);
+    fetchTasks(); // Initial fetch
+
+    // Backup periodic refresh every 2 minutes (in case WebSocket fails)
+    const refreshInterval = setInterval(() => {
+      console.log('[Tasks] Periodic refresh (backup)');
+      fetchTasks();
+    }, 120000); // 2 minutes
+
+    return () => clearInterval(refreshInterval);
+  }, [fetchTasks]);
+
+  // WebSocket: Listen for real-time task updates (primary method)
+  useEffect(() => {
+    const unregister = registerNotificationHandler((notification) => {
+      // Check if this is a task-related notification
+      if (notification.channel === 'task' || notification.type === 'task') {
+        console.log('[Tasks] Received task update via WebSocket:', notification);
+        // Re-fetch tasks to get the latest data
+        fetchTasks();
+      }
+    });
+
+    // Cleanup: unregister the handler when component unmounts
+    return unregister;
+  }, [registerNotificationHandler, fetchTasks]);
 
   // Update task status locally and re-sort immediately
   const handleStatusChange = (taskId, newStatus) => {
@@ -259,7 +284,11 @@ const Tasks = ({ onLogout }) => {
     }
 
     // Number keys for quick filters
-    if (!e.ctrlKey && !e.metaKey && e.target.tagName !== 'INPUT') {
+    // Exclude all input fields to prevent interference with typing
+    const isInputField = ['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName) ||
+                         e.target.isContentEditable;
+
+    if (!e.ctrlKey && !e.metaKey && !isInputField) {
       const num = parseInt(e.key);
       if (num >= 1 && num <= 5) { // hardcode the length to avoid dependency
         e.preventDefault();
@@ -336,6 +365,19 @@ const Tasks = ({ onLogout }) => {
                   title="Keyboard Shortcuts (Ctrl+?)"
                 >
                   <FaKeyboard />
+                </button>
+
+                <button
+                  onClick={() => {
+                    console.log('[Tasks] Manual refresh triggered');
+                    fetchTasks();
+                  }}
+                  className="px-3 py-1.5 bg-blue-700 hover:bg-blue-600 text-white rounded-md text-sm font-medium transition flex items-center gap-1"
+                  title="Refresh Tasks"
+                  disabled={loading}
+                >
+                  <FaSync className={loading ? 'animate-spin' : ''} />
+                  {loading ? 'Refreshing...' : 'Refresh'}
                 </button>
 
                 <button

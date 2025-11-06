@@ -19,7 +19,10 @@ import { AchievementProvider } from "./contexts/AchievementContext";
 import AchievementNotificationContainer from "./components/achievements/AchievementNotificationContainer";
 
 // WebSocket Context
-import { WebSocketProvider, useWebSocketContext } from "./contexts/WebSocketContext";
+import {
+  WebSocketProvider,
+  useWebSocketContext,
+} from "./contexts/WebSocketContext";
 
 // Notifications
 import NotificationToast from "./components/NotificationToast";
@@ -139,7 +142,10 @@ const AppWrapper = () => {
     if (isAuthenticated && !loading) {
       // Request permission after a short delay to allow user interaction
       const timer = setTimeout(async () => {
-        if (notificationManager.isSupported() && !notificationManager.isEnabled()) {
+        if (
+          notificationManager.isSupported() &&
+          !notificationManager.isEnabled()
+        ) {
           const granted = await notificationManager.requestPermission();
           if (granted) {
             console.log("✅ Browser notifications enabled");
@@ -184,7 +190,10 @@ const AppWrapper = () => {
     const handleNotification = (notification) => {
       // Handle payslip notifications
       if (notification.channel === "payslip") {
-        setNotifications(prev => [...prev, { ...notification, id: Date.now() }]);
+        setNotifications((prev) => [
+          ...prev,
+          { ...notification, id: Date.now() },
+        ]);
       }
 
       // Handle task notifications - Show browser notifications
@@ -195,7 +204,7 @@ const AppWrapper = () => {
             body: notification.body || notification.message,
             tag: `task-${notification.taskId}`,
             data: notification,
-            icon: "/favicon.ico"
+            icon: "/favicon.ico",
           });
         }
 
@@ -211,7 +220,7 @@ const AppWrapper = () => {
             body: notification.body || notification.message,
             tag: `chat-${notification.from}`,
             data: notification,
-            icon: "/favicon.ico"
+            icon: "/favicon.ico",
           });
         }
       }
@@ -221,14 +230,16 @@ const AppWrapper = () => {
   }, [registerNotificationHandler]);
 
   const removeNotification = (id) => {
-    setNotifications(prev => prev.filter(n => n.id !== id));
+    setNotifications((prev) => prev.filter((n) => n.id !== id));
   };
 
   // Clear active conversation when leaving /messages
   useEffect(() => {
     if (location.pathname !== "/messages") {
       window.dispatchEvent(
-        new CustomEvent("chat-active-conversation", { detail: { conversationId: null } })
+        new CustomEvent("chat-active-conversation", {
+          detail: { conversationId: null },
+        })
       );
     }
   }, [location.pathname]);
@@ -249,7 +260,7 @@ const AppWrapper = () => {
               body: n.body || n.message,
               tag: `task-${n.taskId}`,
               data: n,
-              icon: "/favicon.ico"
+              icon: "/favicon.ico",
             });
           }
 
@@ -268,12 +279,13 @@ const AppWrapper = () => {
               body: n.body || n.message,
               tag: `chat-${n.from}`,
               data: n,
-              icon: "/favicon.ico"
+              icon: "/favicon.ico",
             });
           }
 
           // Update unread counter
-          const prev = Number(sessionStorage.getItem("chat_unread_total") || 0) || 0;
+          const prev =
+            Number(sessionStorage.getItem("chat_unread_total") || 0) || 0;
           const next = prev + 1;
           sessionStorage.setItem("chat_unread_total", String(next));
           window.dispatchEvent(
@@ -283,7 +295,9 @@ const AppWrapper = () => {
           // Show in-app toast
           const title = n.title || "Notification";
           const body = n.body || "";
-          const tid = `chat-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+          const tid = `chat-${Date.now()}-${Math.random()
+            .toString(36)
+            .slice(2)}`;
           toast.info(`${title}: ${body}`, { toastId: tid });
           return; // Don't show the generic toast below
         }
@@ -292,17 +306,24 @@ const AppWrapper = () => {
         const title = n.title || "Notification";
         const body = n.body || "";
         const channel = n.channel ? ` [${n.channel}]` : "";
-        const tid = `notif-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        const tid = `notif-${Date.now()}-${Math.random()
+          .toString(36)
+          .slice(2)}`;
         toast.info(`${title}${channel}: ${body}`, { toastId: tid });
       } catch {}
     };
 
     window.addEventListener("ws-notification", onWsNotification);
-    return () => window.removeEventListener("ws-notification", onWsNotification);
+    return () =>
+      window.removeEventListener("ws-notification", onWsNotification);
   }, []);
 
   if (loading) {
-    return <div className="flex justify-center items-center h-screen">Loading...</div>;
+    return (
+      <div className="flex justify-center items-center h-screen">
+        Loading...
+      </div>
+    );
   }
 
   // Role checks
@@ -437,7 +458,10 @@ const AppWrapper = () => {
             isAuthenticated && canAccessLeadManagement() ? (
               <ViewLeads onLogout={handleLogout} />
             ) : (
-              <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />
+              <Navigate
+                to={isAuthenticated ? "/dashboard" : "/login"}
+                replace
+              />
             )
           }
         />
@@ -447,7 +471,10 @@ const AppWrapper = () => {
             isAuthenticated && canAccessLeadManagement() ? (
               <LeadKanban onLogout={handleLogout} />
             ) : (
-              <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />
+              <Navigate
+                to={isAuthenticated ? "/dashboard" : "/login"}
+                replace
+              />
             )
           }
         />
@@ -457,7 +484,10 @@ const AppWrapper = () => {
             isAuthenticated && canAccessLeadManagement() ? (
               <AddLead onLogout={handleLogout} />
             ) : (
-              <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />
+              <Navigate
+                to={isAuthenticated ? "/dashboard" : "/login"}
+                replace
+              />
             )
           }
         />
@@ -467,7 +497,10 @@ const AppWrapper = () => {
             isAuthenticated && canAccessLeadManagement() ? (
               <AddLead onLogout={handleLogout} />
             ) : (
-              <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />
+              <Navigate
+                to={isAuthenticated ? "/dashboard" : "/login"}
+                replace
+              />
             )
           }
         />
@@ -479,7 +512,10 @@ const AppWrapper = () => {
             isAuthenticated && canAccessLeadManagement() ? (
               <ViewCallbacks onLogout={handleLogout} />
             ) : (
-              <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />
+              <Navigate
+                to={isAuthenticated ? "/dashboard" : "/login"}
+                replace
+              />
             )
           }
         />
@@ -489,7 +525,10 @@ const AppWrapper = () => {
             isAuthenticated && canAccessLeadManagement() ? (
               <CallbackKanban onLogout={handleLogout} />
             ) : (
-              <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />
+              <Navigate
+                to={isAuthenticated ? "/dashboard" : "/login"}
+                replace
+              />
             )
           }
         />
@@ -499,7 +538,10 @@ const AppWrapper = () => {
             isAuthenticated && canAccessLeadManagement() ? (
               <AddCallback onLogout={handleLogout} />
             ) : (
-              <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />
+              <Navigate
+                to={isAuthenticated ? "/dashboard" : "/login"}
+                replace
+              />
             )
           }
         />
@@ -509,7 +551,10 @@ const AppWrapper = () => {
             isAuthenticated && canAccessLeadManagement() ? (
               <AddCallback onLogout={handleLogout} />
             ) : (
-              <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />
+              <Navigate
+                to={isAuthenticated ? "/dashboard" : "/login"}
+                replace
+              />
             )
           }
         />
@@ -521,7 +566,10 @@ const AppWrapper = () => {
             isAuthenticated && isSuperAdmin ? (
               <SalaryManagement onLogout={handleLogout} />
             ) : (
-              <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />
+              <Navigate
+                to={isAuthenticated ? "/dashboard" : "/login"}
+                replace
+              />
             )
           }
         />
@@ -533,7 +581,10 @@ const AppWrapper = () => {
             isAuthenticated && (isSuperAdmin || isHR || isAdmin) ? (
               <ManualAttendanceManagement onLogout={handleLogout} />
             ) : (
-              <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />
+              <Navigate
+                to={isAuthenticated ? "/dashboard" : "/login"}
+                replace
+              />
             )
           }
         />
@@ -545,7 +596,10 @@ const AppWrapper = () => {
             isAuthenticated && (isSuperAdmin || isHR || isAdmin) ? (
               <AdminTaskPage onLogout={handleLogout} />
             ) : (
-              <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />
+              <Navigate
+                to={isAuthenticated ? "/dashboard" : "/login"}
+                replace
+              />
             )
           }
         />
@@ -557,7 +611,10 @@ const AppWrapper = () => {
             isAuthenticated && (isSuperAdmin || isHR || isAdmin) ? (
               <AdminLeaveRequests onLogout={handleLogout} />
             ) : (
-              <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />
+              <Navigate
+                to={isAuthenticated ? "/dashboard" : "/login"}
+                replace
+              />
             )
           }
         />
@@ -569,7 +626,10 @@ const AppWrapper = () => {
             isAuthenticated && (isSuperAdmin || isHR || isAdmin) ? (
               <ShiftManagement onLogout={handleLogout} />
             ) : (
-              <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />
+              <Navigate
+                to={isAuthenticated ? "/dashboard" : "/login"}
+                replace
+              />
             )
           }
         />
@@ -581,7 +641,10 @@ const AppWrapper = () => {
             isAuthenticated && (isSuperAdmin || isHR || isAdmin) ? (
               <NoticeBoard onLogout={handleLogout} />
             ) : (
-              <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />
+              <Navigate
+                to={isAuthenticated ? "/dashboard" : "/login"}
+                replace
+              />
             )
           }
         />
@@ -593,7 +656,10 @@ const AppWrapper = () => {
             isAuthenticated && (isSuperAdmin || isHR || isAdmin) ? (
               <HolidayManagementPage onLogout={handleLogout} />
             ) : (
-              <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />
+              <Navigate
+                to={isAuthenticated ? "/dashboard" : "/login"}
+                replace
+              />
             )
           }
         />
@@ -642,7 +708,10 @@ const AppWrapper = () => {
           path="/profile"
           element={
             isAuthenticated ? (
-              <MyProfile onLogout={handleLogout} userType={role || "employee"} />
+              <MyProfile
+                onLogout={handleLogout}
+                userType={role || "employee"}
+              />
             ) : (
               <Navigate to="/login" replace />
             )
@@ -656,13 +725,22 @@ const AppWrapper = () => {
             isAuthenticated && (isAdmin || isHR) ? (
               <EmployeePage userRole={role} onLogout={handleLogout} />
             ) : (
-              <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />
+              <Navigate
+                to={isAuthenticated ? "/dashboard" : "/login"}
+                replace
+              />
             )
           }
         />
         <Route
           path="/tasks"
-          element={isAuthenticated ? <Tasks onLogout={handleLogout} /> : <Navigate to="/login" replace />}
+          element={
+            isAuthenticated ? (
+              <Tasks onLogout={handleLogout} />
+            ) : (
+              <Navigate to="/login" replace />
+            )
+          }
         />
         <Route
           path="/today-status"
@@ -678,23 +756,53 @@ const AppWrapper = () => {
         />
         <Route
           path="/attendance"
-          element={isAuthenticated ? <AttendancePage onLogout={handleLogout} /> : <Navigate to="/login" replace />}
+          element={
+            isAuthenticated ? (
+              <AttendancePage onLogout={handleLogout} />
+            ) : (
+              <Navigate to="/login" replace />
+            )
+          }
         />
         <Route
           path="/todo"
-          element={isAuthenticated ? <TodoPage onLogout={handleLogout} /> : <Navigate to="/login" replace />}
+          element={
+            isAuthenticated ? (
+              <TodoPage onLogout={handleLogout} />
+            ) : (
+              <Navigate to="/login" replace />
+            )
+          }
         />
         <Route
           path="/leaves"
-          element={isAuthenticated ? <HolidaysAndLeaves onLogout={handleLogout} /> : <Navigate to="/login" replace />}
+          element={
+            isAuthenticated ? (
+              <HolidaysAndLeaves onLogout={handleLogout} />
+            ) : (
+              <Navigate to="/login" replace />
+            )
+          }
         />
         <Route
           path="/directory"
-          element={isAuthenticated ? <EmployeeDirectory onLogout={handleLogout} /> : <Navigate to="/login" replace />}
+          element={
+            isAuthenticated ? (
+              <EmployeeDirectory onLogout={handleLogout} />
+            ) : (
+              <Navigate to="/login" replace />
+            )
+          }
         />
         <Route
           path="/notepad"
-          element={isAuthenticated ? <NotepadPage onLogout={handleLogout} /> : <Navigate to="/login" replace />}
+          element={
+            isAuthenticated ? (
+              <NotepadPage onLogout={handleLogout} />
+            ) : (
+              <Navigate to="/login" replace />
+            )
+          }
         />
 
         {/* Client Management */}
@@ -704,7 +812,10 @@ const AppWrapper = () => {
             isAuthenticated && isAdmin ? (
               <ClientsPage onLogout={handleLogout} />
             ) : (
-              <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />
+              <Navigate
+                to={isAuthenticated ? "/dashboard" : "/login"}
+                replace
+              />
             )
           }
         />
@@ -716,7 +827,10 @@ const AppWrapper = () => {
             isAuthenticated && isAdmin ? (
               <ProjectsPage onLogout={handleLogout} />
             ) : (
-              <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />
+              <Navigate
+                to={isAuthenticated ? "/dashboard" : "/login"}
+                replace
+              />
             )
           }
         />
@@ -738,7 +852,10 @@ const AppWrapper = () => {
           path="/client-portal"
           element={
             isAuthenticated && role === "client" ? (
-              <ClientPortal onLogout={handleLogout} clientId={currentUser?._id} />
+              <ClientPortal
+                onLogout={handleLogout}
+                clientId={currentUser?._id}
+              />
             ) : (
               <Navigate to="/login" replace />
             )
@@ -751,7 +868,7 @@ const AppWrapper = () => {
           element={
             isAuthenticated ? (
               <ProjectDetailPage
-                projectId={window.location.pathname.split('/').pop()}
+                projectId={window.location.pathname.split("/").pop()}
                 userRole={role}
                 userId={currentUser?._id}
                 onBack={() => window.history.back()}

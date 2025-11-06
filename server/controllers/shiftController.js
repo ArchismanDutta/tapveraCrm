@@ -341,7 +341,11 @@ exports.getEmployeesByShift = async (req, res) => {
 // ======================
 exports.getAllEmployeesWithShifts = async (req, res) => {
   try {
-    const employees = await User.find({ role: "employee" })
+    // Exclude terminated and absconded employees
+    const employees = await User.find({
+      role: "employee",
+      status: { $nin: ['terminated', 'absconded'] }
+    })
       .select("_id name email employeeId shiftType standardShiftType department designation status")
       .populate('assignedShift', 'name start end durationHours')
       .sort({ name: 1 });

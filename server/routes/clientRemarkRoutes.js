@@ -25,7 +25,9 @@ router.get("/:projectId/client-remarks", protect, async (req, res) => {
     }
 
     // Check access
-    const isClient = req.user.role === "client" && project.client.toString() === req.user._id.toString();
+    const isClient = req.user.role === "client" && project.clients.some(
+      (client) => client.toString() === req.user._id.toString()
+    );
     const isAssignedEmployee = req.user.role === "employee" && project.assignedTo.some(
       (emp) => emp.toString() === req.user._id.toString()
     );
@@ -85,7 +87,9 @@ router.post("/:projectId/client-remarks", protect, async (req, res) => {
     }
 
     // Check access - only client can add remarks
-    const isClient = req.user.role === "client" && project.client.toString() === req.user._id.toString();
+    const isClient = req.user.role === "client" && project.clients.some(
+      (client) => client.toString() === req.user._id.toString()
+    );
 
     if (!isClient) {
       return res.status(403).json({

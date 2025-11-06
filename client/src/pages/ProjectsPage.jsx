@@ -168,6 +168,8 @@ const ProjectsPage = ({ onLogout }) => {
   const editEmployeeDropdownRef = useRef(null);
   const serviceDropdownRef = useRef(null);
   const editServiceDropdownRef = useRef(null);
+  const clientDropdownRef = useRef(null);
+  const editClientDropdownRef = useRef(null);
 
   // Form state
   const [showAddModal, setShowAddModal] = useState(false);
@@ -179,7 +181,7 @@ const ProjectsPage = ({ onLogout }) => {
     projectName: "",
     type: [],
     assignedTo: [],
-    client: "",
+    clients: [],
     startDate: "",
     endDate: "",
     description: "",
@@ -195,6 +197,7 @@ const ProjectsPage = ({ onLogout }) => {
   const [editEmployeeSearchTerm, setEditEmployeeSearchTerm] = useState("");
   const [showServiceDropdown, setShowServiceDropdown] = useState(false);
   const [showEditServiceDropdown, setShowEditServiceDropdown] = useState(false);
+  const [showClientDropdown, setShowClientDropdown] = useState(false);
 
   // Filter state
   const [searchTerm, setSearchTerm] = useState("");
@@ -271,6 +274,16 @@ const ProjectsPage = ({ onLogout }) => {
       if (editServiceDropdownRef.current && !editServiceDropdownRef.current.contains(event.target)) {
         setShowEditServiceDropdown(false);
       }
+
+      // Close client dropdown in Add Modal
+      if (clientDropdownRef.current && !clientDropdownRef.current.contains(event.target)) {
+        setShowClientDropdown(false);
+      }
+
+      // Close client dropdown in Edit Modal
+      if (editClientDropdownRef.current && !editClientDropdownRef.current.contains(event.target)) {
+        setShowClientDropdown(false);
+      }
     };
 
     document.addEventListener('mousedown', handleClickOutside);
@@ -316,13 +329,17 @@ const ProjectsPage = ({ onLogout }) => {
     try {
       // Fetch employees with workload data
       const res = await API.get("/api/users/workload");
-      setEmployees(res.data);
+      // Filter to only include active employees (treat undefined as active for backward compatibility)
+      const activeEmployees = res.data.filter(u => !u.status || u.status === "active");
+      setEmployees(activeEmployees);
     } catch (error) {
       console.error("Error fetching employees:", error);
       // Fallback to regular employee fetch if workload endpoint fails
       try {
         const fallbackRes = await API.get("/api/users");
-        setEmployees(fallbackRes.data.filter(u => u.role === "employee"));
+        // Filter by role AND active status (treat undefined as active for backward compatibility)
+        const activeEmployees = fallbackRes.data.filter(u => u.role === "employee" && (!u.status || u.status === "active"));
+        setEmployees(activeEmployees);
       } catch (fallbackError) {
         console.error("Fallback employee fetch failed:", fallbackError);
       }
@@ -479,7 +496,7 @@ const ProjectsPage = ({ onLogout }) => {
       projectName: "",
       type: [],
       assignedTo: [],
-      client: "",
+      clients: [],
       startDate: "",
       endDate: "",
       description: "",
@@ -505,7 +522,7 @@ const ProjectsPage = ({ onLogout }) => {
       projectName: project.projectName,
       type: Array.isArray(project.type) ? project.type : [project.type],
       assignedTo: project.assignedTo.map(e => e._id || e),
-      client: project.client?._id || project.client,
+      clients: Array.isArray(project.clients) ? project.clients.map(c => c._id || c) : [],
       startDate: project.startDate ? new Date(project.startDate).toISOString().split('T')[0] : "",
       endDate: project.endDate ? new Date(project.endDate).toISOString().split('T')[0] : "",
       description: project.description || "",
@@ -1228,12 +1245,20 @@ const ProjectsPage = ({ onLogout }) => {
                         </td>
                         <td className="p-4 text-gray-300">
                           <div className="flex flex-col gap-1.5">
-                            <span>{project.client?.businessName || project.client?.clientName || "N/A"}</span>
-                            {project.client?.region && (
-                              <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-500/20 text-blue-400 border border-blue-500/50 inline-flex items-center gap-1 w-fit">
-                                <span>🌍</span>
-                                {project.client.region}
-                              </span>
+                            {project.clients && project.clients.length > 0 ? (
+                              project.clients.map((client, idx) => (
+                                <div key={idx} className="flex flex-col gap-1">
+                                  <span>{client?.businessName || client?.clientName || "N/A"}</span>
+                                  {client?.region && (
+                                    <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-500/20 text-blue-400 border border-blue-500/50 inline-flex items-center gap-1 w-fit">
+                                      <span>🌍</span>
+                                      {client.region}
+                                    </span>
+                                  )}
+                                </div>
+                              ))
+                            ) : (
+                              <span>N/A</span>
                             )}
                           </div>
                         </td>
@@ -1549,21 +1574,64 @@ const ProjectsPage = ({ onLogout }) => {
                   )}
                 </div>
 
-                <div>
-                  <label className="block text-sm text-gray-400 mb-2">Client *</label>
-                  <select
-                    value={form.client}
-                    onChange={(e) => setForm({ ...form, client: e.target.value })}
-                    className="w-full px-4 py-3 bg-[#0f1419] border border-[#232945] rounded-lg text-white focus:outline-none focus:border-purple-500"
-                    required
+                <div className="relative" ref={clientDropdownRef}>
+                  <label className="block text-sm text-gray-400 mb-2">Clients *</label>
+                  <div
+                    onClick={() => setShowClientDropdown(!showClientDropdown)}
+                    className="w-full px-4 py-3 bg-[#0f1419] border border-[#232945] rounded-lg text-white focus:outline-none focus:border-purple-500 cursor-pointer flex items-center justify-between"
                   >
-                    <option value="">Select Client</option>
-                    {clients.map(client => (
-                      <option key={client._id} value={client._id}>
-                        {client.businessName || client.clientName}
-                      </option>
-                    ))}
-                  </select>
+                    <span className="text-gray-300">
+                      {form.clients.length === 0
+                        ? "Select clients..."
+                        : `${form.clients.length} client${form.clients.length > 1 ? "s" : ""} selected`}
+                    </span>
+                    <ChevronDown className={`w-4 h-4 transition-transform ${showClientDropdown ? "rotate-180" : ""}`} />
+                  </div>
+
+                  {showClientDropdown && (
+                    <div className="absolute z-10 w-full mt-2 bg-[#0f1419] border border-[#232945] rounded-lg shadow-2xl max-h-64 overflow-y-auto">
+                      {clients.map((client) => (
+                        <label
+                          key={client._id}
+                          className="flex items-center gap-3 px-4 py-3 hover:bg-[#191f2b] cursor-pointer transition-colors border-b border-[#232945] last:border-b-0"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={form.clients.includes(client._id)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setForm({ ...form, clients: [...form.clients, client._id] });
+                              } else {
+                                setForm({ ...form, clients: form.clients.filter(id => id !== client._id) });
+                              }
+                            }}
+                            className="w-4 h-4 rounded border-[#232945] bg-[#0f1419] text-purple-600 focus:ring-purple-500 focus:ring-offset-0"
+                          />
+                          <span className="text-white text-sm">{client.businessName || client.clientName}</span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+
+                  {form.clients.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mt-3">
+                      {form.clients.map((clientId) => {
+                        const client = clients.find(c => c._id === clientId);
+                        return client ? (
+                          <div key={clientId} className="flex items-center gap-2 px-3 py-1 bg-blue-600/20 border border-blue-500/30 rounded-full text-sm text-blue-300">
+                            <span>{client.businessName || client.clientName}</span>
+                            <button
+                              type="button"
+                              onClick={() => setForm({ ...form, clients: form.clients.filter(id => id !== clientId) })}
+                              className="hover:text-blue-100 transition-colors"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </div>
+                        ) : null;
+                      })}
+                    </div>
+                  )}
                 </div>
 
                 <div>
@@ -1981,21 +2049,64 @@ const ProjectsPage = ({ onLogout }) => {
                   )}
                 </div>
 
-                <div>
-                  <label className="block text-sm text-gray-400 mb-2">Client *</label>
-                  <select
-                    value={form.client}
-                    onChange={(e) => setForm({ ...form, client: e.target.value })}
-                    className="w-full px-4 py-3 bg-[#0f1419] border border-[#232945] rounded-lg text-white focus:outline-none focus:border-purple-500"
-                    required
+                <div className="relative" ref={editClientDropdownRef}>
+                  <label className="block text-sm text-gray-400 mb-2">Clients *</label>
+                  <div
+                    onClick={() => setShowClientDropdown(!showClientDropdown)}
+                    className="w-full px-4 py-3 bg-[#0f1419] border border-[#232945] rounded-lg text-white focus:outline-none focus:border-purple-500 cursor-pointer flex items-center justify-between"
                   >
-                    <option value="">Select Client</option>
-                    {clients.map(client => (
-                      <option key={client._id} value={client._id}>
-                        {client.businessName || client.clientName}
-                      </option>
-                    ))}
-                  </select>
+                    <span className="text-gray-300">
+                      {form.clients.length === 0
+                        ? "Select clients..."
+                        : `${form.clients.length} client${form.clients.length > 1 ? "s" : ""} selected`}
+                    </span>
+                    <ChevronDown className={`w-4 h-4 transition-transform ${showClientDropdown ? "rotate-180" : ""}`} />
+                  </div>
+
+                  {showClientDropdown && (
+                    <div className="absolute z-10 w-full mt-2 bg-[#0f1419] border border-[#232945] rounded-lg shadow-2xl max-h-64 overflow-y-auto">
+                      {clients.map((client) => (
+                        <label
+                          key={client._id}
+                          className="flex items-center gap-3 px-4 py-3 hover:bg-[#191f2b] cursor-pointer transition-colors border-b border-[#232945] last:border-b-0"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={form.clients.includes(client._id)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setForm({ ...form, clients: [...form.clients, client._id] });
+                              } else {
+                                setForm({ ...form, clients: form.clients.filter(id => id !== client._id) });
+                              }
+                            }}
+                            className="w-4 h-4 rounded border-[#232945] bg-[#0f1419] text-purple-600 focus:ring-purple-500 focus:ring-offset-0"
+                          />
+                          <span className="text-white text-sm">{client.businessName || client.clientName}</span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+
+                  {form.clients.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mt-3">
+                      {form.clients.map((clientId) => {
+                        const client = clients.find(c => c._id === clientId);
+                        return client ? (
+                          <div key={clientId} className="flex items-center gap-2 px-3 py-1 bg-blue-600/20 border border-blue-500/30 rounded-full text-sm text-blue-300">
+                            <span>{client.businessName || client.clientName}</span>
+                            <button
+                              type="button"
+                              onClick={() => setForm({ ...form, clients: form.clients.filter(id => id !== clientId) })}
+                              className="hover:text-blue-100 transition-colors"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </div>
+                        ) : null;
+                      })}
+                    </div>
+                  )}
                 </div>
 
                 <div>

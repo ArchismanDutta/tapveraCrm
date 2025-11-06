@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
+import { useLocation } from "react-router-dom";
 import CreateGroupModal from "../components/chat/CreateGroupModal";
 import ManageGroupModal from "../components/chat/ManageGroupModal";
 import ChatWindow from "../components/chat/chatWindow";
@@ -24,6 +25,7 @@ const useDebounce = (value, delay) => {
 };
 
 const ChatPage = ({ onLogout }) => {
+  const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
   const [userRole, setUserRole] = useState(null);
   const [jwtToken, setJwtToken] = useState(null);
@@ -209,6 +211,42 @@ const ChatPage = ({ onLogout }) => {
       console.error(error);
     }
   };
+
+  // Auto-open conversation from notification navigation
+  useEffect(() => {
+    if (location.state?.openConversationId && conversations.length > 0) {
+      const targetConversation = conversations.find(
+        conv => conv._id === location.state.openConversationId
+      );
+
+      if (targetConversation) {
+        setSelectedConversation(targetConversation);
+        setActiveConversation(targetConversation._id);
+
+        // Clear the conversation's unread count
+        setUnreadMessages(prev => {
+          const updated = { ...prev };
+          delete updated[targetConversation._id];
+          return updated;
+        });
+
+        // Mark messages as read
+        if (jwtToken) {
+          fetch(`${API_BASE}/api/chat/${targetConversation._id}/mark-read`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${jwtToken}`,
+            },
+            body: JSON.stringify({ userId: currentUserId }),
+          }).catch(err => console.error('Failed to mark messages as read:', err));
+        }
+
+        // Clear navigation state
+        window.history.replaceState({}, document.title);
+      }
+    }
+  }, [location.state, conversations, jwtToken, currentUserId]);
 
   const handleCreateGroup = async (name, memberIds) => {
     try {

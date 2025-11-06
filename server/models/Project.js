@@ -20,11 +20,13 @@ const projectSchema = new mongoose.Schema(
         required: true,
       },
     ],
-    client: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Client",
-      required: true,
-    },
+    clients: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Client",
+        required: true,
+      },
+    ],
     startDate: {
       type: Date,
       required: true,
@@ -130,7 +132,7 @@ projectSchema.virtual("computedStatus").get(function () {
 // Index for better query performance
 projectSchema.index({ type: 1, status: 1 });
 projectSchema.index({ assignedTo: 1 });
-projectSchema.index({ client: 1 });
+projectSchema.index({ clients: 1 });
 projectSchema.index({ endDate: 1 });
 
 module.exports = mongoose.model("Project", projectSchema);

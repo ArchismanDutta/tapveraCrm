@@ -126,7 +126,7 @@ Tapvera CRM Team
       }
 
       const project = await Project.findById(message.project)
-        .populate('client', 'email clientName')
+        .populate('clients', 'email clientName businessName')
         .populate('assignedTo', 'email name');
 
       if (!project) {
@@ -137,8 +137,10 @@ Tapvera CRM Team
       const senderName = message.sentBy?.name || message.sentBy?.clientName || 'Team Member';
       const projectUrl = `${process.env.FRONTEND_URL}/projects/${project._id}`;
 
-      // If message is from employee to client
-      if (message.senderType !== 'client' && project.client?.email) {
+      // If message is from employee to client - send to all clients
+      if (message.senderType !== 'client' && project.clients?.length > 0) {
+        for (const client of project.clients) {
+          if (client?.email) {
         const clientEmailHtml = `
           <!DOCTYPE html>
           <html>
@@ -198,17 +200,19 @@ Tapvera CRM Team
         `;
 
         await emailService.sendEmail({
-          to: project.client.email,
+              to: client.email,
           subject: `New Message: ${project.projectName}`,
           html: clientEmailHtml,
           text: clientEmailText,
           emailType: 'project_message',
-          relatedClient: project.client._id,
+              relatedClient: client._id,
           relatedProject: project._id,
           relatedMessage: message._id
         });
 
-        console.log(` Project message email sent to client: ${project.client.email}`);
+        console.log(` Project message email sent to client: ${client.email}`);
+          }
+        }
       }
 
       // If message is from client to employees
@@ -493,16 +497,16 @@ Tapvera CRM Team
           `;
 
           await emailService.sendEmail({
-            to: project.client.email,
+                to: client.email,
             subject: `Task Completed: ${taskData.title}`,
             html: clientHtml,
             emailType: 'task_completed',
-            relatedClient: project.client._id,
+                relatedClient: client._id,
             relatedProject: project._id,
             relatedTask: taskData._id
           });
 
-          console.log(` Task completion email sent to client: ${project.client.email}`);
+          console.log(` Task completion email sent to client: ${client.email}`);
         }
       }
 

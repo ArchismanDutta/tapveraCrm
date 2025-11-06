@@ -379,15 +379,15 @@ const EmployeePortal = ({ onLogout }) => {
   const getStatusColor = (status) => {
     switch (status?.toLowerCase()) {
       case "in progress":
-        return "bg-blue-100 text-blue-800";
+        return "bg-blue-500/20 text-blue-400 border border-blue-500/30";
       case "active":
-        return "bg-green-600/20 text-green-800";
+        return "bg-green-500/20 text-green-400 border border-green-500/30";
       case "completed":
-        return "bg-blue-500/10 text-white";
+        return "bg-purple-500/20 text-purple-400 border border-purple-500/30";
       case "pending":
-        return "bg-yellow-600/20 text-yellow-800";
+        return "bg-yellow-500/20 text-yellow-400 border border-yellow-500/30";
       default:
-        return "bg-blue-500/10 text-white";
+        return "bg-blue-500/20 text-blue-400 border border-blue-500/30";
     }
   };
 
@@ -600,10 +600,13 @@ const EmployeePortal = ({ onLogout }) => {
         ? project.type.some(t => t?.toLowerCase().includes(searchLower))
         : project.type?.toLowerCase().includes(searchLower);
 
-      const matchesClientName = project.client?.clientName?.toLowerCase().includes(searchLower);
-      const matchesBusinessName = project.client?.businessName?.toLowerCase().includes(searchLower);
+      // Check if any client matches the search
+      const matchesClient = project.clients?.some(client =>
+        client?.clientName?.toLowerCase().includes(searchLower) ||
+        client?.businessName?.toLowerCase().includes(searchLower)
+      );
 
-      return matchesName || matchesType || matchesClientName || matchesBusinessName;
+      return matchesName || matchesType || matchesClient;
     }
   );
 
@@ -668,16 +671,18 @@ const EmployeePortal = ({ onLogout }) => {
                     {project.projectName}
                   </h1>
                   <p className="text-xs sm:text-sm text-blue-300 truncate">
-                    {project.client?.businessName || project.client?.clientName}
+                    {project.clients && project.clients.length > 0
+                      ? project.clients.map(c => c?.businessName || c?.clientName).filter(Boolean).join(", ")
+                      : "No client"}
                   </p>
                 </div>
               </div>
               <span
                 className={`px-3 py-1 rounded-full text-xs sm:text-sm font-medium whitespace-nowrap ${
-                  project.status === "Active" ? "bg-green-500/20 text-green-400" :
-                  project.status === "Completed" ? "bg-[#232945]0/20 text-gray-400" :
-                  project.status === "Inactive" ? "bg-red-500/20 text-red-400" :
-                  "bg-blue-500/20 text-blue-400"
+                  project.status === "Active" ? "bg-green-500/20 text-green-400 border border-green-500/30" :
+                  project.status === "Completed" ? "bg-purple-500/20 text-purple-400 border border-purple-500/30" :
+                  project.status === "Inactive" ? "bg-red-500/20 text-red-400 border border-red-500/30" :
+                  "bg-blue-500/20 text-blue-400 border border-blue-500/30"
                 }`}
               >
                 {project.status}
@@ -716,38 +721,52 @@ const EmployeePortal = ({ onLogout }) => {
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div className="bg-[#191f2b]/70 p-4 sm:p-6 rounded-lg shadow-xl border border-[#232945]">
                   <div className="flex items-center gap-3">
-                    <div className="p-2 bg-blue-100 rounded-lg">
-                      <Calendar className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600" />
+                    <div className="p-2 bg-blue-500/20 rounded-lg border border-blue-500/30">
+                      <Calendar className="w-5 h-5 sm:w-6 sm:h-6 text-blue-400" />
                     </div>
                     <div className="min-w-0">
                       <p className="text-xs sm:text-sm text-blue-300">
                         Start Date
                       </p>
                       <p className="text-sm sm:text-base font-semibold text-white truncate">
-                        {project.startDate}
+                        {project.startDate
+                          ? new Date(project.startDate).toLocaleDateString('en-IN', {
+                              day: '2-digit',
+                              month: 'short',
+                              year: 'numeric',
+                              timeZone: 'Asia/Kolkata'
+                            })
+                          : 'N/A'}
                       </p>
                     </div>
                   </div>
                 </div>
                 <div className="bg-[#191f2b]/70 p-4 sm:p-6 rounded-lg shadow-sm border border-[#232945]">
                   <div className="flex items-center gap-3">
-                    <div className="p-2 bg-red-100 rounded-lg">
-                      <Clock className="w-5 h-5 sm:w-6 sm:h-6 text-red-600" />
+                    <div className="p-2 bg-red-500/20 rounded-lg border border-red-500/30">
+                      <Clock className="w-5 h-5 sm:w-6 sm:h-6 text-red-400" />
                     </div>
                     <div className="min-w-0">
                       <p className="text-xs sm:text-sm text-blue-300">
                         End Date
                       </p>
                       <p className="text-sm sm:text-base font-semibold text-white truncate">
-                        {project.endDate}
+                        {project.endDate
+                          ? new Date(project.endDate).toLocaleDateString('en-IN', {
+                              day: '2-digit',
+                              month: 'short',
+                              year: 'numeric',
+                              timeZone: 'Asia/Kolkata'
+                            })
+                          : 'N/A'}
                       </p>
                     </div>
                   </div>
                 </div>
                 <div className="bg-[#191f2b]/70 p-4 sm:p-6 rounded-lg shadow-sm border border-[#232945]">
                   <div className="flex items-center gap-3">
-                    <div className="p-2 bg-green-600/20 rounded-lg">
-                      <Users className="w-5 h-5 sm:w-6 sm:h-6 text-green-600" />
+                    <div className="p-2 bg-green-500/20 rounded-lg border border-green-500/30">
+                      <Users className="w-5 h-5 sm:w-6 sm:h-6 text-green-400" />
                     </div>
                     <div className="min-w-0">
                       <p className="text-xs sm:text-sm text-blue-300">
@@ -760,17 +779,31 @@ const EmployeePortal = ({ onLogout }) => {
                   </div>
                 </div>
                 <div className="bg-[#191f2b]/70 p-4 sm:p-6 rounded-lg shadow-sm border border-[#232945]">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 bg-purple-100 rounded-lg">
-                      <FileText className="w-5 h-5 sm:w-6 sm:h-6 text-purple-600" />
+                  <div className="flex flex-col gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-purple-500/20 rounded-lg border border-purple-500/30">
+                        <FileText className="w-5 h-5 sm:w-6 sm:h-6 text-purple-400" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs sm:text-sm text-blue-300">
+                          Project Type
+                        </p>
+                      </div>
                     </div>
-                    <div className="min-w-0">
-                      <p className="text-xs sm:text-sm text-blue-300">
-                        Project Type
-                      </p>
-                      <p className="text-sm sm:text-base font-semibold text-white truncate">
-                        {project.type}
-                      </p>
+                    <div className="flex flex-wrap gap-2">
+                      {(() => {
+                        const types = Array.isArray(project.type)
+                          ? project.type
+                          : (typeof project.type === 'string' ? project.type.split(/[,\s]+/) : []);
+                        return types.filter(Boolean).map((category, idx) => (
+                          <span
+                            key={idx}
+                            className="px-2 py-1 bg-purple-500/10 text-purple-400 text-xs font-semibold rounded-full border border-purple-500/30"
+                          >
+                            {category}
+                          </span>
+                        ));
+                      })()}
                     </div>
                   </div>
                 </div>
@@ -781,7 +814,7 @@ const EmployeePortal = ({ onLogout }) => {
                 <h3 className="text-base sm:text-lg font-semibold text-white mb-3">
                   Project Description
                 </h3>
-                <p className="text-sm sm:text-base text-gray-700 leading-relaxed">
+                <p className="text-sm sm:text-base text-gray-200 leading-relaxed">
                   {project.description || "No description available"}
                 </p>
               </div>
@@ -797,6 +830,7 @@ const EmployeePortal = ({ onLogout }) => {
                       {project.progress}%
                     </span>
                   </div>
+                  
                   <div className="w-full bg-gray-200 rounded-full h-2 sm:h-3">
                     <div
                       className="bg-blue-600 h-2 sm:h-3 rounded-full transition-all duration-300"
@@ -1669,7 +1703,7 @@ const EmployeePortal = ({ onLogout }) => {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-6">
           <div className="bg-[#191f2b]/70 p-4 sm:p-6 rounded-lg shadow-xl border border-[#232945]">
             <div className="flex items-center justify-between">
               <div>
@@ -1723,23 +1757,6 @@ const EmployeePortal = ({ onLogout }) => {
               </div>
             </div>
           </div>
-          <div className="bg-[#191f2b]/70 p-4 sm:p-6 rounded-lg shadow-sm border border-[#232945]">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs sm:text-sm text-blue-300">Pending</p>
-                <p className="text-2xl sm:text-3xl font-bold text-yellow-400 mt-1">
-                  {
-                    projects.filter(
-                      (p) => p.status?.toLowerCase() === "pending"
-                    ).length
-                  }
-                </p>
-              </div>
-              <div className="p-3 bg-yellow-600/20 rounded-lg">
-                <Calendar className="w-6 h-6 sm:w-8 sm:h-8 text-yellow-400" />
-              </div>
-            </div>
-          </div>
         </div>
 
         {/* Search and Filter */}
@@ -1756,7 +1773,7 @@ const EmployeePortal = ({ onLogout }) => {
           </div>
         </div>
 
-        {/* Projects List */}
+        {/* Projects Grid */}
         {loading ? (
           <div className="flex items-center justify-center py-12">
             <div className="text-center">
@@ -1767,83 +1784,114 @@ const EmployeePortal = ({ onLogout }) => {
             </div>
           </div>
         ) : filteredProjects.length > 0 ? (
-          <div className="bg-[#191f2b]/70 rounded-lg shadow-sm border border-[#232945] overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-[#232945]">
-                  <tr>
-                    <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
-                      Project Name
-                    </th>
-                    <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider hidden lg:table-cell">
-                      Type
-                    </th>
-                    <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider hidden md:table-cell">
-                      Client
-                    </th>
-                    <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider hidden sm:table-cell">
-                      Start Date
-                    </th>
-                    <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
-                      Status
-                    </th>
-                    <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
-                      Action
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-[#191f2b]/70 divide-y divide-gray-200">
-                  {filteredProjects.map((project) => (
-                    <tr key={project._id} className="hover:bg-[#232945]">
-                      <td className="px-4 sm:px-6 py-4">
-                        <div className="text-sm font-medium text-white">
-                          {project.projectName}
-                        </div>
-                        <div className="text-xs text-gray-400 lg:hidden">
-                          {project.type}
-                        </div>
-                      </td>
-                      <td className="px-4 sm:px-6 py-4 hidden lg:table-cell">
-                        <div className="text-sm text-white">
-                          {project.type}
-                        </div>
-                      </td>
-                      <td className="px-4 sm:px-6 py-4 hidden md:table-cell">
-                        <div className="text-sm text-white">
-                          {project.client?.businessName || project.client?.clientName}
-                        </div>
-                      </td>
-                      <td className="px-4 sm:px-6 py-4 hidden sm:table-cell">
-                        <div className="text-sm text-white">
-                          {project.startDate ? new Date(project.startDate).toLocaleDateString() : 'N/A'}
-                        </div>
-                      </td>
-                      <td className="px-4 sm:px-6 py-4">
-                        <span
-                          className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(
-                            project.status
-                          )}`}
-                        >
-                          {project.status}
-                        </span>
-                      </td>
-                      <td className="px-4 sm:px-6 py-4">
-                        <button
-                          onClick={() => {
-                            setSelectedProject(project._id);
-                            fetchProjectMessages(project._id);
-                          }}
-                          className="text-blue-600 hover:text-blue-900 font-medium text-sm flex items-center gap-1"
-                        >
-                          Details
-                          <ChevronRight className="w-4 h-4" />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filteredProjects.map((project) => (
+              <div
+                key={project._id}
+                className="bg-gradient-to-br from-[#191f2b]/90 to-[#141a21]/90 border border-[#232945] rounded-xl overflow-hidden hover:border-blue-500/50 transition-all duration-300 hover:shadow-xl hover:shadow-blue-500/10 group cursor-pointer flex flex-col"
+                onClick={() => {
+                  setSelectedProject(project._id);
+                  fetchProjectMessages(project._id);
+                }}
+              >
+                {/* Card Header */}
+                <div className="p-6 space-y-4 flex-1">
+                  {/* Type Badge and Status */}
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-start gap-2 flex-wrap flex-1">
+                      <div className="p-2 bg-gradient-to-br from-blue-500/20 to-purple-500/20 rounded-lg border border-blue-500/30">
+                        <FileText className="w-5 h-5 text-blue-400" />
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {(() => {
+                          const types = Array.isArray(project.type)
+                            ? project.type
+                            : (typeof project.type === 'string' ? project.type.split(/[,\s]+/) : []);
+                          return types.filter(Boolean).map((category, idx) => (
+                            <span
+                              key={idx}
+                              className="px-3 py-1 bg-blue-500/10 text-blue-400 text-xs font-semibold rounded-full border border-blue-500/30"
+                            >
+                              {category}
+                            </span>
+                          ));
+                        })()}
+                      </div>
+                    </div>
+                    <span
+                      className={`px-3 py-1 text-xs font-semibold rounded-full whitespace-nowrap ${getStatusColor(
+                        project.status
+                      )}`}
+                    >
+                      {project.status}
+                    </span>
+                  </div>
+
+                  {/* Project Name */}
+                  <div>
+                    <h3 className="text-lg font-bold text-white group-hover:text-blue-400 transition-colors line-clamp-2">
+                      {project.projectName}
+                    </h3>
+                  </div>
+
+                  {/* Client Info */}
+                  <div className="flex items-center gap-2 text-sm">
+                    <div className="p-1.5 bg-purple-500/10 rounded border border-purple-500/30">
+                      <Users className="w-3.5 h-3.5 text-purple-400" />
+                    </div>
+                    <span className="text-gray-300 truncate">
+                      {project.clients && project.clients.length > 0
+                        ? project.clients.map(c => c?.businessName || c?.clientName).filter(Boolean).join(", ")
+                        : "No client"}
+                    </span>
+                  </div>
+
+                  {/* Assigned Team */}
+                  {project.assignedTo && project.assignedTo.length > 0 && (
+                    <div className="flex items-center gap-2">
+                      <div className="flex -space-x-2">
+                        {project.assignedTo.slice(0, 3).map((emp, idx) => (
+                          <div
+                            key={idx}
+                            className="w-8 h-8 rounded-full bg-gradient-to-br from-cyan-500 to-blue-500 border-2 border-[#191f2b] flex items-center justify-center text-white text-xs font-semibold"
+                            title={emp.name || "Unknown"}
+                          >
+                            {(emp.name || "U").charAt(0).toUpperCase()}
+                          </div>
+                        ))}
+                        {project.assignedTo.length > 3 && (
+                          <div className="w-8 h-8 rounded-full bg-gray-700 border-2 border-[#191f2b] flex items-center justify-center text-white text-xs font-semibold">
+                            +{project.assignedTo.length - 3}
+                          </div>
+                        )}
+                      </div>
+                      <span className="text-xs text-gray-400">
+                        {project.assignedTo.length} team {project.assignedTo.length === 1 ? 'member' : 'members'}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Start Date */}
+                  <div className="flex items-center gap-2 text-sm text-gray-400">
+                    <Calendar className="w-4 h-4" />
+                    <span>
+                      {project.startDate
+                        ? new Date(project.startDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                        : 'No start date'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Card Footer */}
+                <div className="px-6 py-4 bg-[#0f1419]/50 border-t border-[#232945] flex items-center justify-between flex-shrink-0 mt-auto">
+                  <div className="flex items-center gap-2 text-sm text-gray-400">
+                    <MessageSquare className="w-4 h-4" />
+                    <span>View Details</span>
+                  </div>
+                  <ChevronRight className="w-5 h-5 text-gray-400 group-hover:text-blue-400 group-hover:translate-x-1 transition-all" />
+                </div>
+              </div>
+            ))}
           </div>
         ) : (
           <div className="bg-[#191f2b]/70 rounded-lg shadow-sm border border-[#232945] p-8 sm:p-12 text-center">
