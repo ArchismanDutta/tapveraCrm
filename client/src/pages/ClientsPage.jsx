@@ -117,10 +117,12 @@ const ClientsPage = ({ onLogout }) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [showEditPassword, setShowEditPassword] = useState(false);
   const [filterStatus, setFilterStatus] = useState("all"); // all, active, inactive
   const [sortBy, setSortBy] = useState("name"); // name, email, date, business
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showCredentialsModal, setShowCredentialsModal] = useState(false);
   const [selectedClient, setSelectedClient] = useState(null);
   const [notification, setNotification] = useState(null);
   const [userRole, setUserRole] = useState("admin"); // Default to admin
@@ -179,18 +181,32 @@ const ClientsPage = ({ onLogout }) => {
   const handleEditClient = async (e) => {
     e.preventDefault();
     try {
-      await API.put(`/api/clients/${selectedClient._id}`, {
+      const updateData = {
         clientName: selectedClient.clientName,
         businessName: selectedClient.businessName,
         email: selectedClient.email,
         region: selectedClient.region?.trim() || 'Global',
-      });
+      };
+
+      // Only include password if it has been changed and user is super-admin
+      if (selectedClient.newPassword && selectedClient.newPassword.trim()) {
+        const normalizedRole = userRole.toLowerCase();
+        if (normalizedRole === 'super-admin' || normalizedRole === 'superadmin') {
+          updateData.password = selectedClient.newPassword;
+        } else {
+          showNotification("Only super-admin can change client passwords", "error");
+          return;
+        }
+      }
+
+      await API.put(`/api/clients/${selectedClient._id}`, updateData);
       setShowEditModal(false);
       setSelectedClient(null);
+      setShowEditPassword(false);
       fetchClients();
       showNotification("Client updated successfully!", "success");
     } catch (error) {
-      showNotification(error.response?.data?.message || "Error updating client", "error");
+      showNotification(error.response?.data?.error || error.response?.data?.message || "Error updating client", "error");
       console.error("Error updating client:", error);
     }
   };
@@ -629,6 +645,17 @@ const ClientsPage = ({ onLogout }) => {
                       <td className="pl-6 pr-4 py-5 w-[14%]">
                         <div className="flex items-center gap-3">
                           <button
+                            onClick={() => {
+                              setSelectedClient(c);
+                              setShowCredentialsModal(true);
+                            }}
+                            className="p-2.5 rounded-lg text-cyan-400 hover:text-cyan-300 hover:bg-cyan-500/10 transition-all duration-200"
+                            title="View credentials"
+                          >
+                            <Eye className="w-5 h-5" />
+                          </button>
+
+                          <button
                             onClick={() => toggleStatus(c._id)}
                             className="p-2.5 rounded-lg text-purple-400 hover:text-purple-300 hover:bg-purple-500/10 transition-all duration-200"
                             title={`Toggle to ${c.status === "Active" ? "Inactive" : "Active"}`}
@@ -693,13 +720,14 @@ const ClientsPage = ({ onLogout }) => {
       {/* Edit Modal */}
       {showEditModal && selectedClient && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-          <div className="bg-[#191f2b] rounded-xl shadow-2xl border border-[#232945] p-6 max-w-md w-full">
+          <div className="bg-[#191f2b] rounded-xl shadow-2xl border border-[#232945] p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-xl font-semibold text-white">Edit Client</h3>
               <button
                 onClick={() => {
                   setShowEditModal(false);
                   setSelectedClient(null);
+                  setShowEditPassword(false);
                 }}
                 className="text-gray-400 hover:text-white transition-colors"
               >
@@ -754,12 +782,37 @@ const ClientsPage = ({ onLogout }) => {
                 <p className="text-xs text-gray-500 mt-1">Enter region name (defaults to 'Global' if empty)</p>
               </div>
 
+              {/* Password field only for super-admin */}
+              {(userRole === 'super-admin' || userRole === 'superadmin') && (
+                <div>
+                  <label className="block text-sm text-gray-400 mb-2">New Password (Optional)</label>
+                  <div className="relative">
+                    <input
+                      type={showEditPassword ? "text" : "password"}
+                      placeholder="Leave empty to keep current password"
+                      value={selectedClient.newPassword || ''}
+                      onChange={(e) => setSelectedClient({ ...selectedClient, newPassword: e.target.value })}
+                      className="w-full px-4 py-3 bg-[#0f1419] border border-[#232945] rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 transition-colors pr-10"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowEditPassword(!showEditPassword)}
+                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-white transition-colors"
+                    >
+                      {showEditPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">Only super-admin can change client passwords</p>
+                </div>
+              )}
+
               <div className="flex gap-3 pt-4">
                 <button
                   type="button"
                   onClick={() => {
                     setShowEditModal(false);
                     setSelectedClient(null);
+                    setShowEditPassword(false);
                   }}
                   className="flex-1 px-4 py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors"
                 >
@@ -789,7 +842,7 @@ const ClientsPage = ({ onLogout }) => {
             </div>
 
             <p className="text-gray-300 mb-6">
-              Are you sure you want to delete <strong>{selectedClient.clientName}</strong>? 
+              Are you sure you want to delete <strong>{selectedClient.clientName}</strong>?
               This action cannot be undone.
             </p>
 
@@ -810,6 +863,96 @@ const ClientsPage = ({ onLogout }) => {
                 Delete
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* View Credentials Modal */}
+      {showCredentialsModal && selectedClient && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-[#191f2b] rounded-xl shadow-2xl border border-cyan-500/50 p-6 max-w-md w-full">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <div className="p-3 rounded-full bg-cyan-500/20">
+                  <Eye className="w-6 h-6 text-cyan-400" />
+                </div>
+                <h3 className="text-xl font-semibold text-white">Client Credentials</h3>
+              </div>
+              <button
+                onClick={() => {
+                  setShowCredentialsModal(false);
+                  setSelectedClient(null);
+                }}
+                className="text-gray-400 hover:text-white transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div className="bg-[#0f1419] rounded-lg p-4 border border-[#232945]">
+                <p className="text-sm text-gray-400 mb-2">Client Name</p>
+                <p className="text-white font-semibold">{selectedClient.clientName}</p>
+              </div>
+
+              <div className="bg-[#0f1419] rounded-lg p-4 border border-[#232945]">
+                <p className="text-sm text-gray-400 mb-2">Business Name</p>
+                <p className="text-white font-semibold">{selectedClient.businessName}</p>
+              </div>
+
+              <div className="bg-[#0f1419] rounded-lg p-4 border border-[#232945]">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-sm text-gray-400">Email Address</p>
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(selectedClient.email);
+                      showNotification("Email copied to clipboard!", "success");
+                    }}
+                    className="text-cyan-400 hover:text-cyan-300 text-xs flex items-center gap-1"
+                  >
+                    <Mail className="w-3 h-3" />
+                    Copy
+                  </button>
+                </div>
+                <p className="text-white font-mono text-sm break-all">{selectedClient.email}</p>
+              </div>
+
+              <div className="bg-[#0f1419] rounded-lg p-4 border border-[#232945]">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-sm text-gray-400">Password</p>
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(selectedClient.password);
+                      showNotification("Password copied to clipboard!", "success");
+                    }}
+                    className="text-cyan-400 hover:text-cyan-300 text-xs flex items-center gap-1"
+                  >
+                    <Eye className="w-3 h-3" />
+                    Copy
+                  </button>
+                </div>
+                <p className="text-white font-mono text-sm break-all">{selectedClient.password}</p>
+              </div>
+
+              <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4">
+                <div className="flex items-start gap-2">
+                  <AlertCircle className="w-5 h-5 text-yellow-400 flex-shrink-0 mt-0.5" />
+                  <p className="text-yellow-300 text-sm">
+                    Keep these credentials secure. Share them only through secure channels.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <button
+              onClick={() => {
+                setShowCredentialsModal(false);
+                setSelectedClient(null);
+              }}
+              className="w-full mt-6 px-4 py-3 bg-cyan-600 hover:bg-cyan-700 text-white rounded-lg transition-colors font-medium"
+            >
+              Close
+            </button>
           </div>
         </div>
       )}

@@ -25,8 +25,8 @@ router.post("/", protect, authorize("admin", "super-admin"), async (req, res) =>
     const newClient = new Client({
       clientName,
       businessName,
-      email,
-      password,
+      email: String(email).trim().toLowerCase(), // Normalize email for consistency with login
+      password: String(password).trim(), // Trim password for consistency with login
       region: region || 'Global'
     });
     await newClient.save();
@@ -92,15 +92,27 @@ router.get("/", protect, authorize("admin", "super-admin", "hr"), async (req, re
 // Update client
 router.put("/:id", protect, authorize("admin", "super-admin"), async (req, res) => {
   try {
-    const { clientName, businessName, email, region } = req.body;
+    const { clientName, businessName, email, region, password } = req.body;
     const client = await Client.findById(req.params.id);
 
     if (!client) return res.status(404).json({ error: "Client not found" });
 
     client.clientName = clientName;
     client.businessName = businessName;
-    client.email = email;
+    client.email = String(email).trim().toLowerCase(); // Normalize email for consistency with login
     if (region !== undefined) client.region = region;
+
+    // Only super-admin can update password
+    if (password && password.trim()) {
+      const userRole = req.user.role.toLowerCase();
+      if (userRole === 'super-admin' || userRole === 'superadmin') {
+        // Trim the password before saving (matches login logic)
+        client.password = String(password).trim();
+      } else {
+        return res.status(403).json({ error: "Only super-admin can change client passwords" });
+      }
+    }
+
     await client.save();
 
     res.json(client);

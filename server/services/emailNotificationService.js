@@ -1,5 +1,11 @@
 // services/emailNotificationService.js
-const emailService = require('./email/emailService');
+const emailService = require("./email/emailService");
+
+// Helper function to get the correct frontend URL
+function getFrontendUrl() {
+  // Use hard-coded production URL for consistency
+  return "http://tapvera-crm-frontend.s3-website.ap-south-1.amazonaws.com";
+}
 
 class EmailNotificationService {
   /**
@@ -7,7 +13,9 @@ class EmailNotificationService {
    */
   async sendClientWelcomeEmail(clientData) {
     const { _id, clientName, email, password, businessName } = clientData;
-    const loginUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    // Use hard-coded production URL for client login
+    const loginUrl =
+      "http://tapvera-crm-frontend.s3-website.ap-south-1.amazonaws.com/login";
 
     const emailHtml = `
       <!DOCTYPE html>
@@ -81,7 +89,7 @@ Email: ${email}
 Password: ${password}
 Business Name: ${businessName}
 
-Login URL: ${loginUrl}
+Login URL: http://tapvera-crm-frontend.s3-website.ap-south-1.amazonaws.com/login
 
 If you have any questions, please contact our support team.
 
@@ -92,17 +100,20 @@ Tapvera CRM Team
     try {
       await emailService.sendEmail({
         to: email,
-        subject: 'Welcome to Tapvera CRM - Your Account Details',
+        subject: "Welcome to Tapvera CRM - Your Account Details",
         html: emailHtml,
         text: emailText,
-        emailType: 'client_welcome',
-        relatedClient: _id
+        emailType: "client_welcome",
+        relatedClient: _id,
       });
 
-      console.log(` Welcome email sent to ${email}`);
+      console.log(` Welcome email sent to ${email}`);
       return { success: true };
     } catch (error) {
-      console.error(`L Failed to send welcome email to ${email}:`, error.message);
+      console.error(
+        `L Failed to send welcome email to ${email}:`,
+        error.message
+      );
       throw error;
     }
   }
@@ -112,36 +123,37 @@ Tapvera CRM Team
    */
   async sendProjectMessageEmail(messageData) {
     try {
-      const Message = require('../models/Message');
-      const Project = require('../models/Project');
+      const Message = require("../models/Message");
+      const Project = require("../models/Project");
 
       // Populate message with sender and project details
       const message = await Message.findById(messageData._id)
-        .populate('sentBy', 'name email clientName')
-        .populate('project');
+        .populate("sentBy", "name email clientName")
+        .populate("project");
 
       if (!message) {
-        console.error('Message not found for email notification');
+        console.error("Message not found for email notification");
         return;
       }
 
       const project = await Project.findById(message.project)
-        .populate('clients', 'email clientName businessName')
-        .populate('assignedTo', 'email name');
+        .populate("clients", "email clientName businessName")
+        .populate("assignedTo", "email name");
 
       if (!project) {
-        console.error('Project not found for email notification');
+        console.error("Project not found for email notification");
         return;
       }
 
-      const senderName = message.sentBy?.name || message.sentBy?.clientName || 'Team Member';
-      const projectUrl = `${process.env.FRONTEND_URL}/projects/${project._id}`;
+      const senderName =
+        message.sentBy?.name || message.sentBy?.clientName || "Team Member";
+      const projectUrl = `${getFrontendUrl()}/project/${project._id}`;
 
       // If message is from employee to client - send to all clients
-      if (message.senderType !== 'client' && project.clients?.length > 0) {
+      if (message.senderType !== "client" && project.clients?.length > 0) {
         for (const client of project.clients) {
           if (client?.email) {
-        const clientEmailHtml = `
+            const clientEmailHtml = `
           <!DOCTYPE html>
           <html>
           <head>
@@ -184,7 +196,7 @@ Tapvera CRM Team
           </html>
         `;
 
-        const clientEmailText = `
+            const clientEmailText = `
 New Message in Your Project
 
 Project: ${project.projectName}
@@ -199,24 +211,26 @@ Best regards,
 Tapvera CRM Team
         `;
 
-        await emailService.sendEmail({
+            await emailService.sendEmail({
               to: client.email,
-          subject: `New Message: ${project.projectName}`,
-          html: clientEmailHtml,
-          text: clientEmailText,
-          emailType: 'project_message',
+              subject: `New Message: ${project.projectName}`,
+              html: clientEmailHtml,
+              text: clientEmailText,
+              emailType: "project_message",
               relatedClient: client._id,
-          relatedProject: project._id,
-          relatedMessage: message._id
-        });
+              relatedProject: project._id,
+              relatedMessage: message._id,
+            });
 
-        console.log(` Project message email sent to client: ${client.email}`);
+            console.log(
+              ` Project message email sent to client: ${client.email}`
+            );
           }
         }
       }
 
       // If message is from client to employees
-      if (message.senderType === 'client' && project.assignedTo?.length > 0) {
+      if (message.senderType === "client" && project.assignedTo?.length > 0) {
         for (const employee of project.assignedTo) {
           if (employee.email) {
             const employeeEmailHtml = `
@@ -282,20 +296,22 @@ Tapvera CRM Team
               subject: `Client Message: ${project.projectName}`,
               html: employeeEmailHtml,
               text: employeeEmailText,
-              emailType: 'message_received',
+              emailType: "message_received",
               relatedUser: employee._id,
               relatedProject: project._id,
-              relatedMessage: message._id
+              relatedMessage: message._id,
             });
 
-            console.log(` Project message email sent to employee: ${employee.email}`);
+            console.log(
+              ` Project message email sent to employee: ${employee.email}`
+            );
           }
         }
       }
 
       return { success: true };
     } catch (error) {
-      console.error('L Failed to send project message email:', error.message);
+      console.error("L Failed to send project message email:", error.message);
       // Don't throw error - email notification failure shouldn't break message sending
       return { success: false, error: error.message };
     }
@@ -306,7 +322,7 @@ Tapvera CRM Team
    */
   async sendTaskAssignedEmail(taskData) {
     try {
-      const User = require('../models/User');
+      const User = require("../models/User");
 
       for (const userId of taskData.assignedTo) {
         const user = await User.findById(userId);
@@ -335,13 +351,21 @@ Tapvera CRM Team
                 <h2>${taskData.title}</h2>
 
                 <div class="task-box">
-                  <p><strong>Description:</strong> ${taskData.description || 'No description provided'}</p>
-                  <p><strong>Due Date:</strong> ${taskData.dueDate ? new Date(taskData.dueDate).toLocaleDateString() : 'Not set'}</p>
-                  <p><strong>Priority:</strong> ${taskData.priority || 'Normal'}</p>
+                  <p><strong>Description:</strong> ${
+                    taskData.description || "No description provided"
+                  }</p>
+                  <p><strong>Due Date:</strong> ${
+                    taskData.dueDate
+                      ? new Date(taskData.dueDate).toLocaleDateString()
+                      : "Not set"
+                  }</p>
+                  <p><strong>Priority:</strong> ${
+                    taskData.priority || "Normal"
+                  }</p>
                 </div>
 
                 <div style="text-align: center;">
-                  <a href="${process.env.FRONTEND_URL}/tasks" class="button">View Task</a>
+                  <a href="${getFrontendUrl()}/tasks" class="button">View Task</a>
                 </div>
 
                 <p>Best regards,<br>
@@ -360,17 +384,17 @@ Tapvera CRM Team
           to: user.email,
           subject: `New Task: ${taskData.title}`,
           html,
-          emailType: 'task_assigned',
+          emailType: "task_assigned",
           relatedUser: userId,
-          relatedTask: taskData._id
+          relatedTask: taskData._id,
         });
 
-        console.log(` Task assignment email sent to ${user.email}`);
+        console.log(` Task assignment email sent to ${user.email}`);
       }
 
       return { success: true };
     } catch (error) {
-      console.error('L Failed to send task assignment email:', error.message);
+      console.error("L Failed to send task assignment email:", error.message);
       return { success: false, error: error.message };
     }
   }
@@ -380,15 +404,15 @@ Tapvera CRM Team
    */
   async sendTaskStatusUpdatedEmail(task, oldStatus, newStatus) {
     try {
-      const Task = require('../models/Task');
-      const Project = require('../models/Project');
+      const Task = require("../models/Task");
+      const Project = require("../models/Project");
 
       const taskData = await Task.findById(task._id)
-        .populate('assignedBy', 'email name')
-        .populate('project');
+        .populate("assignedBy", "email name")
+        .populate("project");
 
       if (!taskData) {
-        console.error('Task not found for status update email');
+        console.error("Task not found for status update email");
         return;
       }
 
@@ -417,11 +441,11 @@ Tapvera CRM Team
                 <h2>${taskData.title}</h2>
 
                 <div class="status-box">
-                  <p><strong>Status changed from:</strong> ${oldStatus} � ${newStatus}</p>
+                  <p><strong>Status changed from:</strong> ${oldStatus} → ${newStatus}</p>
                 </div>
 
                 <div style="text-align: center;">
-                  <a href="${process.env.FRONTEND_URL}/tasks" class="button">View Task</a>
+                  <a href="${getFrontendUrl()}/tasks" class="button">View Task</a>
                 </div>
 
                 <p>Best regards,<br>
@@ -440,79 +464,96 @@ Tapvera CRM Team
           to: taskData.assignedBy.email,
           subject: `Task Updated: ${taskData.title}`,
           html,
-          emailType: 'task_updated',
-          relatedTask: taskData._id
+          emailType: "task_updated",
+          relatedTask: taskData._id,
         });
 
-        console.log(` Task status update email sent to ${taskData.assignedBy.email}`);
+        console.log(
+          ` Task status update email sent to ${taskData.assignedBy.email}`
+        );
       }
 
-      // If task completed, notify client
-      if (newStatus === 'completed' && taskData.project) {
-        const project = await Project.findById(taskData.project).populate('client', 'email clientName');
+      // If task completed, notify clients
+      if (newStatus === "completed" && taskData.project) {
+        const project = await Project.findById(taskData.project).populate(
+          "clients",
+          "email clientName businessName"
+        );
 
-        if (project?.client?.email) {
-          const clientHtml = `
-            <!DOCTYPE html>
-            <html>
-            <head>
-              <style>
-                body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-                .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-                .header { background: linear-gradient(135deg, #28a745 0%, #20c997 100%); color: white; padding: 20px; text-align: center; border-radius: 10px 10px 0 0; }
-                .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
-                .task-box { background: white; padding: 20px; border-left: 4px solid #28a745; margin: 20px 0; border-radius: 5px; }
-                .button { display: inline-block; background: linear-gradient(135deg, #28a745 0%, #20c997 100%); color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; margin: 20px 0; }
-                .footer { text-align: center; color: #666; font-size: 12px; margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd; }
-              </style>
-            </head>
-            <body>
-              <div class="container">
-                <div class="header">
-                  <h1>Task Completed!</h1>
-                </div>
-                <div class="content">
-                  <h2>Great News!</h2>
-                  <p>A task for your project has been completed.</p>
+        // Send email to all clients
+        if (project?.clients && Array.isArray(project.clients)) {
+          for (const client of project.clients) {
+            if (!client?.email) continue;
 
-                  <div class="task-box">
-                    <p><strong>Task:</strong> ${taskData.title}</p>
-                    <p><strong>Project:</strong> ${project.projectName}</p>
+            const clientHtml = `
+              <!DOCTYPE html>
+              <html>
+              <head>
+                <style>
+                  body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+                  .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+                  .header { background: linear-gradient(135deg, #28a745 0%, #20c997 100%); color: white; padding: 20px; text-align: center; border-radius: 10px 10px 0 0; }
+                  .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
+                  .task-box { background: white; padding: 20px; border-left: 4px solid #28a745; margin: 20px 0; border-radius: 5px; }
+                  .button { display: inline-block; background: linear-gradient(135deg, #28a745 0%, #20c997 100%); color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; margin: 20px 0; }
+                  .footer { text-align: center; color: #666; font-size: 12px; margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd; }
+                </style>
+              </head>
+              <body>
+                <div class="container">
+                  <div class="header">
+                    <h1>Task Completed!</h1>
                   </div>
+                  <div class="content">
+                    <h2>Great News!</h2>
+                    <p>A task for your project has been completed.</p>
 
-                  <div style="text-align: center;">
-                    <a href="${process.env.FRONTEND_URL}/projects/${project._id}" class="button">View Project</a>
+                    <div class="task-box">
+                      <p><strong>Task:</strong> ${taskData.title}</p>
+                      <p><strong>Project:</strong> ${project.projectName}</p>
+                    </div>
+
+                    <div style="text-align: center;">
+                      <a href="${getFrontendUrl()}/project/${
+              project._id
+            }" class="button">View Project</a>
+                    </div>
+
+                    <p>Best regards,<br>
+                    <strong>Tapvera CRM Team</strong></p>
                   </div>
-
-                  <p>Best regards,<br>
-                  <strong>Tapvera CRM Team</strong></p>
+                  <div class="footer">
+                    <p>This is an automated email. Please do not reply to this message.</p>
+                    <p>&copy; ${new Date().getFullYear()} Tapvera CRM. All rights reserved.</p>
+                  </div>
                 </div>
-                <div class="footer">
-                  <p>This is an automated email. Please do not reply to this message.</p>
-                  <p>&copy; ${new Date().getFullYear()} Tapvera CRM. All rights reserved.</p>
-                </div>
-              </div>
-            </body>
-            </html>
-          `;
+              </body>
+              </html>
+            `;
 
-          await emailService.sendEmail({
-                to: client.email,
-            subject: `Task Completed: ${taskData.title}`,
-            html: clientHtml,
-            emailType: 'task_completed',
-                relatedClient: client._id,
-            relatedProject: project._id,
-            relatedTask: taskData._id
-          });
+            await emailService.sendEmail({
+              to: client.email,
+              subject: `Task Completed: ${taskData.title}`,
+              html: clientHtml,
+              emailType: "task_completed",
+              relatedClient: client._id,
+              relatedProject: project._id,
+              relatedTask: taskData._id,
+            });
 
-          console.log(` Task completion email sent to client: ${client.email}`);
+            console.log(
+              ` Task completion email sent to client: ${client.email}`
+            );
+          }
         }
       }
 
       return { success: true };
     } catch (error) {
-      console.error('L Failed to send task status update email:', error.message);
+      console.error(
+        "L Failed to send task status update email:",
+        error.message
+      );
       return { success: false, error: error.message };
     }
   }

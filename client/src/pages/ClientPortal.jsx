@@ -98,10 +98,14 @@ const ClientPortal = ({ onLogout, clientId }) => {
       const res = await axios.get(`${API_BASE}/api/projects`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      // Filter projects for this client
-      const clientProjects = res.data.filter(
-        (p) => p.client?._id === clientId || p.client === clientId
-      );
+      // Filter projects for this client (clients is an array)
+      const clientProjects = res.data.filter((p) => {
+        if (!p.clients || !Array.isArray(p.clients)) return false;
+        return p.clients.some((c) => {
+          const cId = typeof c === 'object' ? c._id : c;
+          return cId === clientId;
+        });
+      });
       setProjects(clientProjects);
     } catch (error) {
       console.error("Error fetching projects:", error);

@@ -115,13 +115,12 @@ const menuConfig = {
       icon: <ChevronUp size={18} animateOnHover />,
       label: "My Leads",
     },
-   
+
     {
       to: "/callbacks",
       icon: <Gavel size={18} animateOnHover />,
       label: "My Callbacks",
     },
-    
   ],
   hr: [
     {
@@ -166,11 +165,11 @@ const menuConfig = {
       icon: <Users size={18} animateOnHover />,
       label: "Employee Details",
     },
-    {
-      to: "/roles",
-      icon: <Shield size={18} />,
-      label: "Role Management",
-    },
+    // {
+    //   to: "/roles",
+    //   icon: <Shield size={18} />,
+    //   label: "Role Management",
+    // },
     {
       to: "/admin/shifts",
       icon: <Clock size={18} />,
@@ -253,11 +252,11 @@ const menuConfig = {
       ],
     },
 
-    {
-      to: "/roles",
-      icon: <Shield size={18} />,
-      label: "Role Management",
-    },
+    // {
+    //   to: "/roles",
+    //   icon: <Shield size={18} />,
+    //   label: "Role Management",
+    // },
     {
       to: "/sheets",
       icon: <FileSpreadsheet size={18} />,
@@ -363,17 +362,17 @@ const menuConfig = {
           icon: <Fingerprint size={16} animateOnHover />,
           label: "Salary Management",
         },
-        
+
         {
           to: "/directory",
           icon: <Users size={16} animateOnHover />,
           label: "Employee Details",
         },
-        {
-          to: "/roles",
-          icon: <Shield size={16} />,
-          label: "Role Management",
-        },
+        // {
+        //   to: "/roles",
+        //   icon: <Shield size={16} />,
+        //   label: "Role Management",
+        // },
         {
           to: "/super-admin/notepad",
           icon: <BookOpen size={16} animateOnHover />,
@@ -431,7 +430,7 @@ const menuConfig = {
       icon: <Bell size={18} />,
       label: "Notifications",
     },
-    
+
     { to: "/admin/notices", icon: <Flag size={18} />, label: "Notice Board" },
     {
       to: "/admin/holidays",
@@ -477,9 +476,9 @@ const Sidebar = ({ collapsed, setCollapsed, onLogout, userRole }) => {
   } = useAchievements();
 
   const toggleDropdown = (label) => {
-    setExpandedDropdowns(prev => ({
+    setExpandedDropdowns((prev) => ({
       ...prev,
-      [label]: !prev[label]
+      [label]: !prev[label],
     }));
   };
 
@@ -487,25 +486,33 @@ const Sidebar = ({ collapsed, setCollapsed, onLogout, userRole }) => {
   useEffect(() => {
     const rawMenuItems = menuConfig[role] || menuConfig["employee"];
     const newExpandedState = {};
-    
+
     rawMenuItems.forEach((item) => {
       if (item.children) {
-        const hasActiveChild = item.children.some(child => {
+        const hasActiveChild = item.children.some((child) => {
           // Exact match for routes
           if (child.to === location.pathname) return true;
           // Special handling for /super-admin to not match /super-admin/attendance etc
-          if (child.to === "/super-admin" && location.pathname === "/super-admin") return true;
-          if (child.to !== "/super-admin" && location.pathname.startsWith(child.to)) return true;
+          if (
+            child.to === "/super-admin" &&
+            location.pathname === "/super-admin"
+          )
+            return true;
+          if (
+            child.to !== "/super-admin" &&
+            location.pathname.startsWith(child.to)
+          )
+            return true;
           return false;
         });
-        
+
         if (hasActiveChild) {
           newExpandedState[item.label] = true;
         }
       }
     });
-    
-    setExpandedDropdowns(prev => ({ ...prev, ...newExpandedState }));
+
+    setExpandedDropdowns((prev) => ({ ...prev, ...newExpandedState }));
   }, [location.pathname, role]);
 
   useEffect(() => {
@@ -608,10 +615,7 @@ const Sidebar = ({ collapsed, setCollapsed, onLogout, userRole }) => {
     // For items with children, filter the children
     if (item.children) {
       item.children = item.children.filter((child) => {
-        if (
-          child.to === "/leads" ||
-          child.to === "/callbacks"
-        ) {
+        if (child.to === "/leads" || child.to === "/callbacks") {
           return (
             role === "super-admin" ||
             role === "admin" ||
@@ -623,12 +627,9 @@ const Sidebar = ({ collapsed, setCollapsed, onLogout, userRole }) => {
       // Only show the dropdown if it has children after filtering
       return item.children.length > 0;
     }
-    
+
     // Allow access to leads/callbacks for super-admin, admin, or marketingAndSales employees
-    if (
-      item.to === "/leads" ||
-      item.to === "/callbacks"
-    ) {
+    if (item.to === "/leads" || item.to === "/callbacks") {
       return (
         role === "super-admin" ||
         role === "admin" ||
@@ -643,7 +644,9 @@ const Sidebar = ({ collapsed, setCollapsed, onLogout, userRole }) => {
     if (path === "/super-admin") {
       return location.pathname === "/super-admin";
     }
-    return location.pathname === path || location.pathname.startsWith(path + "/");
+    return (
+      location.pathname === path || location.pathname.startsWith(path + "/")
+    );
   };
 
   // Helper to add hover trigger to animated icons
@@ -717,17 +720,20 @@ const Sidebar = ({ collapsed, setCollapsed, onLogout, userRole }) => {
             // Handle dropdown menus
             if (item.children) {
               const isExpanded = expandedDropdowns[item.label];
-              const hasActiveChild = item.children.some(child => isRouteActive(child.to));
-              
+              const hasActiveChild = item.children.some((child) =>
+                isRouteActive(child.to)
+              );
+
               return (
                 <div key={`dropdown-${item.label}`}>
                   <button
                     onClick={() => !collapsed && toggleDropdown(item.label)}
                     className={`group flex items-center gap-4 rounded-lg px-4 py-3 text-sm font-semibold
                       transition-all duration-150 w-full text-left
-                      ${hasActiveChild && !isExpanded
-                        ? "bg-gradient-to-r from-blue-600/50 to-blue-400/50 text-white"
-                        : "text-blue-100 hover:text-blue-300 hover:bg-white/10 hover:font-bold"
+                      ${
+                        hasActiveChild && !isExpanded
+                          ? "bg-gradient-to-r from-blue-600/50 to-blue-400/50 text-white"
+                          : "text-blue-100 hover:text-blue-300 hover:bg-white/10 hover:font-bold"
                       }
                       ${collapsed ? "justify-center" : "justify-between"}`}
                     tabIndex={collapsed ? -1 : 0}
@@ -736,17 +742,24 @@ const Sidebar = ({ collapsed, setCollapsed, onLogout, userRole }) => {
                   >
                     <div className="flex items-center gap-4">
                       <span className="flex items-center justify-center">
-                        {renderIconWithHover(item.icon, hoveredItem === item.label)}
+                        {renderIconWithHover(
+                          item.icon,
+                          hoveredItem === item.label
+                        )}
                       </span>
                       {!collapsed && <span>{item.label}</span>}
                     </div>
                     {!collapsed && (
                       <span className="transition-transform duration-200">
-                        {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                        {isExpanded ? (
+                          <ChevronDown size={16} />
+                        ) : (
+                          <ChevronRight size={16} />
+                        )}
                       </span>
                     )}
                   </button>
-                  
+
                   {/* Dropdown Items */}
                   {!collapsed && isExpanded && (
                     <div className="ml-4 mt-1 space-y-1 border-l-2 border-blue-500/30 pl-2">
@@ -767,7 +780,10 @@ const Sidebar = ({ collapsed, setCollapsed, onLogout, userRole }) => {
                             onMouseLeave={() => setHoveredItem(null)}
                           >
                             <span className="flex items-center justify-center">
-                              {renderIconWithHover(child.icon, hoveredItem === child.to)}
+                              {renderIconWithHover(
+                                child.icon,
+                                hoveredItem === child.to
+                              )}
                             </span>
                             <span>{child.label}</span>
                           </NavLink>

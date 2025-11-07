@@ -17,6 +17,9 @@ import {
   Globe,
   ChevronDown,
   ChevronUp,
+  CheckSquare,
+  Square,
+  Undo2,
 } from "lucide-react";
 import { Line } from "react-chartjs-2";
 import KeywordCalendarHeatmap from "./KeywordCalendarHeatmap";
@@ -61,6 +64,8 @@ const OnPageSEO = ({ projectId, userRole, userId }) => {
   const [stats, setStats] = useState(null);
   const [selectedDate, setSelectedDate] = useState(null);
   const [showVelocityMetrics, setShowVelocityMetrics] = useState(true);
+  const [selectedKeywords, setSelectedKeywords] = useState([]);
+  const [undoStack, setUndoStack] = useState([]);
 
   // Form states
   const [formData, setFormData] = useState({
@@ -196,6 +201,120 @@ const OnPageSEO = ({ projectId, userRole, userId }) => {
     } catch (error) {
       showNotification(
         error.response?.data?.message || "Error deleting keyword",
+        "error"
+      );
+    }
+  };
+
+  const handleSelectKeyword = (keywordId) => {
+    setSelectedKeywords((prev) => {
+      if (prev.includes(keywordId)) {
+        return prev.filter((id) => id !== keywordId);
+      }
+      return [...prev, keywordId];
+    });
+  };
+
+  const handleSelectAll = () => {
+    if (selectedKeywords.length === keywords.length) {
+      setSelectedKeywords([]);
+    } else {
+      setSelectedKeywords(keywords.map((k) => k._id));
+    }
+  };
+
+  const handleDeleteSelected = async () => {
+    if (selectedKeywords.length === 0) {
+      showNotification("No keywords selected", "error");
+      return;
+    }
+
+    if (
+      !window.confirm(
+        `Are you sure you want to deactivate ${selectedKeywords.length} keyword(s)?`
+      )
+    )
+      return;
+
+    try {
+      const token = localStorage.getItem("token");
+      const deletedKeywords = keywords.filter((k) =>
+        selectedKeywords.includes(k._id)
+      );
+
+      // Save to undo stack
+      setUndoStack((prev) => [
+        ...prev,
+        { items: deletedKeywords, timestamp: Date.now() },
+      ]);
+
+      // Delete all selected keywords
+      await Promise.all(
+        selectedKeywords.map((keywordId) =>
+          axios.delete(
+            `${API_BASE}/api/projects/${projectId}/keywords/${keywordId}`,
+            {
+              headers: { Authorization: `Bearer ${token}` },
+            }
+          )
+        )
+      );
+
+      showNotification(
+        `${selectedKeywords.length} keyword(s) deactivated successfully!`,
+        "success"
+      );
+      setSelectedKeywords([]);
+      fetchKeywords();
+      fetchStats();
+    } catch (error) {
+      showNotification(
+        error.response?.data?.message || "Error deleting keywords",
+        "error"
+      );
+    }
+  };
+
+  const handleUndo = async () => {
+    if (undoStack.length === 0) {
+      showNotification("No actions to undo", "error");
+      return;
+    }
+
+    const lastAction = undoStack[undoStack.length - 1];
+    try {
+      const token = localStorage.getItem("token");
+
+      // Restore deleted keywords by re-adding them
+      await Promise.all(
+        lastAction.items.map((keyword) =>
+          axios.post(
+            `${API_BASE}/api/projects/${projectId}/keywords`,
+            {
+              keyword: keyword.keyword,
+              initialRank: keyword.currentRank?.rank || 0,
+              keywordLink: keyword.keywordLink,
+              searchEngine: keyword.searchEngine,
+              location: keyword.location,
+              notes: "Restored via undo",
+            },
+            {
+              headers: { Authorization: `Bearer ${token}` },
+            }
+          )
+        )
+      );
+
+      showNotification(
+        `${lastAction.items.length} keyword(s) restored!`,
+        "success"
+      );
+      setUndoStack((prev) => prev.slice(0, -1));
+      fetchKeywords();
+      fetchStats();
+    } catch (error) {
+      showNotification(
+        error.response?.data?.message || "Error restoring keywords",
         "error"
       );
     }
@@ -339,16 +458,42 @@ const OnPageSEO = ({ projectId, userRole, userId }) => {
           <p className="text-sm text-gray-400 mt-1">
             Track keyword rankings and performance
           </p>
+          {selectedKeywords.length > 0 && (
+            <p className="text-xs text-blue-400 mt-1">
+              {selectedKeywords.length} keyword(s) selected
+            </p>
+          )}
         </div>
-        {canEdit && (
-          <button
-            onClick={() => setShowAddModal(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-lg transition-all font-medium shadow-lg"
-          >
-            <Plus className="w-4 h-4" />
-            Add Keyword
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          {canEdit && selectedKeywords.length > 0 && (
+            <button
+              onClick={handleDeleteSelected}
+              className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-all font-medium shadow-lg"
+            >
+              <Trash2 className="w-4 h-4" />
+              Delete Selected ({selectedKeywords.length})
+            </button>
+          )}
+          {canEdit && undoStack.length > 0 && (
+            <button
+              onClick={handleUndo}
+              className="flex items-center gap-2 px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-all font-medium shadow-lg"
+              title="Undo last deletion"
+            >
+              <Undo2 className="w-4 h-4" />
+              Undo
+            </button>
+          )}
+          {canEdit && (
+            <button
+              onClick={() => setShowAddModal(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-lg transition-all font-medium shadow-lg"
+            >
+              <Plus className="w-4 h-4" />
+              Add Keyword
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Stats Cards */}
@@ -559,6 +704,25 @@ const OnPageSEO = ({ projectId, userRole, userId }) => {
             <table className="w-full">
               <thead className="bg-[#141a21] border-b border-[#232945]">
                 <tr>
+                  {canEdit && (
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider w-12">
+                      <button
+                        onClick={handleSelectAll}
+                        className="p-1 hover:bg-[#232945] rounded transition-colors"
+                        title={
+                          selectedKeywords.length === keywords.length
+                            ? "Deselect All"
+                            : "Select All"
+                        }
+                      >
+                        {selectedKeywords.length === keywords.length ? (
+                          <CheckSquare className="w-5 h-5 text-blue-400" />
+                        ) : (
+                          <Square className="w-5 h-5 text-gray-400" />
+                        )}
+                      </button>
+                    </th>
+                  )}
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">
                     Keyword
                   </th>
@@ -588,6 +752,20 @@ const OnPageSEO = ({ projectId, userRole, userId }) => {
                     key={keyword._id}
                     className="hover:bg-[#141a21] transition-colors"
                   >
+                    {canEdit && (
+                      <td className="px-4 py-4">
+                        <button
+                          onClick={() => handleSelectKeyword(keyword._id)}
+                          className="p-1 hover:bg-[#232945] rounded transition-colors"
+                        >
+                          {selectedKeywords.includes(keyword._id) ? (
+                            <CheckSquare className="w-5 h-5 text-blue-400" />
+                          ) : (
+                            <Square className="w-5 h-5 text-gray-400" />
+                          )}
+                        </button>
+                      </td>
+                    )}
                     <td className="px-4 py-4">
                       <div>
                         <div className="font-medium text-white">

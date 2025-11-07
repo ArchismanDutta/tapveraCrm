@@ -13,6 +13,9 @@ import {
   X,
   Search,
   Filter,
+  CheckSquare,
+  Square,
+  Undo2,
 } from "lucide-react";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
@@ -28,6 +31,8 @@ const BlogUpdates = ({ projectId, userRole, userId }) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterCategory, setFilterCategory] = useState("all");
+  const [selectedBlogs, setSelectedBlogs] = useState([]);
+  const [undoStack, setUndoStack] = useState([]);
 
   const [formData, setFormData] = useState({
     title: "",
@@ -184,6 +189,121 @@ const BlogUpdates = ({ projectId, userRole, userId }) => {
     }
   };
 
+  const handleSelectBlog = (blogId) => {
+    setSelectedBlogs((prev) => {
+      if (prev.includes(blogId)) {
+        return prev.filter((id) => id !== blogId);
+      }
+      return [...prev, blogId];
+    });
+  };
+
+  const handleSelectAll = () => {
+    if (selectedBlogs.length === filteredBlogs.length) {
+      setSelectedBlogs([]);
+    } else {
+      setSelectedBlogs(filteredBlogs.map((b) => b._id));
+    }
+  };
+
+  const handleDeleteSelected = async () => {
+    if (selectedBlogs.length === 0) {
+      showNotification("No blogs selected", "error");
+      return;
+    }
+
+    if (
+      !window.confirm(
+        `Are you sure you want to delete ${selectedBlogs.length} blog(s)?`
+      )
+    )
+      return;
+
+    try {
+      const token = localStorage.getItem("token");
+      const deletedBlogs = blogs.filter((b) => selectedBlogs.includes(b._id));
+
+      // Save to undo stack
+      setUndoStack((prev) => [
+        ...prev,
+        { items: deletedBlogs, timestamp: Date.now() },
+      ]);
+
+      // Delete all selected blogs
+      await Promise.all(
+        selectedBlogs.map((blogId) =>
+          axios.delete(
+            `${API_BASE}/api/projects/${projectId}/blogs/${blogId}`,
+            {
+              headers: { Authorization: `Bearer ${token}` },
+            }
+          )
+        )
+      );
+
+      showNotification(
+        `${selectedBlogs.length} blog(s) deleted successfully!`,
+        "success"
+      );
+      setSelectedBlogs([]);
+      fetchBlogs();
+      fetchStats();
+    } catch (error) {
+      showNotification(
+        error.response?.data?.message || "Error deleting blogs",
+        "error"
+      );
+    }
+  };
+
+  const handleUndo = async () => {
+    if (undoStack.length === 0) {
+      showNotification("No actions to undo", "error");
+      return;
+    }
+
+    const lastAction = undoStack[undoStack.length - 1];
+    try {
+      const token = localStorage.getItem("token");
+
+      // Restore deleted blogs by re-adding them
+      await Promise.all(
+        lastAction.items.map((blog) =>
+          axios.post(
+            `${API_BASE}/api/projects/${projectId}/blogs`,
+            {
+              title: blog.title,
+              url: blog.url,
+              description: blog.description,
+              category: blog.category,
+              status: blog.status,
+              publishedDate: blog.publishedDate,
+              wordCount: blog.wordCount,
+              targetKeywords: blog.targetKeywords,
+              notes: blog.notes || "Restored via undo",
+            },
+            {
+              headers: { Authorization: `Bearer ${token}` },
+            }
+          )
+        )
+      );
+
+      showNotification(
+        `${lastAction.items.length} blog(s) restored!`,
+        "success"
+      );
+      setUndoStack((prev) => prev.slice(0, -1));
+      fetchBlogs();
+      fetchStats();
+    } catch (error) {
+      showNotification(
+        error.response?.data?.message || "Error restoring blogs",
+        "error"
+      );
+    }
+  };
+
   const resetForm = () => {
     setFormData({
       title: "",
@@ -294,16 +414,42 @@ const BlogUpdates = ({ projectId, userRole, userId }) => {
           <p className="text-sm text-gray-400 mt-1">
             Track blog posts and content updates
           </p>
+          {selectedBlogs.length > 0 && (
+            <p className="text-xs text-blue-400 mt-1">
+              {selectedBlogs.length} blog(s) selected
+            </p>
+          )}
         </div>
-        {canEdit && (
-          <button
-            onClick={() => setShowAddModal(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-lg transition-all font-medium shadow-lg"
-          >
-            <Plus className="w-4 h-4" />
-            Add Blog
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          {canEdit && selectedBlogs.length > 0 && (
+            <button
+              onClick={handleDeleteSelected}
+              className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-all font-medium shadow-lg"
+            >
+              <Trash2 className="w-4 h-4" />
+              Delete Selected ({selectedBlogs.length})
+            </button>
+          )}
+          {canEdit && undoStack.length > 0 && (
+            <button
+              onClick={handleUndo}
+              className="flex items-center gap-2 px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-all font-medium shadow-lg"
+              title="Undo last deletion"
+            >
+              <Undo2 className="w-4 h-4" />
+              Undo
+            </button>
+          )}
+          {canEdit && (
+            <button
+              onClick={() => setShowAddModal(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-lg transition-all font-medium shadow-lg"
+            >
+              <Plus className="w-4 h-4" />
+              Add Blog
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Stats Cards */}
@@ -404,6 +550,25 @@ const BlogUpdates = ({ projectId, userRole, userId }) => {
             <table className="w-full">
               <thead className="bg-[#141a21] border-b border-[#232945]">
                 <tr>
+                  {canEdit && (
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider w-12">
+                      <button
+                        onClick={handleSelectAll}
+                        className="p-1 hover:bg-[#232945] rounded transition-colors"
+                        title={
+                          selectedBlogs.length === filteredBlogs.length
+                            ? "Deselect All"
+                            : "Select All"
+                        }
+                      >
+                        {selectedBlogs.length === filteredBlogs.length ? (
+                          <CheckSquare className="w-5 h-5 text-blue-400" />
+                        ) : (
+                          <Square className="w-5 h-5 text-gray-400" />
+                        )}
+                      </button>
+                    </th>
+                  )}
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">
                     Title & URL
                   </th>
@@ -430,6 +595,20 @@ const BlogUpdates = ({ projectId, userRole, userId }) => {
                     key={blog._id}
                     className="hover:bg-[#141a21] transition-colors"
                   >
+                    {canEdit && (
+                      <td className="px-4 py-4">
+                        <button
+                          onClick={() => handleSelectBlog(blog._id)}
+                          className="p-1 hover:bg-[#232945] rounded transition-colors"
+                        >
+                          {selectedBlogs.includes(blog._id) ? (
+                            <CheckSquare className="w-5 h-5 text-blue-400" />
+                          ) : (
+                            <Square className="w-5 h-5 text-gray-400" />
+                          )}
+                        </button>
+                      </td>
+                    )}
                     <td className="px-4 py-4">
                       <div>
                         <div className="font-medium text-white mb-1">

@@ -672,8 +672,10 @@ const ProjectsPage = ({ onLogout }) => {
     let filtered = projects.filter(p => {
       const matchesSearch =
         p.projectName?.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
-        p.client?.businessName?.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
-        p.client?.clientName?.toLowerCase().includes(debouncedSearchTerm.toLowerCase());
+        p.clients?.some(client =>
+          client?.businessName?.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
+          client?.clientName?.toLowerCase().includes(debouncedSearchTerm.toLowerCase())
+        );
 
       const matchesType = filterType === "all" || (Array.isArray(p.type) ? p.type.includes(filterType) : p.type === filterType);
 
@@ -2373,14 +2375,22 @@ const ProjectsPage = ({ onLogout }) => {
                   </span>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-400 mb-1">Client</p>
+                  <p className="text-sm text-gray-400 mb-1">{selectedProject.clients && selectedProject.clients.length > 1 ? 'Clients' : 'Client'}</p>
                   <div className="flex flex-col gap-1.5">
-                    <p className="text-white">{selectedProject.client?.businessName || selectedProject.client?.clientName || "N/A"}</p>
-                    {selectedProject.client?.region && (
-                      <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-500/20 text-blue-400 border border-blue-500/50 inline-flex items-center gap-1 w-fit">
-                        <span>🌍</span>
-                        {selectedProject.client.region}
-                      </span>
+                    {selectedProject.clients && selectedProject.clients.length > 0 ? (
+                      selectedProject.clients.map((client, idx) => (
+                        <div key={idx} className="flex flex-col gap-1">
+                          <p className="text-white">{client?.businessName || client?.clientName || "N/A"}</p>
+                          {client?.region && (
+                            <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-500/20 text-blue-400 border border-blue-500/50 inline-flex items-center gap-1 w-fit">
+                              <span>🌍</span>
+                              {client.region}
+                            </span>
+                          )}
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-white">N/A</p>
                     )}
                   </div>
                 </div>
