@@ -33,9 +33,9 @@ const seedProjects = async () => {
 
       projects.push({
         projectName: `Project ${i + 1} - ${projectTypes[Math.floor(Math.random() * projectTypes.length)]}`,
-        type: projectTypes[Math.floor(Math.random() * projectTypes.length)],
+        type: [projectTypes[Math.floor(Math.random() * projectTypes.length)]],
         assignedTo: employees.slice(0, Math.floor(Math.random() * 3) + 1).map(e => e._id),
-        client: clients[Math.floor(Math.random() * clients.length)]._id,
+        clients: [clients[Math.floor(Math.random() * clients.length)]._id],
         startDate,
         endDate,
         description: `Description for project ${i + 1}`,

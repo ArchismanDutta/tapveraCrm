@@ -307,10 +307,25 @@ const ProjectsPage = ({ onLogout }) => {
     }
   };
 
+  // Normalize project data to handle both old (client) and new (clients) schema
+  const normalizeProjects = (projectsData) => {
+    return projectsData.map(project => {
+      // If project has old 'client' field but no 'clients', convert it
+      if (project.client && (!project.clients || project.clients.length === 0)) {
+        return {
+          ...project,
+          clients: [project.client]  // Convert single client to array
+        };
+      }
+      return project;
+    });
+  };
+
   const fetchProjects = async () => {
     try {
       const res = await API.get("/api/projects");
-      setProjects(res.data);
+      const normalizedProjects = normalizeProjects(res.data);
+      setProjects(normalizedProjects);
     } catch {
       showNotification("Error fetching projects", "error");
     }
@@ -517,12 +532,17 @@ const ProjectsPage = ({ onLogout }) => {
   };
 
   const openEditModal = async (project) => {
-    setSelectedProject(project);
+    // Normalize project to handle both old (client) and new (clients) schema
+    const normalizedProject = project.client && (!project.clients || project.clients.length === 0)
+      ? { ...project, clients: [project.client] }
+      : project;
+
+    setSelectedProject(normalizedProject);
     setForm({
-      projectName: project.projectName,
-      type: Array.isArray(project.type) ? project.type : [project.type],
-      assignedTo: project.assignedTo.map(e => e._id || e),
-      clients: Array.isArray(project.clients) ? project.clients.map(c => c._id || c) : [],
+      projectName: normalizedProject.projectName,
+      type: Array.isArray(normalizedProject.type) ? normalizedProject.type : [normalizedProject.type],
+      assignedTo: normalizedProject.assignedTo.map(e => e._id || e),
+      clients: Array.isArray(normalizedProject.clients) ? normalizedProject.clients.map(c => c._id || c) : [],
       startDate: project.startDate ? new Date(project.startDate).toISOString().split('T')[0] : "",
       endDate: project.endDate ? new Date(project.endDate).toISOString().split('T')[0] : "",
       description: project.description || "",
@@ -693,7 +713,7 @@ const ProjectsPage = ({ onLogout }) => {
 
       const matchesClient =
         filterClient === "all" ||
-        (p.client?._id || p.client) === filterClient;
+        p.clients?.some(c => (c._id || c) === filterClient);
 
       // Date range filter
       const today = new Date();
@@ -765,7 +785,7 @@ const ProjectsPage = ({ onLogout }) => {
       ...filteredProjects.map(p => [
         p.projectName,
         Array.isArray(p.type) ? p.type.join("; ") : p.type,
-        p.client?.businessName || "N/A",
+        p.clients?.map(c => c.businessName || c.clientName || "Unknown").join("; ") || "N/A",
         p.assignedTo?.map(e => e.name || "Unknown").join("; ") || "N/A",
         p.startDate ? new Date(p.startDate).toLocaleDateString() : "N/A",
         p.endDate ? new Date(p.endDate).toLocaleDateString() : "N/A",

@@ -20,11 +20,18 @@ const projectSchema = new mongoose.Schema(
         required: true,
       },
     ],
+    // ✅ Old schema field (backwards compatibility) - kept for old projects
+    client: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Client",
+      required: false,
+    },
+    // ✅ New schema field (current) - array of clients
     clients: [
       {
         type: mongoose.Schema.Types.ObjectId,
         ref: "Client",
-        required: true,
+        required: false,
       },
     ],
     startDate: {

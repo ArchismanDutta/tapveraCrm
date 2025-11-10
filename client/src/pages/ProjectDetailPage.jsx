@@ -328,7 +328,14 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
       const res = await axios.get(`${API_BASE}/api/projects/${projectId}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      setProject(res.data);
+
+      // Normalize project to handle both old (client) and new (clients) schema
+      const projectData = res.data;
+      if (projectData.client && (!projectData.clients || projectData.clients.length === 0)) {
+        projectData.clients = [projectData.client];
+      }
+
+      setProject(projectData);
     } catch (error) {
       console.error("Error fetching project:", error);
       showNotification("Error loading project details", "error");

@@ -115,6 +115,7 @@ router.get("/", protect, async (req, res) => {
 
     const projects = await Project.find(filter)
       .populate("assignedTo", "name email employeeId designation status")
+      .populate("client", "clientName businessName email region")  // ✅ Populate old field (backwards compatibility)
       .populate("clients", "clientName businessName email region")
       .populate("createdBy", "name email")
       .populate("tasks", "title status priority dueDate")  // ✅ Populate tasks for progress calculation
@@ -219,6 +220,7 @@ router.get("/:id", protect, async (req, res) => {
   try {
     const project = await Project.findById(req.params.id)
       .populate("assignedTo", "name email role employeeId designation status")
+      .populate("client", "clientName businessName email")  // ✅ Populate old field (backwards compatibility)
       .populate("clients", "clientName businessName email")
       .populate("createdBy", "name email")
       .populate("notes.createdBy", "name email")
@@ -319,6 +321,7 @@ router.post("/", protect, authorize("admin", "superadmin"), async (req, res) => 
 
     const populatedProject = await Project.findById(project._id)
       .populate("assignedTo", "name email employeeId designation status")
+      .populate("client", "clientName businessName email")  // ✅ Populate old field (backwards compatibility)
       .populate("clients", "clientName businessName email")
       .populate("createdBy", "name email");
 
@@ -414,6 +417,7 @@ router.put("/:id", protect, authorize("admin", "superadmin"), async (req, res) =
 
     const updatedProject = await Project.findById(project._id)
       .populate("assignedTo", "name email employeeId designation status")
+      .populate("client", "clientName businessName email")  // ✅ Populate old field (backwards compatibility)
       .populate("clients", "clientName businessName email")
       .populate("createdBy", "name email");
 
@@ -454,6 +458,7 @@ router.patch("/:id/status", protect, authorize("admin", "superadmin"), async (re
 
     const updatedProject = await Project.findById(project._id)
       .populate("assignedTo", "name email employeeId designation status")
+      .populate("client", "clientName businessName email")  // ✅ Populate old field (backwards compatibility)
       .populate("clients", "clientName businessName email");
 
     res.json(updatedProject);
@@ -601,6 +606,7 @@ router.get("/employee/:employeeId", protect, async (req, res) => {
   try {
     const projects = await Project.find({ assignedTo: req.params.employeeId })
       .populate("assignedTo", "name email employeeId designation status")
+      .populate("client", "clientName businessName email")  // ✅ Populate old field (backwards compatibility)
       .populate("clients", "clientName businessName email")
       .populate("tasks", "title status priority dueDate")
       .sort({ createdAt: -1 });
@@ -619,6 +625,7 @@ router.get("/client/:clientId", protect, async (req, res) => {
   try {
     const projects = await Project.find({ clients: req.params.clientId })
       .populate("assignedTo", "name email employeeId designation status")
+      .populate("client", "clientName businessName email")  // ✅ Populate old field (backwards compatibility)
       .populate("clients", "clientName businessName email")
       .populate("tasks", "title status priority dueDate")
       .sort({ createdAt: -1 });
