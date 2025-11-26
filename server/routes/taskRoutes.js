@@ -34,11 +34,11 @@ router.patch("/:taskId/reject", protect, authorize("admin", "super-admin"), task
 // Submit task details (Employee - assigned users only)
 router.post("/:taskId/submit", protect, taskController.submitTaskDetails);
 
-// Approve task submission (Admin / Super-admin only)
-router.patch("/:taskId/approve", protect, authorize("admin", "super-admin"), taskController.approveTaskSubmission);
+// Approve task submission (Admin / Super-admin / Task Assigner)
+router.patch("/:taskId/approve", protect, taskController.approveTaskSubmission);
 
-// Reject task submission (Admin / Super-admin only)
-router.patch("/:taskId/reject-submission", protect, authorize("admin", "super-admin"), taskController.rejectTaskSubmission);
+// Reject task submission (Admin / Super-admin / Task Assigner)
+router.patch("/:taskId/reject-submission", protect, taskController.rejectTaskSubmission);
 
 // Edit task
 // Admin / Super-admin or assignedBy can edit (authorization handled in controller)

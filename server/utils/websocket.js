@@ -71,10 +71,47 @@ function broadcastMessageToConversation(conversationId, memberIds, messageData) 
   return sentCount > 0;
 }
 
+/**
+ * Broadcast project message to all project members in real-time
+ * @param {string} projectId - The project ID
+ * @param {Array} memberIds - Array of user/client IDs who are project members
+ * @param {Object} messageData - The message data to broadcast
+ * @returns {boolean} - Whether the broadcast was successful
+ */
+function broadcastProjectMessage(projectId, memberIds, messageData) {
+  const payload = JSON.stringify({
+    type: "project_message",
+    projectId: projectId,
+    messageData: messageData
+  });
+
+  let sentCount = 0;
+  memberIds.forEach(userId => {
+    const userConnections = wsUsers[String(userId)];
+    if (userConnections && Array.isArray(userConnections)) {
+      userConnections.forEach(ws => {
+        if (ws && ws.readyState === 1) { // WebSocket.OPEN
+          try {
+            ws.send(payload);
+            sentCount++;
+            console.log(`[WebSocket] Sent project_message to user ${userId} for project ${projectId}`);
+          } catch (error) {
+            console.error(`Failed to broadcast project message to user ${userId}:`, error);
+          }
+        }
+      });
+    }
+  });
+
+  console.log(`[WebSocket] Broadcasted project message to ${sentCount} connections for project ${projectId}`);
+  return sentCount > 0;
+}
+
 module.exports = {
   setWebSocketUsers,
   sendNotificationToUser,
   sendNotificationToMultipleUsers,
   getWebSocketUsers,
-  broadcastMessageToConversation
+  broadcastMessageToConversation,
+  broadcastProjectMessage
 };

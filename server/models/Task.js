@@ -111,4 +111,26 @@ const taskSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+// =====================================================
+// PERFORMANCE INDEXES
+// =====================================================
+
+// Index for querying tasks by assignedTo (most common query)
+taskSchema.index({ assignedTo: 1 });
+
+// Compound index for filtering by status and due date
+taskSchema.index({ status: 1, dueDate: 1 });
+
+// Index for project-based task queries
+taskSchema.index({ project: 1 });
+
+// Index for assignedBy with creation date (for task creator queries)
+taskSchema.index({ assignedBy: 1, createdAt: -1 });
+
+// Compound index for filtering tasks by status and priority
+taskSchema.index({ status: 1, priority: 1 });
+
+// Index for approval status queries (for pending approvals)
+taskSchema.index({ approvalStatus: 1, submittedAt: -1 });
+
 module.exports = mongoose.model("Task", taskSchema);

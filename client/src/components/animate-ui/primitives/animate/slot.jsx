@@ -1,4 +1,4 @@
-'use client';;
+'use client';
 import * as React from 'react';
 import { motion, isMotionComponent } from 'motion/react';
 import { cn } from '@/lib/utils';
@@ -7,6 +7,7 @@ function mergeRefs(...refs) {
   return (node) => {
     refs.forEach((ref) => {
       if (!ref) return;
+      
       if (typeof ref === 'function') {
         ref(node);
       } else {

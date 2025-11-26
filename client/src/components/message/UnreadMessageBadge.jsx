@@ -30,7 +30,7 @@ const UnreadMessageBadge = ({
     if (!projectId) return;
 
     try {
-      const token = localStorage.getItem('authToken');
+      const token = localStorage.getItem('token');
       const response = await axios.get(
         `/api/projects/${projectId}/messages/unread-count`,
         {
@@ -90,15 +90,15 @@ const UnreadMessageBadge = ({
     return null;
   }
 
+  // Show just a red dot indicator (no count number)
   return (
     <span
-      className={`inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 text-xs font-bold text-white bg-red-500 rounded-full ${className}`}
+      className={`inline-flex w-2 h-2 bg-red-500 rounded-full ${className}`}
       style={{
         animation: unreadCount > 0 ? 'pulse 2s infinite' : 'none'
       }}
-    >
-      {loading ? '...' : unreadCount > 99 ? '99+' : unreadCount}
-    </span>
+      title={`${unreadCount} unread message${unreadCount !== 1 ? 's' : ''}`}
+    />
   );
 };
 

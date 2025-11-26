@@ -72,6 +72,7 @@ import ManualAttendanceManagement from "./pages/admin/ManualAttendanceManagement
 import SalaryManagement from "./pages/admin/SalaryManagement";
 import ClientsPage from "./pages/ClientsPage";
 import ProjectsPage from "./pages/ProjectsPage";
+import ProjectCommunicationPage from "./pages/ProjectCommunicationPage";
 import ClientPortal from "./pages/ClientPortal";
 import EmployeePortal from "./pages/EmployeePortal";
 import ProjectDetailPage from "./pages/ProjectDetailPage";
@@ -563,7 +564,7 @@ const AppWrapper = () => {
         <Route
           path="/admin/salary-management"
           element={
-            isAuthenticated && isSuperAdmin ? (
+            isAuthenticated && (isHR || isSuperAdmin) ? (
               <SalaryManagement onLogout={handleLogout} />
             ) : (
               <Navigate
@@ -826,6 +827,21 @@ const AppWrapper = () => {
           element={
             isAuthenticated && isAdmin ? (
               <ProjectsPage onLogout={handleLogout} />
+            ) : (
+              <Navigate
+                to={isAuthenticated ? "/dashboard" : "/login"}
+                replace
+              />
+            )
+          }
+        />
+
+        {/* Project Communication Tracking */}
+        <Route
+          path="/communication-tracking"
+          element={
+            isAuthenticated && isSuperAdmin ? (
+              <ProjectCommunicationPage onLogout={handleLogout} />
             ) : (
               <Navigate
                 to={isAuthenticated ? "/dashboard" : "/login"}

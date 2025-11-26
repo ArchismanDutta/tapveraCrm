@@ -23,7 +23,7 @@ const populateTask = (query) =>
     .populate("lastEditedBy", "name email")
     .populate("remarks.user", "name email")
     .populate("statusHistory.changedBy", "name email")
-    .populate("project", "projectName type client")
+    .populate("project", "projectName type clients client")
     .populate("approvedBy", "name email");
 
 // ------------------- CREATE TASK -------------------
@@ -388,8 +388,14 @@ exports.getTasks = async (req, res) => {
     // Role-based filtering
     if (req.user.role === "client") {
       // For clients: find all projects they own, then find tasks for those projects
+      // Handle both old 'client' field and new 'clients' array
       const Project = require("../models/Project");
-      const clientProjects = await Project.find({ client: req.user._id }).select("_id");
+      const clientProjects = await Project.find({
+        $or: [
+          { client: req.user._id }, // Old schema
+          { clients: req.user._id } // New schema
+        ]
+      }).select("_id");
       const projectIds = clientProjects.map(p => p._id);
       query.project = { $in: projectIds };
     } else if (!["admin", "super-admin"].includes(req.user.role)) {
@@ -401,10 +407,14 @@ exports.getTasks = async (req, res) => {
     if (req.query.project) {
       if (req.user.role === "client") {
         // For clients, ensure they can only see tasks from their own projects
+        // Handle both old 'client' field and new 'clients' array
         const Project = require("../models/Project");
         const projectExists = await Project.findOne({
           _id: req.query.project,
-          client: req.user._id
+          $or: [
+            { client: req.user._id }, // Old schema
+            { clients: req.user._id } // New schema
+          ]
         });
         if (projectExists) {
           query.project = req.query.project;
@@ -823,9 +833,12 @@ exports.approveTaskSubmission = async (req, res) => {
     const task = await Task.findById(taskId);
     if (!task) return res.status(404).json({ message: "Task not found." });
 
-    // Only admin/super-admin can approve
-    if (!["admin", "super-admin"].includes(req.user.role)) {
-      return res.status(403).json({ message: "Only admins can approve task submissions" });
+    // Only admin/super-admin or the person who assigned the task can approve
+    const isAdmin = ["admin", "super-admin"].includes(req.user.role);
+    const isTaskAssigner = task.assignedBy && task.assignedBy.toString() === req.user._id.toString();
+
+    if (!isAdmin && !isTaskAssigner) {
+      return res.status(403).json({ message: "Only admins or the task assigner can approve task submissions" });
     }
 
     // Check if task has been submitted
@@ -893,9 +906,12 @@ exports.rejectTaskSubmission = async (req, res) => {
     const task = await Task.findById(taskId);
     if (!task) return res.status(404).json({ message: "Task not found." });
 
-    // Only admin/super-admin can reject submissions
-    if (!["admin", "super-admin"].includes(req.user.role)) {
-      return res.status(403).json({ message: "Only admins can reject task submissions" });
+    // Only admin/super-admin or the person who assigned the task can reject submissions
+    const isAdmin = ["admin", "super-admin"].includes(req.user.role);
+    const isTaskAssigner = task.assignedBy && task.assignedBy.toString() === req.user._id.toString();
+
+    if (!isAdmin && !isTaskAssigner) {
+      return res.status(403).json({ message: "Only admins or the task assigner can reject task submissions" });
     }
 
     // Check if task has been submitted

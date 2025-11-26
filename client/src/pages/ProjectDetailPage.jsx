@@ -208,14 +208,16 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
 
           // Show browser notification for project messages
           const messageData = data.messageData || data.message || {};
-          const senderName = messageData.sentBy?.name || messageData.sentBy?.clientName || "Someone";
+          const senderDesignation = messageData.senderType === "client"
+            ? "Client"
+            : (messageData.sentBy?.designation || "Team Member");
 
           // Don't notify for own messages
           if (messageData.sentBy?._id !== userId && messageData.sentBy !== userId) {
             const notificationManager = BrowserNotificationManager.getInstance();
             notificationManager.show(
               "New Project Message",
-              `${senderName}: ${messageData.message || "Sent an attachment"}`,
+              `${senderDesignation}: ${messageData.message || "Sent an attachment"}`,
               {
                 tag: `project-${data.projectId}`,
                 icon: "/icon.png", // You can customize this
@@ -318,6 +320,24 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
     };
   }, [showSuggestions]);
 
+  // Close emoji picker when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      // Check if click is outside emoji picker
+      if (showEmojiPicker && !event.target.closest('.emoji-picker-container') && !event.target.closest('[title="Add reaction"]')) {
+        setShowEmojiPicker(null);
+      }
+    };
+
+    if (showEmojiPicker) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showEmojiPicker]);
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
@@ -361,8 +381,33 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
       });
       setMessages(res.data);
       setAllMessages(res.data);
+
+      // Mark messages as read when viewing them
+      markMessagesAsRead();
     } catch (error) {
       console.error("Error fetching messages:", error);
+    }
+  };
+
+  // Mark all messages in this project as read
+  const markMessagesAsRead = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      await axios.patch(
+        `${API_BASE}/api/projects/${projectId}/messages/mark-read`,
+        {},
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+
+      // Dispatch event to notify UnreadMessageBadge
+      window.dispatchEvent(new CustomEvent('project-messages-read', {
+        detail: { projectId }
+      }));
+    } catch (error) {
+      // Silent fail - don't interrupt user experience
+      console.error("Error marking messages as read:", error);
     }
   };
 
@@ -1204,6 +1249,12 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                     msg.sentBy?.name || msg.sentBy?.clientName || "Unknown";
                   const senderType = msg.senderType || "user";
 
+                  // Show designation instead of name, similar to team members sidebar
+                  const senderDesignation = msg.sentBy?.designation || "Team Member";
+                  const senderDisplay = senderType === "client"
+                    ? "Client"
+                    : senderDesignation;
+
                   return (
                     <div
                       key={idx}
@@ -1219,13 +1270,11 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                         <div className="flex items-center gap-2 mb-1 px-1">
                           {!isOwnMessage && (
                             <div className="w-6 h-6 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white text-xs font-semibold flex-shrink-0">
-                              {senderName.charAt(0).toUpperCase()}
+                              {senderDisplay.charAt(0).toUpperCase()}
                             </div>
                           )}
-                          <span className="text-xs text-gray-400 truncate">
-                            {senderName}
-                            {senderType === "client" && " (Client)"}
-                            {senderType === "superadmin" && " (Admin)"}
+                          <span className="text-xs text-blue-400 truncate">
+                            {senderDisplay}
                           </span>
                         </div>
 
@@ -1234,7 +1283,7 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                             isOwnMessage
                               ? "bg-gradient-to-r from-purple-600 to-pink-600"
                               : "bg-[#0f1419] border border-[#232945]"
-                          } rounded-lg p-3 sm:p-4 overflow-hidden`}
+                          } rounded-lg p-3 sm:p-4`}
                         >
                           {/* Reply Preview */}
                           {msg.replyTo && (
@@ -1243,11 +1292,11 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                                 <Reply className="w-3 h-3 text-purple-400 flex-shrink-0" />
                                 <span className="text-xs text-purple-300 font-semibold truncate">
                                   {msg.replyTo.sentBy ?
-                                    (msg.replyTo.sentBy.name || msg.replyTo.sentBy.clientName || "Unknown User") :
+                                    (msg.replyTo.senderType === "client" ? "Client" : (msg.replyTo.sentBy.designation || "Team Member")) :
                                     "Unknown User"}
                                 </span>
                               </div>
-                              <div className="text-xs text-gray-300 overflow-hidden" style={{
+                              <div className="text-xs text-gray-300 overflow-hidden whitespace-pre-wrap" style={{
                                 display: '-webkit-box',
                                 WebkitLineClamp: 2,
                                 WebkitBoxOrient: 'vertical',
@@ -1267,27 +1316,28 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                                   remarkPlugins={[remarkGfm]}
                                   rehypePlugins={[rehypeRaw]}
                                   components={{
-                                    p: ({ children }) => <p className="mb-1 last:mb-0">{children}</p>,
-                                    h1: ({ children }) => <h1 className="text-lg font-bold mb-1">{children}</h1>,
-                                    h2: ({ children }) => <h2 className="text-base font-bold mb-1">{children}</h2>,
-                                    h3: ({ children }) => <h3 className="text-sm font-bold mb-1">{children}</h3>,
-                                    ul: ({ children }) => <ul className="list-disc list-inside mb-1">{children}</ul>,
-                                    ol: ({ children }) => <ol className="list-decimal list-inside mb-1">{children}</ol>,
+                                    p: ({ children }) => <p className="mb-2 last:mb-0 whitespace-pre-wrap">{children}</p>,
+                                    h1: ({ children }) => <h1 className="text-lg font-bold mb-2">{children}</h1>,
+                                    h2: ({ children }) => <h2 className="text-base font-bold mb-2">{children}</h2>,
+                                    h3: ({ children }) => <h3 className="text-sm font-bold mb-2">{children}</h3>,
+                                    ul: ({ children }) => <ul className="list-disc list-inside mb-2 space-y-1">{children}</ul>,
+                                    ol: ({ children }) => <ol className="list-decimal list-inside mb-2 space-y-1">{children}</ol>,
                                     li: ({ children }) => <li className="ml-2">{children}</li>,
                                     code: ({ inline, children }) =>
                                       inline ? (
                                         <code className="bg-black/30 px-1 rounded text-xs">{children}</code>
                                       ) : (
-                                        <code className="block bg-black/30 p-2 rounded text-xs overflow-x-auto">{children}</code>
+                                        <code className="block bg-black/30 p-2 rounded text-xs overflow-x-auto whitespace-pre-wrap">{children}</code>
                                       ),
                                     strong: ({ children }) => <strong className="font-bold">{children}</strong>,
                                     em: ({ children }) => <em className="italic">{children}</em>,
                                     a: ({ href, children }) => (
                                       <a href={href} target="_blank" rel="noopener noreferrer" className="text-blue-300 underline hover:text-blue-200">{children}</a>
                                     ),
+                                    br: () => <br />,
                                   }}
                                 >
-                                  {msg.message}
+                                  {msg.message.replace(/\n/g, '  \n')}
                                 </ReactMarkdown>
                               </div>
                               {/* Mentioned Users */}
@@ -1442,7 +1492,7 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
 
                               {/* Emoji Picker Popup */}
                               {showEmojiPicker === msg._id && (
-                                <div className={`absolute ${isOwnMessage ? 'right-0' : 'left-0'} bottom-full mb-1 p-2 bg-[#1a2332] border border-[#232945] rounded-lg shadow-xl z-10 flex gap-1`}>
+                                <div className={`emoji-picker-container absolute ${isOwnMessage ? 'right-0' : 'left-0'} bottom-full mb-2 p-2 bg-[#1a2332] border border-[#232945] rounded-lg shadow-2xl z-50 flex gap-1`}>
                                   {commonEmojis.map((emoji, emojiIdx) => (
                                     <button
                                       key={emojiIdx}
@@ -1450,7 +1500,7 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                                         e.stopPropagation();
                                         handleReaction(msg._id, emoji);
                                       }}
-                                      className="hover:bg-white/10 p-1.5 rounded transition-colors text-lg"
+                                      className="hover:bg-white/10 hover:scale-110 p-1.5 rounded transition-all text-lg"
                                       title={`React with ${emoji}`}
                                     >
                                       {emoji}
@@ -2050,8 +2100,8 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                                 </div>
                               )}
 
-                              {/* Approval Actions (Only for admin and pending submissions) */}
-                              {(userRole === "super-admin" || userRole === "superadmin") && task.approvalStatus === "pending" && (
+                              {/* Approval Actions (Only for admin, super-admin, or task assigner for pending submissions) */}
+                              {((userRole === "super-admin" || userRole === "superadmin" || userRole === "admin" || task.assignedBy?._id === userId) && task.approvalStatus === "pending") && (
                                 <div className="mt-3">
                                   {selectedTask === task._id ? (
                                     <div className="space-y-3">

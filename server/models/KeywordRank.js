@@ -60,6 +60,11 @@ const keywordRankSchema = new mongoose.Schema(
       default: "Global",
       trim: true,
     },
+    category: {
+      type: String,
+      enum: ["SEO", "GMB"],
+      default: "SEO",
+    },
     rankHistory: [rankHistorySchema],
     isActive: {
       type: Boolean,

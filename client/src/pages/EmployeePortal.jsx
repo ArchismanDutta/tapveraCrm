@@ -196,6 +196,20 @@ const EmployeePortal = ({ onLogout }) => {
     };
   }, [selectedProject]);
 
+  // Normalize project data to handle both old (client) and new (clients) schema
+  const normalizeProjects = (projectsData) => {
+    return projectsData.map(project => {
+      // If project has old 'client' field but no 'clients', convert it
+      if (project.client && (!project.clients || project.clients.length === 0)) {
+        return {
+          ...project,
+          clients: [project.client]  // Convert single client to array
+        };
+      }
+      return project;
+    });
+  };
+
   const fetchEmployeeProjects = async () => {
     try {
       setLoading(true);
@@ -212,7 +226,8 @@ const EmployeePortal = ({ onLogout }) => {
       }
 
       const data = await response.json();
-      setProjects(data);
+      const normalizedProjects = normalizeProjects(data);
+      setProjects(normalizedProjects);
     } catch (error) {
       console.error("Error fetching projects:", error);
       setProjects([]);

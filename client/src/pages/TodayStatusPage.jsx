@@ -130,7 +130,6 @@ const TodayStatusPage = ({ onLogout }) => {
     flexibleRequests: null
   });
   const [connectionStatus, setConnectionStatus] = useState('online');
-  const [lastSuccessfulFetch, setLastSuccessfulFetch] = useState(null);
 
   const token = localStorage.getItem("token");
 
@@ -181,7 +180,6 @@ const TodayStatusPage = ({ onLogout }) => {
       setStatus(statusData);
       setDataLoadingStates(prev => ({ ...prev, status: false }));
       setDataErrors(prev => ({ ...prev, status: null }));
-      setLastSuccessfulFetch(new Date());
       return statusData;
 
     } catch (err) {
@@ -704,15 +702,15 @@ const TodayStatusPage = ({ onLogout }) => {
 
     // Calculate accurate start times and current durations from timeline if available
     if (status.timeline && Array.isArray(status.timeline)) {
-      // Get today's start in user's local timezone
-      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+      // Get today's start - use a more lenient filter (last 24 hours) to catch early morning punches
+      const todayStart = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
       // Find the last work session start time
       const lastWorkStart = [...status.timeline]
         .reverse()
         .find(event => {
           const eventDate = new Date(event.time);
-          return eventDate >= todayStart &&
+          return eventDate >= todayStart && eventDate <= now &&
                  (event.type?.toLowerCase().includes('punch in') ||
                   event.type?.toLowerCase().includes('resume'));
         });
@@ -722,7 +720,7 @@ const TodayStatusPage = ({ onLogout }) => {
         .reverse()
         .find(event => {
           const eventDate = new Date(event.time);
-          return eventDate >= todayStart &&
+          return eventDate >= todayStart && eventDate <= now &&
                  event.type?.toLowerCase().includes('break start');
         });
 
@@ -744,17 +742,19 @@ const TodayStatusPage = ({ onLogout }) => {
     // ALWAYS calculate from timeline to ensure accuracy across page loads
     if (status.timeline && Array.isArray(status.timeline)) {
       console.log("📋 Timeline events:", status.timeline);
-      // Get today's start in user's local timezone
-      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+      // Get today's start - use a more lenient filter to catch early morning punches
+      // Instead of using midnight, go back 24 hours to ensure we catch all events for "today"
+      const todayStart = new Date(now.getTime() - 24 * 60 * 60 * 1000);
       let totalWorkSeconds = 0;
 
       // Find all punch in/out and resume/break events
       const events = status.timeline.filter(e => {
         const eventDate = new Date(e.time);
-        return eventDate >= todayStart;
+        // Include events from the last 24 hours
+        return eventDate >= todayStart && eventDate <= now;
       });
 
-      console.log("📋 Filtered today's events:", events.length, events);
+      console.log("📋 Filtered today's events (last 24h):", events.length, events);
 
       let currentSessionStart = null;
       for (const event of events) {
@@ -773,7 +773,13 @@ const TodayStatusPage = ({ onLogout }) => {
 
       // Add current active session time (only if currently working)
       if (currentSessionStart && status.currentlyWorking) {
-        totalWorkSeconds += Math.floor((now - currentSessionStart) / 1000);
+        const elapsedSeconds = Math.floor((now - currentSessionStart) / 1000);
+        console.log("⏱️ Adding current active session:", {
+          sessionStart: currentSessionStart.toISOString(),
+          now: now.toISOString(),
+          elapsedSeconds
+        });
+        totalWorkSeconds += elapsedSeconds;
       }
 
       calculatedWorkDuration = totalWorkSeconds;
@@ -782,13 +788,9 @@ const TodayStatusPage = ({ onLogout }) => {
       // Calculate total break time from all break sessions (same timeline)
       let totalBreakSeconds = 0;
 
-      const breakEvents = status.timeline.filter(e => {
-        const eventDate = new Date(e.time);
-        return eventDate >= todayStart;
-      });
-
+      // Use the same events array (already filtered for last 24 hours)
       let currentBreakStart = null;
-      for (const event of breakEvents) {
+      for (const event of events) {
         const eventType = event.type?.toUpperCase() || '';
         const eventTime = new Date(event.time);
 
@@ -804,7 +806,13 @@ const TodayStatusPage = ({ onLogout }) => {
 
       // Add current active break time (only if currently on break)
       if (currentBreakStart && status.onBreak) {
-        totalBreakSeconds += Math.floor((now - currentBreakStart) / 1000);
+        const elapsedBreakSeconds = Math.floor((now - currentBreakStart) / 1000);
+        console.log("⏸️ Adding current active break:", {
+          breakStart: currentBreakStart.toISOString(),
+          now: now.toISOString(),
+          elapsedBreakSeconds
+        });
+        totalBreakSeconds += elapsedBreakSeconds;
       }
 
       calculatedBreakDuration = totalBreakSeconds;

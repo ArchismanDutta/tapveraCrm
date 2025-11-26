@@ -61,7 +61,25 @@ const userSchema = new mongoose.Schema(
     password: { type: String, required: true },
     role: { type: String, enum: ["super-admin", "admin", "hr", "employee"], default: "employee" },
     department: { type: String, enum: ["executives", "development", "marketingAndSales", "humanResource", ""], default: "" },
-    designation: { type: String, trim: true, default: "" },
+    designation: {
+      type: String,
+      enum: [
+        // Development Team Hierarchy
+        "dev-team-member",
+        "dev-team-lead",
+        "dev-team-manager",
+        // Other Designations
+        "hr-manager",
+        "hr-executive",
+        "marketing-executive",
+        "content-writer",
+        "seo-specialist",
+        "graphic-designer",
+        "other",
+        ""
+      ],
+      default: ""
+    },
     jobLevel: { type: String, enum: ["intern", "junior", "mid", "senior", "lead", "director", "executive"], default: "junior" },
     employmentType: { type: String, enum: ["full-time", "part-time", "contract", "internship"], default: "full-time" },
     skills: [{ type: String, trim: true }],
@@ -73,9 +91,13 @@ const userSchema = new mongoose.Schema(
     timeZone: { type: String, default: "Asia/Kolkata" }, // Added timezone support
 
     // ====== REGION-BASED ACCESS CONTROL ======
-    // Array of regions the user can access (e.g., ['USA', 'Canada', 'Global'])
+
+    // Array of regions the user can access (e.g., ['USA', 'CANADA', 'Global'])
     regions: {
-      type: [String],
+      type: [{
+        type: String,
+        enum: ['USA', 'AUS', 'CANADA', 'IND', 'Global']
+      }],
       default: ['Global'],
       required: true
     },

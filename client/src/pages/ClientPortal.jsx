@@ -98,8 +98,21 @@ const ClientPortal = ({ onLogout, clientId }) => {
       const res = await axios.get(`${API_BASE}/api/projects`, {
         headers: { Authorization: `Bearer ${token}` },
       });
+
+      // Normalize projects to handle both old (client) and new (clients) schema
+      const normalizedProjects = res.data.map(project => {
+        // If project has old 'client' field but no 'clients', convert it
+        if (project.client && (!project.clients || project.clients.length === 0)) {
+          return {
+            ...project,
+            clients: [project.client]  // Convert single client to array
+          };
+        }
+        return project;
+      });
+
       // Filter projects for this client (clients is an array)
-      const clientProjects = res.data.filter((p) => {
+      const clientProjects = normalizedProjects.filter((p) => {
         if (!p.clients || !Array.isArray(p.clients)) return false;
         return p.clients.some((c) => {
           const cId = typeof c === 'object' ? c._id : c;

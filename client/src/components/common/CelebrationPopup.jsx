@@ -43,7 +43,7 @@ const CelebrationPopup = ({ celebrations, isOpen, onClose }) => {
 
   return (
     <div className={`fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm transition-all duration-300 ${isVisible ? 'opacity-100' : 'opacity-0'}`}>
-      <div className={`relative max-w-md w-full bg-gradient-to-br ${currentCelebration.type === 'birthday' ? getBirthdayGradient() : getAnniversaryGradient()} backdrop-blur-sm border ${currentCelebration.type === 'birthday' ? getBirthdayBorder() : getAnniversaryBorder()} rounded-2xl p-8 transform transition-all duration-300 ${isVisible ? 'scale-100 translate-y-0' : 'scale-95 translate-y-8'}`}>
+      <div className={`relative max-w-md w-full bg-gradient-to-br ${currentCelebration.type === 'birthday' ? getBirthdayGradient() : getAnniversaryGradient()} backdrop-blur-sm border ${currentCelebration.type === 'birthday' ? getBirthdayBorder() : getAnniversaryBorder()} rounded-2xl p-6 sm:p-8 transform transition-all duration-300 ${isVisible ? 'scale-100 translate-y-0' : 'scale-95 translate-y-8'} overflow-hidden`}>
 
         {/* Floating particles animation */}
         <div className="absolute inset-0 overflow-hidden rounded-2xl">
@@ -105,24 +105,24 @@ const CelebrationPopup = ({ celebrations, isOpen, onClose }) => {
             />
           </div>
 
-          <h3 className="text-xl font-semibold text-white mb-1">
+          <h3 className="text-xl font-semibold text-white mb-1 break-words px-2">
             {currentCelebration.user.name}
           </h3>
 
-          <p className="text-gray-300 text-sm mb-2">
+          <p className="text-gray-300 text-sm mb-2 break-words px-2">
             {currentCelebration.user.designation} • {currentCelebration.user.department}
           </p>
 
-          <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-full ${currentCelebration.type === 'birthday' ? 'bg-pink-500/30' : 'bg-amber-500/30'} text-white font-medium`}>
+          <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-full ${currentCelebration.type === 'birthday' ? 'bg-pink-500/30' : 'bg-amber-500/30'} text-white font-medium whitespace-nowrap`}>
             {currentCelebration.type === 'birthday' ? (
               <>
-                <Gift className="h-4 w-4" />
-                Turning {currentCelebration.age} today!
+                <Gift className="h-4 w-4 flex-shrink-0" />
+                <span>Turning {currentCelebration.age} today!</span>
               </>
             ) : (
               <>
-                <Award className="h-4 w-4" />
-                {currentCelebration.years} years with us!
+                <Award className="h-4 w-4 flex-shrink-0" />
+                <span>{currentCelebration.years} years with us!</span>
               </>
             )}
           </div>
@@ -130,7 +130,7 @@ const CelebrationPopup = ({ celebrations, isOpen, onClose }) => {
 
         {/* Message */}
         <div className="text-center mb-6 relative z-10">
-          <p className="text-lg text-gray-200 mb-4">
+          <p className="text-lg text-gray-200 mb-4 break-words px-2">
             {currentCelebration.message}
           </p>
 
@@ -152,21 +152,25 @@ const CelebrationPopup = ({ celebrations, isOpen, onClose }) => {
         </div>
 
         {/* Actions */}
-        <div className="flex gap-3 relative z-10">
+        <div className="flex flex-col sm:flex-row gap-3 relative z-10">
           {!isLastCelebration && (
             <button
               onClick={handleNext}
-              className={`flex-1 py-3 px-4 bg-gradient-to-r ${currentCelebration.type === 'birthday' ? 'from-pink-500 to-rose-600 hover:from-pink-600 hover:to-rose-700' : 'from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700'} text-white rounded-xl font-medium transition-all duration-300 hover:scale-105`}
+              className={`flex-1 py-3 px-4 bg-gradient-to-r ${currentCelebration.type === 'birthday' ? 'from-pink-500 to-rose-600 hover:from-pink-600 hover:to-rose-700' : 'from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700'} text-white rounded-xl font-medium transition-all duration-300 hover:scale-105 whitespace-nowrap overflow-hidden text-ellipsis`}
             >
-              Next Celebration ({celebrations.length - currentIndex - 1} more)
+              <span className="block truncate">
+                Next Celebration ({celebrations.length - currentIndex - 1} more)
+              </span>
             </button>
           )}
 
           <button
             onClick={handleClose}
-            className="flex-1 py-3 px-4 bg-slate-700/50 hover:bg-slate-600/50 text-gray-300 hover:text-white rounded-xl font-medium transition-all duration-300"
+            className="flex-1 py-3 px-4 bg-slate-700/50 hover:bg-slate-600/50 text-gray-300 hover:text-white rounded-xl font-medium transition-all duration-300 whitespace-nowrap overflow-hidden text-ellipsis"
           >
-            {isLastCelebration ? 'Continue to Dashboard' : 'Skip All'}
+            <span className="block truncate">
+              {isLastCelebration ? 'Continue to Dashboard' : 'Skip All'}
+            </span>
           </button>
         </div>
 

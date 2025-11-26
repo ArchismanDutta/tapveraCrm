@@ -74,6 +74,7 @@ const OnPageSEO = ({ projectId, userRole, userId }) => {
     keywordLink: "",
     searchEngine: "Google",
     location: "Global",
+    category: "SEO",
     notes: "",
   });
 
@@ -87,6 +88,7 @@ const OnPageSEO = ({ projectId, userRole, userId }) => {
     keywordLink: "",
     searchEngine: "Google",
     location: "Global",
+    category: "SEO",
   });
 
   const canEdit = ["admin", "super-admin", "superadmin", "employee"].includes(userRole);
@@ -327,6 +329,7 @@ const OnPageSEO = ({ projectId, userRole, userId }) => {
       keywordLink: keyword.keywordLink || "",
       searchEngine: keyword.searchEngine || "Google",
       location: keyword.location || "Global",
+      category: keyword.category || "SEO",
     });
     setShowEditModal(true);
   };
@@ -360,6 +363,7 @@ const OnPageSEO = ({ projectId, userRole, userId }) => {
       keywordLink: "",
       searchEngine: "Google",
       location: "Global",
+      category: "SEO",
       notes: "",
     });
   };
@@ -500,47 +504,47 @@ const OnPageSEO = ({ projectId, userRole, userId }) => {
       {stats && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="bg-[#0f1419] border border-[#232945] rounded-lg p-4">
-            <div className="flex items-center justify-between">
-              <div>
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex-1 min-w-0">
                 <p className="text-sm text-gray-400">Total Keywords</p>
-                <p className="text-2xl font-bold text-white mt-1">
+                <p className="text-2xl font-bold text-white mt-1 truncate">
                   {stats.totalKeywords}
                 </p>
               </div>
-              <Search className="w-8 h-8 text-blue-400" />
+              <Search className="w-8 h-8 text-blue-400 flex-shrink-0" />
             </div>
           </div>
           <div className="bg-[#0f1419] border border-[#232945] rounded-lg p-4">
-            <div className="flex items-center justify-between">
-              <div>
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex-1 min-w-0">
                 <p className="text-sm text-gray-400">Improved</p>
-                <p className="text-2xl font-bold text-green-400 mt-1">
+                <p className="text-2xl font-bold text-green-400 mt-1 truncate">
                   {stats.improved}
                 </p>
               </div>
-              <TrendingUp className="w-8 h-8 text-green-400" />
+              <TrendingUp className="w-8 h-8 text-green-400 flex-shrink-0" />
             </div>
           </div>
           <div className="bg-[#0f1419] border border-[#232945] rounded-lg p-4">
-            <div className="flex items-center justify-between">
-              <div>
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex-1 min-w-0">
                 <p className="text-sm text-gray-400">Declined</p>
-                <p className="text-2xl font-bold text-red-400 mt-1">
+                <p className="text-2xl font-bold text-red-400 mt-1 truncate">
                   {stats.declined}
                 </p>
               </div>
-              <TrendingDown className="w-8 h-8 text-red-400" />
+              <TrendingDown className="w-8 h-8 text-red-400 flex-shrink-0" />
             </div>
           </div>
           <div className="bg-[#0f1419] border border-[#232945] rounded-lg p-4">
-            <div className="flex items-center justify-between">
-              <div>
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex-1 min-w-0">
                 <p className="text-sm text-gray-400">Avg Change</p>
-                <p className={`text-2xl font-bold mt-1 ${stats.averageRankChange > 0 ? 'text-green-400' : stats.averageRankChange < 0 ? 'text-red-400' : 'text-gray-400'}`}>
+                <p className={`text-2xl font-bold mt-1 truncate ${stats.averageRankChange > 0 ? 'text-green-400' : stats.averageRankChange < 0 ? 'text-red-400' : 'text-gray-400'}`}>
                   {stats.averageRankChange > 0 ? '+' : ''}{stats.averageRankChange}
                 </p>
               </div>
-              <BarChart3 className="w-8 h-8 text-purple-400" />
+              <BarChart3 className="w-8 h-8 text-purple-400 flex-shrink-0" />
             </div>
           </div>
         </div>
@@ -768,8 +772,19 @@ const OnPageSEO = ({ projectId, userRole, userId }) => {
                     )}
                     <td className="px-4 py-4">
                       <div>
-                        <div className="font-medium text-white">
-                          {keyword.keyword}
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium text-white">
+                            {keyword.keyword}
+                          </span>
+                          <span
+                            className={`px-2 py-0.5 rounded text-xs font-semibold ${
+                              keyword.category === "SEO"
+                                ? "bg-blue-500/20 text-blue-400 border border-blue-500/50"
+                                : "bg-purple-500/20 text-purple-400 border border-purple-500/50"
+                            }`}
+                          >
+                            {keyword.category || "SEO"}
+                          </span>
                         </div>
                         <div className="flex items-center gap-2 mt-1 text-xs text-gray-500">
                           <Globe className="w-3 h-3" />
@@ -987,6 +1002,26 @@ const OnPageSEO = ({ projectId, userRole, userId }) => {
                       className="w-full px-4 py-2 bg-[#0f1419] border border-[#232945] rounded-lg text-white focus:outline-none focus:border-blue-500"
                     />
                   </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Category *
+                  </label>
+                  <select
+                    value={formData.category}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        category: e.target.value,
+                      })
+                    }
+                    className="w-full px-4 py-2 bg-[#0f1419] border border-[#232945] rounded-lg text-white focus:outline-none focus:border-blue-500"
+                    required
+                  >
+                    <option value="SEO">SEO</option>
+                    <option value="GMB">GMB</option>
+                  </select>
                 </div>
 
                 <div>
@@ -1216,6 +1251,26 @@ const OnPageSEO = ({ projectId, userRole, userId }) => {
                       className="w-full px-4 py-2 bg-[#0f1419] border border-[#232945] rounded-lg text-white focus:outline-none focus:border-blue-500"
                     />
                   </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Category *
+                  </label>
+                  <select
+                    value={editFormData.category}
+                    onChange={(e) =>
+                      setEditFormData({
+                        ...editFormData,
+                        category: e.target.value,
+                      })
+                    }
+                    className="w-full px-4 py-2 bg-[#0f1419] border border-[#232945] rounded-lg text-white focus:outline-none focus:border-blue-500"
+                    required
+                  >
+                    <option value="SEO">SEO</option>
+                    <option value="GMB">GMB</option>
+                  </select>
                 </div>
 
                 <div className="flex gap-3 pt-4">

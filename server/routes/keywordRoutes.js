@@ -59,6 +59,7 @@ router.post("/:projectId/keywords", protect, async (req, res) => {
       backlink,
       searchEngine,
       location,
+      category,
       notes,
     } = req.body;
 
@@ -107,6 +108,7 @@ router.post("/:projectId/keywords", protect, async (req, res) => {
       backlink,
       searchEngine: searchEngine || "Google",
       location: location || "Global",
+      category: category || "SEO",
       rankHistory: [
         {
           rank: initialRank,
@@ -197,7 +199,7 @@ router.post("/:projectId/keywords/:keywordId/rank", protect, async (req, res) =>
 router.put("/:projectId/keywords/:keywordId", protect, async (req, res) => {
   try {
     const { projectId, keywordId } = req.params;
-    const { keyword, targetUrl, keywordLink, blogLink, backlink, searchEngine, location, isActive } = req.body;
+    const { keyword, targetUrl, keywordLink, blogLink, backlink, searchEngine, location, category, isActive } = req.body;
 
     // Check if project exists
     const project = await Project.findById(projectId);
@@ -235,6 +237,7 @@ router.put("/:projectId/keywords/:keywordId", protect, async (req, res) => {
     if (backlink !== undefined) keywordRank.backlink = backlink;
     if (searchEngine !== undefined) keywordRank.searchEngine = searchEngine;
     if (location !== undefined) keywordRank.location = location;
+    if (category !== undefined) keywordRank.category = category;
     if (isActive !== undefined) keywordRank.isActive = isActive;
 
     await keywordRank.save();

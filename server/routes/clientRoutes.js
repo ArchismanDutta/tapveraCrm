@@ -79,6 +79,11 @@ router.get("/", protect, authorize("admin", "super-admin", "hr"), async (req, re
         console.log('[Client Filtering] Strict filtering by single region:', user.region, 'Query:', JSON.stringify(query));
       }
     }
+    // Safety: If no regions defined at all, grant Global access (backward compatibility)
+    else {
+      console.log('[Client Filtering] No regions defined - granting Global access (safety fallback)');
+      query = {};
+    }
 
     const clients = await Client.find(query).sort({ createdAt: -1 });
     console.log(`[Client Filtering] Found ${clients.length} clients matching filter`);

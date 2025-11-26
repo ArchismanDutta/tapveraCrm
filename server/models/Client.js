@@ -7,10 +7,10 @@ const clientSchema = new mongoose.Schema({
   password: { type: String, required: true },
   status: { type: String, enum: ["Active", "Inactive"], default: "Active" },
 
-  // Region for access control (free text, user-defined)
+  // Region for access control (dropdown selection)
   region: {
     type: String,
-    trim: true,
+    enum: ['USA', 'AUS', 'CANADA', 'IND', 'Global'],
     default: 'Global',
     required: true
   },

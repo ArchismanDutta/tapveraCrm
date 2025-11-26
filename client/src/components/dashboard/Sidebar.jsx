@@ -115,7 +115,6 @@ const menuConfig = {
       icon: <ChevronUp size={18} animateOnHover />,
       label: "My Leads",
     },
-
     {
       to: "/callbacks",
       icon: <Gavel size={18} animateOnHover />,
@@ -137,6 +136,16 @@ const menuConfig = {
       to: "/tasks",
       icon: <CircleCheckBig size={18} animateOnHover />,
       label: "My Tasks",
+    },
+    {
+      to: "/super-admin/attendance",
+      icon: <Pin size={16} animateOnHover />,
+      label: "Attendance Portal",
+    },
+    {
+      to: "/admin/salary-management",
+      icon: <Fingerprint size={16} animateOnHover />,
+      label: "Salary Management",
     },
     {
       to: "/sheets",
@@ -400,6 +409,11 @@ const menuConfig = {
           to: "/projects",
           icon: <FolderKanban size={16} />,
           label: "Project Management",
+        },
+        {
+          to: "/communication-tracking",
+          icon: <MessageSquareQuote size={16} animateOnHover />,
+          label: "Communication Tracking",
         },
         {
           to: "/leads",

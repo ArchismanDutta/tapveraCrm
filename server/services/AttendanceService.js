@@ -16,11 +16,12 @@ class AttendanceService {
       HALF_DAY_THRESHOLD_HOURS: 4.5, // < 4.5 hours = Half Day, >= 4.5 hours = Present
       MIN_FULL_DAY_HOURS: 7.5,
       MAX_WORK_HOURS: 12,
-      LATE_THRESHOLD_MINUTES: 0, // STRICT ENFORCEMENT: Even 1 minute late counts as late
+      LATE_THRESHOLD_MINUTES: 1, // Grace period: 1 minute allowed, late after 1 minute
       BREAK_TIME_LIMIT_MINUTES: 60,
       MAX_DAILY_WORK_HOURS: 20,
       MIN_SESSION_DURATION_SECONDS: 30,
-      EARLY_PUNCH_IN_ALLOWED: true, // No restriction on early punch-in
+      EARLY_PUNCH_IN_ALLOWED: true, // Allow early punch-in within the allowed window
+      EARLY_PUNCH_IN_WINDOW_MINUTES: 180, // Allow punching in up to 3 hours before shift start (increased for early morning shifts)
       TIMEZONE: 'Asia/Kolkata' // IST timezone for all calculations
     };
 
@@ -376,6 +377,11 @@ class AttendanceService {
         if (currentStatus === 'ON_BREAK') {
           throw new Error('Employee is on break. Use BREAK_END first');
         }
+
+        // Validate early punch-in for standard shifts (not for flexible shifts)
+        if (employee.assignedShift && !employee.assignedShift.isFlexible) {
+          this.validateEarlyPunchIn(timestamp, employee.assignedShift);
+        }
         break;
 
       case 'PUNCH_OUT':
@@ -422,6 +428,119 @@ class AttendanceService {
     if (timestamp > new Date(now.getTime() + maxFutureMinutes * 60 * 1000)) {
       throw new Error('Cannot record future events');
     }
+  }
+
+  /**
+   * Validate early punch-in time against shift start time
+   * Prevents employees from punching in too early before their shift
+   * All calculations done in IST to ensure consistency
+   * @param {Date} punchTime - The punch-in timestamp (UTC)
+   * @param {Object} shift - Employee's assigned shift
+   */
+  validateEarlyPunchIn(punchTime, shift) {
+    // Skip validation for flexible shifts
+    if (shift?.isFlexible || shift?.name?.toLowerCase().includes('flexible')) {
+      return;
+    }
+
+    // Skip validation if no shift start time
+    if (!shift?.startTime) {
+      return;
+    }
+
+    // Get punch time in IST
+    const istTime = this.getISTTimeComponents(punchTime);
+    const istDate = this.getISTDateComponents(punchTime);
+
+    if (!istTime || !istDate) {
+      return; // Cannot validate without IST components
+    }
+
+    // Parse shift start time (in IST)
+    const [shiftStartHour, shiftStartMin] = shift.startTime.split(':').map(Number);
+
+    // Convert times to minutes since midnight IST for comparison
+    const punchMinutesSinceMidnight = istTime.hour * 60 + istTime.minute;
+    const shiftStartMinutesSinceMidnight = shiftStartHour * 60 + shiftStartMin;
+
+    // Determine which day's shift this punch belongs to
+    // For early morning shifts (before 6 AM), if punching in the evening (after 6 PM), it's for tomorrow's shift
+    let shiftDateYear = istDate.year;
+    let shiftDateMonth = istDate.month;
+    let shiftDateDay = istDate.day;
+
+    // If punching after 6 PM (18:00) for an early morning shift (before 6 AM), it's for tomorrow's shift
+    if (punchMinutesSinceMidnight >= 18 * 60 && shiftStartMinutesSinceMidnight < 6 * 60) {
+      // Add one day to the shift date using IST date components
+      const tempDate = new Date(istDate.year, istDate.month - 1, istDate.day);
+      tempDate.setDate(tempDate.getDate() + 1);
+      shiftDateYear = tempDate.getFullYear();
+      shiftDateMonth = tempDate.getMonth() + 1;
+      shiftDateDay = tempDate.getDate();
+    }
+
+    // Create shift start time in IST, then convert to UTC
+    // Step 1: Create a timestamp representing the IST datetime
+    // We'll create it as if in UTC zone, then adjust
+    const istTimestamp = Date.UTC(shiftDateYear, shiftDateMonth - 1, shiftDateDay, shiftStartHour, shiftStartMin, 0, 0);
+
+    // Step 2: Subtract IST offset (5:30) to get actual UTC time
+    // IST = UTC + 5:30, therefore UTC = IST - 5:30
+    const istOffsetMs = 5.5 * 60 * 60 * 1000;
+    const shiftStartUTC = new Date(istTimestamp - istOffsetMs);
+
+    // Calculate earliest allowed punch-in time (in UTC)
+    const earliestAllowedTime = new Date(
+      shiftStartUTC.getTime() - this.CONSTANTS.EARLY_PUNCH_IN_WINDOW_MINUTES * 60 * 1000
+    );
+
+    // Check if punch time is too early (strictly before earliest allowed time)
+    if (punchTime < earliestAllowedTime) {
+      const hoursEarly = Math.floor(this.CONSTANTS.EARLY_PUNCH_IN_WINDOW_MINUTES / 60);
+      const minutesEarly = this.CONSTANTS.EARLY_PUNCH_IN_WINDOW_MINUTES % 60;
+      const windowText = minutesEarly > 0
+        ? `${hoursEarly} hours ${minutesEarly} minutes`
+        : `${hoursEarly} hours`;
+
+      console.error('❌ Early punch-in validation failed:', {
+        punchTime: punchTime.toISOString(),
+        punchTimeIST: `${String(istTime.hour).padStart(2, '0')}:${String(istTime.minute).padStart(2, '0')}`,
+        istDate: `${shiftDateYear}-${String(shiftDateMonth).padStart(2, '0')}-${String(shiftDateDay).padStart(2, '0')}`,
+        shiftStart: shift.startTime,
+        shiftStartUTC: shiftStartUTC.toISOString(),
+        earliestAllowed: this.formatISTTime(earliestAllowedTime),
+        earliestAllowedUTC: earliestAllowedTime.toISOString(),
+        windowMinutes: this.CONSTANTS.EARLY_PUNCH_IN_WINDOW_MINUTES,
+        punchMinutesSinceMidnight,
+        shiftStartMinutesSinceMidnight
+      });
+
+      throw new Error(
+        `Cannot punch in more than ${windowText} before shift start time (${shift.startTime}). ` +
+        `Earliest allowed punch-in: ${this.formatISTTime(earliestAllowedTime)}`
+      );
+    }
+
+    console.log('✅ Early punch-in validation passed:', {
+      punchTime: punchTime.toISOString(),
+      punchTimeIST: `${String(istTime.hour).padStart(2, '0')}:${String(istTime.minute).padStart(2, '0')}`,
+      shiftStart: shift.startTime,
+      shiftStartUTC: shiftStartUTC.toISOString(),
+      earliestAllowed: this.formatISTTime(earliestAllowedTime),
+      isValid: true
+    });
+  }
+
+  /**
+   * Format a UTC timestamp to IST time string (HH:MM format)
+   * @param {Date} utcDate - UTC timestamp
+   * @returns {String} Time in HH:MM format (IST)
+   */
+  formatISTTime(utcDate) {
+    const istTime = this.getISTTimeComponents(utcDate);
+    if (!istTime) return 'Invalid time';
+
+    return `${String(istTime.hour).padStart(2, '0')}:${String(istTime.minute).padStart(2, '0')}`;
   }
 
   /**
@@ -595,8 +714,11 @@ class AttendanceService {
       breakDuration: this.formatDuration(breakSeconds),
       totalDuration: this.formatDuration(totalSeconds),
 
-      isPresent: workSeconds > 0,
-      isAbsent: workSeconds === 0,
+      // Fixed: Employee is present if they have punched in (arrivalTime exists)
+      // This fixes the issue where punching in at exactly shift time (e.g., 5:30:00 AM)
+      // would mark employee as absent because workSeconds === 0
+      isPresent: arrivalTime !== null,
+      isAbsent: arrivalTime === null,
       // Flexible employees are NEVER marked as late (no shift start time to compare against)
       isLate,
       lateMinutes, // ⭐ Minutes late (0 if on-time or flexible shift)
@@ -1094,16 +1216,20 @@ class AttendanceService {
     const arrivalTotalSeconds = arrivalHour * 3600 + arrivalMin * 60 + arrivalSec;
     const shiftStartSeconds = shiftHour * 3600 + shiftMin * 60; // Shift starts at 0 seconds
 
-    // STRICT ENFORCEMENT: Even 1 second late counts as late
-    // If arrival time is AFTER shift start (even by 1 second), employee is late
+    // GRACE PERIOD: 1 minute grace period (59 seconds)
+    // Employee is late if they arrive 1 minute (60 seconds) or more after shift start
+    // Example: Shift at 9:00 AM, grace period is 9:00:01 to 9:00:59
+    // 9:00:59 AM = NOT LATE, 9:01:00 AM = LATE
+    const gracePeriodSeconds = (this.CONSTANTS.LATE_THRESHOLD_MINUTES * 60) - 1; // 59 seconds
     const secondsLate = arrivalTotalSeconds - shiftStartSeconds;
-    const isLate = secondsLate > 0;
+    const isLate = secondsLate > gracePeriodSeconds;
     const minutesLate = Math.max(0, Math.floor(secondsLate / 60));
 
-    console.log('🕐 calculateIsLate RESULT (STRICT MODE - NO GRACE PERIOD):', {
+    console.log('🕐 calculateIsLate RESULT (1 MINUTE GRACE PERIOD):', {
       arrivalTimeUTC: new Date(arrivalTime).toISOString(),
       arrivalIST: `${String(arrivalHour).padStart(2, '0')}:${String(arrivalMin).padStart(2, '0')}:${String(arrivalSec).padStart(2, '0')} IST`,
       shiftStartTime: `${shift.startTime}:00 IST`,
+      gracePeriod: `${this.CONSTANTS.LATE_THRESHOLD_MINUTES} minute (up to 59 seconds allowed)`,
       arrivalSeconds: arrivalTotalSeconds,
       shiftStartSeconds,
       secondsLate,
@@ -1111,6 +1237,7 @@ class AttendanceService {
       isLate,
       verdict: secondsLate < 0 ? `✅ EARLY by ${Math.abs(secondsLate)}s` :
                secondsLate === 0 ? '✅ ON-TIME (exactly on time)' :
+               secondsLate <= gracePeriodSeconds ? `✅ WITHIN GRACE PERIOD by ${secondsLate}s (${minutesLate} min ${secondsLate % 60}s)` :
                `❌ LATE by ${secondsLate}s (${minutesLate} min ${secondsLate % 60}s)`
     });
 
@@ -1119,12 +1246,12 @@ class AttendanceService {
 
   /**
    * Calculate exact late minutes for employee
-   * STRICT ENFORCEMENT: Counts seconds and rounds up to next minute
+   * WITH GRACE PERIOD: Subtracts grace period from total late time
    * Uses IST timezone regardless of server timezone
    *
    * @param {Date} arrivalTime - Arrival timestamp (UTC from database)
    * @param {String} shiftStartTime - Shift start time in HH:MM format (IST)
-   * @returns {Number} - Minutes late (0 if early/on-time)
+   * @returns {Number} - Minutes late (0 if within grace period or early)
    */
   calculateLateMinutes(arrivalTime, shiftStartTime) {
     if (!arrivalTime || !shiftStartTime) return 0;
@@ -1145,9 +1272,13 @@ class AttendanceService {
     // Calculate seconds late
     const secondsLate = Math.max(0, arrivalTotalSeconds - shiftStartSeconds);
 
+    // Subtract grace period (59 seconds - anything under 1 minute is forgiven)
+    const gracePeriodSeconds = (this.CONSTANTS.LATE_THRESHOLD_MINUTES * 60) - 1; // 59 seconds
+    const secondsLateAfterGrace = Math.max(0, secondsLate - gracePeriodSeconds);
+
     // Round up to next minute if there are any remaining seconds
-    // Example: 1 minute 30 seconds late = 2 minutes late (rounded up)
-    return Math.ceil(secondsLate / 60);
+    // Example: Arrive at 9:01:00 (60s late) - 59s grace = 1s late after grace = 1 minute late (rounded up)
+    return Math.ceil(secondsLateAfterGrace / 60);
   }
 
   updatePerformanceMetrics(employee) {
@@ -1224,8 +1355,8 @@ class AttendanceService {
       workDuration: "0h 0m",
       breakDuration: "0h 0m",
       totalDuration: "0h 0m",
-      isPresent: false,
-      isAbsent: true,
+      isPresent: false, // Will be true once arrivalTime is set
+      isAbsent: true,   // Will be false once arrivalTime is set
       isLate: false,
       lateMinutes: 0, // ⭐ Minutes late
       isHalfDay: false,

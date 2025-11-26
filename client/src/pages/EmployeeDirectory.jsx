@@ -38,20 +38,10 @@ const EmployeeDirectory = ({ onLogout }) => {
     return () => clearInterval(timer);
   }, []);
 
-  // Function to fetch regions
+  // Function to fetch regions (using hardcoded enum)
   const fetchRegions = async () => {
-    try {
-      const token = localStorage.getItem("token");
-      const response = await fetch(`${API_BASE}/api/clients/regions`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setRegions(data);
-      }
-    } catch (error) {
-      console.error('Error fetching regions:', error);
-    }
+    // Use standardized region enum values
+    setRegions(['Global', 'USA', 'AUS', 'CANADA', 'IND']);
   };
 
   // Function to update employee status

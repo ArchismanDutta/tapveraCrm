@@ -7,27 +7,30 @@ class GmailService {
     this.oauth2Client = null;
     this.gmail = null;
     this.initialized = false;
+    this.CLIENT_ID = null;
+    this.CLIENT_SECRET = null;
   }
 
   /**
    * Initialize Gmail API with OAuth2 credentials
+   * Uses database-stored refresh token with auto-refresh capability
    */
   initialize() {
     try {
-      const CLIENT_ID = process.env.GMAIL_CLIENT_ID;
-      const CLIENT_SECRET = process.env.GMAIL_CLIENT_SECRET;
+      this.CLIENT_ID = process.env.GMAIL_CLIENT_ID;
+      this.CLIENT_SECRET = process.env.GMAIL_CLIENT_SECRET;
       const REFRESH_TOKEN = process.env.GMAIL_REFRESH_TOKEN;
       const REDIRECT_URI = process.env.GMAIL_REDIRECT_URI || 'http://localhost:3000/auth/google/callback';
 
-      if (!CLIENT_ID || !CLIENT_SECRET || !REFRESH_TOKEN) {
+      if (!this.CLIENT_ID || !this.CLIENT_SECRET || !REFRESH_TOKEN) {
         console.warn('⚠️  Gmail API credentials not configured. Email will use SMTP fallback.');
         return false;
       }
 
       // Create OAuth2 client
       this.oauth2Client = new google.auth.OAuth2(
-        CLIENT_ID,
-        CLIENT_SECRET,
+        this.CLIENT_ID,
+        this.CLIENT_SECRET,
         REDIRECT_URI
       );
 
@@ -36,11 +39,25 @@ class GmailService {
         refresh_token: REFRESH_TOKEN
       });
 
+      // Listen for token refresh events to update database
+      this.oauth2Client.on('tokens', async (tokens) => {
+        if (tokens.refresh_token) {
+          console.log('🔄 New refresh token received, updating database...');
+          await this.saveRefreshToken(tokens.refresh_token);
+        }
+      });
+
       // Create Gmail API instance
       this.gmail = google.gmail({ version: 'v1', auth: this.oauth2Client });
 
       this.initialized = true;
-      console.log('✅ Gmail API initialized successfully');
+      console.log('✅ Gmail API initialized successfully with auto-refresh');
+
+      // Initialize database with current token
+      this.saveRefreshToken(REFRESH_TOKEN).catch(err => {
+        console.warn('⚠️  Failed to save initial refresh token to database:', err.message);
+      });
+
       return true;
 
     } catch (error) {
@@ -50,7 +67,91 @@ class GmailService {
   }
 
   /**
-   * Send email using Gmail API
+   * Save refresh token to database
+   * This allows tokens to persist across AWS deployments
+   */
+  async saveRefreshToken(refreshToken) {
+    try {
+      const EmailCredentials = require('../../models/EmailCredentials');
+
+      await EmailCredentials.findOneAndUpdate(
+        { service: 'gmail_api' },
+        {
+          refreshToken,
+          lastRefreshed: new Date(),
+          metadata: {
+            clientId: this.CLIENT_ID,
+            clientSecret: this.CLIENT_SECRET,
+            userEmail: process.env.GMAIL_USER
+          }
+        },
+        { upsert: true, new: true }
+      );
+
+      console.log('✅ Refresh token saved to database');
+    } catch (error) {
+      console.error('❌ Failed to save refresh token:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Load refresh token from database
+   * Fallback when environment variable token expires
+   */
+  async loadRefreshTokenFromDB() {
+    try {
+      const EmailCredentials = require('../../models/EmailCredentials');
+
+      const credentials = await EmailCredentials.findOne({ service: 'gmail_api' });
+
+      if (credentials && credentials.refreshToken) {
+        console.log('✅ Loaded refresh token from database');
+        return credentials.refreshToken;
+      }
+
+      return null;
+    } catch (error) {
+      console.error('❌ Failed to load refresh token from database:', error.message);
+      return null;
+    }
+  }
+
+  /**
+   * Ensure valid access token with automatic refresh
+   */
+  async ensureValidToken() {
+    try {
+      // Try to get current access token
+      const { token } = await this.oauth2Client.getAccessToken();
+
+      if (!token) {
+        // If env token failed, try database token
+        console.log('⚠️  Environment refresh token failed, trying database...');
+        const dbToken = await this.loadRefreshTokenFromDB();
+
+        if (dbToken) {
+          this.oauth2Client.setCredentials({ refresh_token: dbToken });
+          const { token: newToken } = await this.oauth2Client.getAccessToken();
+
+          if (newToken) {
+            console.log('✅ Successfully refreshed using database token');
+            return true;
+          }
+        }
+
+        throw new Error('Unable to obtain valid access token');
+      }
+
+      return true;
+    } catch (error) {
+      console.error('❌ Token refresh failed:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Send email using Gmail API with auto-refresh
    * @param {Object} emailData - Email data
    * @returns {Promise<Object>} - Result with messageId
    */
@@ -64,6 +165,9 @@ class GmailService {
     }
 
     try {
+      // Ensure we have a valid access token before sending
+      await this.ensureValidToken();
+
       const { to, cc, bcc, subject, html, text } = emailData;
       const from = process.env.GMAIL_USER || 'tapveratechnologies@gmail.com';
 
@@ -96,6 +200,12 @@ class GmailService {
 
     } catch (error) {
       console.error('❌ Gmail API send error:', error.message);
+
+      // If token refresh fails, throw error to trigger SMTP fallback
+      if (error.message.includes('invalid_grant') || error.message.includes('Invalid Credentials')) {
+        console.error('⚠️  Gmail refresh token expired. Falling back to SMTP...');
+      }
+
       throw error;
     }
   }

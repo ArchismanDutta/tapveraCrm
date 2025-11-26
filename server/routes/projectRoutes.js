@@ -62,13 +62,18 @@ router.get("/", protect, async (req, res) => {
     console.log(`[Project Filtering] user.region:`, user.region);
 
     // Check if user has region restrictions
+    // Safety: Treat undefined/empty regions as Global access (backward compatibility)
+    const hasRegionsUndefined = !user.regions || user.regions.length === 0;
+    const hasOldRegionUndefined = !user.region;
     const hasGlobalAccess = user.role === 'super-admin' || user.role === 'superadmin' ||
                            (user.regions && user.regions.includes('Global')) ||
-                           (user.region === 'Global');
+                           (user.region === 'Global') ||
+                           (hasRegionsUndefined && hasOldRegionUndefined); // Safety fallback
 
     console.log(`[Project Filtering] Is super-admin: ${user.role === 'super-admin' || user.role === 'superadmin'}`);
     console.log(`[Project Filtering] Has Global in regions array: ${user.regions && user.regions.includes('Global')}`);
     console.log(`[Project Filtering] Has Global in region field: ${user.region === 'Global'}`);
+    console.log(`[Project Filtering] Safety fallback (no regions): ${hasRegionsUndefined && hasOldRegionUndefined}`);
     console.log(`[Project Filtering] Final hasGlobalAccess: ${hasGlobalAccess}`);
 
     if (!hasGlobalAccess) {
@@ -137,6 +142,213 @@ router.get("/", protect, async (req, res) => {
     res.json(projects);
   } catch (error) {
     console.error("Error fetching projects:", error);
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
+});
+
+// @route   GET /api/projects/:id/analytics
+// @desc    Get detailed communication analytics for a project (Hybrid: Statistical + AI)
+// @access  Private (Admin/SuperAdmin)
+router.get("/:id/analytics", protect, authorize("admin", "superadmin"), async (req, res) => {
+  try {
+    const { useAI } = req.query;
+    const Message = require("../models/Message");
+    const {
+      calculateAvgResponseTime,
+      calculateWeeklyAverage,
+      getMostActiveDays,
+      getMostActiveHours,
+      calculateTrend,
+      calculateRiskScore,
+      detectAnomalies,
+      predictMessageCount,
+      getBestResponseTime,
+      calculateEngagementScore
+    } = require("../utils/communicationAnalytics");
+    const { analyzeWithAI, shouldUseAI } = require("../utils/aiAnalysis");
+
+    const project = await Project.findById(req.params.id)
+      .populate("clients", "clientName businessName")
+      .lean();
+
+    if (!project) {
+      return res.status(404).json({ message: "Project not found" });
+    }
+
+    // Get all messages for this project
+    const messages = await Message.find({ project: req.params.id })
+      .sort({ createdAt: 1 })
+      .lean();
+
+    // Get communication metadata
+    const lastMessage = messages[messages.length - 1] || null;
+    let daysSinceLastMessage = null;
+    let lastSenderType = null;
+
+    if (lastMessage) {
+      const now = new Date();
+      const lastMsgDate = new Date(lastMessage.createdAt);
+      daysSinceLastMessage = Math.floor((now - lastMsgDate) / (1000 * 60 * 60 * 24));
+      lastSenderType = lastMessage.senderType;
+    }
+
+    // ========================================
+    // LAYER 1: STATISTICAL ANALYSIS (Always)
+    // ========================================
+    const responseTime = {
+      clientToAdmin: calculateAvgResponseTime(messages, 'client', 'admin'),
+      adminToClient: calculateAvgResponseTime(messages, 'admin', 'client'),
+      employeeToAdmin: calculateAvgResponseTime(messages, 'employee', 'admin'),
+    };
+
+    const avgMessagesPerWeek = calculateWeeklyAverage(messages);
+    const activeDays = getMostActiveDays(messages);
+    const activeHours = getMostActiveHours(messages);
+    const trend = calculateTrend(messages);
+    const bestTime = getBestResponseTime(messages);
+    const anomalies = detectAnomalies(messages);
+    const prediction = predictMessageCount(messages, 7);
+
+    const communication = {
+      daysSinceLastMessage,
+      lastSenderType
+    };
+
+    const risk = calculateRiskScore(messages, project, communication);
+    const engagementScore = calculateEngagementScore(messages, project);
+
+    const statisticalAnalysis = {
+      summary: {
+        totalMessages: messages.length,
+        avgMessagesPerWeek,
+        engagementScore,
+        lastActivity: lastMessage?.createdAt || null,
+        daysSinceLastMessage,
+        lastSenderType
+      },
+      responseTime,
+      patterns: {
+        activeDays: activeDays.slice(0, 3), // Top 3 days
+        activeHours,
+        bestTimeToReach: bestTime
+      },
+      trend,
+      risk,
+      anomalies,
+      prediction
+    };
+
+    // ========================================
+    // LAYER 2: AI ANALYSIS (Conditional)
+    // ========================================
+    let aiInsights = null;
+    const context = {
+      risk,
+      responseTime,
+      avgMessagesPerWeek,
+      trend,
+      daysSinceLastMessage,
+      lastSenderType
+    };
+
+    // Determine if AI should be used
+    if (shouldUseAI(context, useAI === 'true')) {
+      console.log(`[Analytics] Using AI for project ${req.params.id} - Risk: ${risk.score}, Days: ${daysSinceLastMessage}`);
+      aiInsights = await analyzeWithAI(messages, context);
+    }
+
+    // ========================================
+    // RETURN COMBINED RESULTS
+    // ========================================
+    res.json({
+      projectId: project._id,
+      projectName: project.projectName,
+      clients: project.clients,
+      statistical: statisticalAnalysis,
+      ai: aiInsights,
+      timestamp: new Date(),
+      analysisType: aiInsights ? (aiInsights.source === 'ai' ? 'hybrid' : 'statistical-fallback') : 'statistical'
+    });
+
+  } catch (error) {
+    console.error("Error generating analytics:", error);
+    res.status(500).json({ message: "Analytics generation failed", error: error.message });
+  }
+});
+
+// @route   GET /api/projects/communication-status
+// @desc    Get all projects with communication metadata for tracking
+// @access  Private (Admin/SuperAdmin)
+router.get("/communication-status", protect, authorize("admin", "superadmin"), async (req, res) => {
+  try {
+    const Message = require("../models/Message");
+
+    // Get all projects
+    const projects = await Project.find({})
+      .populate("clients", "clientName businessName email")
+      .populate("assignedTo", "name email")
+      .select("projectName type status createdAt")
+      .lean();
+
+    // For each project, get communication metadata
+    const projectsWithCommStatus = await Promise.all(
+      projects.map(async (project) => {
+        // Get all messages for this project
+        const messages = await Message.find({ project: project._id })
+          .sort({ createdAt: -1 })
+          .limit(1)
+          .populate("sentBy", "name email clientName designation")
+          .lean();
+
+        const lastMessage = messages[0] || null;
+
+        let communicationStatus = "none"; // none, recent, thisWeek, overdue
+        let lastActivityDate = null;
+        let lastSender = null;
+        let lastSenderType = null;
+        let lastSenderDesignation = null;
+        let daysSinceLastMessage = null;
+
+        if (lastMessage) {
+          lastActivityDate = lastMessage.createdAt;
+          lastSender = lastMessage.sentBy?.name || lastMessage.sentBy?.clientName || "Unknown";
+          lastSenderType = lastMessage.senderType; // 'admin', 'employee', 'client'
+          lastSenderDesignation = lastMessage.senderType === "client"
+            ? "Client"
+            : (lastMessage.sentBy?.designation || "Team Member");
+
+          // Calculate days since last message
+          const now = new Date();
+          const lastMsgDate = new Date(lastMessage.createdAt);
+          daysSinceLastMessage = Math.floor((now - lastMsgDate) / (1000 * 60 * 60 * 24));
+
+          // Determine status based on recency
+          if (daysSinceLastMessage === 0) {
+            communicationStatus = "recent"; // Today (green)
+          } else if (daysSinceLastMessage <= 7) {
+            communicationStatus = "thisWeek"; // Within a week (yellow)
+          } else {
+            communicationStatus = "overdue"; // More than a week (red)
+          }
+        }
+
+        return {
+          ...project,
+          communication: {
+            status: communicationStatus,
+            lastActivityDate,
+            lastSender,
+            lastSenderType,
+            lastSenderDesignation,
+            daysSinceLastMessage,
+          },
+        };
+      })
+    );
+
+    res.json(projectsWithCommStatus);
+  } catch (error) {
+    console.error("Error fetching communication status:", error);
     res.status(500).json({ message: "Server error", error: error.message });
   }
 });
@@ -794,13 +1006,13 @@ router.get("/:id/messages", protect, async (req, res) => {
     }
 
     const messages = await Message.find(filter)
-      .populate("sentBy", "name email clientName")
+      .populate("sentBy", "name email clientName designation")
       .populate({
         path: "replyTo",
-        select: "message sentBy createdAt",
+        select: "message sentBy createdAt senderType",
         populate: {
           path: "sentBy",
-          select: "name email clientName",
+          select: "name email clientName designation",
         },
       })
       .populate({
@@ -939,13 +1151,13 @@ router.post("/:id/messages", protect, uploadToS3.array("files", 5), async (req, 
     });
 
     const populatedMessage = await Message.findById(newMessage._id)
-      .populate("sentBy", "name email clientName")
+      .populate("sentBy", "name email clientName designation")
       .populate({
         path: "replyTo",
-        select: "message sentBy createdAt",
+        select: "message sentBy createdAt senderType",
         populate: {
           path: "sentBy",
-          select: "name email clientName",
+          select: "name email clientName designation",
         },
       })
       .populate({
@@ -1003,6 +1215,24 @@ router.post("/:id/messages", protect, uploadToS3.array("files", 5), async (req, 
     emailNotificationService.sendProjectMessageEmail(populatedMessage).catch(err => {
       console.error('Failed to send project message email:', err);
     });
+
+    // ✅ BROADCAST REAL-TIME MESSAGE TO ALL PROJECT MEMBERS VIA WEBSOCKET
+    const { broadcastProjectMessage } = require('../utils/websocket');
+
+    // Include sender as well (for multi-tab sync)
+    const allMemberIds = [...Array.from(recipientIds), String(req.user._id)];
+
+    try {
+      const broadcasted = broadcastProjectMessage(
+        req.params.id,
+        allMemberIds,
+        populatedMessage
+      );
+      console.log(`[Project Message] Real-time broadcast ${broadcasted ? 'successful' : 'failed'} for project ${req.params.id}`);
+    } catch (broadcastError) {
+      console.error('[Project Message] Failed to broadcast via WebSocket:', broadcastError);
+      // Don't fail the request if WebSocket broadcast fails
+    }
 
     res.status(201).json(populatedMessage);
   } catch (error) {
@@ -1078,7 +1308,7 @@ router.post("/:id/messages/:messageId/react", protect, async (req, res) => {
 
     // Populate and return updated message
     const populatedMessage = await Message.findById(message._id)
-      .populate("sentBy", "name email clientName")
+      .populate("sentBy", "name email clientName designation")
       .populate({
         path: "reactions.users.user",
         select: "name email clientName",
@@ -1121,7 +1351,7 @@ router.patch("/:id/messages/:messageId/attachments/:attachmentId/toggle-importan
 
     // Populate and return updated message
     const populatedMessage = await Message.findById(message._id)
-      .populate("sentBy", "name email clientName");
+      .populate("sentBy", "name email clientName designation");
 
     res.json({
       message: "Attachment importance toggled",

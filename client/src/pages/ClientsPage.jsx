@@ -134,6 +134,43 @@ const ClientsPage = ({ onLogout }) => {
     region: "Global",
   });
 
+  // Robust copy to clipboard function that works with HTTP (non-secure contexts)
+  const copyToClipboard = (text, label = "Text") => {
+    try {
+      // Use textarea method (works in both HTTP and HTTPS)
+      const textArea = document.createElement("textarea");
+      textArea.value = text;
+
+      // Make textarea invisible but still functional
+      textArea.style.position = "fixed";
+      textArea.style.opacity = "0";
+      textArea.style.left = "-999999px";
+      textArea.style.top = "-999999px";
+
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+
+      try {
+        // Execute copy command
+        const successful = document.execCommand('copy');
+        document.body.removeChild(textArea);
+
+        if (successful) {
+          showNotification(`${label} copied to clipboard!`, "success");
+        } else {
+          throw new Error('Copy command was unsuccessful');
+        }
+      } catch (err) {
+        document.body.removeChild(textArea);
+        throw err;
+      }
+    } catch (err) {
+      console.error("Failed to copy:", err);
+      showNotification(`Failed to copy ${label}. Please select and copy manually.`, "error");
+    }
+  };
+
   useEffect(() => {
     // Get user role from localStorage
     try {
@@ -517,14 +554,18 @@ const ClientsPage = ({ onLogout }) => {
 
             <div>
               <label className="block text-sm text-gray-400 mb-2">Region *</label>
-              <input
-                type="text"
-                placeholder="e.g., USA, Australia, Canada"
+              <select
                 value={form.region}
                 onChange={(e) => setForm({ ...form, region: e.target.value })}
-                className="w-full px-4 py-3 bg-[#0f1419] border border-[#232945] rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 transition-colors"
+                className="w-full px-4 py-3 bg-[#0f1419] border border-[#232945] rounded-lg text-white focus:outline-none focus:border-purple-500 transition-colors"
                 required
-              />
+              >
+                <option value="Global">Global</option>
+                <option value="USA">USA</option>
+                <option value="AUS">Australia</option>
+                <option value="CANADA">Canada</option>
+                <option value="IND">India</option>
+              </select>
               <p className="text-xs text-gray-500 mt-1">Admins assigned to this region will see this client</p>
             </div>
 
@@ -770,16 +811,20 @@ const ClientsPage = ({ onLogout }) => {
               </div>
 
               <div>
-                <label className="block text-sm text-gray-400 mb-2">Region</label>
-                <input
-                  type="text"
-                  placeholder="e.g., USA, Australia, Canada, Global"
-                  value={selectedClient.region || ''}
+                <label className="block text-sm text-gray-400 mb-2">Region *</label>
+                <select
+                  value={selectedClient.region || 'Global'}
                   onChange={(e) => setSelectedClient({ ...selectedClient, region: e.target.value })}
                   className="w-full px-4 py-3 bg-[#0f1419] border border-[#232945] rounded-lg text-white focus:outline-none focus:border-purple-500 transition-colors"
                   required
-                />
-                <p className="text-xs text-gray-500 mt-1">Enter region name (defaults to 'Global' if empty)</p>
+                >
+                  <option value="Global">Global</option>
+                  <option value="USA">USA</option>
+                  <option value="AUS">Australia</option>
+                  <option value="CANADA">Canada</option>
+                  <option value="IND">India</option>
+                </select>
+                <p className="text-xs text-gray-500 mt-1">Admins assigned to this region will see this client</p>
               </div>
 
               {/* Password field only for super-admin */}
@@ -904,10 +949,7 @@ const ClientsPage = ({ onLogout }) => {
                 <div className="flex items-center justify-between mb-2">
                   <p className="text-sm text-gray-400">Email Address</p>
                   <button
-                    onClick={() => {
-                      navigator.clipboard.writeText(selectedClient.email);
-                      showNotification("Email copied to clipboard!", "success");
-                    }}
+                    onClick={() => copyToClipboard(selectedClient.email, "Email")}
                     className="text-cyan-400 hover:text-cyan-300 text-xs flex items-center gap-1"
                   >
                     <Mail className="w-3 h-3" />
@@ -921,10 +963,7 @@ const ClientsPage = ({ onLogout }) => {
                 <div className="flex items-center justify-between mb-2">
                   <p className="text-sm text-gray-400">Password</p>
                   <button
-                    onClick={() => {
-                      navigator.clipboard.writeText(selectedClient.password);
-                      showNotification("Password copied to clipboard!", "success");
-                    }}
+                    onClick={() => copyToClipboard(selectedClient.password, "Password")}
                     className="text-cyan-400 hover:text-cyan-300 text-xs flex items-center gap-1"
                   >
                     <Eye className="w-3 h-3" />

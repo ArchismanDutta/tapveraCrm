@@ -21,9 +21,9 @@ router.get("/stats", protect, authorize("admin", "hr", "super-admin"), getPaysli
 router.get("/:employeeId/:month", protect, authorize("admin", "hr", "super-admin"), getEmployeePayslip);
 router.get("/history/:employeeId", protect, authorize("admin", "hr", "super-admin"), getEmployeePayslipHistory);
 
-// Super Admin routes (can create, update, delete) - Uses automated calculation
-router.post("/", protect, authorize("super-admin"), createPayslip);
-router.put("/:id", protect, authorize("super-admin"), updatePayslip);
-router.delete("/:id", protect, authorize("super-admin"), deletePayslip);
+// Super Admin and HR routes (can create, update, delete) - Uses automated calculation
+router.post("/", protect, authorize("super-admin", "hr"), createPayslip);
+router.put("/:id", protect, authorize("super-admin", "hr"), updatePayslip);
+router.delete("/:id", protect, authorize("super-admin", "hr"), deletePayslip);
 
 module.exports = router;
