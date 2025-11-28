@@ -65,6 +65,11 @@ const menuConfig = {
       label: "My Projects",
     },
     {
+      to: "/communication-tracking",
+      icon: <MessageSquareQuote size={18} animateOnHover />,
+      label: "Project Communication",
+    },
+    {
       to: "/tasks",
       icon: <CircleCheckBig size={18} animateOnHover />,
       label: "My Tasks",
@@ -131,6 +136,11 @@ const menuConfig = {
       to: "/today-status",
       icon: <LogIn size={18} animateOnHover />,
       label: "Punch In/Out",
+    },
+    {
+      to: "/communication-tracking",
+      icon: <MessageSquareQuote size={18} animateOnHover />,
+      label: "Project Communication",
     },
     {
       to: "/tasks",
@@ -247,6 +257,11 @@ const menuConfig = {
           to: "/projects",
           icon: <FolderKanban size={16} />,
           label: "Project Management",
+        },
+        {
+          to: "/communication-tracking",
+          icon: <MessageSquareQuote size={16} animateOnHover />,
+          label: "Communication Tracking",
         },
         {
           to: "/leads",

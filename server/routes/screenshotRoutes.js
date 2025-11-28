@@ -61,9 +61,21 @@ router.post(
       const { projectId } = req.params;
       const { title, description, tags } = req.body;
 
+      console.log("[Screenshot Upload] Request received for project:", projectId);
+      console.log("[Screenshot Upload] File received:", req.file ? "Yes" : "No");
+
       if (!req.file) {
+        console.error("[Screenshot Upload] No file in request");
         return res.status(400).json({ message: "Screenshot file is required" });
       }
+
+      console.log("[Screenshot Upload] File details:", {
+        location: req.file.location,
+        key: req.file.key,
+        filename: req.file.filename,
+        size: req.file.size,
+        mimetype: req.file.mimetype
+      });
 
       if (!title) {
         return res.status(400).json({ message: "Title is required" });
@@ -96,8 +108,23 @@ router.post(
       }
 
       // Get file URL from S3 or local storage
-      const fileUrl = req.file.location || `/uploads/screenshots/${req.file.filename}`;
+      let fileUrl;
+      if (req.file.location) {
+        // S3 upload - location contains the S3 URL
+        fileUrl = req.file.location;
+      } else if (req.file.key) {
+        // S3 upload with key instead of location
+        fileUrl = `https://${process.env.AWS_S3_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${req.file.key}`;
+      } else {
+        // Local storage fallback
+        fileUrl = `/uploads/screenshots/${req.file.filename}`;
+      }
       const cloudFrontUrl = convertToCloudFrontUrl(fileUrl);
+
+      console.log("[Screenshot Upload] File URLs:", {
+        originalUrl: fileUrl,
+        cloudFrontUrl: cloudFrontUrl
+      });
 
       // Create screenshot record
       const screenshot = await Screenshot.create({
@@ -115,14 +142,21 @@ router.post(
         screenshot._id
       ).populate("uploadedBy", "name email employeeId");
 
+      console.log("[Screenshot Upload] Success! Screenshot ID:", screenshot._id);
+
       res.status(201).json({
         success: true,
         message: "Screenshot uploaded successfully",
         data: populatedScreenshot,
       });
     } catch (error) {
-      console.error("Error uploading screenshot:", error);
-      res.status(500).json({ message: "Server error", error: error.message });
+      console.error("[Screenshot Upload] Error:", error);
+      console.error("[Screenshot Upload] Error stack:", error.stack);
+      res.status(500).json({
+        message: "Server error",
+        error: error.message,
+        details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      });
     }
   }
 );

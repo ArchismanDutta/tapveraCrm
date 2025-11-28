@@ -29,6 +29,7 @@ import {
   Lightbulb,
   Zap,
   BarChart3,
+  Star,
 } from "lucide-react";
 import Sidebar from "../components/dashboard/Sidebar";
 import MediaLightbox from "../components/common/MediaLightbox";
@@ -266,7 +267,8 @@ const EmployeePortal = ({ onLogout }) => {
       }
 
       const data = await response.json();
-      setMessages(data);
+      // Handle new pagination response format (data.messages) or old format (array directly)
+      setMessages(data.messages || data);
     } catch (error) {
       console.error("Error fetching messages:", error);
       setMessages([]);
@@ -873,6 +875,31 @@ const EmployeePortal = ({ onLogout }) => {
                   </div>
                 </div>
               )}
+
+              {/* Project Creator */}
+              {project.createdBy && (
+                <div className="bg-[#191f2b]/70 p-4 sm:p-6 rounded-lg shadow-sm border border-[#232945]">
+                  <h3 className="text-base sm:text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                    <Star className="w-5 h-5 text-yellow-400" />
+                    Project Creator
+                  </h3>
+                  <div className="flex items-center gap-3 p-3 bg-[#0f1419] rounded-lg border border-[#232945]">
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-yellow-500 to-orange-500 flex items-center justify-center text-white font-semibold flex-shrink-0">
+                      {(project.createdBy.name || "U").charAt(0).toUpperCase()}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-white font-medium text-sm">
+                        {project.createdBy.name || "Unknown"}
+                      </p>
+                      {project.createdBy.email && (
+                        <p className="text-xs text-yellow-400">
+                          {project.createdBy.email}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -1088,11 +1115,35 @@ const EmployeePortal = ({ onLogout }) => {
                                         </div>
                                       </div>
                                       <a
-                                        href={att.url.startsWith('http') ? att.url : `${API_BASE}${att.url}`}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
+                                        href={`${API_BASE}/api/projects/${selectedProject}/messages/${msg._id}/attachments/${att._id}/download`}
                                         className="p-1 hover:bg-white/10 rounded"
-                                        download
+                                        onClick={(e) => {
+                                          e.preventDefault();
+                                          const token = localStorage.getItem("token");
+                                          fetch(`${API_BASE}/api/projects/${selectedProject}/messages/${msg._id}/attachments/${att._id}/download`, {
+                                            headers: {
+                                              'Authorization': `Bearer ${token}`
+                                            }
+                                          })
+                                          .then(response => {
+                                            if (!response.ok) throw new Error('Download failed');
+                                            return response.blob();
+                                          })
+                                          .then(blob => {
+                                            const url = window.URL.createObjectURL(blob);
+                                            const a = document.createElement('a');
+                                            a.href = url;
+                                            a.download = att.filename || 'download';
+                                            document.body.appendChild(a);
+                                            a.click();
+                                            window.URL.revokeObjectURL(url);
+                                            document.body.removeChild(a);
+                                          })
+                                          .catch(error => {
+                                            console.error('Download error:', error);
+                                            setNotification({ message: 'Failed to download file', type: 'error' });
+                                          });
+                                        }}
                                       >
                                         <Download className="w-4 h-4 text-gray-300" />
                                       </a>

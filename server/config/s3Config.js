@@ -89,7 +89,12 @@ const uploadToS3 = isS3Configured ? multer({
   storage: multer.diskStorage({
     destination: function (req, file, cb) {
       const fs = require('fs');
-      const uploadDir = path.join(__dirname, "../uploads/messages");
+      // Determine folder based on the endpoint
+      let folder = "messages";
+      if (req.route && req.route.path && req.route.path.includes("screenshots")) {
+        folder = "screenshots";
+      }
+      const uploadDir = path.join(__dirname, `../uploads/${folder}`);
       if (!fs.existsSync(uploadDir)) {
         fs.mkdirSync(uploadDir, { recursive: true });
       }
@@ -167,14 +172,26 @@ const getFileType = (mimeType) => {
 const convertToCloudFrontUrl = (fileUrlOrPath) => {
   if (!fileUrlOrPath) return fileUrlOrPath;
 
+  console.log("[convertToCloudFrontUrl] Input:", fileUrlOrPath);
+  console.log("[convertToCloudFrontUrl] S3 Configured:", isS3Configured);
+
   // If S3 is not configured, return local server URL
   if (!isS3Configured) {
-    // If it's already a local path starting with /, add /uploads prefix if needed
+    // If it's already a local path starting with /, return as is
     if (fileUrlOrPath.startsWith('/')) {
+      console.log("[convertToCloudFrontUrl] Returning local path:", fileUrlOrPath);
       return fileUrlOrPath;
     }
     // Otherwise return as /uploads/messages/filename
-    return `/uploads/messages/${fileUrlOrPath}`;
+    const localPath = `/uploads/messages/${fileUrlOrPath}`;
+    console.log("[convertToCloudFrontUrl] Returning local path:", localPath);
+    return localPath;
+  }
+
+  // If it's a local path (starts with /), return as is (shouldn't happen with S3 configured)
+  if (fileUrlOrPath.startsWith('/')) {
+    console.log("[convertToCloudFrontUrl] Local path with S3 configured:", fileUrlOrPath);
+    return fileUrlOrPath;
   }
 
   // Extract the S3 key from the URL
@@ -190,8 +207,15 @@ const convertToCloudFrontUrl = (fileUrlOrPath) => {
     .replace(`https://s3.${region}.amazonaws.com/${bucketName}/`, "")
     .replace(`https://s3.amazonaws.com/${bucketName}/`, "");
 
+  // If no replacement happened, the input might already be just a key
+  if (key === fileUrlOrPath && !fileUrlOrPath.startsWith('http')) {
+    console.log("[convertToCloudFrontUrl] Input appears to be a key already:", key);
+  }
+
   // Return CloudFront URL
-  return `https://${CLOUDFRONT_DOMAIN}/${key}`;
+  const cloudFrontUrl = `https://${CLOUDFRONT_DOMAIN}/${key}`;
+  console.log("[convertToCloudFrontUrl] Output CloudFront URL:", cloudFrontUrl);
+  return cloudFrontUrl;
 };
 
 module.exports = {

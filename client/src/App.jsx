@@ -840,7 +840,7 @@ const AppWrapper = () => {
         <Route
           path="/communication-tracking"
           element={
-            isAuthenticated && isSuperAdmin ? (
+            isAuthenticated && role !== "client" ? (
               <ProjectCommunicationPage onLogout={handleLogout} />
             ) : (
               <Navigate

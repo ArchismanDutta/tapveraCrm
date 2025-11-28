@@ -18,6 +18,7 @@ import {
   BarChart3,
   ChevronLeft,
   ChevronRight,
+  ListTodo,
 } from "lucide-react";
 import Sidebar from "../components/dashboard/Sidebar";
 import CommunicationAnalytics from "../components/analytics/CommunicationAnalytics";
@@ -474,22 +475,25 @@ const ProjectCommunicationPage = ({ onLogout }) => {
             <table className="w-full">
               <thead>
                 <tr className="border-b-2 border-[#232945]">
-                  <th className="text-left pl-6 pr-4 py-4 text-base font-semibold text-gray-400 w-[25%]">
+                  <th className="text-left pl-6 pr-4 py-4 text-base font-semibold text-gray-400 w-[20%]">
                     Project Name
                   </th>
-                  <th className="text-left pl-6 pr-4 py-4 text-base font-semibold text-gray-400 w-[20%]">
+                  <th className="text-left pl-6 pr-4 py-4 text-base font-semibold text-gray-400 w-[15%]">
                     Client
                   </th>
-                  <th className="text-left pl-6 pr-4 py-4 text-base font-semibold text-gray-400 w-[15%]">
+                  <th className="text-left pl-6 pr-4 py-4 text-base font-semibold text-gray-400 w-[12%]">
                     Status
                   </th>
-                  <th className="text-left pl-6 pr-4 py-4 text-base font-semibold text-gray-400 w-[15%]">
+                  <th className="text-left pl-6 pr-4 py-4 text-base font-semibold text-gray-400 w-[12%]">
                     Last Activity
                   </th>
-                  <th className="text-left pl-6 pr-4 py-4 text-base font-semibold text-gray-400 w-[15%]">
+                  <th className="text-left pl-6 pr-4 py-4 text-base font-semibold text-gray-400 w-[13%]">
                     Last Sender
                   </th>
                   <th className="text-left pl-6 pr-4 py-4 text-base font-semibold text-gray-400 w-[10%]">
+                    Pending Tasks
+                  </th>
+                  <th className="text-left pl-6 pr-4 py-4 text-base font-semibold text-gray-400 w-[18%]">
                     Actions
                   </th>
                 </tr>
@@ -497,7 +501,7 @@ const ProjectCommunicationPage = ({ onLogout }) => {
               <tbody>
                 {paginatedProjects.length === 0 ? (
                   <tr>
-                    <td colSpan="6" className="text-center py-12">
+                    <td colSpan="7" className="text-center py-12">
                       <MessageSquare className="w-12 h-12 text-gray-600 mx-auto mb-3" />
                       <p className="text-gray-500 text-base">
                         {searchTerm || filterStatus !== "all" || filterClient !== "all" || filterProjectStatus !== "all" || filterCommunicationStatus !== "all"
@@ -581,6 +585,16 @@ const ProjectCommunicationPage = ({ onLogout }) => {
                           ) : (
                             <span className="text-gray-500 text-sm">No messages</span>
                           )}
+                        </td>
+                        <td className="pl-6 pr-4 py-5">
+                          <div className="flex items-center gap-2">
+                            <ListTodo className="w-4 h-4 text-blue-400" />
+                            <span className={`text-base font-semibold ${
+                              project.pendingTaskCount > 0 ? 'text-blue-400' : 'text-gray-500'
+                            }`}>
+                              {project.pendingTaskCount || 0}
+                            </span>
+                          </div>
                         </td>
                         <td className="pl-6 pr-4 py-5">
                           <div className="flex items-center gap-2">

@@ -9,7 +9,6 @@ import useMessageSuggestions from "../hooks/useMessageSuggestions";
 import ProjectTaskModal from "../components/project/ProjectTaskModal";
 import ProjectTaskEditModal from "../components/project/ProjectTaskEditModal";
 import UnreadMessageBadge from "../components/message/UnreadMessageBadge";
-import MessageWithMentions from "../components/message/MessageWithMentions";
 import ProjectReportTab from "../components/project/ProjectReportTab";
 import {
   ArrowLeft,
@@ -26,8 +25,6 @@ import {
   AlertCircle,
   Send,
   Paperclip,
-  Menu,
-  X,
   Download,
   Copy,
   Check,
@@ -103,7 +100,6 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
   const location = useLocation();
   const [project, setProject] = useState(null);
   const [messages, setMessages] = useState([]);
-  const [allMessages, setAllMessages] = useState([]);
   const [newMessage, setNewMessage] = useState("");
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
@@ -130,12 +126,20 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
   const [summary, setSummary] = useState("");
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [summaryDays, setSummaryDays] = useState(7);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [hasMoreMessages, setHasMoreMessages] = useState(true);
+  const [totalMessages, setTotalMessages] = useState(0);
+  const [loadingMoreMessages, setLoadingMoreMessages] = useState(false);
   const messagesEndRef = useRef(null);
   const chatContainerRef = useRef(null);
   const fileInputRef = useRef(null);
   const textareaRef = useRef(null);
   const wsRef = useRef(null);
   const prevMessagesLengthRef = useRef(0);
+  const reconnectTimeoutRef = useRef(null);
+  const reconnectAttemptsRef = useRef(0);
+  const maxReconnectAttempts = 10;
+  const [wsConnected, setWsConnected] = useState(false);
 
   // Message suggestions
   const { getSuggestions, getQuickReplies } = useMessageSuggestions(projectId, messages);
@@ -146,12 +150,13 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
   const [showQuickReplies, setShowQuickReplies] = useState(true);
   const suggestionsRef = useRef(null);
 
+  // WebSocket connection with exponential backoff reconnection
   useEffect(() => {
     fetchProjectDetails();
     fetchMessages();
 
-    // WebSocket connection for real-time messages
     const token = localStorage.getItem("token");
+    let isComponentMounted = true;
 
     // Determine WebSocket URL from environment variables
     const getWebSocketURL = () => {
@@ -165,7 +170,10 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
           const u = new URL(apiBase);
           u.protocol = u.protocol === "https:" ? "wss:" : "ws:";
           return `${u.protocol}//${u.host}`;
-        } catch {}
+        } catch (error) {
+          console.error("Failed to parse WebSocket URL:", error);
+          return null;
+        }
       }
 
       // 3) Fallback to window origin with default port
@@ -181,78 +189,127 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
       return "ws://localhost:5000";
     };
 
-    const wsURL = getWebSocketURL();
-    console.log("[ProjectDetailPage] Connecting to WebSocket:", wsURL);
-    const ws = new WebSocket(wsURL);
-    wsRef.current = ws;
+    const connectWebSocket = () => {
+      if (!isComponentMounted) return;
 
-    ws.onopen = () => {
-      console.log("WebSocket connected for project messages");
-      // Authenticate
-      ws.send(JSON.stringify({ type: "authenticate", token }));
-    };
+      const wsURL = getWebSocketURL();
+      console.log("[ProjectDetailPage] Connecting to WebSocket:", wsURL);
+      const ws = new WebSocket(wsURL);
+      wsRef.current = ws;
 
-    ws.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
+      ws.onopen = () => {
+        console.log("WebSocket connected for project messages");
+        setWsConnected(true);
+        reconnectAttemptsRef.current = 0; // Reset reconnection attempts on successful connection
+        // Authenticate
+        ws.send(JSON.stringify({ type: "authenticate", token }));
+      };
 
-        if (data.type === "authenticated") {
-          console.log("WebSocket authenticated");
-        } else if (data.type === "project_message") {
-          console.log("Received real-time project message");
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
 
-          // Refresh messages if it's for this project
-          if (data.projectId === projectId) {
-            fetchMessages();
+          if (data.type === "authenticated") {
+            console.log("WebSocket authenticated");
+          } else if (data.type === "project_message") {
+            console.log("Received real-time project message");
+
+            // Add message to list if it's for this project
+            if (data.projectId === projectId) {
+              const messageData = data.messageData || data.message || {};
+
+              // Check if message already exists (prevent duplicates)
+              setMessages((prevMessages) => {
+                const exists = prevMessages.some(
+                  (m) => m._id === messageData._id
+                );
+                if (exists) return prevMessages;
+
+                // Invalidate cache when new message arrives
+                invalidateMessageCache();
+
+                // Append new message and increment total count
+                setTotalMessages((prev) => prev + 1);
+                return [...prevMessages, messageData];
+              });
+            }
+
+            // Show browser notification for project messages
+            const messageData = data.messageData || data.message || {};
+            const senderDesignation = messageData.senderType === "client"
+              ? "Client"
+              : (messageData.sentBy?.designation || "Team Member");
+
+            // Don't notify for own messages
+            if (messageData.sentBy?._id !== userId && messageData.sentBy !== userId) {
+              const notificationManager = BrowserNotificationManager.getInstance();
+              notificationManager.show(
+                "New Project Message",
+                `${senderDesignation}: ${messageData.message || "Sent an attachment"}`,
+                {
+                  tag: `project-${data.projectId}`,
+                  icon: "/icon.png",
+                  requireInteraction: false,
+                }
+              );
+            }
           }
-
-          // Show browser notification for project messages
-          const messageData = data.messageData || data.message || {};
-          const senderDesignation = messageData.senderType === "client"
-            ? "Client"
-            : (messageData.sentBy?.designation || "Team Member");
-
-          // Don't notify for own messages
-          if (messageData.sentBy?._id !== userId && messageData.sentBy !== userId) {
-            const notificationManager = BrowserNotificationManager.getInstance();
-            notificationManager.show(
-              "New Project Message",
-              `${senderDesignation}: ${messageData.message || "Sent an attachment"}`,
-              {
-                tag: `project-${data.projectId}`,
-                icon: "/icon.png", // You can customize this
-                requireInteraction: false,
-              }
-            );
-          }
+        } catch (error) {
+          console.error("WebSocket message error:", error);
         }
-      } catch (error) {
-        console.error("WebSocket message error:", error);
-      }
-    };
+      };
 
-    ws.onerror = (error) => {
-      console.error("[ProjectDetailPage] WebSocket error:", error);
-    };
+      ws.onerror = (error) => {
+        console.error("[ProjectDetailPage] WebSocket error:", error);
+        setWsConnected(false);
+      };
 
-    ws.onclose = () => {
-      console.log("[ProjectDetailPage] WebSocket disconnected");
-      // Reconnect after 5 seconds if component is still mounted
-      const reconnectTimer = setTimeout(() => {
-        if (wsRef.current === ws) {
-          console.log("[ProjectDetailPage] Attempting to reconnect...");
-          // Trigger re-connection by updating a dependency
-          // Note: This is a simple approach; in production, use a more robust reconnection strategy
+      ws.onclose = () => {
+        console.log("[ProjectDetailPage] WebSocket disconnected");
+        setWsConnected(false);
+
+        // Attempt to reconnect with exponential backoff
+        if (isComponentMounted && reconnectAttemptsRef.current < maxReconnectAttempts) {
+          const backoffDelay = Math.min(1000 * Math.pow(2, reconnectAttemptsRef.current), 30000);
+          reconnectAttemptsRef.current += 1;
+
+          console.log(
+            `[ProjectDetailPage] Reconnecting in ${backoffDelay}ms (attempt ${reconnectAttemptsRef.current}/${maxReconnectAttempts})`
+          );
+
+          reconnectTimeoutRef.current = setTimeout(() => {
+            connectWebSocket();
+          }, backoffDelay);
+        } else if (reconnectAttemptsRef.current >= maxReconnectAttempts) {
+          console.error("[ProjectDetailPage] Max reconnection attempts reached");
         }
-      }, 5000);
-      return () => clearTimeout(reconnectTimer);
+      };
     };
+
+    // Initial connection
+    connectWebSocket();
 
     return () => {
-      if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
-        ws.close();
+      isComponentMounted = false;
+
+      // Clear reconnection timeout
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+        reconnectTimeoutRef.current = null;
       }
-      wsRef.current = null;
+
+      // Close WebSocket
+      if (wsRef.current) {
+        const ws = wsRef.current;
+        if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+          ws.close();
+        }
+        wsRef.current = null;
+      }
+
+      // Reset connection state
+      setWsConnected(false);
+      reconnectAttemptsRef.current = 0;
     };
   }, [projectId]);
 
@@ -364,14 +421,39 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
     }
   };
 
-  const fetchMessages = async () => {
+  const fetchMessages = async (page = 1, append = false) => {
     try {
+      if (append) {
+        setLoadingMoreMessages(true);
+      }
+
       const token = localStorage.getItem("token");
+
+      // Try to load from cache first (only for initial load without filters)
+      if (page === 1 && !append && !searchTerm && !searchSender && !dateFilter.start && !dateFilter.end) {
+        try {
+          const cacheKey = `project_messages_${projectId}`;
+          const cached = localStorage.getItem(cacheKey);
+          if (cached) {
+            const { messages: cachedMessages, timestamp } = JSON.parse(cached);
+            // Use cache if less than 5 minutes old
+            if (Date.now() - timestamp < 5 * 60 * 1000) {
+              setMessages(cachedMessages);
+              console.log("[Cache] Loaded messages from cache");
+            }
+          }
+        } catch (cacheError) {
+          console.error("Cache read error:", cacheError);
+        }
+      }
+
       const params = new URLSearchParams();
       if (searchTerm) params.append("search", searchTerm);
       if (searchSender) params.append("senderName", searchSender);
       if (dateFilter.start) params.append("startDate", dateFilter.start);
       if (dateFilter.end) params.append("endDate", dateFilter.end);
+      params.append("page", page);
+      params.append("limit", "50");
 
       const queryString = params.toString();
       const url = `${API_BASE}/api/projects/${projectId}/messages${queryString ? `?${queryString}` : ""}`;
@@ -379,13 +461,72 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
       const res = await axios.get(url, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      setMessages(res.data);
-      setAllMessages(res.data);
+
+      // Handle new pagination response format
+      const { messages: newMessages, pagination } = res.data;
+
+      if (append) {
+        // Append new messages to existing ones
+        setMessages((prev) => [...prev, ...newMessages]);
+      } else {
+        // Replace all messages (initial load or filter change)
+        setMessages(newMessages);
+
+        // Cache messages (only for initial load without filters)
+        if (page === 1 && !searchTerm && !searchSender && !dateFilter.start && !dateFilter.end) {
+          try {
+            const cacheKey = `project_messages_${projectId}`;
+            localStorage.setItem(
+              cacheKey,
+              JSON.stringify({
+                messages: newMessages,
+                timestamp: Date.now(),
+              })
+            );
+            console.log("[Cache] Saved messages to cache");
+          } catch (cacheError) {
+            console.error("Cache write error:", cacheError);
+            // If localStorage is full, clear old caches
+            if (cacheError.name === "QuotaExceededError") {
+              Object.keys(localStorage).forEach((key) => {
+                if (key.startsWith("project_messages_") && key !== `project_messages_${projectId}`) {
+                  localStorage.removeItem(key);
+                }
+              });
+            }
+          }
+        }
+      }
+
+      setCurrentPage(pagination.page);
+      setHasMoreMessages(pagination.hasMore);
+      setTotalMessages(pagination.total);
 
       // Mark messages as read when viewing them
-      markMessagesAsRead();
+      if (!append) {
+        markMessagesAsRead();
+      }
     } catch (error) {
       console.error("Error fetching messages:", error);
+    } finally {
+      setLoadingMoreMessages(false);
+    }
+  };
+
+  const loadMoreMessages = () => {
+    if (hasMoreMessages && !loadingMoreMessages) {
+      fetchMessages(currentPage + 1, true);
+    }
+  };
+
+  // Helper to invalidate message cache
+  const invalidateMessageCache = () => {
+    try {
+      const cacheKey = `project_messages_${projectId}`;
+      localStorage.removeItem(cacheKey);
+      console.log("[Cache] Invalidated message cache");
+    } catch (error) {
+      console.error("Cache invalidation error:", error);
     }
   };
 
@@ -505,10 +646,11 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
     fetchTasks(); // Refresh tasks list
   };
 
-  // Re-fetch when filters change
+  // Re-fetch when filters change (reset to page 1)
   useEffect(() => {
     if (projectId) {
-      fetchMessages();
+      setCurrentPage(1);
+      fetchMessages(1, false);
     }
   }, [searchTerm, searchSender, dateFilter]);
 
@@ -564,6 +706,8 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
       setSelectedFiles([]);
       setReplyingTo(null);
       fetchMessages();
+      // Scroll to bottom after sending message
+      setTimeout(() => scrollToBottom(), 100);
       showNotification("Message sent successfully!", "success");
     } catch (error) {
       console.error("Error sending message:", error);
@@ -610,8 +754,15 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
         throw new Error("Failed to add reaction");
       }
 
-      // Refresh messages to show updated reactions
-      await fetchMessages();
+      const updatedMessage = await response.json();
+
+      // Optimistically update just this message in state
+      setMessages((prevMessages) =>
+        prevMessages.map((msg) =>
+          msg._id === messageId ? updatedMessage : msg
+        )
+      );
+
       setShowEmojiPicker(null);
     } catch (error) {
       console.error("Error adding reaction:", error);
@@ -1069,6 +1220,32 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
             </div>
           </div>
 
+          {/* Project Creator Card */}
+          {project.createdBy && (
+            <div className="bg-[#191f2b]/70 rounded-xl shadow-xl border border-[#232945] p-4 sm:p-6">
+              <h2 className="text-base sm:text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                <Star className="w-5 h-5 text-yellow-400" />
+                Project Creator
+              </h2>
+
+              <div className="flex items-center gap-3 p-3 bg-[#0f1419] rounded-lg border border-[#232945]">
+                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-yellow-500 to-orange-500 flex items-center justify-center text-white font-semibold flex-shrink-0">
+                  {(project.createdBy.name || "U").charAt(0).toUpperCase()}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-white font-medium text-sm">
+                    {project.createdBy.name || "Unknown"}
+                  </p>
+                  {project.createdBy.email && (
+                    <p className="text-xs text-yellow-400">
+                      {project.createdBy.email}
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Description Card */}
           {project.description && (
             <div className="bg-[#191f2b]/70 rounded-xl shadow-xl border border-[#232945] p-4 sm:p-6">
@@ -1141,9 +1318,21 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                         <Mail className="w-5 h-5 text-blue-400" />
                         Project Conversation
                       </h2>
-                      <p className="text-xs sm:text-sm text-gray-400 mt-1">
-                        {messages.length} message{messages.length !== 1 ? "s" : ""}
-                      </p>
+                      <div className="flex items-center gap-3 mt-1">
+                        <p className="text-xs sm:text-sm text-gray-400">
+                          {messages.length} message{messages.length !== 1 ? "s" : ""}
+                        </p>
+                        <div className="flex items-center gap-1.5">
+                          <div
+                            className={`w-2 h-2 rounded-full ${
+                              wsConnected ? "bg-green-400 animate-pulse" : "bg-red-400"
+                            }`}
+                          ></div>
+                          <span className="text-xs text-gray-500">
+                            {wsConnected ? "Connected" : "Disconnected"}
+                          </span>
+                        </div>
+                      </div>
                     </div>
 
                 <div className="flex gap-2">
@@ -1245,8 +1434,6 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                 messages.map((msg, idx) => {
                   const isOwnMessage =
                     msg.sentBy?._id === userId || msg.sentBy === userId;
-                  const senderName =
-                    msg.sentBy?.name || msg.sentBy?.clientName || "Unknown";
                   const senderType = msg.senderType || "user";
 
                   // Show designation instead of name, similar to team members sidebar
@@ -1400,11 +1587,35 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                                       <Star className={`w-4 h-4 ${att.isImportant ? "fill-yellow-400" : ""}`} />
                                     </button>
                                     <a
-                                      href={att.url.startsWith('http') ? att.url : `${API_BASE}${att.url}`}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
+                                      href={`${API_BASE}/api/projects/${projectId}/messages/${msg._id}/attachments/${att._id}/download`}
                                       className="p-1 hover:bg-white/10 rounded"
-                                      download
+                                      onClick={(e) => {
+                                        e.preventDefault();
+                                        const token = localStorage.getItem("token");
+                                        fetch(`${API_BASE}/api/projects/${projectId}/messages/${msg._id}/attachments/${att._id}/download`, {
+                                          headers: {
+                                            'Authorization': `Bearer ${token}`
+                                          }
+                                        })
+                                        .then(response => {
+                                          if (!response.ok) throw new Error('Download failed');
+                                          return response.blob();
+                                        })
+                                        .then(blob => {
+                                          const url = window.URL.createObjectURL(blob);
+                                          const a = document.createElement('a');
+                                          a.href = url;
+                                          a.download = att.filename || 'download';
+                                          document.body.appendChild(a);
+                                          a.click();
+                                          window.URL.revokeObjectURL(url);
+                                          document.body.removeChild(a);
+                                        })
+                                        .catch(error => {
+                                          console.error('Download error:', error);
+                                          showNotification('Failed to download file', 'error');
+                                        });
+                                      }}
                                     >
                                       <Download className="w-4 h-4 text-gray-300" />
                                     </a>
@@ -1516,6 +1727,30 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                   );
                 })
               )}
+
+              {/* Load More Messages Button */}
+              {hasMoreMessages && messages.length > 0 && (
+                <div className="flex justify-center py-4">
+                  <button
+                    onClick={loadMoreMessages}
+                    disabled={loadingMoreMessages}
+                    className="flex items-center gap-2 px-4 py-2 bg-blue-600/20 hover:bg-blue-600/40 text-blue-400 border border-blue-500/30 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {loadingMoreMessages ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin"></div>
+                        <span>Loading...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Plus className="w-4 h-4" />
+                        <span>Load More Messages ({totalMessages - messages.length} remaining)</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              )}
+
               <div ref={messagesEndRef} />
             </div>
 
@@ -1738,12 +1973,9 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                     value={newMessage}
                     onChange={(e) => {
                       setNewMessage(e.target.value);
-                      // Auto-scroll to bottom when typing
-                      scrollToBottom();
                     }}
                     onFocus={() => {
-                      // Scroll to bottom when focused
-                      scrollToBottom();
+                      // Don't auto-scroll - let user stay where they are reading
                     }}
                     onKeyDown={(e) => {
                       // Handle suggestion navigation

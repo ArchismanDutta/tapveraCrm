@@ -278,19 +278,29 @@ router.get("/:id/analytics", protect, authorize("admin", "superadmin"), async (r
 
 // @route   GET /api/projects/communication-status
 // @desc    Get all projects with communication metadata for tracking
-// @access  Private (Admin/SuperAdmin)
-router.get("/communication-status", protect, authorize("admin", "superadmin"), async (req, res) => {
+// @access  Private (Admin/SuperAdmin/Employee)
+router.get("/communication-status", protect, async (req, res) => {
   try {
     const Message = require("../models/Message");
+    const Task = require("../models/Task");
 
-    // Get all projects
-    const projects = await Project.find({})
+    // Build query based on user role
+    let projectQuery = {};
+
+    // Employees only see their assigned projects
+    if (req.user.role === "employee") {
+      projectQuery.assignedTo = req.user._id;
+    }
+    // Admin and SuperAdmin see all projects (no filter needed)
+
+    // Get projects based on role
+    const projects = await Project.find(projectQuery)
       .populate("clients", "clientName businessName email")
       .populate("assignedTo", "name email")
       .select("projectName type status createdAt")
       .lean();
 
-    // For each project, get communication metadata
+    // For each project, get communication metadata and task counts
     const projectsWithCommStatus = await Promise.all(
       projects.map(async (project) => {
         // Get all messages for this project
@@ -332,6 +342,13 @@ router.get("/communication-status", protect, authorize("admin", "superadmin"), a
           }
         }
 
+        // Get pending task count for this project (exclude approved tasks)
+        const pendingTaskCount = await Task.countDocuments({
+          project: project._id,
+          status: { $in: ["pending", "in-progress"] },
+          approvalStatus: { $ne: "approved" }
+        });
+
         return {
           ...project,
           communication: {
@@ -342,6 +359,7 @@ router.get("/communication-status", protect, authorize("admin", "superadmin"), a
             lastSenderDesignation,
             daysSinceLastMessage,
           },
+          pendingTaskCount,
         };
       })
     );
@@ -983,8 +1001,13 @@ router.get("/:id/messages", protect, async (req, res) => {
       }
     }
 
-    // Extract query parameters for search
-    const { search, startDate, endDate, senderName } = req.query;
+    // Extract query parameters for search and pagination
+    const { search, startDate, endDate, senderName, page, limit } = req.query;
+
+    // Pagination parameters
+    const pageNum = parseInt(page) || 1;
+    const limitNum = parseInt(limit) || 50; // Default 50 messages per page
+    const skip = (pageNum - 1) * limitNum;
 
     // Build filter
     const filter = { project: req.params.id };
@@ -1005,6 +1028,9 @@ router.get("/:id/messages", protect, async (req, res) => {
       }
     }
 
+    // Count total messages for pagination metadata
+    const totalMessages = await Message.countDocuments(filter);
+
     const messages = await Message.find(filter)
       .populate("sentBy", "name email clientName designation")
       .populate({
@@ -1019,7 +1045,9 @@ router.get("/:id/messages", protect, async (req, res) => {
         path: "mentions.user",
         select: "name email clientName",
       })
-      .sort({ createdAt: 1 });
+      .sort({ createdAt: -1 }) // Sort descending (newest first) for pagination
+      .skip(skip)
+      .limit(limitNum);
 
     // Filter by sender name if provided
     let filteredMessages = messages;
@@ -1030,7 +1058,19 @@ router.get("/:id/messages", protect, async (req, res) => {
       });
     }
 
-    res.json(filteredMessages);
+    // Reverse the array to show oldest first in UI (since we sorted descending for pagination)
+    filteredMessages = filteredMessages.reverse();
+
+    res.json({
+      messages: filteredMessages,
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        total: totalMessages,
+        totalPages: Math.ceil(totalMessages / limitNum),
+        hasMore: skip + filteredMessages.length < totalMessages,
+      },
+    });
   } catch (error) {
     console.error("Error fetching messages:", error);
     res.status(500).json({ message: "Server error", error: error.message });
@@ -1482,6 +1522,99 @@ Keep it professional and organized. Use markdown formatting with headers and bul
   } catch (error) {
     console.error("Error summarizing project messages:", error);
     res.status(500).json({ message: "Server error", error: error.message });
+  }
+});
+
+// @route   GET /api/projects/:id/messages/:messageId/attachments/:attachmentId/download
+// @desc    Download an attachment from a message
+// @access  Private
+router.get("/:id/messages/:messageId/attachments/:attachmentId/download", protect, async (req, res) => {
+  try {
+    const Message = require("../models/Message");
+    const axios = require("axios");
+    const path = require("path");
+    const fs = require("fs");
+
+    const { id: projectId, messageId, attachmentId } = req.params;
+
+    // Find the project
+    const project = await Project.findById(projectId);
+    if (!project) {
+      return res.status(404).json({ message: "Project not found" });
+    }
+
+    // Check access - employees must be assigned, clients must own the project
+    if (req.user.role === "employee") {
+      const isAssigned = project.assignedTo.some(
+        (emp) => emp.toString() === req.user._id.toString()
+      );
+      if (!isAssigned) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+    }
+
+    // Find the message
+    const message = await Message.findById(messageId);
+    if (!message) {
+      return res.status(404).json({ message: "Message not found" });
+    }
+
+    // Find the attachment
+    const attachment = message.attachments.id(attachmentId);
+    if (!attachment) {
+      return res.status(404).json({ message: "Attachment not found" });
+    }
+
+    const fileUrl = attachment.url;
+    const filename = attachment.filename || "download";
+
+    // Check if it's an S3/CloudFront URL or local file
+    if (fileUrl.startsWith("http://") || fileUrl.startsWith("https://")) {
+      // It's a remote URL (S3/CloudFront)
+      try {
+        const response = await axios.get(fileUrl, {
+          responseType: "stream",
+        });
+
+        // Set headers for download
+        res.setHeader("Content-Type", attachment.mimeType || "application/octet-stream");
+        res.setHeader("Content-Disposition", `attachment; filename="${encodeURIComponent(filename)}"`);
+
+        // Pipe the response to client
+        response.data.pipe(res);
+      } catch (error) {
+        console.error("Error downloading from remote URL:", error);
+        return res.status(500).json({ message: "Failed to download file from storage" });
+      }
+    } else {
+      // It's a local file
+      const filePath = path.join(__dirname, "..", fileUrl);
+
+      // Check if file exists
+      if (!fs.existsSync(filePath)) {
+        return res.status(404).json({ message: "File not found on server" });
+      }
+
+      // Set headers for download
+      res.setHeader("Content-Type", attachment.mimeType || "application/octet-stream");
+      res.setHeader("Content-Disposition", `attachment; filename="${encodeURIComponent(filename)}"`);
+
+      // Stream the file
+      const fileStream = fs.createReadStream(filePath);
+      fileStream.pipe(res);
+
+      fileStream.on("error", (error) => {
+        console.error("Error reading file:", error);
+        if (!res.headersSent) {
+          res.status(500).json({ message: "Error reading file" });
+        }
+      });
+    }
+  } catch (error) {
+    console.error("Error in download route:", error);
+    if (!res.headersSent) {
+      res.status(500).json({ message: "Server error", error: error.message });
+    }
   }
 });
 

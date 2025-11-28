@@ -205,6 +205,7 @@ const ProjectsPage = ({ onLogout }) => {
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterEmployee, setFilterEmployee] = useState("all");
   const [filterClient, setFilterClient] = useState("all");
+  const [filterPriority, setFilterPriority] = useState("all"); // all, High, Medium, Low
   const [filterDateRange, setFilterDateRange] = useState("all"); // all, next7days, next30days, expired
   const [showMyProjectsOnly, setShowMyProjectsOnly] = useState(false); // Filter for projects created by current user
   const [sortBy, setSortBy] = useState("createdAt");
@@ -690,12 +691,39 @@ const ProjectsPage = ({ onLogout }) => {
   // Filtered and sorted projects
   const filteredProjects = useMemo(() => {
     let filtered = projects.filter(p => {
-      const matchesSearch =
-        p.projectName?.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
+      // Comprehensive search across ALL fields
+      const searchLower = debouncedSearchTerm.toLowerCase();
+      const matchesSearch = !debouncedSearchTerm ||
+        p.projectName?.toLowerCase().includes(searchLower) ||
+        p.description?.toLowerCase().includes(searchLower) ||
+        p.remarks?.toLowerCase().includes(searchLower) ||
+        p.budget?.toString().toLowerCase().includes(searchLower) ||
+        p.priority?.toLowerCase().includes(searchLower) ||
+        // Search in clients
         p.clients?.some(client =>
-          client?.businessName?.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
-          client?.clientName?.toLowerCase().includes(debouncedSearchTerm.toLowerCase())
-        );
+          client?.businessName?.toLowerCase().includes(searchLower) ||
+          client?.clientName?.toLowerCase().includes(searchLower) ||
+          client?.email?.toLowerCase().includes(searchLower)
+        ) ||
+        // Search in assigned employees
+        p.assignedTo?.some(emp =>
+          emp?.name?.toLowerCase().includes(searchLower) ||
+          emp?.email?.toLowerCase().includes(searchLower) ||
+          emp?.employeeId?.toLowerCase().includes(searchLower) ||
+          emp?.designation?.toLowerCase().includes(searchLower)
+        ) ||
+        // Search in project types
+        (Array.isArray(p.type) ? p.type : [p.type])?.some(t =>
+          t?.toLowerCase().includes(searchLower)
+        ) ||
+        // Search in created by
+        p.createdBy?.name?.toLowerCase().includes(searchLower) ||
+        p.createdBy?.email?.toLowerCase().includes(searchLower) ||
+        // Search in dates
+        new Date(p.startDate).toLocaleDateString().toLowerCase().includes(searchLower) ||
+        new Date(p.endDate).toLocaleDateString().toLowerCase().includes(searchLower) ||
+        // Search in status
+        p.status?.toLowerCase().includes(searchLower);
 
       const matchesType = filterType === "all" || (Array.isArray(p.type) ? p.type.includes(filterType) : p.type === filterType);
 
@@ -715,6 +743,10 @@ const ProjectsPage = ({ onLogout }) => {
         filterClient === "all" ||
         p.clients?.some(c => (c._id || c) === filterClient);
 
+      const matchesPriority =
+        filterPriority === "all" ||
+        p.priority === filterPriority;
+
       // Date range filter
       const today = new Date();
       const endDate = new Date(p.endDate);
@@ -731,7 +763,7 @@ const ProjectsPage = ({ onLogout }) => {
         !showMyProjectsOnly ||
         (currentUserId && (p.createdBy?._id === currentUserId || p.createdBy === currentUserId));
 
-      return matchesSearch && matchesType && matchesStatus && matchesEmployee && matchesClient && matchesDateRange && matchesMyProjects;
+      return matchesSearch && matchesType && matchesStatus && matchesEmployee && matchesClient && matchesPriority && matchesDateRange && matchesMyProjects;
     });
 
     // Sort
@@ -751,7 +783,7 @@ const ProjectsPage = ({ onLogout }) => {
     });
 
     return filtered;
-  }, [projects, debouncedSearchTerm, filterType, filterStatus, filterEmployee, filterClient, filterDateRange, showMyProjectsOnly, currentUserId, sortBy]);
+  }, [projects, debouncedSearchTerm, filterType, filterStatus, filterEmployee, filterClient, filterPriority, filterDateRange, showMyProjectsOnly, currentUserId, sortBy]);
 
   // Paginated projects
   const paginatedProjects = useMemo(() => {
@@ -765,7 +797,7 @@ const ProjectsPage = ({ onLogout }) => {
   // Reset to page 1 when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [debouncedSearchTerm, filterType, filterStatus, filterEmployee, filterClient, filterDateRange, showMyProjectsOnly]);
+  }, [debouncedSearchTerm, filterType, filterStatus, filterEmployee, filterClient, filterPriority, filterDateRange, showMyProjectsOnly]);
 
   // Check if user can export data (only admin, super-admin, hr)
   const canExportData = () => {
@@ -1019,6 +1051,17 @@ const ProjectsPage = ({ onLogout }) => {
               </select>
 
               <select
+                value={filterPriority}
+                onChange={(e) => setFilterPriority(e.target.value)}
+                className="px-4 py-2 bg-[#0f1419] border border-[#232945] rounded-lg text-white focus:outline-none focus:border-blue-500 transition-colors"
+              >
+                <option value="all">All Priorities</option>
+                <option value="High">High Priority</option>
+                <option value="Medium">Medium Priority</option>
+                <option value="Low">Low Priority</option>
+              </select>
+
+              <select
                 value={filterEmployee}
                 onChange={(e) => setFilterEmployee(e.target.value)}
                 className="px-4 py-2 bg-[#0f1419] border border-[#232945] rounded-lg text-white focus:outline-none focus:border-blue-500 transition-colors"
@@ -1068,12 +1111,13 @@ const ProjectsPage = ({ onLogout }) => {
                 </button>
               </div>
 
-              {(searchTerm || filterType !== "all" || filterStatus !== "all" || filterEmployee !== "all" || filterClient !== "all" || filterDateRange !== "all" || showMyProjectsOnly) && (
+              {(searchTerm || filterType !== "all" || filterStatus !== "all" || filterPriority !== "all" || filterEmployee !== "all" || filterClient !== "all" || filterDateRange !== "all" || showMyProjectsOnly) && (
                 <button
                   onClick={() => {
                     setSearchTerm("");
                     setFilterType("all");
                     setFilterStatus("all");
+                    setFilterPriority("all");
                     setFilterEmployee("all");
                     setFilterClient("all");
                     setFilterDateRange("all");
