@@ -6,6 +6,14 @@ const STATUS_COLOR = {
   present: "bg-green-500 text-white",
   absent: "bg-red-500 text-white",
   late: "bg-yellow-400 text-black",
+  "half-day": "bg-violet-500 text-white",
+  "half-day-leave": "bg-violet-600 text-white",
+  wfh: "bg-fuchsia-500 text-white",
+  "paid-leave": "bg-emerald-500 text-white",
+  "unpaid-leave": "bg-rose-500 text-white",
+  "sick-leave": "bg-orange-500 text-white",
+  "maternity-leave": "bg-pink-500 text-white",
+  leave: "bg-purple-500 text-white",
   default: "bg-gray-400 text-white",
 };
 
@@ -46,13 +54,52 @@ const AttendanceCalendar = ({ dailyData = [] }) => {
           let tooltip = `Day ${dayNum}`;
 
           if (record) {
-            if (record.isAbsent || !record.arrivalTime) {
+            // Check for WFH first
+            if (record.isWFH || record.leave?.isWFH) {
+              status = "wfh";
+              tooltip += " - Work From Home";
+            }
+            // Check for half-day leave
+            else if (record.leave?.isHalfDayLeave || record.leave?.leaveType === 'halfDay') {
+              status = "half-day-leave";
+              tooltip += " - Half Day Leave (4-4.5 hours)";
+            }
+            // Check for other leaves
+            else if (record.leave?.isOnLeave) {
+              if (record.leave?.isPaidLeave || record.leave?.leaveType === 'paid') {
+                status = "paid-leave";
+                tooltip += " - Paid Leave";
+              } else if (record.leave?.leaveType === 'unpaid') {
+                status = "unpaid-leave";
+                tooltip += " - Unpaid Leave";
+              } else if (record.leave?.leaveType === 'sick') {
+                status = "sick-leave";
+                tooltip += " - Sick Leave";
+              } else if (record.leave?.leaveType === 'maternity') {
+                status = "maternity-leave";
+                tooltip += " - Maternity Leave";
+              } else {
+                status = "leave";
+                tooltip += ` - ${record.leave?.leaveType || "Leave"}`;
+              }
+            }
+            // Check for absence
+            else if (record.isAbsent || !record.arrivalTime) {
               status = "absent";
               tooltip += " - Absent";
-            } else if (record.isLate || record.late) {
+            }
+            // Check for half-day work (automatic)
+            else if (record.isHalfDay) {
+              status = "half-day";
+              tooltip += ` - Half Day (${record.arrivalTime} - ${record.departureTime || "N/A"})`;
+            }
+            // Check for late
+            else if (record.isLate || record.late) {
               status = "late";
               tooltip += ` - Late (${record.arrivalTime})`;
-            } else {
+            }
+            // Present
+            else {
               status = "present";
               tooltip += ` - Present (${record.arrivalTime} - ${record.departureTime || "N/A"})`;
             }

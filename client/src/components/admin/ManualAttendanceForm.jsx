@@ -37,6 +37,7 @@ const ManualAttendanceForm = ({
     isHoliday: false,
     isWFH: false,  // ⭐ Work From Home flag
     isPaidLeave: false,  // ⭐ Paid Leave flag
+    isHalfDayLeave: false,  // ⭐ Half-Day Leave flag (approved reduced hours)
     leaveType: "",  // Leave type (paid, unpaid, sick, etc.)
     overrideExisting: false,
     // Multi-date functionality
@@ -104,6 +105,7 @@ const ManualAttendanceForm = ({
         isHoliday: editData.isHoliday || false,
         isWFH: editData.isWFH || false,
         isPaidLeave: editData.isPaidLeave || false,
+        isHalfDayLeave: editData.isHalfDayLeave || false,
         leaveType: editData.leaveType || "",
         overrideExisting: true
       });
@@ -147,7 +149,7 @@ const ManualAttendanceForm = ({
       newErrors.selectedDates = "Please select at least one date";
     }
 
-    // WFH requires punch times (it's a working day), but regular leaves don't
+    // WFH and Half-Day Leave require punch times (they're working days), but regular leaves don't
     const requiresPunchTimes = !formData.isOnLeave && !formData.isHoliday;
 
     if (requiresPunchTimes) {
@@ -504,6 +506,7 @@ const ManualAttendanceForm = ({
       isHoliday: false,
       isWFH: false,
       isPaidLeave: false,
+      isHalfDayLeave: false,
       leaveType: "",
       overrideExisting: false,
       isMultiDate: false,
@@ -890,7 +893,8 @@ const ManualAttendanceForm = ({
                         // Uncheck incompatible options
                         isOnLeave: false,
                         isHoliday: false,
-                        isPaidLeave: false
+                        isPaidLeave: false,
+                        isHalfDayLeave: false
                       }));
                     }}
                     className="w-5 h-5 text-blue-600 bg-slate-700 border-slate-600 rounded focus:ring-blue-500"
@@ -900,6 +904,35 @@ const ManualAttendanceForm = ({
                     <div>
                       <span className="text-white font-medium">Work From Home</span>
                       <p className="text-xs text-gray-400 mt-0.5">Employee works remotely (requires punch in/out)</p>
+                    </div>
+                  </div>
+                </label>
+
+                {/* Half-Day Leave */}
+                <label className="flex items-center gap-3 p-4 bg-violet-600/10 border border-violet-600/30 rounded-lg cursor-pointer hover:bg-violet-600/20 transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={formData.isHalfDayLeave}
+                    onChange={(e) => {
+                      const checked = e.target.checked;
+                      setFormData(prev => ({
+                        ...prev,
+                        isHalfDayLeave: checked,
+                        leaveType: checked ? 'halfDay' : '',
+                        // Uncheck incompatible options
+                        isOnLeave: false,
+                        isHoliday: false,
+                        isPaidLeave: false,
+                        isWFH: false
+                      }));
+                    }}
+                    className="w-5 h-5 text-violet-600 bg-slate-700 border-slate-600 rounded focus:ring-violet-500"
+                  />
+                  <div className="flex items-center gap-2 flex-1">
+                    <Clock className="w-5 h-5 text-violet-400" />
+                    <div>
+                      <span className="text-white font-medium">Half-Day Leave</span>
+                      <p className="text-xs text-gray-400 mt-0.5">Employee works 4-4.5 hours (requires punch in/out)</p>
                     </div>
                   </div>
                 </label>
@@ -918,7 +951,8 @@ const ManualAttendanceForm = ({
                         leaveType: checked ? 'paid' : '',
                         // Uncheck incompatible options
                         isWFH: false,
-                        isHoliday: false
+                        isHoliday: false,
+                        isHalfDayLeave: false
                       }));
                     }}
                     className="w-5 h-5 text-emerald-600 bg-slate-700 border-slate-600 rounded focus:ring-emerald-500"
@@ -946,7 +980,8 @@ const ManualAttendanceForm = ({
                         // Uncheck incompatible options
                         isWFH: false,
                         isHoliday: false,
-                        isPaidLeave: false
+                        isPaidLeave: false,
+                        isHalfDayLeave: false
                       }));
                     }}
                     className="w-5 h-5 text-purple-600 bg-slate-700 border-slate-600 rounded focus:ring-purple-500"
@@ -973,7 +1008,8 @@ const ManualAttendanceForm = ({
                         // Uncheck incompatible options
                         isWFH: false,
                         isOnLeave: false,
-                        isPaidLeave: false
+                        isPaidLeave: false,
+                        isHalfDayLeave: false
                       }));
                     }}
                     className="w-5 h-5 text-cyan-600 bg-slate-700 border-slate-600 rounded focus:ring-cyan-500"
@@ -1023,8 +1059,8 @@ const ManualAttendanceForm = ({
               )}
             </div>
 
-            {/* Work Hours - Show for normal days and WFH, but NOT for regular leaves or holidays */}
-            {((!formData.isOnLeave && !formData.isHoliday) || formData.isWFH) && (
+            {/* Work Hours - Show for normal days, WFH, and Half-Day Leave, but NOT for regular leaves or holidays */}
+            {((!formData.isOnLeave && !formData.isHoliday) || formData.isWFH || formData.isHalfDayLeave) && (
               <div className="space-y-4">
                 <h3 className="text-lg font-medium text-white flex items-center gap-2">
                   <Clock className="w-5 h-5 text-cyan-400" />

@@ -238,9 +238,9 @@ const ClientPortal = ({ onLogout, clientId }) => {
       </header>
 
       {/* Main Content */}
-      <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto">
+      <main className="flex-1 p-3 sm:p-4 md:p-6 lg:p-8 overflow-y-auto">
         {/* Header - Desktop */}
-        <div className="hidden lg:flex justify-between items-start mb-8">
+        <div className="hidden lg:flex justify-between items-start mb-6 lg:mb-8">
           <div>
             <h1 className="text-2xl lg:text-3xl font-bold text-white tracking-tight mb-2">
               My Projects
@@ -260,108 +260,108 @@ const ClientPortal = ({ onLogout, clientId }) => {
         </div>
 
         {/* Mobile Title */}
-        <div className="lg:hidden mb-6">
-          <h2 className="text-xl font-bold text-white mb-1">My Projects</h2>
-          <p className="text-sm text-blue-300">Track your project progress</p>
+        <div className="lg:hidden mb-4 sm:mb-6">
+          <h2 className="text-lg sm:text-xl font-bold text-white mb-1">My Projects</h2>
+          <p className="text-xs sm:text-sm text-blue-300">Track your project progress</p>
         </div>
 
         {/* Statistics Cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6 mb-6 lg:mb-8">
-          <div className="bg-[#191f2b]/70 rounded-xl shadow-xl border border-[#232945] p-4 lg:p-6">
-            <div className="flex items-center justify-between mb-2 lg:mb-3">
-              <div className="p-2 lg:p-3 rounded-lg bg-blue-600/20">
-                <FolderKanban className="w-4 h-4 lg:w-6 lg:h-6 text-blue-400" />
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3 md:gap-4 lg:gap-6 mb-4 sm:mb-6 lg:mb-8">
+          <div className="bg-[#191f2b]/70 rounded-lg sm:rounded-xl shadow-xl border border-[#232945] p-3 sm:p-4 md:p-5 lg:p-6">
+            <div className="flex items-center justify-between mb-1 sm:mb-2 lg:mb-3">
+              <div className="p-1.5 sm:p-2 lg:p-3 rounded-lg bg-blue-600/20">
+                <FolderKanban className="w-3 h-3 sm:w-4 sm:h-4 lg:w-6 lg:h-6 text-blue-400" />
               </div>
             </div>
-            <p className="text-xs lg:text-sm text-gray-400 mb-1">
+            <p className="text-[10px] sm:text-xs lg:text-sm text-gray-400 mb-0.5 sm:mb-1">
               Total Projects
             </p>
-            <p className="text-2xl lg:text-3xl font-bold text-white">
+            <p className="text-xl sm:text-2xl lg:text-3xl font-bold text-white">
               {stats.total}
             </p>
           </div>
 
-          <div className="bg-[#191f2b]/70 rounded-xl shadow-xl border border-[#232945] p-4 lg:p-6">
-            <div className="flex items-center justify-between mb-2 lg:mb-3">
-              <div className="p-2 lg:p-3 rounded-lg bg-green-600/20">
-                <CheckCircle className="w-4 h-4 lg:w-6 lg:h-6 text-green-400" />
+          <div className="bg-[#191f2b]/70 rounded-lg sm:rounded-xl shadow-xl border border-[#232945] p-3 sm:p-4 md:p-5 lg:p-6">
+            <div className="flex items-center justify-between mb-1 sm:mb-2 lg:mb-3">
+              <div className="p-1.5 sm:p-2 lg:p-3 rounded-lg bg-green-600/20">
+                <CheckCircle className="w-3 h-3 sm:w-4 sm:h-4 lg:w-6 lg:h-6 text-green-400" />
               </div>
             </div>
-            <p className="text-xs lg:text-sm text-gray-400 mb-1">Active</p>
-            <p className="text-2xl lg:text-3xl font-bold text-green-400">
+            <p className="text-[10px] sm:text-xs lg:text-sm text-gray-400 mb-0.5 sm:mb-1">Active</p>
+            <p className="text-xl sm:text-2xl lg:text-3xl font-bold text-green-400">
               {stats.active}
             </p>
           </div>
 
-          <div className="bg-[#191f2b]/70 rounded-xl shadow-xl border border-[#232945] p-4 lg:p-6">
-            <div className="flex items-center justify-between mb-2 lg:mb-3">
-              <div className="p-2 lg:p-3 rounded-lg bg-orange-600/20">
-                <AlertCircle className="w-4 h-4 lg:w-6 lg:h-6 text-orange-400" />
+          <div className="bg-[#191f2b]/70 rounded-lg sm:rounded-xl shadow-xl border border-[#232945] p-3 sm:p-4 md:p-5 lg:p-6">
+            <div className="flex items-center justify-between mb-1 sm:mb-2 lg:mb-3">
+              <div className="p-1.5 sm:p-2 lg:p-3 rounded-lg bg-orange-600/20">
+                <AlertCircle className="w-3 h-3 sm:w-4 sm:h-4 lg:w-6 lg:h-6 text-orange-400" />
               </div>
             </div>
-            <p className="text-xs lg:text-sm text-gray-400 mb-1">
+            <p className="text-[10px] sm:text-xs lg:text-sm text-gray-400 mb-0.5 sm:mb-1">
               Needs Renewal
             </p>
-            <p className="text-2xl lg:text-3xl font-bold text-orange-400">
+            <p className="text-xl sm:text-2xl lg:text-3xl font-bold text-orange-400">
               {stats.needsRenewal}
             </p>
           </div>
 
-          <div className="bg-[#191f2b]/70 rounded-xl shadow-xl border border-[#232945] p-4 lg:p-6">
-            <div className="flex items-center justify-between mb-2 lg:mb-3">
-              <div className="p-2 lg:p-3 rounded-lg bg-purple-600/20">
-                <CheckCircle className="w-4 h-4 lg:w-6 lg:h-6 text-purple-400" />
+          <div className="bg-[#191f2b]/70 rounded-lg sm:rounded-xl shadow-xl border border-[#232945] p-3 sm:p-4 md:p-5 lg:p-6">
+            <div className="flex items-center justify-between mb-1 sm:mb-2 lg:mb-3">
+              <div className="p-1.5 sm:p-2 lg:p-3 rounded-lg bg-purple-600/20">
+                <CheckCircle className="w-3 h-3 sm:w-4 sm:h-4 lg:w-6 lg:h-6 text-purple-400" />
               </div>
             </div>
-            <p className="text-xs lg:text-sm text-gray-400 mb-1">Completed</p>
-            <p className="text-2xl lg:text-3xl font-bold text-purple-400">
+            <p className="text-[10px] sm:text-xs lg:text-sm text-gray-400 mb-0.5 sm:mb-1">Completed</p>
+            <p className="text-xl sm:text-2xl lg:text-3xl font-bold text-purple-400">
               {stats.completed}
             </p>
           </div>
         </div>
 
         {/* Projects Table */}
-        <div className="bg-[#191f2b]/70 rounded-xl shadow-xl border border-[#232945] p-4 lg:p-6">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 lg:gap-4 mb-4 lg:mb-6">
+        <div className="bg-[#191f2b]/70 rounded-lg sm:rounded-xl shadow-xl border border-[#232945] p-3 sm:p-4 md:p-5 lg:p-6">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3 lg:gap-4 mb-3 sm:mb-4 lg:mb-6">
             <div className="flex items-center gap-2">
-              <FolderKanban className="w-5 h-5 text-blue-400" />
-              <h3 className="text-base lg:text-lg font-semibold text-white">
+              <FolderKanban className="w-4 h-4 sm:w-5 sm:h-5 text-blue-400" />
+              <h3 className="text-sm sm:text-base lg:text-lg font-semibold text-white">
                 All Projects
               </h3>
               {loading && (
-                <div className="w-4 h-4 border-2 border-blue-500/20 border-t-blue-500 rounded-full animate-spin"></div>
+                <div className="w-3 h-3 sm:w-4 sm:h-4 border-2 border-blue-500/20 border-t-blue-500 rounded-full animate-spin"></div>
               )}
             </div>
 
             <button
               onClick={fetchProjects}
-              className="sm:ml-auto flex items-center gap-2 px-3 py-2 rounded-lg bg-blue-600/20 hover:bg-blue-600/40 text-blue-400 border border-blue-500/30 transition-colors text-sm"
+              className="w-full sm:w-auto sm:ml-auto flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-blue-600/20 hover:bg-blue-600/40 text-blue-400 border border-blue-500/30 transition-colors text-xs sm:text-sm"
               disabled={loading}
             >
               <RefreshCw
-                className={`w-4 h-4 ${loading ? "animate-spin" : ""}`}
+                className={`w-3 h-3 sm:w-4 sm:h-4 ${loading ? "animate-spin" : ""}`}
               />
               <span>Refresh</span>
             </button>
           </div>
 
           {/* Filters */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 lg:gap-4 mb-4 lg:mb-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3 lg:gap-4 mb-3 sm:mb-4 lg:mb-6">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-500" />
+              <Search className="absolute left-2 sm:left-3 top-1/2 transform -translate-y-1/2 w-3 h-3 sm:w-4 sm:h-4 text-gray-500" />
               <input
                 type="text"
                 placeholder="Search projects..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 bg-[#0f1419] border border-[#232945] rounded-lg text-white text-sm placeholder-gray-500 focus:outline-none focus:border-blue-500 transition-colors"
+                className="w-full pl-8 sm:pl-10 pr-3 sm:pr-4 py-2 bg-[#0f1419] border border-[#232945] rounded-lg text-white text-xs sm:text-sm placeholder-gray-500 focus:outline-none focus:border-blue-500 transition-colors"
               />
             </div>
 
             <select
               value={filterType}
               onChange={(e) => setFilterType(e.target.value)}
-              className="px-4 py-2 bg-[#0f1419] border border-[#232945] rounded-lg text-white text-sm focus:outline-none focus:border-blue-500 transition-colors"
+              className="px-3 sm:px-4 py-2 bg-[#0f1419] border border-[#232945] rounded-lg text-white text-xs sm:text-sm focus:outline-none focus:border-blue-500 transition-colors"
             >
               <option value="all">All Types</option>
               <option value="Website">Website</option>
@@ -375,7 +375,7 @@ const ClientPortal = ({ onLogout, clientId }) => {
             <select
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value)}
-              className="px-4 py-2 bg-[#0f1419] border border-[#232945] rounded-lg text-white text-sm focus:outline-none focus:border-blue-500 transition-colors"
+              className="px-3 sm:px-4 py-2 bg-[#0f1419] border border-[#232945] rounded-lg text-white text-xs sm:text-sm focus:outline-none focus:border-blue-500 transition-colors"
             >
               <option value="all">All Status</option>
               <option value="active">Active</option>
@@ -531,11 +531,11 @@ const ClientPortal = ({ onLogout, clientId }) => {
           </div>
 
           {/* Mobile Cards */}
-          <div className="lg:hidden space-y-3">
+          <div className="lg:hidden space-y-2 sm:space-y-3">
             {filteredProjects.length === 0 ? (
-              <div className="text-center py-12">
-                <FolderKanban className="w-12 h-12 text-gray-600 mx-auto mb-3" />
-                <p className="text-gray-500 text-sm">No projects found</p>
+              <div className="text-center py-8 sm:py-12">
+                <FolderKanban className="w-10 h-10 sm:w-12 sm:h-12 text-gray-600 mx-auto mb-2 sm:mb-3" />
+                <p className="text-gray-500 text-xs sm:text-sm">No projects found</p>
               </div>
             ) : (
               filteredProjects.map((project) => {
@@ -547,26 +547,26 @@ const ClientPortal = ({ onLogout, clientId }) => {
                 return (
                   <div
                     key={project._id}
-                    className="bg-[#0f1419] rounded-lg border border-[#232945] p-4"
+                    className="bg-[#0f1419] rounded-lg border border-[#232945] p-3 sm:p-4"
                   >
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="flex items-center gap-2 flex-1 min-w-0">
+                    <div className="flex items-start justify-between mb-2 sm:mb-3">
+                      <div className="flex items-center gap-1.5 sm:gap-2 flex-1 min-w-0">
                         <Icon
-                          className={`w-4 h-4 ${colors.text} flex-shrink-0`}
+                          className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${colors.text} flex-shrink-0`}
                         />
-                        <h4 className="text-white font-medium text-sm truncate">
+                        <h4 className="text-white font-medium text-xs sm:text-sm truncate">
                           {project.projectName || "Untitled Project"}
                         </h4>
                       </div>
                       <span
-                        className={`px-2 py-1 rounded-full text-xs font-medium ${colors.bg} ${colors.text} border ${colors.border} flex-shrink-0 ml-2`}
+                        className={`px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-xs font-medium ${colors.bg} ${colors.text} border ${colors.border} flex-shrink-0 ml-1.5 sm:ml-2`}
                       >
                         {projectType}
                       </span>
                     </div>
 
-                    <div className="space-y-2 mb-3">
-                      <div className="flex items-center gap-2 text-xs text-gray-400">
+                    <div className="space-y-1.5 sm:space-y-2 mb-2 sm:mb-3">
+                      <div className="flex items-center gap-1.5 sm:gap-2 text-[10px] sm:text-xs text-gray-400">
                         <Calendar className="w-3 h-3 flex-shrink-0" />
                         <span className="truncate">
                           {project.endDate
@@ -575,7 +575,7 @@ const ClientPortal = ({ onLogout, clientId }) => {
                         </span>
                       </div>
 
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1.5 sm:gap-2">
                         <Users className="w-3 h-3 text-gray-400 flex-shrink-0" />
                         <div className="flex items-center gap-1">
                           {project.assignedTo && Array.isArray(project.assignedTo) && project.assignedTo.length > 0 ? (
@@ -583,28 +583,28 @@ const ClientPortal = ({ onLogout, clientId }) => {
                               {project.assignedTo.slice(0, 3).map((emp, idx) => (
                                 <div
                                   key={idx}
-                                  className="w-6 h-6 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white text-xs font-semibold"
+                                  className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white text-[10px] sm:text-xs font-semibold"
                                   title={emp?.name || "Unknown"}
                                 >
                                   {(emp?.name || "U").charAt(0).toUpperCase()}
                                 </div>
                               ))}
                               {project.assignedTo.length > 3 && (
-                                <div className="w-6 h-6 rounded-full bg-gray-700 flex items-center justify-center text-white text-xs font-semibold">
+                                <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-gray-700 flex items-center justify-center text-white text-[10px] sm:text-xs font-semibold">
                                   +{project.assignedTo.length - 3}
                                 </div>
                               )}
                             </>
                           ) : (
-                            <span className="text-gray-500 text-xs">No team</span>
+                            <span className="text-gray-500 text-[10px] sm:text-xs">No team</span>
                           )}
                         </div>
                       </div>
                     </div>
 
-                    <div className="flex items-center justify-between pt-3 border-t border-[#232945]">
+                    <div className="flex items-center justify-between pt-2 sm:pt-3 border-t border-[#232945]">
                       <span
-                        className={`px-2 py-1 rounded-full text-xs font-medium inline-flex items-center gap-1 ${
+                        className={`px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-xs font-medium inline-flex items-center gap-1 ${
                           status === "active"
                             ? "bg-green-500/20 text-green-400 border border-green-500/50"
                             : status === "completed"
@@ -615,7 +615,7 @@ const ClientPortal = ({ onLogout, clientId }) => {
                         }`}
                       >
                         <div
-                          className={`w-1.5 h-1.5 rounded-full ${
+                          className={`w-1 h-1 sm:w-1.5 sm:h-1.5 rounded-full ${
                             status === "active"
                               ? "bg-green-400"
                               : status === "completed"
@@ -634,16 +634,16 @@ const ClientPortal = ({ onLogout, clientId }) => {
                           : "Inactive"}
                       </span>
 
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1.5 sm:gap-2">
                         <div className="relative">
-                          <MessageCircle className="w-4 h-4 text-gray-400" />
+                          <MessageCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-400" />
                           <div className="absolute -top-1 -right-1">
-                            <UnreadMessageBadge projectId={project._id} refreshInterval={60000} className="text-[10px] min-w-[16px] h-4 px-1" />
+                            <UnreadMessageBadge projectId={project._id} refreshInterval={60000} className="text-[8px] sm:text-[10px] min-w-[14px] sm:min-w-[16px] h-3.5 sm:h-4 px-0.5 sm:px-1" />
                           </div>
                         </div>
                         <button
                           onClick={() => navigate(`/project/${project._id}`)}
-                          className="inline-flex items-center gap-1 px-3 py-1 rounded-lg text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 transition-all text-sm"
+                          className="inline-flex items-center gap-1 px-2 sm:px-3 py-1 rounded-lg text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 transition-all text-xs sm:text-sm"
                         >
                           <Eye className="w-3 h-3" />
                           <span>View</span>
@@ -656,7 +656,7 @@ const ClientPortal = ({ onLogout, clientId }) => {
             )}
           </div>
 
-          <div className="mt-4 text-xs lg:text-sm text-gray-400">
+          <div className="mt-3 sm:mt-4 text-[10px] sm:text-xs lg:text-sm text-gray-400">
             Showing {filteredProjects.length} of {projects.length} projects
           </div>
         </div>

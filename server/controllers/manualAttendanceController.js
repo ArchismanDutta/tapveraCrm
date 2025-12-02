@@ -23,6 +23,7 @@ const createManualAttendance = async (req, res) => {
       isHoliday = false,
       isWFH = false,  // ⭐ Work From Home flag
       isPaidLeave = false,  // ⭐ Paid Leave flag
+      isHalfDayLeave = false,  // ⭐ Half-Day Leave flag (approved reduced hours)
       leaveType = "",  // Leave type
       overrideExisting = false
     } = req.body;
@@ -35,6 +36,7 @@ const createManualAttendance = async (req, res) => {
       breakSessionsCount: breakSessions.length,
       isWFH,
       isPaidLeave,
+      isHalfDayLeave,
       leaveType
     });
 
@@ -217,6 +219,7 @@ const createManualAttendance = async (req, res) => {
         isOnLeave: false,
         isWFH: false,
         isPaidLeave: false,
+        isHalfDayLeave: false,
         leaveType: null,
         isHoliday: false,
         holidayName: null
@@ -230,6 +233,12 @@ const createManualAttendance = async (req, res) => {
       employeeData.leaveInfo.isOnLeave = false;
       employeeData.leaveInfo.leaveType = 'workFromHome';
       console.log('✅ Manual WFH flag set:', employeeData.leaveInfo);
+    } else if (isHalfDayLeave) {
+      // ⭐ Half-Day Leave is NOT a full leave - employee works 4-4.5 hours
+      employeeData.leaveInfo.isHalfDayLeave = true;
+      employeeData.leaveInfo.isOnLeave = false;
+      employeeData.leaveInfo.leaveType = 'halfDay';
+      console.log('✅ Manual Half-Day Leave flag set:', employeeData.leaveInfo);
     } else if (isPaidLeave) {
       // ⭐ Paid Leave - set both flags
       employeeData.leaveInfo.isOnLeave = true;

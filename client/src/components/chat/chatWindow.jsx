@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import MediaLightbox from "../common/MediaLightbox";
 import useMessageSuggestions from "../../hooks/useMessageSuggestions";
+import MentionInput from "../common/MentionInput";
 
 const DateDivider = ({ date }) => {
   const now = new Date();
@@ -58,6 +59,7 @@ const ChatWindow = ({
   const [input, setInput] = useState("");
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [replyingTo, setReplyingTo] = useState(null);
+  const [mentionedUsers, setMentionedUsers] = useState([]);
   const [messageSearchTerm, setMessageSearchTerm] = useState("");
   const [searchSender, setSearchSender] = useState("");
   const [dateFilter, setDateFilter] = useState({ start: "", end: "" });
@@ -95,18 +97,24 @@ const ChatWindow = ({
     const token = localStorage.getItem("token");
 
     try {
-      // If there are files or reply, use HTTP POST (FormData required)
-      if (selectedFiles.length > 0 || replyingTo) {
+      // If there are files, reply, or mentions, use HTTP POST (FormData required)
+      if (selectedFiles.length > 0 || replyingTo || mentionedUsers.length > 0) {
+        console.log('[ChatWindow] Sending message with files:', selectedFiles.length);
         const formData = new FormData();
         formData.append("conversationId", conversationId);
-        formData.append("message", input.trim());
+        formData.append("message", input.trim() || "(File attachment)");
         if (replyingTo) {
           formData.append("replyTo", replyingTo._id || replyingTo.messageId);
         }
+        if (mentionedUsers.length > 0) {
+          formData.append("mentions", JSON.stringify(mentionedUsers.map(u => u._id)));
+        }
         selectedFiles.forEach((file) => {
+          console.log('[ChatWindow] Adding file:', file.name, file.type, file.size);
           formData.append("files", file);
         });
 
+        console.log('[ChatWindow] Sending to:', `${API_BASE}/api/chat/messages`);
         const response = await fetch(`${API_BASE}/api/chat/messages`, {
           method: "POST",
           headers: {
@@ -116,13 +124,19 @@ const ChatWindow = ({
         });
 
         if (!response.ok) {
-          throw new Error("Failed to send message");
+          const errorData = await response.json().catch(() => ({}));
+          console.error('[ChatWindow] Upload error:', response.status, errorData);
+          throw new Error(errorData.error || "Failed to send message");
         }
+
+        const result = await response.json();
+        console.log('[ChatWindow] Upload success:', result);
 
         // Clear input and attachments after successful send
         setInput("");
         setSelectedFiles([]);
         setReplyingTo(null);
+        setMentionedUsers([]);
 
         // The WebSocket will handle displaying the new message
       } else {
@@ -131,8 +145,8 @@ const ChatWindow = ({
         setInput("");
       }
     } catch (error) {
-      console.error("Error sending message:", error);
-      alert("Failed to send message. Please try again.");
+      console.error("[ChatWindow] Error sending message:", error);
+      alert(`Failed to send message: ${error.message}`);
     }
   };
 
@@ -660,7 +674,7 @@ const ChatWindow = ({
                                       </div>
                                     </div>
                                     <a
-                                      href={att.url.startsWith('http') ? att.url : `http://localhost:5000${att.url}`}
+                                      href={att.url.startsWith('http') ? att.url : `${import.meta.env.VITE_API_BASE || 'http://localhost:5000'}${att.url}`}
                                       target="_blank"
                                       rel="noopener noreferrer"
                                       className="p-1 hover:bg-white/10 rounded"
@@ -674,7 +688,7 @@ const ChatWindow = ({
                                 {att.fileType === "image" && (
                                   <div className="relative group">
                                     <img
-                                      src={att.url.startsWith('http') ? att.url : `http://localhost:5000${att.url}`}
+                                      src={att.url.startsWith('http') ? att.url : `${import.meta.env.VITE_API_BASE || 'http://localhost:5000'}${att.url}`}
                                       alt={att.filename}
                                       className="w-48 h-48 object-cover rounded cursor-pointer hover:opacity-90 transition-opacity"
                                       onClick={() => {
@@ -690,7 +704,7 @@ const ChatWindow = ({
                                 {att.fileType === "video" && (
                                   <div className="relative">
                                     <video
-                                      src={att.url.startsWith('http') ? att.url : `http://localhost:5000${att.url}`}
+                                      src={att.url.startsWith('http') ? att.url : `${import.meta.env.VITE_API_BASE || 'http://localhost:5000'}${att.url}`}
                                       className="w-48 h-48 object-cover rounded cursor-pointer"
                                       onClick={() => {
                                         setLightboxAllMedia(mediaAttachments);
@@ -1042,129 +1056,131 @@ const ChatWindow = ({
           >
             <Type className="w-5 h-5" />
           </button>
-          <textarea
-            ref={textareaRef}
-            value={input}
-            onChange={(e) => {
-              setInput(e.target.value);
-              // Auto-scroll to bottom when typing
-              chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-            }}
-            onFocus={() => {
-              // Scroll to bottom when focused
-              chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-            }}
-            onKeyDown={(e) => {
-              // Handle suggestion navigation
-              if (showSuggestions && suggestions.length > 0) {
-                if (e.key === "ArrowDown") {
-                  e.preventDefault();
-                  setSelectedSuggestionIndex(prev =>
-                    prev < suggestions.length - 1 ? prev + 1 : 0
-                  );
-                  return;
-                }
-                if (e.key === "ArrowUp") {
-                  e.preventDefault();
-                  setSelectedSuggestionIndex(prev =>
-                    prev > 0 ? prev - 1 : suggestions.length - 1
-                  );
-                  return;
-                }
-                if (e.key === "Tab") {
-                  e.preventDefault();
-                  acceptSuggestion(suggestions[selectedSuggestionIndex]);
-                  return;
-                }
-                if (e.key === "Escape") {
-                  e.preventDefault();
-                  setShowSuggestions(false);
-                  return;
-                }
-              }
-
-              // Send message on Enter (without Shift)
-              if (e.key === "Enter" && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
-                e.preventDefault();
-                // Accept suggestion if visible
+          <div className="flex-1" onFocus={() => {
+            // Scroll to bottom when focused
+            chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+          }}>
+            <MentionInput
+              ref={textareaRef}
+              value={input}
+              onChange={(newValue, mentions) => {
+                setInput(newValue);
+                setMentionedUsers(mentions);
+                // Auto-scroll to bottom when typing
+                chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+              }}
+              users={conversationMembers || []}
+              placeholder="Type @ to mention someone... (Ctrl+B for bold)"
+              rows={2}
+              className="bg-gray-700 text-gray-100 border-gray-600 focus:ring-blue-500"
+              onKeyDown={(e) => {
+                // Handle suggestion navigation
                 if (showSuggestions && suggestions.length > 0) {
-                  acceptSuggestion(suggestions[selectedSuggestionIndex]);
-                } else {
-                  handleSendMessage();
-                }
-                return;
-              }
-
-              // Keyboard shortcuts (Ctrl/Cmd + key)
-              const isMac = /Mac|iPad|iPhone|iPod/.test(navigator.platform);
-              const isCtrlOrCmd = isMac ? e.metaKey : e.ctrlKey;
-
-              // Check if we should handle this shortcut
-              if (isCtrlOrCmd) {
-                const key = e.key.toLowerCase();
-                let handled = false;
-
-                // Check for Ctrl+Shift combinations
-                if (e.shiftKey) {
-                  if (key === 'l') {
+                  if (e.key === "ArrowDown") {
                     e.preventDefault();
-                    e.stopPropagation();
-                    formatNumbered();
-                    handled = true;
+                    setSelectedSuggestionIndex(prev =>
+                      prev < suggestions.length - 1 ? prev + 1 : 0
+                    );
+                    return;
                   }
-                } else {
-                  // Regular Ctrl shortcuts
-                  switch (key) {
-                    case 'b':
-                      e.preventDefault();
-                      e.stopPropagation();
-                      formatBold();
-                      handled = true;
-                      break;
-                    case 'i':
-                      e.preventDefault();
-                      e.stopPropagation();
-                      formatItalic();
-                      handled = true;
-                      break;
-                    case 'u':
-                      e.preventDefault();
-                      e.stopPropagation();
-                      formatStrikethrough();
-                      handled = true;
-                      break;
-                    case 'e':
-                    case 'k':
-                      e.preventDefault();
-                      e.stopPropagation();
-                      formatCode();
-                      handled = true;
-                      break;
-                    case 'd':
-                      e.preventDefault();
-                      e.stopPropagation();
-                      formatHeading();
-                      handled = true;
-                      break;
-                    case 'l':
-                      e.preventDefault();
-                      e.stopPropagation();
-                      formatBullet();
-                      handled = true;
-                      break;
+                  if (e.key === "ArrowUp") {
+                    e.preventDefault();
+                    setSelectedSuggestionIndex(prev =>
+                      prev > 0 ? prev - 1 : suggestions.length - 1
+                    );
+                    return;
+                  }
+                  if (e.key === "Tab") {
+                    e.preventDefault();
+                    acceptSuggestion(suggestions[selectedSuggestionIndex]);
+                    return;
+                  }
+                  if (e.key === "Escape") {
+                    e.preventDefault();
+                    setShowSuggestions(false);
+                    return;
                   }
                 }
 
-                if (handled) {
-                  return false;
+                // Send message on Enter (without Shift)
+                if (e.key === "Enter" && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
+                  e.preventDefault();
+                  // Accept suggestion if visible
+                  if (showSuggestions && suggestions.length > 0) {
+                    acceptSuggestion(suggestions[selectedSuggestionIndex]);
+                  } else {
+                    handleSendMessage();
+                  }
+                  return;
                 }
-              }
-            }}
-            placeholder="Type a message... (Ctrl+B for bold, Ctrl+I for italic)"
-            className="flex-1 px-4 py-2 rounded-lg bg-gray-700 text-gray-100 border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none overflow-y-auto"
-            rows="2"
-            style={{ maxHeight: "150px" }}
-          />
+
+                // Keyboard shortcuts (Ctrl/Cmd + key)
+                const isMac = /Mac|iPad|iPhone|iPod/.test(navigator.platform);
+                const isCtrlOrCmd = isMac ? e.metaKey : e.ctrlKey;
+
+                // Check if we should handle this shortcut
+                if (isCtrlOrCmd) {
+                  const key = e.key.toLowerCase();
+                  let handled = false;
+
+                  // Check for Ctrl+Shift combinations
+                  if (e.shiftKey) {
+                    if (key === 'l') {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      formatNumbered();
+                      handled = true;
+                    }
+                  } else {
+                    // Regular Ctrl shortcuts
+                    switch (key) {
+                      case 'b':
+                        e.preventDefault();
+                        e.stopPropagation();
+                        formatBold();
+                        handled = true;
+                        break;
+                      case 'i':
+                        e.preventDefault();
+                        e.stopPropagation();
+                        formatItalic();
+                        handled = true;
+                        break;
+                      case 'u':
+                        e.preventDefault();
+                        e.stopPropagation();
+                        formatStrikethrough();
+                        handled = true;
+                        break;
+                      case 'e':
+                      case 'k':
+                        e.preventDefault();
+                        e.stopPropagation();
+                        formatCode();
+                        handled = true;
+                        break;
+                      case 'd':
+                        e.preventDefault();
+                        e.stopPropagation();
+                        formatHeading();
+                        handled = true;
+                        break;
+                      case 'l':
+                        e.preventDefault();
+                        e.stopPropagation();
+                        formatBullet();
+                        handled = true;
+                        break;
+                    }
+                  }
+
+                  if (handled) {
+                    return false;
+                  }
+                }
+              }}
+            />
+          </div>
           <button
             onClick={handleSendMessage}
             disabled={!input.trim() && selectedFiles.length === 0}

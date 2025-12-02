@@ -104,6 +104,7 @@ const EmployeeAttendanceSchema = new mongoose.Schema({
     leaveType: String, // 'SICK', 'CASUAL', 'ANNUAL', 'paid', 'unpaid', 'workFromHome' etc.
     isWFH: { type: Boolean, default: false }, // Work From Home flag
     isPaidLeave: { type: Boolean, default: false }, // Paid Leave flag
+    isHalfDayLeave: { type: Boolean, default: false }, // ⭐ Half-Day Leave flag (approved reduced hours)
     isHoliday: { type: Boolean, default: false },
     holidayName: String
   },

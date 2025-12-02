@@ -11,6 +11,8 @@ const Shift = require("../models/Shift");
 // =========================
 exports.createEmployee = async (req, res) => {
   try {
+    console.log("📝 Creating new employee with data:", JSON.stringify(req.body, null, 2));
+
     const {
       employeeId, name, email, contact, dob, gender, bloodGroup,
       qualifications, permanentAddress, currentAddress, emergencyContact,
@@ -18,6 +20,7 @@ exports.createEmployee = async (req, res) => {
       department, designation, password, shift, shiftType,
       skills, jobLevel,
       standardShiftType,
+      location, employmentType, outlookEmail, outlookAppPassword,
     } = req.body;
 
     // Required fields
@@ -79,6 +82,10 @@ exports.createEmployee = async (req, res) => {
       designation: designation?.trim() || "",
       role: "employee",
       jobLevel: jobLevel || "junior",
+      location: location?.trim() || "",
+      employmentType: employmentType?.toLowerCase() || "full-time",
+      outlookEmail: outlookEmail?.trim() || "",
+      outlookAppPassword: outlookAppPassword?.trim() || "",
     };
 
     // Dynamic shift handling based on shiftType
@@ -101,9 +108,26 @@ exports.createEmployee = async (req, res) => {
 
       // If shiftId is provided, use it directly
       if (shift?.shiftId) {
+        console.log(`🔍 Looking up shift by ID: ${shift.shiftId}`);
+
+        // Validate ObjectId format
+        const mongoose = require('mongoose');
+        if (!mongoose.Types.ObjectId.isValid(shift.shiftId)) {
+          return res.status(400).json({
+            message: "Invalid shift ID format",
+            shiftId: shift.shiftId
+          });
+        }
+
         const foundShift = await Shift.findById(shift.shiftId);
+        console.log(`Shift lookup result:`, foundShift ? `Found: ${foundShift.name}` : 'Not found');
+
         if (!foundShift) {
-          return res.status(400).json({ message: "Selected shift not found in database" });
+          return res.status(400).json({
+            message: "Selected shift not found in database",
+            shiftId: shift.shiftId,
+            hint: "Please select a valid shift from the dropdown or create the shift first"
+          });
         }
 
         userData.assignedShift = foundShift._id;
@@ -183,13 +207,26 @@ exports.createEmployee = async (req, res) => {
       }
     }
 
+    console.log("💾 Final userData before saving:", JSON.stringify(userData, null, 2));
+
     const user = new User(userData);
+    console.log("✅ User model created, now saving to database...");
     await user.save();
+    console.log("🎉 Employee saved successfully with ID:", user._id);
 
     return res.status(201).json({ message: "Employee created successfully", user });
   } catch (error) {
-    console.error("Create employee error:", error);
-    return res.status(500).json({ message: "Server error" });
+    console.error("❌ Create employee error:", error);
+    console.error("Error details:", {
+      message: error.message,
+      stack: error.stack,
+      name: error.name
+    });
+    return res.status(500).json({
+      message: "Server error",
+      error: error.message,
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
   }
 };
 

@@ -162,8 +162,8 @@ const LeaveApplicationForm = ({ onSubmitLeave }) => {
       <InfoModal
         show={showHalfDayModal}
         onClose={handleHalfDayConfirm}
-        title="Half Day Warning"
-        message="Minimum working hours are 7 hours. If you work less, you will be marked absent."
+        title="Half Day Leave Confirmation"
+        message="Half-day leave means you will work 4-4.5 hours on this day. Please ensure you complete at least 4 hours of work to avoid being marked absent."
         cancelButton={true}
         onCancel={handleHalfDayCancel}
       />

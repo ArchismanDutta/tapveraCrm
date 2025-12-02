@@ -843,7 +843,7 @@ const ProjectsPage = ({ onLogout }) => {
         userRole={userRole}
       />
 
-      <main className={`flex-1 p-8 overflow-y-auto transition-all duration-300 ${sidebarCollapsed ? "ml-20" : "ml-72"}`}>
+      <main className={`flex-1 p-3 sm:p-4 md:p-6 lg:p-8 overflow-y-auto transition-all duration-300 ${sidebarCollapsed ? "ml-0 lg:ml-20" : "ml-0 lg:ml-72"}`}>
         {/* Notification Toast */}
         {notification && (
           <div className={`fixed top-4 right-4 z-50 px-6 py-4 rounded-lg shadow-2xl border flex items-center gap-3 animate-slide-in ${
@@ -857,177 +857,179 @@ const ProjectsPage = ({ onLogout }) => {
         )}
 
         {/* Header */}
-        <div className="flex flex-col lg:flex-row lg:justify-between lg:items-start gap-6 mb-8">
+        <div className="flex flex-col lg:flex-row lg:justify-between lg:items-start gap-3 sm:gap-4 md:gap-6 mb-4 sm:mb-6 md:mb-8">
           <div>
-            <h1 className="text-3xl font-bold text-white tracking-tight mb-2">
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-white tracking-tight mb-1 sm:mb-2">
               Project Management
             </h1>
-            <p className="text-blue-300">Manage all your projects and track their progress</p>
+            <p className="text-xs sm:text-sm md:text-base text-blue-300">Manage all your projects and track their progress</p>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             {/* Export button - only for admin, super-admin, and hr */}
             {canExportData() && (
               <button
                 onClick={exportToCSV}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-green-600/20 hover:bg-green-600/40 text-green-400 border border-green-500/30 transition-colors"
+                className="flex items-center gap-2 px-3 sm:px-4 py-2 rounded-lg bg-green-600/20 hover:bg-green-600/40 text-green-400 border border-green-500/30 transition-colors text-xs sm:text-sm"
               >
-                <Download className="w-4 h-4" />
+                <Download className="w-3 h-3 sm:w-4 sm:h-4" />
                 <span className="hidden sm:inline">Export</span>
+                <span className="sm:hidden">CSV</span>
               </button>
             )}
 
             <button
               onClick={fetchAllData}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600/20 hover:bg-blue-600/40 text-blue-400 border border-blue-500/30 transition-colors"
+              className="flex items-center gap-2 px-3 sm:px-4 py-2 rounded-lg bg-blue-600/20 hover:bg-blue-600/40 text-blue-400 border border-blue-500/30 transition-colors text-xs sm:text-sm"
               disabled={loading}
             >
-              <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
-              <span className="hidden sm:inline">Refresh</span>
+              <RefreshCw className={`w-3 h-3 sm:w-4 sm:h-4 ${loading ? "animate-spin" : ""}`} />
+              <span className="hidden md:inline">Refresh</span>
             </button>
 
             <button
               onClick={() => setShowAddModal(true)}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white transition-all shadow-lg"
+              className="flex items-center gap-2 px-3 sm:px-4 py-2 rounded-lg bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white transition-all shadow-lg text-xs sm:text-sm"
             >
-              <Plus className="w-4 h-4" />
-              <span className="hidden sm:inline">Add Project</span>
+              <Plus className="w-3 h-3 sm:w-4 sm:h-4" />
+              <span className="hidden md:inline">Add Project</span>
+              <span className="md:hidden">Add</span>
             </button>
           </div>
         </div>
 
         {/* Overall Statistics */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
-          <div className="bg-[#191f2b]/70 rounded-xl shadow-xl border border-[#232945] p-6">
-            <div className="flex items-center justify-between mb-3">
-              <div className="p-3 rounded-lg bg-blue-600/20">
-                <FolderKanban className="w-6 h-6 text-blue-400" />
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2 sm:gap-3 md:gap-4 lg:gap-6 mb-4 sm:mb-6 md:mb-8">
+          <div className="bg-[#191f2b]/70 rounded-lg sm:rounded-xl shadow-xl border border-[#232945] p-3 sm:p-4 md:p-5 lg:p-6">
+            <div className="flex items-center justify-between mb-1 sm:mb-2 md:mb-3">
+              <div className="p-1.5 sm:p-2 md:p-3 rounded-lg bg-blue-600/20">
+                <FolderKanban className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 text-blue-400" />
               </div>
             </div>
-            <p className="text-sm text-gray-400 mb-1">Total Projects</p>
-            <p className="text-3xl font-bold text-white">{overallStats.total}</p>
+            <p className="text-[10px] sm:text-xs md:text-sm text-gray-400 mb-0.5 sm:mb-1">Total Projects</p>
+            <p className="text-xl sm:text-2xl md:text-3xl font-bold text-white">{overallStats.total}</p>
           </div>
 
-          <div className="bg-[#191f2b]/70 rounded-xl shadow-xl border border-[#232945] p-6">
-            <div className="flex items-center justify-between mb-3">
-              <div className="p-3 rounded-lg bg-blue-600/20">
-                <Plus className="w-6 h-6 text-blue-400" />
+          <div className="bg-[#191f2b]/70 rounded-lg sm:rounded-xl shadow-xl border border-[#232945] p-3 sm:p-4 md:p-5 lg:p-6">
+            <div className="flex items-center justify-between mb-1 sm:mb-2 md:mb-3">
+              <div className="p-1.5 sm:p-2 md:p-3 rounded-lg bg-blue-600/20">
+                <Plus className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 text-blue-400" />
               </div>
             </div>
-            <p className="text-sm text-gray-400 mb-1">New</p>
-            <p className="text-3xl font-bold text-blue-400">{overallStats.new}</p>
+            <p className="text-[10px] sm:text-xs md:text-sm text-gray-400 mb-0.5 sm:mb-1">New</p>
+            <p className="text-xl sm:text-2xl md:text-3xl font-bold text-blue-400">{overallStats.new}</p>
           </div>
 
-          <div className="bg-[#191f2b]/70 rounded-xl shadow-xl border border-[#232945] p-6">
-            <div className="flex items-center justify-between mb-3">
-              <div className="p-3 rounded-lg bg-green-600/20">
-                <CheckCircle className="w-6 h-6 text-green-400" />
+          <div className="bg-[#191f2b]/70 rounded-lg sm:rounded-xl shadow-xl border border-[#232945] p-3 sm:p-4 md:p-5 lg:p-6">
+            <div className="flex items-center justify-between mb-1 sm:mb-2 md:mb-3">
+              <div className="p-1.5 sm:p-2 md:p-3 rounded-lg bg-green-600/20">
+                <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 text-green-400" />
               </div>
             </div>
-            <p className="text-sm text-gray-400 mb-1">Ongoing</p>
-            <p className="text-3xl font-bold text-green-400">{overallStats.ongoing}</p>
+            <p className="text-[10px] sm:text-xs md:text-sm text-gray-400 mb-0.5 sm:mb-1">Ongoing</p>
+            <p className="text-xl sm:text-2xl md:text-3xl font-bold text-green-400">{overallStats.ongoing}</p>
           </div>
 
-          <div className="bg-[#191f2b]/70 rounded-xl shadow-xl border border-[#232945] p-6">
-            <div className="flex items-center justify-between mb-3">
-              <div className="p-3 rounded-lg bg-orange-600/20">
-                <AlertCircle className="w-6 h-6 text-orange-400" />
+          <div className="bg-[#191f2b]/70 rounded-lg sm:rounded-xl shadow-xl border border-[#232945] p-3 sm:p-4 md:p-5 lg:p-6">
+            <div className="flex items-center justify-between mb-1 sm:mb-2 md:mb-3">
+              <div className="p-1.5 sm:p-2 md:p-3 rounded-lg bg-orange-600/20">
+                <AlertCircle className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 text-orange-400" />
               </div>
             </div>
-            <p className="text-sm text-gray-400 mb-1">Expired</p>
-            <p className="text-3xl font-bold text-orange-400">{overallStats.expired}</p>
+            <p className="text-[10px] sm:text-xs md:text-sm text-gray-400 mb-0.5 sm:mb-1">Expired</p>
+            <p className="text-xl sm:text-2xl md:text-3xl font-bold text-orange-400">{overallStats.expired}</p>
           </div>
 
-          <div className="bg-[#191f2b]/70 rounded-xl shadow-xl border border-[#232945] p-6">
-            <div className="flex items-center justify-between mb-3">
-              <div className="p-3 rounded-lg bg-purple-600/20">
-                <CheckCircle className="w-6 h-6 text-purple-400" />
+          <div className="bg-[#191f2b]/70 rounded-lg sm:rounded-xl shadow-xl border border-[#232945] p-3 sm:p-4 md:p-5 lg:p-6 col-span-2 sm:col-span-1">
+            <div className="flex items-center justify-between mb-1 sm:mb-2 md:mb-3">
+              <div className="p-1.5 sm:p-2 md:p-3 rounded-lg bg-purple-600/20">
+                <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 text-purple-400" />
               </div>
             </div>
-            <p className="text-sm text-gray-400 mb-1">Completed</p>
-            <p className="text-3xl font-bold text-purple-400">{overallStats.completed}</p>
+            <p className="text-[10px] sm:text-xs md:text-sm text-gray-400 mb-0.5 sm:mb-1">Completed</p>
+            <p className="text-xl sm:text-2xl md:text-3xl font-bold text-purple-400">{overallStats.completed}</p>
           </div>
         </div>
 
         {/* Project Type Statistics */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 md:gap-6 mb-4 sm:mb-6 md:mb-8">
           {Object.entries(projectStats).map(([type, stats]) => {
             const Icon = PROJECT_TYPE_ICONS[type];
             const colors = PROJECT_TYPE_COLORS[type];
             const isExpanded = expandedStats[type];
 
             return (
-              <div key={type} className={`${colors.bg} rounded-xl shadow-xl border ${colors.border} p-6 transition-all`}>
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-3">
-                    <div className={`p-2 rounded-lg ${colors.bg}`}>
-                      <Icon className={`w-5 h-5 ${colors.text}`} />
+              <div key={type} className={`${colors.bg} rounded-lg sm:rounded-xl shadow-xl border ${colors.border} p-4 sm:p-5 md:p-6 transition-all`}>
+                <div className="flex items-center justify-between mb-3 sm:mb-4">
+                  <div className="flex items-center gap-2 sm:gap-3">
+                    <div className={`p-1.5 sm:p-2 rounded-lg ${colors.bg}`}>
+                      <Icon className={`w-4 h-4 sm:w-5 sm:h-5 ${colors.text}`} />
                     </div>
                     <div>
-                      <h3 className={`font-semibold ${colors.text}`}>{type}</h3>
-                      <p className="text-sm text-gray-400">{stats.total} projects</p>
+                      <h3 className={`text-sm sm:text-base font-semibold ${colors.text}`}>{type}</h3>
+                      <p className="text-xs sm:text-sm text-gray-400">{stats.total} projects</p>
                     </div>
                   </div>
                   <button
                     onClick={() => setExpandedStats(prev => ({ ...prev, [type]: !prev[type] }))}
                     className={`${colors.text} hover:opacity-70 transition-opacity`}
                   >
-                    {isExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                    {isExpanded ? <ChevronUp className="w-4 h-4 sm:w-5 sm:h-5" /> : <ChevronDown className="w-4 h-4 sm:w-5 sm:h-5" />}
                   </button>
                 </div>
 
                 {isExpanded && (
-                  <div className="grid grid-cols-2 gap-3 mt-4 pt-4 border-t border-gray-700">
-                    <div className="text-center p-3 rounded-lg bg-blue-600/10 border border-blue-500/20">
-                      <p className="text-2xl font-bold text-blue-400">{stats.new}</p>
-                      <p className="text-xs text-gray-400 mt-1">New</p>
+                  <div className="grid grid-cols-2 gap-2 sm:gap-3 mt-3 sm:mt-4 pt-3 sm:pt-4 border-t border-gray-700">
+                    <div className="text-center p-2 sm:p-3 rounded-lg bg-blue-600/10 border border-blue-500/20">
+                      <p className="text-lg sm:text-xl md:text-2xl font-bold text-blue-400">{stats.new}</p>
+                      <p className="text-[10px] sm:text-xs text-gray-400 mt-0.5 sm:mt-1">New</p>
                     </div>
-                    <div className="text-center p-3 rounded-lg bg-green-600/10 border border-green-500/20">
-                      <p className="text-2xl font-bold text-green-400">{stats.ongoing}</p>
-                      <p className="text-xs text-gray-400 mt-1">Ongoing</p>
+                    <div className="text-center p-2 sm:p-3 rounded-lg bg-green-600/10 border border-green-500/20">
+                      <p className="text-lg sm:text-xl md:text-2xl font-bold text-green-400">{stats.ongoing}</p>
+                      <p className="text-[10px] sm:text-xs text-gray-400 mt-0.5 sm:mt-1">Ongoing</p>
                     </div>
-                    <div className="text-center p-3 rounded-lg bg-orange-600/10 border border-orange-500/20">
-                      <p className="text-2xl font-bold text-orange-400">{stats.expired}</p>
-                      <p className="text-xs text-gray-400 mt-1">Expired</p>
+                    <div className="text-center p-2 sm:p-3 rounded-lg bg-orange-600/10 border border-orange-500/20">
+                      <p className="text-lg sm:text-xl md:text-2xl font-bold text-orange-400">{stats.expired}</p>
+                      <p className="text-[10px] sm:text-xs text-gray-400 mt-0.5 sm:mt-1">Expired</p>
                     </div>
-                    <div className="text-center p-3 rounded-lg bg-purple-600/10 border border-purple-500/20">
-                      <p className="text-2xl font-bold text-purple-400">{stats.completed}</p>
-                      <p className="text-xs text-gray-400 mt-1">Completed</p>
+                    <div className="text-center p-2 sm:p-3 rounded-lg bg-purple-600/10 border border-purple-500/20">
+                      <p className="text-lg sm:text-xl md:text-2xl font-bold text-purple-400">{stats.completed}</p>
+                      <p className="text-[10px] sm:text-xs text-gray-400 mt-0.5 sm:mt-1">Completed</p>
                     </div>
                   </div>
                 )}
               </div>
-            );  
+            );
           })}
         </div>
 
         {/* Projects Table */}
-        <div className="bg-[#191f2b]/70 rounded-xl shadow-xl border border-[#232945] p-6">
-          <div className="flex items-center gap-2 mb-6">
-            <FolderKanban className="w-5 h-5 text-blue-400" />
-            <h3 className="text-lg font-semibold text-white">All Projects</h3>
-            {loading && <div className="w-4 h-4 border-2 border-blue-500/20 border-t-blue-500 rounded-full animate-spin"></div>}
+        <div className="bg-[#191f2b]/70 rounded-lg sm:rounded-xl shadow-xl border border-[#232945] p-3 sm:p-4 md:p-5 lg:p-6">
+          <div className="flex items-center gap-2 mb-4 sm:mb-5 md:mb-6">
+            <FolderKanban className="w-4 h-4 sm:w-5 sm:h-5 text-blue-400" />
+            <h3 className="text-base sm:text-lg font-semibold text-white">All Projects</h3>
+            {loading && <div className="w-3 h-3 sm:w-4 sm:h-4 border-2 border-blue-500/20 border-t-blue-500 rounded-full animate-spin"></div>}
           </div>
 
           {/* Filters */}
-          <div className="space-y-4 mb-6">
+          <div className="space-y-3 sm:space-y-4 mb-4 sm:mb-5 md:mb-6">
             {/* Basic Filters */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-500" />
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3 md:gap-4">
+              <div className="relative sm:col-span-2 md:col-span-3 lg:col-span-1">
+                <Search className="absolute left-2 sm:left-3 top-1/2 transform -translate-y-1/2 w-3 h-3 sm:w-4 sm:h-4 text-gray-500" />
                 <input
                   type="text"
                   placeholder="Search projects..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 bg-[#0f1419] border border-[#232945] rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 transition-colors"
+                  className="w-full pl-8 sm:pl-10 pr-3 sm:pr-4 py-2 bg-[#0f1419] border border-[#232945] rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 transition-colors text-xs sm:text-sm"
                 />
               </div>
 
               <select
                 value={filterType}
                 onChange={(e) => setFilterType(e.target.value)}
-                className="px-4 py-2 bg-[#0f1419] border border-[#232945] rounded-lg text-white focus:outline-none focus:border-blue-500 transition-colors"
+                className="px-3 sm:px-4 py-2 bg-[#0f1419] border border-[#232945] rounded-lg text-white focus:outline-none focus:border-blue-500 transition-colors text-xs sm:text-sm"
               >
                 <option value="all">All Types</option>
                 <option value="Website">Website</option>
@@ -1041,7 +1043,7 @@ const ProjectsPage = ({ onLogout }) => {
               <select
                 value={filterStatus}
                 onChange={(e) => setFilterStatus(e.target.value)}
-                className="px-4 py-2 bg-[#0f1419] border border-[#232945] rounded-lg text-white focus:outline-none focus:border-blue-500 transition-colors"
+                className="px-3 sm:px-4 py-2 bg-[#0f1419] border border-[#232945] rounded-lg text-white focus:outline-none focus:border-blue-500 transition-colors text-xs sm:text-sm"
               >
                 <option value="all">All Status</option>
                 <option value="new">New</option>
@@ -1053,7 +1055,7 @@ const ProjectsPage = ({ onLogout }) => {
               <select
                 value={filterPriority}
                 onChange={(e) => setFilterPriority(e.target.value)}
-                className="px-4 py-2 bg-[#0f1419] border border-[#232945] rounded-lg text-white focus:outline-none focus:border-blue-500 transition-colors"
+                className="px-3 sm:px-4 py-2 bg-[#0f1419] border border-[#232945] rounded-lg text-white focus:outline-none focus:border-blue-500 transition-colors text-xs sm:text-sm"
               >
                 <option value="all">All Priorities</option>
                 <option value="High">High Priority</option>
@@ -1064,7 +1066,7 @@ const ProjectsPage = ({ onLogout }) => {
               <select
                 value={filterEmployee}
                 onChange={(e) => setFilterEmployee(e.target.value)}
-                className="px-4 py-2 bg-[#0f1419] border border-[#232945] rounded-lg text-white focus:outline-none focus:border-blue-500 transition-colors"
+                className="px-3 sm:px-4 py-2 bg-[#0f1419] border border-[#232945] rounded-lg text-white focus:outline-none focus:border-blue-500 transition-colors text-xs sm:text-sm"
               >
                 <option value="all">All Employees</option>
                 {employees.map(emp => (
@@ -1075,7 +1077,7 @@ const ProjectsPage = ({ onLogout }) => {
               <select
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value)}
-                className="px-4 py-2 bg-[#0f1419] border border-[#232945] rounded-lg text-white focus:outline-none focus:border-blue-500 transition-colors"
+                className="px-3 sm:px-4 py-2 bg-[#0f1419] border border-[#232945] rounded-lg text-white focus:outline-none focus:border-blue-500 transition-colors text-xs sm:text-sm"
               >
                 <option value="createdAt">Sort by Created</option>
                 <option value="name">Sort by Name</option>
@@ -1471,38 +1473,38 @@ const ProjectsPage = ({ onLogout }) => {
 
           {/* Pagination Controls - Centered */}
           {filteredProjects.length > 0 && (
-            <div className="mt-6 mb-4 flex flex-col items-center gap-3 pb-4 border-t border-[#232945] pt-4">
+            <div className="mt-4 sm:mt-5 md:mt-6 mb-3 sm:mb-4 flex flex-col items-center gap-2 sm:gap-3 pb-3 sm:pb-4 border-t border-[#232945] pt-3 sm:pt-4">
               {/* Page count info */}
-              <div className="text-sm text-gray-400">
+              <div className="text-xs sm:text-sm text-gray-400">
                 Showing {((currentPage - 1) * projectsPerPage) + 1} to {Math.min(currentPage * projectsPerPage, filteredProjects.length)} of {filteredProjects.length} projects
               </div>
 
               {/* Pagination buttons - only show if more than 1 page */}
               {totalPages > 1 && (
-                <div className="flex items-center justify-center gap-2">
+                <div className="flex items-center justify-center gap-1 sm:gap-2">
                   <button
                     onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
                     disabled={currentPage === 1}
-                    className={`px-3 py-2 rounded-lg border transition-all ${
+                    className={`px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg border transition-all ${
                       currentPage === 1
                         ? "border-[#232945] text-gray-600 cursor-not-allowed"
                         : "border-blue-500/50 text-blue-400 hover:bg-blue-500/10"
                     }`}
                   >
-                    <ChevronLeft className="w-4 h-4" />
+                    <ChevronLeft className="w-3 h-3 sm:w-4 sm:h-4" />
                   </button>
 
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center gap-0.5 sm:gap-1">
                     {/* First page */}
                     {currentPage > 2 && (
                       <>
                         <button
                           onClick={() => setCurrentPage(1)}
-                          className="min-w-[40px] px-3 py-2 rounded-lg border border-[#232945] text-gray-300 hover:bg-[#0f1419] hover:text-white hover:border-blue-500/50 transition-all"
+                          className="min-w-[32px] sm:min-w-[40px] px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg border border-[#232945] text-gray-300 hover:bg-[#0f1419] hover:text-white hover:border-blue-500/50 transition-all text-xs sm:text-sm"
                         >
                           1
                         </button>
-                        {currentPage > 3 && <span className="text-gray-600 px-2">...</span>}
+                        {currentPage > 3 && <span className="text-gray-600 px-1 sm:px-2 text-xs sm:text-sm">...</span>}
                       </>
                     )}
 
@@ -1517,7 +1519,7 @@ const ProjectsPage = ({ onLogout }) => {
                         <button
                           key={page}
                           onClick={() => setCurrentPage(page)}
-                          className={`min-w-[40px] px-3 py-2 rounded-lg border transition-all font-semibold ${
+                          className={`min-w-[32px] sm:min-w-[40px] px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg border transition-all font-semibold text-xs sm:text-sm ${
                             currentPage === page
                               ? "border-blue-500 bg-blue-500/20 text-blue-400 shadow-md"
                               : "border-[#232945] text-gray-300 hover:bg-[#0f1419] hover:text-white hover:border-blue-500/50"
@@ -1530,10 +1532,10 @@ const ProjectsPage = ({ onLogout }) => {
                     {/* Last page */}
                     {currentPage < totalPages - 1 && (
                       <>
-                        {currentPage < totalPages - 2 && <span className="text-gray-600 px-2">...</span>}
+                        {currentPage < totalPages - 2 && <span className="text-gray-600 px-1 sm:px-2 text-xs sm:text-sm">...</span>}
                         <button
                           onClick={() => setCurrentPage(totalPages)}
-                          className="min-w-[40px] px-3 py-2 rounded-lg border border-[#232945] text-gray-300 hover:bg-[#0f1419] hover:text-white hover:border-blue-500/50 transition-all"
+                          className="min-w-[32px] sm:min-w-[40px] px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg border border-[#232945] text-gray-300 hover:bg-[#0f1419] hover:text-white hover:border-blue-500/50 transition-all text-xs sm:text-sm"
                         >
                           {totalPages}
                         </button>
@@ -1544,13 +1546,13 @@ const ProjectsPage = ({ onLogout }) => {
                   <button
                     onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
                     disabled={currentPage === totalPages}
-                    className={`px-3 py-2 rounded-lg border transition-all ${
+                    className={`px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg border transition-all ${
                       currentPage === totalPages
                         ? "border-[#232945] text-gray-600 cursor-not-allowed"
                         : "border-blue-500/50 text-blue-400 hover:bg-blue-500/10"
                     }`}
                   >
-                    <ChevronRight className="w-4 h-4" />
+                    <ChevronRight className="w-3 h-3 sm:w-4 sm:h-4" />
                   </button>
                 </div>
               )}

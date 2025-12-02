@@ -315,6 +315,7 @@ class AttendanceService {
       let isOnLeave = false;
       let isWFH = false;
       let isPaidLeave = false;
+      let isHalfDayLeave = false;
       let leaveType = null;
 
       if (leaveRequest) {
@@ -324,13 +325,21 @@ class AttendanceService {
           leaveType = 'workFromHome';
           isOnLeave = false; // ⭐ WFH is NOT counted as leave
           isPaidLeave = false;
+        } else if (leaveRequest.type === 'halfDay') {
+          // ⭐ Half-Day Leave: Employee comes to work but only for 4-4.5 hours
+          // Treated like WFH - not a full leave, employee is expected to work reduced hours
+          isHalfDayLeave = true;
+          leaveType = 'halfDay';
+          isOnLeave = false; // ⭐ Half-day is NOT counted as leave - employee is working
+          isPaidLeave = false;
+          isWFH = false;
         } else if (leaveRequest.type === 'paid') {
           // ⭐ Paid leave: Separate from unpaid leaves, still counts as leave but marked distinctly
           isPaidLeave = true;
           isOnLeave = true;
           leaveType = 'paid';
         } else {
-          // Other leaves (sick, unpaid, maternity, halfDay)
+          // Other leaves (sick, unpaid, maternity)
           isOnLeave = true;
           isPaidLeave = false;
           leaveType = leaveRequest.type;
@@ -338,9 +347,10 @@ class AttendanceService {
       }
 
       return {
-        isOnLeave,      // True for all leaves (NOT for WFH)
+        isOnLeave,      // True for full leaves (NOT for WFH or halfDay)
         isWFH,          // Separate flag for Work From Home
-        isPaidLeave,    // ⭐ NEW: Separate flag for Paid Leave
+        isPaidLeave,    // ⭐ Separate flag for Paid Leave
+        isHalfDayLeave, // ⭐ NEW: Separate flag for Half-Day Leave (approved reduced hours)
         leaveType,      // Type: sick/paid/unpaid/maternity/halfDay/workFromHome
         isHoliday: !!holiday,
         holidayName: holiday?.name || null
@@ -352,6 +362,7 @@ class AttendanceService {
         isOnLeave: false,
         isWFH: false,
         isPaidLeave: false,
+        isHalfDayLeave: false,
         leaveType: null,
         isHoliday: false,
         holidayName: null

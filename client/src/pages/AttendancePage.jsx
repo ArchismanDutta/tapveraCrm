@@ -645,27 +645,42 @@ const AttendancePage = ({ onLogout }) => {
 
         let status = "absent";
         // Use backend calculated status with WFH support
-        // ⭐ Priority: WFH (DOMINATES ALL) > Absent/Leave > Late > Half-day > Present
+        // ⭐ Priority: WFH (DOMINATES ALL) > Half-Day Leave > Absent/Leave > Late > Half-day > Present
         // WFH DOMINATES: If employee has WFH and worked, show WFH regardless of late/early/half-day
         if ((d.isWFH || d.leaveInfo?.type === 'workFromHome') &&
             (!d.isAbsent && (d.workDurationSeconds > 0 || d.isPresent))) {
           // ⭐ HIGHEST PRIORITY: Work From Home - DOMINATES over late/half-day/early
           // If employee has WFH and worked ANY amount, show as WFH (magenta)
           status = "wfh";
+        } else if (d.leaveInfo?.isHalfDayLeave || d.leaveInfo?.type === 'halfDay') {
+          // ⭐ Half-Day Leave: Employee is expected to work 4-4.5 hours (approved reduced hours)
+          // Show half-day-leave status if they have approved half-day leave
+          status = "half-day-leave";
         } else if (d.isAbsent) {
-          // Check if it's an approved leave (not WFH)
-          if (d.leaveInfo && d.leaveInfo.type !== 'workFromHome') {
-            status = d.leaveInfo.type === 'halfDay' ? "half-day-leave" : "approved-leave";
+          // Check if it's an approved leave (not WFH or halfDay)
+          if (d.leaveInfo && d.leaveInfo.type !== 'workFromHome' && d.leaveInfo.type !== 'halfDay') {
+            // Distinguish between paid and unpaid leaves
+            if (d.isPaidLeave || d.leaveInfo.isPaidLeave || d.leaveInfo.type === 'paid') {
+              status = "paid-leave";
+            } else if (d.leaveInfo.type === 'unpaid') {
+              status = "unpaid-leave";
+            } else if (d.leaveInfo.type === 'sick') {
+              status = "sick-leave";
+            } else if (d.leaveInfo.type === 'maternity') {
+              status = "maternity-leave";
+            } else {
+              status = "approved-leave";
+            }
           } else {
             status = "absent";
           }
         } else if (d.isLate) {
-          // Late takes priority over half-day (but NOT over WFH)
+          // Late takes priority over half-day (but NOT over WFH or half-day leave)
           status = "late";
           console.log(`🔴 LATE DAY DETECTED: ${d.date}`, {isLate: d.isLate, isHalfDay: d.isHalfDay, status, arrivalTime: d.arrivalTime});
         } else if (d.isHalfDay) {
-          // Check if it's half-day leave or just worked half day
-          status = d.leaveInfo && d.leaveInfo.type === 'halfDay' ? "half-day-leave" : "half-day";
+          // Employee worked 4-4.5 hours (automatic calculation)
+          status = "half-day";
         } else {
           status = "present";
         }
@@ -910,18 +925,37 @@ const AttendancePage = ({ onLogout }) => {
             (!d.isAbsent && (d.workDurationSeconds > 0 || d.isPresent))) {
           status = "WFH";
           statusColor = "fuchsia"; // Magenta color to match calendar
+        } else if (d.leaveInfo?.isHalfDayLeave || d.leaveInfo?.type === 'halfDay') {
+          // ⭐ Half-Day Leave: Employee is expected to work 4-4.5 hours
+          status = "Half Day Leave";
+          statusColor = "violet";
         } else if (d.isAbsent) {
-          if (d.leaveInfo && d.leaveInfo.type !== 'workFromHome') {
-            status = d.leaveInfo.type === 'halfDay' ? "Half Day Leave" :
-                     `${d.leaveInfo.type.charAt(0).toUpperCase() + d.leaveInfo.type.slice(1)} Leave`;
-            statusColor = "purple";
+          if (d.leaveInfo && d.leaveInfo.type !== 'workFromHome' && d.leaveInfo.type !== 'halfDay') {
+            // Distinguish between paid and unpaid leaves
+            if (d.isPaidLeave || d.leaveInfo.isPaidLeave || d.leaveInfo.type === 'paid') {
+              status = "Paid Leave";
+              statusColor = "emerald";
+            } else if (d.leaveInfo.type === 'unpaid') {
+              status = "Unpaid Leave";
+              statusColor = "rose";
+            } else if (d.leaveInfo.type === 'sick') {
+              status = "Sick Leave";
+              statusColor = "orange";
+            } else if (d.leaveInfo.type === 'maternity') {
+              status = "Maternity Leave";
+              statusColor = "pink";
+            } else {
+              status = `${d.leaveInfo.type.charAt(0).toUpperCase() + d.leaveInfo.type.slice(1)} Leave`;
+              statusColor = "purple";
+            }
           } else {
             status = "Absent";
             statusColor = "red";
           }
         } else if (d.isHalfDay) {
-          status = d.leaveInfo && d.leaveInfo.type === 'halfDay' ? "Half Day Leave" : "Half Day";
-          statusColor = "orange";
+          // Employee worked 4-4.5 hours (automatic calculation)
+          status = "Half Day";
+          statusColor = "violet";
         } else if (d.isLate) {
           status = "Late";
           statusColor = "yellow";
