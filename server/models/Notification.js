@@ -79,7 +79,6 @@ const notificationSchema = new mongoose.Schema(
     // Expiry (auto-delete old notifications)
     expiresAt: {
       type: Date,
-      index: true,
     },
   },
   {

@@ -82,7 +82,8 @@ const keywordRankSchema = new mongoose.Schema(
 );
 
 // Index for faster queries
-keywordRankSchema.index({ project: 1, keyword: 1 });
+// Same keyword can exist with different categories (SEO, GMB)
+keywordRankSchema.index({ project: 1, keyword: 1, category: 1 });
 keywordRankSchema.index({ createdAt: -1 });
 
 // Virtual for current rank

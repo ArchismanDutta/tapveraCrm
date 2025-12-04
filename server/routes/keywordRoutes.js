@@ -85,16 +85,17 @@ router.post("/:projectId/keywords", protect, async (req, res) => {
       }
     }
 
-    // Check if keyword already exists for this project
+    // Check if keyword already exists for this project with the same category
     const existingKeyword = await KeywordRank.findOne({
       project: projectId,
       keyword: keyword.trim(),
+      category: category || "SEO",
       isActive: true,
     });
 
     if (existingKeyword) {
       return res.status(400).json({
-        message: "This keyword is already being tracked for this project",
+        message: `This keyword is already being tracked for this project in the ${category || "SEO"} category`,
       });
     }
 
@@ -227,6 +228,26 @@ router.put("/:projectId/keywords/:keywordId", protect, async (req, res) => {
       return res.status(400).json({
         message: "Keyword does not belong to this project",
       });
+    }
+
+    // Check if updating keyword or category would create a duplicate
+    if (keyword !== undefined || category !== undefined) {
+      const updatedKeyword = keyword !== undefined ? keyword.trim() : keywordRank.keyword;
+      const updatedCategory = category !== undefined ? category : keywordRank.category;
+
+      const existingKeyword = await KeywordRank.findOne({
+        project: projectId,
+        keyword: updatedKeyword,
+        category: updatedCategory,
+        isActive: true,
+        _id: { $ne: keywordId }, // Exclude the current keyword being updated
+      });
+
+      if (existingKeyword) {
+        return res.status(400).json({
+          message: `This keyword is already being tracked for this project in the ${updatedCategory} category`,
+        });
+      }
     }
 
     // Update fields

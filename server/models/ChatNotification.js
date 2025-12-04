@@ -40,8 +40,7 @@ const chatNotificationSchema = new mongoose.Schema({
   // Date when notification was sent (stored as start of day in UTC)
   notificationDate: {
     type: Date,
-    required: true,
-    index: true
+    required: true
   },
 
   // When the notification was actually sent

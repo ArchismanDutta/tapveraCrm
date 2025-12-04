@@ -63,21 +63,7 @@ const userSchema = new mongoose.Schema(
     department: { type: String, enum: ["executives", "development", "marketingAndSales", "humanResource", ""], default: "" },
     designation: {
       type: String,
-      enum: [
-        // Development Team Hierarchy
-        "dev-team-member",
-        "dev-team-lead",
-        "dev-team-manager",
-        // Other Designations
-        "hr-manager",
-        "hr-executive",
-        "marketing-executive",
-        "content-writer",
-        "seo-specialist",
-        "graphic-designer",
-        "other",
-        ""
-      ],
+      trim: true,
       default: ""
     },
     jobLevel: { type: String, enum: ["intern", "junior", "mid", "senior", "lead", "director", "executive"], default: "junior" },

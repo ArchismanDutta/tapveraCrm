@@ -505,8 +505,6 @@ if (!process.env.MONGODB_URI) {
 
 mongoose
   .connect(process.env.MONGODB_URI, {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
     serverSelectionTimeoutMS: 10000, // Timeout after 10 seconds instead of hanging
     socketTimeoutMS: 45000, // Close sockets after 45 seconds of inactivity
   })

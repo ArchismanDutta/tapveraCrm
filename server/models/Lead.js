@@ -110,8 +110,7 @@ const leadSchema = new mongoose.Schema(
     assignedTo: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
-      required: true,
-      index: true
+      required: true
     },
 
     assignedBy: {
@@ -159,7 +158,7 @@ const leadSchema = new mongoose.Schema(
 );
 
 // Index for better query performance
-leadSchema.index({ leadId: 1 });
+// Note: leadId already has index via unique:true, no need to duplicate
 leadSchema.index({ assignedTo: 1 });
 leadSchema.index({ status: 1 });
 leadSchema.index({ createdAt: -1 });

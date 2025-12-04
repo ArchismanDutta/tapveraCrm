@@ -468,8 +468,8 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
       const { messages: newMessages, pagination } = res.data;
 
       if (append) {
-        // Append new messages to existing ones
-        setMessages((prev) => [...prev, ...newMessages]);
+        // Prepend older messages at the beginning (top) like WhatsApp
+        setMessages((prev) => [...newMessages, ...prev]);
       } else {
         // Replace all messages (initial load or filter change)
         setMessages(newMessages);
@@ -515,9 +515,24 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
     }
   };
 
-  const loadMoreMessages = () => {
+  const loadMoreMessages = async () => {
     if (hasMoreMessages && !loadingMoreMessages) {
-      fetchMessages(currentPage + 1, true);
+      // Save scroll position before loading
+      const container = chatContainerRef.current;
+      const previousScrollHeight = container?.scrollHeight || 0;
+      const previousScrollTop = container?.scrollTop || 0;
+
+      await fetchMessages(currentPage + 1, true);
+
+      // Restore scroll position after loading older messages
+      // This prevents the view from jumping to the top
+      setTimeout(() => {
+        if (container) {
+          const newScrollHeight = container.scrollHeight;
+          const addedHeight = newScrollHeight - previousScrollHeight;
+          container.scrollTop = previousScrollTop + addedHeight;
+        }
+      }, 100);
     }
   };
 
@@ -1442,7 +1457,31 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                   </p>
                 </div>
               ) : (
-                messages.map((msg, idx) => {
+                <>
+                  {/* Load More Messages Button - At Top */}
+                  {hasMoreMessages && (
+                    <div className="flex justify-center py-4">
+                      <button
+                        onClick={loadMoreMessages}
+                        disabled={loadingMoreMessages}
+                        className="flex items-center gap-2 px-4 py-2 bg-blue-600/20 hover:bg-blue-600/40 text-blue-400 border border-blue-500/30 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {loadingMoreMessages ? (
+                          <>
+                            <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin"></div>
+                            <span>Loading...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Plus className="w-4 h-4" />
+                            <span>Load More Messages ({totalMessages - messages.length} remaining)</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  )}
+
+                  {messages.map((msg, idx) => {
                   const isOwnMessage =
                     msg.sentBy?._id === userId || msg.sentBy === userId;
                   const senderType = msg.senderType || "user";
@@ -1736,33 +1775,11 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                       </div>
                     </div>
                   );
-                })
-              )}
+                  })}
 
-              {/* Load More Messages Button */}
-              {hasMoreMessages && messages.length > 0 && (
-                <div className="flex justify-center py-4">
-                  <button
-                    onClick={loadMoreMessages}
-                    disabled={loadingMoreMessages}
-                    className="flex items-center gap-2 px-4 py-2 bg-blue-600/20 hover:bg-blue-600/40 text-blue-400 border border-blue-500/30 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {loadingMoreMessages ? (
-                      <>
-                        <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin"></div>
-                        <span>Loading...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Plus className="w-4 h-4" />
-                        <span>Load More Messages ({totalMessages - messages.length} remaining)</span>
-                      </>
-                    )}
-                  </button>
-                </div>
+                  <div ref={messagesEndRef} />
+                </>
               )}
-
-              <div ref={messagesEndRef} />
             </div>
 
             {/* Message Input */}
