@@ -287,7 +287,7 @@ exports.getAllUsers = async (req, res) => {
       : { status: { $nin: ['terminated', 'absconded'] } };
 
     const users = await User.find(filter)
-      .select("_id name email role department designation employeeId dob doj shift shiftType jobLevel status");
+      .select("_id name email role department designation employeeId dob doj shift shiftType jobLevel status salary");
     res.json(users);
   } catch (err) {
     console.error("Error fetching users:", err);

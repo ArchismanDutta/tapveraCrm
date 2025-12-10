@@ -17,6 +17,7 @@ import {
   DollarSign,
   FileSpreadsheet,
   Shield,
+  Zap,
 } from "lucide-react";
 import { FaChevronCircleRight } from "react-icons/fa";
 import { Users } from "@/components/animate-ui/icons/users";
@@ -89,6 +90,11 @@ const menuConfig = {
       icon: <Send size={18} animateOnHover />,
       label: "Leave Requests",
     },
+    {
+      to: "/my-payslips",
+      icon: <FileText size={18} />,
+      label: "My Payslips",
+    },
     { to: "/todo", icon: <Brush size={18} animateOnHover />, label: "Todo" },
     {
       to: "/messages",
@@ -156,6 +162,21 @@ const menuConfig = {
       to: "/admin/salary-management",
       icon: <Fingerprint size={16} animateOnHover />,
       label: "Salary Management",
+    },
+    {
+      to: "/admin/auto-payroll",
+      icon: <Zap size={16} />,
+      label: "Auto Payroll",
+    },
+    {
+      to: "/admin/payslips",
+      icon: <FileText size={16} />,
+      label: "All Payslips",
+    },
+    {
+      to: "/my-payslips",
+      icon: <DollarSign size={16} />,
+      label: "My Payslips",
     },
     {
       to: "/sheets",
@@ -319,6 +340,11 @@ const menuConfig = {
       label: "Holidays List",
     },
     {
+      to: "/my-payslips",
+      icon: <DollarSign size={18} />,
+      label: "My Payslips",
+    },
+    {
       to: "/attendance",
       icon: <AnimatedClock10 size={18} animateOnHover />,
       label: "My Attendance",
@@ -385,6 +411,16 @@ const menuConfig = {
           to: "/admin/salary-management",
           icon: <Fingerprint size={16} animateOnHover />,
           label: "Salary Management",
+        },
+        {
+          to: "/admin/auto-payroll",
+          icon: <Zap size={16} />,
+          label: "Auto Payroll",
+        },
+        {
+          to: "/admin/payslips",
+          icon: <FileText size={16} />,
+          label: "View Payslips",
         },
 
         {

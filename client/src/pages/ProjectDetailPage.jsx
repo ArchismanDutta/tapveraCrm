@@ -468,8 +468,13 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
       const { messages: newMessages, pagination } = res.data;
 
       if (append) {
-        // Prepend older messages at the beginning (top) like WhatsApp
-        setMessages((prev) => [...newMessages, ...prev]);
+        // Append older messages - new messages contain older data from previous pages
+        // Ensure chronological order (oldest first)
+        setMessages((prev) => {
+          const combined = [...newMessages, ...prev];
+          // Sort by createdAt to ensure proper chronological order
+          return combined.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+        });
       } else {
         // Replace all messages (initial load or filter change)
         setMessages(newMessages);
@@ -526,13 +531,15 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
 
       // Restore scroll position after loading older messages
       // This prevents the view from jumping to the top
+      // Use longer timeout to ensure DOM updates are complete after sorting
       setTimeout(() => {
         if (container) {
           const newScrollHeight = container.scrollHeight;
           const addedHeight = newScrollHeight - previousScrollHeight;
+          // Adjust scroll position to account for newly added messages at the top
           container.scrollTop = previousScrollTop + addedHeight;
         }
-      }, 100);
+      }, 150);
     }
   };
 

@@ -8,16 +8,20 @@ const {
   getEmployeePayslip,
   getAllPayslips,
   getEmployeePayslipHistory,
+  getMyPayslipHistory,
   deletePayslip,
-  getPayslipStats
+  getPayslipStats,
+  getPayslipById
 } = require("../controllers/payslipController");
 
 // Employee routes
+router.get("/my/history", protect, getMyPayslipHistory);
 router.get("/my/:month", protect, getMyPayslip);
 
 // Admin routes (can view any employee's payslip)
 router.get("/admin", protect, authorize("admin", "hr", "super-admin"), getAllPayslips);
 router.get("/stats", protect, authorize("admin", "hr", "super-admin"), getPayslipStats);
+router.get("/id/:id", protect, authorize("admin", "hr", "super-admin"), getPayslipById);
 router.get("/:employeeId/:month", protect, authorize("admin", "hr", "super-admin"), getEmployeePayslip);
 router.get("/history/:employeeId", protect, authorize("admin", "hr", "super-admin"), getEmployeePayslipHistory);
 

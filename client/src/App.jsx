@@ -70,6 +70,9 @@ import SuperAdminAttendancePortal from "./pages/SuperAdminAttendancePortal";
 import ShiftManagement from "./components/humanResource/ShiftManagement";
 import ManualAttendanceManagement from "./pages/admin/ManualAttendanceManagement";
 import SalaryManagement from "./pages/admin/SalaryManagement";
+import AutoPayrollManagement from "./pages/admin/AutoPayrollManagement";
+import PayslipManagement from "./pages/admin/PayslipManagement";
+import MyPayslipsPage from "./pages/MyPayslipsPage";
 import ClientsPage from "./pages/ClientsPage";
 import ProjectsPage from "./pages/ProjectsPage";
 import ProjectCommunicationPage from "./pages/ProjectCommunicationPage";
@@ -571,6 +574,48 @@ const AppWrapper = () => {
                 to={isAuthenticated ? "/dashboard" : "/login"}
                 replace
               />
+            )
+          }
+        />
+
+        {/* Automatic Payroll Management */}
+        <Route
+          path="/admin/auto-payroll"
+          element={
+            isAuthenticated && (isHR || isSuperAdmin) ? (
+              <AutoPayrollManagement onLogout={handleLogout} />
+            ) : (
+              <Navigate
+                to={isAuthenticated ? "/dashboard" : "/login"}
+                replace
+              />
+            )
+          }
+        />
+
+        {/* Payslip Management - Admin/HR View */}
+        <Route
+          path="/admin/payslips"
+          element={
+            isAuthenticated && (isHR || isSuperAdmin) ? (
+              <PayslipManagement onLogout={handleLogout} />
+            ) : (
+              <Navigate
+                to={isAuthenticated ? "/dashboard" : "/login"}
+                replace
+              />
+            )
+          }
+        />
+
+        {/* My Payslips - Employee, Admin, HR View (Everyone except Super Admin) */}
+        <Route
+          path="/my-payslips"
+          element={
+            isAuthenticated && !isSuperAdmin ? (
+              <MyPayslipsPage onLogout={handleLogout} />
+            ) : (
+              <Navigate to="/login" replace />
             )
           }
         />

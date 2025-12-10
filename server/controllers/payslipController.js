@@ -522,6 +522,36 @@ exports.getEmployeePayslipHistory = async (req, res) => {
   }
 };
 
+// Get current user's payslip history (for employees)
+exports.getMyPayslipHistory = async (req, res) => {
+  try {
+    const employeeId = req.user._id;
+    const { page = 1, limit = 12 } = req.query;
+
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    const payslips = await Payslip.find({ employee: employeeId })
+      .populate('employee', 'name employeeId email department designation')
+      .sort({ payPeriod: -1 })
+      .skip(skip)
+      .limit(parseInt(limit));
+
+    const total = await Payslip.countDocuments({ employee: employeeId });
+
+    res.json({
+      payslips,
+      pagination: {
+        current: parseInt(page),
+        pages: Math.ceil(total / parseInt(limit)),
+        total
+      }
+    });
+  } catch (error) {
+    console.error("Error fetching payslip history:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+};
+
 // Delete payslip
 exports.deletePayslip = async (req, res) => {
   try {
@@ -542,6 +572,31 @@ exports.deletePayslip = async (req, res) => {
 };
 
 // Get payslip statistics
+// Get payslip by ID
+exports.getPayslipById = async (req, res) => {
+  try {
+    const payslip = await Payslip.findById(req.params.id)
+      .populate('employee', 'name employeeId email department designation')
+      .populate('createdBy', 'name email');
+
+    if (!payslip) {
+      return res.status(404).json({
+        success: false,
+        message: 'Payslip not found'
+      });
+    }
+
+    res.json(payslip);
+  } catch (error) {
+    console.error('Error fetching payslip by ID:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching payslip',
+      error: error.message
+    });
+  }
+};
+
 exports.getPayslipStats = async (req, res) => {
   try {
     const currentMonth = new Date().toISOString().slice(0, 7);

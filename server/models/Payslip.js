@@ -56,6 +56,11 @@ const payslipSchema = new mongoose.Schema({
     required: true
   },
 
+  // Bonuses
+  bonuses: {
+    perfectAttendanceBonus: { type: Number, default: 0 } // One day extra pay for perfect attendance (6+ months tenure)
+  },
+
   // Deductions
   deductions: {
     employeePF: { type: Number, default: 0 },     // 12% of basic if basic <= 15000

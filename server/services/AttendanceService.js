@@ -333,13 +333,13 @@ class AttendanceService {
           isOnLeave = false; // ⭐ Half-day is NOT counted as leave - employee is working
           isPaidLeave = false;
           isWFH = false;
-        } else if (leaveRequest.type === 'paid') {
-          // ⭐ Paid leave: Separate from unpaid leaves, still counts as leave but marked distinctly
+        } else if (leaveRequest.type === 'paid' || leaveRequest.type === 'sick' || leaveRequest.type === 'maternity') {
+          // ⭐ Paid leaves: paid, sick, and maternity are all paid leaves
           isPaidLeave = true;
           isOnLeave = true;
-          leaveType = 'paid';
+          leaveType = leaveRequest.type;
         } else {
-          // Other leaves (sick, unpaid, maternity)
+          // Other leaves (unpaid, etc.)
           isOnLeave = true;
           isPaidLeave = false;
           leaveType = leaveRequest.type;
@@ -688,31 +688,14 @@ class AttendanceService {
     // Check if employee is on paid leave
     const isPaidLeave = employee.leaveInfo?.isPaidLeave || false;
 
-    // Calculate if late and late minutes
-    const isLate = isFlexibleShift ? false : this.calculateIsLate(arrivalTime, employee.assignedShift, attendanceDate);
-
-    // 🔍 Debug: Log late minutes condition check
-    console.log(`🔍 Late minutes condition check for ${this.formatDateKey(attendanceDate)}:`, {
-      isLate,
-      hasArrivalTime: !!arrivalTime,
-      hasAssignedShift: !!employee.assignedShift,
-      hasShiftStartTime: !!employee.assignedShift?.startTime,
-      shiftStartTime: employee.assignedShift?.startTime,
-      willCalculateLateMinutes: isLate && arrivalTime && employee.assignedShift?.startTime
-    });
-
-    const lateMinutes = (isLate && arrivalTime && employee.assignedShift?.startTime)
+    // Calculate late minutes first
+    const lateMinutes = (arrivalTime && employee.assignedShift?.startTime && !isFlexibleShift)
       ? this.calculateLateMinutes(arrivalTime, employee.assignedShift.startTime)
       : 0;
 
-    // 🔍 Debug: Log late minutes calculation result
-    console.log(`🔍 Late Minutes RESULT for ${this.formatDateKey(attendanceDate)}:`, {
-      isLate,
-      lateMinutes,
-      arrivalTime: arrivalTime ? arrivalTime.toISOString() : null,
-      shiftStartTime: employee.assignedShift?.startTime,
-      isFlexible: isFlexibleShift
-    });
+    // ⭐ IMPORTANT: isLate should ONLY be true if lateMinutes > 0
+    // This ensures consistency between isLate flag and lateMinutes value
+    const isLate = lateMinutes > 0;
 
     employee.calculated = {
       arrivalTime,
@@ -730,7 +713,7 @@ class AttendanceService {
       // would mark employee as absent because workSeconds === 0
       isPresent: arrivalTime !== null,
       isAbsent: arrivalTime === null,
-      // Flexible employees are NEVER marked as late (no shift start time to compare against)
+      // ⭐ isLate is true ONLY if lateMinutes > 0 (ensures consistency)
       isLate,
       lateMinutes, // ⭐ Minutes late (0 if on-time or flexible shift)
       // Half-day status: >= 4 hours AND < 4.5 hours

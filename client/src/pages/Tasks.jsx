@@ -73,6 +73,7 @@ const Tasks = ({ onLogout }) => {
           rejectedAt: task.rejectedAt || null, // ✅ include rejectedAt
           rejectionReason: task.rejectionReason || null, // ✅ include rejectionReason
           remarks: task.remarks || [], // ✅ include remarks
+          project: task.project || null, // ✅ include project
         }))
         .sort((a, b) => {
           // First by status hierarchy
@@ -116,7 +117,8 @@ const Tasks = ({ onLogout }) => {
       filtered = filtered.filter(task =>
         task.title.toLowerCase().includes(searchLower) ||
         task.description.toLowerCase().includes(searchLower) ||
-        task.assignedBy?.name?.toLowerCase().includes(searchLower)
+        task.assignedBy?.name?.toLowerCase().includes(searchLower) ||
+        task.project?.projectName?.toLowerCase().includes(searchLower)
       );
       trackCustomFilter(); // Track custom filter usage
     }
@@ -229,13 +231,14 @@ const Tasks = ({ onLogout }) => {
     }
 
     const csvContent = [
-      ['Title', 'Status', 'Priority', 'Due Date', 'Assigned By', 'Description'],
+      ['Title', 'Status', 'Priority', 'Due Date', 'Assigned By', 'Project', 'Description'],
       ...filteredTasks.map(task => [
         task.title || 'Untitled',
         task.status || 'Unknown',
         task.priority || 'Unknown',
         task.dueDate ? new Date(task.dueDate).toLocaleDateString() : 'No due date',
         task.assignedBy?.name || 'Unknown',
+        task.project?.projectName || 'No project',
         (task.description || 'No description').replace(/,/g, ';').replace(/"/g, '""') // Replace commas and escape quotes
       ])
     ].map(row => row.map(cell => `"${cell}"`).join(',')).join('\n');
