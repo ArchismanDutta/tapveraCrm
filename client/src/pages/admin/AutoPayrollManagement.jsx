@@ -141,7 +141,11 @@ const AutoPayrollManagement = ({ onLogout }) => {
 
         // Filter active employees with valid salary
         const activeEmployees = data.filter(
-          (user) => user.role === "employee" && user.status === "active"
+          (user) =>
+            (user.role === "employee" ||
+              user.role === "admin" ||
+              user.role === "hr") &&
+            user.status === "active"
         );
 
         // Debug logging - check salary structure
@@ -255,11 +259,18 @@ const AutoPayrollManagement = ({ onLogout }) => {
         const errorData = await response.json();
         const existingPayslipId = errorData.payslipId;
 
-        if (window.confirm("Payslip already exists for this period. Do you want to view it? (Cancel to keep preview open)")) {
+        if (
+          window.confirm(
+            "Payslip already exists for this period. Do you want to view it? (Cancel to keep preview open)"
+          )
+        ) {
           // Fetch and display existing payslip
-          const fetchResponse = await fetch(`${API_BASE}/api/payslips/id/${existingPayslipId}`, {
-            headers: { Authorization: `Bearer ${token}` }
-          });
+          const fetchResponse = await fetch(
+            `${API_BASE}/api/payslips/id/${existingPayslipId}`,
+            {
+              headers: { Authorization: `Bearer ${token}` },
+            }
+          );
 
           if (fetchResponse.ok) {
             const data = await fetchResponse.json();
@@ -387,25 +398,30 @@ const AutoPayrollManagement = ({ onLogout }) => {
 
       // If editing an existing payslip, use recalculate endpoint
       if (editingPayslip) {
-        const response = await fetch(`${API_BASE}/api/auto-payroll/recalculate/${editingPayslip._id}`, {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            workingDays: editFormData.workingDays,
-            paidDays: editFormData.paidDays,
-            lateDays: editFormData.lateDays,
-            halfDays: editFormData.halfDays,
-            manualDeductions: {
-              tds: editFormData.tds,
-              other: editFormData.other,
-              advance: editFormData.advance,
+        const response = await fetch(
+          `${API_BASE}/api/auto-payroll/recalculate/${editingPayslip._id}`,
+          {
+            method: "PUT",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
             },
-            remarks: editFormData.remarks || `Manually recalculated: Late days=${editFormData.lateDays}, Half days=${editFormData.halfDays}`,
-          }),
-        });
+            body: JSON.stringify({
+              workingDays: editFormData.workingDays,
+              paidDays: editFormData.paidDays,
+              lateDays: editFormData.lateDays,
+              halfDays: editFormData.halfDays,
+              manualDeductions: {
+                tds: editFormData.tds,
+                other: editFormData.other,
+                advance: editFormData.advance,
+              },
+              remarks:
+                editFormData.remarks ||
+                `Manually recalculated: Late days=${editFormData.lateDays}, Half days=${editFormData.halfDays}`,
+            }),
+          }
+        );
 
         if (response.ok) {
           const data = await response.json();
@@ -440,7 +456,9 @@ const AutoPayrollManagement = ({ onLogout }) => {
               other: editFormData.other,
               advance: editFormData.advance,
             },
-            remarks: editFormData.remarks || `Manually adjusted attendance: Late days=${editFormData.lateDays}, Half days=${editFormData.halfDays}`,
+            remarks:
+              editFormData.remarks ||
+              `Manually adjusted attendance: Late days=${editFormData.lateDays}, Half days=${editFormData.halfDays}`,
           }),
         });
 
@@ -451,25 +469,30 @@ const AutoPayrollManagement = ({ onLogout }) => {
 
           toast.info("Payslip already exists, recalculating...");
 
-          response = await fetch(`${API_BASE}/api/auto-payroll/recalculate/${existingPayslipId}`, {
-            method: "PUT",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${token}`,
-            },
-            body: JSON.stringify({
-              workingDays: editFormData.workingDays,
-              paidDays: editFormData.paidDays,
-              lateDays: editFormData.lateDays,
-              halfDays: editFormData.halfDays,
-              manualDeductions: {
-                tds: editFormData.tds,
-                other: editFormData.other,
-                advance: editFormData.advance,
+          response = await fetch(
+            `${API_BASE}/api/auto-payroll/recalculate/${existingPayslipId}`,
+            {
+              method: "PUT",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${token}`,
               },
-              remarks: editFormData.remarks || `Manually adjusted attendance: Late days=${editFormData.lateDays}, Half days=${editFormData.halfDays}`,
-            }),
-          });
+              body: JSON.stringify({
+                workingDays: editFormData.workingDays,
+                paidDays: editFormData.paidDays,
+                lateDays: editFormData.lateDays,
+                halfDays: editFormData.halfDays,
+                manualDeductions: {
+                  tds: editFormData.tds,
+                  other: editFormData.other,
+                  advance: editFormData.advance,
+                },
+                remarks:
+                  editFormData.remarks ||
+                  `Manually adjusted attendance: Late days=${editFormData.lateDays}, Half days=${editFormData.halfDays}`,
+              }),
+            }
+          );
         }
 
         if (response.ok) {
@@ -1037,7 +1060,9 @@ const AutoPayrollManagement = ({ onLogout }) => {
                 <div className="flex justify-between items-center mb-6">
                   <h2 className="text-2xl font-bold text-white flex items-center gap-2">
                     <Edit className="w-6 h-6 text-blue-400" />
-                    {editingPayslip ? "Edit & Recalculate Payslip" : "Edit Attendance & Deductions"}
+                    {editingPayslip
+                      ? "Edit & Recalculate Payslip"
+                      : "Edit Attendance & Deductions"}
                   </h2>
                   <button
                     onClick={() => {
@@ -1209,9 +1234,12 @@ const AutoPayrollManagement = ({ onLogout }) => {
                   >
                     <Save className="w-5 h-5" />
                     {loading
-                      ? (editingPayslip ? "Recalculating..." : "Generating...")
-                      : (editingPayslip ? "Save & Recalculate" : "Generate with Edits")
-                    }
+                      ? editingPayslip
+                        ? "Recalculating..."
+                        : "Generating..."
+                      : editingPayslip
+                      ? "Save & Recalculate"
+                      : "Generate with Edits"}
                   </button>
                   <button
                     onClick={() => {

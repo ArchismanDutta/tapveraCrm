@@ -1,5 +1,4 @@
 // services/email/emailService.js
-const gmailService = require('./gmailService');
 const smtpService = require('./smtpService');
 const EmailLog = require('../../models/EmailLog');
 
@@ -14,23 +13,16 @@ class EmailService {
   async initialize() {
     console.log('📧 Initializing Email Service...');
 
-    // Try to initialize Gmail API first
-    const gmailAvailable = gmailService.initialize();
-
-    // Initialize SMTP as fallback
+    // Initialize SMTP with App Password (no OAuth required)
     const smtpAvailable = smtpService.initialize();
 
-    if (!gmailAvailable && !smtpAvailable) {
-      console.error('❌ No email service available! Please configure Gmail API or SMTP.');
+    if (!smtpAvailable) {
+      console.error('❌ SMTP not configured! Please set EMAIL_USER and EMAIL_PASS (Gmail App Password).');
       this.initialized = false;
       return false;
     }
 
-    if (gmailAvailable) {
-      console.log('✅ Email Service ready (Primary: Gmail API, Fallback: SMTP)');
-    } else {
-      console.log('✅ Email Service ready (SMTP only)');
-    }
+    console.log('✅ Email Service ready (SMTP with App Password)');
 
     this.initialized = true;
     return true;
@@ -82,40 +74,20 @@ class EmailService {
       relatedTask,
       relatedMessage,
       status: 'pending',
-      deliveryMethod: 'gmail_api', // We'll update this based on actual method
+      deliveryMethod: 'smtp', // Using SMTP with App Password
       metadata
     });
 
     try {
       let result;
-      let deliveryMethod;
+      let deliveryMethod = 'smtp';
 
-      // Try Gmail API first
-      if (gmailService.isAvailable()) {
-        try {
-          result = await gmailService.sendEmail({ to, cc, bcc, subject, html, text });
-          deliveryMethod = 'gmail_api';
-          console.log(`✅ Email sent via Gmail API to ${to}`);
-        } catch (gmailError) {
-          console.warn(`⚠️  Gmail API failed for ${to}, trying SMTP fallback...`);
-          console.error('Gmail error:', gmailError.message);
-
-          // Fallback to SMTP
-          if (smtpService.isAvailable()) {
-            result = await smtpService.sendEmail({ to, cc, bcc, subject, html, text });
-            deliveryMethod = 'fallback_smtp';
-            console.log(`✅ Email sent via SMTP fallback to ${to}`);
-          } else {
-            throw new Error('Both Gmail API and SMTP failed');
-          }
-        }
-      } else if (smtpService.isAvailable()) {
-        // Use SMTP directly if Gmail not available
+      // Send email via SMTP with App Password
+      if (smtpService.isAvailable()) {
         result = await smtpService.sendEmail({ to, cc, bcc, subject, html, text });
-        deliveryMethod = 'smtp';
         console.log(`✅ Email sent via SMTP to ${to}`);
       } else {
-        throw new Error('No email service available');
+        throw new Error('SMTP service not available. Please configure EMAIL_USER and EMAIL_PASS.');
       }
 
       // Update log with success

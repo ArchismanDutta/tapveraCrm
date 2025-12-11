@@ -1,99 +1,94 @@
-# Quick Email Setup Guide
+# Quick Email Setup Guide - Gmail App Password (UPDATED)
 
-## Problem
-Client emails are not being sent because Gmail API is not configured.
+## What Changed?
+We've switched from OAuth (Gmail API) to **Gmail App Passwords** because:
+- ✅ No more refresh token expiry issues
+- ✅ More stable and reliable
+- ✅ Simpler setup - no OAuth configuration needed
+- ✅ Perfect for automated system emails
 
-## Solution - Follow These Steps:
+---
 
-### Step 1: Update .env with Gmail Credentials
-You said you already have Gmail Client ID and Secret. Update these lines in `server/.env`:
+## Setup Steps (5 Minutes)
 
-```env
-GMAIL_CLIENT_ID=YOUR_ACTUAL_CLIENT_ID.apps.googleusercontent.com
-GMAIL_CLIENT_SECRET=YOUR_ACTUAL_CLIENT_SECRET
-```
+### Step 1: Enable 2-Factor Authentication
 
-### Step 2: Generate Refresh Token
+1. Go to [Google Account Security](https://myaccount.google.com/security)
+2. Click on **2-Step Verification**
+3. Follow the prompts to enable it (if not already enabled)
 
-Run this command to generate the refresh token:
+### Step 2: Generate Gmail App Password
 
-```bash
-cd server
-node scripts/setupGmail.js
-```
+1. Go to [App Passwords](https://myaccount.google.com/apppasswords)
+2. Sign in if prompted
+3. Under "Select app", choose **Mail**
+4. Under "Select device", choose **Other (Custom name)**
+5. Type: **Tapvera CRM**
+6. Click **Generate**
+7. **Copy the 16-character password** (it will look like: `abcd efgh ijkl mnop`)
+8. Remove the spaces: `abcdefghijklmnop`
 
-This will:
-1. Show you an authorization URL
-2. You open it in browser
-3. Sign in with **tapveratechnologies@gmail.com**
-4. Grant permissions
-5. Copy the authorization code
-6. Paste it back into the terminal
-7. It will give you the `GMAIL_REFRESH_TOKEN`
+### Step 3: Update .env File
 
-### Step 3: Add Refresh Token to .env
-
-Copy the refresh token from the terminal output and add it to your `.env`:
+Update your `server/.env` with these values:
 
 ```env
-GMAIL_REFRESH_TOKEN=the-long-refresh-token-you-got
+EMAIL_HOST=smtp.gmail.com
+EMAIL_PORT=587
+EMAIL_USER=tapveratechnologies@gmail.com
+EMAIL_PASS=abcdefghijklmnop
 ```
+
+**Replace `abcdefghijklmnop` with your actual 16-character app password (no spaces)**
 
 ### Step 4: Restart Server
 
 Stop the server (Ctrl+C) and restart it:
 
 ```bash
+cd server
 npm start
 ```
 
 You should see:
 ```
-✅ Gmail API initialized successfully
-✅ Email service ready (Primary: Gmail API, Fallback: SMTP)
+✅ Email Service ready (SMTP with App Password)
 ```
 
 ### Step 5: Test by Creating a Client
 
 Create a new client account and check:
-1. The console should show: `✅ Welcome email sent to client@email.com`
+1. The console should show: `✅ Email sent via SMTP to client@email.com`
 2. Check the client's email inbox (including spam folder)
-
----
-
-## Alternative: Use SMTP Only (Simpler)
-
-If you can't set up Gmail API, you can use SMTP instead:
-
-1. Go to [Google Account Security](https://myaccount.google.com/security)
-2. Enable 2-Step Verification
-3. Go to "App passwords"
-4. Generate a new app password for "Mail"
-5. Update `.env`:
-
-```env
-EMAIL_HOST=smtp.gmail.com
-EMAIL_PORT=587
-EMAIL_USER=tapveratechnologies@gmail.com
-EMAIL_PASS=your-16-character-app-password
-```
 
 ---
 
 ## Troubleshooting
 
-### Error: "Gmail API credentials not configured"
-- Make sure you've added `GMAIL_CLIENT_ID`, `GMAIL_CLIENT_SECRET`, and `GMAIL_REFRESH_TOKEN` to `.env`
+### Error: "SMTP not configured"
+- Make sure you've added `EMAIL_USER` and `EMAIL_PASS` to `.env`
+- Ensure EMAIL_PASS is your App Password (16 characters, no spaces)
 - Restart the server after updating `.env`
 
-### Error: "Invalid grant"
-- Your refresh token expired
-- Run `node scripts/setupGmail.js` again to generate a new one
+### Error: "Invalid login" or "Authentication failed"
+- Your app password is incorrect
+- Go back to [App Passwords](https://myaccount.google.com/apppasswords) and generate a new one
+- Update `EMAIL_PASS` in `.env`
+
+### Error: "Connection timeout"
+- Check your internet connection
+- Make sure port 587 is not blocked by firewall
+- Try port 465 with SSL instead (update `EMAIL_PORT=465` in `.env`)
 
 ### Email not received
 - Check spam/junk folder
 - Check server console for error messages
-- Verify `FRONTEND_URL` is set correctly in `.env`
+- Verify the recipient email address is correct
+- Check Gmail account's "Sent" folder to confirm it was sent
+
+### Error: "Daily sending limit exceeded"
+- Gmail has a limit of ~500 emails per day for regular accounts
+- Wait 24 hours or upgrade to Google Workspace for higher limits
 
 ---
 
@@ -102,10 +97,26 @@ EMAIL_PASS=your-16-character-app-password
 Your `.env` should have these lines:
 
 ```env
-FRONTEND_URL=http://localhost:5173
+# Email Configuration
+EMAIL_HOST=smtp.gmail.com
+EMAIL_PORT=587
+EMAIL_USER=tapveratechnologies@gmail.com
+EMAIL_PASS=your_16_character_app_password_here
 
-GMAIL_CLIENT_ID=your-client-id.apps.googleusercontent.com
-GMAIL_CLIENT_SECRET=your-client-secret
-GMAIL_REFRESH_TOKEN=your-refresh-token
-GMAIL_USER=tapveratechnologies@gmail.com
+# Frontend URL (for links in emails)
+FRONTEND_URL=http://localhost:5173
+```
+
+---
+
+## Old OAuth Method (Deprecated)
+
+The Gmail API with OAuth method is no longer recommended due to refresh token expiry issues. If you have old OAuth credentials in your `.env`, you can safely remove them:
+
+```env
+# These are no longer needed:
+# GMAIL_CLIENT_ID=
+# GMAIL_CLIENT_SECRET=
+# GMAIL_REFRESH_TOKEN=
+# GMAIL_REDIRECT_URI=
 ```

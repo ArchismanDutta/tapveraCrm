@@ -23,7 +23,8 @@ import {
   MoreVertical,
   AlertCircle,
   TrendingUp,
-  Activity
+  Activity,
+  Send
 } from "lucide-react";
 import Sidebar from "../components/dashboard/Sidebar";
 
@@ -126,6 +127,13 @@ const ClientsPage = ({ onLogout }) => {
   const [selectedClient, setSelectedClient] = useState(null);
   const [notification, setNotification] = useState(null);
   const [userRole, setUserRole] = useState("admin"); // Default to admin
+  const [showBulkEmailModal, setShowBulkEmailModal] = useState(false);
+  const [bulkEmailForm, setBulkEmailForm] = useState({
+    subject: "",
+    body: "",
+  });
+  const [selectedClientIds, setSelectedClientIds] = useState([]);
+  const [sendingBulkEmail, setSendingBulkEmail] = useState(false);
   const [form, setForm] = useState({
     clientName: "",
     businessName: "",
@@ -275,6 +283,66 @@ const ClientsPage = ({ onLogout }) => {
   const showNotification = (message, type) => {
     setNotification({ message, type });
     setTimeout(() => setNotification(null), 3000);
+  };
+
+  const handleOpenBulkEmail = () => {
+    // Select all filtered clients by default
+    const allClientIds = filteredAndSortedClients.map(c => c._id);
+    setSelectedClientIds(allClientIds);
+    setShowBulkEmailModal(true);
+  };
+
+  const toggleClientSelection = (clientId) => {
+    setSelectedClientIds(prev =>
+      prev.includes(clientId)
+        ? prev.filter(id => id !== clientId)
+        : [...prev, clientId]
+    );
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedClientIds.length === filteredAndSortedClients.length) {
+      setSelectedClientIds([]);
+    } else {
+      setSelectedClientIds(filteredAndSortedClients.map(c => c._id));
+    }
+  };
+
+  const handleSendBulkEmail = async () => {
+    if (selectedClientIds.length === 0) {
+      showNotification("Please select at least one client", "error");
+      return;
+    }
+
+    if (!bulkEmailForm.subject.trim() || !bulkEmailForm.body.trim()) {
+      showNotification("Please enter both subject and body", "error");
+      return;
+    }
+
+    setSendingBulkEmail(true);
+    try {
+      const response = await API.post("/api/clients/bulk-email", {
+        clientIds: selectedClientIds,
+        subject: bulkEmailForm.subject,
+        body: bulkEmailForm.body,
+      });
+
+      showNotification(
+        `Email sent successfully to ${response.data.successCount} client(s)`,
+        "success"
+      );
+      setShowBulkEmailModal(false);
+      setBulkEmailForm({ subject: "", body: "" });
+      setSelectedClientIds([]);
+    } catch (error) {
+      showNotification(
+        error.response?.data?.message || "Error sending bulk emails",
+        "error"
+      );
+      console.error("Error sending bulk emails:", error);
+    } finally {
+      setSendingBulkEmail(false);
+    }
   };
 
   const exportToCSV = () => {
@@ -602,6 +670,17 @@ const ClientsPage = ({ onLogout }) => {
                   className="w-full pl-10 pr-4 py-2 bg-[#0f1419] border border-[#232945] rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 transition-colors"
                 />
               </div>
+
+              {/* Bulk Email Button */}
+              <button
+                onClick={handleOpenBulkEmail}
+                disabled={clients.length === 0}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white border border-purple-500/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Send bulk email to clients"
+              >
+                <Send className="w-4 h-4" />
+                <span className="hidden sm:inline">Bulk Email</span>
+              </button>
 
               {/* Filter Dropdown */}
               <select
@@ -992,6 +1071,150 @@ const ClientsPage = ({ onLogout }) => {
             >
               Close
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Email Modal */}
+      {showBulkEmailModal && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-[#191f2b] rounded-xl shadow-2xl border border-purple-500/50 p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <div className="p-3 rounded-full bg-purple-500/20">
+                  <Send className="w-6 h-6 text-purple-400" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-semibold text-white">Send Bulk Email</h3>
+                  <p className="text-sm text-gray-400">
+                    {selectedClientIds.length} of {filteredAndSortedClients.length} clients selected
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setShowBulkEmailModal(false);
+                  setBulkEmailForm({ subject: "", body: "" });
+                  setSelectedClientIds([]);
+                }}
+                className="text-gray-400 hover:text-white transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Client Selection Panel */}
+              <div className="lg:col-span-1">
+                <div className="bg-[#0f1419] rounded-lg border border-[#232945] p-4">
+                  <div className="flex items-center justify-between mb-4">
+                    <h4 className="text-sm font-semibold text-white">Select Recipients</h4>
+                    <button
+                      onClick={toggleSelectAll}
+                      className="text-xs text-purple-400 hover:text-purple-300 transition-colors"
+                    >
+                      {selectedClientIds.length === filteredAndSortedClients.length ? "Deselect All" : "Select All"}
+                    </button>
+                  </div>
+
+                  <div className="space-y-2 max-h-96 overflow-y-auto">
+                    {filteredAndSortedClients.map((client) => (
+                      <label
+                        key={client._id}
+                        className="flex items-center gap-3 p-3 rounded-lg bg-[#141a21] hover:bg-[#1a2028] transition-colors cursor-pointer border border-[#232945]"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedClientIds.includes(client._id)}
+                          onChange={() => toggleClientSelection(client._id)}
+                          className="w-4 h-4 rounded text-purple-600 focus:ring-purple-500 focus:ring-offset-0"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-white truncate">
+                            {client.clientName}
+                          </p>
+                          <p className="text-xs text-gray-400 truncate">{client.email}</p>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Email Composition Panel */}
+              <div className="lg:col-span-2 space-y-4">
+                <div>
+                  <label className="block text-sm text-gray-400 mb-2">Subject *</label>
+                  <input
+                    type="text"
+                    placeholder="Enter email subject..."
+                    value={bulkEmailForm.subject}
+                    onChange={(e) => setBulkEmailForm({ ...bulkEmailForm, subject: e.target.value })}
+                    className="w-full px-4 py-3 bg-[#0f1419] border border-[#232945] rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 transition-colors"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm text-gray-400 mb-2">Message Body *</label>
+                  <textarea
+                    placeholder="Enter your message here..."
+                    value={bulkEmailForm.body}
+                    onChange={(e) => setBulkEmailForm({ ...bulkEmailForm, body: e.target.value })}
+                    rows={12}
+                    className="w-full px-4 py-3 bg-[#0f1419] border border-[#232945] rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 transition-colors resize-none"
+                    required
+                  />
+                  <p className="text-xs text-gray-500 mt-2">
+                    Tip: You can use HTML tags for formatting (e.g., &lt;b&gt;bold&lt;/b&gt;, &lt;br/&gt; for line breaks)
+                  </p>
+                </div>
+
+                <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
+                  <div className="flex items-start gap-2">
+                    <Mail className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" />
+                    <div className="text-sm text-blue-300">
+                      <p className="font-semibold mb-1">Email Preview</p>
+                      <p>
+                        This email will be sent to {selectedClientIds.length} client{selectedClientIds.length !== 1 ? 's' : ''}.
+                        Each client will receive an individual email.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex gap-3 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowBulkEmailModal(false);
+                      setBulkEmailForm({ subject: "", body: "" });
+                      setSelectedClientIds([]);
+                    }}
+                    className="flex-1 px-4 py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleSendBulkEmail}
+                    disabled={sendingBulkEmail || selectedClientIds.length === 0}
+                    className="flex-1 px-4 py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  >
+                    {sendingBulkEmail ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin"></div>
+                        Sending...
+                      </>
+                    ) : (
+                      <>
+                        <Send className="w-4 h-4" />
+                        Send to {selectedClientIds.length} Client{selectedClientIds.length !== 1 ? 's' : ''}
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       )}

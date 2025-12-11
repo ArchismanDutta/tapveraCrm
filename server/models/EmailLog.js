@@ -45,7 +45,8 @@ const emailLogSchema = new mongoose.Schema({
       'message_received',
       'project_created',
       'project_updated',
-      'project_message'
+      'project_message',
+      'bulk_email'
     ],
     required: true,
     index: true

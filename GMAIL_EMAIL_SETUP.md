@@ -1,13 +1,40 @@
-# Gmail Email Notification System - Implementation Guide
+# ⚠️ DEPRECATED - Gmail OAuth Email Setup
 
-## 📋 Overview
+## ⚠️ THIS GUIDE IS DEPRECATED
 
-Complete production-ready Gmail email notification system for Tapvera CRM with:
-- ✅ Gmail API (OAuth2) as primary method
-- ✅ SMTP as automatic fallback
+**This OAuth-based Gmail API setup is no longer recommended due to refresh token expiry issues.**
+
+**Please use the new Gmail App Password method instead:**
+- 📄 See `QUICK_EMAIL_SETUP.md` for the updated guide
+- ✅ Simpler setup (no OAuth complexity)
+- ✅ No refresh token expiry issues
+- ✅ More stable for production use
+
+---
+
+## 📋 Overview (OLD METHOD - NOT RECOMMENDED)
+
+~~Complete production-ready Gmail email notification system for Tapvera CRM with:~~
+- ❌ Gmail API (OAuth2) - **DEPRECATED** due to token expiry issues
+- ✅ SMTP with App Password - **NEW RECOMMENDED METHOD**
 - ✅ Email logging and tracking
 - ✅ Automatic retry for failed emails
 - ✅ Notifications for all CRM events
+
+---
+
+## Why This Method Was Deprecated
+
+1. **Refresh Token Expiry**: OAuth refresh tokens expire after 6 months of inactivity
+2. **Testing Mode Limits**: Unverified apps have strict token expiration
+3. **Complex Setup**: Requires Google Cloud Console configuration
+4. **Maintenance Overhead**: Tokens need periodic regeneration
+
+**Solution**: Use Gmail App Passwords (see `QUICK_EMAIL_SETUP.md`)
+
+---
+
+# OLD DOCUMENTATION BELOW (FOR REFERENCE ONLY)
 
 ---
 
