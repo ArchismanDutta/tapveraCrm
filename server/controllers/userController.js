@@ -254,7 +254,7 @@ exports.getEmployeeDirectory = async (req, res) => {
     }
 
     const employees = await User.find(filter)
-      .select("_id employeeId name email contact department designation jobLevel status shiftType regions region")
+      .select("_id employeeId name email contact department designation jobLevel status shiftType regions region position positionLevel")
       .sort({ name: 1 });
 
     const employeesWithStatus = employees.map(emp => ({

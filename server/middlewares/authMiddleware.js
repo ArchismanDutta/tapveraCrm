@@ -66,6 +66,8 @@ exports.protect = async (req, res, next) => {
         email: user.email,
         role: user.role, // e.g. hr, admin, employee, super-admin
         department: user.department || "Unknown",
+        position: user.position || "",
+        positionLevel: user.positionLevel || 0,
         avatar: user.avatar || "",
         userType: "User",
         regions: user.regions || [user.region] || ['Global'], // CRITICAL: Include regions for filtering

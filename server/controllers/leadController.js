@@ -1,9 +1,49 @@
 const Lead = require("../models/Lead");
 const User = require("../models/User");
+const Position = require("../models/Position");
+const {
+  getAccessibleUserIds,
+  canAccessUserData,
+  hasPermission,
+  buildHierarchicalQuery
+} = require("../utils/hierarchyUtils");
 
 // Helper function to check if user has access to Lead Management
-const canAccessLeadManagement = (user) => {
-  return user.role === "super-admin" || user.role === "admin" || user.department === "marketingAndSales";
+const canAccessLeadManagement = async (user) => {
+  // Super-admin and admin always have access
+  if (user.role === "super-admin" || user.role === "admin") {
+    return true;
+  }
+
+  // Marketing & Sales department has access
+  if (user.department === "marketingAndSales") {
+    return true;
+  }
+
+  // Check if user has a position with lead management permissions
+  if (user.position && user.position.trim() !== "") {
+    try {
+      const position = await Position.findOne({
+        name: user.position,
+        status: "active"
+      });
+
+      if (position) {
+        // If user has any lead-related permissions, grant access
+        if (
+          position.permissions?.canViewSubordinateLeads ||
+          position.permissions?.canEditSubordinateLeads ||
+          position.permissions?.canViewDepartmentLeads
+        ) {
+          return true;
+        }
+      }
+    } catch (error) {
+      console.error("Error checking position permissions:", error);
+    }
+  }
+
+  return false;
 };
 
 // @desc    Create a new lead
@@ -12,9 +52,9 @@ const canAccessLeadManagement = (user) => {
 exports.createLead = async (req, res) => {
   try {
     // Check access permissions
-    if (!canAccessLeadManagement(req.user)) {
+    if (!(await canAccessLeadManagement(req.user))) {
       return res.status(403).json({
-        message: "Access denied. Lead management is only available to Super Admin and Marketing & Sales department."
+        message: "Access denied. Lead management is only available to Super Admin, Marketing & Sales department, or users with lead management permissions."
       });
     }
 
@@ -49,24 +89,36 @@ exports.createLead = async (req, res) => {
 
     // Determine who to assign the lead to
     let assignedToUser = assignedTo;
+    const isSuperAdmin = req.user.role === "super-admin" || req.user.role === "admin";
 
-    if (req.user.role === "super-admin" || req.user.role === "admin" || req.user.role === "admin") {
-      // Super-admin and admin can assign to anyone
-      if (!assignedToUser) {
-        // If not provided, assign to current user
-        assignedToUser = req.user._id;
-      } else {
-        // Validate assignedTo user exists
-        const userExists = await User.findById(assignedToUser);
-        if (!userExists) {
-          return res.status(404).json({ message: "Assigned user not found" });
-        }
-      }
-    } else {
-      // Regular employees can only assign to themselves
+    if (!assignedToUser) {
+      // If not provided, assign to current user
       assignedToUser = req.user._id;
-      if (assignedTo && assignedTo !== req.user._id.toString()) {
-        return res.status(403).json({ message: "You can only assign leads to yourself. Admins can assign to anyone." });
+    } else {
+      // Validate assignedTo user exists
+      const userExists = await User.findById(assignedToUser);
+      if (!userExists) {
+        return res.status(404).json({ message: "Assigned user not found" });
+      }
+
+      // Check if user can assign to this target user
+      if (assignedToUser !== req.user._id.toString()) {
+        // Not assigning to self, check permissions
+        const canAssignToSubordinates = await hasPermission(req.user, "canAssignToSubordinates");
+
+        if (!isSuperAdmin && !canAssignToSubordinates) {
+          return res.status(403).json({
+            message: "You can only assign leads to yourself. Supervisors and admins can assign to subordinates."
+          });
+        }
+
+        // Check if target user is accessible (subordinate or team member)
+        const canAccessTarget = await canAccessUserData(req.user, assignedToUser);
+        if (!canAccessTarget && !isSuperAdmin) {
+          return res.status(403).json({
+            message: "You can only assign leads to yourself or your subordinates."
+          });
+        }
       }
     }
 
@@ -118,9 +170,9 @@ exports.createLead = async (req, res) => {
 exports.getLeads = async (req, res) => {
   try {
     // Check access permissions
-    if (!canAccessLeadManagement(req.user)) {
+    if (!(await canAccessLeadManagement(req.user))) {
       return res.status(403).json({
-        message: "Access denied. Lead management is only available to Super Admin and Marketing & Sales department."
+        message: "Access denied. Lead management is only available to Super Admin, Marketing & Sales department, or users with lead management permissions."
       });
     }
 
@@ -129,13 +181,22 @@ exports.getLeads = async (req, res) => {
     // Build filter
     const filter = {};
 
-    // Role-based filtering
-    if (req.user.role !== "super-admin" && req.user.role !== "admin") {
-      // Non-super-admin users can only see their assigned leads
-      filter.assignedTo = req.user._id;
-    } else if (assignedTo) {
-      // Super-admins can filter by assignedTo
+    // Hierarchical access control
+    const accessibleUserIds = await getAccessibleUserIds(req.user);
+
+    // Apply hierarchical filtering
+    if (assignedTo) {
+      // If specific user requested, check if current user can access them
+      const canAccess = await canAccessUserData(req.user, assignedTo);
+      if (!canAccess) {
+        return res.status(403).json({
+          message: "You don't have permission to view leads for this user"
+        });
+      }
       filter.assignedTo = assignedTo;
+    } else {
+      // Show leads for all accessible users (self + subordinates based on position)
+      filter.assignedTo = { $in: accessibleUserIds };
     }
 
     // Additional filters
@@ -190,9 +251,9 @@ exports.getLeads = async (req, res) => {
 exports.getLeadById = async (req, res) => {
   try {
     // Check access permissions
-    if (!canAccessLeadManagement(req.user)) {
+    if (!(await canAccessLeadManagement(req.user))) {
       return res.status(403).json({
-        message: "Access denied. Lead management is only available to Super Admin and Marketing & Sales department."
+        message: "Access denied. Lead management is only available to Super Admin, Marketing & Sales department, or users with lead management permissions."
       });
     }
 
@@ -204,12 +265,12 @@ exports.getLeadById = async (req, res) => {
       return res.status(404).json({ message: "Lead not found" });
     }
 
-    // Check access permissions for assigned leads
-    if (
-      req.user.role !== "super-admin" && req.user.role !== "admin" &&
-      lead.assignedTo._id.toString() !== req.user._id.toString()
-    ) {
-      return res.status(403).json({ message: "Access denied. You can only view your assigned leads." });
+    // Check hierarchical access permissions
+    const canAccess = await canAccessUserData(req.user, lead.assignedTo._id);
+    if (!canAccess) {
+      return res.status(403).json({
+        message: "Access denied. You can only view leads assigned to you or your subordinates."
+      });
     }
 
     res.json({
@@ -231,9 +292,9 @@ exports.getLeadById = async (req, res) => {
 exports.updateLead = async (req, res) => {
   try {
     // Check access permissions
-    if (!canAccessLeadManagement(req.user)) {
+    if (!(await canAccessLeadManagement(req.user))) {
       return res.status(403).json({
-        message: "Access denied. Lead management is only available to Super Admin and Marketing & Sales department."
+        message: "Access denied. Lead management is only available to Super Admin, Marketing & Sales department, or users with lead management permissions."
       });
     }
 
@@ -243,17 +304,42 @@ exports.updateLead = async (req, res) => {
       return res.status(404).json({ message: "Lead not found" });
     }
 
-    // Check permissions
-    const isAssigned = lead.assignedTo.toString() === req.user._id.toString();
-    const isSuperAdmin = req.user.role === "super-admin" || req.user.role === "admin";
-
-    if (!isAssigned && !isSuperAdmin) {
-      return res.status(403).json({ message: "Access denied. You can only edit your assigned leads." });
+    // Check hierarchical access permissions
+    const canAccess = await canAccessUserData(req.user, lead.assignedTo);
+    if (!canAccess) {
+      return res.status(403).json({
+        message: "Access denied. You can only edit leads assigned to you or your subordinates."
+      });
     }
 
-    // Non-super-admin cannot reassign leads to others
-    if (!isSuperAdmin && req.body.assignedTo && req.body.assignedTo !== req.user._id.toString()) {
-      return res.status(403).json({ message: "You cannot reassign leads. Only Super Admin can reassign." });
+    // Check if user can edit subordinate leads
+    const isOwnLead = lead.assignedTo.toString() === req.user._id.toString();
+    const canEditSubordinate = await hasPermission(req.user, "canEditSubordinateLeads");
+    const isSuperAdmin = req.user.role === "super-admin" || req.user.role === "admin";
+
+    if (!isOwnLead && !canEditSubordinate && !isSuperAdmin) {
+      return res.status(403).json({
+        message: "You don't have permission to edit subordinate leads. Contact your supervisor."
+      });
+    }
+
+    // Check if user can reassign leads
+    if (req.body.assignedTo && req.body.assignedTo !== lead.assignedTo.toString()) {
+      const canAssignToSubordinates = await hasPermission(req.user, "canAssignToSubordinates");
+
+      if (!isSuperAdmin && !canAssignToSubordinates) {
+        return res.status(403).json({
+          message: "You don't have permission to reassign leads. Only supervisors and admins can reassign."
+        });
+      }
+
+      // If user can reassign, check if target user is accessible
+      const canAccessTarget = await canAccessUserData(req.user, req.body.assignedTo);
+      if (!canAccessTarget) {
+        return res.status(403).json({
+          message: "You can only reassign leads to yourself or your subordinates."
+        });
+      }
     }
 
     // Update last contacted date if status changed to contacted
@@ -294,9 +380,9 @@ exports.updateLead = async (req, res) => {
 exports.deleteLead = async (req, res) => {
   try {
     // Check access permissions
-    if (!canAccessLeadManagement(req.user)) {
+    if (!(await canAccessLeadManagement(req.user))) {
       return res.status(403).json({
-        message: "Access denied. Lead management is only available to Super Admin and Marketing & Sales department."
+        message: "Access denied. Lead management is only available to Super Admin, Marketing & Sales department, or users with lead management permissions."
       });
     }
 
@@ -332,18 +418,17 @@ exports.deleteLead = async (req, res) => {
 exports.getLeadStats = async (req, res) => {
   try {
     // Check access permissions
-    if (!canAccessLeadManagement(req.user)) {
+    if (!(await canAccessLeadManagement(req.user))) {
       return res.status(403).json({
-        message: "Access denied. Lead management is only available to Super Admin and Marketing & Sales department."
+        message: "Access denied. Lead management is only available to Super Admin, Marketing & Sales department, or users with lead management permissions."
       });
     }
 
-    const filter = {};
-
-    // Filter by user role
-    if (req.user.role !== "super-admin" && req.user.role !== "admin") {
-      filter.assignedTo = req.user._id;
-    }
+    // Hierarchical access control for stats
+    const accessibleUserIds = await getAccessibleUserIds(req.user);
+    const filter = {
+      assignedTo: { $in: accessibleUserIds }
+    };
 
     const stats = await Lead.aggregate([
       { $match: filter },
@@ -382,10 +467,17 @@ exports.getLeadStats = async (req, res) => {
 // @access  Private (Super-admin only)
 exports.lookupLead = async (req, res) => {
   try {
-    // Only super-admin can use lookup
+    // Check access permissions
+    if (!(await canAccessLeadManagement(req.user))) {
+      return res.status(403).json({
+        message: "Access denied. Lead management is only available to Super Admin, Marketing & Sales department, or users with lead management permissions."
+      });
+    }
+
+    // Only super-admin and admin can use lookup
     if (req.user.role !== "super-admin" && req.user.role !== "admin") {
       return res.status(403).json({
-        message: "Access denied. Lead lookup is only available to Super Admin."
+        message: "Access denied. Lead lookup is only available to Super Admin and Admin."
       });
     }
 

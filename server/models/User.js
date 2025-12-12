@@ -66,6 +66,18 @@ const userSchema = new mongoose.Schema(
       trim: true,
       default: ""
     },
+    position: {
+      type: String,
+      trim: true,
+      default: "",
+      index: true
+    },
+    positionLevel: {
+      type: Number,
+      default: 0,
+      min: 0,
+      max: 100
+    },
     jobLevel: { type: String, enum: ["intern", "junior", "mid", "senior", "lead", "director", "executive"], default: "junior" },
     employmentType: { type: String, enum: ["full-time", "part-time", "contract", "internship"], default: "full-time" },
     skills: [{ type: String, trim: true }],

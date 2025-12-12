@@ -117,6 +117,42 @@ const callbackSchema = new mongoose.Schema(
     reminderSentDate: {
       type: Date,
     },
+
+    // Transfer fields
+    transferStatus: {
+      type: String,
+      enum: ["Not Transferred", "Transferred", "Accepted", "Rejected", "Completed"],
+      default: "Not Transferred",
+      index: true,
+    },
+
+    transferredTo: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+    },
+
+    transferredBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+    },
+
+    transferredAt: {
+      type: Date,
+    },
+
+    transferRemarks: {
+      type: String,
+      trim: true,
+    },
+
+    transferCompletedAt: {
+      type: Date,
+    },
+
+    transferCompletedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+    },
   },
   {
     timestamps: true,

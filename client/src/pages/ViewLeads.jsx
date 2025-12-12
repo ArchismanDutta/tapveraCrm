@@ -15,6 +15,7 @@ import {
   Eye,
   PhoneCall,
   User,
+  Users,
   MapPin,
 } from "lucide-react";
 import Sidebar from "../components/dashboard/Sidebar";
@@ -35,6 +36,7 @@ const ViewLeads = ({ onLogout }) => {
   const [loading, setLoading] = useState(true);
   const [userRole, setUserRole] = useState("employee");
   const [userDepartment, setUserDepartment] = useState("");
+  const [userPosition, setUserPosition] = useState("");
   const [currentUser, setCurrentUser] = useState(null);
   const [employees, setEmployees] = useState([]);
   const [stats, setStats] = useState({
@@ -49,6 +51,7 @@ const ViewLeads = ({ onLogout }) => {
   const [priorityFilter, setPriorityFilter] = useState("");
   const [sourceFilter, setSourceFilter] = useState("");
   const [assignedToFilter, setAssignedToFilter] = useState("");
+  const [viewMode, setViewMode] = useState("team"); // "my" or "team"
 
   // View Modal
   const [viewModalOpen, setViewModalOpen] = useState(false);
@@ -70,17 +73,21 @@ const ViewLeads = ({ onLogout }) => {
       setUserRole(user.role);
       setCurrentUser(user);
       setUserDepartment(user.department || "");
+      setUserPosition(user.position || "");
     }
     fetchLeads();
     fetchStats();
-    if (["admin", "super-admin", "hr"].includes(user?.role)) {
+    if (["admin", "super-admin", "hr"].includes(user?.role) ||
+        (user?.position && (user.position.toLowerCase().includes("supervisor") ||
+          user.position.toLowerCase().includes("team lead") ||
+          user.position.toLowerCase().includes("manager")))) {
       fetchEmployees();
     }
   }, []);
 
   useEffect(() => {
     filterLeads();
-  }, [leads, searchTerm, statusFilter, priorityFilter, sourceFilter, assignedToFilter]);
+  }, [leads, searchTerm, statusFilter, priorityFilter, sourceFilter, assignedToFilter, viewMode]);
 
   const fetchLeads = async () => {
     try {
@@ -135,6 +142,11 @@ const ViewLeads = ({ onLogout }) => {
 
   const filterLeads = () => {
     let filtered = [...leads];
+
+    // View mode filter (for supervisors)
+    if (viewMode === "my" && currentUser) {
+      filtered = filtered.filter((lead) => lead.assignedTo?._id === currentUser._id);
+    }
 
     // Search filter
     if (searchTerm) {
@@ -212,6 +224,7 @@ const ViewLeads = ({ onLogout }) => {
     setPriorityFilter("");
     setSourceFilter("");
     setAssignedToFilter("");
+    setViewMode("team");
   };
 
   // Super Admin Lookup Function
@@ -402,9 +415,21 @@ const ViewLeads = ({ onLogout }) => {
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
             <div>
               <h1 className="text-4xl font-bold bg-gradient-to-r from-cyan-400 to-blue-400 bg-clip-text text-transparent mb-2">
-                Lead Management
+                {userPosition && (userPosition.toLowerCase().includes("supervisor") ||
+                  userPosition.toLowerCase().includes("team lead") ||
+                  userPosition.toLowerCase().includes("manager"))
+                  ? "Team Lead Management"
+                  : userRole === "admin" || userRole === "super-admin"
+                  ? "Lead Management"
+                  : "My Leads"}
               </h1>
-              <p className="text-gray-400">Track and manage your sales leads</p>
+              <p className="text-gray-400">
+                {userPosition && (userPosition.toLowerCase().includes("supervisor") ||
+                  userPosition.toLowerCase().includes("team lead") ||
+                  userPosition.toLowerCase().includes("manager"))
+                  ? "Track and manage your team's sales leads"
+                  : "Track and manage your sales leads"}
+              </p>
             </div>
             {(userRole === "super-admin" || userDepartment === "marketingAndSales") && (
               <button
@@ -456,6 +481,49 @@ const ViewLeads = ({ onLogout }) => {
             </div>
           </div>
         </div>
+
+        {/* View Mode Filter for Supervisors */}
+        {userPosition && (userPosition.toLowerCase().includes("supervisor") ||
+          userPosition.toLowerCase().includes("team lead") ||
+          userPosition.toLowerCase().includes("manager")) && (
+          <div className="bg-gradient-to-br from-cyan-500/10 to-blue-500/10 backdrop-blur-sm rounded-xl p-6 border border-cyan-500/30 mb-6">
+            <h3 className="text-lg font-semibold text-cyan-400 mb-4 flex items-center gap-2">
+              <Filter className="h-5 w-5" />
+              View Mode
+            </h3>
+            <div className="flex flex-wrap gap-4">
+              <button
+                onClick={() => setViewMode("my")}
+                className={`flex items-center gap-3 px-6 py-4 rounded-xl font-semibold transition-all ${
+                  viewMode === "my"
+                    ? "bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow-lg shadow-cyan-500/30 scale-105"
+                    : "bg-slate-700/50 text-gray-300 hover:bg-slate-700 border border-slate-600"
+                }`}
+              >
+                <User className="h-5 w-5" />
+                <div className="text-left">
+                  <div className="text-sm">My Leads</div>
+                  <div className="text-xs opacity-75">Show only my assigned leads</div>
+                </div>
+              </button>
+
+              <button
+                onClick={() => setViewMode("team")}
+                className={`flex items-center gap-3 px-6 py-4 rounded-xl font-semibold transition-all ${
+                  viewMode === "team"
+                    ? "bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow-lg shadow-cyan-500/30 scale-105"
+                    : "bg-slate-700/50 text-gray-300 hover:bg-slate-700 border border-slate-600"
+                }`}
+              >
+                <Users className="h-5 w-5" />
+                <div className="text-left">
+                  <div className="text-sm">Team Leads</div>
+                  <div className="text-xs opacity-75">Show all team members' leads</div>
+                </div>
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Super Admin Lookup Section */}
         {userRole === "super-admin" && (
@@ -579,14 +647,17 @@ const ViewLeads = ({ onLogout }) => {
               </div>
             </div>
 
-            {["admin", "super-admin", "hr"].includes(userRole) && (
+            {(["admin", "super-admin", "hr"].includes(userRole) ||
+              (userPosition && (userPosition.toLowerCase().includes("supervisor") ||
+                userPosition.toLowerCase().includes("team lead") ||
+                userPosition.toLowerCase().includes("manager")))) && (
               <div className="relative">
                 <select
                   value={assignedToFilter}
                   onChange={(e) => setAssignedToFilter(e.target.value)}
                   className="w-full px-4 py-2 bg-slate-700/50 border border-slate-600 rounded-lg text-white focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition-all appearance-none cursor-pointer hover:bg-slate-700"
                 >
-                  <option value="">👥 All Marketing & Sales</option>
+                  <option value="">👥 All Team Members</option>
                   {employees.map((emp) => (
                     <option key={emp._id} value={emp._id}>
                       👤 {emp.name}
@@ -603,7 +674,7 @@ const ViewLeads = ({ onLogout }) => {
           </div>
 
           {/* Export Buttons */}
-          <div className="flex flex-wrap gap-3">
+          <div className="flex flex-wrap gap-3 mt-4">
             <button
               onClick={copyToClipboard}
               className="flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-all"
@@ -698,7 +769,22 @@ const ViewLeads = ({ onLogout }) => {
                         </td>
                         <td className="px-3 py-3">
                           <div className="space-y-1">
-                            <p className="text-white font-medium text-sm truncate">{lead.clientName}</p>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <p className="text-white font-medium text-sm truncate">{lead.clientName}</p>
+                              {userPosition && (userPosition.toLowerCase().includes("supervisor") ||
+                                userPosition.toLowerCase().includes("team lead") ||
+                                userPosition.toLowerCase().includes("manager")) && (
+                                <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold whitespace-nowrap ${
+                                  lead.assignedTo?._id === currentUser?._id
+                                    ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40"
+                                    : "bg-purple-500/20 text-purple-300 border border-purple-500/40"
+                                }`}>
+                                  {lead.assignedTo?._id === currentUser?._id
+                                    ? "👤 Me"
+                                    : `👤 ${lead.assignedTo?.name || "Unassigned"}`}
+                                </span>
+                              )}
+                            </div>
                             <p className="text-gray-400 text-xs truncate">{lead.businessName}</p>
                             <p className="text-gray-500 text-xs truncate">{lead.phone}</p>
                           </div>

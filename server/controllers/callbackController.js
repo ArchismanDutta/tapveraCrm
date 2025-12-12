@@ -1,10 +1,49 @@
 const Callback = require("../models/Callback");
 const Lead = require("../models/Lead");
 const User = require("../models/User");
+const Position = require("../models/Position");
+const {
+  getAccessibleUserIds,
+  canAccessUserData,
+  hasPermission
+} = require("../utils/hierarchyUtils");
 
 // Helper function to check if user has access to Callback Management
-const canAccessCallbackManagement = (user) => {
-  return user.role === "super-admin" || user.role === "admin" || user.department === "marketingAndSales";
+const canAccessCallbackManagement = async (user) => {
+  // Super-admin and admin always have access
+  if (user.role === "super-admin" || user.role === "admin") {
+    return true;
+  }
+
+  // Marketing & Sales department has access
+  if (user.department === "marketingAndSales") {
+    return true;
+  }
+
+  // Check if user has a position with callback management permissions
+  if (user.position && user.position.trim() !== "") {
+    try {
+      const position = await Position.findOne({
+        name: user.position,
+        status: "active"
+      });
+
+      if (position) {
+        // If user has any callback-related permissions, grant access
+        if (
+          position.permissions?.canViewSubordinateCallbacks ||
+          position.permissions?.canEditSubordinateCallbacks ||
+          position.permissions?.canViewDepartmentCallbacks
+        ) {
+          return true;
+        }
+      }
+    } catch (error) {
+      console.error("Error checking position permissions:", error);
+    }
+  }
+
+  return false;
 };
 
 // @desc    Create a new callback
@@ -13,9 +52,9 @@ const canAccessCallbackManagement = (user) => {
 exports.createCallback = async (req, res) => {
   try {
     // Check access permissions
-    if (!canAccessCallbackManagement(req.user)) {
+    if (!(await canAccessCallbackManagement(req.user))) {
       return res.status(403).json({
-        message: "Access denied. Callback management is only available to Super Admin and Marketing & Sales department."
+        message: "Access denied. Callback management is only available to Super Admin, Marketing & Sales department, or users with callback management permissions."
       });
     }
 
@@ -43,26 +82,45 @@ exports.createCallback = async (req, res) => {
       return res.status(404).json({ message: "Lead not found" });
     }
 
-    // Check if user has access to this lead
-    if (req.user.role !== "super-admin" && req.user.role !== "admin" && lead.assignedTo.toString() !== req.user._id.toString()) {
-      return res.status(403).json({ message: "Access denied. You can only create callbacks for your assigned leads." });
+    // Check hierarchical access to this lead
+    const canAccessLead = await canAccessUserData(req.user, lead.assignedTo);
+    if (!canAccessLead) {
+      return res.status(403).json({
+        message: "Access denied. You can only create callbacks for leads assigned to you or your subordinates."
+      });
     }
 
     // Determine who the callback should be assigned to
     let assignedToUser = assignedTo;
+    const isSuperAdmin = req.user.role === "super-admin" || req.user.role === "admin";
+
     if (!assignedToUser) {
-      // If not specified, assign to current user (for employees) or lead's assigned user (for super-admin)
-      assignedToUser = req.user.role === "super-admin" || req.user.role === "admin" ? lead.assignedTo : req.user._id;
-    } else if (req.user.role !== "super-admin" && req.user.role !== "admin") {
-      // Non-super-admin users can only assign to themselves
-      if (assignedTo !== req.user._id.toString()) {
-        return res.status(403).json({ message: "You can only assign callbacks to yourself. Super Admin can assign to anyone." });
-      }
+      // If not specified, assign to lead's assigned user
+      assignedToUser = lead.assignedTo;
     } else {
-      // Super-admin: Validate assignedTo user exists
+      // Validate assignedTo user exists
       const userExists = await User.findById(assignedToUser);
       if (!userExists) {
         return res.status(404).json({ message: "Assigned user not found" });
+      }
+
+      // Check if user can assign to this target user
+      if (assignedToUser.toString() !== req.user._id.toString()) {
+        const canAssignToSubordinates = await hasPermission(req.user, "canAssignToSubordinates");
+
+        if (!isSuperAdmin && !canAssignToSubordinates) {
+          return res.status(403).json({
+            message: "You can only assign callbacks to yourself. Supervisors and admins can assign to subordinates."
+          });
+        }
+
+        // Check if target user is accessible
+        const canAccessTarget = await canAccessUserData(req.user, assignedToUser);
+        if (!canAccessTarget && !isSuperAdmin) {
+          return res.status(403).json({
+            message: "You can only assign callbacks to yourself or your subordinates."
+          });
+        }
       }
     }
 
@@ -111,9 +169,9 @@ exports.createCallback = async (req, res) => {
 exports.getCallbacks = async (req, res) => {
   try {
     // Check access permissions
-    if (!canAccessCallbackManagement(req.user)) {
+    if (!(await canAccessCallbackManagement(req.user))) {
       return res.status(403).json({
-        message: "Access denied. Callback management is only available to Super Admin and Marketing & Sales department."
+        message: "Access denied. Callback management is only available to Super Admin, Marketing & Sales department, or users with callback management permissions."
       });
     }
 
@@ -137,13 +195,22 @@ exports.getCallbacks = async (req, res) => {
       filter.leadId = leadId;
     }
 
-    // Role-based filtering
-    if (req.user.role !== "super-admin" && req.user.role !== "admin") {
-      // Non-super-admin users can only see their assigned callbacks
-      filter.assignedTo = req.user._id;
-    } else if (assignedTo) {
-      // Super-admins can filter by assignedTo
+    // Hierarchical access control
+    const accessibleUserIds = await getAccessibleUserIds(req.user);
+
+    // Apply hierarchical filtering
+    if (assignedTo) {
+      // If specific user requested, check if current user can access them
+      const canAccess = await canAccessUserData(req.user, assignedTo);
+      if (!canAccess) {
+        return res.status(403).json({
+          message: "You don't have permission to view callbacks for this user"
+        });
+      }
       filter.assignedTo = assignedTo;
+    } else {
+      // Show callbacks for all accessible users (self + subordinates based on position)
+      filter.assignedTo = { $in: accessibleUserIds };
     }
 
     // Additional filters
@@ -171,8 +238,11 @@ exports.getCallbacks = async (req, res) => {
 
     const callbacks = await Callback.find(filter)
       .populate("leadId", "leadId clientName businessName email phone status")
-      .populate("assignedTo", "name email employeeId")
+      .populate("assignedTo", "name email employeeId position")
       .populate("assignedBy", "name email employeeId")
+      .populate("transferredTo", "name email employeeId position")
+      .populate("transferredBy", "name email employeeId")
+      .populate("transferCompletedBy", "name email employeeId")
       .sort({ callbackDate: 1, callbackTime: 1 })
       .skip(skip)
       .limit(parseInt(limit));
@@ -204,28 +274,31 @@ exports.getCallbacks = async (req, res) => {
 exports.getCallbackById = async (req, res) => {
   try {
     // Check access permissions
-    if (!canAccessCallbackManagement(req.user)) {
+    if (!(await canAccessCallbackManagement(req.user))) {
       return res.status(403).json({
-        message: "Access denied. Callback management is only available to Super Admin and Marketing & Sales department."
+        message: "Access denied. Callback management is only available to Super Admin, Marketing & Sales department, or users with callback management permissions."
       });
     }
 
     const callback = await Callback.findById(req.params.id)
       .populate("leadId")
-      .populate("assignedTo", "name email employeeId department")
+      .populate("assignedTo", "name email employeeId department position")
       .populate("assignedBy", "name email employeeId")
-      .populate("completedBy", "name email employeeId");
+      .populate("completedBy", "name email employeeId")
+      .populate("transferredTo", "name email employeeId position")
+      .populate("transferredBy", "name email employeeId")
+      .populate("transferCompletedBy", "name email employeeId");
 
     if (!callback) {
       return res.status(404).json({ message: "Callback not found" });
     }
 
-    // Check access permissions
-    if (
-      req.user.role !== "super-admin" && req.user.role !== "admin" &&
-      callback.assignedTo._id.toString() !== req.user._id.toString()
-    ) {
-      return res.status(403).json({ message: "Access denied. You can only view your assigned callbacks." });
+    // Check hierarchical access permissions
+    const canAccess = await canAccessUserData(req.user, callback.assignedTo._id);
+    if (!canAccess) {
+      return res.status(403).json({
+        message: "Access denied. You can only view callbacks assigned to you or your subordinates."
+      });
     }
 
     res.json({
@@ -247,9 +320,9 @@ exports.getCallbackById = async (req, res) => {
 exports.updateCallback = async (req, res) => {
   try {
     // Check access permissions
-    if (!canAccessCallbackManagement(req.user)) {
+    if (!(await canAccessCallbackManagement(req.user))) {
       return res.status(403).json({
-        message: "Access denied. Callback management is only available to Super Admin and Marketing & Sales department."
+        message: "Access denied. Callback management is only available to Super Admin, Marketing & Sales department, or users with callback management permissions."
       });
     }
 
@@ -259,17 +332,42 @@ exports.updateCallback = async (req, res) => {
       return res.status(404).json({ message: "Callback not found" });
     }
 
-    // Check permissions
-    const isAssigned = callback.assignedTo.toString() === req.user._id.toString();
-    const isSuperAdmin = req.user.role === "super-admin" || req.user.role === "admin";
-
-    if (!isAssigned && !isSuperAdmin) {
-      return res.status(403).json({ message: "Access denied. You can only edit your assigned callbacks." });
+    // Check hierarchical access permissions
+    const canAccess = await canAccessUserData(req.user, callback.assignedTo);
+    if (!canAccess) {
+      return res.status(403).json({
+        message: "Access denied. You can only edit callbacks assigned to you or your subordinates."
+      });
     }
 
-    // Non-super-admin cannot reassign callbacks to others
-    if (!isSuperAdmin && req.body.assignedTo && req.body.assignedTo !== req.user._id.toString()) {
-      return res.status(403).json({ message: "You cannot reassign callbacks. Only Super Admin can reassign." });
+    // Check if user can edit subordinate callbacks
+    const isOwnCallback = callback.assignedTo.toString() === req.user._id.toString();
+    const canEditSubordinate = await hasPermission(req.user, "canEditSubordinateCallbacks");
+    const isSuperAdmin = req.user.role === "super-admin" || req.user.role === "admin";
+
+    if (!isOwnCallback && !canEditSubordinate && !isSuperAdmin) {
+      return res.status(403).json({
+        message: "You don't have permission to edit subordinate callbacks. Contact your supervisor."
+      });
+    }
+
+    // Check if user can reassign callbacks
+    if (req.body.assignedTo && req.body.assignedTo !== callback.assignedTo.toString()) {
+      const canAssignToSubordinates = await hasPermission(req.user, "canAssignToSubordinates");
+
+      if (!isSuperAdmin && !canAssignToSubordinates) {
+        return res.status(403).json({
+          message: "You don't have permission to reassign callbacks. Only supervisors and admins can reassign."
+        });
+      }
+
+      // If user can reassign, check if target user is accessible
+      const canAccessTarget = await canAccessUserData(req.user, req.body.assignedTo);
+      if (!canAccessTarget) {
+        return res.status(403).json({
+          message: "You can only reassign callbacks to yourself or your subordinates."
+        });
+      }
     }
 
     // Track rescheduling
@@ -321,9 +419,9 @@ exports.updateCallback = async (req, res) => {
 exports.deleteCallback = async (req, res) => {
   try {
     // Check access permissions
-    if (!canAccessCallbackManagement(req.user)) {
+    if (!(await canAccessCallbackManagement(req.user))) {
       return res.status(403).json({
-        message: "Access denied. Callback management is only available to Super Admin and Marketing & Sales department."
+        message: "Access denied. Callback management is only available to Super Admin, Marketing & Sales department, or users with callback management permissions."
       });
     }
 
@@ -359,18 +457,17 @@ exports.deleteCallback = async (req, res) => {
 exports.getCallbackStats = async (req, res) => {
   try {
     // Check access permissions
-    if (!canAccessCallbackManagement(req.user)) {
+    if (!(await canAccessCallbackManagement(req.user))) {
       return res.status(403).json({
-        message: "Access denied. Callback management is only available to Super Admin and Marketing & Sales department."
+        message: "Access denied. Callback management is only available to Super Admin, Marketing & Sales department, or users with callback management permissions."
       });
     }
 
-    const filter = {};
-
-    // Filter by user role
-    if (req.user.role !== "super-admin" && req.user.role !== "admin") {
-      filter.assignedTo = req.user._id;
-    }
+    // Hierarchical access control for stats
+    const accessibleUserIds = await getAccessibleUserIds(req.user);
+    const filter = {
+      assignedTo: { $in: accessibleUserIds }
+    };
 
     const stats = await Callback.aggregate([
       { $match: filter },
@@ -432,9 +529,9 @@ exports.getCallbackStats = async (req, res) => {
 exports.getCallbacksByLead = async (req, res) => {
   try {
     // Check access permissions
-    if (!canAccessCallbackManagement(req.user)) {
+    if (!(await canAccessCallbackManagement(req.user))) {
       return res.status(403).json({
-        message: "Access denied. Callback management is only available to Super Admin and Marketing & Sales department."
+        message: "Access denied. Callback management is only available to Super Admin, Marketing & Sales department, or users with callback management permissions."
       });
     }
 
@@ -446,18 +543,21 @@ exports.getCallbacksByLead = async (req, res) => {
       return res.status(404).json({ message: "Lead not found" });
     }
 
-    // Check access permissions
-    if (
-      req.user.role !== "super-admin" && req.user.role !== "admin" &&
-      lead.assignedTo.toString() !== req.user._id.toString()
-    ) {
-      return res.status(403).json({ message: "Access denied. You can only view callbacks for your assigned leads." });
+    // Check hierarchical access to this lead
+    const canAccessLead = await canAccessUserData(req.user, lead.assignedTo);
+    if (!canAccessLead) {
+      return res.status(403).json({
+        message: "Access denied. You can only view callbacks for leads assigned to you or your subordinates."
+      });
     }
 
     const callbacks = await Callback.find({ leadId })
-      .populate("assignedTo", "name email employeeId")
+      .populate("assignedTo", "name email employeeId position")
       .populate("assignedBy", "name email employeeId")
       .populate("completedBy", "name email employeeId")
+      .populate("transferredTo", "name email employeeId position")
+      .populate("transferredBy", "name email employeeId")
+      .populate("transferCompletedBy", "name email employeeId")
       .sort({ callbackDate: -1 });
 
     res.json({

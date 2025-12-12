@@ -54,6 +54,8 @@ const screenshotRoutes = require("./routes/screenshotRoutes");
 const projectReportRoutes = require("./routes/projectReportRoutes");
 const clientRemarkRoutes = require("./routes/clientRemarkRoutes");
 const sheetRoutes = require("./routes/sheetRoutes");
+const positionRoutes = require("./routes/positionRoutes");
+const transferRoutes = require("./routes/transferRoutes");
 
 // Controllers
 const ChatController = require("./controllers/chatController");
@@ -176,6 +178,7 @@ app.use("/api/auto-payroll", autoPayrollRoutes); // Automatic payroll generation
 app.use("/api/celebrations", celebrationRoutes);
 app.use("/api/leads", leadRoutes);
 app.use("/api/callbacks", callbackRoutes);
+app.use("/api/transfers", transferRoutes);
 app.use("/api/notepad", notepadRoutes);
 app.use("/api/clients", clientRoutes);
 app.use("/api/notifications", notificationRoutes);
@@ -194,6 +197,7 @@ app.use("/api/projects", projectReportRoutes);
 app.use("/api/projects", clientRemarkRoutes);
 // Mount general project routes LAST
 app.use("/api/projects", projectRoutes);
+app.use("/api/positions", positionRoutes);
 
 // =====================
 // Serve frontend in production

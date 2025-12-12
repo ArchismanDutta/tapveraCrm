@@ -18,6 +18,7 @@ import {
   FileSpreadsheet,
   Shield,
   Zap,
+  ArrowLeftRight,
 } from "lucide-react";
 import { FaChevronCircleRight } from "react-icons/fa";
 import { Users } from "@/components/animate-ui/icons/users";
@@ -130,6 +131,11 @@ const menuConfig = {
       to: "/callbacks",
       icon: <Gavel size={18} animateOnHover />,
       label: "My Callbacks",
+    },
+    {
+      to: "/my-transfers",
+      icon: <ArrowLeftRight size={18} animateOnHover />,
+      label: "My Transfers",
     },
   ],
   hr: [
@@ -413,6 +419,11 @@ const menuConfig = {
           label: "Salary Management",
         },
         {
+          to: "/admin/position-management",
+          icon: <Briefcase size={16} />,
+          label: "Position Management",
+        },
+        {
           to: "/admin/auto-payroll",
           icon: <Zap size={16} />,
           label: "Auto Payroll",
@@ -476,6 +487,11 @@ const menuConfig = {
           icon: <RotateCw size={16} animateOnHover />,
           label: "Callback Management",
         },
+        {
+          to: "/admin/transfer-management",
+          icon: <ArrowLeftRight size={16} />,
+          label: "Transfer Management",
+        },
       ],
     },
 
@@ -532,6 +548,7 @@ const Sidebar = ({ collapsed, setCollapsed, onLogout, userRole }) => {
   const [conversations, setConversations] = useState([]);
   const [showUnreadTooltip, setShowUnreadTooltip] = useState(false);
   const [userDepartment, setUserDepartment] = useState("");
+  const [userPosition, setUserPosition] = useState("");
   const [hoveredItem, setHoveredItem] = useState(null);
   const [expandedDropdowns, setExpandedDropdowns] = useState({});
   const {
@@ -583,6 +600,7 @@ const Sidebar = ({ collapsed, setCollapsed, onLogout, userRole }) => {
   useEffect(() => {
     let resolvedRole = normalizeRole(userRole || "employee");
     let department = "";
+    let position = "";
     try {
       const userStr = localStorage.getItem("user");
       if (userStr) {
@@ -593,12 +611,16 @@ const Sidebar = ({ collapsed, setCollapsed, onLogout, userRole }) => {
         if (parsed.department) {
           department = parsed.department;
         }
+        if (parsed.position) {
+          position = parsed.position;
+        }
       }
     } catch {
       // fallback silently
     }
     setRole(resolvedRole);
     setUserDepartment(department);
+    setUserPosition(position);
   }, [userRole]);
 
   // Listen for chat unread total to show badge on Messages item
@@ -674,17 +696,42 @@ const Sidebar = ({ collapsed, setCollapsed, onLogout, userRole }) => {
     return () => clearInterval(interval);
   }, []);
 
-  // Filter menu items based on role and department
+  // Check if user has supervisor/team lead position
+  const isSupervisor = userPosition &&
+    (userPosition.toLowerCase().includes("supervisor") ||
+     userPosition.toLowerCase().includes("team lead") ||
+     userPosition.toLowerCase().includes("manager"));
+
+  // Filter menu items based on role, department, and position
   const rawMenuItems = menuConfig[role] || menuConfig["employee"];
-  const menuItems = rawMenuItems.filter((item) => {
-    // For items with children, filter the children
+  const menuItems = rawMenuItems.map((item) => {
+    // Update labels for leads/callbacks based on position
+    if (item.to === "/leads" && isSupervisor) {
+      return { ...item, label: "Team Leads" };
+    }
+    if (item.to === "/callbacks" && isSupervisor) {
+      return { ...item, label: "Team Callbacks" };
+    }
+    return item;
+  }).filter((item) => {
+    // For items with children, filter and update labels
     if (item.children) {
-      item.children = item.children.filter((child) => {
+      item.children = item.children.map((child) => {
+        // Update labels for leads/callbacks in dropdowns
+        if (child.to === "/leads" && isSupervisor) {
+          return { ...child, label: "Team Leads" };
+        }
+        if (child.to === "/callbacks" && isSupervisor) {
+          return { ...child, label: "Team Callbacks" };
+        }
+        return child;
+      }).filter((child) => {
         if (child.to === "/leads" || child.to === "/callbacks") {
           return (
             role === "super-admin" ||
             role === "admin" ||
-            userDepartment === "marketingAndSales"
+            userDepartment === "marketingAndSales" ||
+            (userPosition && userPosition.trim() !== "")
           );
         }
         return true;
@@ -693,12 +740,13 @@ const Sidebar = ({ collapsed, setCollapsed, onLogout, userRole }) => {
       return item.children.length > 0;
     }
 
-    // Allow access to leads/callbacks for super-admin, admin, or marketingAndSales employees
+    // Allow access to leads/callbacks for super-admin, admin, marketingAndSales employees, or users with positions
     if (item.to === "/leads" || item.to === "/callbacks") {
       return (
         role === "super-admin" ||
         role === "admin" ||
-        userDepartment === "marketingAndSales"
+        userDepartment === "marketingAndSales" ||
+        (userPosition && userPosition.trim() !== "")
       );
     }
     return true;

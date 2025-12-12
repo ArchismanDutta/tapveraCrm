@@ -19,6 +19,8 @@ import {
   Mail,
   Phone,
   MapPin,
+  ChevronDown,
+  X,
 } from "lucide-react";
 import Sidebar from "../components/dashboard/Sidebar";
 import * as XLSX from "xlsx";
@@ -40,6 +42,7 @@ const ViewCallbacks = ({ onLogout }) => {
   const [userDepartment, setUserDepartment] = useState("");
   const [currentUserId, setCurrentUserId] = useState("");
   const [employees, setEmployees] = useState([]);
+  const [supervisors, setSupervisors] = useState([]);
   const [stats, setStats] = useState({
     totalCallbacks: 0,
     pendingCallbacks: 0,
@@ -63,6 +66,10 @@ const ViewCallbacks = ({ onLogout }) => {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
 
+  // Transfer dropdown state
+  const [openTransferDropdown, setOpenTransferDropdown] = useState(null);
+  const [transferSearchTerm, setTransferSearchTerm] = useState("");
+
   useEffect(() => {
     const user = JSON.parse(localStorage.getItem("user"));
     if (user) {
@@ -74,6 +81,10 @@ const ViewCallbacks = ({ onLogout }) => {
     fetchStats();
     if (["admin", "super-admin", "hr"].includes(user?.role)) {
       fetchEmployees();
+    }
+    // Fetch supervisors for web consultants to enable transfers
+    if (user?.department === "marketingAndSales") {
+      fetchSupervisors();
     }
   }, []);
 
@@ -129,6 +140,44 @@ const ViewCallbacks = ({ onLogout }) => {
       setEmployees(marketingSalesEmployees);
     } catch (error) {
       console.error("Error fetching employees:", error);
+    }
+  };
+
+  const fetchSupervisors = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      const response = await fetch(`${API_BASE}/api/users/directory?department=marketingAndSales`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!response.ok) {
+        console.error("Failed to fetch supervisors:", response.status);
+        setSupervisors([]);
+        return;
+      }
+
+      const users = await response.json();
+
+      // The directory endpoint returns an array directly
+      if (!Array.isArray(users)) {
+        console.warn("Unexpected response structure:", users);
+        setSupervisors([]);
+        return;
+      }
+
+      // Filter to supervisors and team leads in Marketing & Sales
+      const supervisorList = users.filter(
+        (emp) =>
+          emp.position &&
+          (emp.position.toLowerCase().includes("supervisor") ||
+           emp.position.toLowerCase().includes("team lead") ||
+           emp.position.toLowerCase().includes("manager"))
+      );
+
+      setSupervisors(supervisorList);
+    } catch (error) {
+      console.error("Error fetching supervisors:", error);
+      setSupervisors([]);
     }
   };
 
@@ -228,6 +277,62 @@ const ViewCallbacks = ({ onLogout }) => {
   const handleViewCallback = (callback) => {
     setSelectedCallback(callback);
     setViewModalOpen(true);
+  };
+
+  const handleTransfer = async (callbackId, transferredTo) => {
+    if (!transferredTo || transferredTo === "self" || transferredTo === "not-transferred") {
+      // Reset transfer if selecting "Not Transferred"
+      if (transferredTo === "not-transferred") {
+        try {
+          const token = localStorage.getItem("token");
+          const response = await fetch(`${API_BASE}/api/transfers/${callbackId}/cancel`, {
+            method: "PUT",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+          });
+
+          if (response.ok) {
+            toast.success("Transfer cancelled successfully");
+            fetchCallbacks();
+            fetchStats();
+          } else {
+            const data = await response.json();
+            toast.error(data.message || "Failed to cancel transfer");
+          }
+        } catch (error) {
+          console.error("Error cancelling transfer:", error);
+          toast.error("Failed to cancel transfer");
+        }
+      }
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem("token");
+      const response = await fetch(`${API_BASE}/api/transfers/callback/${callbackId}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ transferredTo }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        toast.success("Callback transferred successfully");
+        fetchCallbacks();
+        fetchStats();
+      } else {
+        toast.error(data.message || "Failed to transfer callback");
+      }
+    } catch (error) {
+      console.error("Error transferring callback:", error);
+      toast.error("Failed to transfer callback");
+    }
   };
 
   const clearFilters = () => {
@@ -597,7 +702,7 @@ const ViewCallbacks = ({ onLogout }) => {
         </div>
 
         {/* Table */}
-        <div className="bg-slate-800/50 backdrop-blur-sm rounded-xl border border-slate-700/50 overflow-hidden">
+        <div className="bg-slate-800/50 backdrop-blur-sm rounded-xl border border-slate-700/50" style={{ overflow: 'visible' }}>
           {loading ? (
             <div className="flex justify-center items-center py-20">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-500"></div>
@@ -624,6 +729,11 @@ const ViewCallbacks = ({ onLogout }) => {
                       <th className="w-24 px-2 py-3 text-center text-xs font-medium text-gray-400 uppercase">
                         Status
                       </th>
+                      {userDepartment === "marketingAndSales" && (
+                        <th className="w-48 px-2 py-3 text-left text-xs font-medium text-gray-400 uppercase">
+                          Transfer To
+                        </th>
+                      )}
                       <th className="w-32 px-2 py-3 text-left text-xs font-medium text-gray-400 uppercase">
                         Actions
                       </th>
@@ -667,6 +777,141 @@ const ViewCallbacks = ({ onLogout }) => {
                             {callback.status}
                           </span>
                         </td>
+                        {userDepartment === "marketingAndSales" && (
+                          <td className="px-2 py-3">
+                            <div className="relative">
+                              {/* Searchable Transfer Dropdown Button */}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (callback.assignedTo?._id === currentUserId) {
+                                    setOpenTransferDropdown(openTransferDropdown === callback._id ? null : callback._id);
+                                    setTransferSearchTerm("");
+                                  }
+                                }}
+                                disabled={callback.assignedTo?._id !== currentUserId}
+                                className={`w-full px-2 py-1.5 text-xs rounded-lg border transition-all text-left flex items-center justify-between ${
+                                  callback.transferStatus !== "Not Transferred"
+                                    ? "bg-orange-500/10 border-orange-500/30 text-orange-300"
+                                    : "bg-slate-700/50 border-slate-600 text-gray-300"
+                                } ${
+                                  callback.assignedTo?._id === currentUserId
+                                    ? "cursor-pointer hover:border-green-500/50"
+                                    : "cursor-not-allowed opacity-50"
+                                }`}
+                                title={
+                                  callback.assignedTo?._id !== currentUserId
+                                    ? "Can only transfer your own callbacks"
+                                    : "Transfer this callback"
+                                }
+                              >
+                                <span className="truncate">
+                                  {callback.transferStatus === "Not Transferred"
+                                    ? "Not Transferred"
+                                    : callback.transferredTo
+                                      ? `${callback.transferredTo.name} (${callback.transferredTo.position})`
+                                      : "Select..."}
+                                </span>
+                                <ChevronDown className="h-3 w-3 ml-1 flex-shrink-0" />
+                              </button>
+
+                              {/* Dropdown Menu */}
+                              {openTransferDropdown === callback._id && (
+                                <div className="absolute z-[9999] mt-1 w-64 bg-slate-800 border border-slate-600 rounded-lg shadow-2xl">
+                                  {/* Search Input */}
+                                  <div className="p-2 border-b border-slate-600">
+                                    <div className="relative">
+                                      <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-gray-400" />
+                                      <input
+                                        type="text"
+                                        placeholder="Search by name..."
+                                        value={transferSearchTerm}
+                                        onChange={(e) => setTransferSearchTerm(e.target.value)}
+                                        className="w-full pl-7 pr-7 py-1.5 text-xs bg-slate-700 border border-slate-600 rounded text-gray-300 focus:outline-none focus:border-green-500"
+                                        onClick={(e) => e.stopPropagation()}
+                                      />
+                                      {transferSearchTerm && (
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setTransferSearchTerm("");
+                                          }}
+                                          className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-300"
+                                        >
+                                          <X className="h-3 w-3" />
+                                        </button>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  {/* Options List */}
+                                  <div className="max-h-60 overflow-y-auto">
+                                    {/* Not Transferred Option */}
+                                    <button
+                                      onClick={() => {
+                                        handleTransfer(callback._id, "not-transferred");
+                                        setOpenTransferDropdown(null);
+                                        setTransferSearchTerm("");
+                                      }}
+                                      className="w-full px-3 py-2 text-left text-xs text-gray-300 hover:bg-slate-700 transition-colors"
+                                    >
+                                      Not Transferred
+                                    </button>
+
+                                    {/* Self Option (Disabled) */}
+                                    <div className="px-3 py-2 text-xs text-gray-500 cursor-not-allowed opacity-50">
+                                      Self
+                                    </div>
+
+                                    {/* Filtered Supervisors & Team Leads */}
+                                    {supervisors
+                                      .filter((sup) =>
+                                        sup.name.toLowerCase().includes(transferSearchTerm.toLowerCase()) ||
+                                        sup.position.toLowerCase().includes(transferSearchTerm.toLowerCase())
+                                      )
+                                      .map((sup) => (
+                                        <button
+                                          key={sup._id}
+                                          onClick={() => {
+                                            handleTransfer(callback._id, sup._id);
+                                            setOpenTransferDropdown(null);
+                                            setTransferSearchTerm("");
+                                          }}
+                                          className="w-full px-3 py-2 text-left text-xs text-gray-300 hover:bg-slate-700 transition-colors"
+                                        >
+                                          <div className="font-medium">{sup.name}</div>
+                                          <div className="text-[10px] text-gray-500">({sup.position})</div>
+                                        </button>
+                                      ))}
+
+                                    {/* No Results */}
+                                    {transferSearchTerm &&
+                                      supervisors.filter((sup) =>
+                                        sup.name.toLowerCase().includes(transferSearchTerm.toLowerCase()) ||
+                                        sup.position.toLowerCase().includes(transferSearchTerm.toLowerCase())
+                                      ).length === 0 && (
+                                        <div className="px-3 py-4 text-xs text-gray-500 text-center">
+                                          No results found
+                                        </div>
+                                      )}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Transfer Status Badge */}
+                              {callback.transferStatus !== "Not Transferred" && (
+                                <div className="mt-1 flex items-center gap-1">
+                                  <span className="text-[10px] text-orange-400">
+                                    {callback.transferStatus === "Transferred" && "⏳ Pending"}
+                                    {callback.transferStatus === "Accepted" && "✓ Accepted"}
+                                    {callback.transferStatus === "Rejected" && "✗ Rejected"}
+                                    {callback.transferStatus === "Completed" && "✓ Completed"}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          </td>
+                        )}
                         <td className="px-2 py-3">
                           <div className="flex items-center gap-1">
                             <button

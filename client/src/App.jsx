@@ -70,6 +70,7 @@ import SuperAdminAttendancePortal from "./pages/SuperAdminAttendancePortal";
 import ShiftManagement from "./components/humanResource/ShiftManagement";
 import ManualAttendanceManagement from "./pages/admin/ManualAttendanceManagement";
 import SalaryManagement from "./pages/admin/SalaryManagement";
+import PositionManagement from "./pages/admin/PositionManagement";
 import AutoPayrollManagement from "./pages/admin/AutoPayrollManagement";
 import PayslipManagement from "./pages/admin/PayslipManagement";
 import MyPayslipsPage from "./pages/MyPayslipsPage";
@@ -86,6 +87,8 @@ import ViewCallbacks from "./pages/ViewCallbacks";
 import AddCallback from "./pages/AddCallback";
 import LeadKanban from "./pages/LeadKanban";
 import CallbackKanban from "./pages/CallbackKanban";
+import MyTransfers from "./pages/MyTransfers";
+import TransferManagement from "./pages/admin/TransferManagement";
 
 // Notepad
 import NotepadPage from "./pages/NotepadPage";
@@ -536,6 +539,34 @@ const AppWrapper = () => {
             )
           }
         />
+
+        {/* Transfer Management */}
+        <Route
+          path="/my-transfers"
+          element={
+            isAuthenticated && canAccessLeadManagement() ? (
+              <MyTransfers onLogout={handleLogout} />
+            ) : (
+              <Navigate
+                to={isAuthenticated ? "/dashboard" : "/login"}
+                replace
+              />
+            )
+          }
+        />
+        <Route
+          path="/admin/transfer-management"
+          element={
+            isAuthenticated && (currentUser?.role === "super-admin" || currentUser?.role === "admin") ? (
+              <TransferManagement onLogout={handleLogout} />
+            ) : (
+              <Navigate
+                to={isAuthenticated ? "/dashboard" : "/login"}
+                replace
+              />
+            )
+          }
+        />
         <Route
           path="/callbacks/add"
           element={
@@ -569,6 +600,21 @@ const AppWrapper = () => {
           element={
             isAuthenticated && (isHR || isSuperAdmin) ? (
               <SalaryManagement onLogout={handleLogout} />
+            ) : (
+              <Navigate
+                to={isAuthenticated ? "/dashboard" : "/login"}
+                replace
+              />
+            )
+          }
+        />
+
+        {/* Position Management */}
+        <Route
+          path="/admin/position-management"
+          element={
+            isAuthenticated && isSuperAdmin ? (
+              <PositionManagement onLogout={handleLogout} />
             ) : (
               <Navigate
                 to={isAuthenticated ? "/dashboard" : "/login"}
