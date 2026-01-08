@@ -107,8 +107,7 @@ keywordRankSchema.virtual("pastRank").get(function () {
 // Virtual for rank change (difference between current and previous)
 keywordRankSchema.virtual("rankChange").get(function () {
   if (!this.currentRank || !this.previousRank) return 0;
-  // Negative means improvement (lower rank number is better)
-  return this.previousRank.rank - this.currentRank.rank;
+  return calculateRankChange(this.previousRank.rank, this.currentRank.rank);
 });
 
 // Virtual for rank trend (improved, declined, stable)
@@ -122,6 +121,32 @@ keywordRankSchema.virtual("rankTrend").get(function () {
 // Ensure virtuals are included in JSON
 keywordRankSchema.set("toJSON", { virtuals: true });
 keywordRankSchema.set("toObject", { virtuals: true });
+
+// Helper function to calculate rank change handling zero (not ranked) case
+function calculateRankChange(prevRank, currRank) {
+  // Special handling for rank 0 (not ranked)
+  // 0 means "not ranked" which is worse than any positive ranking
+  if (prevRank === 0 && currRank > 0) {
+    // Moving from unranked (0) to any ranking (1, 2, 3...) is an improvement
+    // Return a positive value proportional to the ranking achieved
+    return 100 - currRank; // Higher positive number for better rankings
+  }
+
+  if (prevRank > 0 && currRank === 0) {
+    // Moving from ranked to unranked is a decline
+    // Return a negative value
+    return -(100 + prevRank);
+  }
+
+  if (prevRank === 0 && currRank === 0) {
+    // Both unranked, no change
+    return 0;
+  }
+
+  // Normal case: both have rankings (1, 2, 3, etc.)
+  // Positive change means improvement (rank went down in number)
+  return prevRank - currRank;
+}
 
 // Method to add new rank
 keywordRankSchema.methods.addRank = function (rank, userId, notes = "") {
@@ -176,7 +201,7 @@ keywordRankSchema.methods.calculateVelocity = function (days = 7) {
     const timeElapsed = (new Date(lastRank.recordedAt) - new Date(firstRank.recordedAt)) / (1000 * 60 * 60 * 24);
     const daysElapsed = Math.max(timeElapsed, 0.1); // Minimum 0.1 days to handle same-day updates better
 
-    const change = firstRank.rank - lastRank.rank;
+    const change = calculateRankChange(firstRank.rank, lastRank.rank);
     const velocity = change / daysElapsed;
 
     return {
@@ -192,7 +217,7 @@ keywordRankSchema.methods.calculateVelocity = function (days = 7) {
   }
 
   // Positive change means improvement (rank went down in number)
-  const change = pastRank.rank - currentRank.rank;
+  const change = calculateRankChange(pastRank.rank, currentRank.rank);
   const velocity = change / days; // Average positions gained per day
 
   return {

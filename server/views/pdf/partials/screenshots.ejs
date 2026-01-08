@@ -1,0 +1,46 @@
+<section class="screenshots-section page-break">
+  <h1 class="section-title">SCREENSHOTS</h1>
+  <div class="underline"></div>
+
+  <div class="stat-item mb-2">
+    <span class="stat-label">Total Screenshots:</span>
+    <span class="stat-value"><%= screenshots.length %></span>
+  </div>
+
+  <% screenshots.forEach((screenshot, index) => { %>
+    <div class="screenshot-item">
+      <div class="screenshot-info">
+        <div class="screenshot-title">
+          <%= index + 1 %>. <%= screenshot.title || 'Screenshot' %>
+        </div>
+
+        <% if (screenshot.description) { %>
+          <div class="screenshot-description">
+            <%= screenshot.description %>
+          </div>
+        <% } %>
+
+        <div class="screenshot-meta">
+          Uploaded: <%= new Date(screenshot.createdAt).toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric'
+          }) %>
+          <% if (screenshot.uploadedBy && screenshot.uploadedBy.name) { %>
+            | By: <%= screenshot.uploadedBy.name %>
+          <% } %>
+        </div>
+      </div>
+
+      <% if (screenshot.imageBase64) { %>
+        <div class="screenshot-image-container">
+          <img src="<%= screenshot.imageBase64 %>" alt="<%= screenshot.title || 'Screenshot' %>" class="screenshot-image" />
+        </div>
+      <% } else { %>
+        <div class="screenshot-missing">
+          [Image file not found on server]
+        </div>
+      <% } %>
+    </div>
+  <% }); %>
+</section>

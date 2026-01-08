@@ -1,0 +1,62 @@
+<section class="backlinks-section page-break">
+  <h1 class="section-title">OFF-PAGE SEO</h1>
+  <div class="underline"></div>
+
+  <% if (backlinks.length === 0) { %>
+    <p class="no-data">No backlinks tracked for this project.</p>
+  <% } else { %>
+    <%
+      const socialMediaLinks = backlinks.filter(b => b.category === 'Social Media').length;
+      const otherLinks = backlinks.filter(b => b.category === 'Others').length;
+    %>
+
+    <div class="stats-summary mb-2">
+      <div class="stat-item">
+        <span class="stat-label">Total Backlinks:</span>
+        <span class="stat-value"><%= backlinks.length %></span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-label">Social Media:</span>
+        <span class="stat-value"><%= socialMediaLinks %></span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-label">Others:</span>
+        <span class="stat-value"><%= otherLinks %></span>
+      </div>
+    </div>
+
+    <% backlinks.forEach((backlink, index) => { %>
+      <div class="content-card">
+        <div class="content-card-title">
+          <%= index + 1 %>. <%= backlink.platform || 'Backlink' %>
+        </div>
+
+        <div style="margin-bottom: 8px;">
+          <% if (backlink.category === 'Social Media') { %>
+            <span class="category-badge social-media">SOCIAL MEDIA</span>
+          <% } else { %>
+            <span class="category-badge others">OTHERS</span>
+          <% } %>
+
+          <span class="content-card-meta" style="margin-left: 5px;">
+            <%= new Date(backlink.createdAt).toLocaleDateString('en-US', {
+              year: 'numeric',
+              month: 'short',
+              day: 'numeric'
+            }) %>
+          </span>
+        </div>
+
+        <div class="content-card-link">
+          <%= backlink.url %>
+        </div>
+
+        <% if (backlink.notes) { %>
+          <div class="content-card-notes">
+            "<%= backlink.notes %>"
+          </div>
+        <% } %>
+      </div>
+    <% }); %>
+  <% } %>
+</section>

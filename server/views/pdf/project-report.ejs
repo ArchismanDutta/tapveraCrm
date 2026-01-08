@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Project Report - <%= project.projectName %></title>
+
+  <%- include('./styles/pdf-styles.ejs') %>
+</head>
+<body>
+  <!-- Header with Logo and Gradient -->
+  <%- include('./partials/header.ejs', { logo }) %>
+
+  <!-- Main Content -->
+  <main class="report-content">
+    <!-- Project Overview -->
+    <%- include('./partials/project-overview.ejs', { project }) %>
+
+    <!-- Keyword Analysis -->
+    <%- include('./partials/keyword-analysis.ejs', { keywords }) %>
+
+    <!-- Velocity Metrics -->
+    <%- include('./partials/velocity-metrics.ejs', { velocityInsights }) %>
+
+    <!-- Blog Updates -->
+    <%- include('./partials/blog-updates.ejs', { blogs }) %>
+
+    <!-- Backlinks (Off-Page SEO) -->
+    <%- include('./partials/backlinks.ejs', { backlinks }) %>
+
+    <!-- Screenshots (only if present) -->
+    <% if (screenshots && screenshots.length > 0) { %>
+      <%- include('./partials/screenshots.ejs', { screenshots }) %>
+    <% } %>
+  </main>
+
+  <!-- Footer -->
+  <%- include('./partials/footer.ejs', { generatedDate }) %>
+</body>
+</html>

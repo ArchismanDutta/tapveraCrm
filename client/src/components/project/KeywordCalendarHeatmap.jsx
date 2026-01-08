@@ -23,6 +23,32 @@ const KeywordCalendarHeatmap = ({ keywords, onDateClick }) => {
   const [hoveredCell, setHoveredCell] = useState(null);
   const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
 
+  // Helper function to calculate rank change handling zero (not ranked) case
+  const calculateRankChange = (prevRank, currRank) => {
+    // Special handling for rank 0 (not ranked)
+    // 0 means "not ranked" which is worse than any positive ranking
+    if (prevRank === 0 && currRank > 0) {
+      // Moving from unranked (0) to any ranking (1, 2, 3...) is an improvement
+      // Return a positive value proportional to the ranking achieved
+      return 100 - currRank; // Higher positive number for better rankings
+    }
+
+    if (prevRank > 0 && currRank === 0) {
+      // Moving from ranked to unranked is a decline
+      // Return a negative value
+      return -(100 + prevRank);
+    }
+
+    if (prevRank === 0 && currRank === 0) {
+      // Both unranked, no change
+      return 0;
+    }
+
+    // Normal case: both have rankings (1, 2, 3, etc.)
+    // Positive change means improvement (rank went down in number)
+    return prevRank - currRank;
+  };
+
   // Calculate heatmap data
   const heatmapData = useMemo(() => {
     const data = {};
@@ -35,7 +61,7 @@ const KeywordCalendarHeatmap = ({ keywords, onDateClick }) => {
         const dateKey = date.toISOString().split('T')[0];
         const prevRank = keyword.rankHistory[index - 1].rank;
         const currentRank = record.rank;
-        const change = prevRank - currentRank;
+        const change = calculateRankChange(prevRank, currentRank);
 
         if (!data[dateKey]) {
           data[dateKey] = {

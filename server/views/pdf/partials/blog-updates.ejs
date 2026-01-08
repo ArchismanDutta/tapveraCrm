@@ -1,0 +1,43 @@
+<section class="blog-section page-break">
+  <h1 class="section-title">BLOG UPDATES</h1>
+  <div class="underline"></div>
+
+  <% if (blogs.length === 0) { %>
+    <p class="no-data">No blog updates for this project.</p>
+  <% } else { %>
+    <div class="stat-item mb-2">
+      <span class="stat-label">Total Blog Posts:</span>
+      <span class="stat-value"><%= blogs.length %></span>
+    </div>
+
+    <% blogs.forEach((blog, index) => { %>
+      <div class="content-card">
+        <div class="content-card-title">
+          <%= index + 1 %>. <%= blog.title %>
+        </div>
+
+        <% if (blog.publishedDate) { %>
+          <div class="content-card-meta">
+            Published: <%= new Date(blog.publishedDate).toLocaleDateString('en-US', {
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric'
+            }) %>
+          </div>
+        <% } %>
+
+        <% if (blog.url) { %>
+          <div class="content-card-link">
+            <%= blog.url %>
+          </div>
+        <% } %>
+
+        <% if (blog.addedBy && blog.addedBy.name) { %>
+          <div class="content-card-meta" style="margin-top: 8px; font-style: italic;">
+            Added by: <%= blog.addedBy.name %>
+          </div>
+        <% } %>
+      </div>
+    <% }); %>
+  <% } %>
+</section>

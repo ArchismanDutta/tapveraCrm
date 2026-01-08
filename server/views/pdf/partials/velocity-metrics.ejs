@@ -1,0 +1,107 @@
+<% if (velocityInsights) { %>
+<section class="velocity-section mt-3">
+  <h2 class="section-subtitle">VELOCITY METRICS</h2>
+  <p class="section-description">7-day and 30-day keyword performance trends</p>
+
+  <% const { summary, fastestImprovements, rapidDeclines, stagnantKeywords } = velocityInsights; %>
+
+  <!-- Summary Stats Box -->
+  <div class="velocity-summary-box">
+    <div class="velocity-stats">
+      <div class="velocity-stat-col">
+        <div class="velocity-stat-header">Total</div>
+        <div class="velocity-stat-number total"><%= summary.totalKeywords %></div>
+        <div class="velocity-stat-label">Keywords</div>
+      </div>
+
+      <div class="velocity-stat-col">
+        <div class="velocity-stat-header">Improving</div>
+        <div class="velocity-stat-number improving"><%= summary.improving %></div>
+        <div class="velocity-stat-label">(7 days)</div>
+      </div>
+
+      <div class="velocity-stat-col">
+        <div class="velocity-stat-header">Declining</div>
+        <div class="velocity-stat-number declining"><%= summary.declining %></div>
+        <div class="velocity-stat-label">(7 days)</div>
+      </div>
+
+      <div class="velocity-stat-col">
+        <div class="velocity-stat-header">Stagnant</div>
+        <div class="velocity-stat-number stagnant"><%= summary.stagnant %></div>
+        <div class="velocity-stat-label">(30 days)</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Fastest Improvements -->
+  <% if (fastestImprovements.length > 0) { %>
+    <h3 class="section-subtitle" style="font-size: 14pt; color: #059669; margin-top: 25px;">
+      ✓ Fastest Improvements (Top 5)
+    </h3>
+
+    <% fastestImprovements.slice(0, 5).forEach((kw, index) => { %>
+      <div class="insight-card improvement">
+        <div class="insight-card-keyword improvement">
+          <%= index + 1 %>. <%= kw.keyword %>
+        </div>
+        <div class="insight-card-rank improvement">
+          Current: #<%= kw.currentRank || 'N/A' %>
+        </div>
+        <div class="insight-card-change improvement">
+          <%= kw.velocity7Day.change > 0 ? '+' + kw.velocity7Day.change : kw.velocity7Day.change %>
+        </div>
+        <div class="insight-card-time improvement">
+          positions in <%= kw.velocity7Day.isFallback ? Math.round(kw.velocity7Day.daysAnalyzed) + 'd' : '7 days' %>
+        </div>
+      </div>
+    <% }); %>
+  <% } %>
+
+  <!-- Rapid Declines -->
+  <% if (rapidDeclines.length > 0) { %>
+    <h3 class="section-subtitle" style="font-size: 14pt; color: #dc2626; margin-top: 25px;">
+      ⚠ Rapid Declines (Needs Attention)
+    </h3>
+
+    <% rapidDeclines.slice(0, 5).forEach((kw, index) => { %>
+      <div class="insight-card decline">
+        <div class="insight-card-keyword decline">
+          <%= kw.keyword %>
+        </div>
+        <div class="insight-card-rank decline">
+          Current: #<%= kw.currentRank || 'N/A' %>
+        </div>
+        <div class="insight-card-change decline">
+          <%= kw.velocity7Day.change %>
+        </div>
+        <div class="insight-card-time decline">
+          positions in <%= kw.velocity7Day.isFallback ? Math.round(kw.velocity7Day.daysAnalyzed) + 'd' : '7 days' %>
+        </div>
+      </div>
+    <% }); %>
+  <% } %>
+
+  <!-- Stagnant Keywords Summary -->
+  <% if (stagnantKeywords.length > 0) { %>
+    <div class="stagnant-summary mt-2">
+      <div class="stagnant-summary-title">Stagnant Keywords Summary</div>
+      <p class="stagnant-summary-text">
+        <%= stagnantKeywords.length %> keyword<%= stagnantKeywords.length !== 1 ? 's' : '' %> with no movement in the last 30 days.
+        Consider updating content or building backlinks to improve rankings.
+      </p>
+    </div>
+  <% } %>
+
+  <!-- Average Velocity -->
+  <div class="average-velocity mt-2">
+    <div class="average-velocity-title">Average Velocity</div>
+    <div class="average-velocity-item">
+      7-Day Average: <%= summary.averageVelocity7Day > 0 ? '+' : '' %><%= summary.averageVelocity7Day %> positions
+    </div>
+    <div class="average-velocity-item">
+      30-Day Average: <%= summary.averageVelocity30Day > 0 ? '+' : '' %><%= summary.averageVelocity30Day %> positions
+    </div>
+  </div>
+</section>
+<% } %>

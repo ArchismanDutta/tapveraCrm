@@ -1,0 +1,85 @@
+<section class="project-overview-section">
+  <h1 class="section-title text-center">PROJECT OVERVIEW</h1>
+
+  <div class="info-box mb-2 mt-2">
+    <div class="info-box-title">Client Information</div>
+
+    <% if (project.clients && project.clients.length > 0) { %>
+      <div class="info-row">
+        <span class="info-label">Client(s): </span>
+        <span class="info-value">
+          <%= project.clients.map(c => c.businessName || c.clientName || c.name || 'N/A').join(', ') %>
+        </span>
+      </div>
+      <%
+        const clientEmails = project.clients.filter(c => c.email).map(c => c.email);
+        if (clientEmails.length > 0) {
+      %>
+        <div class="info-row">
+          <span class="info-label">Email(s): </span>
+          <span class="info-value"><%= clientEmails.join(', ') %></span>
+        </div>
+      <% } %>
+      <%
+        const clientPhones = project.clients.filter(c => c.phone).map(c => c.phone);
+        if (clientPhones.length > 0) {
+      %>
+        <div class="info-row">
+          <span class="info-label">Phone(s): </span>
+          <span class="info-value"><%= clientPhones.join(', ') %></span>
+        </div>
+      <% } %>
+    <% } else { %>
+      <div class="info-row">
+        <span class="info-label">Client(s): </span>
+        <span class="info-value">N/A</span>
+      </div>
+    <% } %>
+  </div>
+
+  <div class="info-box mb-2">
+    <div class="info-box-title">Project Details</div>
+
+    <div class="info-row">
+      <span class="info-label">Project Name: </span>
+      <span class="info-value"><%= project.projectName || 'N/A' %></span>
+    </div>
+
+    <div class="info-row">
+      <span class="info-label">Type: </span>
+      <span class="info-value"><%= (project.type && project.type.length > 0) ? project.type.join(', ') : 'N/A' %></span>
+    </div>
+
+    <div class="info-row">
+      <span class="info-label">Status: </span>
+      <span class="info-value"><%= project.status ? project.status.toUpperCase() : 'N/A' %></span>
+    </div>
+
+    <% if (project.startDate) { %>
+      <div class="info-row">
+        <span class="info-label">Start Date: </span>
+        <span class="info-value">
+          <%= new Date(project.startDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) %>
+        </span>
+      </div>
+    <% } %>
+
+    <% if (project.endDate) { %>
+      <div class="info-row">
+        <span class="info-label">End Date: </span>
+        <span class="info-value">
+          <%= new Date(project.endDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) %>
+        </span>
+      </div>
+    <% } %>
+
+    <% if (project.description) { %>
+      <div class="info-row mt-1">
+        <div class="info-label">Description:</div>
+        <div class="info-value" style="margin-top: 5px; text-align: justify;">
+          <%= project.description %>
+        </div>
+      </div>
+    <% } %>
+  </div>
+</section>

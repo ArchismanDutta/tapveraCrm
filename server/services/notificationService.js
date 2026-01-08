@@ -43,6 +43,8 @@ class NotificationService {
         message: message || body,
         priority,
         notificationId: notification._id,
+        timestamp: notification.createdAt || new Date(),
+        read: false,
         ...relatedData,
       });
 

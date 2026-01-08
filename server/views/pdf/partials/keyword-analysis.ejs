@@ -1,0 +1,59 @@
+<section class="keyword-section page-break">
+  <h1 class="section-title">KEYWORD ANALYSIS</h1>
+  <div class="underline"></div>
+
+  <% if (keywords.length === 0) { %>
+    <p class="no-data">No keywords tracked for this project.</p>
+  <% } else { %>
+    <%
+      const improvedKeywords = keywords.filter(k => k.rankTrend === 'improved').length;
+      const declinedKeywords = keywords.filter(k => k.rankTrend === 'declined').length;
+    %>
+
+    <div class="stats-summary mb-2">
+      <div class="stat-item">
+        <span class="stat-label">Total Keywords:</span>
+        <span class="stat-value"><%= keywords.length %></span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-label">Improved:</span>
+        <span class="stat-value green"><%= improvedKeywords %></span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-label">Declined:</span>
+        <span class="stat-value red"><%= declinedKeywords %></span>
+      </div>
+    </div>
+
+    <table class="keyword-table">
+      <thead>
+        <tr>
+          <th>Keyword</th>
+          <th class="text-center">Past Rank</th>
+          <th class="text-center">Previous</th>
+          <th class="text-center">Current</th>
+          <th class="text-center">Trend</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% keywords.forEach((keyword, index) => { %>
+          <tr>
+            <td><%= keyword.keyword || 'N/A' %></td>
+            <td class="text-center"><%= keyword.pastRank?.rank || '-' %></td>
+            <td class="text-center"><%= keyword.previousRank?.rank || '-' %></td>
+            <td class="text-center current-rank"><%= keyword.currentRank?.rank || '-' %></td>
+            <td class="text-center">
+              <% if (keyword.rankTrend === 'improved') { %>
+                <span class="trend-improved">↑ Improved</span>
+              <% } else if (keyword.rankTrend === 'declined') { %>
+                <span class="trend-declined">↓ Declined</span>
+              <% } else { %>
+                <span class="trend-no-change">− No Change</span>
+              <% } %>
+            </td>
+          </tr>
+        <% }); %>
+      </tbody>
+    </table>
+  <% } %>
+</section>

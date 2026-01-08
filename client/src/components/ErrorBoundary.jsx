@@ -18,6 +18,18 @@ class ErrorBoundary extends React.Component {
       error,
       errorInfo
     });
+
+    // Store error globally for iOS Safari debugging
+    if (typeof window !== 'undefined') {
+      window.lastError = {
+        error: error.toString(),
+        stack: error.stack,
+        componentStack: errorInfo.componentStack,
+        timestamp: new Date().toISOString(),
+        userAgent: navigator.userAgent
+      };
+      console.log('Error stored in window.lastError for debugging');
+    }
   }
 
   render() {

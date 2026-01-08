@@ -194,7 +194,27 @@ const AppWrapper = () => {
 
   // Register WebSocket notification handler
   useEffect(() => {
+    const isNotificationOld = (timestamp) => {
+      if (!timestamp) return false;
+      const notificationTime = new Date(timestamp).getTime();
+      const now = Date.now();
+      const twentyFourHoursAgo = now - (24 * 60 * 60 * 1000);
+      return notificationTime < twentyFourHoursAgo;
+    };
+
     const handleNotification = (notification) => {
+      // Filter out old notifications (older than 24 hours)
+      if (notification.timestamp && isNotificationOld(notification.timestamp)) {
+        console.log("[Notification Handler] Ignoring old notification:", notification.title);
+        return;
+      }
+
+      // Filter out already-read notifications
+      if (notification.read === true || notification.isRead === true) {
+        console.log("[Notification Handler] Ignoring already-read notification:", notification.title);
+        return;
+      }
+
       // Handle payslip notifications
       if (notification.channel === "payslip") {
         setNotifications((prev) => [
@@ -255,9 +275,60 @@ const AppWrapper = () => {
   useEffect(() => {
     window.toast = toast;
 
+    // Track shown notifications to prevent duplicates
+    const getShownNotifications = () => {
+      try {
+        const shown = sessionStorage.getItem("shown_notifications");
+        return shown ? new Set(JSON.parse(shown)) : new Set();
+      } catch {
+        return new Set();
+      }
+    };
+
+    const markNotificationAsShown = (id) => {
+      try {
+        const shown = getShownNotifications();
+        shown.add(id);
+        // Keep only last 1000 IDs to prevent memory issues
+        const arr = Array.from(shown).slice(-1000);
+        sessionStorage.setItem("shown_notifications", JSON.stringify(arr));
+      } catch {}
+    };
+
+    const isNotificationOld = (timestamp) => {
+      if (!timestamp) return false;
+      const notificationTime = new Date(timestamp).getTime();
+      const now = Date.now();
+      const twentyFourHoursAgo = now - (24 * 60 * 60 * 1000);
+      return notificationTime < twentyFourHoursAgo;
+    };
+
     const onWsNotification = (e) => {
       try {
         const n = e.detail || {};
+
+        // Filter out old notifications (older than 24 hours)
+        if (n.timestamp && isNotificationOld(n.timestamp)) {
+          console.log("[Notification] Ignoring old notification:", n.title);
+          return;
+        }
+
+        // Filter out already-read notifications
+        if (n.read === true || n.isRead === true) {
+          console.log("[Notification] Ignoring already-read notification:", n.title);
+          return;
+        }
+
+        // Check if already shown (prevent duplicates)
+        const notificationId = n.notificationId || n._id || `${n.channel}-${n.timestamp}`;
+        const shownNotifications = getShownNotifications();
+        if (shownNotifications.has(notificationId)) {
+          console.log("[Notification] Ignoring duplicate notification:", n.title);
+          return;
+        }
+
+        // Mark as shown
+        markNotificationAsShown(notificationId);
 
         // Handle task notifications - Show browser notifications
         if (n.channel === "task") {
