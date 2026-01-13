@@ -1,0 +1,38 @@
+name: Deploy Backend (PRODUCTION)
+
+on:
+  push:
+    branches:
+      - prod
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy backend to EC2 (prod)
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          port: 22
+          script: |
+            set -e
+
+            echo "🚀 PRODUCTION DEPLOY STARTED"
+
+            cd ~/apps/tapveraCrm/server
+
+            echo "📥 Fetching prod branch"
+            git fetch origin prod
+            git checkout prod
+            git pull origin prod
+
+            echo "📦 Installing production dependencies"
+            npm ci --omit=dev
+
+            echo "♻️ Reloading PM2 (zero downtime)"
+            pm2 reload tapvera-backend
+
+            echo "✅ PRODUCTION DEPLOY COMPLETE"
