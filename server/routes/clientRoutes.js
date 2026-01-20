@@ -208,6 +208,70 @@ router.patch(
   }
 );
 
+// Send single email to one client (for real-time progress tracking)
+router.post(
+  "/send-email/:clientId",
+  protect,
+  authorize("admin", "super-admin"),
+  async (req, res) => {
+    try {
+      const { clientId } = req.params;
+      const { subject, body } = req.body;
+
+      if (!subject || !subject.trim()) {
+        return res.status(400).json({ error: "Email subject is required" });
+      }
+
+      if (!body || !body.trim()) {
+        return res.status(400).json({ error: "Email body is required" });
+      }
+
+      const client = await Client.findById(clientId);
+      if (!client) {
+        return res.status(404).json({ error: "Client not found" });
+      }
+
+      await emailService.sendEmail({
+        to: client.email,
+        subject: subject.trim(),
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #6d28d9;">Hello ${client.clientName},</h2>
+            <div style="margin: 20px 0;">
+              ${body}
+            </div>
+            <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
+            <p style="color: #6b7280; font-size: 14px;">
+              Best regards,<br>
+              <strong>Tapvera Team</strong>
+            </p>
+          </div>
+        `,
+        text: `Hello ${client.clientName},\n\n${body.replace(/<[^>]*>/g, "")}\n\nBest regards,\nTapvera Team`,
+        emailType: "bulk_email",
+        relatedClient: client._id,
+        metadata: {
+          sentBy: req.user.email,
+          sentByName: req.user.name,
+        },
+      });
+
+      res.json({
+        success: true,
+        clientId: client._id,
+        clientName: client.clientName,
+        email: client.email,
+      });
+    } catch (err) {
+      console.error(`❌ Failed to send email:`, err);
+      res.status(500).json({
+        success: false,
+        error: err.message,
+      });
+    }
+  }
+);
+
 // Send bulk email to multiple clients
 router.post(
   "/bulk-email",
@@ -246,7 +310,14 @@ router.post(
         errors: [],
       };
 
-      for (const client of clients) {
+      for (let i = 0; i < clients.length; i++) {
+        const client = clients[i];
+
+        // Add delay between emails to avoid Gmail rate limiting (skip delay for first email)
+        if (i > 0) {
+          await new Promise(resolve => setTimeout(resolve, 1500)); // 1.5 second delay
+        }
+
         try {
           await emailService.sendEmail({
             to: client.email,

@@ -134,6 +134,8 @@ const ClientsPage = ({ onLogout }) => {
   });
   const [selectedClientIds, setSelectedClientIds] = useState([]);
   const [sendingBulkEmail, setSendingBulkEmail] = useState(false);
+  const [emailStatus, setEmailStatus] = useState({}); // Track status: 'pending' | 'sending' | 'success' | 'failed'
+  const [currentSendingIndex, setCurrentSendingIndex] = useState(-1);
   const [form, setForm] = useState({
     clientName: "",
     businessName: "",
@@ -320,29 +322,70 @@ const ClientsPage = ({ onLogout }) => {
     }
 
     setSendingBulkEmail(true);
-    try {
-      const response = await API.post("/api/clients/bulk-email", {
-        clientIds: selectedClientIds,
-        subject: bulkEmailForm.subject,
-        body: bulkEmailForm.body,
-      });
 
+    // Initialize all selected clients as pending
+    const initialStatus = {};
+    selectedClientIds.forEach(id => {
+      initialStatus[id] = 'pending';
+    });
+    setEmailStatus(initialStatus);
+
+    let successCount = 0;
+    let failedCount = 0;
+
+    // Send emails one by one with real-time status updates
+    for (let i = 0; i < selectedClientIds.length; i++) {
+      const clientId = selectedClientIds[i];
+      setCurrentSendingIndex(i);
+
+      // Mark current client as sending
+      setEmailStatus(prev => ({ ...prev, [clientId]: 'sending' }));
+
+      try {
+        await API.post(`/api/clients/send-email/${clientId}`, {
+          subject: bulkEmailForm.subject,
+          body: bulkEmailForm.body,
+        });
+
+        // Mark as success
+        setEmailStatus(prev => ({ ...prev, [clientId]: 'success' }));
+        successCount++;
+      } catch (error) {
+        console.error(`Failed to send email to client ${clientId}:`, error);
+        // Mark as failed
+        setEmailStatus(prev => ({ ...prev, [clientId]: 'failed' }));
+        failedCount++;
+      }
+
+      // Small delay between emails to avoid rate limiting
+      if (i < selectedClientIds.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+    }
+
+    setCurrentSendingIndex(-1);
+    setSendingBulkEmail(false);
+
+    // Show final notification
+    if (failedCount === 0) {
       showNotification(
-        `Email sent successfully to ${response.data.successCount} client(s)`,
+        `All ${successCount} emails sent successfully!`,
         "success"
       );
-      setShowBulkEmailModal(false);
-      setBulkEmailForm({ subject: "", body: "" });
-      setSelectedClientIds([]);
-    } catch (error) {
+    } else {
       showNotification(
-        error.response?.data?.message || "Error sending bulk emails",
-        "error"
+        `Sent ${successCount} emails, ${failedCount} failed`,
+        failedCount > successCount ? "error" : "success"
       );
-      console.error("Error sending bulk emails:", error);
-    } finally {
-      setSendingBulkEmail(false);
     }
+  };
+
+  const closeBulkEmailModal = () => {
+    setShowBulkEmailModal(false);
+    setBulkEmailForm({ subject: "", body: "" });
+    setSelectedClientIds([]);
+    setEmailStatus({});
+    setCurrentSendingIndex(-1);
   };
 
   const exportToCSV = () => {
@@ -1092,12 +1135,9 @@ const ClientsPage = ({ onLogout }) => {
                 </div>
               </div>
               <button
-                onClick={() => {
-                  setShowBulkEmailModal(false);
-                  setBulkEmailForm({ subject: "", body: "" });
-                  setSelectedClientIds([]);
-                }}
-                className="text-gray-400 hover:text-white transition-colors"
+                onClick={closeBulkEmailModal}
+                disabled={sendingBulkEmail}
+                className="text-gray-400 hover:text-white transition-colors disabled:opacity-50"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -1109,34 +1149,85 @@ const ClientsPage = ({ onLogout }) => {
                 <div className="bg-[#0f1419] rounded-lg border border-[#232945] p-4">
                   <div className="flex items-center justify-between mb-4">
                     <h4 className="text-sm font-semibold text-white">Select Recipients</h4>
-                    <button
-                      onClick={toggleSelectAll}
-                      className="text-xs text-purple-400 hover:text-purple-300 transition-colors"
-                    >
-                      {selectedClientIds.length === filteredAndSortedClients.length ? "Deselect All" : "Select All"}
-                    </button>
+                    {!sendingBulkEmail && (
+                      <button
+                        onClick={toggleSelectAll}
+                        className="text-xs text-purple-400 hover:text-purple-300 transition-colors"
+                      >
+                        {selectedClientIds.length === filteredAndSortedClients.length ? "Deselect All" : "Select All"}
+                      </button>
+                    )}
                   </div>
 
                   <div className="space-y-2 max-h-96 overflow-y-auto">
-                    {filteredAndSortedClients.map((client) => (
-                      <label
-                        key={client._id}
-                        className="flex items-center gap-3 p-3 rounded-lg bg-[#141a21] hover:bg-[#1a2028] transition-colors cursor-pointer border border-[#232945]"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={selectedClientIds.includes(client._id)}
-                          onChange={() => toggleClientSelection(client._id)}
-                          className="w-4 h-4 rounded text-purple-600 focus:ring-purple-500 focus:ring-offset-0"
-                        />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-white truncate">
-                            {client.clientName}
-                          </p>
-                          <p className="text-xs text-gray-400 truncate">{client.email}</p>
-                        </div>
-                      </label>
-                    ))}
+                    {filteredAndSortedClients.map((client) => {
+                      const status = emailStatus[client._id];
+                      const isSelected = selectedClientIds.includes(client._id);
+
+                      return (
+                        <label
+                          key={client._id}
+                          className={`flex items-center gap-3 p-3 rounded-lg transition-colors cursor-pointer border ${
+                            status === 'success'
+                              ? 'bg-green-500/10 border-green-500/50'
+                              : status === 'failed'
+                              ? 'bg-red-500/10 border-red-500/50'
+                              : status === 'sending'
+                              ? 'bg-purple-500/10 border-purple-500/50'
+                              : 'bg-[#141a21] hover:bg-[#1a2028] border-[#232945]'
+                          }`}
+                        >
+                          {/* Show checkbox only when not sending */}
+                          {!sendingBulkEmail ? (
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => toggleClientSelection(client._id)}
+                              className="w-4 h-4 rounded text-purple-600 focus:ring-purple-500 focus:ring-offset-0"
+                            />
+                          ) : (
+                            /* Show status icon when sending */
+                            <div className="w-5 h-5 flex items-center justify-center">
+                              {status === 'success' && (
+                                <Check className="w-5 h-5 text-green-400" />
+                              )}
+                              {status === 'failed' && (
+                                <X className="w-5 h-5 text-red-400" />
+                              )}
+                              {status === 'sending' && (
+                                <div className="w-4 h-4 border-2 border-purple-400/30 border-t-purple-400 rounded-full animate-spin" />
+                              )}
+                              {status === 'pending' && (
+                                <div className="w-3 h-3 rounded-full bg-gray-500" />
+                              )}
+                            </div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-white truncate">
+                              {client.clientName}
+                            </p>
+                            <p className="text-xs text-gray-400 truncate">{client.email}</p>
+                          </div>
+                          {/* Status badge */}
+                          {sendingBulkEmail && status && (
+                            <span className={`text-xs px-2 py-1 rounded-full ${
+                              status === 'success'
+                                ? 'bg-green-500/20 text-green-400'
+                                : status === 'failed'
+                                ? 'bg-red-500/20 text-red-400'
+                                : status === 'sending'
+                                ? 'bg-purple-500/20 text-purple-400'
+                                : 'bg-gray-500/20 text-gray-400'
+                            }`}>
+                              {status === 'success' && 'Sent'}
+                              {status === 'failed' && 'Failed'}
+                              {status === 'sending' && 'Sending...'}
+                              {status === 'pending' && 'Waiting'}
+                            </span>
+                          )}
+                        </label>
+                      );
+                    })}
                   </div>
                 </div>
               </div>
@@ -1150,7 +1241,8 @@ const ClientsPage = ({ onLogout }) => {
                     placeholder="Enter email subject..."
                     value={bulkEmailForm.subject}
                     onChange={(e) => setBulkEmailForm({ ...bulkEmailForm, subject: e.target.value })}
-                    className="w-full px-4 py-3 bg-[#0f1419] border border-[#232945] rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 transition-colors"
+                    disabled={sendingBulkEmail}
+                    className="w-full px-4 py-3 bg-[#0f1419] border border-[#232945] rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 transition-colors disabled:opacity-50"
                     required
                   />
                 </div>
@@ -1161,8 +1253,9 @@ const ClientsPage = ({ onLogout }) => {
                     placeholder="Enter your message here..."
                     value={bulkEmailForm.body}
                     onChange={(e) => setBulkEmailForm({ ...bulkEmailForm, body: e.target.value })}
+                    disabled={sendingBulkEmail}
                     rows={12}
-                    className="w-full px-4 py-3 bg-[#0f1419] border border-[#232945] rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 transition-colors resize-none"
+                    className="w-full px-4 py-3 bg-[#0f1419] border border-[#232945] rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 transition-colors resize-none disabled:opacity-50"
                     required
                   />
                   <p className="text-xs text-gray-500 mt-2">
@@ -1183,17 +1276,46 @@ const ClientsPage = ({ onLogout }) => {
                   </div>
                 </div>
 
+                {/* Progress summary when sending */}
+                {sendingBulkEmail && (
+                  <div className="bg-purple-500/10 border border-purple-500/30 rounded-lg p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm text-purple-300 font-medium">
+                        Sending emails...
+                      </span>
+                      <span className="text-sm text-purple-400">
+                        {Object.values(emailStatus).filter(s => s === 'success' || s === 'failed').length} / {selectedClientIds.length}
+                      </span>
+                    </div>
+                    <div className="w-full bg-purple-900/50 rounded-full h-2">
+                      <div
+                        className="bg-gradient-to-r from-purple-500 to-pink-500 h-2 rounded-full transition-all duration-300"
+                        style={{
+                          width: `${(Object.values(emailStatus).filter(s => s === 'success' || s === 'failed').length / selectedClientIds.length) * 100}%`
+                        }}
+                      />
+                    </div>
+                    <div className="flex items-center gap-4 mt-2 text-xs">
+                      <span className="text-green-400">
+                        <Check className="w-3 h-3 inline mr-1" />
+                        {Object.values(emailStatus).filter(s => s === 'success').length} sent
+                      </span>
+                      <span className="text-red-400">
+                        <X className="w-3 h-3 inline mr-1" />
+                        {Object.values(emailStatus).filter(s => s === 'failed').length} failed
+                      </span>
+                    </div>
+                  </div>
+                )}
+
                 <div className="flex gap-3 pt-4">
                   <button
                     type="button"
-                    onClick={() => {
-                      setShowBulkEmailModal(false);
-                      setBulkEmailForm({ subject: "", body: "" });
-                      setSelectedClientIds([]);
-                    }}
-                    className="flex-1 px-4 py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors"
+                    onClick={closeBulkEmailModal}
+                    disabled={sendingBulkEmail}
+                    className="flex-1 px-4 py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    Cancel
+                    {sendingBulkEmail ? 'Please wait...' : 'Cancel'}
                   </button>
                   <button
                     onClick={handleSendBulkEmail}
@@ -1203,7 +1325,7 @@ const ClientsPage = ({ onLogout }) => {
                     {sendingBulkEmail ? (
                       <>
                         <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin"></div>
-                        Sending...
+                        Sending {currentSendingIndex + 1} of {selectedClientIds.length}...
                       </>
                     ) : (
                       <>
