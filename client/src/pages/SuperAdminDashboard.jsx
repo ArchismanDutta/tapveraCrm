@@ -496,7 +496,14 @@ const SuperAdminDashboard = ({ onLogout }) => {
         />
 
       {/* Main Content */}
-      <main className={`relative z-10 flex-1 transition-all duration-300 ${sidebarCollapsed ? "ml-24" : "ml-72"} p-8`}>
+      <main
+        className={`relative z-10 flex-1 transition-all duration-300 p-4 md:p-6 lg:p-8 overflow-x-hidden`}
+        style={{
+          marginLeft: sidebarCollapsed ? '6rem' : '18rem',
+          width: sidebarCollapsed ? 'calc(100vw - 6rem)' : 'calc(100vw - 18rem)',
+          maxWidth: sidebarCollapsed ? 'calc(100vw - 6rem)' : 'calc(100vw - 18rem)'
+        }}
+      >
         {/* Modern Header */}
         <div className="mb-12">
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between mb-6">
@@ -506,9 +513,15 @@ const SuperAdminDashboard = ({ onLogout }) => {
                   Super Admin Dashboard
                 </span>
               </h1>
-              <p className="text-xl text-gray-300 mb-4">
-                Real-time employee attendance and productivity insights ⚡
-              </p>
+              <div className="flex items-center gap-2 mb-4">
+                <p className="text-xl text-gray-300">
+                  Real-time employee attendance and productivity insights
+                </p>
+                <div className="flex items-center gap-1 px-3 py-1 bg-gradient-to-r from-yellow-500/20 to-orange-500/20 border border-yellow-500/30 rounded-full">
+                  <Zap className="h-4 w-4 text-yellow-400" />
+                  <span className="text-xs text-yellow-400 font-medium">Live</span>
+                </div>
+              </div>
             </div>
             <div className="flex items-center space-x-4">
               <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 backdrop-blur-sm border border-slate-600/30 rounded-2xl px-6 py-4">
@@ -539,7 +552,7 @@ const SuperAdminDashboard = ({ onLogout }) => {
         </div>
 
         {/* Enhanced Controls and Filters */}
-        <div className="bg-gradient-to-br from-slate-800/40 to-slate-900/40 backdrop-blur-sm border border-slate-600/30 rounded-2xl p-6 mb-8">
+        <div className="bg-gradient-to-br from-slate-800/40 to-slate-900/40 backdrop-blur-sm border border-slate-600/30 rounded-2xl p-4 md:p-6 mb-8 w-full">
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between mb-6">
             <h2 className="text-2xl font-bold text-white mb-4 lg:mb-0 flex items-center gap-3">
               <BarChart3 className="h-7 w-7 text-cyan-400" />
@@ -696,28 +709,52 @@ const SuperAdminDashboard = ({ onLogout }) => {
                   </div>
                 </div>
               ) : viewMode === "table" ? (
-                <div className="bg-gradient-to-br from-slate-800/40 to-slate-900/40 backdrop-blur-sm border border-slate-600/30 rounded-2xl overflow-hidden">
-                  <div className="overflow-x-auto">
-                    <table className="w-full table-auto min-w-[720px] text-gray-100">
+                <div className="bg-gradient-to-br from-slate-800/40 to-slate-900/40 backdrop-blur-sm border border-slate-600/30 rounded-2xl overflow-hidden shadow-xl">
+                  <div
+                    className="overflow-x-auto overflow-y-visible"
+                    style={{
+                      scrollbarWidth: 'thin',
+                      scrollbarColor: '#475569 #1e293b'
+                    }}
+                  >
+                    <style>{`
+                      .overflow-x-auto::-webkit-scrollbar {
+                        height: 8px;
+                      }
+                      .overflow-x-auto::-webkit-scrollbar-track {
+                        background: #1e293b;
+                        border-radius: 4px;
+                      }
+                      .overflow-x-auto::-webkit-scrollbar-thumb {
+                        background: #475569;
+                        border-radius: 4px;
+                      }
+                      .overflow-x-auto::-webkit-scrollbar-thumb:hover {
+                        background: #64748b;
+                      }
+                    `}</style>
+                    <table className="w-full table-auto text-gray-100" style={{ minWidth: '1100px' }}>
                       <thead>
-                        <tr className="bg-slate-900/70 border-b border-slate-600/30">
+                        <tr className="bg-gradient-to-r from-slate-900/90 via-slate-800/90 to-slate-900/90 border-b-2 border-slate-600/50">
                           {[
-                            { key: "Emp ID", icon: <UserCheck className="h-4 w-4" /> },
-                            { key: "Name", icon: <Users className="h-4 w-4" /> },
-                            { key: "Punch In", icon: <Clock className="h-4 w-4" /> },
-                            { key: "Punch Out", icon: <Timer className="h-4 w-4" /> },
-                            { key: "Break Status", icon: <Coffee className="h-4 w-4" /> },
-                            { key: "Break Type", icon: <FileText className="h-4 w-4" /> },
-                            { key: "Break (min)", icon: <Timer className="h-4 w-4" /> },
-                            { key: "Work Hours", icon: <Activity className="h-4 w-4" /> },
-                            { key: "Working?", icon: <CheckCircle className="h-4 w-4" /> },
+                            { key: "Emp ID", icon: <UserCheck className="h-4 w-4 text-purple-400" /> },
+                            { key: "Name", icon: <Users className="h-4 w-4 text-cyan-400" /> },
+                            { key: "Punch In", icon: <Clock className="h-4 w-4 text-green-400" /> },
+                            { key: "Punch Out", icon: <Timer className="h-4 w-4 text-red-400" /> },
+                            { key: "Break Status", icon: <Coffee className="h-4 w-4 text-yellow-400" /> },
+                            { key: "Break Type", icon: <FileText className="h-4 w-4 text-blue-400" /> },
+                            { key: "Break (min)", icon: <Timer className="h-4 w-4 text-orange-400" /> },
+                            { key: "Work Hours", icon: <Activity className="h-4 w-4 text-cyan-400" /> },
+                            { key: "Working?", icon: <CheckCircle className="h-4 w-4 text-emerald-400" /> },
                           ].map(({ key, icon }) => (
                             <th
                               key={key}
-                              className="py-4 px-6 text-left text-sm font-semibold tracking-wide text-gray-300"
+                              className="py-4 px-3 text-left text-xs font-bold tracking-wide text-gray-200 uppercase"
                             >
                               <div className="flex items-center gap-2">
-                                {icon}
+                                <div className="w-6 h-6 bg-slate-700/50 rounded-lg flex items-center justify-center">
+                                  {icon}
+                                </div>
                                 <span>{key}</span>
                               </div>
                             </th>

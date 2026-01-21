@@ -149,7 +149,7 @@ const TodayStatusPage = ({ onLogout }) => {
 
     try {
       // Use new attendance system
-      console.log("🆕 Fetching today's attendance status");
+      console.log("Fetching today's attendance status");
       const response = await newAttendanceService.getTodayStatus();
 
       if (!response.success || !response.data) {
@@ -175,7 +175,7 @@ const TodayStatusPage = ({ onLogout }) => {
         statusData = { ...statusData, ...response.data.summary };
       }
 
-      console.log("✅ Successfully fetched attendance status:", statusData);
+      console.log("Successfully fetched attendance status:", statusData);
 
       setStatus(statusData);
       setDataLoadingStates(prev => ({ ...prev, status: false }));
@@ -184,7 +184,7 @@ const TodayStatusPage = ({ onLogout }) => {
 
     } catch (err) {
       console.error(
-        `❌ Failed to fetch today's status (attempt ${retryCount + 1}/${maxRetries + 1}):`,
+        `Failed to fetch today's status (attempt ${retryCount + 1}/${maxRetries + 1}):`,
         err.response?.data || err.message
       );
 
@@ -200,7 +200,7 @@ const TodayStatusPage = ({ onLogout }) => {
           (err.code === 'NETWORK_ERROR' ||
            err.response?.status >= 500 ||
            err.code === 'ECONNABORTED')) {
-        console.log(`🔄 Retrying in ${retryDelay}ms...`);
+        console.log(`Retrying in ${retryDelay}ms...`);
         setTimeout(() => fetchStatus(retryCount + 1), retryDelay);
         return null;
       }
@@ -249,14 +249,14 @@ const TodayStatusPage = ({ onLogout }) => {
       sunday.setHours(23, 59, 59, 999);
 
       // Fetch weekly summary using new attendance system
-      console.log("🆕 Fetching weekly summary");
+      console.log("Fetching weekly summary");
       const response = await newAttendanceService.getMyWeeklySummary(monday, sunday);
 
       if (!response.success || !response.data) {
         throw new Error('Invalid response from weekly summary API');
       }
 
-      console.log("📊 Raw weekly summary response:", response.data);
+      console.log("Raw weekly summary response:", response.data);
 
       // Extract data directly from response
       let weeklySummaryData, dailyDataArray;
@@ -286,7 +286,7 @@ const TodayStatusPage = ({ onLogout }) => {
 
       dailyDataArray = rawData.dailyData || rawData.attendance || [];
 
-      console.log("📋 Weekly data:", {
+      console.log("Weekly data:", {
         presentDays: weeklySummaryData.presentDays,
         dailyCount: dailyDataArray.length,
         summarySource: Object.keys(summarySource)
@@ -300,7 +300,7 @@ const TodayStatusPage = ({ onLogout }) => {
 
         // Keep previous values if available, or set reasonable defaults
         if (!weeklySummary || (weeklySummary.presentDays === 0 && dailyData.length === 0)) {
-          console.log("📝 Setting comprehensive fallback data for SummaryCard");
+          console.log("Setting comprehensive fallback data for SummaryCard");
           weeklySummaryData = {
             presentDays: 0,
             totalWork: '0h 0m',
@@ -319,16 +319,16 @@ const TodayStatusPage = ({ onLogout }) => {
             totalBreakTime: '0h 0m'
           };
         } else {
-          console.log("📋 Preserving previous valid data");
+          console.log("Preserving previous valid data");
           weeklySummaryData = weeklySummary;
           dailyDataArray = dailyData;
         }
       }
 
-      console.log("✅ Final weekly summary data:", weeklySummaryData);
+      console.log("Final weekly summary data:", weeklySummaryData);
 
       // Update state with proper logging
-      console.log("📊 Setting weekly summary state:", {
+      console.log("Setting weekly summary state:", {
         hasData: !!weeklySummaryData,
         presentDays: weeklySummaryData?.presentDays,
         totalWorkTime: weeklySummaryData?.totalWorkTime,
@@ -639,13 +639,13 @@ const TodayStatusPage = ({ onLogout }) => {
       if (payload.timelineEvent?.type) {
         const eventType = payload.timelineEvent.type.toLowerCase();
         if (eventType.includes("punch in")) {
-          toast.success("🔓 Punched in successfully! Work timer started.", { autoClose: 3000 });
+          toast.success("Punched in successfully! Work timer started.", { autoClose: 3000 });
         } else if (eventType.includes("punch out")) {
-          toast.success("🔒 Punched out successfully! Great work today!", { autoClose: 3000 });
+          toast.success("Punched out successfully! Great work today!", { autoClose: 3000 });
         } else if (eventType.includes("break")) {
-          toast.success("☕ Break started! Take your time.", { autoClose: 3000 });
+          toast.success("Break started! Take your time.", { autoClose: 3000 });
         } else if (eventType.includes("resume")) {
-          toast.success("💼 Work resumed! Break timer stopped.", { autoClose: 3000 });
+          toast.success("Work resumed! Break timer stopped.", { autoClose: 3000 });
         }
       }
     } catch (err) {
