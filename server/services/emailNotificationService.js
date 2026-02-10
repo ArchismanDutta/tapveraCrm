@@ -4,7 +4,7 @@ const emailService = require("./email/emailService");
 // Helper function to get the correct frontend URL
 function getFrontendUrl() {
   // Use hard-coded production URL for consistency
-  return "http://tapvera-crm-frontend.s3-website.ap-south-1.amazonaws.com";
+  return "https://client.tapvera.io";
 }
 
 class EmailNotificationService {
@@ -14,8 +14,7 @@ class EmailNotificationService {
   async sendClientWelcomeEmail(clientData) {
     const { _id, clientName, email, password, businessName } = clientData;
     // Use hard-coded production URL for client login
-    const loginUrl =
-      "http://tapvera-crm-frontend.s3-website.ap-south-1.amazonaws.com/login";
+    const loginUrl = "https://client.tapvera.io/login";
 
     const emailHtml = `
       <!DOCTYPE html>
@@ -89,7 +88,7 @@ Email: ${email}
 Password: ${password}
 Business Name: ${businessName}
 
-Login URL: http://tapvera-crm-frontend.s3-website.ap-south-1.amazonaws.com/login
+Login URL: https://client.tapvera.io/login
 
 If you have any questions, please contact our support team.
 
@@ -112,7 +111,7 @@ Tapvera CRM Team
     } catch (error) {
       console.error(
         `L Failed to send welcome email to ${email}:`,
-        error.message
+        error.message,
       );
       throw error;
     }
@@ -223,7 +222,7 @@ Tapvera CRM Team
             });
 
             console.log(
-              ` Project message email sent to client: ${client.email}`
+              ` Project message email sent to client: ${client.email}`,
             );
           }
         }
@@ -303,7 +302,7 @@ Tapvera CRM Team
             });
 
             console.log(
-              ` Project message email sent to employee: ${employee.email}`
+              ` Project message email sent to employee: ${employee.email}`,
             );
           }
         }
@@ -469,7 +468,7 @@ Tapvera CRM Team
         });
 
         console.log(
-          ` Task status update email sent to ${taskData.assignedBy.email}`
+          ` Task status update email sent to ${taskData.assignedBy.email}`,
         );
       }
 
@@ -477,7 +476,7 @@ Tapvera CRM Team
       if (newStatus === "completed" && taskData.project) {
         const project = await Project.findById(taskData.project).populate(
           "clients",
-          "email clientName businessName"
+          "email clientName businessName",
         );
 
         // Send email to all clients
@@ -515,8 +514,8 @@ Tapvera CRM Team
 
                     <div style="text-align: center;">
                       <a href="${getFrontendUrl()}/project/${
-              project._id
-            }" class="button">View Project</a>
+                        project._id
+                      }" class="button">View Project</a>
                     </div>
 
                     <p>Best regards,<br>
@@ -542,7 +541,7 @@ Tapvera CRM Team
             });
 
             console.log(
-              ` Task completion email sent to client: ${client.email}`
+              ` Task completion email sent to client: ${client.email}`,
             );
           }
         }
@@ -552,7 +551,7 @@ Tapvera CRM Team
     } catch (error) {
       console.error(
         "L Failed to send task status update email:",
-        error.message
+        error.message,
       );
       return { success: false, error: error.message };
     }
@@ -561,6 +560,3 @@ Tapvera CRM Team
 
 // Export singleton instance
 module.exports = new EmailNotificationService();
-
-
-

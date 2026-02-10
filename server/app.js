@@ -77,11 +77,11 @@ app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 const frontendOrigins = [
   process.env.FRONTEND_ORIGIN,
   process.env.FRONTEND_URL,
-  "http://tapvera-crm-frontend.s3-website.ap-south-1.amazonaws.com",
+  "https://client.tapvera.io",
 ]
-.filter(Boolean)
-.flatMap(origin => origin.split(',').map(o => o.trim()))
-.filter(Boolean);
+  .filter(Boolean)
+  .flatMap((origin) => origin.split(",").map((o) => o.trim()))
+  .filter(Boolean);
 
 
 if (!frontendOrigins.length) {
