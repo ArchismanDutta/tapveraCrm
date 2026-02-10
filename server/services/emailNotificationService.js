@@ -60,7 +60,7 @@ class EmailNotificationService {
             </div>
 
             <div style="text-align: center;">
-              <a href="${loginUrl}" class="button">Login to Your Account</a>
+              <a href="${loginUrl}" class="button" style="color: white; font-weight: bold;">Login to Your Account</a>
             </div>
 
             <p>If you have any questions or need assistance, please don't hesitate to contact our support team.</p>
