@@ -133,6 +133,11 @@ const menuConfig = {
       label: "My Callbacks",
     },
     {
+      to: "/call-intelligence",
+      icon: <PhoneCall size={18} animateOnHover />,
+      label: "My Call Summaries",
+    },
+    {
       to: "/my-transfers",
       icon: <ArrowLeftRight size={18} animateOnHover />,
       label: "My Transfers",
@@ -299,6 +304,11 @@ const menuConfig = {
           to: "/callbacks",
           icon: <RotateCw size={16} animateOnHover />,
           label: "Callback Management",
+        },
+        {
+          to: "/call-intelligence",
+          icon: <PhoneCall size={16} animateOnHover />,
+          label: "Call Intelligence",
         },
       ],
     },
@@ -486,6 +496,11 @@ const menuConfig = {
           to: "/callbacks",
           icon: <RotateCw size={16} animateOnHover />,
           label: "Callback Management",
+        },
+        {
+          to: "/call-intelligence",
+          icon: <PhoneCall size={16} />,
+          label: "Call Intelligence",
         },
         {
           to: "/admin/transfer-management",

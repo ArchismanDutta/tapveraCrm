@@ -23,6 +23,7 @@ import {
   X,
 } from "lucide-react";
 import Sidebar from "../components/dashboard/Sidebar";
+import CallSummaryCard from "../components/callIntelligence/CallSummaryCard";
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import "jspdf-autotable";
@@ -1207,6 +1208,18 @@ const ViewCallbacks = ({ onLogout }) => {
                     <p className="text-gray-300 whitespace-pre-wrap">{selectedCallback.remarks}</p>
                   </div>
                 )}
+
+                {/* Call Intelligence */}
+                <div className="bg-slate-700/30 rounded-xl p-5 border border-slate-600/50">
+                  <h3 className="text-lg font-semibold text-green-400 mb-3 flex items-center gap-2">
+                    <PhoneCall className="h-5 w-5" />
+                    Recent Call Intelligence
+                  </h3>
+                  <CallSummaryCard
+                    phoneNumber={selectedCallback?.leadId?.phone}
+                    callbackId={selectedCallback?._id}
+                  />
+                </div>
                 </div>
               </SimpleBar>
 

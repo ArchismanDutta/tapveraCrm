@@ -88,6 +88,7 @@ import AddCallback from "./pages/AddCallback";
 import LeadKanban from "./pages/LeadKanban";
 import CallbackKanban from "./pages/CallbackKanban";
 import MyTransfers from "./pages/MyTransfers";
+import CallIntelligence from "./pages/CallIntelligence";
 import TransferManagement from "./pages/admin/TransferManagement";
 
 // Notepad
@@ -602,6 +603,21 @@ const AppWrapper = () => {
           element={
             isAuthenticated && canAccessLeadManagement() ? (
               <CallbackKanban onLogout={handleLogout} />
+            ) : (
+              <Navigate
+                to={isAuthenticated ? "/dashboard" : "/login"}
+                replace
+              />
+            )
+          }
+        />
+
+        {/* Call Intelligence */}
+        <Route
+          path="/call-intelligence"
+          element={
+            isAuthenticated && canAccessLeadManagement() ? (
+              <CallIntelligence onLogout={handleLogout} />
             ) : (
               <Navigate
                 to={isAuthenticated ? "/dashboard" : "/login"}

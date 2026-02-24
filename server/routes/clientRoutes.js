@@ -231,14 +231,15 @@ router.post(
         return res.status(404).json({ error: "Client not found" });
       }
 
+      const htmlBody = body.replace(/\n/g, '<br>');
       await emailService.sendEmail({
         to: client.email,
         subject: subject.trim(),
         html: `
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
             <h2 style="color: #6d28d9;">Hello ${client.clientName},</h2>
-            <div style="margin: 20px 0;">
-              ${body}
+            <div style="margin: 20px 0; line-height: 1.6;">
+              ${htmlBody}
             </div>
             <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
             <p style="color: #6b7280; font-size: 14px;">
@@ -318,6 +319,7 @@ router.post(
           await new Promise(resolve => setTimeout(resolve, 1500)); // 1.5 second delay
         }
 
+        const htmlBody = body.replace(/\n/g, '<br>');
         try {
           await emailService.sendEmail({
             to: client.email,
@@ -325,8 +327,8 @@ router.post(
             html: `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
               <h2 style="color: #6d28d9;">Hello ${client.clientName},</h2>
-              <div style="margin: 20px 0;">
-                ${body}
+              <div style="margin: 20px 0; line-height: 1.6;">
+                ${htmlBody}
               </div>
               <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
               <p style="color: #6b7280; font-size: 14px;">

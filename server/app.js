@@ -56,6 +56,7 @@ const clientRemarkRoutes = require("./routes/clientRemarkRoutes");
 const sheetRoutes = require("./routes/sheetRoutes");
 const positionRoutes = require("./routes/positionRoutes");
 const transferRoutes = require("./routes/transferRoutes");
+const callIntelligenceRoutes = require("./routes/callIntelligenceRoutes");
 
 // Controllers
 const ChatController = require("./controllers/chatController");
@@ -198,6 +199,7 @@ app.use("/api/projects", clientRemarkRoutes);
 // Mount general project routes LAST
 app.use("/api/projects", projectRoutes);
 app.use("/api/positions", positionRoutes);
+app.use("/api/call-intelligence", callIntelligenceRoutes);
 
 // =====================
 // Serve frontend in production
