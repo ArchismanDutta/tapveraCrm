@@ -1049,6 +1049,7 @@ const AppWrapper = () => {
               <ClientPortal
                 onLogout={handleLogout}
                 clientId={currentUser?._id}
+                clientEmail={currentUser?.email}
               />
             ) : (
               <Navigate to="/login" replace />

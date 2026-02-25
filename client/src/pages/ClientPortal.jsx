@@ -24,6 +24,7 @@ import {
   MessageCircle,
 } from "lucide-react";
 import UnreadMessageBadge from "../components/message/UnreadMessageBadge";
+import WonderseedInvoice from "../components/WonderseedInvoice";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
 
@@ -78,7 +79,9 @@ const DEFAULT_COLORS = {
   border: "border-gray-500/50",
 };
 
-const ClientPortal = ({ onLogout, clientId }) => {
+const WONDERSEED_EMAIL = "harshad.patel@javind.com";
+
+const ClientPortal = ({ onLogout, clientId, clientEmail }) => {
   const navigate = useNavigate();
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -264,6 +267,11 @@ const ClientPortal = ({ onLogout, clientId }) => {
           <h2 className="text-lg sm:text-xl font-bold text-white mb-1">My Projects</h2>
           <p className="text-xs sm:text-sm text-blue-300">Track your project progress</p>
         </div>
+
+        {/* Wonderseed Invoice — shown only for Harshad Patel */}
+        {clientEmail?.toLowerCase() === WONDERSEED_EMAIL && (
+          <WonderseedInvoice />
+        )}
 
         {/* Statistics Cards */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3 md:gap-4 lg:gap-6 mb-4 sm:mb-6 lg:mb-8">
