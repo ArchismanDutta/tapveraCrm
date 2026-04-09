@@ -66,14 +66,22 @@ const OnPageSEO = ({ projectId, userRole, userId }) => {
   const [showVelocityMetrics, setShowVelocityMetrics] = useState(true);
   const [selectedKeywords, setSelectedKeywords] = useState([]);
   const [undoStack, setUndoStack] = useState([]);
+  const [fetchingRankId, setFetchingRankId] = useState(null);
 
   // Form states
   const [formData, setFormData] = useState({
     keyword: "",
     initialRank: "",
+    targetUrl: "",
     keywordLink: "",
     searchEngine: "Google",
     location: "Global",
+    city: "",
+    country: "Global",
+    countryCode: "",
+    priority: "normal",
+    device: "desktop",
+    fetchFrequency: "weekly",
     category: "SEO",
     notes: "",
   });
@@ -85,9 +93,16 @@ const OnPageSEO = ({ projectId, userRole, userId }) => {
 
   const [editFormData, setEditFormData] = useState({
     keyword: "",
+    targetUrl: "",
     keywordLink: "",
     searchEngine: "Google",
     location: "Global",
+    city: "",
+    country: "Global",
+    countryCode: "",
+    priority: "normal",
+    device: "desktop",
+    fetchFrequency: "weekly",
     category: "SEO",
   });
 
@@ -293,11 +308,19 @@ const OnPageSEO = ({ projectId, userRole, userId }) => {
           axios.post(
             `${API_BASE}/api/projects/${projectId}/keywords`,
             {
-              keyword: keyword.keyword,
-              initialRank: keyword.currentRank?.rank || 0,
-              keywordLink: keyword.keywordLink,
-              searchEngine: keyword.searchEngine,
-              location: keyword.location,
+              keyword:        keyword.keyword,
+              initialRank:    keyword.currentRank?.rank || 0,
+              targetUrl:      keyword.targetUrl      || "",
+              keywordLink:    keyword.keywordLink    || "",
+              searchEngine:   keyword.searchEngine   || "Google",
+              location:       keyword.location       || "Global",
+              city:           keyword.city           || "",
+              country:        keyword.country        || "Global",
+              countryCode:    keyword.countryCode    || "",
+              priority:       keyword.priority       || "normal",
+              device:         keyword.device         || "desktop",
+              fetchFrequency: keyword.fetchFrequency || "weekly",
+              category:       keyword.category       || "SEO",
               notes: "Restored via undo",
             },
             {
@@ -325,11 +348,18 @@ const OnPageSEO = ({ projectId, userRole, userId }) => {
   const openEditModal = (keyword) => {
     setSelectedKeyword(keyword);
     setEditFormData({
-      keyword: keyword.keyword || "",
-      keywordLink: keyword.keywordLink || "",
-      searchEngine: keyword.searchEngine || "Google",
-      location: keyword.location || "Global",
-      category: keyword.category || "SEO",
+      keyword:        keyword.keyword        || "",
+      targetUrl:      keyword.targetUrl      || "",
+      keywordLink:    keyword.keywordLink    || "",
+      searchEngine:   keyword.searchEngine   || "Google",
+      location:       keyword.location       || "Global",
+      city:           keyword.city           || "",
+      country:        keyword.country        || "Global",
+      countryCode:    keyword.countryCode    || "",
+      priority:       keyword.priority       || "normal",
+      device:         keyword.device         || "desktop",
+      fetchFrequency: keyword.fetchFrequency || "weekly",
+      category:       keyword.category       || "SEO",
     });
     setShowEditModal(true);
   };
@@ -356,13 +386,43 @@ const OnPageSEO = ({ projectId, userRole, userId }) => {
     }
   };
 
+  const handleFetchRank = async (keyword) => {
+    if (!keyword.targetUrl) {
+      showNotification("No Target URL set on this keyword. Edit it to add one first.", "error");
+      return;
+    }
+    setFetchingRankId(keyword._id);
+    try {
+      const token = localStorage.getItem("token");
+      const response = await axios.post(
+        `${API_BASE}/api/projects/${projectId}/keywords/${keyword._id}/fetch-rank`,
+        {},
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      showNotification(response.data.message || "Rank fetched successfully!", "success");
+      fetchKeywords();
+      fetchStats();
+    } catch (error) {
+      showNotification(error.response?.data?.message || "Error fetching rank", "error");
+    } finally {
+      setFetchingRankId(null);
+    }
+  };
+
   const resetForm = () => {
     setFormData({
       keyword: "",
       initialRank: "",
+      targetUrl: "",
       keywordLink: "",
       searchEngine: "Google",
       location: "Global",
+      city: "",
+      country: "Global",
+      countryCode: "",
+      priority: "normal",
+      device: "desktop",
+      fetchFrequency: "weekly",
       category: "SEO",
       notes: "",
     });
@@ -392,7 +452,10 @@ const OnPageSEO = ({ projectId, userRole, userId }) => {
     const labels = history.map((h) =>
       new Date(h.recordedAt).toLocaleDateString()
     );
-    const data = history.map((h) => h.rank);
+    // Map rank 0 or >= 101 to null so Chart.js renders a gap instead of a misleading spike
+    const data = history.map((h) =>
+      h.rank === 0 || h.rank >= 101 ? null : h.rank
+    );
 
     return {
       labels,
@@ -404,6 +467,7 @@ const OnPageSEO = ({ projectId, userRole, userId }) => {
           backgroundColor: "rgba(59, 130, 246, 0.1)",
           fill: true,
           tension: 0.4,
+          spanGaps: false, // show gap when null (not ranked)
         },
       ],
     };
@@ -786,11 +850,17 @@ const OnPageSEO = ({ projectId, userRole, userId }) => {
                             {keyword.category || "SEO"}
                           </span>
                         </div>
-                        <div className="flex items-center gap-2 mt-1 text-xs text-gray-500">
+                        <div className="flex items-center gap-2 mt-1 text-xs text-gray-500 flex-wrap">
                           <Globe className="w-3 h-3" />
                           {keyword.searchEngine}
-                          <MapPin className="w-3 h-3 ml-2" />
-                          {keyword.location}
+                          <MapPin className="w-3 h-3 ml-1" />
+                          {keyword.city ? `${keyword.city}, ` : ""}{keyword.country || keyword.location}
+                          {keyword.device === "mobile" && (
+                            <span className="px-1 bg-cyan-500/20 text-cyan-400 rounded text-xs">mobile</span>
+                          )}
+                          {keyword.priority === "high" && (
+                            <span className="text-yellow-400" title="High priority">★</span>
+                          )}
                         </div>
                       </div>
                     </td>
@@ -819,14 +889,27 @@ const OnPageSEO = ({ projectId, userRole, userId }) => {
                       )}
                     </td>
                     <td className="px-4 py-4">
-                      <span className="text-white font-semibold text-lg">
-                        {keyword.currentRank?.rank || "-"}
-                      </span>
+                      {(() => {
+                        const r = keyword.currentRank?.rank;
+                        if (r === undefined || r === null) return <span className="text-gray-500">-</span>;
+                        if (r >= 101 || r === 0) return <span className="text-red-400 font-semibold text-sm">Not ranked</span>;
+                        return <span className="text-white font-semibold text-lg">{r}</span>;
+                      })()}
                       {keyword.currentRank && (
-                        <div className="text-xs text-gray-600 mt-1">
-                          {new Date(
-                            keyword.currentRank.recordedAt
-                          ).toLocaleDateString()}
+                        <div className="flex items-center gap-1 mt-1 flex-wrap">
+                          <span className="text-xs text-gray-600">
+                            {new Date(keyword.currentRank.recordedAt).toLocaleDateString()}
+                          </span>
+                          <span className={`text-xs px-1.5 py-0.5 rounded-full ${
+                            keyword.currentRank.source === "auto"   ? "bg-purple-500/20 text-purple-300" :
+                            keyword.currentRank.source === "fetch"  ? "bg-blue-500/20   text-blue-300"   :
+                            keyword.currentRank.source === "scrape" ? "bg-orange-500/20 text-orange-300" :
+                                                                      "bg-gray-500/20   text-gray-500"
+                          }`}>
+                            {keyword.currentRank.source === "auto"   ? "auto"    :
+                             keyword.currentRank.source === "fetch"  ? "api"     :
+                             keyword.currentRank.source === "scrape" ? "scraped" : "manual"}
+                          </span>
                         </div>
                       )}
                     </td>
@@ -874,13 +957,38 @@ const OnPageSEO = ({ projectId, userRole, userId }) => {
                             >
                               <Edit2 className="w-4 h-4" />
                             </button>
+                            {/* Fetch Rank — SerpAPI/Playwright auto-fetch */}
+                            <button
+                              onClick={() => handleFetchRank(keyword)}
+                              disabled={fetchingRankId === keyword._id || keyword.searchEngine !== "Google"}
+                              className={`p-1.5 rounded transition-colors ${
+                                fetchingRankId === keyword._id || keyword.searchEngine !== "Google"
+                                  ? "text-gray-600 cursor-not-allowed"
+                                  : keyword.targetUrl
+                                    ? "text-purple-400 hover:bg-purple-500/20"
+                                    : "text-gray-600 cursor-not-allowed"
+                              }`}
+                              title={
+                                keyword.searchEngine !== "Google"
+                                  ? "Auto-fetch supports Google only"
+                                  : keyword.targetUrl
+                                    ? `Fetch rank from Google (${keyword.device || "desktop"})`
+                                    : "Edit keyword to add Target URL first"
+                              }
+                            >
+                              {fetchingRankId === keyword._id ? (
+                                <div className="w-4 h-4 border-2 border-purple-500/30 border-t-purple-400 rounded-full animate-spin" />
+                              ) : (
+                                <Globe className="w-4 h-4" />
+                              )}
+                            </button>
                             <button
                               onClick={() => {
                                 setSelectedKeyword(keyword);
                                 setShowUpdateModal(true);
                               }}
                               className="p-1.5 text-green-400 hover:bg-green-500/20 rounded transition-colors"
-                              title="Update Rank"
+                              title="Update Rank (manual)"
                             >
                               <RefreshCw className="w-4 h-4" />
                             </button>
@@ -955,6 +1063,20 @@ const OnPageSEO = ({ projectId, userRole, userId }) => {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Target URL <span className="text-purple-400 text-xs font-normal">(required for auto-fetch)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.targetUrl}
+                    onChange={(e) => setFormData({ ...formData, targetUrl: e.target.value })}
+                    className="w-full px-4 py-2 bg-[#0f1419] border border-[#232945] rounded-lg text-white focus:outline-none focus:border-blue-500"
+                    placeholder="e.g. mysite.com"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">Domain to find in Google results</p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
                     Keyword Link
                   </label>
                   <input
@@ -975,12 +1097,7 @@ const OnPageSEO = ({ projectId, userRole, userId }) => {
                     </label>
                     <select
                       value={formData.searchEngine}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          searchEngine: e.target.value,
-                        })
-                      }
+                      onChange={(e) => setFormData({ ...formData, searchEngine: e.target.value })}
                       className="w-full px-4 py-2 bg-[#0f1419] border border-[#232945] rounded-lg text-white focus:outline-none focus:border-blue-500"
                     >
                       <option value="Google">Google</option>
@@ -991,16 +1108,73 @@ const OnPageSEO = ({ projectId, userRole, userId }) => {
 
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-2">
-                      Location
+                      Country
                     </label>
                     <input
                       type="text"
-                      value={formData.location}
-                      onChange={(e) =>
-                        setFormData({ ...formData, location: e.target.value })
-                      }
+                      value={formData.country}
+                      onChange={(e) => setFormData({ ...formData, country: e.target.value })}
                       className="w-full px-4 py-2 bg-[#0f1419] border border-[#232945] rounded-lg text-white focus:outline-none focus:border-blue-500"
+                      placeholder="e.g. Australia"
                     />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      City <span className="text-gray-500 text-xs font-normal">(for local SEO)</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.city}
+                      onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                      className="w-full px-4 py-2 bg-[#0f1419] border border-[#232945] rounded-lg text-white focus:outline-none focus:border-blue-500"
+                      placeholder="e.g. Sydney"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Device
+                    </label>
+                    <select
+                      value={formData.device}
+                      onChange={(e) => setFormData({ ...formData, device: e.target.value })}
+                      className="w-full px-4 py-2 bg-[#0f1419] border border-[#232945] rounded-lg text-white focus:outline-none focus:border-blue-500"
+                    >
+                      <option value="desktop">Desktop</option>
+                      <option value="mobile">Mobile</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Auto-fetch Frequency
+                    </label>
+                    <select
+                      value={formData.fetchFrequency}
+                      onChange={(e) => setFormData({ ...formData, fetchFrequency: e.target.value })}
+                      className="w-full px-4 py-2 bg-[#0f1419] border border-[#232945] rounded-lg text-white focus:outline-none focus:border-blue-500"
+                    >
+                      <option value="daily">Daily</option>
+                      <option value="weekly">Weekly</option>
+                      <option value="monthly">Monthly</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Priority
+                    </label>
+                    <select
+                      value={formData.priority}
+                      onChange={(e) => setFormData({ ...formData, priority: e.target.value })}
+                      className="w-full px-4 py-2 bg-[#0f1419] border border-[#232945] rounded-lg text-white focus:outline-none focus:border-blue-500"
+                    >
+                      <option value="normal">Normal</option>
+                      <option value="high">High ★</option>
+                    </select>
                   </div>
                 </div>
 
@@ -1194,11 +1368,22 @@ const OnPageSEO = ({ projectId, userRole, userId }) => {
                   <input
                     type="text"
                     value={editFormData.keyword}
-                    onChange={(e) =>
-                      setEditFormData({ ...editFormData, keyword: e.target.value })
-                    }
+                    onChange={(e) => setEditFormData({ ...editFormData, keyword: e.target.value })}
                     className="w-full px-4 py-2 bg-[#0f1419] border border-[#232945] rounded-lg text-white focus:outline-none focus:border-blue-500"
                     required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Target URL <span className="text-purple-400 text-xs font-normal">(required for auto-fetch)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={editFormData.targetUrl}
+                    onChange={(e) => setEditFormData({ ...editFormData, targetUrl: e.target.value })}
+                    className="w-full px-4 py-2 bg-[#0f1419] border border-[#232945] rounded-lg text-white focus:outline-none focus:border-blue-500"
+                    placeholder="e.g. mysite.com"
                   />
                 </div>
 
@@ -1209,9 +1394,7 @@ const OnPageSEO = ({ projectId, userRole, userId }) => {
                   <input
                     type="url"
                     value={editFormData.keywordLink}
-                    onChange={(e) =>
-                      setEditFormData({ ...editFormData, keywordLink: e.target.value })
-                    }
+                    onChange={(e) => setEditFormData({ ...editFormData, keywordLink: e.target.value })}
                     className="w-full px-4 py-2 bg-[#0f1419] border border-[#232945] rounded-lg text-white focus:outline-none focus:border-blue-500"
                     placeholder="https://example.com/keyword"
                   />
@@ -1224,12 +1407,7 @@ const OnPageSEO = ({ projectId, userRole, userId }) => {
                     </label>
                     <select
                       value={editFormData.searchEngine}
-                      onChange={(e) =>
-                        setEditFormData({
-                          ...editFormData,
-                          searchEngine: e.target.value,
-                        })
-                      }
+                      onChange={(e) => setEditFormData({ ...editFormData, searchEngine: e.target.value })}
                       className="w-full px-4 py-2 bg-[#0f1419] border border-[#232945] rounded-lg text-white focus:outline-none focus:border-blue-500"
                     >
                       <option value="Google">Google</option>
@@ -1237,19 +1415,75 @@ const OnPageSEO = ({ projectId, userRole, userId }) => {
                       <option value="Yahoo">Yahoo</option>
                     </select>
                   </div>
-
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-2">
-                      Location
+                      Country
                     </label>
                     <input
                       type="text"
-                      value={editFormData.location}
-                      onChange={(e) =>
-                        setEditFormData({ ...editFormData, location: e.target.value })
-                      }
+                      value={editFormData.country}
+                      onChange={(e) => setEditFormData({ ...editFormData, country: e.target.value })}
                       className="w-full px-4 py-2 bg-[#0f1419] border border-[#232945] rounded-lg text-white focus:outline-none focus:border-blue-500"
+                      placeholder="e.g. Australia"
                     />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      City
+                    </label>
+                    <input
+                      type="text"
+                      value={editFormData.city}
+                      onChange={(e) => setEditFormData({ ...editFormData, city: e.target.value })}
+                      className="w-full px-4 py-2 bg-[#0f1419] border border-[#232945] rounded-lg text-white focus:outline-none focus:border-blue-500"
+                      placeholder="e.g. Sydney"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Device
+                    </label>
+                    <select
+                      value={editFormData.device}
+                      onChange={(e) => setEditFormData({ ...editFormData, device: e.target.value })}
+                      className="w-full px-4 py-2 bg-[#0f1419] border border-[#232945] rounded-lg text-white focus:outline-none focus:border-blue-500"
+                    >
+                      <option value="desktop">Desktop</option>
+                      <option value="mobile">Mobile</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Fetch Frequency
+                    </label>
+                    <select
+                      value={editFormData.fetchFrequency}
+                      onChange={(e) => setEditFormData({ ...editFormData, fetchFrequency: e.target.value })}
+                      className="w-full px-4 py-2 bg-[#0f1419] border border-[#232945] rounded-lg text-white focus:outline-none focus:border-blue-500"
+                    >
+                      <option value="daily">Daily</option>
+                      <option value="weekly">Weekly</option>
+                      <option value="monthly">Monthly</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Priority
+                    </label>
+                    <select
+                      value={editFormData.priority}
+                      onChange={(e) => setEditFormData({ ...editFormData, priority: e.target.value })}
+                      className="w-full px-4 py-2 bg-[#0f1419] border border-[#232945] rounded-lg text-white focus:outline-none focus:border-blue-500"
+                    >
+                      <option value="normal">Normal</option>
+                      <option value="high">High ★</option>
+                    </select>
                   </div>
                 </div>
 
@@ -1259,12 +1493,7 @@ const OnPageSEO = ({ projectId, userRole, userId }) => {
                   </label>
                   <select
                     value={editFormData.category}
-                    onChange={(e) =>
-                      setEditFormData({
-                        ...editFormData,
-                        category: e.target.value,
-                      })
-                    }
+                    onChange={(e) => setEditFormData({ ...editFormData, category: e.target.value })}
                     className="w-full px-4 py-2 bg-[#0f1419] border border-[#232945] rounded-lg text-white focus:outline-none focus:border-blue-500"
                     required
                   >
@@ -1331,29 +1560,45 @@ const OnPageSEO = ({ projectId, userRole, userId }) => {
                   Rank History
                 </h4>
                 <div className="space-y-2 max-h-48 overflow-y-auto">
-                  {selectedKeyword.rankHistory.map((record, index) => (
+                  {[...selectedKeyword.rankHistory].reverse().map((record, index) => (
                     <div
                       key={index}
                       className="flex items-center justify-between py-2 px-3 bg-[#141a21] rounded-lg"
                     >
                       <div className="flex items-center gap-3">
-                        <div className="text-2xl font-bold text-white">
-                          #{record.rank}
+                        <div className={`text-2xl font-bold ${record.rank >= 101 || record.rank === 0 ? "text-red-400 text-base" : "text-white"}`}>
+                          {record.rank >= 101 || record.rank === 0 ? "N/R" : `#${record.rank}`}
                         </div>
                         <div>
                           <div className="text-xs text-gray-500">
                             {new Date(record.recordedAt).toLocaleString()}
                           </div>
                           {record.notes && (
-                            <div className="text-xs text-gray-400 mt-1">
-                              {record.notes}
-                            </div>
+                            <div className="text-xs text-gray-400 mt-0.5">{record.notes}</div>
                           )}
                         </div>
                       </div>
-                      <div className="text-xs text-gray-500 flex items-center gap-1">
-                        <User className="w-3 h-3" />
-                        {record.recordedBy?.name || "Unknown"}
+                      <div className="flex flex-col items-end gap-1">
+                        <span className={`text-xs px-1.5 py-0.5 rounded-full ${
+                          record.source === "auto"   ? "bg-purple-500/20 text-purple-300" :
+                          record.source === "fetch"  ? "bg-blue-500/20   text-blue-300"   :
+                          record.source === "scrape" ? "bg-orange-500/20 text-orange-300" :
+                                                       "bg-gray-500/20   text-gray-500"
+                        }`}>
+                          {record.source === "auto"   ? "auto"    :
+                           record.source === "fetch"  ? "api"     :
+                           record.source === "scrape" ? "scraped" : "manual"}
+                        </span>
+                        <div className="text-xs text-gray-500 flex items-center gap-1">
+                          {record.source === "auto" || record.source === "scrape" || record.source === "fetch" ? (
+                            <Globe className="w-3 h-3" />
+                          ) : (
+                            <User className="w-3 h-3" />
+                          )}
+                          {record.source === "auto"
+                            ? "Auto-fetched"
+                            : record.recordedBy?.name || "System"}
+                        </div>
                       </div>
                     </div>
                   ))}

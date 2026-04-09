@@ -215,12 +215,32 @@ class ReportDataService {
         return rank !== undefined && rank !== null ? { rank: Number(rank) } : null;
       };
 
+      // Helper: convert rank value to display string (101+ = "Not ranked", 0 = "Not ranked")
+      const rankDisplay = (rankObj) => {
+        if (!rankObj) return null;
+        const r = rankObj.rank;
+        if (r === undefined || r === null) return null;
+        if (r === 0 || r >= 101) return { rank: null, display: "Not ranked" };
+        return { rank: r, display: String(r) };
+      };
+
+      const currentSource = keywordObj.currentRank?.source || "manual";
+
       return {
-        keyword: String(keywordObj.keyword || "N/A"),
-        pastRank: getPastRank(),
-        previousRank: getPreviousRank(),
-        currentRank: getCurrentRank(),
-        rankTrend: String(keywordObj.rankTrend || "no-change"),
+        keyword:      String(keywordObj.keyword || "N/A"),
+        pastRank:     rankDisplay(getPastRank()),
+        previousRank: rankDisplay(getPreviousRank()),
+        currentRank:  rankDisplay(getCurrentRank()),
+        rankTrend:    String(keywordObj.rankTrend || "no-change"),
+        // New fields for richer PDF reports
+        city:         String(keywordObj.city    || ""),
+        country:      String(keywordObj.country || keywordObj.location || "Global"),
+        device:       String(keywordObj.device  || "desktop"),
+        priority:     String(keywordObj.priority || "normal"),
+        source:       currentSource,
+        sourceLabel:  currentSource === "auto"   ? "Auto-fetched" :
+                      currentSource === "fetch"  ? "API fetch"    :
+                      currentSource === "scrape" ? "Scraped"      : "Manual",
       };
     });
   }

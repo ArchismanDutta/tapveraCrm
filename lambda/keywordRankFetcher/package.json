@@ -1,0 +1,9 @@
+{
+  "name": "tapvera-keyword-rank-fetcher",
+  "version": "1.0.0",
+  "description": "AWS Lambda function for scheduled keyword rank fetching",
+  "main": "handler.js",
+  "dependencies": {
+    "mongoose": "^8.0.0"
+  }
+}

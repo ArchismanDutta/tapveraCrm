@@ -5,11 +5,13 @@ const rankHistorySchema = new mongoose.Schema({
     type: Number,
     required: true,
     min: 0,
+    // 0   = legacy "not ranked" (manual entries, backward-compat)
+    // 101 = auto-detected "not in top 100" (new standard for auto/fetch/scrape)
   },
   recordedBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "User",
-    required: true,
+    required: false, // false: cron job has no user context
   },
   recordedAt: {
     type: Date,
@@ -19,6 +21,25 @@ const rankHistorySchema = new mongoose.Schema({
     type: String,
     trim: true,
   },
+  source: {
+    type: String,
+    enum: ["manual", "auto", "fetch", "scrape"],
+    default: "manual",
+  },
+  device: {
+    type: String,
+    enum: ["desktop", "mobile"],
+    default: "desktop",
+  },
+  // Top 10 SERP results at time of fetch (for competitor visibility)
+  serpSnapshot: [
+    {
+      position: Number,
+      domain: String,
+      url: String,
+      title: String,
+    },
+  ],
 });
 
 const keywordRankSchema = new mongoose.Schema(
@@ -55,15 +76,48 @@ const keywordRankSchema = new mongoose.Schema(
       enum: ["Google", "Bing", "Yahoo"],
       default: "Google",
     },
+    // Legacy single-string location kept for backward compatibility
     location: {
       type: String,
       default: "Global",
       trim: true,
     },
+    // City-level location fields (new)
+    city: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    country: {
+      type: String,
+      trim: true,
+      default: "Global",
+    },
+    countryCode: {
+      type: String,
+      trim: true,
+      default: "",
+      lowercase: true,
+    },
     category: {
       type: String,
       enum: ["SEO", "GMB"],
       default: "SEO",
+    },
+    priority: {
+      type: String,
+      enum: ["high", "normal"],
+      default: "normal",
+    },
+    device: {
+      type: String,
+      enum: ["desktop", "mobile"],
+      default: "desktop",
+    },
+    fetchFrequency: {
+      type: String,
+      enum: ["daily", "weekly", "monthly"],
+      default: "weekly",
     },
     rankHistory: [rankHistorySchema],
     isActive: {
@@ -82,35 +136,31 @@ const keywordRankSchema = new mongoose.Schema(
 );
 
 // Index for faster queries
-// Same keyword can exist with different categories (SEO, GMB)
 keywordRankSchema.index({ project: 1, keyword: 1, category: 1 });
 keywordRankSchema.index({ createdAt: -1 });
 
-// Virtual for current rank
+// ─── Virtuals ─────────────────────────────────────────────────────────────────
+
 keywordRankSchema.virtual("currentRank").get(function () {
   if (!this.rankHistory || this.rankHistory.length === 0) return null;
   return this.rankHistory[this.rankHistory.length - 1];
 });
 
-// Virtual for previous rank
 keywordRankSchema.virtual("previousRank").get(function () {
   if (!this.rankHistory || this.rankHistory.length < 2) return null;
   return this.rankHistory[this.rankHistory.length - 2];
 });
 
-// Virtual for past rank (3rd most recent)
 keywordRankSchema.virtual("pastRank").get(function () {
   if (!this.rankHistory || this.rankHistory.length < 3) return null;
   return this.rankHistory[this.rankHistory.length - 3];
 });
 
-// Virtual for rank change (difference between current and previous)
 keywordRankSchema.virtual("rankChange").get(function () {
   if (!this.currentRank || !this.previousRank) return 0;
   return calculateRankChange(this.previousRank.rank, this.currentRank.rank);
 });
 
-// Virtual for rank trend (improved, declined, stable)
 keywordRankSchema.virtual("rankTrend").get(function () {
   const change = this.rankChange;
   if (change > 0) return "improved";
@@ -118,63 +168,69 @@ keywordRankSchema.virtual("rankTrend").get(function () {
   return "stable";
 });
 
-// Ensure virtuals are included in JSON
 keywordRankSchema.set("toJSON", { virtuals: true });
 keywordRankSchema.set("toObject", { virtuals: true });
 
-// Helper function to calculate rank change handling zero (not ranked) case
-function calculateRankChange(prevRank, currRank) {
-  // Special handling for rank 0 (not ranked)
-  // 0 means "not ranked" which is worse than any positive ranking
-  if (prevRank === 0 && currRank > 0) {
-    // Moving from unranked (0) to any ranking (1, 2, 3...) is an improvement
-    // Return a positive value proportional to the ranking achieved
-    return 100 - currRank; // Higher positive number for better rankings
-  }
+// ─── Rank change calculation ──────────────────────────────────────────────────
 
-  if (prevRank > 0 && currRank === 0) {
-    // Moving from ranked to unranked is a decline
-    // Return a negative value
+// Treats both legacy 0 and new 101+ as "not ranked"
+function isNotRanked(rank) {
+  return rank === 0 || rank >= 101;
+}
+
+function calculateRankChange(prevRank, currRank) {
+  const prevUnranked = isNotRanked(prevRank);
+  const currUnranked = isNotRanked(currRank);
+
+  if (prevUnranked && !currUnranked) {
+    // Entered rankings: improvement proportional to position achieved
+    return 100 - currRank;
+  }
+  if (!prevUnranked && currUnranked) {
+    // Fell out of rankings: steep decline
     return -(100 + prevRank);
   }
-
-  if (prevRank === 0 && currRank === 0) {
-    // Both unranked, no change
+  if (prevUnranked && currUnranked) {
     return 0;
   }
-
-  // Normal case: both have rankings (1, 2, 3, etc.)
-  // Positive change means improvement (rank went down in number)
+  // Normal case: lower number = better, so positive = improvement
   return prevRank - currRank;
 }
 
-// Method to add new rank
-keywordRankSchema.methods.addRank = function (rank, userId, notes = "") {
+// ─── Instance methods ─────────────────────────────────────────────────────────
+
+// Add a new rank entry to history
+keywordRankSchema.methods.addRank = function (
+  rank,
+  userId,
+  notes = "",
+  source = "manual",
+  device = "desktop",
+  serpSnapshot = []
+) {
   this.rankHistory.push({
     rank,
-    recordedBy: userId,
+    recordedBy: userId || undefined,
     recordedAt: new Date(),
     notes,
+    source,
+    device,
+    serpSnapshot,
   });
   return this.save();
 };
 
-// Method to get rank at specific date
+// Get the rank entry closest to a specific date
 keywordRankSchema.methods.getRankAtDate = function (targetDate) {
   if (!this.rankHistory || this.rankHistory.length === 0) return null;
-
-  // Find the closest rank record before or on the target date
   const validRecords = this.rankHistory.filter(
     (record) => new Date(record.recordedAt) <= targetDate
   );
-
   if (validRecords.length === 0) return null;
-
-  // Return the most recent valid record
   return validRecords[validRecords.length - 1];
 };
 
-// Method to calculate velocity over a time period (in days)
+// Calculate velocity (rank change per day) over a time window
 keywordRankSchema.methods.calculateVelocity = function (days = 7) {
   if (!this.rankHistory || this.rankHistory.length < 2) {
     return { change: 0, velocity: 0, hasData: false };
@@ -186,10 +242,7 @@ keywordRankSchema.methods.calculateVelocity = function (days = 7) {
   const currentRank = this.currentRank;
   const pastRank = this.getRankAtDate(targetDate);
 
-  // If we don't have data from the requested time period,
-  // use the first and last rank in history as fallback
   if (!currentRank || !pastRank) {
-    // Fallback: Compare first and last rank in history
     const firstRank = this.rankHistory[0];
     const lastRank = this.rankHistory[this.rankHistory.length - 1];
 
@@ -197,10 +250,10 @@ keywordRankSchema.methods.calculateVelocity = function (days = 7) {
       return { change: 0, velocity: 0, hasData: false };
     }
 
-    // Calculate actual time elapsed in days
-    const timeElapsed = (new Date(lastRank.recordedAt) - new Date(firstRank.recordedAt)) / (1000 * 60 * 60 * 24);
-    const daysElapsed = Math.max(timeElapsed, 0.1); // Minimum 0.1 days to handle same-day updates better
-
+    const timeElapsed =
+      (new Date(lastRank.recordedAt) - new Date(firstRank.recordedAt)) /
+      (1000 * 60 * 60 * 24);
+    const daysElapsed = Math.max(timeElapsed, 0.1);
     const change = calculateRankChange(firstRank.rank, lastRank.rank);
     const velocity = change / daysElapsed;
 
@@ -211,14 +264,13 @@ keywordRankSchema.methods.calculateVelocity = function (days = 7) {
       currentRank: lastRank.rank,
       pastRank: firstRank.rank,
       daysAnalyzed: daysElapsed,
-      isFallback: true, // Indicate this is based on available data, not requested time period
+      isFallback: true,
       requestedDays: days,
     };
   }
 
-  // Positive change means improvement (rank went down in number)
   const change = calculateRankChange(pastRank.rank, currentRank.rank);
-  const velocity = change / days; // Average positions gained per day
+  const velocity = change / days;
 
   return {
     change,
@@ -231,125 +283,107 @@ keywordRankSchema.methods.calculateVelocity = function (days = 7) {
   };
 };
 
-// Check if keyword is stagnant (no movement in X days)
+// Check if keyword has not moved in X days
 keywordRankSchema.methods.isStagnant = function (days = 30) {
   if (!this.rankHistory || this.rankHistory.length < 2) return false;
 
   const now = new Date();
   const targetDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
-
   const currentRank = this.currentRank;
   const pastRank = this.getRankAtDate(targetDate);
 
-  // If we don't have data from the requested period, use fallback
   if (!currentRank || !pastRank) {
-    // Fallback: Compare first and last rank in history
     const firstRank = this.rankHistory[0];
     const lastRank = this.rankHistory[this.rankHistory.length - 1];
-
     if (!firstRank || !lastRank) return false;
-
-    // Check if keyword has at least 2 different dates
-    const firstDate = new Date(firstRank.recordedAt);
-    const lastDate = new Date(lastRank.recordedAt);
-    const daysDiff = (lastDate - firstDate) / (1000 * 60 * 60 * 24);
-
-    // Only consider stagnant if at least 1 day has passed and rank hasn't changed
+    const daysDiff =
+      (new Date(lastRank.recordedAt) - new Date(firstRank.recordedAt)) /
+      (1000 * 60 * 60 * 24);
     if (daysDiff < 1) return false;
-
     return firstRank.rank === lastRank.rank;
   }
 
-  // No movement if rank is exactly the same
   return currentRank.rank === pastRank.rank;
 };
 
-// Check for rapid decline (drop of X positions in Y days)
-keywordRankSchema.methods.hasRapidDecline = function (
-  positionDrop = 5,
-  days = 7
-) {
+// Check for a rapid decline over X days
+keywordRankSchema.methods.hasRapidDecline = function (positionDrop = 5, days = 7) {
   const velocity = this.calculateVelocity(days);
-
   if (!velocity.hasData) return false;
-
-  // Negative change means decline (rank went up in number)
   return velocity.change <= -positionDrop;
 };
 
-// Get velocity category
+// Bin velocity into a descriptive category
 keywordRankSchema.methods.getVelocityCategory = function (days = 7) {
   const velocity = this.calculateVelocity(days);
-
   if (!velocity.hasData) return "unknown";
-
   const change = velocity.change;
-
-  if (change >= 10) return "rapid-improvement"; // +10 or more positions
-  if (change >= 5) return "strong-improvement"; // +5 to +9 positions
-  if (change >= 1) return "improvement"; // +1 to +4 positions
-  if (change === 0) return "stable"; // No change
-  if (change >= -4) return "slight-decline"; // -1 to -4 positions
-  if (change >= -9) return "decline"; // -5 to -9 positions
-  return "rapid-decline"; // -10 or worse
+  if (change >= 10) return "rapid-improvement";
+  if (change >= 5)  return "strong-improvement";
+  if (change >= 1)  return "improvement";
+  if (change === 0) return "stable";
+  if (change >= -4) return "slight-decline";
+  if (change >= -9) return "decline";
+  return "rapid-decline";
 };
 
-// Virtual field for 7-day velocity
+// ─── Virtual aggregates ───────────────────────────────────────────────────────
+
 keywordRankSchema.virtual("velocity7Day").get(function () {
   return this.calculateVelocity(7);
 });
 
-// Virtual field for 30-day velocity
 keywordRankSchema.virtual("velocity30Day").get(function () {
   return this.calculateVelocity(30);
 });
 
-// Virtual field for stagnation check
 keywordRankSchema.virtual("isStagnant30Days").get(function () {
   return this.isStagnant(30);
 });
 
-// Static method to get all keywords for a project
+// ─── Static methods ───────────────────────────────────────────────────────────
+
 keywordRankSchema.statics.getProjectKeywords = async function (
   projectId,
   activeOnly = true
 ) {
   const filter = { project: projectId };
   if (activeOnly) filter.isActive = true;
-
   return this.find(filter)
     .populate("createdBy", "name email employeeId")
     .populate("rankHistory.recordedBy", "name email employeeId")
     .sort({ createdAt: -1 });
 };
 
-// Static method to get velocity insights for a project
 keywordRankSchema.statics.getVelocityInsights = async function (projectId) {
   const keywords = await this.getProjectKeywords(projectId, true);
 
-  // Calculate velocity for each keyword
   const keywordsWithVelocity = keywords.map((keyword) => {
-    const velocity7 = keyword.calculateVelocity(7);
+    const velocity7  = keyword.calculateVelocity(7);
     const velocity30 = keyword.calculateVelocity(30);
     const isStagnant = keyword.isStagnant(30);
-    const hasRapidDecline = keyword.hasRapidDecline(5, 7);
+    const hasRapidDecline  = keyword.hasRapidDecline(5, 7);
     const velocityCategory = keyword.getVelocityCategory(7);
 
     return {
-      keyword: keyword.keyword,
-      _id: keyword._id,
-      currentRank: keyword.currentRank?.rank || null,
-      velocity7Day: velocity7,
-      velocity30Day: velocity30,
+      keyword:        keyword.keyword,
+      _id:            keyword._id,
+      currentRank:    keyword.currentRank?.rank || null,
+      velocity7Day:   velocity7,
+      velocity30Day:  velocity30,
       isStagnant,
       hasRapidDecline,
       velocityCategory,
-      searchEngine: keyword.searchEngine,
-      location: keyword.location,
+      searchEngine:   keyword.searchEngine,
+      location:       keyword.location,
+      city:           keyword.city,
+      country:        keyword.country,
+      priority:       keyword.priority,
+      fetchFrequency: keyword.fetchFrequency,
+      device:         keyword.device,
     };
   });
 
-  // Filter and sort for different categories
   const fastestImprovements = keywordsWithVelocity
     .filter((k) => k.velocity7Day.hasData && k.velocity7Day.change > 0)
     .sort((a, b) => b.velocity7Day.change - a.velocity7Day.change)
@@ -361,7 +395,6 @@ keywordRankSchema.statics.getVelocityInsights = async function (projectId) {
 
   const stagnantKeywords = keywordsWithVelocity.filter((k) => k.isStagnant);
 
-  // Calculate summary statistics
   const totalKeywords = keywordsWithVelocity.length;
   const improving = keywordsWithVelocity.filter(
     (k) => k.velocity7Day.hasData && k.velocity7Day.change > 0
@@ -391,9 +424,9 @@ keywordRankSchema.statics.getVelocityInsights = async function (projectId) {
       improving,
       declining,
       stable,
-      stagnant: stagnantKeywords.length,
+      stagnant:      stagnantKeywords.length,
       rapidDeclines: rapidDeclines.length,
-      averageVelocity7Day: Math.round(averageVelocity7Day * 100) / 100,
+      averageVelocity7Day:  Math.round(averageVelocity7Day  * 100) / 100,
       averageVelocity30Day: Math.round(averageVelocity30Day * 100) / 100,
     },
     fastestImprovements,

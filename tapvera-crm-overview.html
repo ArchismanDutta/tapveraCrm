@@ -1,0 +1,1879 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tapvera CRM — Business Overview</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Playfair+Display:wght@700;800&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    :root {
+      --primary: #FF9900;
+      --primary-light: #FFB740;
+      --secondary: #FFC300;
+      --orange-dark: #CC7A00;
+      --bg: #0F0F0F;
+      --surface: #1A1A1A;
+      --surface2: #222222;
+      --border: #2E2E2E;
+      --text: #FFFFFF;
+      --muted: #AAAAAA;
+      --muted2: #666666;
+      --pink: #f19ad2;
+      --violet: #ab4ee1;
+      --violet-deep: #9743c8;
+      --green: #22c55e;
+      --blue: #3b82f6;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      line-height: 1.7;
+      overflow-x: hidden;
+    }
+
+    /* ─── SVG ICON HELPERS ─── */
+    .icon {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .icon svg {
+      display: block;
+    }
+
+    /* ─── COVER ─── */
+    .cover {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      padding: 60px 40px 100px;
+      text-align: center;
+      overflow: hidden;
+    }
+
+    .cover-bg {
+      position: absolute;
+      inset: 0;
+      background:
+        radial-gradient(ellipse 80% 60% at 50% 0%, rgba(255,153,0,0.16) 0%, transparent 70%),
+        radial-gradient(ellipse 60% 40% at 100% 100%, rgba(171,78,225,0.13) 0%, transparent 60%),
+        radial-gradient(ellipse 50% 40% at 0% 80%, rgba(241,154,210,0.08) 0%, transparent 60%),
+        var(--bg);
+    }
+
+    .cover-grid {
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(255,153,0,0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,153,0,0.04) 1px, transparent 1px);
+      background-size: 60px 60px;
+    }
+
+    .cover-content {
+      position: relative;
+      z-index: 1;
+      max-width: 820px;
+    }
+
+    .cover-logo {
+      width: 140px;
+      height: auto;
+      margin-bottom: 36px;
+      filter: drop-shadow(0 0 32px rgba(255,153,0,0.45));
+    }
+
+    .cover-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(255,153,0,0.10);
+      border: 1px solid rgba(255,153,0,0.30);
+      color: var(--primary);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 2.5px;
+      text-transform: uppercase;
+      padding: 8px 20px;
+      border-radius: 100px;
+      margin-bottom: 32px;
+    }
+
+    .cover-badge-dot {
+      width: 6px;
+      height: 6px;
+      background: var(--primary);
+      border-radius: 50%;
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(1.4); }
+    }
+
+    .cover-title {
+      font-family: 'Playfair Display', serif;
+      font-size: clamp(38px, 6vw, 70px);
+      font-weight: 800;
+      line-height: 1.08;
+      margin-bottom: 22px;
+      background: linear-gradient(135deg, #ffffff 0%, var(--primary) 55%, var(--secondary) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .cover-subtitle {
+      font-size: 17px;
+      color: var(--muted);
+      font-weight: 400;
+      max-width: 540px;
+      margin: 0 auto 52px;
+    }
+
+    .cover-stats {
+      display: flex;
+      justify-content: center;
+      gap: 14px;
+      flex-wrap: wrap;
+      margin-bottom: 56px;
+    }
+
+    .cover-stat {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 20px 30px;
+      text-align: center;
+    }
+
+    .cover-stat-num {
+      font-size: 30px;
+      font-weight: 800;
+      color: var(--primary);
+      display: block;
+      line-height: 1;
+      margin-bottom: 6px;
+    }
+
+    .cover-stat-label {
+      font-size: 12px;
+      color: var(--muted);
+      letter-spacing: 0.3px;
+    }
+
+    .cover-divider {
+      width: 100px;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--primary), transparent);
+      margin: 0 auto 18px;
+    }
+
+    .cover-footer {
+      position: absolute;
+      bottom: 28px;
+      left: 0;
+      right: 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0 48px;
+      font-size: 11px;
+      color: var(--muted2);
+      z-index: 1;
+    }
+
+    /* ─── NAV ─── */
+    .nav {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: rgba(15,15,15,0.94);
+      backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border);
+      padding: 0 48px;
+      height: 58px;
+      display: flex;
+      align-items: center;
+      gap: 28px;
+    }
+
+    .nav-logo {
+      height: 26px;
+      width: auto;
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 24px;
+      list-style: none;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+    .nav-links::-webkit-scrollbar { display: none; }
+
+    .nav-links a {
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 500;
+      white-space: nowrap;
+      transition: color 0.2s;
+    }
+    .nav-links a:hover { color: var(--primary); }
+
+    /* ─── LAYOUT ─── */
+    .container {
+      max-width: 1080px;
+      margin: 0 auto;
+      padding: 0 40px;
+    }
+
+    .section { padding: 96px 0; }
+    .section-alt { background: var(--surface); }
+
+    .section-header {
+      text-align: center;
+      margin-bottom: 64px;
+    }
+
+    .section-tag {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 2.5px;
+      text-transform: uppercase;
+      color: var(--primary);
+      margin-bottom: 12px;
+    }
+
+    .section-title {
+      font-family: 'Playfair Display', serif;
+      font-size: clamp(28px, 4vw, 44px);
+      font-weight: 800;
+      line-height: 1.2;
+      margin-bottom: 16px;
+      color: var(--text);
+    }
+
+    .section-desc {
+      font-size: 16px;
+      color: var(--muted);
+      max-width: 580px;
+      margin: 0 auto;
+    }
+
+    /* ─── INTRO GRID ─── */
+    .intro-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 56px;
+      align-items: center;
+    }
+
+    .intro-text h2 {
+      font-family: 'Playfair Display', serif;
+      font-size: clamp(26px, 3.5vw, 40px);
+      font-weight: 800;
+      line-height: 1.2;
+      margin-bottom: 20px;
+    }
+
+    .intro-text h2 span { color: var(--primary); }
+
+    .intro-text p {
+      color: var(--muted);
+      font-size: 15px;
+      margin-bottom: 16px;
+    }
+
+    .highlight-box {
+      background: linear-gradient(135deg, rgba(255,153,0,0.09), rgba(255,153,0,0.04));
+      border: 1px solid rgba(255,153,0,0.22);
+      border-radius: 14px;
+      padding: 24px;
+      margin-top: 24px;
+    }
+
+    .highlight-box p {
+      color: var(--text);
+      font-size: 14px;
+      margin: 0;
+      line-height: 1.75;
+    }
+
+    .intro-visual {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 22px;
+      padding: 30px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .intro-visual::before {
+      content: '';
+      position: absolute;
+      top: -40px;
+      right: -40px;
+      width: 150px;
+      height: 150px;
+      background: radial-gradient(circle, rgba(255,153,0,0.18), transparent 70%);
+    }
+
+    .visual-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 13px;
+    }
+
+    .visual-list li {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .visual-list li .dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--primary);
+      flex-shrink: 0;
+      margin-top: 5px;
+    }
+
+    .visual-list li strong { color: var(--text); }
+
+    /* ─── CARDS GRID ─── */
+    .cards-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 18px;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 26px;
+      transition: border-color 0.25s, transform 0.25s;
+      overflow: hidden;
+    }
+
+    .card:hover {
+      border-color: rgba(255,153,0,0.38);
+      transform: translateY(-3px);
+    }
+
+    .card-icon {
+      width: 46px;
+      height: 46px;
+      border-radius: 13px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 16px;
+    }
+
+    .card-icon.orange { background: rgba(255,153,0,0.13); color: var(--primary); }
+    .card-icon.violet { background: rgba(171,78,225,0.13); color: #c084fc; }
+    .card-icon.pink   { background: rgba(241,154,210,0.13); color: #f19ad2; }
+    .card-icon.green  { background: rgba(34,197,94,0.13); color: #4ade80; }
+    .card-icon.blue   { background: rgba(59,130,246,0.13); color: #60a5fa; }
+
+    .card-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 9px;
+    }
+
+    .card-desc {
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.65;
+    }
+
+    /* ─── FEATURE BLOCKS ─── */
+    .feature-block {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 64px;
+      align-items: center;
+      margin-bottom: 96px;
+    }
+
+    .feature-block:last-child { margin-bottom: 0; }
+
+    .feature-block.reverse { direction: rtl; }
+    .feature-block.reverse > * { direction: ltr; }
+
+    .feature-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--primary);
+      margin-bottom: 16px;
+    }
+
+    .feature-label::before {
+      content: '';
+      width: 18px;
+      height: 2px;
+      background: var(--primary);
+      flex-shrink: 0;
+    }
+
+    .feature-title {
+      font-family: 'Playfair Display', serif;
+      font-size: clamp(22px, 2.8vw, 34px);
+      font-weight: 800;
+      line-height: 1.22;
+      margin-bottom: 16px;
+    }
+
+    .feature-desc {
+      color: var(--muted);
+      font-size: 15px;
+      margin-bottom: 24px;
+    }
+
+    .feature-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .feature-list li {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      font-size: 14px;
+      color: var(--muted);
+    }
+
+    .check-circle {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: rgba(255,153,0,0.13);
+      border: 1px solid rgba(255,153,0,0.35);
+      flex-shrink: 0;
+      margin-top: 2px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .check-circle svg {
+      display: block;
+    }
+
+    .feature-panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 22px;
+      padding: 30px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .feature-panel::after {
+      content: '';
+      position: absolute;
+      bottom: -60px;
+      right: -60px;
+      width: 180px;
+      height: 180px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(255,153,0,0.10), transparent);
+    }
+
+    .panel-heading {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--muted2);
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      margin-bottom: 18px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .panel-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 0;
+      border-bottom: 1px solid rgba(46,46,46,0.6);
+      font-size: 13px;
+    }
+
+    .panel-row:last-child { border-bottom: none; }
+    .panel-row-label { color: var(--muted); }
+    .panel-row-value { font-weight: 600; color: var(--text); }
+
+    .badge {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 100px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    .badge-green  { background: rgba(34,197,94,0.13);  color: #4ade80; }
+    .badge-orange { background: rgba(255,153,0,0.13);  color: var(--primary); }
+    .badge-violet { background: rgba(171,78,225,0.13); color: #c084fc; }
+    .badge-blue   { background: rgba(59,130,246,0.13); color: #60a5fa; }
+
+    .callout {
+      background: linear-gradient(135deg, rgba(255,153,0,0.10), rgba(255,195,0,0.05));
+      border: 1px solid rgba(255,153,0,0.25);
+      border-left: 3px solid var(--primary);
+      border-radius: 10px;
+      padding: 20px 24px;
+      margin-top: 24px;
+    }
+
+    .callout p {
+      font-size: 14px;
+      color: var(--text);
+      font-style: italic;
+      line-height: 1.7;
+    }
+
+    /* ─── STATS STRIP ─── */
+    .stats-strip {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 1px;
+      background: var(--border);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      overflow: hidden;
+    }
+
+    .stat-item {
+      background: var(--surface);
+      padding: 28px 20px;
+      text-align: center;
+    }
+
+    .stat-number {
+      font-size: 34px;
+      font-weight: 800;
+      color: var(--primary);
+      line-height: 1;
+      margin-bottom: 8px;
+    }
+
+    .stat-label {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    /* ─── ROLES GRID ─── */
+    .roles-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 18px;
+    }
+
+    .role-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 28px 22px;
+      text-align: center;
+    }
+
+    .role-icon {
+      width: 58px;
+      height: 58px;
+      border-radius: 50%;
+      margin: 0 auto 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .role-name {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 8px;
+    }
+
+    .role-desc {
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.65;
+    }
+
+    /* ─── PILLARS ─── */
+    .pillars-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 22px;
+    }
+
+    .pillar {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 28px;
+      display: flex;
+      gap: 18px;
+      align-items: flex-start;
+    }
+
+    .pillar-icon {
+      width: 50px;
+      height: 50px;
+      border-radius: 14px;
+      background: linear-gradient(135deg, rgba(255,153,0,0.18), rgba(255,153,0,0.05));
+      border: 1px solid rgba(255,153,0,0.18);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      color: var(--primary);
+    }
+
+    .pillar-body h3 {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 7px;
+    }
+
+    .pillar-body p {
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.65;
+    }
+
+    /* ─── COMPARE TABLE ─── */
+    .compare-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    .compare-table th {
+      padding: 14px 18px;
+      text-align: left;
+      background: var(--surface2);
+      color: var(--muted);
+      font-weight: 600;
+      font-size: 11px;
+      letter-spacing: 1.2px;
+      text-transform: uppercase;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .compare-table td {
+      padding: 13px 18px;
+      border-bottom: 1px solid rgba(46,46,46,0.5);
+      color: var(--muted);
+      vertical-align: middle;
+    }
+
+    .compare-table tbody tr:last-child td { border-bottom: none; }
+    .compare-table tbody tr:hover td { background: rgba(255,255,255,0.02); }
+    .compare-table td:first-child { color: var(--text); font-weight: 500; }
+
+    /* ─── STEPS ─── */
+    .steps {
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+
+    .steps::before {
+      content: '';
+      position: absolute;
+      left: 23px;
+      top: 48px;
+      bottom: 48px;
+      width: 2px;
+      background: linear-gradient(180deg, var(--primary), var(--violet));
+    }
+
+    .step {
+      display: flex;
+      gap: 22px;
+      padding-bottom: 38px;
+      position: relative;
+    }
+
+    .step:last-child { padding-bottom: 0; }
+
+    .step-num {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--primary), var(--orange-dark));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 16px;
+      color: #000;
+      flex-shrink: 0;
+      position: relative;
+      z-index: 1;
+      box-shadow: 0 0 18px rgba(255,153,0,0.28);
+    }
+
+    .step-content h3 {
+      font-size: 16px;
+      font-weight: 700;
+      margin-bottom: 6px;
+      padding-top: 12px;
+    }
+
+    .step-content p {
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.65;
+    }
+
+    /* ─── GRADIENT SECTION ─── */
+    .gradient-section {
+      background: linear-gradient(135deg, rgba(255,153,0,0.06) 0%, rgba(171,78,225,0.06) 100%);
+      border-top: 1px solid rgba(255,153,0,0.12);
+      border-bottom: 1px solid rgba(171,78,225,0.12);
+    }
+
+    /* ─── TAG CLOUD ─── */
+    .tag-cloud {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 9px;
+      margin-top: 24px;
+    }
+
+    .module-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--border);
+      border-radius: 100px;
+      padding: 5px 13px;
+      font-size: 12px;
+      color: var(--muted);
+      font-weight: 500;
+    }
+
+    .module-tag .dot {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    /* ─── DIVIDER ─── */
+    .divider {
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--border), transparent);
+    }
+
+    /* ─── FOOTER ─── */
+    .footer {
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      padding: 52px 0;
+      text-align: center;
+    }
+
+    .footer-logo {
+      height: 34px;
+      width: auto;
+      margin-bottom: 16px;
+      opacity: 0.82;
+    }
+
+    .footer-text {
+      font-size: 12px;
+      color: var(--muted2);
+      margin-bottom: 6px;
+    }
+
+    .footer-brand {
+      font-size: 12px;
+      color: var(--primary);
+      font-weight: 600;
+    }
+
+    .footer-credits {
+      margin-top: 20px;
+      padding-top: 20px;
+      border-top: 1px solid var(--border);
+      font-size: 12px;
+      color: var(--muted2);
+    }
+
+    .footer-credits span {
+      color: var(--muted);
+      font-weight: 500;
+    }
+
+    /* ─── RESPONSIVE ─── */
+    @media (max-width: 900px) {
+      .container { padding: 0 24px; }
+      .section { padding: 64px 0; }
+      .intro-grid,
+      .feature-block { grid-template-columns: 1fr; gap: 32px; }
+      .feature-block.reverse { direction: ltr; }
+      .cards-grid { grid-template-columns: 1fr 1fr; }
+      .roles-grid { grid-template-columns: 1fr 1fr; }
+      .pillars-grid { grid-template-columns: 1fr; }
+      .stats-strip { grid-template-columns: 1fr 1fr; }
+      .nav { padding: 0 24px; }
+      .cover-footer { padding: 0 24px; }
+    }
+
+    @media (max-width: 600px) {
+      .cards-grid { grid-template-columns: 1fr; }
+      .roles-grid { grid-template-columns: 1fr 1fr; }
+      .stats-strip { grid-template-columns: 1fr 1fr; }
+      .cover { padding: 48px 24px 88px; }
+      .cover-stats { gap: 10px; }
+      .cover-stat { padding: 14px 18px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════
+     COVER
+═══════════════════════════════════════════════════ -->
+<section class="cover">
+  <div class="cover-bg"></div>
+  <div class="cover-grid"></div>
+  <div class="cover-content">
+    <img src="client/src/assets/tapvera.png" alt="Tapvera" class="cover-logo" onerror="this.style.display='none'" />
+    <div class="cover-badge">
+      <span class="cover-badge-dot"></span>
+      Business Overview Document
+    </div>
+    <h1 class="cover-title">Your Business,<br>Fully in Control.</h1>
+    <p class="cover-subtitle">
+      A complete look at how Tapvera CRM organizes your team, projects, clients, and revenue — all under one roof.
+    </p>
+    <div class="cover-stats">
+      <div class="cover-stat">
+        <span class="cover-stat-num">15+</span>
+        <span class="cover-stat-label">Core Modules</span>
+      </div>
+      <div class="cover-stat">
+        <span class="cover-stat-num">4</span>
+        <span class="cover-stat-label">User Roles</span>
+      </div>
+      <div class="cover-stat">
+        <span class="cover-stat-num">Live</span>
+        <span class="cover-stat-label">Real-Time Updates</span>
+      </div>
+      <div class="cover-stat">
+        <span class="cover-stat-num">AI</span>
+        <span class="cover-stat-label">Powered Assistant</span>
+      </div>
+    </div>
+    <div class="cover-divider"></div>
+    <p style="font-size:12px; color:var(--muted2);">Tapvera Technologies Pvt. Ltd. &nbsp;&middot;&nbsp; Prepared April 2026</p>
+  </div>
+  <div class="cover-footer">
+    <span>Tapvera CRM</span>
+    <span>Confidential &mdash; Internal Document</span>
+    <span>April 2026</span>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════
+     NAVIGATION
+═══════════════════════════════════════════════════ -->
+<nav class="nav">
+  <img src="client/src/assets/tapvera.png" alt="Tapvera" class="nav-logo" onerror="this.style.display='none'" />
+  <ul class="nav-links">
+    <li><a href="#intro">What is it?</a></li>
+    <li><a href="#features">Features</a></li>
+    <li><a href="#hr">HR &amp; Payroll</a></li>
+    <li><a href="#attendance">Attendance</a></li>
+    <li><a href="#projects">Projects</a></li>
+    <li><a href="#leads">Leads &amp; Sales</a></li>
+    <li><a href="#communication">Communication</a></li>
+    <li><a href="#analytics">Analytics</a></li>
+    <li><a href="#security">Access &amp; Roles</a></li>
+    <li><a href="#benefits">Benefits</a></li>
+  </ul>
+</nav>
+
+<!-- ═══════════════════════════════════════════════════
+     WHAT IS IT
+═══════════════════════════════════════════════════ -->
+<section class="section" id="intro">
+  <div class="container">
+    <div class="intro-grid">
+      <div class="intro-text">
+        <h2>One platform that <span>runs your entire business.</span></h2>
+        <p>
+          Tapvera CRM is a custom-built business management system designed specifically for your company. It replaces the need for multiple disconnected tools — spreadsheets, WhatsApp groups, separate payroll software, and manual attendance registers.
+        </p>
+        <p>
+          Everything — your employees, clients, projects, payments, and leads — lives in one place. Your team logs in, does their work, and you get a clear view of everything happening across the business.
+        </p>
+        <div class="highlight-box">
+          <p>
+            Think of it as the central nervous system of your company. Whether you are managing five people or five hundred, Tapvera CRM gives you the visibility and control to keep things running smoothly — without the chaos.
+          </p>
+        </div>
+      </div>
+      <div class="intro-visual">
+        <p class="panel-heading">What Tapvera Replaces</p>
+        <ul class="visual-list">
+          <li><span class="dot"></span><span><strong>Attendance registers</strong> &rarr; Digital check-in with real-time tracking</span></li>
+          <li><span class="dot"></span><span><strong>WhatsApp groups</strong> &rarr; Structured project chat &amp; communication</span></li>
+          <li><span class="dot"></span><span><strong>Excel payroll sheets</strong> &rarr; Automated salary &amp; payslip generation</span></li>
+          <li><span class="dot"></span><span><strong>Paper leave forms</strong> &rarr; Digital request, review, and approval</span></li>
+          <li><span class="dot"></span><span><strong>Scattered lead tracking</strong> &rarr; Kanban-style lead &amp; callback management</span></li>
+          <li><span class="dot"></span><span><strong>Manual project updates</strong> &rarr; Live project dashboard for the whole team</span></li>
+          <li><span class="dot"></span><span><strong>Separate invoice tools</strong> &rarr; Built-in invoicing with PDF export</span></li>
+          <li><span class="dot"></span><span><strong>Guesswork reporting</strong> &rarr; Real-time data and performance dashboards</span></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ═══════════════════════════════════════════════════
+     STATS STRIP
+═══════════════════════════════════════════════════ -->
+<section style="padding: 0;">
+  <div class="container" style="padding-top: 64px; padding-bottom: 64px;">
+    <div class="stats-strip">
+      <div class="stat-item">
+        <div class="stat-number">100%</div>
+        <div class="stat-label">Cloud-based, access from anywhere</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-number">Live</div>
+        <div class="stat-label">Real-time notifications &amp; updates</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-number">Auto</div>
+        <div class="stat-label">Payroll, payslips &amp; email reports</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-number">AI</div>
+        <div class="stat-label">Smart assistant built right in</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ═══════════════════════════════════════════════════
+     FEATURES OVERVIEW
+═══════════════════════════════════════════════════ -->
+<section class="section section-alt" id="features">
+  <div class="container">
+    <div class="section-header">
+      <span class="section-tag">Core Features</span>
+      <h2 class="section-title">Everything Your Business Needs</h2>
+      <p class="section-desc">Every module has been built to solve a real, everyday business problem — without unnecessary complexity.</p>
+    </div>
+
+    <div class="cards-grid">
+
+      <div class="card">
+        <div class="card-icon orange">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+        </div>
+        <h3 class="card-title">Employee Management</h3>
+        <p class="card-desc">Add, view, and manage all your employees in one place. Track their roles, departments, contact details, and work history without digging through files or folders.</p>
+      </div>
+
+      <div class="card">
+        <div class="card-icon green">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        </div>
+        <h3 class="card-title">Attendance Tracking</h3>
+        <p class="card-desc">Employees check in and check out digitally. You see who is present, who is absent, and who came in late — in real time, without having to ask anyone.</p>
+      </div>
+
+      <div class="card">
+        <div class="card-icon orange">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/><line x1="12" y1="12" x2="12" y2="17"/><line x1="9.5" y1="14.5" x2="14.5" y2="14.5"/></svg>
+        </div>
+        <h3 class="card-title">Project Management</h3>
+        <p class="card-desc">Create projects, assign team members, set deadlines, and track progress. Every project has its own space for updates, files, and team communication.</p>
+      </div>
+
+      <div class="card">
+        <div class="card-icon violet">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+        </div>
+        <h3 class="card-title">Payroll &amp; Payslips</h3>
+        <p class="card-desc">Salary calculations happen automatically. Payslips are generated with one click and sent directly to your employees — no manual effort required.</p>
+      </div>
+
+      <div class="card">
+        <div class="card-icon blue">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.88 13a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.81 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l.91-.91a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 17z"/></svg>
+        </div>
+        <h3 class="card-title">Lead &amp; Sales Management</h3>
+        <p class="card-desc">Track every sales lead from the first contact to closing the deal. Leads move through stages on a visual board so your team always knows what action to take next.</p>
+      </div>
+
+      <div class="card">
+        <div class="card-icon pink">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        </div>
+        <h3 class="card-title">Team Chat</h3>
+        <p class="card-desc">Your team communicates directly inside the CRM. No need for external apps. Project-specific chat keeps conversations organized and easy to search.</p>
+      </div>
+
+      <div class="card">
+        <div class="card-icon green">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="12" y2="16"/></svg>
+        </div>
+        <h3 class="card-title">Task Management</h3>
+        <p class="card-desc">Assign tasks to team members with due dates and priorities. Everyone knows what they are responsible for, and you can see what has been completed.</p>
+      </div>
+
+      <div class="card">
+        <div class="card-icon orange">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/><line x1="2" y1="20" x2="22" y2="20"/></svg>
+        </div>
+        <h3 class="card-title">Analytics &amp; Reports</h3>
+        <p class="card-desc">Get a clear picture of your business performance — sales, attendance, projects, and revenue — through clean, easy-to-read dashboards and automated reports.</p>
+      </div>
+
+      <div class="card">
+        <div class="card-icon violet">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        </div>
+        <h3 class="card-title">Role-Based Access</h3>
+        <p class="card-desc">Control exactly what each person can see and do. Employees only see their own data. Managers see their team. Admins have full visibility.</p>
+      </div>
+
+      <div class="card">
+        <div class="card-icon pink">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>
+        </div>
+        <h3 class="card-title">Client Management</h3>
+        <p class="card-desc">Keep all client information organized — contact details, linked projects, communications, and invoices — all in one clean profile per client.</p>
+      </div>
+
+      <div class="card">
+        <div class="card-icon blue">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+        </div>
+        <h3 class="card-title">Leave Management</h3>
+        <p class="card-desc">Employees apply for leave digitally. Managers review and approve or reject with a single click. No forms, no paperwork, no back-and-forth messages.</p>
+      </div>
+
+      <div class="card">
+        <div class="card-icon green">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
+        </div>
+        <h3 class="card-title">AI Assistant</h3>
+        <p class="card-desc">A built-in AI assistant helps your team get quick answers, draft messages, and surface information — without manually searching through data.</p>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ═══════════════════════════════════════════════════
+     HR & PAYROLL
+═══════════════════════════════════════════════════ -->
+<section class="section" id="hr">
+  <div class="container">
+    <div class="feature-block">
+      <div class="feature-text">
+        <div class="feature-label">HR &amp; Payroll</div>
+        <h2 class="feature-title">Forget spreadsheets. Your HR runs itself.</h2>
+        <p class="feature-desc">
+          HR is one of the most time-consuming parts of running a business. Tapvera CRM automates the repetitive parts so your HR team can focus on people, not paperwork.
+        </p>
+        <ul class="feature-list">
+          <li>
+            <span class="check-circle"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke="#FF9900" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+            Salaries calculated automatically each month based on attendance and shift data
+          </li>
+          <li>
+            <span class="check-circle"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke="#FF9900" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+            Payslips generated and sent to employees without any manual effort
+          </li>
+          <li>
+            <span class="check-circle"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke="#FF9900" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+            Leave requests received, reviewed, and approved entirely digitally
+          </li>
+          <li>
+            <span class="check-circle"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke="#FF9900" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+            Holidays set company-wide so everyone sees the same calendar
+          </li>
+          <li>
+            <span class="check-circle"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke="#FF9900" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+            Employee positions and designations managed from one central place
+          </li>
+          <li>
+            <span class="check-circle"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke="#FF9900" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+            Full HR dashboard showing headcount, leaves, and payroll status at a glance
+          </li>
+        </ul>
+      </div>
+      <div class="feature-panel">
+        <p class="panel-heading">Monthly Payroll Overview</p>
+        <div class="panel-row">
+          <span class="panel-row-label">Total Employees</span>
+          <span class="panel-row-value">24</span>
+        </div>
+        <div class="panel-row">
+          <span class="panel-row-label">Payslips Generated</span>
+          <span class="panel-row-value"><span class="badge badge-green">24 / 24</span></span>
+        </div>
+        <div class="panel-row">
+          <span class="panel-row-label">Pending Leave Requests</span>
+          <span class="panel-row-value"><span class="badge badge-orange">3 Pending</span></span>
+        </div>
+        <div class="panel-row">
+          <span class="panel-row-label">Upcoming Holidays</span>
+          <span class="panel-row-value">2 this month</span>
+        </div>
+        <div class="panel-row">
+          <span class="panel-row-label">Payroll Status</span>
+          <span class="panel-row-value"><span class="badge badge-green">Processed</span></span>
+        </div>
+        <div class="panel-row">
+          <span class="panel-row-label">New Joiners</span>
+          <span class="panel-row-value"><span class="badge badge-violet">2 this month</span></span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ═══════════════════════════════════════════════════
+     ATTENDANCE
+═══════════════════════════════════════════════════ -->
+<section class="section section-alt" id="attendance">
+  <div class="container">
+    <div class="feature-block reverse">
+      <div class="feature-text">
+        <div class="feature-label">Attendance &amp; Shifts</div>
+        <h2 class="feature-title">Always know who is working and when.</h2>
+        <p class="feature-desc">
+          Whether your team works fixed hours, rotational shifts, or flexible schedules — Tapvera handles it all. No more calling around to find out who is in.
+        </p>
+        <ul class="feature-list">
+          <li>
+            <span class="check-circle"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke="#FF9900" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+            Employees mark attendance digitally — no physical register needed
+          </li>
+          <li>
+            <span class="check-circle"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke="#FF9900" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+            Multiple shift types supported — morning, evening, night, and flexible
+          </li>
+          <li>
+            <span class="check-circle"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke="#FF9900" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+            Admins can manually correct attendance records when needed
+          </li>
+          <li>
+            <span class="check-circle"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke="#FF9900" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+            Today's attendance visible to managers in real time
+          </li>
+          <li>
+            <span class="check-circle"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke="#FF9900" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+            Monthly attendance reports generated automatically
+          </li>
+          <li>
+            <span class="check-circle"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke="#FF9900" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+            Attendance data feeds directly into payroll calculations
+          </li>
+        </ul>
+      </div>
+      <div class="feature-panel">
+        <p class="panel-heading">Today's Attendance &mdash; Live</p>
+        <div class="panel-row">
+          <span class="panel-row-label">Present</span>
+          <span class="panel-row-value" style="color:#4ade80;">18 employees</span>
+        </div>
+        <div class="panel-row">
+          <span class="panel-row-label">On Leave</span>
+          <span class="panel-row-value" style="color:#f59e0b;">3 employees</span>
+        </div>
+        <div class="panel-row">
+          <span class="panel-row-label">Absent</span>
+          <span class="panel-row-value" style="color:#f87171;">2 employees</span>
+        </div>
+        <div class="panel-row">
+          <span class="panel-row-label">Late Check-in</span>
+          <span class="panel-row-value">1 employee</span>
+        </div>
+        <div class="panel-row">
+          <span class="panel-row-label">Active Shift</span>
+          <span class="panel-row-value"><span class="badge badge-green">Morning</span></span>
+        </div>
+        <div class="panel-row">
+          <span class="panel-row-label">Monthly Avg. Attendance</span>
+          <span class="panel-row-value">94.2%</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ═══════════════════════════════════════════════════
+     PROJECTS
+═══════════════════════════════════════════════════ -->
+<section class="section" id="projects">
+  <div class="container">
+    <div class="feature-block">
+      <div class="feature-text">
+        <div class="feature-label">Project Management</div>
+        <h2 class="feature-title">Every project. On track. On time.</h2>
+        <p class="feature-desc">
+          Managing multiple client projects gets complicated fast. Tapvera gives every project its own dedicated space — with the team, tasks, files, and conversations all in one place.
+        </p>
+        <ul class="feature-list">
+          <li>
+            <span class="check-circle"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke="#FF9900" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+            Create projects and assign the right team members instantly
+          </li>
+          <li>
+            <span class="check-circle"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke="#FF9900" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+            Set milestones and deadlines; get notified if anything slips
+          </li>
+          <li>
+            <span class="check-circle"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke="#FF9900" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+            Clients get their own view of the project — no access to internal data
+          </li>
+          <li>
+            <span class="check-circle"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke="#FF9900" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+            In-project chat keeps all conversation tied to the right project
+          </li>
+          <li>
+            <span class="check-circle"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke="#FF9900" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+            Track SEO keywords and backlinks directly within the project
+          </li>
+          <li>
+            <span class="check-circle"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke="#FF9900" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+            Generate and share professional project reports in seconds
+          </li>
+        </ul>
+
+        <div class="callout">
+          <p>"Your clients can log in and see exactly what is being done on their project — without you having to send a single update email."</p>
+        </div>
+      </div>
+      <div class="feature-panel">
+        <p class="panel-heading">Active Projects</p>
+        <div class="panel-row">
+          <span class="panel-row-label">E-Commerce Redesign</span>
+          <span class="panel-row-value"><span class="badge badge-green">On Track</span></span>
+        </div>
+        <div class="panel-row">
+          <span class="panel-row-label">Mobile App Launch</span>
+          <span class="panel-row-value"><span class="badge badge-orange">In Review</span></span>
+        </div>
+        <div class="panel-row">
+          <span class="panel-row-label">SEO Campaign &mdash; Q2</span>
+          <span class="panel-row-value"><span class="badge badge-green">Active</span></span>
+        </div>
+        <div class="panel-row">
+          <span class="panel-row-label">Brand Identity</span>
+          <span class="panel-row-value"><span class="badge badge-violet">Planning</span></span>
+        </div>
+        <div class="panel-row">
+          <span class="panel-row-label">Client Portal Setup</span>
+          <span class="panel-row-value"><span class="badge badge-blue">Pending Client</span></span>
+        </div>
+        <div class="panel-row">
+          <span class="panel-row-label">Total Active Projects</span>
+          <span class="panel-row-value" style="color:var(--primary); font-size:16px;">12</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ═══════════════════════════════════════════════════
+     LEADS & SALES
+═══════════════════════════════════════════════════ -->
+<section class="section section-alt" id="leads">
+  <div class="container">
+    <div class="feature-block reverse">
+      <div class="feature-text">
+        <div class="feature-label">Leads &amp; Sales</div>
+        <h2 class="feature-title">Never let a lead fall through the cracks.</h2>
+        <p class="feature-desc">
+          Every business has leads — potential clients who have shown interest. The problem is keeping track of them. Tapvera gives your sales team a structured system to manage every lead from the first call to the final close.
+        </p>
+        <ul class="feature-list">
+          <li>
+            <span class="check-circle"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke="#FF9900" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+            Add leads in seconds with contact details and source information
+          </li>
+          <li>
+            <span class="check-circle"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke="#FF9900" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+            Leads move through visual stages: New &rarr; Contacted &rarr; Interested &rarr; Closed
+          </li>
+          <li>
+            <span class="check-circle"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke="#FF9900" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+            Schedule callbacks with date and time reminders — nothing gets forgotten
+          </li>
+          <li>
+            <span class="check-circle"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke="#FF9900" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+            Calendar view shows all upcoming follow-ups at a glance
+          </li>
+          <li>
+            <span class="check-circle"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke="#FF9900" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+            Leads can be transferred between team members seamlessly
+          </li>
+          <li>
+            <span class="check-circle"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke="#FF9900" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+            Full interaction history stored for every lead — no context lost
+          </li>
+        </ul>
+      </div>
+      <div class="feature-panel">
+        <p class="panel-heading">Lead Pipeline &mdash; This Week</p>
+        <div class="panel-row">
+          <span class="panel-row-label">New Leads</span>
+          <span class="panel-row-value" style="color:var(--primary);">14</span>
+        </div>
+        <div class="panel-row">
+          <span class="panel-row-label">Contacted</span>
+          <span class="panel-row-value">9</span>
+        </div>
+        <div class="panel-row">
+          <span class="panel-row-label">Interested / Hot</span>
+          <span class="panel-row-value" style="color:#4ade80;">5</span>
+        </div>
+        <div class="panel-row">
+          <span class="panel-row-label">Callbacks Scheduled</span>
+          <span class="panel-row-value"><span class="badge badge-orange">7 Upcoming</span></span>
+        </div>
+        <div class="panel-row">
+          <span class="panel-row-label">Closed This Month</span>
+          <span class="panel-row-value" style="color:#4ade80;">11 Won</span>
+        </div>
+        <div class="panel-row">
+          <span class="panel-row-label">Conversion Rate</span>
+          <span class="panel-row-value">38%</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ═══════════════════════════════════════════════════
+     COMMUNICATION
+═══════════════════════════════════════════════════ -->
+<section class="section" id="communication">
+  <div class="container">
+    <div class="section-header">
+      <span class="section-tag">Communication</span>
+      <h2 class="section-title">Your team, always connected.</h2>
+      <p class="section-desc">Stop losing important conversations in message threads and email chains. Everything is structured, searchable, and tied to the right project or person.</p>
+    </div>
+
+    <div class="pillars-grid">
+
+      <div class="pillar">
+        <div class="pillar-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        </div>
+        <div class="pillar-body">
+          <h3>In-App Team Chat</h3>
+          <p>Your team can message each other directly inside Tapvera. Conversations stay organized and do not get lost in personal phones or external apps.</p>
+        </div>
+      </div>
+
+      <div class="pillar">
+        <div class="pillar-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>
+        </div>
+        <div class="pillar-body">
+          <h3>Project Chat Rooms</h3>
+          <p>Every project has its own dedicated chat. All discussions related to that project stay in one place — easy to search, easy to reference, no confusion between clients.</p>
+        </div>
+      </div>
+
+      <div class="pillar">
+        <div class="pillar-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+        </div>
+        <div class="pillar-body">
+          <h3>Real-Time Notifications</h3>
+          <p>When something important happens — a task assigned, a leave approved, a lead updated — the right person gets notified instantly, without any delay.</p>
+        </div>
+      </div>
+
+      <div class="pillar">
+        <div class="pillar-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+        </div>
+        <div class="pillar-body">
+          <h3>Automated Email Reports</h3>
+          <p>Scheduled summary emails go out automatically — keeping managers and stakeholders informed without anyone having to compile or send reports manually.</p>
+        </div>
+      </div>
+
+      <div class="pillar">
+        <div class="pillar-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+        </div>
+        <div class="pillar-body">
+          <h3>Notice Board</h3>
+          <p>Post company-wide announcements, policy updates, or event reminders. Every employee sees it when they log in — no missed communications, no separate broadcast needed.</p>
+        </div>
+      </div>
+
+      <div class="pillar">
+        <div class="pillar-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+        </div>
+        <div class="pillar-body">
+          <h3>Digital Notepad</h3>
+          <p>Employees maintain their own notes and to-dos inside the system. Important notes can be shared or flagged — nothing critical gets lost on a sticky note or in a personal document.</p>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ═══════════════════════════════════════════════════
+     ANALYTICS
+═══════════════════════════════════════════════════ -->
+<section class="section gradient-section" id="analytics">
+  <div class="container">
+    <div class="feature-block">
+      <div class="feature-text">
+        <div class="feature-label">Analytics &amp; Insights</div>
+        <h2 class="feature-title">Stop guessing. Start knowing.</h2>
+        <p class="feature-desc">
+          Good decisions come from good data. Tapvera gives you live dashboards and reports that turn raw business activity into clear, actionable insights — without needing a data analyst.
+        </p>
+        <ul class="feature-list">
+          <li>
+            <span class="check-circle"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke="#FF9900" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+            Main dashboard gives a live overview of the entire business
+          </li>
+          <li>
+            <span class="check-circle"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke="#FF9900" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+            Attendance trends show patterns before they become problems
+          </li>
+          <li>
+            <span class="check-circle"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke="#FF9900" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+            Lead conversion reports tell you which sales efforts are working
+          </li>
+          <li>
+            <span class="check-circle"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke="#FF9900" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+            Project status reports without any daily check-in calls
+          </li>
+          <li>
+            <span class="check-circle"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke="#FF9900" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+            Payroll and payment summaries available in one click
+          </li>
+          <li>
+            <span class="check-circle"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke="#FF9900" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+            Keyword ranking data tracks your clients' SEO performance over time
+          </li>
+        </ul>
+
+        <div class="tag-cloud">
+          <span class="module-tag"><span class="dot" style="background:var(--primary)"></span>Sales Reports</span>
+          <span class="module-tag"><span class="dot" style="background:var(--green)"></span>Attendance Charts</span>
+          <span class="module-tag"><span class="dot" style="background:var(--violet)"></span>Payroll Summary</span>
+          <span class="module-tag"><span class="dot" style="background:var(--blue)"></span>Project Status</span>
+          <span class="module-tag"><span class="dot" style="background:var(--pink)"></span>Keyword Rankings</span>
+          <span class="module-tag"><span class="dot" style="background:var(--secondary)"></span>Lead Analytics</span>
+        </div>
+      </div>
+
+      <div class="feature-panel">
+        <p class="panel-heading">Business Health &mdash; April 2026</p>
+        <div class="panel-row">
+          <span class="panel-row-label">Revenue This Month</span>
+          <span class="panel-row-value" style="color:#4ade80;">+18%</span>
+        </div>
+        <div class="panel-row">
+          <span class="panel-row-label">Lead Conversion</span>
+          <span class="panel-row-value">38%</span>
+        </div>
+        <div class="panel-row">
+          <span class="panel-row-label">Team Attendance Rate</span>
+          <span class="panel-row-value">94.2%</span>
+        </div>
+        <div class="panel-row">
+          <span class="panel-row-label">Projects On-Time</span>
+          <span class="panel-row-value"><span class="badge badge-green">10 / 12</span></span>
+        </div>
+        <div class="panel-row">
+          <span class="panel-row-label">Tasks Completed</span>
+          <span class="panel-row-value">87 this week</span>
+        </div>
+        <div class="panel-row">
+          <span class="panel-row-label">Open Callbacks</span>
+          <span class="panel-row-value"><span class="badge badge-orange">7 Pending</span></span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ═══════════════════════════════════════════════════
+     ACCESS & ROLES
+═══════════════════════════════════════════════════ -->
+<section class="section section-alt" id="security">
+  <div class="container">
+    <div class="section-header">
+      <span class="section-tag">Access &amp; Security</span>
+      <h2 class="section-title">The right people see the right things.</h2>
+      <p class="section-desc">Not everyone in your company needs access to everything. Tapvera has four built-in user roles that control exactly what each person can see and do.</p>
+    </div>
+
+    <div class="roles-grid">
+
+      <div class="role-card">
+        <div class="role-icon" style="background: linear-gradient(135deg, rgba(255,153,0,0.18), rgba(255,153,0,0.05)); color:var(--primary);">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+        </div>
+        <div class="role-name">Super Admin</div>
+        <div class="role-desc">Full access to everything. Manages all settings, all employees, all data, and all configurations. Typically the business owner.</div>
+      </div>
+
+      <div class="role-card">
+        <div class="role-icon" style="background: linear-gradient(135deg, rgba(171,78,225,0.18), rgba(171,78,225,0.05)); color:#c084fc;">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 0-14.14 0"/><path d="M4.93 19.07a10 10 0 0 0 14.14 0"/><path d="M12 2v2M12 20v2M2 12H4M20 12h2"/></svg>
+        </div>
+        <div class="role-name">Admin</div>
+        <div class="role-desc">Manages day-to-day operations — attendance, payroll, projects, and leads. Broad access within the boundaries set by the Super Admin.</div>
+      </div>
+
+      <div class="role-card">
+        <div class="role-icon" style="background: linear-gradient(135deg, rgba(59,130,246,0.18), rgba(59,130,246,0.05)); color:#60a5fa;">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        </div>
+        <div class="role-name">HR</div>
+        <div class="role-desc">Focused on employee-related features — attendance, leaves, payroll, and positions. No access to sales, project financials, or system settings.</div>
+      </div>
+
+      <div class="role-card">
+        <div class="role-icon" style="background: linear-gradient(135deg, rgba(34,197,94,0.18), rgba(34,197,94,0.05)); color:#4ade80;">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+        </div>
+        <div class="role-name">Employee</div>
+        <div class="role-desc">Sees only their own data — their attendance, payslips, tasks, and projects they are part of. Simple, focused, and distraction-free.</div>
+      </div>
+
+    </div>
+
+    <div style="margin-top: 56px;">
+      <div class="section-header" style="margin-bottom: 28px;">
+        <h3 style="font-size:20px; font-weight:700; color:var(--text);">Tapvera vs. Doing It Manually</h3>
+      </div>
+      <div style="border: 1px solid var(--border); border-radius: 16px; overflow: hidden;">
+        <table class="compare-table">
+          <thead>
+            <tr>
+              <th>Task</th>
+              <th>Without Tapvera</th>
+              <th>With Tapvera</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Payslip generation</td>
+              <td>Hours of manual calculation in spreadsheets</td>
+              <td><span class="badge badge-green">One click, auto-generated</span></td>
+            </tr>
+            <tr>
+              <td>Attendance tracking</td>
+              <td>Paper registers, prone to errors and disputes</td>
+              <td><span class="badge badge-green">Digital, real-time, accurate</span></td>
+            </tr>
+            <tr>
+              <td>Leave approvals</td>
+              <td>Messages that are easy to overlook or forget</td>
+              <td><span class="badge badge-green">Formal request &rarr; Approve / Reject</span></td>
+            </tr>
+            <tr>
+              <td>Lead follow-ups</td>
+              <td>Mental notes, missed callbacks, lost business</td>
+              <td><span class="badge badge-green">Scheduled, reminded, tracked</span></td>
+            </tr>
+            <tr>
+              <td>Project updates</td>
+              <td>Daily calls and manually written report emails</td>
+              <td><span class="badge badge-green">Live dashboard, instant visibility</span></td>
+            </tr>
+            <tr>
+              <td>Client communication</td>
+              <td>Scattered across emails, messages, calls</td>
+              <td><span class="badge badge-green">Structured, searchable, in one place</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ═══════════════════════════════════════════════════
+     HOW IT WORKS
+═══════════════════════════════════════════════════ -->
+<section class="section">
+  <div class="container">
+    <div class="intro-grid">
+      <div>
+        <div style="margin-bottom: 40px;">
+          <span class="section-tag">How It Works</span>
+          <h2 class="section-title" style="font-size: clamp(24px, 3vw, 38px);">Getting started is simple.</h2>
+          <p style="font-size: 15px; color: var(--muted);">From day one, your team is set up, your data is in, and the system is working for you.</p>
+        </div>
+        <div class="steps">
+          <div class="step">
+            <div class="step-num">1</div>
+            <div class="step-content">
+              <h3>Your team gets added</h3>
+              <p>Employees are added to the system with their roles, departments, and details. Each person gets their own secure login immediately.</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">2</div>
+            <div class="step-content">
+              <h3>Daily operations go digital</h3>
+              <p>Attendance, tasks, projects, and leads are managed through the system. No more scattered tools or manual data entry.</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">3</div>
+            <div class="step-content">
+              <h3>Everything runs automatically</h3>
+              <p>Payroll calculates itself. Reports generate on schedule. Notifications go out when action is needed.</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">4</div>
+            <div class="step-content">
+              <h3>You get full visibility</h3>
+              <p>Log in from anywhere — phone, laptop, or tablet — and see exactly what is happening across your entire business in real time.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div style="margin-bottom: 28px;">
+          <span class="section-tag">All Modules</span>
+          <h2 class="section-title" style="font-size: clamp(22px, 2.5vw, 32px);">Everything that is included.</h2>
+        </div>
+        <div class="tag-cloud">
+          <span class="module-tag"><span class="dot" style="background:var(--primary)"></span>Employee Management</span>
+          <span class="module-tag"><span class="dot" style="background:var(--green)"></span>Attendance Tracking</span>
+          <span class="module-tag"><span class="dot" style="background:var(--violet)"></span>Payroll &amp; Payslips</span>
+          <span class="module-tag"><span class="dot" style="background:var(--blue)"></span>Project Management</span>
+          <span class="module-tag"><span class="dot" style="background:var(--pink)"></span>Client Management</span>
+          <span class="module-tag"><span class="dot" style="background:var(--primary)"></span>Lead Management</span>
+          <span class="module-tag"><span class="dot" style="background:var(--green)"></span>Callback Scheduling</span>
+          <span class="module-tag"><span class="dot" style="background:var(--violet)"></span>Task Management</span>
+          <span class="module-tag"><span class="dot" style="background:var(--blue)"></span>Leave Management</span>
+          <span class="module-tag"><span class="dot" style="background:var(--pink)"></span>Shift Management</span>
+          <span class="module-tag"><span class="dot" style="background:var(--primary)"></span>Team Chat</span>
+          <span class="module-tag"><span class="dot" style="background:var(--green)"></span>Notice Board</span>
+          <span class="module-tag"><span class="dot" style="background:var(--violet)"></span>Analytics Dashboard</span>
+          <span class="module-tag"><span class="dot" style="background:var(--blue)"></span>Keyword Tracking</span>
+          <span class="module-tag"><span class="dot" style="background:var(--pink)"></span>Backlink Tracking</span>
+          <span class="module-tag"><span class="dot" style="background:var(--primary)"></span>Invoice Management</span>
+          <span class="module-tag"><span class="dot" style="background:var(--green)"></span>Payment Tracking</span>
+          <span class="module-tag"><span class="dot" style="background:var(--violet)"></span>Role-Based Access</span>
+          <span class="module-tag"><span class="dot" style="background:var(--blue)"></span>Real-Time Notifications</span>
+          <span class="module-tag"><span class="dot" style="background:var(--pink)"></span>AI Assistant</span>
+          <span class="module-tag"><span class="dot" style="background:var(--primary)"></span>Holiday Management</span>
+          <span class="module-tag"><span class="dot" style="background:var(--green)"></span>Digital Notepad</span>
+          <span class="module-tag"><span class="dot" style="background:var(--violet)"></span>Automated Email Reports</span>
+          <span class="module-tag"><span class="dot" style="background:var(--blue)"></span>Client Portals</span>
+          <span class="module-tag"><span class="dot" style="background:var(--pink)"></span>Sheet Manager</span>
+          <span class="module-tag"><span class="dot" style="background:var(--primary)"></span>Call Intelligence</span>
+          <span class="module-tag"><span class="dot" style="background:var(--green)"></span>HR Dashboard</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ═══════════════════════════════════════════════════
+     BENEFITS
+═══════════════════════════════════════════════════ -->
+<section class="section gradient-section" id="benefits">
+  <div class="container">
+    <div class="section-header">
+      <span class="section-tag">Why It Matters</span>
+      <h2 class="section-title">What Tapvera CRM does for your business.</h2>
+      <p class="section-desc">Beyond the features, here is the real-world impact of having everything managed in one system.</p>
+    </div>
+
+    <div class="pillars-grid">
+
+      <div class="pillar">
+        <div class="pillar-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        </div>
+        <div class="pillar-body">
+          <h3>Saves Time Every Day</h3>
+          <p>Tasks that used to take hours — generating payslips, tracking attendance, following up on leads — now happen in minutes or automatically. Your team spends time on work that matters, not admin.</p>
+        </div>
+      </div>
+
+      <div class="pillar">
+        <div class="pillar-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+        </div>
+        <div class="pillar-body">
+          <h3>Full Visibility at All Times</h3>
+          <p>You always know what is happening. Which projects are on track, who is present, which leads need follow-up, and how much revenue has come in — from any device, anywhere.</p>
+        </div>
+      </div>
+
+      <div class="pillar">
+        <div class="pillar-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg>
+        </div>
+        <div class="pillar-body">
+          <h3>Fewer Mistakes</h3>
+          <p>Manual processes are error-prone. When payroll calculates itself from attendance data, human error is eliminated. When leads are tracked in a system, they do not get forgotten.</p>
+        </div>
+      </div>
+
+      <div class="pillar">
+        <div class="pillar-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+        </div>
+        <div class="pillar-body">
+          <h3>More Revenue, Less Leakage</h3>
+          <p>Every lead is tracked. Every callback is scheduled. Every client project has a clear status. Things that used to fall through the cracks — and cost you business — are now caught and managed.</p>
+        </div>
+      </div>
+
+      <div class="pillar">
+        <div class="pillar-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        </div>
+        <div class="pillar-body">
+          <h3>A Better Experience for Your Team</h3>
+          <p>Employees can view their own payslips, apply for leave without chasing anyone, and find the information they need without sending messages. It builds trust and saves everyone time.</p>
+        </div>
+      </div>
+
+      <div class="pillar">
+        <div class="pillar-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+        </div>
+        <div class="pillar-body">
+          <h3>Scales with Your Business</h3>
+          <p>Whether you have five employees today or five hundred next year, Tapvera CRM handles it. The system grows with you — no need to switch tools or lose historical data as your team expands.</p>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ═══════════════════════════════════════════════════
+     CLOSING
+═══════════════════════════════════════════════════ -->
+<section class="section">
+  <div class="container">
+    <div style="max-width: 700px; margin: 0 auto; text-align: center;">
+      <span class="section-tag">In Summary</span>
+      <h2 class="section-title" style="margin-bottom: 24px;">Tapvera CRM is your business, organized.</h2>
+      <p style="font-size: 16px; color: var(--muted); line-height: 1.8; margin-bottom: 28px;">
+        Running a business means managing people, projects, money, and relationships — all at the same time. Most companies do this with a mix of spreadsheets, messaging apps, paper records, and memory. It works, until it does not.
+      </p>
+      <p style="font-size: 16px; color: var(--muted); line-height: 1.8; margin-bottom: 28px;">
+        Tapvera CRM brings everything into one place. It gives your team a clear system to work within, gives your managers real-time visibility, and gives you — as the business owner — confidence that nothing is being missed.
+      </p>
+      <p style="font-size: 16px; color: var(--muted); line-height: 1.8; margin-bottom: 48px;">
+        It is not just software. It is the operating system for your company.
+      </p>
+
+      <div style="display: inline-flex; align-items: center; gap: 14px; background: linear-gradient(135deg, rgba(255,153,0,0.12), rgba(255,153,0,0.04)); border: 1px solid rgba(255,153,0,0.28); border-radius: 16px; padding: 22px 36px;">
+        <img src="client/src/assets/tapvera.png" alt="Tapvera" style="height: 34px; width: auto;" onerror="this.style.display='none'" />
+        <div style="text-align: left;">
+          <div style="font-size: 15px; font-weight: 700; color: var(--text);">Tapvera Technologies Pvt. Ltd.</div>
+          <div style="font-size: 12px; color: var(--muted); margin-top: 2px;">Your Business, Fully in Control.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════
+     FOOTER
+═══════════════════════════════════════════════════ -->
+<footer class="footer">
+  <div class="container">
+    <img src="client/src/assets/tapvera.png" alt="Tapvera" class="footer-logo" onerror="this.style.display='none'" />
+    <p class="footer-text">Tapvera CRM &mdash; Business Overview Document</p>
+    <p class="footer-text">Tapvera Technologies Pvt. Ltd. &nbsp;&middot;&nbsp; April 2026</p>
+    <p class="footer-brand">tapvera.com</p>
+    <div class="footer-credits">
+      Designed &amp; Developed by <span>Anish Jaiswal</span> &amp; <span>Archisman</span>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>

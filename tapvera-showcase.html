@@ -1,0 +1,1606 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Tapvera CRM — Full Feature Showcase</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Playfair+Display:wght@700;800&display=swap" rel="stylesheet"/>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --or:#FF9900;--or2:#FFC300;--dk:#0F0F0F;
+  --emp:#FF9900;   /* Employee — orange */
+  --adm:#3b82f6;   /* Admin    — blue   */
+  --hr:#22c55e;    /* HR       — green  */
+  --sa:#ab4ee1;    /* SuperAdmin — purple*/
+  --sh:#f59e0b;    /* Shared   — amber  */
+}
+html{scroll-behavior:smooth}
+body{font-family:'Inter',sans-serif;background:#f4f4f4;color:#111;line-height:1.6;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+
+/* ── PRINT / PDF ── */
+@media print{
+  /* @page margin:0 so cover and closing are true full-bleed.
+     Content sections use internal mm padding instead. */
+  @page{size:A4;margin:0}
+  *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important}
+  body{background:#fff!important;margin:0;padding:0;font-size:10pt;-webkit-print-color-adjust:exact!important}
+  .no-print,.scroll-nav{display:none!important}
+  .doc{max-width:100%!important;width:100%!important;box-shadow:none!important;margin:0!important;padding:0!important}
+
+  /* ── COVER: true full-bleed dark first page (297mm = full A4) ── */
+  .cover{
+    background:#0F0F0F!important;
+    page-break-after:always!important;
+    height:297mm!important;
+    min-height:297mm!important;
+    width:100%!important;
+    display:flex!important;
+    flex-direction:column!important;
+    align-items:center!important;
+    justify-content:center!important;
+    padding:60px 52px!important;
+    box-sizing:border-box!important;
+    overflow:hidden!important
+  }
+
+  /* ── TOC: own page, inner padding replaces page margins ── */
+  .toc{
+    page-break-before:always!important;
+    page-break-inside:auto;
+    padding:16mm 16mm 12mm!important
+  }
+
+  /* ── Section header: new page per role section.
+     page-break-after:avoid glues it to the first feat-block. ── */
+  .sec-header{
+    page-break-before:always!important;
+    page-break-inside:avoid;
+    page-break-after:avoid;
+    padding:14mm 16mm 10mm!important
+  }
+
+  /* ── Feature blocks:
+     First in section flows with sec-header (no forced break).
+     Each subsequent (after .divider) starts its own page. ── */
+  .feat-block{
+    page-break-inside:auto;
+    padding:10mm 16mm!important
+  }
+  .divider + .feat-block{
+    page-break-before:always!important
+  }
+
+  /* ── CLOSING: true full-bleed dark last page ── */
+  .closing{
+    page-break-before:always!important;
+    background:#0F0F0F!important;
+    height:297mm!important;
+    min-height:297mm!important;
+    width:100%!important;
+    display:flex!important;
+    flex-direction:column!important;
+    align-items:center!important;
+    justify-content:center!important;
+    padding:60px 52px!important;
+    box-sizing:border-box!important;
+    overflow:hidden!important
+  }
+
+  /* ── Screenshots: never split across pages ── */
+  .screenshot-wrap{
+    page-break-inside:avoid!important;
+    break-inside:avoid!important;
+    overflow:hidden!important;
+    max-width:100%!important;
+    margin:10px 0!important
+  }
+  .feat-list{page-break-inside:avoid;break-inside:avoid;margin:10px 0!important}
+
+  /* ── Dividers: completely gone ── */
+  .divider{display:none!important;margin:0!important;height:0!important;border:none!important}
+
+  /* ── Typography & spacing ── */
+  .feat-title{font-size:18px!important;line-height:1.25!important;margin-bottom:4px!important}
+  .feat-subtitle{font-size:11px!important;margin-bottom:10px!important;color:#666!important}
+  .feat-num{margin-bottom:6px!important}
+  .sec-h{font-size:26px!important;margin-bottom:8px!important}
+  .sec-desc{font-size:12px!important;line-height:1.6!important;max-width:100%!important}
+  .sec-badge{margin-bottom:10px!important}
+  .sec-modules{margin-top:12px!important;gap:5px!important}
+  .sec-mod{font-size:9px!important;padding:3px 8px!important}
+  .feat-story{font-size:10pt!important;max-width:100%!important;margin-bottom:10px!important;line-height:1.65!important;color:#333!important}
+  .feat-tags{flex-wrap:wrap!important;gap:4px!important;margin-bottom:10px!important;margin-top:6px!important}
+  .feat-tag{font-size:9px!important;padding:3px 8px!important}
+  .feat-list-item{padding:8px 12px!important}
+  .fli-icon{width:24px!important;height:24px!important;font-size:12px!important}
+  .fli-title{font-size:11px!important;font-weight:700!important}
+  .fli-desc{font-size:9.5px!important;line-height:1.45!important}
+  .toc-grid{gap:0 24px!important}
+  .toc-section{margin-bottom:14px!important}
+  .toc-title{font-size:24px!important;margin-bottom:18px!important}
+  .toc-row{padding:3px 0!important;font-size:11px!important}
+  .screenshot-bar{padding:6px 12px!important}
+  .screenshot-caption{padding:6px 14px!important;font-size:10px!important}
+  .highlight{padding:10px 14px!important;margin:10px 0!important}
+  .highlight p{font-size:10px!important;line-height:1.55!important}
+  .cl-title{font-size:30px!important;margin-bottom:14px!important;color:#fff!important}
+  .cl-sub{font-size:12px!important;margin-bottom:16px!important;color:#aaa!important;line-height:1.7!important}
+  .cl-credit{font-size:11px!important;color:#555!important}
+  .closing-inner{max-width:540px!important;text-align:center!important}
+
+  /* ── Images ── */
+  img{max-width:100%!important;height:auto!important;display:block!important}
+  .screenshot-wrap img{width:100%!important;object-fit:contain!important}
+
+  /* strip decorative elements */
+  .cover::before,.closing::before,.sec-header::after,.cover-grid,.closing-grid{display:none!important}
+  .cover-inner{position:relative!important;z-index:1!important;text-align:center!important}
+
+  /* links */
+  a,a:visited{text-decoration:none!important;color:inherit!important}
+  a[href]::after{content:none!important}
+}
+
+/* ── WRAPPER ── */
+.doc{max-width:1080px;margin:0 auto;background:#fff;box-shadow:0 0 60px rgba(0,0,0,0.12)}
+
+/* ── COVER ── */
+.cover{
+  background:#0F0F0F;
+  min-height:480px;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  text-align:center;padding:80px 48px;
+  position:relative;overflow:hidden;
+}
+.cover::before{
+  content:'';position:absolute;inset:0;
+  background:radial-gradient(ellipse 70% 55% at 50% 0%,rgba(255,153,0,0.22) 0%,transparent 65%),
+             radial-gradient(ellipse 50% 40% at 90% 90%,rgba(171,78,225,0.15) 0%,transparent 60%);
+}
+.cover-grid{position:absolute;inset:0;background-image:linear-gradient(rgba(255,153,0,0.05) 1px,transparent 1px),linear-gradient(90deg,rgba(255,153,0,0.05) 1px,transparent 1px);background-size:44px 44px}
+.cover-inner{position:relative;z-index:1}
+.c-brand{font-family:'Playfair Display',serif;font-size:64px;font-weight:800;background:linear-gradient(135deg,#FF9900,#FFC300);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;letter-spacing:-2px;line-height:1}
+.c-tagline{font-size:12px;font-weight:600;letter-spacing:4px;color:#666;text-transform:uppercase;margin-top:4px;margin-bottom:28px}
+.c-pill{display:inline-flex;align-items:center;gap:7px;background:rgba(255,153,0,0.10);border:1px solid rgba(255,153,0,0.3);color:#FF9900;font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;padding:6px 18px;border-radius:100px;margin-bottom:22px}
+.c-dot{width:5px;height:5px;border-radius:50%;background:#FF9900}
+.c-title{font-family:'Playfair Display',serif;font-size:38px;font-weight:800;line-height:1.1;color:#fff;margin-bottom:14px}
+.c-title span{background:linear-gradient(135deg,#FF9900,#FFC300);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.c-sub{font-size:15px;color:#aaa;max-width:560px;margin:0 auto 36px;line-height:1.7}
+.c-stats{display:flex;justify-content:center;gap:16px;flex-wrap:wrap}
+.c-stat{background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:16px 24px;text-align:center;min-width:110px}
+.c-stat-n{font-size:28px;font-weight:800;color:#FF9900;display:block;line-height:1;margin-bottom:4px;font-family:'Playfair Display',serif}
+.c-stat-l{font-size:10px;color:#666;letter-spacing:.5px}
+.cover-footer{background:rgba(0,0,0,0.4);border-top:1px solid rgba(255,153,0,0.2);padding:14px 48px;display:flex;justify-content:space-between;align-items:center;position:relative;z-index:1}
+.cf-brand{font-size:11px;font-weight:700;color:#FF9900}
+.cf-info{font-size:10px;color:#555}
+
+/* ── TOC ── */
+.toc{background:#fff;padding:52px 64px 44px;border-bottom:1px solid #f0f0f0}
+.toc-label{font-size:10px;font-weight:700;letter-spacing:3px;color:#FF9900;text-transform:uppercase;margin-bottom:10px}
+.toc-title{font-family:'Playfair Display',serif;font-size:30px;font-weight:800;color:#111;margin-bottom:32px}
+.toc-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 48px}
+.toc-section{margin-bottom:24px}
+.toc-section-head{font-size:9px;font-weight:800;letter-spacing:2.5px;text-transform:uppercase;margin-bottom:10px;padding-bottom:6px;border-bottom:2px solid currentColor;display:flex;align-items:center;gap:8px}
+.toc-section-head.emp{color:var(--emp);border-color:var(--emp)}
+.toc-section-head.adm{color:var(--adm);border-color:var(--adm)}
+.toc-section-head.hr{color:var(--hr);border-color:var(--hr)}
+.toc-section-head.sa{color:var(--sa);border-color:var(--sa)}
+.toc-section-head.sh{color:var(--sh);border-color:var(--sh)}
+.toc-row{display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px dashed #eee;font-size:12px;cursor:pointer;transition:color .15s}
+.toc-row:hover{color:#FF9900}
+.toc-row-name{color:#333;font-weight:500}
+.toc-row-n{font-size:10px;font-weight:700;color:#FF9900;background:#fff9ee;padding:1px 6px;border-radius:4px;border:1px solid rgba(255,153,0,0.2)}
+
+/* ── SECTION HEADER ── */
+.sec-header{padding:52px 64px 36px;border-bottom:4px solid currentColor;position:relative;overflow:hidden}
+.sec-header::after{content:'';position:absolute;top:-60px;right:-60px;width:200px;height:200px;border-radius:50%;opacity:.08;background:currentColor}
+.sec-header.emp{color:var(--emp);background:linear-gradient(135deg,rgba(255,153,0,0.04),#fff)}
+.sec-header.adm{color:var(--adm);background:linear-gradient(135deg,rgba(59,130,246,0.04),#fff)}
+.sec-header.hr{color:var(--hr);background:linear-gradient(135deg,rgba(34,197,94,0.04),#fff)}
+.sec-header.sa{color:var(--sa);background:linear-gradient(135deg,rgba(171,78,225,0.04),#fff)}
+.sec-header.sh{color:var(--sh);background:linear-gradient(135deg,rgba(245,158,11,0.04),#fff)}
+.sec-badge{display:inline-flex;align-items:center;gap:6px;border:1.5px solid currentColor;border-radius:100px;padding:4px 14px;font-size:9px;font-weight:800;letter-spacing:2.5px;text-transform:uppercase;margin-bottom:14px;opacity:.9}
+.sec-dot{width:5px;height:5px;border-radius:50%;background:currentColor}
+.sec-h{font-family:'Playfair Display',serif;font-size:38px;font-weight:800;color:#111;line-height:1.1;margin-bottom:10px}
+.sec-h em{font-style:normal}
+.sec-h em.emp{color:var(--emp)}
+.sec-h em.adm{color:var(--adm)}
+.sec-h em.hr{color:var(--hr)}
+.sec-h em.sa{color:var(--sa)}
+.sec-h em.sh{color:var(--sh)}
+.sec-desc{font-size:15px;color:#555;max-width:680px;line-height:1.75}
+.sec-modules{display:flex;flex-wrap:wrap;gap:7px;margin-top:20px}
+.sec-mod{padding:5px 12px;border-radius:100px;font-size:10.5px;font-weight:600;background:rgba(0,0,0,0.05);color:#444}
+
+/* ── FEATURE BLOCK ── */
+.feat-block{padding:56px 64px;border-bottom:1px solid #f0f0f0}
+.feat-block:last-of-type{border-bottom:none}
+.feat-num{font-size:11px;font-weight:800;letter-spacing:2px;text-transform:uppercase;margin-bottom:6px;display:flex;align-items:center;gap:8px}
+.feat-num .num{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;color:#fff}
+.feat-num .num.emp{background:var(--emp)}
+.feat-num .num.adm{background:var(--adm)}
+.feat-num .num.hr{background:var(--hr)}
+.feat-num .num.sa{background:var(--sa)}
+.feat-num .num.sh{background:var(--sh)}
+.feat-num span{font-size:10px;color:#999;font-weight:600}
+.feat-title{font-family:'Playfair Display',serif;font-size:30px;font-weight:800;color:#111;line-height:1.15;margin-bottom:6px}
+.feat-subtitle{font-size:14px;color:#777;margin-bottom:22px;font-style:italic}
+.feat-story{font-size:14px;color:#444;line-height:1.8;margin-bottom:22px;max-width:820px}
+.feat-story strong{color:#111;font-weight:700}
+
+/* ── SCREENSHOT ── */
+.screenshot-wrap{margin:24px 0;border-radius:14px;overflow:hidden;box-shadow:0 8px 40px rgba(0,0,0,0.14),0 2px 8px rgba(0,0,0,0.08);border:1px solid #e5e7eb;background:#0F0F0F}
+.screenshot-bar{background:#1a1a1a;padding:10px 16px;display:flex;align-items:center;gap:10px;border-bottom:1px solid #2a2a2a}
+.sb-dots{display:flex;gap:5px}
+.sb-dot{width:10px;height:10px;border-radius:50%}
+.sb-dot.r{background:#ef4444}.sb-dot.y{background:#f59e0b}.sb-dot.g{background:#22c55e}
+.sb-url{flex:1;background:#222;border-radius:5px;padding:4px 12px;font-size:10px;color:#555;font-family:'Inter',sans-serif}
+.screenshot-wrap img{width:100%;display:block}
+.screenshot-caption{background:#f9fafb;border:1px solid #f0f0f0;border-top:none;border-radius:0 0 14px 14px;padding:12px 20px;font-size:12px;color:#666;font-style:italic;display:flex;align-items:center;gap:8px}
+.caption-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+
+/* ── FEATURE TAGS ── */
+.feat-tags{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px;margin-bottom:24px}
+.feat-tag{display:inline-flex;align-items:center;gap:5px;padding:6px 13px;border-radius:100px;font-size:11.5px;font-weight:600;letter-spacing:.2px}
+.feat-tag.emp{background:rgba(255,153,0,0.10);color:#cc7800;border:1px solid rgba(255,153,0,0.25)}
+.feat-tag.adm{background:rgba(59,130,246,0.10);color:#1d4ed8;border:1px solid rgba(59,130,246,0.25)}
+.feat-tag.hr{background:rgba(34,197,94,0.10);color:#15803d;border:1px solid rgba(34,197,94,0.25)}
+.feat-tag.sa{background:rgba(171,78,225,0.10);color:#7e22ce;border:1px solid rgba(171,78,225,0.25)}
+.feat-tag.sh{background:rgba(245,158,11,0.10);color:#b45309;border:1px solid rgba(245,158,11,0.25)}
+.feat-tag::before{content:'✓';font-size:10px;opacity:.7}
+
+/* ── FEATURE LIST ── */
+.feat-list{display:flex;flex-direction:column;gap:0;margin:18px 0;border:1px solid #f0f0f0;border-radius:12px;overflow:hidden}
+.feat-list-item{display:flex;align-items:flex-start;gap:14px;padding:13px 18px;border-bottom:1px solid #f5f5f5;background:#fff}
+.feat-list-item:last-child{border-bottom:none}
+.feat-list-item:nth-child(even){background:#fafafa}
+.fli-icon{width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}
+.fli-icon.emp{background:rgba(255,153,0,0.1)}
+.fli-icon.adm{background:rgba(59,130,246,0.1)}
+.fli-icon.hr{background:rgba(34,197,94,0.1)}
+.fli-icon.sa{background:rgba(171,78,225,0.1)}
+.fli-icon.sh{background:rgba(245,158,11,0.1)}
+.fli-body{}
+.fli-title{font-size:13px;font-weight:700;color:#111;margin-bottom:2px}
+.fli-desc{font-size:12px;color:#666;line-height:1.55}
+
+/* ── HIGHLIGHT BOX ── */
+.highlight{background:linear-gradient(135deg,#fff9ee,#fffcf5);border:1px solid rgba(255,153,0,0.2);border-left:4px solid #FF9900;border-radius:0 10px 10px 0;padding:16px 20px;margin:20px 0}
+.highlight p{font-size:13px;color:#555;line-height:1.7;font-style:italic}
+.highlight strong{color:#111}
+
+/* ── DIVIDER ── */
+.divider{height:1px;background:linear-gradient(90deg,transparent,#e5e7eb 20%,#e5e7eb 80%,transparent);margin:0}
+
+/* ── CLOSING ── */
+.closing{background:#0F0F0F;padding:80px 64px;text-align:center;position:relative;overflow:hidden}
+.closing::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 60% 50% at 50% 0%,rgba(255,153,0,0.18) 0%,transparent 65%)}
+.closing-grid{position:absolute;inset:0;background-image:linear-gradient(rgba(255,153,0,0.04) 1px,transparent 1px),linear-gradient(90deg,rgba(255,153,0,0.04) 1px,transparent 1px);background-size:44px 44px}
+.closing-inner{position:relative;z-index:1;max-width:600px;margin:0 auto}
+.cl-title{font-family:'Playfair Display',serif;font-size:40px;font-weight:800;color:#fff;line-height:1.1;margin-bottom:16px}
+.cl-sub{font-size:15px;color:#888;line-height:1.8;margin-bottom:36px}
+.cl-roles{display:flex;justify-content:center;gap:14px;flex-wrap:wrap;margin-bottom:36px}
+.cl-role{background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:10px;padding:14px 20px;text-align:center;min-width:130px}
+.cl-role-n{font-size:13px;font-weight:700;color:#fff;margin-bottom:3px}
+.cl-role-d{font-size:10.5px;color:#666}
+.cl-credit{font-size:11px;color:#444;margin-top:16px}
+.cl-credit span{color:#FF9900;font-weight:600}
+
+/* ── PRINT BUTTON ── */
+.no-print{position:fixed;top:20px;right:20px;z-index:999;display:flex;gap:8px}
+.btn{padding:10px 18px;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;transition:all .15s}
+.btn-primary{background:#FF9900;color:#000;box-shadow:0 4px 16px rgba(255,153,0,0.35)}
+.btn-primary:hover{background:#FFC300}
+.btn-secondary{background:rgba(255,255,255,0.9);color:#333;border:1px solid #e5e7eb}
+
+/* ── ROLE BADGE INLINE ── */
+.role-badge{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:100px;font-size:10px;font-weight:700;vertical-align:middle;margin-left:4px}
+.role-badge.emp{background:rgba(255,153,0,0.12);color:#cc7800;border:1px solid rgba(255,153,0,0.25)}
+.role-badge.adm{background:rgba(59,130,246,0.12);color:#1d4ed8;border:1px solid rgba(59,130,246,0.25)}
+.role-badge.hr{background:rgba(34,197,94,0.12);color:#15803d;border:1px solid rgba(34,197,94,0.25)}
+.role-badge.sa{background:rgba(171,78,225,0.12);color:#7e22ce;border:1px solid rgba(171,78,225,0.25)}
+
+/* ── SCROLL INDICATOR ── */
+.scroll-nav{position:fixed;left:20px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:8px;z-index:100}
+.sn-dot{width:10px;height:10px;border-radius:50%;background:#ddd;cursor:pointer;transition:all .2s;border:2px solid transparent}
+.sn-dot:hover,.sn-dot.active{background:#FF9900;transform:scale(1.3)}
+.sn-dot[data-role="emp"]{border-color:rgba(255,153,0,0.3)}
+.sn-dot[data-role="adm"]{border-color:rgba(59,130,246,0.3)}
+.sn-dot[data-role="hr"]{border-color:rgba(34,197,94,0.3)}
+.sn-dot[data-role="sa"]{border-color:rgba(171,78,225,0.3)}
+@media(max-width:900px){.scroll-nav{display:none}}
+
+/* ── INTRO STRIP ── */
+.intro-strip{background:#fff;padding:48px 64px;border-bottom:1px solid #f0f0f0}
+.is-grid{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:1px;background:#f0f0f0;border:1px solid #f0f0f0;border-radius:12px;overflow:hidden}
+.is-card{background:#fff;padding:24px 20px;text-align:center}
+.is-icon{font-size:28px;margin-bottom:10px}
+.is-title{font-size:13px;font-weight:800;color:#111;margin-bottom:5px}
+.is-desc{font-size:11.5px;color:#666;line-height:1.55}
+.is-count{font-size:22px;font-weight:900;margin-bottom:4px;font-family:'Playfair Display',serif}
+.is-count.emp{color:var(--emp)}.is-count.adm{color:var(--adm)}.is-count.hr{color:var(--hr)}.is-count.sa{color:var(--sa)}
+
+/* ── OVERVIEW SCREENSHOT ── */
+.overview-wrap{padding:40px 64px;background:#f9fafb;border-bottom:1px solid #f0f0f0}
+.ow-label{font-size:10px;font-weight:700;letter-spacing:2.5px;color:#FF9900;text-transform:uppercase;margin-bottom:8px}
+.ow-title{font-family:'Playfair Display',serif;font-size:26px;font-weight:800;color:#111;margin-bottom:16px}
+
+/* ensure images are always crisply visible */
+img{max-width:100%;height:auto;display:block}
+
+</style>
+</head>
+<body>
+
+<div class="no-print">
+  <button class="btn btn-secondary" onclick="window.print()">🖨 Print / PDF</button>
+</div>
+
+<!-- ════════════════════════════
+     COVER
+════════════════════════════ -->
+<div class="doc">
+<div class="cover" id="top">
+  <div class="cover-grid"></div>
+  <div class="cover-inner">
+    <img src="client/src/assets/tapvera.png" alt="Tapvera" style="height:72px;width:auto;margin:0 auto 8px;display:block;filter:brightness(1.05)"/>
+    <div class="c-tagline">Tapping Innovations</div>
+    <div class="c-pill"><span class="c-dot"></span>Complete Platform Feature Showcase</div>
+    <h1 class="c-title">Every Feature.<br/><span>Every Role. Every Screen.</span></h1>
+    <p class="c-sub">A comprehensive visual walkthrough of every module inside Tapvera CRM — from the Employee's daily dashboard to the Super Admin's live oversight — with real screenshots and detailed feature descriptions.</p>
+  </div>
+</div>
+
+<!-- ════════════════════════════
+     TABLE OF CONTENTS
+════════════════════════════ -->
+<div class="toc" id="toc">
+  <div class="toc-label">Navigation</div>
+  <div class="toc-title">Table of Contents</div>
+  <div class="toc-grid">
+    <div>
+      <div class="toc-section">
+        <div class="toc-section-head emp"><span class="c-dot" style="background:var(--emp)"></span>Employee Portal</div>
+        <div class="toc-row" onclick="document.getElementById('login').scrollIntoView({behavior:'smooth'})"><span class="toc-row-name">1. Login &amp; Authentication</span><span class="toc-row-n">EMP</span></div>
+        <div class="toc-row" onclick="document.getElementById('emp-dash').scrollIntoView({behavior:'smooth'})"><span class="toc-row-name">2. Employee Dashboard</span><span class="toc-row-n">EMP</span></div>
+        <div class="toc-row" onclick="document.getElementById('punch').scrollIntoView({behavior:'smooth'})"><span class="toc-row-name">3. Punch In / Punch Out</span><span class="toc-row-n">EMP</span></div>
+        <div class="toc-row" onclick="document.getElementById('attendance').scrollIntoView({behavior:'smooth'})"><span class="toc-row-name">4. My Attendance Statistics</span><span class="toc-row-n">EMP</span></div>
+        <div class="toc-row" onclick="document.getElementById('tasks').scrollIntoView({behavior:'smooth'})"><span class="toc-row-name">5. My Tasks</span><span class="toc-row-n">EMP</span></div>
+        <div class="toc-row" onclick="document.getElementById('projects').scrollIntoView({behavior:'smooth'})"><span class="toc-row-name">6. My Projects</span><span class="toc-row-n">EMP</span></div>
+        <div class="toc-row" onclick="document.getElementById('proj-comm').scrollIntoView({behavior:'smooth'})"><span class="toc-row-name">7. Project Communication</span><span class="toc-row-n">EMP</span></div>
+        <div class="toc-row" onclick="document.getElementById('payslips').scrollIntoView({behavior:'smooth'})"><span class="toc-row-name">8. My Payslips</span><span class="toc-row-n">EMP</span></div>
+        <div class="toc-row" onclick="document.getElementById('todo').scrollIntoView({behavior:'smooth'})"><span class="toc-row-name">9. Todo — Personal Task List</span><span class="toc-row-n">EMP</span></div>
+        <div class="toc-row" onclick="document.getElementById('notif').scrollIntoView({behavior:'smooth'})"><span class="toc-row-name">10. Notifications &amp; Notification Center</span><span class="toc-row-n">EMP</span></div>
+        <div class="toc-row" onclick="document.getElementById('notepad').scrollIntoView({behavior:'smooth'})"><span class="toc-row-name">11. My Notepad</span><span class="toc-row-n">EMP</span></div>
+        <div class="toc-row" onclick="document.getElementById('achieve').scrollIntoView({behavior:'smooth'})"><span class="toc-row-name">12. Achievements &amp; Gamification</span><span class="toc-row-n">EMP</span></div>
+      </div>
+    </div>
+    <div>
+      <div class="toc-section">
+        <div class="toc-section-head adm"><span class="c-dot" style="background:var(--adm)"></span>Admin Portal</div>
+        <div class="toc-row" onclick="document.getElementById('adm-proj').scrollIntoView({behavior:'smooth'})"><span class="toc-row-name">13. Project Management</span><span class="toc-row-n">ADM</span></div>
+        <div class="toc-row" onclick="document.getElementById('adm-client').scrollIntoView({behavior:'smooth'})"><span class="toc-row-name">14. Client Management</span><span class="toc-row-n">ADM</span></div>
+        <div class="toc-row" onclick="document.getElementById('adm-leads').scrollIntoView({behavior:'smooth'})"><span class="toc-row-name">15. Lead Management</span><span class="toc-row-n">ADM</span></div>
+        <div class="toc-row" onclick="document.getElementById('adm-callbacks').scrollIntoView({behavior:'smooth'})"><span class="toc-row-name">16. Callback Management</span><span class="toc-row-n">ADM</span></div>
+        <div class="toc-row" onclick="document.getElementById('adm-comm').scrollIntoView({behavior:'smooth'})"><span class="toc-row-name">17. Communication Tracking</span><span class="toc-row-n">ADM</span></div>
+        <div class="toc-row" onclick="document.getElementById('adm-notice').scrollIntoView({behavior:'smooth'})"><span class="toc-row-name">18. Notice Board</span><span class="toc-row-n">ADM</span></div>
+        <div class="toc-row" onclick="document.getElementById('adm-tasks').scrollIntoView({behavior:'smooth'})"><span class="toc-row-name">19. Task Assignment</span><span class="toc-row-n">ADM</span></div>
+        <div class="toc-row" onclick="document.getElementById('adm-callintel').scrollIntoView({behavior:'smooth'})"><span class="toc-row-name">20. Call Intelligence</span><span class="toc-row-n">ADM</span></div>
+        <div class="toc-row" onclick="document.getElementById('adm-transfer').scrollIntoView({behavior:'smooth'})"><span class="toc-row-name">21. Transfer Management</span><span class="toc-row-n">ADM</span></div>
+      </div>
+      <div class="toc-section">
+        <div class="toc-section-head hr"><span class="c-dot" style="background:var(--hr)"></span>HR Portal</div>
+        <div class="toc-row" onclick="document.getElementById('hr-empdir').scrollIntoView({behavior:'smooth'})"><span class="toc-row-name">22. HR Employee Directory</span><span class="toc-row-n">HR</span></div>
+        <div class="toc-row" onclick="document.getElementById('hr-leave').scrollIntoView({behavior:'smooth'})"><span class="toc-row-name">23. Leave Management</span><span class="toc-row-n">HR</span></div>
+        <div class="toc-row" onclick="document.getElementById('hr-payslip').scrollIntoView({behavior:'smooth'})"><span class="toc-row-name">24. Payslip Management</span><span class="toc-row-n">HR</span></div>
+        <div class="toc-row" onclick="document.getElementById('hr-shift').scrollIntoView({behavior:'smooth'})"><span class="toc-row-name">25. Shift Management</span><span class="toc-row-n">HR</span></div>
+        <div class="toc-row" onclick="document.getElementById('hr-holiday').scrollIntoView({behavior:'smooth'})"><span class="toc-row-name">26. Holiday Management</span><span class="toc-row-n">HR</span></div>
+      </div>
+      <div class="toc-section">
+        <div class="toc-section-head sa"><span class="c-dot" style="background:var(--sa)"></span>Super Admin</div>
+        <div class="toc-row" onclick="document.getElementById('sa-dash').scrollIntoView({behavior:'smooth'})"><span class="toc-row-name">27. Super Admin Dashboard</span><span class="toc-row-n">SA</span></div>
+        <div class="toc-row" onclick="document.getElementById('sa-status').scrollIntoView({behavior:'smooth'})"><span class="toc-row-name">28. Live Employee Status</span><span class="toc-row-n">SA</span></div>
+      </div>
+      <div class="toc-section">
+        <div class="toc-section-head" style="color:#0ea5e9;border-color:#0ea5e9"><span class="c-dot" style="background:#0ea5e9"></span>Client Portal</div>
+        <div class="toc-row" onclick="document.getElementById('client-portal').scrollIntoView({behavior:'smooth'})"><span class="toc-row-name">29. Client Portal — Project View</span><span class="toc-row-n" style="color:#0ea5e9;background:#f0f9ff;border-color:rgba(14,165,233,0.2)">CLIENT</span></div>
+        <div class="toc-row" onclick="document.getElementById('client-comm').scrollIntoView({behavior:'smooth'})"><span class="toc-row-name">30. Client — Direct Team Communication</span><span class="toc-row-n" style="color:#0ea5e9;background:#f0f9ff;border-color:rgba(14,165,233,0.2)">CLIENT</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="divider"></div>
+
+
+<!-- ════════════════════════════════════════
+     ●  SHARED — LOGIN
+════════════════════════════════════════ -->
+<div id="login">
+<div class="sec-header sh">
+  <div class="sec-badge sh"><span class="sec-dot"></span>Shared — All Roles</div>
+  <div class="sec-h">Login &amp; <em class="sh">Authentication</em></div>
+  <p class="sec-desc">The single secure gateway into Tapvera — one screen that serves every user type, automatically detecting role and loading the right experience.</p>
+  <div class="sec-modules">
+    <span class="sec-mod">Email + Password Login</span>
+    <span class="sec-mod">Role-Based Auto Routing</span>
+    <span class="sec-mod">Session Management</span>
+  </div>
+</div>
+
+<div class="feat-block" id="login-screen">
+  <div class="feat-num"><span class="num sh">1</span><span>Login Screen</span></div>
+  <div class="feat-title">Welcome Back — Your Entire Business, One Login</div>
+  <div class="feat-subtitle">The same clean screen for every user — from the newest employee to the business owner.</div>
+  <p class="feat-story">
+    Every person in the organization — employee, HR manager, admin, or business owner — starts their workday on this exact screen. Just head to <strong>web.tapvera.io</strong>, enter your credentials, and Tapvera identifies your role, loads the correct interface, and welcomes you to your personal workspace — in under two seconds.
+  </p>
+  <p class="feat-story">
+    The design is deliberately minimal: a company-branded screen with just two fields and one button. No distractions. No complexity. The password field includes a visibility toggle so users can verify what they've typed before signing in.
+  </p>
+  <div class="screenshot-wrap">
+    <div class="screenshot-bar"><div class="sb-dots"><span class="sb-dot r"></span><span class="sb-dot y"></span><span class="sb-dot g"></span></div><div class="sb-url">web.tapvera.io · Login</div></div>
+    <img src="Crm screenshots/login.png" alt="Tapvera Login Screen"/>
+    <div class="screenshot-caption"><span class="caption-dot" style="background:#FF9900"></span>Tapvera Login Screen — email + password, branded, role-aware, works for all 4 user types</div>
+  </div>
+  <div class="feat-tags">
+    <span class="feat-tag sh">Secure email authentication</span>
+    <span class="feat-tag sh">Password visibility toggle</span>
+    <span class="feat-tag sh">Role-based auto-routing on login</span>
+    <span class="feat-tag sh">Persistent session management</span>
+    <span class="feat-tag sh">Tapvera branded experience</span>
+  </div>
+  <div class="feat-list">
+    <div class="feat-list-item"><div class="fli-icon sh">🔐</div><div class="fli-body"><div class="fli-title">Automatic Role Detection</div><div class="fli-desc">The system identifies whether you are an Employee, Admin, HR, or Super Admin and loads the correct workspace — no manual selection needed.</div></div></div>
+    <div class="feat-list-item"><div class="fli-icon sh">📧</div><div class="fli-body"><div class="fli-title">Email-Based Authentication</div><div class="fli-desc">Login uses the employee's registered email address paired with a secure password — credentials managed entirely within Tapvera.</div></div></div>
+    <div class="feat-list-item"><div class="fli-icon sh">📱</div><div class="fli-body"><div class="fli-title">Works on All Devices</div><div class="fli-desc">The login screen and the entire CRM are fully responsive — accessible from desktops, laptops, tablets, and mobile browsers.</div></div></div>
+  </div>
+</div>
+</div>
+<div class="divider"></div>
+
+
+<!-- ════════════════════════════════════════
+     ●  EMPLOYEE PORTAL
+════════════════════════════════════════ -->
+<div id="employee">
+<div class="sec-header emp">
+  <div class="sec-badge emp"><span class="sec-dot"></span>Part One · Employee Portal</div>
+  <div class="sec-h">The <em class="emp">Employee Experience</em></div>
+  <p class="sec-desc">A complete personal workspace for every team member — covering attendance, tasks, projects, payslips, communication, notes, and personal growth. Everything an employee needs, nothing they don't.</p>
+  <div class="sec-modules">
+    <span class="sec-mod">Dashboard</span><span class="sec-mod">Punch In/Out</span><span class="sec-mod">Attendance</span>
+    <span class="sec-mod">Tasks</span><span class="sec-mod">Projects</span><span class="sec-mod">Communication</span>
+    <span class="sec-mod">Payslips</span><span class="sec-mod">Leave Requests</span><span class="sec-mod">Todo</span>
+    <span class="sec-mod">Messages</span><span class="sec-mod">Notifications</span><span class="sec-mod">Notepad</span><span class="sec-mod">Achievements</span>
+  </div>
+</div>
+
+<!-- E1 — EMPLOYEE DASHBOARD -->
+<div class="feat-block" id="emp-dash">
+  <div class="feat-num"><span class="num emp">1</span><span>Employee Portal · Feature 1</span></div>
+  <div class="feat-title">Employee Dashboard — Your Day, at a Glance</div>
+  <div class="feat-subtitle">The first screen after login — a personalized command center showing exactly what needs attention today.</div>
+  <p class="feat-story">
+    The Employee Dashboard greets every team member by name, shows the current date and time, and immediately answers the most important morning question: <strong>"Where do I stand today?"</strong> Five task summary cards — All Tasks, Due Today, High Priority, Completed, and Rejected — give a complete snapshot of the workload in under three seconds.
+  </p>
+  <p class="feat-story">
+    Below the summary cards, <strong>Quick Actions</strong> provide one-click shortcuts to the three most common daily tasks: Punch In, View Tasks, and Attendance. The "Today's Tasks" section beneath lists every task due on the current day with the assignee name, due time, and priority badge. Real-time notification pop-ups appear in the top-right corner when new tasks are assigned — employees are informed the moment something changes, without needing to refresh or check another tool.
+  </p>
+  <div class="screenshot-wrap">
+    <div class="screenshot-bar"><div class="sb-dots"><span class="sb-dot r"></span><span class="sb-dot y"></span><span class="sb-dot g"></span></div><div class="sb-url">web.tapvera.io · Employee Dashboard</div></div>
+    <img src="Crm screenshots/emp dashboard.png" alt="Employee Dashboard"/>
+    <div class="screenshot-caption"><span class="caption-dot" style="background:var(--emp)"></span>Employee Dashboard — task summary cards, quick actions, today's tasks, and live notification popups</div>
+  </div>
+  <div class="feat-tags">
+    <span class="feat-tag emp">Personalized greeting with live date/time</span>
+    <span class="feat-tag emp">5 task summary cards</span>
+    <span class="feat-tag emp">Quick action shortcuts</span>
+    <span class="feat-tag emp">Today's task list</span>
+    <span class="feat-tag emp">Real-time notification popups</span>
+    <span class="feat-tag emp">Online status indicator</span>
+    <span class="feat-tag emp">Full sidebar navigation</span>
+  </div>
+  <div class="feat-list">
+    <div class="feat-list-item"><div class="fli-icon emp">👋</div><div class="fli-body"><div class="fli-title">Personalized Greeting</div><div class="fli-desc">The dashboard greets the employee by name with the current day, date, and live time — making the workspace feel personal from the first moment of the day.</div></div></div>
+    <div class="feat-list-item"><div class="fli-icon emp">📊</div><div class="fli-body"><div class="fli-title">Task Summary Cards</div><div class="fli-desc">Five highlighted cards show: All Tasks (16), Due Today (0), High Priority (1), Completed (4), and Rejected (0) — the entire workload in one glance.</div></div></div>
+    <div class="feat-list-item"><div class="fli-icon emp">⚡</div><div class="fli-body"><div class="fli-title">Quick Actions</div><div class="fli-desc">Three large action buttons — Punch In, View Tasks, and Attendance — take the employee directly where they need to go with a single click.</div></div></div>
+    <div class="feat-list-item"><div class="fli-icon emp">📋</div><div class="fli-body"><div class="fli-title">Today's Tasks Feed</div><div class="fli-desc">Every task due today is listed with the assigning person's name, due time, and visual priority tag — so the employee always knows what to work on first.</div></div></div>
+    <div class="feat-list-item"><div class="fli-icon emp">🔔</div><div class="fli-body"><div class="fli-title">Live Notification Popups</div><div class="fli-desc">New task assignments and system updates appear as real-time toast notifications in the corner of the dashboard — no page refresh needed, no alerts missed.</div></div></div>
+  </div>
+</div>
+<div class="divider"></div>
+
+<!-- E2 — PUNCH IN/OUT -->
+<div class="feat-block" id="punch">
+  <div class="feat-num"><span class="num emp">2</span><span>Employee Portal · Feature 2</span></div>
+  <div class="feat-title">Punch In / Punch Out — Every Minute, Tracked Automatically</div>
+  <div class="feat-subtitle">A fully digital time-tracking system replacing paper registers with live, precise, tamper-proof records.</div>
+  <p class="feat-story">
+    The moment an employee clicks "Punch In," a live work timer begins counting. The system records the exact arrival time down to the second and begins tracking work duration in real time. The screen shows Work Duration, Break Time, and Arrival Time — all live. <strong>No manual entries, no approximations, no disputes at month-end.</strong> Both the employee and their manager see the same precise, timestamped record.
+  </p>
+  <p class="feat-story">
+    Break Management lets employees categorize their breaks — <strong>Lunch, Coffee, or Personal</strong> — keeping work and break time clearly separated. The "Today's Timeline" shows a chronological log of every event for the day. The Week Summary panel on the right gives a full picture: Total Hours worked this week, Average Daily Work, Total Break time, On-Time Rate, and Breaks Taken. Employees can also request a Flexible Shift if their schedule needs to change — the request goes to admin for approval.
+  </p>
+  <div class="screenshot-wrap">
+    <div class="screenshot-bar"><div class="sb-dots"><span class="sb-dot r"></span><span class="sb-dot y"></span><span class="sb-dot g"></span></div><div class="sb-url">web.tapvera.io · Punch In / Out</div></div>
+    <img src="Crm screenshots/punchinpunchout.png" alt="Punch In / Punch Out"/>
+    <div class="screenshot-caption"><span class="caption-dot" style="background:var(--emp)"></span>Punch In/Out — live work timer, break management with type selection, today's timeline, and weekly summary</div>
+  </div>
+  <div class="feat-tags">
+    <span class="feat-tag emp">Live work duration counter</span>
+    <span class="feat-tag emp">Exact arrival time recording</span>
+    <span class="feat-tag emp">Break management: Lunch, Coffee, Personal</span>
+    <span class="feat-tag emp">Today's timeline log</span>
+    <span class="feat-tag emp">Week summary panel</span>
+    <span class="feat-tag emp">On-Time Rate tracking</span>
+    <span class="feat-tag emp">Flexible shift request</span>
+    <span class="feat-tag emp">Instant confirmation notification</span>
+  </div>
+  <div class="feat-list">
+    <div class="feat-list-item"><div class="fli-icon emp">⏱️</div><div class="fli-body"><div class="fli-title">Live Work Duration Counter</div><div class="fli-desc">The timer runs in real time — hours, minutes, and seconds — so the employee always knows exactly how long they've been working without checking a clock.</div></div></div>
+    <div class="feat-list-item"><div class="fli-icon emp">☕</div><div class="fli-body"><div class="fli-title">Typed Break Management</div><div class="fli-desc">Employees select a break type (Lunch, Coffee, or Personal) before starting a break — keeping work time and break time accurately separated in the records.</div></div></div>
+    <div class="feat-list-item"><div class="fli-icon emp">📅</div><div class="fli-body"><div class="fli-title">Today's Timeline</div><div class="fli-desc">A chronological event log shows every punch-in, break start, break end, and punch-out for the current day — a complete audit trail visible to the employee.</div></div></div>
+    <div class="feat-list-item"><div class="fli-icon emp">📈</div><div class="fli-body"><div class="fli-title">Week Summary Panel</div><div class="fli-desc">The right panel shows Total Hours, Avg. Daily Work, Total Break, On-Time Rate, and Breaks Taken for the current week — helping employees self-manage their time.</div></div></div>
+    <div class="feat-list-item"><div class="fli-icon emp">🔄</div><div class="fli-body"><div class="fli-title">Flexible Shift Request</div><div class="fli-desc">Employees who need to work different hours can request a flexible shift directly from this screen — it routes to admin for approval with zero back-and-forth messaging.</div></div></div>
+  </div>
+  <div class="highlight">
+    <p><strong>Why it matters:</strong> Paper attendance registers are prone to manipulation, loss, and disputes. Tapvera's digital punch system creates a tamper-proof, timestamped record that both the employee and the company can trust — every single day.</p>
+  </div>
+</div>
+<div class="divider"></div>
+
+<!-- E3 — ATTENDANCE STATS -->
+<div class="feat-block" id="attendance">
+  <div class="feat-num"><span class="num emp">3</span><span>Employee Portal · Feature 3</span></div>
+  <div class="feat-title">My Attendance — Complete Visibility Into Your Own Work History</div>
+  <div class="feat-subtitle">A data-rich personal attendance dashboard showing every metric, every day, every trend — so employees are always in control of their own records.</div>
+  <p class="feat-story">
+    The Attendance Statistics page is one of Tapvera's most powerful employee-facing features — because it gives people something most companies never provide: <strong>honest, real-time data about their own work patterns</strong>. Nine stat cards cover every dimension of attendance: Attendance Rate, Present Days, Working Hours, Full Days, Late Arrivals, On-Time Rate, Half Days, Absent Days, Current Status, and Today's Hours.
+  </p>
+  <p class="feat-story">
+    Scrolling below the stat cards reveals a full color-coded monthly <strong>Attendance Calendar</strong> showing every day of the month — green for present, red for absent, amber for leave, gray for weekend. To the right, a <strong>Weekly Hours Chart</strong> displays actual hours worked vs. the target (40h/week), alongside an Efficiency percentage and Target Met days counter. This level of transparency naturally builds accountability without requiring management pressure.
+  </p>
+  <div class="screenshot-wrap">
+    <div class="screenshot-bar"><div class="sb-dots"><span class="sb-dot r"></span><span class="sb-dot y"></span><span class="sb-dot g"></span></div><div class="sb-url">web.tapvera.io · My Attendance</div></div>
+    <img src="Crm screenshots/empattendancestats.png" alt="My Attendance Statistics"/>
+    <div class="screenshot-caption"><span class="caption-dot" style="background:var(--emp)"></span>My Attendance — 10 stat cards, full monthly calendar, and weekly hours chart with efficiency tracking</div>
+  </div>
+  <div class="feat-tags">
+    <span class="feat-tag emp">Attendance Rate %</span>
+    <span class="feat-tag emp">Present days vs expected</span>
+    <span class="feat-tag emp">Working hours tracking</span>
+    <span class="feat-tag emp">Full days / Half days breakdown</span>
+    <span class="feat-tag emp">Late arrivals counter</span>
+    <span class="feat-tag emp">On-Time Rate %</span>
+    <span class="feat-tag emp">Absent days count</span>
+    <span class="feat-tag emp">Color-coded monthly calendar</span>
+    <span class="feat-tag emp">Weekly hours vs target chart</span>
+    <span class="feat-tag emp">Efficiency rate tracking</span>
+  </div>
+  <div class="feat-list">
+    <div class="feat-list-item"><div class="fli-icon emp">📊</div><div class="fli-body"><div class="fli-title">10-Card Attendance Overview</div><div class="fli-desc">Ten data cards covering every attendance dimension: rate, present days, working hours, full days, half days, late arrivals, on-time rate, absent days, current status, and today's hours.</div></div></div>
+    <div class="feat-list-item"><div class="fli-icon emp">🗓️</div><div class="fli-body"><div class="fli-title">Monthly Attendance Calendar</div><div class="fli-desc">Every day of the month is color-coded: green = present, red = absent, amber = leave, purple = weekend — giving a complete visual history at one glance.</div></div></div>
+    <div class="feat-list-item"><div class="fli-icon emp">📈</div><div class="fli-body"><div class="fli-title">Weekly Hours Chart</div><div class="fli-desc">Tracks total hours worked vs. the 40h weekly target, showing efficiency percentage and how many days the target was met — week by week.</div></div></div>
+    <div class="feat-list-item"><div class="fli-icon emp">🟢</div><div class="fli-body"><div class="fli-title">Live Current Status</div><div class="fli-desc">A "Current Status" card shows whether the employee is currently Working, on Break, or not checked in — live, in real time.</div></div></div>
+  </div>
+</div>
+<div class="divider"></div>
+
+<!-- E4 — TASKS -->
+<div class="feat-block" id="tasks">
+  <div class="feat-num"><span class="num emp">4</span><span>Employee Portal · Feature 4</span></div>
+  <div class="feat-title">My Tasks — Every Assignment. Every Deadline. One View.</div>
+  <div class="feat-subtitle">A personal task management hub showing every assigned task across all projects — with priority, progress, filtering, and both list and Kanban views.</div>
+  <p class="feat-story">
+    No employee should ever be surprised by a deadline. The My Tasks module gives every team member a unified, real-time view of their entire workload. Four headline numbers at the top — <strong>16 Total, 4 Completed, 0 In Progress, 12 Overdue</strong> — provide an honest snapshot of where things stand. A progress bar beneath shows 25% overall completion. Below that, every individual task is listed with its title, the person who assigned it, the due date and time, a description, and a priority badge (High / Medium / Low).
+  </p>
+  <p class="feat-story">
+    Employees can switch between <strong>List View</strong> (detailed, shown here) and <strong>Kanban View</strong> (drag-and-drop columns) based on how they prefer to work. Status can be changed inline from a dropdown — no separate screen needed. The Remarks system lets employees leave comments on tasks for clarification or updates. Smart filters — by status, priority, overdue-only, or keyword search — let employees cut through a large task list instantly.
+  </p>
+  <div class="screenshot-wrap">
+    <div class="screenshot-bar"><div class="sb-dots"><span class="sb-dot r"></span><span class="sb-dot y"></span><span class="sb-dot g"></span></div><div class="sb-url">web.tapvera.io · My Tasks</div></div>
+    <img src="Crm screenshots/emptaskmanagement.png" alt="My Tasks"/>
+    <div class="screenshot-caption"><span class="caption-dot" style="background:var(--emp)"></span>My Tasks — summary header, overall progress bar, list view with priority badges, status updates, and filters</div>
+  </div>
+  <div class="feat-tags">
+    <span class="feat-tag emp">Task count summary (Total/Completed/Overdue)</span>
+    <span class="feat-tag emp">Overall progress percentage bar</span>
+    <span class="feat-tag emp">Priority badges: High / Medium / Low</span>
+    <span class="feat-tag emp">List View + Kanban View toggle</span>
+    <span class="feat-tag emp">Inline status update dropdown</span>
+    <span class="feat-tag emp">Remarks / comments per task</span>
+    <span class="feat-tag emp">Filter by status, priority, overdue</span>
+    <span class="feat-tag emp">Keyword search across tasks</span>
+    <span class="feat-tag emp">Export task report</span>
+    <span class="feat-tag emp">Tab navigation: All / Overdue / High Priority / In Progress / Done Today</span>
+  </div>
+  <div class="feat-list">
+    <div class="feat-list-item"><div class="fli-icon emp">🗂️</div><div class="fli-body"><div class="fli-title">Dual View Modes</div><div class="fli-desc">Switch between List View (detailed task info with all metadata) and Kanban View (drag tasks across Pending, In Progress, Completed columns) — employees choose what works for them.</div></div></div>
+    <div class="feat-list-item"><div class="fli-icon emp">🎯</div><div class="fli-body"><div class="fli-title">Priority Badges</div><div class="fli-desc">Every task has a colored priority badge — High (red), Medium (orange), Low (green) — so employees immediately know which tasks demand attention first.</div></div></div>
+    <div class="feat-list-item"><div class="fli-icon emp">💬</div><div class="fli-body"><div class="fli-title">Remarks System</div><div class="fli-desc">Employees can add comments and remarks on individual tasks — useful for noting blockers, asking questions, or recording what was done — all visible to the assignee.</div></div></div>
+    <div class="feat-list-item"><div class="fli-icon emp">🔍</div><div class="fli-body"><div class="fli-title">Smart Filters &amp; Search</div><div class="fli-desc">Filter by All, Overdue, High Priority, In Progress, or Completed Today. Search tasks by title, description, or assignee name with Ctrl+K keyboard shortcut.</div></div></div>
+    <div class="feat-list-item"><div class="fli-icon emp">📤</div><div class="fli-body"><div class="fli-title">Export Task Report</div><div class="fli-desc">Generate and download a structured report of all tasks — useful for performance reviews, status updates, or sharing with stakeholders.</div></div></div>
+  </div>
+</div>
+<div class="divider"></div>
+
+<!-- E5 — MY PROJECTS -->
+<div class="feat-block" id="projects">
+  <div class="feat-num"><span class="num emp">5</span><span>Employee Portal · Feature 5</span></div>
+  <div class="feat-title">My Projects — See Every Project You're Part Of</div>
+  <div class="feat-subtitle">A full visual overview of all assigned projects — with client name, team members, status, tags, and direct access to the full project workspace.</div>
+  <p class="feat-story">
+    Context transforms the quality of work. When an employee understands the full scope of the project — not just their individual tasks — they make better decisions, ask better questions, and deliver better results. The My Projects module gives every team member a card-based view of every project they're assigned to, with all the context they need immediately visible.
+  </p>
+  <p class="feat-story">
+    Three headline counters — <strong>10 Total, 4 Active, 1 Completed</strong> — give an immediate summary. Each project card shows the project name, the client it belongs to, a status badge (Active, Hold, or Completed), technology/service tags (e.g., React, Node, Google Marketing), team member avatar chips, the start date, and a "View Details" link. Clicking View Details opens the full project workspace with tasks, reports, communication, and analytics.
+  </p>
+  <div class="screenshot-wrap">
+    <div class="screenshot-bar"><div class="sb-dots"><span class="sb-dot r"></span><span class="sb-dot y"></span><span class="sb-dot g"></span></div><div class="sb-url">web.tapvera.io · My Projects</div></div>
+    <img src="Crm screenshots/empprojectmanage.png" alt="My Projects"/>
+    <div class="screenshot-caption"><span class="caption-dot" style="background:var(--emp)"></span>My Projects — project cards showing client, status badge, service tags, team avatars, dates, and direct project access</div>
+  </div>
+  <div class="feat-tags">
+    <span class="feat-tag emp">Project card grid with all metadata</span>
+    <span class="feat-tag emp">Total / Active / Completed counters</span>
+    <span class="feat-tag emp">Client name on every card</span>
+    <span class="feat-tag emp">Status badges: Active / Hold / Completed</span>
+    <span class="feat-tag emp">Technology / service tag chips</span>
+    <span class="feat-tag emp">Team member avatar display</span>
+    <span class="feat-tag emp">Project start date</span>
+    <span class="feat-tag emp">Search projects by name</span>
+    <span class="feat-tag emp">View Details → full project workspace</span>
+  </div>
+  <div class="feat-list">
+    <div class="feat-list-item"><div class="fli-icon emp">🃏</div><div class="fli-body"><div class="fli-title">Visual Project Cards</div><div class="fli-desc">Each project is presented as a rich card — name, client, status, tags, and team — giving employees the full context of what they're contributing to without opening anything extra.</div></div></div>
+    <div class="feat-list-item"><div class="fli-icon emp">🏷️</div><div class="fli-body"><div class="fli-title">Service & Tech Tags</div><div class="fli-desc">Color-coded tag chips on each card indicate the type of work — e.g., React, Node.js, SEO, Google Marketing — so the nature of every project is instantly clear.</div></div></div>
+    <div class="feat-list-item"><div class="fli-icon emp">👥</div><div class="fli-body"><div class="fli-title">Team Visibility</div><div class="fli-desc">Avatar circles on each card show who else is on the project — enabling employees to know their teammates without looking anywhere else.</div></div></div>
+    <div class="feat-list-item"><div class="fli-icon emp">🔗</div><div class="fli-body"><div class="fli-title">Full Project Workspace Access</div><div class="fli-desc">"View Details" opens the complete project page — tasks, team, progress reports, communication room, SEO analytics, shared sheets, and screenshot history.</div></div></div>
+  </div>
+</div>
+<div class="divider"></div>
+
+<!-- E6 — PROJECT COMMUNICATION -->
+<div class="feat-block" id="proj-comm">
+  <div class="feat-num"><span class="num emp">6</span><span>Employee Portal · Feature 6</span></div>
+  <div class="feat-title">Project Communication — The Health of Every Conversation, at a Glance</div>
+  <div class="feat-subtitle">A communication health dashboard that shows every project's messaging activity, pending responses, and overdue threads — so nothing falls silent.</div>
+  <p class="feat-story">
+    Client communication failures are one of the top reasons agencies lose business. Not because the work was bad — but because a message went unanswered too long, a client felt ignored, or a team lost track of where the conversation stood. <strong>Tapvera's Project Communication module is specifically designed to prevent this.</strong>
+  </p>
+  <p class="feat-story">
+    The top "Communication Health Overview" section provides a system-level summary: how many projects require Urgent Action, how many are Critically Overdue, and how many Active Communications are currently open. Below that, every project is listed in a table with the last activity date, last sender, pending task count, and analytics score — all filterable by client, status, or communication type. Clicking any project opens its dedicated communication room.
+  </p>
+  <div class="screenshot-wrap">
+    <div class="screenshot-bar"><div class="sb-dots"><span class="sb-dot r"></span><span class="sb-dot y"></span><span class="sb-dot g"></span></div><div class="sb-url">web.tapvera.io · Project Communication</div></div>
+    <img src="Crm screenshots/empprojectcommunication1.png" alt="Project Communication"/>
+    <div class="screenshot-caption"><span class="caption-dot" style="background:var(--emp)"></span>Project Communication — health overview panel, per-project status rows, last activity, pending tasks, and overdue alerts</div>
+  </div>
+  <div class="feat-tags">
+    <span class="feat-tag emp">Communication Health Overview (Urgent / Overdue / Active)</span>
+    <span class="feat-tag emp">Total projects + rooms + to-dos count</span>
+    <span class="feat-tag emp">Per-project: last activity date</span>
+    <span class="feat-tag emp">Last sender visibility</span>
+    <span class="feat-tag emp">Pending tasks count per project</span>
+    <span class="feat-tag emp">Overdue alert highlighting</span>
+    <span class="feat-tag emp">Filter by client / status / type</span>
+    <span class="feat-tag emp">One-click project communication room access</span>
+  </div>
+  <div class="feat-list">
+    <div class="feat-list-item"><div class="fli-icon emp">🏥</div><div class="fli-body"><div class="fli-title">Communication Health Score</div><div class="fli-desc">The top panel shows system-wide urgency — projects flagged for Urgent Action or Critically Overdue are surfaced first, so nothing critical goes unnoticed.</div></div></div>
+    <div class="feat-list-item"><div class="fli-icon emp">📅</div><div class="fli-body"><div class="fli-title">Last Activity Tracking</div><div class="fli-desc">For every project, the system shows when the last message was sent and who sent it — making it instantly clear if a project has gone silent for too long.</div></div></div>
+    <div class="feat-list-item"><div class="fli-icon emp">⚠️</div><div class="fli-body"><div class="fli-title">Overdue Indicators</div><div class="fli-desc">Projects with responses overdue by more than a set threshold are highlighted in the table — enabling teams to prioritize client responses before they become complaints.</div></div></div>
+    <div class="feat-list-item"><div class="fli-icon emp">💬</div><div class="fli-body"><div class="fli-title">Per-Project Communication Rooms</div><div class="fli-desc">Each project has a dedicated messaging room — click any row to enter the full conversation thread for that specific project, keeping all discussion context in one place.</div></div></div>
+  </div>
+</div>
+<div class="divider"></div>
+
+<!-- E7 — PAYSLIPS -->
+<div class="feat-block" id="payslips">
+  <div class="feat-num"><span class="num emp">7</span><span>Employee Portal · Feature 7</span></div>
+  <div class="feat-title">My Payslips — Salary History, Accessible Anytime</div>
+  <div class="feat-subtitle">Every payslip, every month, instantly accessible — with full salary breakdown, deductions, and downloadable PDF — no HR follow-up needed.</div>
+  <p class="feat-story">
+    Financial clarity is fundamental to employee trust. When people can always see exactly what they've earned and understand every deduction, the relationship between employee and employer strengthens. Tapvera gives every employee a self-service payslip portal — their <strong>complete salary history going back as far as they've been with the organization</strong>, available in seconds.
+  </p>
+  <p class="feat-story">
+    Monthly payslip cards show Gross Salary, Deductions, Net Payment, Working Days, and Leaves Taken for each period — at a glance. A year filter lets employees navigate between periods. Clicking "View Details" on any card opens a full itemized breakdown: Basic Salary, Performance Bonus, Allowances, and Tax Deductions all listed separately. Every payslip can be downloaded as a formatted document for personal records, loan applications, or tax filing.
+  </p>
+  <div class="screenshot-wrap">
+    <div class="screenshot-bar"><div class="sb-dots"><span class="sb-dot r"></span><span class="sb-dot y"></span><span class="sb-dot g"></span></div><div class="sb-url">web.tapvera.io · My Payslips</div></div>
+    <img src="Crm screenshots/emppayslip.png" alt="My Payslips"/>
+    <div class="screenshot-caption"><span class="caption-dot" style="background:var(--emp)"></span>My Payslips — 7 months of salary cards showing gross pay, deductions, net payment, working days, and leaves taken</div>
+  </div>
+  <div class="feat-tags">
+    <span class="feat-tag emp">Monthly payslip cards (Gross / Deductions / Net)</span>
+    <span class="feat-tag emp">Working days and leaves per month</span>
+    <span class="feat-tag emp">Year filter for historical records</span>
+    <span class="feat-tag emp">View Details — full itemized breakdown</span>
+    <span class="feat-tag emp">Download payslip as PDF</span>
+    <span class="feat-tag emp">Processing status indicator</span>
+    <span class="feat-tag emp">Instant availability after HR generation</span>
+  </div>
+  <div class="feat-list">
+    <div class="feat-list-item"><div class="fli-icon emp">💰</div><div class="fli-body"><div class="fli-title">Monthly Payslip Cards</div><div class="fli-desc">Each month is presented as a card showing Gross Salary, Deductions, Net Payment, Working Days, and Leaves — the complete salary picture in a compact, readable format.</div></div></div>
+    <div class="feat-list-item"><div class="fli-icon emp">📄</div><div class="fli-body"><div class="fli-title">Full Itemized Breakdown</div><div class="fli-desc">View Details opens a complete salary breakdown: Basic Pay, HRA, Performance Bonus, Allowances, Tax Deduction (TDS), Provident Fund — every line item explained.</div></div></div>
+    <div class="feat-list-item"><div class="fli-icon emp">⬇️</div><div class="fli-body"><div class="fli-title">Downloadable PDF</div><div class="fli-desc">Any payslip can be downloaded as a formatted PDF document — immediately usable for loan applications, tax filings, or personal financial records.</div></div></div>
+    <div class="feat-list-item"><div class="fli-icon emp">🗂️</div><div class="fli-body"><div class="fli-title">Historical Archive</div><div class="fli-desc">The year filter lets employees navigate to any past year's payslips — maintaining a complete salary history for as long as they've been part of the organization.</div></div></div>
+  </div>
+</div>
+<div class="divider"></div>
+
+<!-- E8 — TODO -->
+<div class="feat-block" id="todo">
+  <div class="feat-num"><span class="num emp">8</span><span>Employee Portal · Feature 8</span></div>
+  <div class="feat-title">Todo — Your Private Personal Task List</div>
+  <div class="feat-subtitle">A lightweight personal planner for self-managed tasks — completely separate from assigned work, private, and organized by today, upcoming, and completed.</div>
+  <p class="feat-story">
+    Not everything at work fits into a project task. There are meeting preparations, personal follow-ups, administrative reminders, and ideas to capture. The Todo module is the employee's own private planning space — <strong>completely separate from manager-assigned tasks</strong>, visible only to them. It brings the last piece of daily planning inside Tapvera, eliminating the need for sticky notes, phone reminders, or a separate to-do app.
+  </p>
+  <p class="feat-story">
+    Tasks are organized into three clean sections: <strong>Today's Tasks</strong>, <strong>Upcoming Tasks</strong>, and <strong>Completed Tasks</strong>. A progress bar at the top shows overall completion for the current period. Each task carries a priority label (High, Medium, Low), a due date and time, and a checkbox to mark it done — which the system timestamps automatically. Tasks can be edited or deleted at any time.
+  </p>
+  <div class="screenshot-wrap">
+    <div class="screenshot-bar"><div class="sb-dots"><span class="sb-dot r"></span><span class="sb-dot y"></span><span class="sb-dot g"></span></div><div class="sb-url">web.tapvera.io · Todo</div></div>
+    <img src="Crm screenshots/emptodo.png" alt="Todo"/>
+    <div class="screenshot-caption"><span class="caption-dot" style="background:var(--emp)"></span>Todo — overall progress bar, today's tasks, upcoming tasks, and completed tasks with auto-timestamps</div>
+  </div>
+  <div class="feat-tags">
+    <span class="feat-tag emp">Overall completion progress bar</span>
+    <span class="feat-tag emp">Today's tasks section</span>
+    <span class="feat-tag emp">Upcoming tasks section</span>
+    <span class="feat-tag emp">Completed tasks with timestamp</span>
+    <span class="feat-tag emp">Priority levels: High / Medium / Low</span>
+    <span class="feat-tag emp">Due date and time per task</span>
+    <span class="feat-tag emp">Create / Edit / Delete tasks</span>
+    <span class="feat-tag emp">100% private — visible only to the employee</span>
+  </div>
+  <div class="highlight">
+    <p><strong>Key distinction:</strong> "My Tasks" shows work assigned by managers across projects. "Todo" is your own private daily planner — personal, self-managed, and separate from any project. Together, they cover every dimension of a working day.</p>
+  </div>
+</div>
+<div class="divider"></div>
+
+<!-- E9 — NOTIFICATIONS -->
+<div class="feat-block" id="notif">
+  <div class="feat-num"><span class="num emp">9</span><span>Employee Portal · Feature 9</span></div>
+  <div class="feat-title">Notifications — Stay Informed Without Being Interrupted</div>
+  <div class="feat-subtitle">Real-time notification popups on the dashboard, plus a full Notification Center for searching, managing, and clearing every alert in one place.</div>
+  <p class="feat-story">
+    Tapvera's notification system operates on two levels: <strong>instant real-time popups</strong> on the dashboard when something important happens, and a <strong>persistent Notification Center</strong> where every alert is stored, searchable, and manageable. No important update ever gets lost, and the employee is never overwhelmed — they can clear, bulk-read, or search through their notification history at any time.
+  </p>
+  <div class="screenshot-wrap">
+    <div class="screenshot-bar"><div class="sb-dots"><span class="sb-dot r"></span><span class="sb-dot y"></span><span class="sb-dot g"></span></div><div class="sb-url">web.tapvera.io · Dashboard — Live Notification Popup</div></div>
+    <img src="Crm screenshots/empnotification.png" alt="Live Notification Popup"/>
+    <div class="screenshot-caption"><span class="caption-dot" style="background:var(--emp)"></span>Live notification popup — new task assignment alert appearing in real-time on the Employee Dashboard</div>
+  </div>
+  <div class="screenshot-wrap" style="margin-top:32px">
+    <div class="screenshot-bar"><div class="sb-dots"><span class="sb-dot r"></span><span class="sb-dot y"></span><span class="sb-dot g"></span></div><div class="sb-url">web.tapvera.io · Notification Center</div></div>
+    <img src="Crm screenshots/empnotificationcenter.png" alt="Notification Center"/>
+    <div class="screenshot-caption"><span class="caption-dot" style="background:var(--emp)"></span>Notification Center — 16 unread alerts, searchable list, bulk select, mark-all-read, and delete-read controls</div>
+  </div>
+  <div class="feat-tags">
+    <span class="feat-tag emp">Real-time popup notifications on dashboard</span>
+    <span class="feat-tag emp">Unread badge count on sidebar</span>
+    <span class="feat-tag emp">16+ notifications stored in center</span>
+    <span class="feat-tag emp">Search notifications by keyword</span>
+    <span class="feat-tag emp">Category tags: chat / task / project / leave</span>
+    <span class="feat-tag emp">Timestamps on every notification</span>
+    <span class="feat-tag emp">Bulk Select for group actions</span>
+    <span class="feat-tag emp">Mark All Read in one click</span>
+    <span class="feat-tag emp">Delete Read notifications to clean up</span>
+  </div>
+  <div class="feat-list">
+    <div class="feat-list-item"><div class="fli-icon emp">⚡</div><div class="fli-body"><div class="fli-title">Real-Time Popups</div><div class="fli-desc">New task assignments and system updates appear as instant toast notifications on the dashboard — employees are informed the moment something changes.</div></div></div>
+    <div class="feat-list-item"><div class="fli-icon emp">📬</div><div class="fli-body"><div class="fli-title">Persistent Notification Center</div><div class="fli-desc">Every notification is stored in the center with timestamp, category tag, and full context — searchable and available even if the popup was missed.</div></div></div>
+    <div class="feat-list-item"><div class="fli-icon emp">🗂️</div><div class="fli-body"><div class="fli-title">Category Tags</div><div class="fli-desc">Notifications are tagged by type — chat, task, project, leave — so employees can filter and find relevant alerts quickly within a busy notification list.</div></div></div>
+    <div class="feat-list-item"><div class="fli-icon emp">🧹</div><div class="fli-body"><div class="fli-title">Bulk Management</div><div class="fli-desc">Mark All Read clears the unread badge with one click. Bulk Select + Delete Read removes old notifications. The center stays clean and organized.</div></div></div>
+  </div>
+</div>
+<div class="divider"></div>
+
+<!-- E10 — NOTEPAD -->
+<div class="feat-block" id="notepad">
+  <div class="feat-num"><span class="num emp">10</span><span>Employee Portal · Feature 10</span></div>
+  <div class="feat-title">My Notepad — Think Privately, Write Freely</div>
+  <div class="feat-subtitle">An auto-saving, version-tracked, fully private digital notepad — built directly into the CRM so employees never need to leave the platform to jot something down.</div>
+  <p class="feat-story">
+    Professionals think in notes. Meeting summaries, ideas, follow-up reminders, personal goals, rough drafts — they need a space to capture thinking as it happens. Tapvera's Notepad brings that space inside the workplace itself, with one critical property: <strong>complete privacy</strong>. No manager, no admin, no super admin can read an employee's notepad without explicit system-level access — it is the employee's personal thinking space, always and entirely.
+  </p>
+  <p class="feat-story">
+    The Notepad auto-saves every 2 seconds after the user stops typing — <strong>zero data loss, ever</strong>. It tracks character count, word count, and line count in real time. Search within notes with Ctrl+F. View the last 5 saved versions through the History icon and restore any version. Download the full content as a .txt file. Up to 50,000 characters of writing space — enough for dozens of pages of notes.
+  </p>
+  <div class="screenshot-wrap">
+    <div class="screenshot-bar"><div class="sb-dots"><span class="sb-dot r"></span><span class="sb-dot y"></span><span class="sb-dot g"></span></div><div class="sb-url">web.tapvera.io · My Notepad</div></div>
+    <img src="Crm screenshots/empnotepad.png" alt="My Notepad"/>
+    <div class="screenshot-caption"><span class="caption-dot" style="background:var(--emp)"></span>My Notepad — auto-saving private workspace with character/word/line counters, version history, and download option</div>
+  </div>
+  <div class="feat-tags">
+    <span class="feat-tag emp">Auto-saves every 2 seconds</span>
+    <span class="feat-tag emp">50,000 character capacity</span>
+    <span class="feat-tag emp">Real-time character / word / line count</span>
+    <span class="feat-tag emp">Manual save with Ctrl+S</span>
+    <span class="feat-tag emp">In-note search with Ctrl+F</span>
+    <span class="feat-tag emp">Version history — last 5 saves</span>
+    <span class="feat-tag emp">Download as .txt file</span>
+    <span class="feat-tag emp">100% private — no other user can view</span>
+    <span class="feat-tag emp">Last saved timestamp always visible</span>
+  </div>
+  <div class="feat-list">
+    <div class="feat-list-item"><div class="fli-icon emp">💾</div><div class="fli-body"><div class="fli-title">Auto-Save Every 2 Seconds</div><div class="fli-desc">The notepad saves automatically 2 seconds after the user stops typing — no manual save required. A "All changes saved" indicator confirms every save in real time.</div></div></div>
+    <div class="feat-list-item"><div class="fli-icon emp">🔒</div><div class="fli-body"><div class="fli-title">Complete Privacy</div><div class="fli-desc">The notepad is visible only to the employee who owns it. No manager, HR, admin, or colleague can see its contents — it is the employee's private thinking space.</div></div></div>
+    <div class="feat-list-item"><div class="fli-icon emp">🕐</div><div class="fli-body"><div class="fli-title">Version History</div><div class="fli-desc">Click the History icon to view the last 5 saved versions of the notepad — any version can be restored, protecting against accidental overwrites.</div></div></div>
+    <div class="feat-list-item"><div class="fli-icon emp">⬇️</div><div class="fli-body"><div class="fli-title">Export as Text File</div><div class="fli-desc">The entire notepad can be downloaded as a .txt file — useful for sharing meeting notes, archiving ideas, or backing up personal records.</div></div></div>
+  </div>
+</div>
+<div class="divider"></div>
+
+<!-- E11 — ACHIEVEMENTS -->
+<div class="feat-block" id="achieve">
+  <div class="feat-num"><span class="num emp">11</span><span>Employee Portal · Feature 11</span></div>
+  <div class="feat-title">Achievements — Work Gets Recognized. Progress Gets Rewarded.</div>
+  <div class="feat-subtitle">A built-in gamification system that turns daily work into a leveling journey — with points, streaks, badges, and performance milestones that make productivity feel personal.</div>
+  <p class="feat-story">
+    Recognition is one of the most powerful drivers of employee performance — and one of the most underutilized. Tapvera's Achievements module builds recognition directly into the platform with a <strong>full gamification system</strong>: levels, points, streaks, badges, and a progress bar that advances with every meaningful action. Employees don't just do work — they earn from it.
+  </p>
+  <p class="feat-story">
+    Every employee starts at Level 1 and earns points for work activities: completing high-priority tasks, maintaining perfect attendance streaks, adding detailed comments, using advanced features. The Achievements panel has three tabs — <strong>Earned</strong> (badges unlocked), <strong>Available</strong> (12 badges to unlock), and <strong>Stats</strong> (Tasks Completed, High Priority count, Current Streak, Best Streak, and Completion percentage). The system shows Recent Activity and Achievement Progress — giving employees a clear view of how far they've come and exactly what it takes to reach the next level.
+  </p>
+  <div class="screenshot-wrap">
+    <div class="screenshot-bar"><div class="sb-dots"><span class="sb-dot r"></span><span class="sb-dot y"></span><span class="sb-dot g"></span></div><div class="sb-url">web.tapvera.io · Achievements</div></div>
+    <img src="Crm screenshots/empachievement.png" alt="Achievements"/>
+    <div class="screenshot-caption"><span class="caption-dot" style="background:var(--emp)"></span>Achievements — level + point system, 3-tab layout (Earned / Available / Stats), streaks, and progress tracking</div>
+  </div>
+  <div class="feat-tags">
+    <span class="feat-tag emp">Level + point system (0/100 to Level 2)</span>
+    <span class="feat-tag emp">12 available achievements to unlock</span>
+    <span class="feat-tag emp">Earned / Available / Stats tabs</span>
+    <span class="feat-tag emp">Current Streak tracking</span>
+    <span class="feat-tag emp">Best Streak record</span>
+    <span class="feat-tag emp">Tasks Completed counter</span>
+    <span class="feat-tag emp">High Priority tasks count</span>
+    <span class="feat-tag emp">Recent Activity log</span>
+    <span class="feat-tag emp">Completion % across all achievements</span>
+  </div>
+  <div class="highlight">
+    <p><strong>Why it matters:</strong> When employees can see their streak, their level, and their badges, they show up differently. Achievements aren't a feature about games — they're a feature about recognition, and recognition drives retention.</p>
+  </div>
+</div>
+</div><!-- end employee -->
+<div class="divider"></div>
+
+
+<!-- ════════════════════════════════════════
+     ●  ADMIN PORTAL
+════════════════════════════════════════ -->
+<div id="admin">
+<div class="sec-header adm">
+  <div class="sec-badge adm"><span class="sec-dot"></span>Part Two · Admin Portal</div>
+  <div class="sec-h">The <em class="adm">Admin Experience</em></div>
+  <p class="sec-desc">Built for the people running the business — complete control over projects, clients, leads, callbacks, team communication, tasks, call intelligence, and transfers. Every tool an admin needs to keep operations moving without friction.</p>
+  <div class="sec-modules">
+    <span class="sec-mod">Project Management</span><span class="sec-mod">Client Management</span>
+    <span class="sec-mod">Lead Management</span><span class="sec-mod">Callback Management</span>
+    <span class="sec-mod">Communication Tracking</span><span class="sec-mod">Notice Board</span>
+    <span class="sec-mod">Task Assignment</span><span class="sec-mod">Call Intelligence</span>
+    <span class="sec-mod">Transfer Management</span>
+  </div>
+</div>
+
+<!-- A1 — PROJECT MANAGEMENT -->
+<div class="feat-block" id="adm-proj">
+  <div class="feat-num"><span class="num adm">1</span><span>Admin Portal · Feature 1</span></div>
+  <div class="feat-title">Project Management — Every Project, Every Status, One View</div>
+  <div class="feat-subtitle">A complete project delivery engine that shows every active project, its team, its client, and its health — all from a single organised screen.</div>
+  <p class="feat-story">
+    Running multiple client projects at once means constantly tracking who is doing what, how far along each project is, and which ones are at risk of slipping. Tapvera's Project Management screen consolidates all of this into one table that answers every status question at a glance. <strong>Project name, client, assigned team members, type, deadline, and current status</strong> — all visible together without opening individual records.
+  </p>
+  <p class="feat-story">
+    Projects are categorised by type — Website, SEO, Google Marketing, SMO, Hosting, Invoice App — with colour-coded status badges: On Track, In Review, Active, Planning, Completed, Overdue. Stat cards at the top give a portfolio-level count by type. Admins can switch between table view and card view, filter by status or type, and drill into any project to see its tasks, chat, shared sheets, SEO analytics, and client portal — all from the same entry point.
+  </p>
+  <div class="screenshot-wrap">
+    <div class="screenshot-bar"><div class="sb-dots"><span class="sb-dot r"></span><span class="sb-dot y"></span><span class="sb-dot g"></span></div><div class="sb-url">web.tapvera.io · Project Management</div></div>
+    <img src="Crm screenshots/projectmanagement.png" alt="Project Management"/>
+    <div class="screenshot-caption"><span class="caption-dot" style="background:var(--adm)"></span>Project Management — full project list with type, team, client, status and deadline in one view</div>
+  </div>
+  <div class="feat-tags">
+    <span class="feat-tag adm">Project table with name / client / team / type / status / deadline</span>
+    <span class="feat-tag adm">Type breakdown: Website, SEO, SMO, Marketing, Hosting, Invoice App</span>
+    <span class="feat-tag adm">Status badges: On Track / In Review / Active / Planning / Overdue</span>
+    <span class="feat-tag adm">Table view and card view toggle</span>
+    <span class="feat-tag adm">Project-level tasks, chat, sheets, and SEO analytics</span>
+    <span class="feat-tag adm">Client portal linked per project</span>
+    <span class="feat-tag adm">Milestone tracking with deadline alerts</span>
+    <span class="feat-tag adm">One-click downloadable project report</span>
+  </div>
+  <div class="feat-list">
+    <div class="feat-list-item"><div class="fli-icon adm">📁</div><div class="fli-body"><div class="fli-title">Centralised Project Workspace</div><div class="fli-desc">Every project has its own space inside Tapvera — tasks, team chat, shared sheets, SEO analytics, reports, and screenshots — all organised under that project so nothing gets lost.</div></div></div>
+    <div class="feat-list-item"><div class="fli-icon adm">📊</div><div class="fli-body"><div class="fli-title">Portfolio Health at a Glance</div><div class="fli-desc">The project table shows all active projects with their status, giving managers immediate visibility into which projects are on track and which need attention — without opening each one.</div></div></div>
+    <div class="feat-list-item"><div class="fli-icon adm">👥</div><div class="fli-body"><div class="fli-title">Team Assignment per Project</div><div class="fli-desc">Each project shows the assigned team members as avatar chips. Adding or removing a team member from a project takes seconds and instantly updates their task and communication access.</div></div></div>
+    <div class="feat-list-item"><div class="fli-icon adm">📋</div><div class="fli-body"><div class="fli-title">SEO &amp; Backlink Tracking Built In</div><div class="fli-desc">SEO projects include integrated keyword ranking tracking and backlink monitoring — no separate tools needed. Track keyword positions and link growth directly inside the project.</div></div></div>
+  </div>
+</div>
+<div class="divider"></div>
+
+<!-- A2 — CLIENT MANAGEMENT -->
+<div class="feat-block" id="adm-client">
+  <div class="feat-num"><span class="num adm">2</span><span>Admin Portal · Feature 2</span></div>
+  <div class="feat-title">Client Management — Every Client Relationship, Fully Organised</div>
+  <div class="feat-subtitle">A complete client directory with contact details, business info, status management, credentials, invoices, and interaction history — all in one place.</div>
+  <p class="feat-story">
+    Managing client relationships means keeping track of a lot of moving pieces — contact details, active projects, invoice status, past interactions, and credentials. Tapvera's Client Management screen brings all of it into one clean interface. <strong>Every client has a record</strong> showing their business name, email, phone, status (Active/Inactive), and quick access to all their linked projects and invoices.
+  </p>
+  <p class="feat-story">
+    Admins can add new clients, edit their details, activate or deactivate accounts, and manage portal credentials — all without leaving the screen. Each client record stores invoices, interaction remarks, and a communication history so every team member who interacts with that client has the full context. A <strong>bulk email tool</strong> lets admins send messages to multiple clients at once with a custom subject and body.
+  </p>
+  <div class="screenshot-wrap">
+    <div class="screenshot-bar"><div class="sb-dots"><span class="sb-dot r"></span><span class="sb-dot y"></span><span class="sb-dot g"></span></div><div class="sb-url">web.tapvera.io · Client Management</div></div>
+    <img src="Crm screenshots/clientmanagement.png" alt="Client Management"/>
+    <div class="screenshot-caption"><span class="caption-dot" style="background:var(--adm)"></span>Client Management — full client directory with status, credentials, linked projects and invoice history</div>
+  </div>
+  <div class="feat-tags">
+    <span class="feat-tag adm">Full client directory with name / business / email / status</span>
+    <span class="feat-tag adm">Add / edit / deactivate clients instantly</span>
+    <span class="feat-tag adm">Active / Inactive status toggle per client</span>
+    <span class="feat-tag adm">Client portal credentials management</span>
+    <span class="feat-tag adm">Invoice storage and payment tracking per client</span>
+    <span class="feat-tag adm">Interaction remarks and communication history</span>
+    <span class="feat-tag adm">Bulk email tool — custom subject and body</span>
+    <span class="feat-tag adm">Linked projects view per client</span>
+  </div>
+  <div class="feat-list">
+    <div class="feat-list-item"><div class="fli-icon adm">🔑</div><div class="fli-body"><div class="fli-title">Client Portal Access Control</div><div class="fli-desc">Each client has dedicated login credentials for their portal. Admins manage these credentials directly — generate, view, copy, or reset them — without involving IT or third-party tools.</div></div></div>
+    <div class="feat-list-item"><div class="fli-icon adm">💼</div><div class="fli-body"><div class="fli-title">Invoice &amp; Payment Tracking</div><div class="fli-desc">Each client record stores their invoices and payment history. Track outstanding payments, view past transactions, and keep financial records against each client without a separate system.</div></div></div>
+    <div class="feat-list-item"><div class="fli-icon adm">📧</div><div class="fli-body"><div class="fli-title">Bulk Client Communication</div><div class="fli-desc">Select multiple clients and send a single email with a custom message — for announcements, updates, or reminders. No BCC, no mail merge, no third-party tool needed.</div></div></div>
+    <div class="feat-list-item"><div class="fli-icon adm">📝</div><div class="fli-body"><div class="fli-title">Interaction Remarks</div><div class="fli-desc">Log notes and remarks against each client interaction. Every team member who later touches that client account can see the full history and context — no repeated conversations.</div></div></div>
+  </div>
+</div>
+<div class="divider"></div>
+
+<!-- A3 — LEAD MANAGEMENT -->
+<div class="feat-block" id="adm-leads">
+  <div class="feat-num"><span class="num adm">3</span><span>Admin Portal · Feature 3</span></div>
+  <div class="feat-title">Lead Management — Your Entire Sales Pipeline, Visualised</div>
+  <div class="feat-subtitle">A drag-and-drop Kanban pipeline that tracks every prospect from first contact to closed deal — so no lead ever goes cold due to poor follow-up.</div>
+  <p class="feat-story">
+    Most businesses lose deals not because of price or product — but because of follow-up failure. A lead was contacted, interest was shown, and then nothing. Tapvera's Lead Management system is designed to make that impossible. <strong>Every lead has a stage, every stage has an owner, and the pipeline always shows you exactly what needs to happen next.</strong>
+  </p>
+  <p class="feat-story">
+    The Visual Lead Board (Kanban) organises leads across six stages: New Leads, Contacted, Qualified, Negotiation, Closed Won, and Closed Lost. Each card shows the company name, contact person, phone number, and assigned rep. Leads move between stages by drag-and-drop — and every move is logged automatically. Stats at the top show conversion rate, win rate, total revenue, and average deal size in real time.
+  </p>
+  <div class="screenshot-wrap">
+    <div class="screenshot-bar"><div class="sb-dots"><span class="sb-dot r"></span><span class="sb-dot y"></span><span class="sb-dot g"></span></div><div class="sb-url">web.tapvera.io · Lead Management</div></div>
+    <img src="Crm screenshots/leadmanagement.png" alt="Lead Management"/>
+    <div class="screenshot-caption"><span class="caption-dot" style="background:var(--adm)"></span>Lead Kanban — 6-stage pipeline with drag-and-drop, lead cards, conversion metrics and team assignment</div>
+  </div>
+  <div class="feat-tags">
+    <span class="feat-tag adm">6-stage Kanban: New → Contacted → Qualified → Negotiation → Won → Lost</span>
+    <span class="feat-tag adm">Drag-and-drop lead stage movement</span>
+    <span class="feat-tag adm">Lead cards: name / company / phone / assigned rep</span>
+    <span class="feat-tag adm">Assign and transfer leads between team members</span>
+    <span class="feat-tag adm">Conversion rate, win rate, revenue metrics</span>
+    <span class="feat-tag adm">Every status change logged automatically</span>
+    <span class="feat-tag adm">Priority tagging: High / Medium / Low</span>
+    <span class="feat-tag adm">Source tracking for each lead</span>
+  </div>
+  <div class="feat-list">
+    <div class="feat-list-item"><div class="fli-icon adm">🗂️</div><div class="fli-body"><div class="fli-title">Visual Kanban Pipeline</div><div class="fli-desc">Leads are represented as cards on a drag-and-drop board. Moving a lead from "Contacted" to "Qualified" is as simple as dragging the card — status updates instantly and the move is logged.</div></div></div>
+    <div class="feat-list-item"><div class="fli-icon adm">👤</div><div class="fli-body"><div class="fli-title">Lead Ownership &amp; Transfer</div><div class="fli-desc">Every lead is assigned to a specific team member. Leads can be transferred between reps with full history preserved — no context lost, no starting from scratch.</div></div></div>
+    <div class="feat-list-item"><div class="fli-icon adm">📊</div><div class="fli-body"><div class="fli-title">Real-Time Sales Metrics</div><div class="fli-desc">Conversion rate, win rate, total revenue, and average deal size update in real time as leads move through the pipeline — giving managers an instant performance snapshot.</div></div></div>
+    <div class="feat-list-item"><div class="fli-icon adm">🏷️</div><div class="fli-body"><div class="fli-title">Priority &amp; Source Tagging</div><div class="fli-desc">Each lead carries a priority level (High/Medium/Low) and source tag (Website, Referral, Cold Call, etc.) — making it easy to filter leads and focus effort on the highest-value prospects.</div></div></div>
+  </div>
+</div>
+<div class="divider"></div>
+
+<!-- A4 — CALLBACK MANAGEMENT -->
+<div class="feat-block" id="adm-callbacks">
+  <div class="feat-num"><span class="num adm">4</span><span>Admin Portal · Feature 4</span></div>
+  <div class="feat-title">Callback Management — Every Follow-Up Scheduled, Nothing Missed</div>
+  <div class="feat-subtitle">A time-based Kanban and calendar system that ensures every scheduled callback happens — on the right day, by the right person, with full context.</div>
+  <p class="feat-story">
+    Callbacks are where deals are won or lost. Scheduling a callback and actually completing it on time are two very different things — and most CRMs fail at the second part. <strong>Tapvera's Callback Management organises every scheduled follow-up into a live, time-aware board</strong> that makes it impossible to miss a callback or lose track of who was supposed to call whom.
+  </p>
+  <p class="feat-story">
+    The time-based Kanban has six columns: Overdue, Today, Tomorrow, This Week, Future, and Completed. Each callback card shows the contact name, company, callback type (Call, Email, WhatsApp, Zoom, In-Person), scheduled time, and the assigned rep. Overdue callbacks are highlighted immediately so they get actioned first. The system also offers a full calendar view for month/week/day planning — with colour-coded events and click-through details.
+  </p>
+  <div class="screenshot-wrap">
+    <div class="screenshot-bar"><div class="sb-dots"><span class="sb-dot r"></span><span class="sb-dot y"></span><span class="sb-dot g"></span></div><div class="sb-url">web.tapvera.io · Callback Management</div></div>
+    <img src="Crm screenshots/callback management.png" alt="Callback Management"/>
+    <div class="screenshot-caption"><span class="caption-dot" style="background:var(--adm)"></span>Callback Kanban — time-based columns (Overdue, Today, Tomorrow, This Week, Future, Completed) with callback type and assignee</div>
+  </div>
+  <div class="feat-tags">
+    <span class="feat-tag adm">Time-based Kanban: Overdue / Today / Tomorrow / This Week / Future / Completed</span>
+    <span class="feat-tag adm">Callback types: Call / Email / WhatsApp / Zoom / In-Person</span>
+    <span class="feat-tag adm">Overdue callbacks flagged immediately</span>
+    <span class="feat-tag adm">Assign callbacks to specific reps</span>
+    <span class="feat-tag adm">Calendar view (month / week / day / agenda)</span>
+    <span class="feat-tag adm">Filter by rep, callback type, or status</span>
+    <span class="feat-tag adm">Full contact context on every callback card</span>
+    <span class="feat-tag adm">Notes attached to each callback</span>
+  </div>
+  <div class="feat-list">
+    <div class="feat-list-item"><div class="fli-icon adm">⏰</div><div class="fli-body"><div class="fli-title">Overdue Callbacks Surfaced First</div><div class="fli-desc">The Overdue column highlights every missed callback in red the moment its scheduled time passes — making sure the team addresses backlog before scheduling new follow-ups.</div></div></div>
+    <div class="feat-list-item"><div class="fli-icon adm">📞</div><div class="fli-body"><div class="fli-title">Multi-Channel Follow-Up Types</div><div class="fli-desc">Each callback specifies the channel — phone call, email, WhatsApp, Zoom meeting, or in-person visit. Teams know exactly how to reach a contact, not just when.</div></div></div>
+    <div class="feat-list-item"><div class="fli-icon adm">📅</div><div class="fli-body"><div class="fli-title">Full Calendar Integration</div><div class="fli-desc">Switch from Kanban to a full calendar view showing every scheduled callback as a colour-coded event. Plan the week ahead, view daily schedules, and spot gaps in follow-up coverage.</div></div></div>
+    <div class="feat-list-item"><div class="fli-icon adm">👤</div><div class="fli-body"><div class="fli-title">Rep-Level Accountability</div><div class="fli-desc">Every callback is assigned to a named team member. Managers can filter the board by rep to see who has pending callbacks, who is overdue, and who is completing their follow-ups on time.</div></div></div>
+  </div>
+</div>
+<div class="divider"></div>
+
+<!-- A5 — COMMUNICATION TRACKING -->
+<div class="feat-block" id="adm-comm">
+  <div class="feat-num"><span class="num adm">5</span><span>Admin Portal · Feature 5</span></div>
+  <div class="feat-title">Communication Tracking — All Team Conversations, Organised by Project</div>
+  <div class="feat-subtitle">Built-in team messaging with project-specific rooms, direct messages, and group chats — so every work conversation happens in the right place and is always findable.</div>
+  <p class="feat-story">
+    Work conversations belong where the work happens. Tapvera's Communication Tracking gives the entire organisation a fully structured messaging system — <strong>no WhatsApp, no Slack, no switching between tabs</strong>. Every project has its own dedicated chat room. Every team member has direct message access to every colleague. Discussions stay linked to the project or task they are about, making them searchable and permanently accessible.
+  </p>
+  <p class="feat-story">
+    Admins can view all project communications, track conversation history, monitor team activity, and jump into any room to provide guidance or context. The search and filter tools let managers quickly find specific messages, decisions, or file attachments across all project rooms — without asking someone to forward a message.
+  </p>
+  <div class="screenshot-wrap">
+    <div class="screenshot-bar"><div class="sb-dots"><span class="sb-dot r"></span><span class="sb-dot y"></span><span class="sb-dot g"></span></div><div class="sb-url">web.tapvera.io · Communication Tracking</div></div>
+    <img src="Crm screenshots/communicationmanagement.png" alt="Communication Tracking"/>
+    <div class="screenshot-caption"><span class="caption-dot" style="background:var(--adm)"></span>Communication Tracking — project chat rooms, direct messages, group chats, and searchable conversation history</div>
+  </div>
+  <div class="feat-tags">
+    <span class="feat-tag adm">Project-specific chat rooms per client/project</span>
+    <span class="feat-tag adm">Direct messages between any team members</span>
+    <span class="feat-tag adm">Group chats for departments or teams</span>
+    <span class="feat-tag adm">File and image attachments in chat</span>
+    <span class="feat-tag adm">Message reply and thread quoting</span>
+    <span class="feat-tag adm">Real-time message delivery</span>
+    <span class="feat-tag adm">Search across all conversations</span>
+    <span class="feat-tag adm">Unread message counters per room</span>
+  </div>
+  <div class="feat-list">
+    <div class="feat-list-item"><div class="fli-icon adm">💬</div><div class="fli-body"><div class="fli-title">Project Chat Rooms</div><div class="fli-desc">Every project has a dedicated chat room — all team discussions about that project are in one thread, searchable and persistent, linked directly to the project record.</div></div></div>
+    <div class="feat-list-item"><div class="fli-icon adm">📎</div><div class="fli-body"><div class="fli-title">File Sharing Built In</div><div class="fli-desc">Send images, documents, and files directly in chat — no separate file transfer needed. Attachments stay linked to their conversation so they can be found later without asking who sent what.</div></div></div>
+    <div class="feat-list-item"><div class="fli-icon adm">🔍</div><div class="fli-body"><div class="fli-title">Full Conversation Search</div><div class="fli-desc">Search across all chat rooms and direct messages to find any decision, instruction, or file that was shared — even from months ago. No more "can you re-send that?"</div></div></div>
+    <div class="feat-list-item"><div class="fli-icon adm">📊</div><div class="fli-body"><div class="fli-title">Admin Visibility Across All Rooms</div><div class="fli-desc">Admins can view all project rooms and team conversations — providing oversight without micromanagement. Jump in to provide context, share a file, or make a decision directly in the thread.</div></div></div>
+  </div>
+</div>
+<div class="divider"></div>
+
+<!-- A6 — NOTICE BOARD -->
+<div class="feat-block" id="adm-notice">
+  <div class="feat-num"><span class="num adm">6</span><span>Admin Portal · Feature 6</span></div>
+  <div class="feat-title">Notice Board — Company-Wide Announcements, Instantly Delivered</div>
+  <div class="feat-subtitle">A dedicated notice board that delivers company announcements to every employee the moment they log in — no mass emails, no group chats, no missed messages.</div>
+  <p class="feat-story">
+    Important company updates — new policies, holiday notices, meeting reminders, urgent alerts — need to reach everyone reliably. Tapvera's Notice Board gives admins a dedicated channel for organisation-wide communication that doesn't get buried in email inboxes or group chats. <strong>Post once, and every employee sees it on login</strong> — as a prominent overlay or pinned notification that cannot be easily dismissed without reading.
+  </p>
+  <p class="feat-story">
+    Each notice can have a title, body, and optional attachment. Notices are timestamped and archived — so there's a permanent record of every company-wide communication, accessible to admins at any time. Employees can view the full notice board from their sidebar, review past notices, and see when each was posted and by whom.
+  </p>
+  <div class="screenshot-wrap">
+    <div class="screenshot-bar"><div class="sb-dots"><span class="sb-dot r"></span><span class="sb-dot y"></span><span class="sb-dot g"></span></div><div class="sb-url">web.tapvera.io · Notice Board</div></div>
+    <img src="Crm screenshots/notice board.png" alt="Notice Board"/>
+    <div class="screenshot-caption"><span class="caption-dot" style="background:var(--adm)"></span>Notice Board — company-wide announcements posted by admins, visible to all employees on login</div>
+  </div>
+  <div class="feat-tags">
+    <span class="feat-tag adm">Company-wide announcements visible to all employees</span>
+    <span class="feat-tag adm">Notice shown as overlay on employee login</span>
+    <span class="feat-tag adm">Title, body, and optional attachment per notice</span>
+    <span class="feat-tag adm">Timestamped and archived — permanent record</span>
+    <span class="feat-tag adm">Posted by admin — visible instantly across org</span>
+    <span class="feat-tag adm">Employees can view full notice board from sidebar</span>
+    <span class="feat-tag adm">No email required — in-app delivery</span>
+  </div>
+  <div class="feat-list">
+    <div class="feat-list-item"><div class="fli-icon adm">📢</div><div class="fli-body"><div class="fli-title">Instant Organisation-Wide Reach</div><div class="fli-desc">Post a notice and every employee across the organisation sees it the next time they log in — no email required, no group chat needed, no chance it gets missed in a busy inbox.</div></div></div>
+    <div class="feat-list-item"><div class="fli-icon adm">📌</div><div class="fli-body"><div class="fli-title">Login Overlay for Critical Notices</div><div class="fli-desc">Critical notices appear as a full-screen overlay when employees log in — ensuring holiday announcements, policy changes, or urgent alerts are seen before the employee starts their workday.</div></div></div>
+    <div class="feat-list-item"><div class="fli-icon adm">📚</div><div class="fli-body"><div class="fli-title">Permanent Notice Archive</div><div class="fli-desc">All past notices are archived and accessible. Employees can review previous announcements. Admins have a full audit trail of every company communication ever posted.</div></div></div>
+    <div class="feat-list-item"><div class="fli-icon adm">✎</div><div class="fli-body"><div class="fli-title">Simple Notice Creation</div><div class="fli-desc">Admins create notices in seconds — title, body, and optional file attachment. No formatting tools, no scheduling complexity. Write it, post it, it's live immediately.</div></div></div>
+  </div>
+</div>
+<div class="divider"></div>
+
+<!-- A7 — TASK ASSIGNMENT -->
+<div class="feat-block" id="adm-tasks">
+  <div class="feat-num"><span class="num adm">7</span><span>Admin Portal · Feature 7</span></div>
+  <div class="feat-title">Task Assignment — Assign, Track, and Manage Every Team Task from One Panel</div>
+  <div class="feat-subtitle">A unified task management panel for admins — create tasks for any employee, set priorities and deadlines, and track the status of every task across the entire organisation.</div>
+  <p class="feat-story">
+    Knowing what your team is working on shouldn't require a daily standup or constant Slack messages. Tapvera's Task Assignment panel gives admins a complete view of <strong>every task across the entire organisation</strong> — not just their own. See what's pending, what's in progress, what's been completed, and what's overdue — all in one place without asking anyone for a status update.
+  </p>
+  <p class="feat-story">
+    Creating a task is straightforward: select the employee, write the title and description, set a priority (High/Medium/Low), add a deadline, and assign it. The employee sees the task immediately in their dashboard. Admins track progress through status badges — Pending, In Progress, Completed, Rejected — and can filter by employee, priority, or deadline to find exactly what needs attention.
+  </p>
+  <div class="screenshot-wrap">
+    <div class="screenshot-bar"><div class="sb-dots"><span class="sb-dot r"></span><span class="sb-dot y"></span><span class="sb-dot g"></span></div><div class="sb-url">web.tapvera.io · Task Assignment</div></div>
+    <img src="Crm screenshots/superadmintaskassignment.png" alt="Task Assignment"/>
+    <div class="screenshot-caption"><span class="caption-dot" style="background:var(--adm)"></span>Task Assignment — admin view of all team tasks with priority, deadline, assignee, and live status tracking</div>
+  </div>
+  <div class="feat-tags">
+    <span class="feat-tag adm">Admin view of all tasks across entire organisation</span>
+    <span class="feat-tag adm">Create tasks for any employee with priority and deadline</span>
+    <span class="feat-tag adm">Status tracking: Pending / In Progress / Completed / Rejected</span>
+    <span class="feat-tag adm">Priority levels: High / Medium / Low</span>
+    <span class="feat-tag adm">Filter by employee, priority, status, or due date</span>
+    <span class="feat-tag adm">Employees see assigned tasks instantly on their dashboard</span>
+    <span class="feat-tag adm">Task notes and description per assignment</span>
+    <span class="feat-tag adm">Overdue tasks highlighted for immediate action</span>
+  </div>
+  <div class="feat-list">
+    <div class="feat-list-item"><div class="fli-icon adm">📋</div><div class="fli-body"><div class="fli-title">Full Organisation Task View</div><div class="fli-desc">Admins see all tasks across all employees — not just their own. Understand team workload at a glance, spot bottlenecks, and rebalance tasks before deadlines are missed.</div></div></div>
+    <div class="feat-list-item"><div class="fli-icon adm">⚡</div><div class="fli-body"><div class="fli-title">Instant Task Delivery</div><div class="fli-desc">The moment an admin assigns a task, the employee sees it in their dashboard with a notification. No emails, no chasing — the task is live and visible immediately.</div></div></div>
+    <div class="feat-list-item"><div class="fli-icon adm">🎯</div><div class="fli-body"><div class="fli-title">Priority-Based Workload Management</div><div class="fli-desc">Tag tasks as High, Medium, or Low priority. Employees see their urgent tasks first. Admins can filter by priority to check that the most important work is getting done on time.</div></div></div>
+    <div class="feat-list-item"><div class="fli-icon adm">📅</div><div class="fli-body"><div class="fli-title">Deadline Tracking with Overdue Alerts</div><div class="fli-desc">Every task has a deadline. Overdue tasks are flagged visually so they get immediate attention. No task silently goes past its deadline without the admin noticing.</div></div></div>
+  </div>
+</div>
+<div class="divider"></div>
+
+<!-- A8 — CALL INTELLIGENCE -->
+<div class="feat-block" id="adm-callintel">
+  <div class="feat-num"><span class="num adm">8</span><span>Admin Portal · Feature 8</span></div>
+  <div class="feat-title">Call Intelligence — Every Client Call Documented and Searchable</div>
+  <div class="feat-subtitle">Log call summaries, notes, and outcomes for every client or lead interaction — so no conversation is ever lost and every team member stays fully informed.</div>
+  <p class="feat-story">
+    Sales and client calls contain decisions, commitments, and context that matter long after the call ends. Without a structured way to capture them, that information lives only in someone's head or a personal notepad — and disappears the moment that person is unavailable. <strong>Tapvera's Call Intelligence feature gives every call a permanent, searchable record</strong> that any authorised team member can access.
+  </p>
+  <p class="feat-story">
+    Each call summary captures the contact name, date and time, duration, type (Inbound/Outbound), outcome, and detailed notes. Admins can view all call logs across the team — filtering by employee, date range, or contact — to understand what was discussed, what was promised, and what follow-up is needed. The full call history per client or lead is always available, building a complete interaction timeline.
+  </p>
+  <div class="screenshot-wrap">
+    <div class="screenshot-bar"><div class="sb-dots"><span class="sb-dot r"></span><span class="sb-dot y"></span><span class="sb-dot g"></span></div><div class="sb-url">web.tapvera.io · Call Intelligence</div></div>
+    <img src="Crm screenshots/call intelligence.png" alt="Call Intelligence"/>
+    <div class="screenshot-caption"><span class="caption-dot" style="background:var(--adm)"></span>Call Intelligence — call log with contact, date, type, outcome, and full summary notes per interaction</div>
+  </div>
+  <div class="feat-tags">
+    <span class="feat-tag adm">Log call summaries per client or lead interaction</span>
+    <span class="feat-tag adm">Contact name, date, time, duration, call type</span>
+    <span class="feat-tag adm">Inbound / Outbound call classification</span>
+    <span class="feat-tag adm">Outcome tagging per call</span>
+    <span class="feat-tag adm">Detailed notes field per call record</span>
+    <span class="feat-tag adm">Admin view of all team call logs</span>
+    <span class="feat-tag adm">Filter by employee, date range, or contact</span>
+    <span class="feat-tag adm">Full call history per client or lead</span>
+  </div>
+  <div class="feat-list">
+    <div class="feat-list-item"><div class="fli-icon adm">📞</div><div class="fli-body"><div class="fli-title">Permanent Call Records</div><div class="fli-desc">Every call logged in Tapvera creates a permanent record. When a client calls again weeks later, the team member answering can see the full conversation history before saying hello.</div></div></div>
+    <div class="feat-list-item"><div class="fli-icon adm">🔍</div><div class="fli-body"><div class="fli-title">Searchable Call History</div><div class="fli-desc">Search call logs by contact name, outcome, or notes keyword. Find a specific call, a specific promise made to a client, or all calls from a particular date range — instantly.</div></div></div>
+    <div class="feat-list-item"><div class="fli-icon adm">👁️</div><div class="fli-body"><div class="fli-title">Team Call Oversight for Admins</div><div class="fli-desc">Admins see all call logs across the entire team — who spoke to which client, what was discussed, and what was promised. Managers can coach based on real call records, not impressions.</div></div></div>
+    <div class="feat-list-item"><div class="fli-icon adm">🔗</div><div class="fli-body"><div class="fli-title">Linked to Lead &amp; Client Records</div><div class="fli-desc">Call logs are linked to the corresponding lead or client record — so the full interaction timeline is available when viewing a client profile or reviewing a lead's history.</div></div></div>
+  </div>
+</div>
+<div class="divider"></div>
+
+<!-- A9 — TRANSFER MANAGEMENT -->
+<div class="feat-block" id="adm-transfer">
+  <div class="feat-num"><span class="num adm">9</span><span>Admin Portal · Feature 9</span></div>
+  <div class="feat-title">Transfer Management — Move Leads Between Team Members Without Losing Context</div>
+  <div class="feat-subtitle">A structured lead transfer system that moves ownership between team members with full history intact — ensuring continuity and accountability with every handover.</div>
+  <p class="feat-story">
+    When a lead changes hands — because a sales rep leaves, a territory realigns, or a client requests a different contact — the worst possible outcome is losing the context of every interaction that happened before. <strong>Tapvera's Transfer Management system handles lead handovers with full history preserved.</strong> The new owner sees every call, every note, every stage change from the beginning — no re-introduction required.
+  </p>
+  <p class="feat-story">
+    Admins can initiate a transfer from any lead record, selecting the new assignee and adding a transfer note. The previous owner, new owner, and timestamp are all recorded. Transferred leads keep their complete interaction history, callback schedule, and stage position. The receiving rep picks up exactly where the previous one left off — maintaining relationship continuity and preventing deals from going cold during the handover.
+  </p>
+  <div class="screenshot-wrap">
+    <div class="screenshot-bar"><div class="sb-dots"><span class="sb-dot r"></span><span class="sb-dot y"></span><span class="sb-dot g"></span></div><div class="sb-url">web.tapvera.io · Transfer Management</div></div>
+    <img src="Crm screenshots/transfer management.png" alt="Transfer Management"/>
+    <div class="screenshot-caption"><span class="caption-dot" style="background:var(--adm)"></span>Transfer Management — lead transfer log with previous owner, new owner, timestamp, and full history preservation</div>
+  </div>
+  <div class="feat-tags">
+    <span class="feat-tag adm">Transfer leads between team members with full history intact</span>
+    <span class="feat-tag adm">Previous owner, new owner, and timestamp recorded</span>
+    <span class="feat-tag adm">Transfer note field for context</span>
+    <span class="feat-tag adm">Transferred lead keeps stage, callbacks, and notes</span>
+    <span class="feat-tag adm">Complete transfer log per lead record</span>
+    <span class="feat-tag adm">Admin-initiated or rep-requested transfers</span>
+    <span class="feat-tag adm">No context lost during team handovers</span>
+  </div>
+  <div class="feat-list">
+    <div class="feat-list-item"><div class="fli-icon adm">🔄</div><div class="fli-body"><div class="fli-title">Zero-Loss Handovers</div><div class="fli-desc">When a lead is transferred, every interaction note, call log, stage history, and scheduled callback moves with it. The new rep starts with full context — not a blank slate.</div></div></div>
+    <div class="feat-list-item"><div class="fli-icon adm">📋</div><div class="fli-body"><div class="fli-title">Full Transfer Audit Trail</div><div class="fli-desc">Every transfer is logged — who initiated it, who it went to, when it happened, and any note provided. Managers have a complete record of how leads moved through the team.</div></div></div>
+    <div class="feat-list-item"><div class="fli-icon adm">👥</div><div class="fli-body"><div class="fli-title">Flexible Initiation</div><div class="fli-desc">Transfers can be initiated by an admin (reassigning a rep's leads) or requested by the rep themselves. Either way, the process is structured, documented, and tracked.</div></div></div>
+    <div class="feat-list-item"><div class="fli-icon adm">🔗</div><div class="fli-body"><div class="fli-title">Stage and Callback Continuity</div><div class="fli-desc">The lead's Kanban stage and all scheduled callbacks carry over to the new owner automatically. The next follow-up is already in the new rep's calendar before they even open the lead.</div></div></div>
+  </div>
+</div>
+</div><!-- end admin -->
+<div class="divider"></div>
+
+
+<!-- ════════════════════════════════════════
+     ●  HR PORTAL
+════════════════════════════════════════ -->
+<div id="hr">
+<div class="sec-header hr">
+  <div class="sec-badge hr"><span class="sec-dot"></span>Part Three · HR Portal</div>
+  <div class="sec-h">The <em class="hr">HR Experience</em></div>
+  <p class="sec-desc">A complete people-management suite — employee directory, leave approvals, payroll processing, shift scheduling, and holiday management — giving HR teams the tools to work on people strategy, not paperwork.</p>
+  <div class="sec-modules">
+    <span class="sec-mod">HR Employee Directory</span><span class="sec-mod">Leave Management</span>
+    <span class="sec-mod">Payslip Management</span><span class="sec-mod">Shift Management</span>
+    <span class="sec-mod">Holiday Management</span>
+  </div>
+</div>
+
+<!-- H1 — HR EMPLOYEE DIRECTORY -->
+<div class="feat-block" id="hr-empdir">
+  <div class="feat-num"><span class="num hr">1</span><span>HR Portal · Feature 1</span></div>
+  <div class="feat-title">HR Employee Directory — Your Complete Workforce, Fully Organised</div>
+  <div class="feat-subtitle">A searchable, filterable directory of every employee in the organisation — with role, department, attendance status, and full profile access from one HR-focused view.</div>
+  <p class="feat-story">
+    HR teams need fast access to employee information — not just names and job titles, but the details that matter for people management: department, designation, current attendance status, leave balance, salary band, and work history. Tapvera's HR Employee Directory provides a <strong>purpose-built view of the entire workforce</strong> designed specifically for HR workflows, with quick-access actions at every row.
+  </p>
+  <p class="feat-story">
+    Search by name, filter by department or designation, and access any employee's full profile — including personal details, salary structure, documents, and complete attendance history — in a single click. HR can update employee records, manage contract details, and view workforce analytics without switching to a separate system.
+  </p>
+  <div class="screenshot-wrap">
+    <div class="screenshot-bar"><div class="sb-dots"><span class="sb-dot r"></span><span class="sb-dot y"></span><span class="sb-dot g"></span></div><div class="sb-url">web.tapvera.io · HR Employee Directory</div></div>
+    <img src="Crm screenshots/hrempdirectory.png" alt="HR Employee Directory"/>
+    <div class="screenshot-caption"><span class="caption-dot" style="background:var(--hr)"></span>HR Employee Directory — full workforce list with department, designation, status and profile access</div>
+  </div>
+  <div class="feat-tags">
+    <span class="feat-tag hr">Full employee directory with department and designation</span>
+    <span class="feat-tag hr">Search by name, filter by department or role</span>
+    <span class="feat-tag hr">One-click access to full employee profiles</span>
+    <span class="feat-tag hr">Salary structure and work history per employee</span>
+    <span class="feat-tag hr">Document management per employee record</span>
+    <span class="feat-tag hr">Attendance status indicators</span>
+    <span class="feat-tag hr">Add / edit / deactivate employees</span>
+    <span class="feat-tag hr">Workforce analytics view</span>
+  </div>
+  <div class="feat-list">
+    <div class="feat-list-item"><div class="fli-icon hr">👥</div><div class="fli-body"><div class="fli-title">Complete Employee Profiles</div><div class="fli-desc">Every employee record includes personal details, contact info, role, department, documents, salary structure, and full attendance and work history — all in one HR-accessible profile.</div></div></div>
+    <div class="feat-list-item"><div class="fli-icon hr">🔍</div><div class="fli-body"><div class="fli-title">Smart Search &amp; Filtering</div><div class="fli-desc">Find any employee instantly by searching their name or filtering by department, designation, or employment status. The directory handles large teams without any lag or pagination friction.</div></div></div>
+    <div class="feat-list-item"><div class="fli-icon hr">📄</div><div class="fli-body"><div class="fli-title">Document Management</div><div class="fli-desc">Store and access employee documents — contracts, ID proofs, certifications — directly within each employee's record. No separate document drive, no emailing files back and forth.</div></div></div>
+    <div class="feat-list-item"><div class="fli-icon hr">📊</div><div class="fli-body"><div class="fli-title">Attendance &amp; Leave Overview</div><div class="fli-desc">HR can view each employee's attendance percentage, leave balance, and current status directly from the directory — without opening separate attendance or leave modules.</div></div></div>
+  </div>
+</div>
+<div class="divider"></div>
+
+<!-- H2 — LEAVE MANAGEMENT -->
+<div class="feat-block" id="hr-leave">
+  <div class="feat-num"><span class="num hr">2</span><span>HR Portal · Feature 2</span></div>
+  <div class="feat-title">Leave Management — Approve, Track, and Plan Employee Time Off Effortlessly</div>
+  <div class="feat-subtitle">A complete leave request workflow — employees apply, HR reviews and approves or rejects, attendance updates automatically, and payroll reflects leave deductions with no manual work.</div>
+  <p class="feat-story">
+    Leave management is one of the most operationally sensitive HR tasks — handled poorly, it leads to unapproved absences, payroll errors, and compliance issues. Tapvera's Leave Management system creates a <strong>fully digital, structured approval workflow</strong> that replaces email chains and paper forms entirely. Employees apply for leave through their portal; HR sees every request in a centralised table and can approve or reject with a single click.
+  </p>
+  <p class="feat-story">
+    Each leave request shows the employee name, leave type (Annual Leave, Sick Leave, Emergency Leave, Casual Leave), dates requested, number of days, reason, and current status (Pending/Approved/Rejected). Once approved, the employee's attendance record updates automatically and the leave deduction feeds into payroll — no manual updates required. HR also has a full view of who is currently on leave, helping avoid resource conflicts during project-critical periods.
+  </p>
+  <div class="screenshot-wrap">
+    <div class="screenshot-bar"><div class="sb-dots"><span class="sb-dot r"></span><span class="sb-dot y"></span><span class="sb-dot g"></span></div><div class="sb-url">web.tapvera.io · Leave Management</div></div>
+    <img src="Crm screenshots/hrleavemanagement.png" alt="Leave Management"/>
+    <div class="screenshot-caption"><span class="caption-dot" style="background:var(--hr)"></span>Leave Management — leave request table with type, dates, days, reason, status and one-click approve/reject</div>
+  </div>
+  <div class="feat-tags">
+    <span class="feat-tag hr">Leave request table: employee / type / dates / days / status</span>
+    <span class="feat-tag hr">Leave types: Annual / Sick / Emergency / Casual / Unpaid</span>
+    <span class="feat-tag hr">One-click Approve or Reject per request</span>
+    <span class="feat-tag hr">Attendance record updates automatically on approval</span>
+    <span class="feat-tag hr">Leave deduction feeds directly into payroll</span>
+    <span class="feat-tag hr">Active leaves view — who is away right now</span>
+    <span class="feat-tag hr">Leave balance tracking per employee</span>
+    <span class="feat-tag hr">Department-level leave overlap warnings</span>
+  </div>
+  <div class="feat-list">
+    <div class="feat-list-item"><div class="fli-icon hr">✅</div><div class="fli-body"><div class="fli-title">One-Click Approval Workflow</div><div class="fli-desc">HR sees all pending leave requests in one table and approves or rejects each with a single click. No emails, no forms, no back-and-forth — the entire process takes seconds.</div></div></div>
+    <div class="feat-list-item"><div class="fli-icon hr">🔗</div><div class="fli-body"><div class="fli-title">Automatic Attendance &amp; Payroll Updates</div><div class="fli-desc">Approved leave automatically updates the employee's attendance record and feeds the deduction into payroll. HR doesn't touch two systems — one action updates everything.</div></div></div>
+    <div class="feat-list-item"><div class="fli-icon hr">📅</div><div class="fli-body"><div class="fli-title">Active Leave Visibility</div><div class="fli-desc">See a live view of all employees currently on approved leave — helping HR and managers avoid scheduling meetings, demos, or deadlines on days when key people are away.</div></div></div>
+    <div class="feat-list-item"><div class="fli-icon hr">⚠️</div><div class="fli-body"><div class="fli-title">Department Overlap Warnings</div><div class="fli-desc">Tapvera flags when multiple employees from the same department have overlapping leave requests — so HR can manage coverage and avoid operational gaps before approving.</div></div></div>
+  </div>
+</div>
+<div class="divider"></div>
+
+<!-- H3 — PAYSLIP MANAGEMENT -->
+<div class="feat-block" id="hr-payslip">
+  <div class="feat-num"><span class="num hr">3</span><span>HR Portal · Feature 3</span></div>
+  <div class="feat-title">Payslip Management — From Two Days of Payroll Work to Under an Hour</div>
+  <div class="feat-subtitle">Fully automated salary calculation, attendance-linked deductions, and one-click payslip generation — every employee's payslip ready and distributed without manual calculation.</div>
+  <p class="feat-story">
+    Payroll used to take the HR team two full days every month: pulling attendance data, calculating deductions, adjusting for leaves, generating individual payslips, and distributing them. <strong>Tapvera's Auto Payroll system completes all of this in under an hour.</strong> Salary structures are configured once per employee. Every month, the system calculates gross pay, applies attendance-linked deductions, accounts for leave days, processes TDS and PF, and generates all payslips automatically — ready for every employee to access instantly.
+  </p>
+  <p class="feat-story">
+    The Payslip Management screen gives HR a complete overview: every employee's payslip status (Processed/Pending), salary breakdown, and the ability to generate or re-generate individual payslips. Once generated, each payslip appears automatically in the respective employee's "My Payslips" section — no distribution required, no emails to send.
+  </p>
+  <div class="screenshot-wrap">
+    <div class="screenshot-bar"><div class="sb-dots"><span class="sb-dot r"></span><span class="sb-dot y"></span><span class="sb-dot g"></span></div><div class="sb-url">web.tapvera.io · Payslip Management</div></div>
+    <img src="Crm screenshots/hrpayslipmanagement.png" alt="Payslip Management"/>
+    <div class="screenshot-caption"><span class="caption-dot" style="background:var(--hr)"></span>Payslip Management — all employee payslip statuses, salary breakdown, and auto-generation with one click</div>
+  </div>
+  <div class="feat-tags">
+    <span class="feat-tag hr">Auto Payroll — generate all payslips in one click</span>
+    <span class="feat-tag hr">Salary structure: Base + Bonus + Allowances</span>
+    <span class="feat-tag hr">Attendance-linked deductions automatically applied</span>
+    <span class="feat-tag hr">Leave deductions reflected in net pay</span>
+    <span class="feat-tag hr">TDS and Provident Fund calculations</span>
+    <span class="feat-tag hr">Payslip status: Processed / Pending per employee</span>
+    <span class="feat-tag hr">Payroll completion progress tracker</span>
+    <span class="feat-tag hr">Instant employee self-access after generation</span>
+  </div>
+  <div class="feat-list">
+    <div class="feat-list-item"><div class="fli-icon hr">⚙️</div><div class="fli-body"><div class="fli-title">One-Click Payroll Generation</div><div class="fli-desc">Configure each employee's salary structure once. Every month, a single click generates all payslips — calculated, formatted, and distributed automatically to every employee.</div></div></div>
+    <div class="feat-list-item"><div class="fli-icon hr">🔗</div><div class="fli-body"><div class="fli-title">Attendance-Linked Deductions</div><div class="fli-desc">The payroll engine reads attendance data directly — absent days, late penalties, and unpaid leave are all automatically reflected in each employee's net pay calculation. No manual adjustments.</div></div></div>
+    <div class="feat-list-item"><div class="fli-icon hr">📊</div><div class="fli-body"><div class="fli-title">Payroll Completion Tracker</div><div class="fli-desc">A progress indicator shows how many payslips have been generated and sent this month — confirming that the payroll run is complete before the HR team closes the month.</div></div></div>
+    <div class="feat-list-item"><div class="fli-icon hr">📤</div><div class="fli-body"><div class="fli-title">Instant Employee Self-Access</div><div class="fli-desc">The moment payslips are generated, they appear in each employee's My Payslips section automatically — no distribution, no attachments, no chasing from employees asking for their payslip.</div></div></div>
+  </div>
+  <div class="highlight">
+    <p><strong>Real result:</strong> "What used to take the HR team two days every month now takes under an hour. Payslips are generated and distributed automatically — employees receive them without anyone having to chase."</p>
+  </div>
+</div>
+<div class="divider"></div>
+
+<!-- H4 — SHIFT MANAGEMENT -->
+<div class="feat-block" id="hr-shift">
+  <div class="feat-num"><span class="num hr">4</span><span>HR Portal · Feature 4</span></div>
+  <div class="feat-title">Shift Management — Organise, Assign, and Adjust Work Schedules With Ease</div>
+  <div class="feat-subtitle">A complete shift scheduling system that defines shift structures, assigns employees, handles flexible requests, and keeps attendance tied to the right schedule automatically.</div>
+  <p class="feat-story">
+    Businesses with multiple shift patterns — morning, evening, night, and flexible — need a scheduling system that doesn't create administrative overhead. Tapvera's Shift Management module lets HR define shift structures once and assign employees to the right schedule with a few clicks. <strong>Attendance tracking, overtime calculations, and payroll deductions all automatically respect each employee's assigned shift</strong> — no manual adjustments needed.
+  </p>
+  <p class="feat-story">
+    HR can view the current shift assignments for all employees, create new shift patterns, update existing ones, and process shift change requests submitted by employees. Flexible shift requests — where an employee asks to temporarily change their schedule — flow through an approval workflow identical to leave requests, keeping the process structured and auditable.
+  </p>
+  <div class="screenshot-wrap">
+    <div class="screenshot-bar"><div class="sb-dots"><span class="sb-dot r"></span><span class="sb-dot y"></span><span class="sb-dot g"></span></div><div class="sb-url">web.tapvera.io · Shift Management</div></div>
+    <img src="Crm screenshots/shiftmanagement.png" alt="Shift Management"/>
+    <div class="screenshot-caption"><span class="caption-dot" style="background:var(--hr)"></span>Shift Management — shift definitions, employee assignments, schedule view and flexible shift request approvals</div>
+  </div>
+  <div class="feat-tags">
+    <span class="feat-tag hr">Create and manage Morning / Evening / Night / Flexible shifts</span>
+    <span class="feat-tag hr">Assign employees to specific shift patterns</span>
+    <span class="feat-tag hr">View all employee shift assignments at once</span>
+    <span class="feat-tag hr">Attendance auto-validates against assigned shift</span>
+    <span class="feat-tag hr">Overtime tracking per shift</span>
+    <span class="feat-tag hr">Flexible shift change request workflow</span>
+    <span class="feat-tag hr">Shift change approval or rejection with one click</span>
+    <span class="feat-tag hr">Payroll reflects shift-based deductions automatically</span>
+  </div>
+  <div class="feat-list">
+    <div class="feat-list-item"><div class="fli-icon hr">⏰</div><div class="fli-body"><div class="fli-title">Multi-Shift Support</div><div class="fli-desc">Define any number of shift patterns — morning (9 AM–6 PM), evening (2 PM–11 PM), night (11 PM–8 AM), and flexible hours. Assign different employees to different shifts with no conflict.</div></div></div>
+    <div class="feat-list-item"><div class="fli-icon hr">🔗</div><div class="fli-body"><div class="fli-title">Attendance Tied to Shift</div><div class="fli-desc">The attendance system validates each punch against the employee's assigned shift — flagging late arrivals, early departures, and overtime based on the correct schedule, not a one-size-fits-all rule.</div></div></div>
+    <div class="feat-list-item"><div class="fli-icon hr">🔄</div><div class="fli-body"><div class="fli-title">Flexible Shift Request Flow</div><div class="fli-desc">Employees can request a temporary shift change through their portal. HR reviews and approves with one click — the schedule updates automatically, and no manual calendar editing is needed.</div></div></div>
+    <div class="feat-list-item"><div class="fli-icon hr">💰</div><div class="fli-body"><div class="fli-title">Shift-Aware Payroll</div><div class="fli-desc">Shift differentials, overtime, and late deductions are all calculated based on each employee's actual shift assignment — payroll is always accurate regardless of how complex the schedule is.</div></div></div>
+  </div>
+</div>
+<div class="divider"></div>
+
+<!-- H5 — HOLIDAY MANAGEMENT -->
+<div class="feat-block" id="hr-holiday">
+  <div class="feat-num"><span class="num hr">5</span><span>HR Portal · Feature 5</span></div>
+  <div class="feat-title">Holiday Management — Manage the Company Calendar, Keep Everyone Informed</div>
+  <div class="feat-subtitle">A centralised holiday calendar that HR controls — add public holidays, company-specific off days, and regional events — visible to every employee automatically.</div>
+  <p class="feat-story">
+    Every year, HR spends time sending out holiday lists via email, updating shared calendars, and fielding questions about which days are off. Tapvera's Holiday Management module eliminates all of that. <strong>HR adds holidays once to the central calendar — and every employee sees them automatically</strong> in their leave and attendance views, with no additional communication required.
+  </p>
+  <p class="feat-story">
+    The holiday calendar supports public holidays, company-specific days (Founder's Day, company anniversary), and regional events. Holidays are automatically excluded from leave calculations — an employee applying for leave over a holiday period won't have that day counted against their leave balance. The attendance system also recognises holidays and marks them correctly without manual intervention.
+  </p>
+  <div class="screenshot-wrap">
+    <div class="screenshot-bar"><div class="sb-dots"><span class="sb-dot r"></span><span class="sb-dot y"></span><span class="sb-dot g"></span></div><div class="sb-url">web.tapvera.io · Holiday Management</div></div>
+    <img src="Crm screenshots/Holidaymanagement.png" alt="Holiday Management"/>
+    <div class="screenshot-caption"><span class="caption-dot" style="background:var(--hr)"></span>Holiday Management — company holiday calendar with add/edit/delete controls, visible to all employees</div>
+  </div>
+  <div class="feat-tags">
+    <span class="feat-tag hr">Centralised holiday calendar managed by HR</span>
+    <span class="feat-tag hr">Public holidays, company days, regional events</span>
+    <span class="feat-tag hr">Add, edit, delete holidays with instant effect</span>
+    <span class="feat-tag hr">Holidays auto-excluded from leave calculations</span>
+    <span class="feat-tag hr">Attendance system marks holidays automatically</span>
+    <span class="feat-tag hr">All employees see holidays in their leave view</span>
+    <span class="feat-tag hr">Holiday list visible from employee sidebar</span>
+  </div>
+  <div class="feat-list">
+    <div class="feat-list-item"><div class="fli-icon hr">📅</div><div class="fli-body"><div class="fli-title">Centralised Holiday Control</div><div class="fli-desc">HR manages the company holiday calendar from one place. Add a national holiday, update its name, or remove an incorrect entry — changes reflect everywhere immediately with no employee action required.</div></div></div>
+    <div class="feat-list-item"><div class="fli-icon hr">🔗</div><div class="fli-body"><div class="fli-title">Smart Leave Calculation</div><div class="fli-desc">When an employee applies for leave that overlaps with a public holiday, the system automatically excludes the holiday from the leave day count — so employees don't waste leave days on days they weren't working anyway.</div></div></div>
+    <div class="feat-list-item"><div class="fli-icon hr">👁️</div><div class="fli-body"><div class="fli-title">Visible to Every Employee</div><div class="fli-desc">Employees can view the full holiday list from their portal sidebar at any time — no more emailing HR to ask "is the 26th a holiday?" The answer is always visible and always current.</div></div></div>
+    <div class="feat-list-item"><div class="fli-icon hr">✅</div><div class="fli-body"><div class="fli-title">Attendance Auto-Marks Holidays</div><div class="fli-desc">The attendance system recognises company holidays and marks them correctly in each employee's record — no HR staff need to manually update attendance for days the whole company was off.</div></div></div>
+  </div>
+</div>
+</div><!-- end hr -->
+<div class="divider"></div>
+
+
+<!-- ════════════════════════════════════════
+     ●  SUPER ADMIN PORTAL
+════════════════════════════════════════ -->
+<div id="superadmin">
+<div class="sec-header sa">
+  <div class="sec-badge sa"><span class="sec-dot"></span>Part Four · Super Admin Portal</div>
+  <div class="sec-h">The <em class="sa">Super Admin Experience</em></div>
+  <p class="sec-desc">The highest level of access in Tapvera — <strong>the Super Admin can see and do everything in the system</strong>. Every module, every employee record, every financial figure, every project, every lead, every payslip, every setting. Nothing is hidden, nothing is restricted. This is the role designed for the business owner who needs the full picture at all times.</p>
+  <div class="sec-modules">
+    <span class="sec-mod">Full Business Dashboard</span><span class="sec-mod">Live Employee Status</span>
+    <span class="sec-mod">Every Module — No Restrictions</span><span class="sec-mod">System Configuration</span>
+    <span class="sec-mod">All Employee Records</span><span class="sec-mod">All Financial Data</span>
+    <span class="sec-mod">All HR Data</span><span class="sec-mod">All Projects &amp; Leads</span>
+  </div>
+</div>
+
+<!-- SA1 — SUPER ADMIN DASHBOARD -->
+<div class="feat-block" id="sa-dash">
+  <div class="feat-num"><span class="num sa">1</span><span>Super Admin · Feature 1</span></div>
+  <div class="feat-title">Super Admin Dashboard — The Complete Business Overview</div>
+  <div class="feat-subtitle">Log in as Super Admin and see the full picture — employees, attendance, projects, revenue, and leads — all live, all in one screen, with access to every module in the system.</div>
+  <p class="feat-story">
+    The Super Admin is the business owner or managing director — the person who needs to see everything, not just their department's slice. Tapvera's Super Admin Dashboard delivers a <strong>complete business overview the moment you log in</strong>: how many people are in today, which projects are active, what the revenue trend looks like, and how the lead pipeline is performing — all on one screen.
+  </p>
+  <p class="feat-story">
+    Beyond the dashboard numbers, the Super Admin has unrestricted access to <strong>every single module in the system</strong> — Employee Management, Attendance, HR Dashboard, Leave Management, Payroll &amp; Payslips, Shift Management, Holiday Management, Projects, Clients, Leads, Callbacks, Communication, Notice Board, Task Assignment, Call Intelligence, Transfer Management, and more. Every record, every report, every setting. <strong>Nothing is hidden. Nothing is gated.</strong> This is the control centre for the entire business — built for the person who needs the complete picture to make fast, confident decisions.
+  </p>
+  <div class="screenshot-wrap">
+    <div class="screenshot-bar"><div class="sb-dots"><span class="sb-dot r"></span><span class="sb-dot y"></span><span class="sb-dot g"></span></div><div class="sb-url">web.tapvera.io · Super Admin Dashboard</div></div>
+    <img src="Crm screenshots/Superadmindashboard.png" alt="Super Admin Dashboard"/>
+    <div class="screenshot-caption"><span class="caption-dot" style="background:var(--sa)"></span>Super Admin Dashboard — complete business overview with full access to all modules and live data</div>
+  </div>
+  <div class="feat-tags">
+    <span class="feat-tag sa">Complete business overview on login</span>
+    <span class="feat-tag sa">Access to every single module — no exceptions</span>
+    <span class="feat-tag sa">Live attendance and employee status</span>
+    <span class="feat-tag sa">Revenue trends and project health</span>
+    <span class="feat-tag sa">Lead pipeline and conversion metrics</span>
+    <span class="feat-tag sa">All payroll, payslip, and salary data</span>
+    <span class="feat-tag sa">All HR data — leaves, shifts, holidays</span>
+    <span class="feat-tag sa">All employee records and documents</span>
+    <span class="feat-tag sa">No data gated — full visibility across every role</span>
+    <span class="feat-tag sa">System configuration and role assignment</span>
+  </div>
+  <div class="feat-list">
+    <div class="feat-list-item"><div class="fli-icon sa">👑</div><div class="fli-body"><div class="fli-title">Full System Access</div><div class="fli-desc">Super Admin can access every module, every record, and every report in the system. No feature is restricted — this is the complete view that only the business owner should have.</div></div></div>
+    <div class="feat-list-item"><div class="fli-icon sa">📊</div><div class="fli-body"><div class="fli-title">Live Business Metrics</div><div class="fli-desc">Attendance counts, project status, revenue trends, and lead conversion rates — all updated in real time on the dashboard. No refreshing, no manual pulls, no stale reports.</div></div></div>
+    <div class="feat-list-item"><div class="fli-icon sa">🛠️</div><div class="fli-body"><div class="fli-title">System Configuration</div><div class="fli-desc">Super Admin controls system-level settings — role assignments, employee onboarding, module permissions, and platform configuration — that are not accessible to any other role.</div></div></div>
+    <div class="feat-list-item"><div class="fli-icon sa">🔐</div><div class="fli-body"><div class="fli-title">Role-Based Access Management</div><div class="fli-desc">Assign and change employee roles — Employee, Admin, HR, or Super Admin — from the system settings. Every role assignment takes effect immediately, updating the employee's interface on next login.</div></div></div>
+  </div>
+</div>
+<div class="divider"></div>
+
+<!-- SA2 — LIVE EMPLOYEE STATUS -->
+<div class="feat-block" id="sa-status">
+  <div class="feat-num"><span class="num sa">2</span><span>Super Admin · Feature 2</span></div>
+  <div class="feat-title">Live Employee Status — See Every Person's Work Status in Real Time</div>
+  <div class="feat-subtitle">A live monitoring dashboard showing every employee's current status — Working, On Break, or Offline — with arrival times, work durations, and break durations updating in real time.</div>
+  <p class="feat-story">
+    As a business owner, knowing whether your team is at work right now — without calling anyone or checking a spreadsheet — is a fundamental operational need. Tapvera's Live Employee Status monitor gives the Super Admin a <strong>real-time dashboard showing every employee's current state</strong>: who clocked in and when, how long they've been working, how much break time they've taken, and who hasn't arrived yet — all on one screen.
+  </p>
+  <p class="feat-story">
+    Employees are sorted by status priority — Working first, then On Break, then Offline — so the most relevant information is always at the top. The Super Admin can filter by status, search by name, and view historical data for any date. Summary stats at the top show total employees working, on break, and absent — giving an attendance pulse with a single glance, any time of day.
+  </p>
+  <div class="screenshot-wrap">
+    <div class="screenshot-bar"><div class="sb-dots"><span class="sb-dot r"></span><span class="sb-dot y"></span><span class="sb-dot g"></span></div><div class="sb-url">web.tapvera.io · Live Employee Status</div></div>
+    <img src="Crm screenshots/empstatus.png" alt="Live Employee Status"/>
+    <div class="screenshot-caption"><span class="caption-dot" style="background:var(--sa)"></span>Live Employee Status — real-time monitor showing Working / On Break / Offline status, arrival times and work durations</div>
+  </div>
+  <div class="feat-tags">
+    <span class="feat-tag sa">Real-time Working / On Break / Offline status per employee</span>
+    <span class="feat-tag sa">Arrival time and total work duration per person</span>
+    <span class="feat-tag sa">Break duration tracked and displayed live</span>
+    <span class="feat-tag sa">Employees sorted by status priority</span>
+    <span class="feat-tag sa">Filter by status or search by name</span>
+    <span class="feat-tag sa">Summary stats: total working, on break, absent</span>
+    <span class="feat-tag sa">Historical data — view any past date</span>
+    <span class="feat-tag sa">Card view and table view toggle</span>
+  </div>
+  <div class="feat-list">
+    <div class="feat-list-item"><div class="fli-icon sa">🟢</div><div class="fli-body"><div class="fli-title">Real-Time Status Updates</div><div class="fli-desc">The dashboard updates automatically — the moment an employee punches in, their status changes from Offline to Working. No page refresh needed. The business owner always sees current state.</div></div></div>
+    <div class="feat-list-item"><div class="fli-icon sa">⏱️</div><div class="fli-body"><div class="fli-title">Work and Break Duration Tracking</div><div class="fli-desc">For every employee currently working, see exactly how long they've been working today and how much total break time they've taken — updated live as minutes tick by.</div></div></div>
+    <div class="feat-list-item"><div class="fli-icon sa">📊</div><div class="fli-body"><div class="fli-title">Instant Attendance Summary</div><div class="fli-desc">The four summary cards at the top — Total Working, On Break, Absent, Attendance Rate — give a complete attendance pulse at a glance. No calculation, no report generation needed.</div></div></div>
+    <div class="feat-list-item"><div class="fli-icon sa">📅</div><div class="fli-body"><div class="fli-title">Historical Status Lookup</div><div class="fli-desc">Switch the date picker to any past date and see the attendance status, arrival times, and work durations for that day — a complete historical record going back as far as the data exists.</div></div></div>
+  </div>
+</div>
+</div><!-- end superadmin -->
+<div class="divider"></div>
+
+
+<!-- ════════════════════════════════════════
+     ●  CLIENT PORTAL
+════════════════════════════════════════ -->
+<div id="client-portal">
+<div class="sec-header" style="color:#0ea5e9;background:linear-gradient(135deg,rgba(14,165,233,0.04),#fff);border-bottom-color:#0ea5e9">
+  <div class="sec-badge" style="color:#0ea5e9;border-color:#0ea5e9"><span class="sec-dot" style="background:#0ea5e9"></span>Part Five · Client Portal</div>
+  <div class="sec-h">The <em style="color:#0ea5e9">Client Experience</em></div>
+  <p class="sec-desc">Clients get their own dedicated portal — a clean, focused view of their project progress, updates, reports, and team communication, without ever seeing any internal company data.</p>
+  <div class="sec-modules">
+    <span class="sec-mod">Project Progress View</span><span class="sec-mod">Completion Percentage</span>
+    <span class="sec-mod">Recent Updates Feed</span><span class="sec-mod">Secure Client Login</span>
+    <span class="sec-mod">Read-Only Access</span>
+  </div>
+</div>
+
+<!-- C1 — CLIENT PORTAL -->
+<div class="feat-block" id="client-portal-feat">
+  <div class="feat-num"><span class="num" style="background:#0ea5e9">1</span><span>Client Portal · Feature 1</span></div>
+  <div class="feat-title">Client Portal — A Transparent Window Into Their Project, Built Just for Them</div>
+  <div class="feat-subtitle">Every client gets their own secure login to a dedicated portal showing their project's progress, completion status, and latest updates — without seeing any of your internal operations.</div>
+  <p class="feat-story">
+    Clients want to know how their project is going without having to chase emails or sit through lengthy calls. Tapvera solves this with a <strong>dedicated client portal — a clean, professional interface that every client can access with their own login</strong>. They see exactly what they need: their project's current status, how far along it is, what has been completed, and what's coming next. Nothing internal. Nothing confusing. Just their project, clearly presented.
+  </p>
+  <p class="feat-story">
+    The portal is entirely separate from the internal CRM — clients log in at the same URL but land in a completely different view. They can track overall project completion percentages, see recent activity updates posted by the team, review deliverables, and stay informed throughout the project lifecycle — all without a single internal employee needing to write a status email. <strong>Transparency is built into the product, not bolted on as an afterthought.</strong>
+  </p>
+  <div class="screenshot-wrap">
+    <div class="screenshot-bar"><div class="sb-dots"><span class="sb-dot r"></span><span class="sb-dot y"></span><span class="sb-dot g"></span></div><div class="sb-url">web.tapvera.io · Client Portal</div></div>
+    <img src="Crm screenshots/client.jpeg" alt="Client Portal"/>
+    <div class="screenshot-caption"><span class="caption-dot" style="background:#0ea5e9"></span>Client Portal — dedicated client view showing project progress, completion percentage, and recent updates</div>
+  </div>
+  <div class="feat-tags">
+    <span class="feat-tag" style="background:rgba(14,165,233,0.08);color:#0284c7;border:1px solid rgba(14,165,233,0.2)">Dedicated secure login per client</span>
+    <span class="feat-tag" style="background:rgba(14,165,233,0.08);color:#0284c7;border:1px solid rgba(14,165,233,0.2)">Project progress and completion percentage</span>
+    <span class="feat-tag" style="background:rgba(14,165,233,0.08);color:#0284c7;border:1px solid rgba(14,165,233,0.2)">Recent updates feed from the team</span>
+    <span class="feat-tag" style="background:rgba(14,165,233,0.08);color:#0284c7;border:1px solid rgba(14,165,233,0.2)">Read-only — clients cannot modify any data</span>
+    <span class="feat-tag" style="background:rgba(14,165,233,0.08);color:#0284c7;border:1px solid rgba(14,165,233,0.2)">Completely isolated from internal CRM data</span>
+    <span class="feat-tag" style="background:rgba(14,165,233,0.08);color:#0284c7;border:1px solid rgba(14,165,233,0.2)">Each client sees only their own project</span>
+    <span class="feat-tag" style="background:rgba(14,165,233,0.08);color:#0284c7;border:1px solid rgba(14,165,233,0.2)">Credentials managed by admin — instant access</span>
+    <span class="feat-tag" style="background:rgba(14,165,233,0.08);color:#0284c7;border:1px solid rgba(14,165,233,0.2)">No internal costs, team names, or data exposed</span>
+  </div>
+  <div class="feat-list">
+    <div class="feat-list-item"><div class="fli-icon" style="background:rgba(14,165,233,0.12);color:#0ea5e9">🔐</div><div class="fli-body"><div class="fli-title">Dedicated Client Login</div><div class="fli-desc">Every client receives their own login credentials managed by the admin. They access the portal at the same URL as the rest of the team — the system recognises their role and shows them only their own client view.</div></div></div>
+    <div class="feat-list-item"><div class="fli-icon" style="background:rgba(14,165,233,0.12);color:#0ea5e9">📊</div><div class="fli-body"><div class="fli-title">Live Project Progress</div><div class="fli-desc">Clients see their project's overall completion percentage updated in real time as the team marks tasks done and milestones complete. No need to email for a status update — the number is always live and accurate.</div></div></div>
+    <div class="feat-list-item"><div class="fli-icon" style="background:rgba(14,165,233,0.12);color:#0ea5e9">📰</div><div class="fli-body"><div class="fli-title">Recent Updates Feed</div><div class="fli-desc">The team posts updates directly into the project — completed phases, upcoming work, important notes. Clients see these updates chronologically in their portal, staying informed without a single email from the team.</div></div></div>
+    <div class="feat-list-item"><div class="fli-icon" style="background:rgba(14,165,233,0.12);color:#0ea5e9">🛡️</div><div class="fli-body"><div class="fli-title">Complete Data Isolation</div><div class="fli-desc">Clients see only their own project data — nothing about other clients, no internal team discussions, no costs, no employee details. The portal is a clean professional window, not a leak into the business.</div></div></div>
+    <div class="feat-list-item"><div class="fli-icon" style="background:rgba(14,165,233,0.12);color:#0ea5e9">⭐</div><div class="fli-body"><div class="fli-title">Professional Client Experience</div><div class="fli-desc">A branded, clean portal builds trust with clients — they can see the team is organised, progress is real, and updates are timely. It's a competitive differentiator that agencies and service businesses use to win retainers.</div></div></div>
+  </div>
+  <div class="highlight" style="border-left-color:#0ea5e9;background:rgba(14,165,233,0.04)">
+    <p><strong>Why it matters:</strong> Clients who can see their project progressing in real time are far less likely to raise concerns, send chasing emails, or lose confidence. The client portal turns transparency into a feature — and trust into retention.</p>
+  </div>
+</div>
+</div>
+<div class="divider"></div>
+
+<!-- C2 — CLIENT COMMUNICATION -->
+<div class="feat-block" id="client-comm">
+  <div class="feat-num"><span class="num" style="background:#0ea5e9">2</span><span>Client Portal · Feature 2</span></div>
+  <div class="feat-title">Direct Team Communication — Talk to the People Building Your Project, Instantly</div>
+  <div class="feat-subtitle">Clients can message the project team directly from their portal — no emails, no hunting for contact details, no middlemen. Just a few clicks to reach the right people.</div>
+  <p class="feat-story">
+    One of the biggest friction points in any client-agency relationship is communication lag. A client has a question, sends an email, waits for a reply, follows up — and the team only sees it hours later. Tapvera eliminates this entirely. <strong>Clients can communicate directly with the team working on their project, straight from their portal, in real time.</strong> No email thread to chase. No CC lists. No forwarding required.
+  </p>
+  <p class="feat-story">
+    The communication channel is project-specific — every message a client sends is tied to their project and lands directly with the team handling it. The team sees it inside their CRM the moment it arrives. Replies go back to the client instantly. It takes the client just a few clicks — open the portal, go to the message section, type and send. <strong>The feedback loop that used to take hours now takes seconds.</strong>
+  </p>
+  <div class="screenshot-wrap">
+    <div class="screenshot-bar"><div class="sb-dots"><span class="sb-dot r"></span><span class="sb-dot y"></span><span class="sb-dot g"></span></div><div class="sb-url">web.tapvera.io · Client Portal — Messages</div></div>
+    <img src="Crm screenshots/clientcom.jpeg" alt="Client Direct Communication"/>
+    <div class="screenshot-caption"><span class="caption-dot" style="background:#0ea5e9"></span>Client Communication — clients message the project team directly from their portal in a few clicks</div>
+  </div>
+  <div class="feat-tags">
+    <span class="feat-tag" style="background:rgba(14,165,233,0.08);color:#0284c7;border:1px solid rgba(14,165,233,0.2)">Direct messaging to the project team</span>
+    <span class="feat-tag" style="background:rgba(14,165,233,0.08);color:#0284c7;border:1px solid rgba(14,165,233,0.2)">Messages tied to the client's specific project</span>
+    <span class="feat-tag" style="background:rgba(14,165,233,0.08);color:#0284c7;border:1px solid rgba(14,165,233,0.2)">Team receives messages inside the CRM instantly</span>
+    <span class="feat-tag" style="background:rgba(14,165,233,0.08);color:#0284c7;border:1px solid rgba(14,165,233,0.2)">Replies delivered back to client in real time</span>
+    <span class="feat-tag" style="background:rgba(14,165,233,0.08);color:#0284c7;border:1px solid rgba(14,165,233,0.2)">Just a few clicks — no setup, no learning curve</span>
+    <span class="feat-tag" style="background:rgba(14,165,233,0.08);color:#0284c7;border:1px solid rgba(14,165,233,0.2)">No email chains, no CC lists, no forwarding</span>
+    <span class="feat-tag" style="background:rgba(14,165,233,0.08);color:#0284c7;border:1px solid rgba(14,165,233,0.2)">Full conversation history available in portal</span>
+  </div>
+  <div class="feat-list">
+    <div class="feat-list-item"><div class="fli-icon" style="background:rgba(14,165,233,0.12);color:#0ea5e9">💬</div><div class="fli-body"><div class="fli-title">Instant Project-Linked Messaging</div><div class="fli-desc">Every message a client sends goes directly to the team working on their project — not to a generic inbox. The right people see it immediately, without anyone having to forward or reassign it.</div></div></div>
+    <div class="feat-list-item"><div class="fli-icon" style="background:rgba(14,165,233,0.12);color:#0ea5e9">⚡</div><div class="fli-body"><div class="fli-title">A Few Clicks, No Friction</div><div class="fli-desc">Clients don't need to install anything, find an email address, or navigate a complex system. Open the portal, click messages, type, send. That's it — they're talking to the team in seconds.</div></div></div>
+    <div class="feat-list-item"><div class="fli-icon" style="background:rgba(14,165,233,0.12);color:#0ea5e9">🔄</div><div class="fli-body"><div class="fli-title">Two-Way Real-Time Conversation</div><div class="fli-desc">When the team replies inside the CRM, the client sees it in their portal immediately. The feedback loop is closed in real time — questions answered, decisions made, progress unblocked faster.</div></div></div>
+    <div class="feat-list-item"><div class="fli-icon" style="background:rgba(14,165,233,0.12);color:#0ea5e9">📜</div><div class="fli-body"><div class="fli-title">Full Conversation History</div><div class="fli-desc">Every message is stored and visible in the portal. Clients can scroll back through the entire conversation history — no lost emails, no "I never got that reply." Everything is on record.</div></div></div>
+  </div>
+  <div class="highlight" style="border-left-color:#0ea5e9;background:rgba(14,165,233,0.04)">
+    <p><strong>The result:</strong> Clients feel closer to the work, teams spend less time on status calls, and nothing important falls through the cracks. Direct communication is the foundation of every strong client relationship — and Tapvera builds it right into the product.</p>
+  </div>
+</div>
+</div><!-- end client portal -->
+<div class="divider"></div>
+
+
+<!-- ════════════════════════════
+     CLOSING
+════════════════════════════ -->
+<div class="closing">
+  <div class="closing-grid"></div>
+  <div class="closing-inner">
+    <div class="cl-title">One Platform.<br/>Every Person. Every Process.</div>
+    <p class="cl-sub">Tapvera CRM is the operating system for your company — from the first punch-in of the day to the last deal closed. Every workflow is designed to save time, reduce errors, and help your people do their best work.</p>
+    <div class="cl-credit">Built by <span>Tapvera Technologies Pvt. Ltd.</span> &middot; web.tapvera.io &middot; April 2026</div>
+  </div>
+</div>
+
+</div><!-- end .doc -->
+
+<script>
+// smooth scroll for TOC links is handled inline
+// print shortcut
+document.addEventListener('keydown', function(e){
+  if((e.ctrlKey||e.metaKey)&&e.key==='p'){window.print()}
+})
+</script>
+</body>
+</html>

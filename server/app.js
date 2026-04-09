@@ -57,6 +57,7 @@ const sheetRoutes = require("./routes/sheetRoutes");
 const positionRoutes = require("./routes/positionRoutes");
 const transferRoutes = require("./routes/transferRoutes");
 const callIntelligenceRoutes = require("./routes/callIntelligenceRoutes");
+const internalRoutes         = require("./routes/internalRoutes");
 
 // Controllers
 const ChatController = require("./controllers/chatController");
@@ -200,6 +201,7 @@ app.use("/api/projects", clientRemarkRoutes);
 app.use("/api/projects", projectRoutes);
 app.use("/api/positions", positionRoutes);
 app.use("/api/call-intelligence", callIntelligenceRoutes);
+app.use("/api/internal", internalRoutes);
 
 // =====================
 // Serve frontend in production

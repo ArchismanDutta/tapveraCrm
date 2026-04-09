@@ -1,0 +1,83 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: Tapvera CRM — Keyword Rank Fetcher Lambda + EventBridge schedules
+
+# ── Parameters ────────────────────────────────────────────────────────────────
+Parameters:
+  MongoDbUri:
+    Type: String
+    NoEcho: true
+    Description: "MongoDB Atlas connection string"
+
+  SerpApiKey:
+    Type: String
+    NoEcho: true
+    Description: "SerpAPI API key"
+
+  SerpApiMonthlyLimit:
+    Type: Number
+    Default: 100
+    Description: "Monthly SerpAPI quota cap"
+
+  CrmServerUrl:
+    Type: String
+    Description: "Base URL of your CRM server, e.g. https://your-domain.com"
+
+  InternalWebhookSecret:
+    Type: String
+    NoEcho: true
+    Description: "Shared secret for Lambda → CRM rank-drop webhook"
+
+# ── Globals ───────────────────────────────────────────────────────────────────
+Globals:
+  Function:
+    Runtime: nodejs20.x
+    Timeout: 600        # 10 minutes — plenty for large keyword batches
+    MemorySize: 256     # No browser, just HTTP + Mongo — 256 MB is enough
+    Environment:
+      Variables:
+        MONGODB_URI:             !Ref MongoDbUri
+        SERPAPI_KEY:             !Ref SerpApiKey
+        SERPAPI_MONTHLY_LIMIT:   !Ref SerpApiMonthlyLimit
+        CRM_SERVER_URL:          !Ref CrmServerUrl
+        INTERNAL_WEBHOOK_SECRET: !Ref InternalWebhookSecret
+
+# ── Resources ─────────────────────────────────────────────────────────────────
+Resources:
+  KeywordRankFetcher:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: tapvera-keyword-rank-fetcher
+      CodeUri: lambda/keywordRankFetcher/
+      Handler: handler.handler
+      Description: "Fetches Google keyword rankings via SerpAPI on a scheduled basis"
+      Events:
+        # All keywords — 15th of every month at 06:00 UTC
+        BiMonthlyMidTrigger:
+          Type: Schedule
+          Properties:
+            Schedule: cron(0 6 15 * ? *)
+            Input: '{"frequency":"all"}'
+            Name: tapvera-keyword-15th
+            Description: "Bi-monthly keyword rank fetch (15th)"
+            Enabled: true
+
+        # All keywords — 27th of every month at 06:00 UTC
+        BiMonthlyEndTrigger:
+          Type: Schedule
+          Properties:
+            Schedule: cron(0 6 27 * ? *)
+            Input: '{"frequency":"all"}'
+            Name: tapvera-keyword-27th
+            Description: "Bi-monthly keyword rank fetch (27th)"
+            Enabled: true
+
+# ── Outputs ───────────────────────────────────────────────────────────────────
+Outputs:
+  LambdaArn:
+    Description: "Lambda function ARN"
+    Value: !GetAtt KeywordRankFetcher.Arn
+
+  LambdaName:
+    Description: "Lambda function name"
+    Value: !Ref KeywordRankFetcher

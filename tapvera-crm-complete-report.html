@@ -1,0 +1,2493 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Tapvera CRM — Complete Platform Overview</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Playfair+Display:wght@700;800&display=swap" rel="stylesheet"/>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --or:#FF9900;--or2:#FFC300;--dark:#CC7A00;
+  --bg:#0F0F0F;--s1:#1A1A1A;--s2:#222;--s3:#2a2a2a;
+  --bd:#2E2E2E;--bd2:#3a3a3a;
+  --txt:#FFFFFF;--m1:#CCCCCC;--m2:#999;--m3:#666;
+  --gr:#22c55e;--bl:#3b82f6;--vi:#ab4ee1;--pk:#f19ad2;--rd:#ef4444;--am:#f59e0b;
+}
+html{scroll-behavior:smooth}
+body{font-family:'Inter',sans-serif;background:#e8e8e8;color:#111;line-height:1.6;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+
+/* PAGE SYSTEM */
+.page{width:210mm;height:297mm;margin:0 auto;page-break-after:always;position:relative;overflow:hidden}
+@media screen{.page{margin:0 auto 24px;box-shadow:0 4px 40px rgba(0,0,0,0.22)}}
+@media print{body{margin:0}.page{margin:0;box-shadow:none;page-break-after:always}.no-print{display:none}}
+
+/* COVER */
+.cover{background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:60px 48px}
+.cover-glow{position:absolute;inset:0;background:radial-gradient(ellipse 70% 50% at 50% 0%,rgba(255,153,0,0.22) 0%,transparent 65%),radial-gradient(ellipse 50% 40% at 90% 90%,rgba(171,78,225,0.14) 0%,transparent 60%),radial-gradient(ellipse 40% 30% at 10% 80%,rgba(241,154,210,0.10) 0%,transparent 60%)}
+.cover-grid{position:absolute;inset:0;background-image:linear-gradient(rgba(255,153,0,0.05) 1px,transparent 1px),linear-gradient(90deg,rgba(255,153,0,0.05) 1px,transparent 1px);background-size:40px 40px}
+.cover-inner{position:relative;z-index:1;width:100%}
+.clogo-text{font-family:'Playfair Display',serif;font-size:52px;font-weight:800;background:linear-gradient(135deg,#FF9900,#FFC300);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;letter-spacing:-1px;margin-bottom:4px}
+.clogo-sub{font-size:11px;font-weight:600;letter-spacing:4px;text-transform:uppercase;color:var(--m2);margin-bottom:28px}
+.cbadge{display:inline-flex;align-items:center;gap:7px;background:rgba(255,153,0,0.10);border:1px solid rgba(255,153,0,0.28);color:var(--or);font-size:10px;font-weight:700;letter-spacing:2.5px;text-transform:uppercase;padding:6px 18px;border-radius:100px;margin-bottom:24px}
+.cbadge-dot{width:5px;height:5px;background:var(--or);border-radius:50%}
+.ctitle{font-family:'Playfair Display',serif;font-size:40px;font-weight:800;line-height:1.1;margin-bottom:14px;background:linear-gradient(135deg,#fff 0%,var(--or) 55%,var(--or2) 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.csub{font-size:14px;color:var(--m1);max-width:480px;margin:0 auto 34px;font-weight:400;line-height:1.7}
+.cstats{display:flex;justify-content:center;gap:12px;margin-bottom:38px}
+.cstat{background:rgba(255,255,255,0.04);border:1px solid var(--bd);border-radius:12px;padding:16px 22px;text-align:center}
+.cstat-n{font-size:26px;font-weight:800;color:var(--or);display:block;line-height:1;margin-bottom:4px}
+.cstat-l{font-size:10px;color:var(--m2)}
+.cover-div{width:80px;height:1px;background:linear-gradient(90deg,transparent,var(--or),transparent);margin:0 auto 14px}
+.cover-note{font-size:10px;color:var(--m3)}
+.cover-footer{position:absolute;bottom:20px;left:0;right:0;display:flex;justify-content:space-between;padding:0 40px;font-size:9px;color:var(--m3);z-index:1}
+
+/* SECTION DIVIDER */
+.sec-div{background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:60px 48px}
+.sec-div-inner{position:relative;z-index:1;max-width:500px}
+.sec-number{font-size:120px;font-weight:900;color:rgba(255,153,0,0.07);line-height:1;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-family:'Playfair Display',serif}
+.sec-badge{display:inline-flex;align-items:center;gap:7px;background:rgba(255,153,0,0.10);border:1px solid rgba(255,153,0,0.28);color:var(--or);font-size:9px;font-weight:700;letter-spacing:2.5px;text-transform:uppercase;padding:5px 16px;border-radius:100px;margin-bottom:20px}
+.sec-title{font-family:'Playfair Display',serif;font-size:42px;font-weight:800;line-height:1.1;margin-bottom:14px;background:linear-gradient(135deg,#fff 0%,var(--or) 55%,var(--or2) 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.sec-desc{font-size:14px;color:var(--m1);line-height:1.75}
+.sec-chapters{display:flex;flex-direction:column;gap:8px;margin-top:28px;text-align:left;max-width:360px;margin-left:auto;margin-right:auto}
+.sec-ch{display:flex;align-items:center;gap:10px;background:rgba(255,255,255,0.04);border:1px solid var(--bd);border-radius:8px;padding:8px 14px;font-size:11px;color:var(--m1)}
+.sec-ch-n{width:20px;height:20px;border-radius:50%;background:linear-gradient(135deg,var(--or),var(--dark));display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;color:#000;flex-shrink:0}
+
+/* TOC PAGE */
+.toc-page{background:#fff;padding:0;display:flex;flex-direction:column;height:100%}
+.toc-header{background:var(--bg);padding:28px 40px 22px;border-bottom:3px solid var(--or)}
+.toc-header-tag{font-size:9px;font-weight:700;letter-spacing:2.5px;text-transform:uppercase;color:var(--or);display:block;margin-bottom:6px}
+.toc-header-title{font-family:'Playfair Display',serif;font-size:26px;font-weight:800;color:#fff}
+.toc-body{padding:24px 40px 50px;display:grid;grid-template-columns:1fr 1fr;gap:0 32px}
+.toc-section{margin-bottom:20px}
+.toc-section-title{font-size:9px;font-weight:800;letter-spacing:2px;text-transform:uppercase;color:var(--or);margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid #f3f4f6}
+.toc-item{display:flex;justify-content:space-between;align-items:center;padding:4px 0;font-size:11px;color:#444;border-bottom:1px dotted #e5e7eb}
+.toc-item:last-child{border-bottom:none}
+.toc-item-name{color:#222;font-weight:500}
+.toc-item-pg{color:var(--or);font-weight:700;font-size:10px}
+
+/* SECTION PAGE */
+.sp{background:#fff;padding:0;display:flex;flex-direction:column;height:100%}
+.sp-header{background:var(--bg);padding:22px 40px 18px;border-bottom:3px solid var(--or);position:relative;overflow:hidden}
+.sp-header::after{content:'';position:absolute;top:-40px;right:-40px;width:140px;height:140px;background:radial-gradient(circle,rgba(255,153,0,0.2),transparent 70%)}
+.sp-tag{font-size:9px;font-weight:700;letter-spacing:2.5px;text-transform:uppercase;color:var(--or);display:block;margin-bottom:5px}
+.sp-title{font-family:'Playfair Display',serif;font-size:24px;font-weight:800;color:#fff;line-height:1.2}
+.sp-subtitle{font-size:11.5px;color:var(--m2);margin-top:5px;max-width:500px}
+.sp-body{padding:22px 40px 52px;flex:1;overflow:hidden}
+
+/* LAYOUTS */
+.feat-2col{display:grid;grid-template-columns:1fr 1fr;gap:22px;align-items:start}
+.feat-2col-r{display:grid;grid-template-columns:1fr 1fr;gap:22px;align-items:start}
+.feat-3col{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
+.feat-label{font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--or);margin-bottom:8px}
+.feat-h{font-family:'Playfair Display',serif;font-size:19px;font-weight:800;line-height:1.25;margin-bottom:9px;color:#111}
+.feat-h span{color:var(--or)}
+.feat-p{font-size:11.5px;color:#555;line-height:1.7;margin-bottom:10px}
+.feat-list{list-style:none;display:flex;flex-direction:column;gap:7px}
+.feat-list li{display:flex;align-items:flex-start;gap:9px;font-size:11px;color:#444;line-height:1.5}
+.feat-list li::before{content:'';width:16px;height:16px;border-radius:50%;flex-shrink:0;margin-top:1px;background:rgba(255,153,0,0.12);border:1px solid rgba(255,153,0,0.35);background-image:url("data:image/svg+xml,%3Csvg width='9' height='7' viewBox='0 0 9 7' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 3.5L3.5 6L8 1' stroke='%23FF9900' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:center}
+.callout-box{background:linear-gradient(135deg,rgba(255,153,0,0.08),rgba(255,153,0,0.03));border:1px solid rgba(255,153,0,0.22);border-left:3px solid var(--or);border-radius:8px;padding:13px 15px;margin-top:12px}
+.callout-box p{font-size:11px;color:#333;font-style:italic;line-height:1.65}
+
+/* SCREENSHOT FRAME */
+.screen-frame{border-radius:10px;overflow:hidden;border:2px solid var(--bd);box-shadow:0 8px 32px rgba(0,0,0,0.3)}
+.screen-frame img{width:100%;display:block}
+.screen-caption{font-size:9px;color:var(--m3);text-align:center;margin-top:6px;font-style:italic}
+
+/* MOCK UI */
+.mock{background:var(--bg);border-radius:10px;overflow:hidden;border:1px solid var(--bd);box-shadow:0 8px 32px rgba(0,0,0,0.4)}
+.mock-bar{background:var(--s2);padding:7px 12px;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--bd)}
+.mock-dots{display:flex;gap:4px}
+.mock-dot{width:7px;height:7px;border-radius:50%}
+.mock-dot.r{background:#ef4444}.mock-dot.y{background:#f59e0b}.mock-dot.g{background:#22c55e}
+.mock-url{flex:1;background:var(--s3);border-radius:4px;padding:3px 10px;font-size:9px;color:var(--m3);font-family:'Inter',sans-serif}
+.mock-body{display:flex}
+.mock-sidebar{width:46px;background:var(--s1);border-right:1px solid var(--bd);padding:8px 0;display:flex;flex-direction:column;align-items:center;gap:5px}
+.mock-sb-logo{width:26px;height:26px;background:var(--or);border-radius:7px;margin-bottom:6px}
+.mock-sb-item{width:30px;height:30px;border-radius:6px;display:flex;align-items:center;justify-content:center;color:var(--m3);font-size:13px}
+.mock-sb-item.active{background:rgba(255,153,0,0.15);color:var(--or)}
+.mock-content{flex:1;overflow:hidden;background:var(--bg);padding:12px;display:flex;flex-direction:column;gap:8px}
+.mc-row{display:flex;gap:7px}
+.mc{flex:1;background:var(--s1);border:1px solid var(--bd);border-radius:7px;padding:8px 10px}
+.mc-val{font-size:16px;font-weight:800;color:var(--txt);font-family:'Inter',sans-serif;line-height:1}
+.mc-lbl{font-size:7px;color:var(--m2);font-family:'Inter',sans-serif;margin-top:2px}
+.mc-chg{font-size:7px;font-weight:600;margin-top:3px;font-family:'Inter',sans-serif}
+.mc-chg.up{color:var(--gr)}.mc-chg.dn{color:var(--rd)}
+.chart-area{background:var(--s1);border:1px solid var(--bd);border-radius:7px;padding:8px 10px;flex:1}
+.chart-title{font-size:7px;font-weight:600;color:var(--m2);font-family:'Inter',sans-serif;margin-bottom:6px}
+.bars{display:flex;align-items:flex-end;gap:3px;height:55px}
+.bar{flex:1;border-radius:3px 3px 0 0;background:var(--or);opacity:0.7;min-width:5px}
+.bar.hi{opacity:1}.bar.vi{background:var(--vi);opacity:0.7}.bar.bl{background:var(--bl);opacity:0.7}.bar.gr{background:var(--gr);opacity:0.7}
+.mtable{width:100%;border-collapse:collapse;font-size:7.5px;font-family:'Inter',sans-serif}
+.mtable th{padding:4px 7px;background:var(--s2);color:var(--m3);font-weight:600;letter-spacing:0.8px;text-transform:uppercase;font-size:6.5px;text-align:left;border-bottom:1px solid var(--bd)}
+.mtable td{padding:5px 7px;border-bottom:1px solid rgba(46,46,46,0.5);color:var(--m1);vertical-align:middle}
+.mtable tbody tr:last-child td{border-bottom:none}
+.mtable td:first-child{color:var(--txt);font-weight:500}
+.mb{display:inline-block;padding:2px 6px;border-radius:100px;font-size:6.5px;font-weight:600;font-family:'Inter',sans-serif}
+.mb-g{background:rgba(34,197,94,0.15);color:#4ade80}.mb-o{background:rgba(255,153,0,0.15);color:var(--or)}
+.mb-v{background:rgba(171,78,225,0.15);color:#c084fc}.mb-b{background:rgba(59,130,246,0.15);color:#60a5fa}
+.mb-r{background:rgba(239,68,68,0.15);color:#f87171}.mb-am{background:rgba(245,158,11,0.15);color:#fbbf24}
+.av{width:20px;height:20px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:7px;font-weight:700;font-family:'Inter',sans-serif;flex-shrink:0}
+.prog{background:rgba(255,255,255,0.08);border-radius:100px;height:3px;overflow:hidden;margin-top:3px}
+.prog-fill{height:100%;border-radius:100px;background:linear-gradient(90deg,var(--or),var(--or2))}
+
+/* INFO CARDS */
+.info-cards{display:flex;flex-direction:column;gap:9px}
+.info-card{background:#fff;border:1px solid #e5e7eb;border-radius:9px;padding:12px 14px;display:flex;gap:11px;align-items:flex-start}
+.info-icon{width:36px;height:36px;border-radius:9px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:16px}
+.info-icon.or{background:rgba(255,153,0,0.12);color:var(--or)}
+.info-icon.vi{background:rgba(171,78,225,0.12);color:var(--vi)}
+.info-icon.gr{background:rgba(34,197,94,0.12);color:var(--gr)}
+.info-icon.bl{background:rgba(59,130,246,0.12);color:var(--bl)}
+.info-icon.rd{background:rgba(239,68,68,0.12);color:var(--rd)}
+.info-body h4{font-size:12.5px;font-weight:700;color:#111;margin-bottom:2px}
+.info-body p{font-size:11px;color:#555;line-height:1.6}
+
+/* MINI STAT CARDS */
+.mini-cards{display:flex;gap:9px;margin-bottom:14px}
+.mini-card{flex:1;background:var(--bg);color:var(--txt);border-radius:9px;padding:12px;border:1px solid var(--bd)}
+.mini-card-n{font-size:20px;font-weight:800;color:var(--or);font-family:'Playfair Display',serif}
+.mini-card-l{font-size:8.5px;color:var(--m2);margin-top:1px}
+
+/* BENEFIT GRID */
+.benefit-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.benefit{background:#fff;border:1px solid #e5e7eb;border-radius:9px;padding:12px 14px}
+.benefit h4{font-size:12.5px;font-weight:700;color:#111;margin-bottom:4px}
+.benefit p{font-size:10.5px;color:#555;line-height:1.6}
+
+/* KANBAN */
+.kanban{display:flex;gap:6px;padding:8px}
+.kb-col{flex:1;background:rgba(255,255,255,0.04);border-radius:6px;padding:6px}
+.kb-head{font-size:7px;font-weight:700;color:var(--m2);letter-spacing:1px;text-transform:uppercase;margin-bottom:5px;font-family:'Inter',sans-serif}
+.kb-card{background:var(--s2);border:1px solid var(--bd);border-radius:5px;padding:6px;margin-bottom:4px}
+.kb-name{font-size:7.5px;font-weight:600;color:var(--txt);font-family:'Inter',sans-serif;margin-bottom:2px}
+.kb-meta{font-size:6.5px;color:var(--m3);font-family:'Inter',sans-serif}
+.kb-badge{display:inline-block;padding:1px 5px;border-radius:100px;font-size:6px;font-weight:700;margin-top:3px}
+
+/* STEPS */
+.steps{position:relative;padding-left:40px}
+.steps::before{content:'';position:absolute;left:17px;top:30px;bottom:30px;width:2px;background:linear-gradient(180deg,var(--or),var(--vi))}
+.step{position:relative;margin-bottom:16px}
+.step:last-child{margin-bottom:0}
+.step-n{position:absolute;left:-40px;top:0;width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,var(--or),var(--dark));display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;color:#000;z-index:1;box-shadow:0 0 14px rgba(255,153,0,0.3)}
+.step h3{font-size:13px;font-weight:700;color:#111;margin-bottom:3px;padding-top:5px}
+.step p{font-size:11px;color:#555;line-height:1.6}
+
+/* TAG CLOUD */
+.tag-cloud{display:flex;flex-wrap:wrap;gap:6px}
+.tag{display:inline-flex;align-items:center;gap:5px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:100px;padding:4px 10px;font-size:10px;color:#555;font-weight:500}
+.tag-dot{width:5px;height:5px;border-radius:50%;flex-shrink:0}
+
+/* PAGE FOOTER */
+.page-footer{position:absolute;bottom:0;left:0;right:0;background:var(--bg);padding:8px 40px;display:flex;justify-content:space-between;align-items:center;border-top:2px solid var(--or);height:40px;z-index:10}
+.pf-brand{display:flex;align-items:center;gap:7px}
+.pf-name{font-size:10px;font-weight:700;color:var(--or)}
+.pf-page{font-size:10px;color:var(--m3)}
+.pf-conf{font-size:9px;color:var(--m3)}
+
+/* DIVIDER */
+.s-div{height:1px;background:linear-gradient(90deg,transparent,#e5e7eb,transparent);margin:16px 0}
+
+/* GRADIENT ACCENT BOX */
+.gradient-accent{background:linear-gradient(135deg,rgba(255,153,0,0.06),rgba(171,78,225,0.05));border-radius:10px;padding:14px;border:1px solid rgba(255,153,0,0.12)}
+
+/* NOTIF MOCK */
+.notif-list{display:flex;flex-direction:column;gap:5px;padding:6px}
+.notif{background:var(--s2);border:1px solid var(--bd);border-radius:6px;padding:7px 9px;display:flex;gap:7px;align-items:flex-start}
+.notif-icon{width:20px;height:20px;border-radius:5px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:10px}
+.notif-title{font-size:7.5px;font-weight:600;color:var(--txt);font-family:'Inter',sans-serif}
+.notif-sub{font-size:6.5px;color:var(--m3);font-family:'Inter',sans-serif;margin-top:1px}
+.notif-time{font-size:6.5px;color:var(--m3);font-family:'Inter',sans-serif;margin-left:auto;flex-shrink:0}
+
+/* CHAT MOCK */
+.chat-mock{display:flex}
+.chat-sidebar{width:80px;background:var(--s1);border-right:1px solid var(--bd);padding:7px}
+.chat-s-head{font-size:6.5px;color:var(--m3);letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;font-family:'Inter',sans-serif}
+.chat-item{display:flex;gap:4px;align-items:center;padding:3px;border-radius:4px;margin-bottom:2px}
+.chat-item.active{background:rgba(255,153,0,0.12)}
+.chat-item-name{font-size:7px;font-weight:500;color:var(--m1);font-family:'Inter',sans-serif;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.chat-main{flex:1;display:flex;flex-direction:column}
+.chat-top{background:var(--s2);padding:7px 11px;border-bottom:1px solid var(--bd);display:flex;align-items:center;gap:7px}
+.chat-top-name{font-size:9px;font-weight:600;color:var(--txt);font-family:'Inter',sans-serif}
+.chat-top-sub{font-size:7px;color:var(--gr);font-family:'Inter',sans-serif}
+.chat-messages{flex:1;padding:8px;display:flex;flex-direction:column;gap:6px;overflow:hidden}
+.msg{max-width:65%;font-size:8px;font-family:'Inter',sans-serif}
+.msg-text{padding:5px 8px;border-radius:8px;line-height:1.5}
+.msg.them .msg-text{background:var(--s2);color:var(--m1);border-radius:0 8px 8px 8px}
+.msg.me{align-self:flex-end}
+.msg.me .msg-text{background:linear-gradient(135deg,var(--or),var(--dark));color:#000;font-weight:500;border-radius:8px 0 8px 8px}
+.msg-time{font-size:6.5px;color:var(--m3);margin-top:1px}
+.chat-input{background:var(--s2);padding:6px 10px;border-top:1px solid var(--bd);display:flex;gap:6px;align-items:center}
+.chat-input-box{flex:1;background:var(--s3);border-radius:16px;padding:4px 10px;font-size:8px;color:var(--m3);font-family:'Inter',sans-serif}
+
+/* LEAVE MOCK */
+.leave-row{display:flex;gap:7px;align-items:center;padding:7px 0;border-bottom:1px solid rgba(46,46,46,0.5);font-size:8px;font-family:'Inter',sans-serif}
+.leave-row:last-child{border-bottom:none}
+.leave-type{color:var(--txt);font-weight:600;flex:1}
+.leave-dates{color:var(--m2);flex:1.5}
+.leave-days{color:var(--or);font-weight:700;flex:0.5;text-align:right}
+
+/* PAYSLIP MOCK */
+.payslip-card{background:var(--s1);border:1px solid var(--bd);border-radius:8px;overflow:hidden}
+.payslip-header{background:linear-gradient(135deg,rgba(255,153,0,0.2),rgba(255,153,0,0.05));padding:9px 12px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--bd)}
+.payslip-month{font-size:10px;font-weight:700;color:var(--txt);font-family:'Inter',sans-serif}
+.payslip-amount{font-size:14px;font-weight:800;color:var(--or);font-family:'Inter',sans-serif}
+.payslip-body{padding:8px 12px;display:flex;flex-direction:column;gap:5px}
+.payslip-row{display:flex;justify-content:space-between;font-size:8px;font-family:'Inter',sans-serif}
+.payslip-row .label{color:var(--m2)}.payslip-row .val{color:var(--txt);font-weight:600}
+
+/* SHIFT MOCK */
+.shift-row{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(46,46,46,0.4);font-size:8px;font-family:'Inter',sans-serif}
+.shift-name{color:var(--txt);font-weight:600;flex:1}
+.shift-time{color:var(--m2);flex:1.5}
+
+/* ROLES GRID */
+.roles-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:9px}
+.role-card{background:#fff;border:1px solid #e5e7eb;border-radius:9px;padding:12px;text-align:center}
+.role-icon-wrap{width:42px;height:42px;border-radius:50%;margin:0 auto 8px;display:flex;align-items:center;justify-content:center;font-size:18px}
+.role-n{font-size:11.5px;font-weight:700;color:#111;margin-bottom:3px}
+.role-d{font-size:10px;color:#666;line-height:1.5}
+
+/* CLOSING */
+.closing{background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:60px 48px}
+.closing-inner{position:relative;z-index:1;max-width:480px}
+.closing-title{font-family:'Playfair Display',serif;font-size:36px;font-weight:800;line-height:1.1;margin-bottom:16px;background:linear-gradient(135deg,#fff 0%,var(--or) 55%,var(--or2) 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.closing-sub{font-size:13.5px;color:var(--m1);line-height:1.8;margin-bottom:28px}
+.closing-card{display:inline-flex;align-items:center;gap:12px;background:linear-gradient(135deg,rgba(255,153,0,0.12),rgba(255,153,0,0.04));border:1px solid rgba(255,153,0,0.28);border-radius:12px;padding:16px 24px;margin-bottom:24px}
+.closing-card-logo{font-family:'Playfair Display',serif;font-size:22px;font-weight:800;background:linear-gradient(135deg,#FF9900,#FFC300);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.closing-card-text div:first-child{font-size:13px;font-weight:700;color:var(--txt);text-align:left}
+.closing-card-text div:last-child{font-size:10.5px;color:var(--m2);margin-top:2px;text-align:left}
+.credits{font-size:10.5px;color:var(--m3);margin-top:8px}
+.credits span{color:var(--or);font-weight:600}
+
+/* PRINT BUTTON */
+.no-print{position:fixed;top:16px;right:16px;z-index:999}
+.print-btn{background:var(--or);color:#000;font-weight:700;font-size:12px;padding:10px 20px;border:none;border-radius:8px;cursor:pointer;font-family:'Inter',sans-serif;box-shadow:0 4px 16px rgba(255,153,0,0.4)}
+.print-btn:hover{background:var(--or2)}
+
+/* FEATURE HIGHLIGHT ROW */
+.feat-highlight{display:flex;gap:8px;margin-top:12px}
+.feat-hl-item{flex:1;background:var(--bg);border:1px solid var(--bd);border-radius:8px;padding:10px 12px;color:var(--txt)}
+.feat-hl-icon{font-size:18px;margin-bottom:5px}
+.feat-hl-title{font-size:9px;font-weight:700;color:var(--or);text-transform:uppercase;letter-spacing:1px;margin-bottom:3px}
+.feat-hl-desc{font-size:10px;color:var(--m2);line-height:1.5}
+
+/* ATTENDANCE CALENDAR MINI */
+.att-mini{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;padding:8px}
+.att-cell{background:var(--s2);border-radius:3px;padding:4px;text-align:center;font-size:7px;font-family:'Inter',sans-serif;color:var(--m1)}
+.att-cell.p{background:rgba(34,197,94,0.2);color:#4ade80}
+.att-cell.a{background:rgba(239,68,68,0.2);color:#f87171}
+.att-cell.l{background:rgba(245,158,11,0.2);color:#fbbf24}
+.att-cell.w{background:rgba(99,102,241,0.15);color:#a5b4fc}
+.att-cell-n{font-weight:700;display:block}
+
+/* FULL PAGE SCREEN */
+.full-screen-wrap{background:var(--bg);border-radius:10px;overflow:hidden;border:1px solid var(--bd);box-shadow:0 6px 28px rgba(0,0,0,0.35)}
+.full-screen-wrap img{width:100%;display:block}
+
+/* COMPARISON TABLE */
+.ctbl{width:100%;border-collapse:collapse;font-size:11px}
+.ctbl th{padding:9px 12px;background:#f9fafb;color:#666;font-weight:700;font-size:9.5px;letter-spacing:1px;text-transform:uppercase;border-bottom:2px solid #e5e7eb;text-align:left}
+.ctbl td{padding:9px 12px;border-bottom:1px solid #f3f4f6;color:#555;vertical-align:middle}
+.ctbl td:first-child{color:#111;font-weight:600}
+.ctbl-or{color:var(--or);font-weight:700}
+.check{color:var(--gr);font-weight:700}
+.cross{color:var(--rd)}
+
+</style>
+</head>
+<body>
+
+<div class="no-print">
+  <button class="print-btn" onclick="window.print()">Export as PDF</button>
+</div>
+
+<!-- ══════════════════════════════════════
+     PAGE 1 — COVER
+══════════════════════════════════════ -->
+<div class="page cover">
+  <div class="cover-glow"></div>
+  <div class="cover-grid"></div>
+  <div class="cover-inner">
+    <div class="clogo-text">Tapvera</div>
+    <div class="clogo-sub">Tapping Innovations</div>
+    <div class="cbadge"><span class="cbadge-dot"></span> Complete Platform Overview</div>
+    <div class="ctitle">The CRM Built for<br/>How Real Teams Work</div>
+    <p class="csub">From the moment an employee logs in to the moment a business closes a deal — every workflow, every insight, and every collaboration tool, united in one powerful platform.</p>
+    <div class="cstats">
+      <div class="cstat"><span class="cstat-n">35+</span><div class="cstat-l">Platform Modules</div></div>
+      <div class="cstat"><span class="cstat-n">4</span><div class="cstat-l">User Roles</div></div>
+      <div class="cstat"><span class="cstat-n">360°</span><div class="cstat-l">Business Coverage</div></div>
+      <div class="cstat"><span class="cstat-n">∞</span><div class="cstat-l">Scalability</div></div>
+    </div>
+    <div class="cover-div"></div>
+    <div class="cover-note">Confidential · Tapvera Technologies · 2026</div>
+  </div>
+  <div class="cover-footer">
+    <span>tapvera.com</span>
+    <span>Prepared for: Business Stakeholders &amp; Decision Makers</span>
+    <span>April 2026</span>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════
+     PAGE 2 — TABLE OF CONTENTS
+══════════════════════════════════════ -->
+<div class="page toc-page">
+  <div class="toc-header">
+    <span class="toc-header-tag">Navigation</span>
+    <div class="toc-header-title">Table of Contents</div>
+  </div>
+  <div class="toc-body">
+    <div>
+      <div class="toc-section">
+        <div class="toc-section-title">Employee Experience</div>
+        <div class="toc-item"><span class="toc-item-name">Login &amp; Authentication</span><span class="toc-item-pg">04</span></div>
+        <div class="toc-item"><span class="toc-item-name">Employee Dashboard</span><span class="toc-item-pg">05</span></div>
+        <div class="toc-item"><span class="toc-item-name">Punch In / Punch Out</span><span class="toc-item-pg">06</span></div>
+        <div class="toc-item"><span class="toc-item-name">My Attendance</span><span class="toc-item-pg">07</span></div>
+        <div class="toc-item"><span class="toc-item-name">My Tasks</span><span class="toc-item-pg">08</span></div>
+        <div class="toc-item"><span class="toc-item-name">My Projects</span><span class="toc-item-pg">09</span></div>
+        <div class="toc-item"><span class="toc-item-name">Project Communication</span><span class="toc-item-pg">10</span></div>
+        <div class="toc-item"><span class="toc-item-name">Leave Requests</span><span class="toc-item-pg">11</span></div>
+        <div class="toc-item"><span class="toc-item-name">My Payslips</span><span class="toc-item-pg">12</span></div>
+        <div class="toc-item"><span class="toc-item-name">Todo — Personal Task List</span><span class="toc-item-pg">13</span></div>
+        <div class="toc-item"><span class="toc-item-name">Messages &amp; Team Chat</span><span class="toc-item-pg">14</span></div>
+        <div class="toc-item"><span class="toc-item-name">Notification Center</span><span class="toc-item-pg">15</span></div>
+        <div class="toc-item"><span class="toc-item-name">My Notepad</span><span class="toc-item-pg">16</span></div>
+        <div class="toc-item"><span class="toc-item-name">Achievements &amp; Gamification</span><span class="toc-item-pg">17</span></div>
+        <div class="toc-item"><span class="toc-item-name">Profile &amp; Daily Updates</span><span class="toc-item-pg">18</span></div>
+      </div>
+    </div>
+    <div>
+      <div class="toc-section">
+        <div class="toc-section-title">Admin &amp; Management</div>
+        <div class="toc-item"><span class="toc-item-name">HR Dashboard</span><span class="toc-item-pg">20</span></div>
+        <div class="toc-item"><span class="toc-item-name">Employee Management</span><span class="toc-item-pg">21</span></div>
+        <div class="toc-item"><span class="toc-item-name">Attendance &amp; Shifts</span><span class="toc-item-pg">22</span></div>
+        <div class="toc-item"><span class="toc-item-name">Leave Management</span><span class="toc-item-pg">23</span></div>
+        <div class="toc-item"><span class="toc-item-name">Payroll &amp; Salary</span><span class="toc-item-pg">24</span></div>
+        <div class="toc-item"><span class="toc-item-name">Lead Pipeline (Kanban)</span><span class="toc-item-pg">25</span></div>
+        <div class="toc-item"><span class="toc-item-name">Callbacks &amp; Sales Tracking</span><span class="toc-item-pg">26</span></div>
+        <div class="toc-item"><span class="toc-item-name">Client Management</span><span class="toc-item-pg">27</span></div>
+        <div class="toc-item"><span class="toc-item-name">Project Management</span><span class="toc-item-pg">28</span></div>
+        <div class="toc-item"><span class="toc-item-name">SEO &amp; Content Analytics</span><span class="toc-item-pg">29</span></div>
+        <div class="toc-item"><span class="toc-item-name">Call Intelligence</span><span class="toc-item-pg">30</span></div>
+        <div class="toc-item"><span class="toc-item-name">Notice Board &amp; Celebrations</span><span class="toc-item-pg">31</span></div>
+      </div>
+      <div class="toc-section">
+        <div class="toc-section-title">Super Administration</div>
+        <div class="toc-item"><span class="toc-item-name">Super Admin Portal</span><span class="toc-item-pg">32</span></div>
+        <div class="toc-item"><span class="toc-item-name">Shared Sheets</span><span class="toc-item-pg">33</span></div>
+      </div>
+      <div class="toc-section">
+        <div class="toc-section-title">Closing</div>
+        <div class="toc-item"><span class="toc-item-name">Why Tapvera — The Advantage</span><span class="toc-item-pg">34</span></div>
+        <div class="toc-item"><span class="toc-item-name">Get Started</span><span class="toc-item-pg">35</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="page-footer">
+    <div class="pf-brand"><span class="pf-name">TAPVERA</span></div>
+    <span class="pf-page">Table of Contents</span>
+    <span class="pf-conf">Confidential</span>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════
+     PAGE 3 — INTRODUCTION
+══════════════════════════════════════ -->
+<div class="page sp">
+  <div class="sp-header">
+    <span class="sp-tag">Platform Overview</span>
+    <div class="sp-title">One Platform. Every Person. Every Process.</div>
+    <div class="sp-subtitle">Tapvera CRM was built because great teams deserve better tools — not a dozen disconnected apps, but one intelligent platform that grows with your business.</div>
+  </div>
+  <div class="sp-body">
+    <div class="feat-2col" style="margin-bottom:16px">
+      <div>
+        <p class="feat-p">Running a business means managing people, projects, clients, and pipelines — simultaneously. Most companies patch this together with spreadsheets, WhatsApp groups, and half a dozen tools that don't talk to each other.</p>
+        <p class="feat-p">Tapvera was designed to eliminate that chaos. Whether you're a business owner reviewing monthly payroll, an HR manager approving leaves, a salesperson nurturing leads, or an employee checking in for the day — <strong>Tapvera has a purpose-built experience for you.</strong></p>
+        <div class="callout-box">
+          <p>"It's not just software — it's a smarter way to run your entire operation, from day one to done deal."</p>
+        </div>
+      </div>
+      <div class="info-cards">
+        <div class="info-card">
+          <div class="info-icon or">👤</div>
+          <div class="info-body"><h4>Employees</h4><p>Track attendance, manage tasks, access payslips, stay connected — all in one place, every single day.</p></div>
+        </div>
+        <div class="info-card">
+          <div class="info-icon bl">🏢</div>
+          <div class="info-body"><h4>Admins &amp; HR</h4><p>Oversee your workforce, run payroll, manage leaves, assign projects, and monitor performance in real time.</p></div>
+        </div>
+        <div class="info-card">
+          <div class="info-icon gr">💼</div>
+          <div class="info-body"><h4>Sales Teams</h4><p>Nurture leads through a visual pipeline, track callbacks, manage clients, and close deals faster.</p></div>
+        </div>
+        <div class="info-card">
+          <div class="info-icon vi">🔑</div>
+          <div class="info-body"><h4>Super Admins</h4><p>See everything. Manage all employees, monitor live attendance, access private notepads, and control the entire system.</p></div>
+        </div>
+      </div>
+    </div>
+    <div class="s-div"></div>
+    <div class="roles-grid">
+      <div class="role-card">
+        <div class="role-icon-wrap" style="background:rgba(255,153,0,0.1)">🚀</div>
+        <div class="role-n">15+ Employee Tools</div>
+        <div class="role-d">Everything an employee needs to do great work and stay informed</div>
+      </div>
+      <div class="role-card">
+        <div class="role-icon-wrap" style="background:rgba(59,130,246,0.1)">📊</div>
+        <div class="role-n">Full HR Suite</div>
+        <div class="role-d">Payroll, attendance, leaves, shifts, and workforce analytics</div>
+      </div>
+      <div class="role-card">
+        <div class="role-icon-wrap" style="background:rgba(34,197,94,0.1)">🎯</div>
+        <div class="role-n">Sales Pipeline</div>
+        <div class="role-d">Visual lead tracking, client management, and callback scheduling</div>
+      </div>
+      <div class="role-card">
+        <div class="role-icon-wrap" style="background:rgba(171,78,225,0.1)">🛡️</div>
+        <div class="role-n">Project Intelligence</div>
+        <div class="role-d">SEO analytics, communication health, and delivery tracking</div>
+      </div>
+    </div>
+  </div>
+  <div class="page-footer">
+    <div class="pf-brand"><span class="pf-name">TAPVERA</span></div>
+    <span class="pf-page">3 / Introduction</span>
+    <span class="pf-conf">Confidential</span>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════
+     PAGE 4 — EMPLOYEE SECTION DIVIDER
+══════════════════════════════════════ -->
+<div class="page sec-div">
+  <div class="cover-glow"></div>
+  <div class="cover-grid"></div>
+  <div class="sec-div-inner">
+    <div class="sec-badge"><span class="cbadge-dot"></span> Part One</div>
+    <div class="sec-title">The Employee<br/>Experience</div>
+    <p class="sec-desc">From the first login to the last punch-out, Tapvera gives every team member a personal workspace that is smart, complete, and completely theirs.</p>
+    <div class="sec-chapters">
+      <div class="sec-ch"><span class="sec-ch-n">1</span> Secure Login &amp; Role Detection</div>
+      <div class="sec-ch"><span class="sec-ch-n">2</span> Personal Dashboard &amp; Task Overview</div>
+      <div class="sec-ch"><span class="sec-ch-n">3</span> Time &amp; Attendance Tracking</div>
+      <div class="sec-ch"><span class="sec-ch-n">4</span> Projects, Tasks &amp; Communication</div>
+      <div class="sec-ch"><span class="sec-ch-n">5</span> Payslips, Leaves &amp; HR Self-Service</div>
+      <div class="sec-ch"><span class="sec-ch-n">6</span> Productivity, Notifications &amp; Growth</div>
+    </div>
+  </div>
+  <div class="cover-footer">
+    <span>Tapvera CRM</span>
+    <span>Employee Experience — Pages 5 to 18</span>
+    <span>tapvera.com</span>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════
+     PAGE 5 — LOGIN
+══════════════════════════════════════ -->
+<div class="page sp">
+  <div class="sp-header">
+    <span class="sp-tag">Employee Experience · Step 1</span>
+    <div class="sp-title">Login &amp; Authentication</div>
+    <div class="sp-subtitle">The gateway to Tapvera — secure, simple, and role-aware from the first tap.</div>
+  </div>
+  <div class="sp-body">
+    <div class="feat-2col">
+      <div>
+        <p class="feat-label">The Story</p>
+        <p class="feat-p">Every morning, thousands of employees start their workday with one simple action: opening Tapvera and logging in. There's no complicated setup, no remembering multiple passwords, no figuring out where to go. The login screen greets them with "Welcome Back" — and means it.</p>
+        <p class="feat-p">Behind the scenes, Tapvera's authentication system does the heavy lifting. The moment a user enters their credentials, the system identifies their role — Employee, Admin, HR, or Super Admin — and routes them to exactly the right experience. No wrong doors, no confusion.</p>
+        <ul class="feat-list">
+          <li>Email &amp; password authentication with password visibility toggle</li>
+          <li>Role-based automatic routing — employees go to employee dashboard, admins to the HR suite</li>
+          <li>Forgot Password flow with secure reset link via email</li>
+          <li>Session management with persistent login across devices</li>
+          <li>Clean, distraction-free design that works on all screen sizes</li>
+          <li>Tapvera branded experience builds team familiarity from day one</li>
+        </ul>
+        <div class="callout-box">
+          <p>Security meets simplicity. Employees don't need IT support to get in — they just type their email, enter their password, and they're home.</p>
+        </div>
+      </div>
+      <div>
+        <div class="full-screen-wrap">
+          <img src="Crm screenshots/login.png" alt="Tapvera Login Screen"/>
+        </div>
+        <p class="screen-caption">The Tapvera login screen — clean, branded, and secure</p>
+        <div style="margin-top:12px" class="gradient-accent">
+          <div style="font-size:10px;font-weight:700;color:var(--or);margin-bottom:8px;text-transform:uppercase;letter-spacing:1px">Access Levels</div>
+          <div style="display:flex;flex-direction:column;gap:5px">
+            <div style="display:flex;align-items:center;gap:8px;font-size:10.5px;color:#444"><span style="width:8px;height:8px;border-radius:50%;background:#FF9900;flex-shrink:0"></span><strong>Employee</strong> — Personal workspace, tasks &amp; attendance</div>
+            <div style="display:flex;align-items:center;gap:8px;font-size:10.5px;color:#444"><span style="width:8px;height:8px;border-radius:50%;background:#3b82f6;flex-shrink:0"></span><strong>Admin / HR</strong> — Team management &amp; payroll</div>
+            <div style="display:flex;align-items:center;gap:8px;font-size:10.5px;color:#444"><span style="width:8px;height:8px;border-radius:50%;background:#22c55e;flex-shrink:0"></span><strong>Sales</strong> — Lead pipeline &amp; client portal</div>
+            <div style="display:flex;align-items:center;gap:8px;font-size:10.5px;color:#444"><span style="width:8px;height:8px;border-radius:50%;background:#ab4ee1;flex-shrink:0"></span><strong>Super Admin</strong> — Full system control</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="page-footer">
+    <div class="pf-brand"><span class="pf-name">TAPVERA</span></div>
+    <span class="pf-page">5 / Login &amp; Authentication</span>
+    <span class="pf-conf">Confidential</span>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════
+     PAGE 6 — EMPLOYEE DASHBOARD
+══════════════════════════════════════ -->
+<div class="page sp">
+  <div class="sp-header">
+    <span class="sp-tag">Employee Experience · Step 2</span>
+    <div class="sp-title">Employee Dashboard — Your Personal Command Center</div>
+    <div class="sp-subtitle">The first thing every employee sees after login — a personalized, real-time snapshot of their entire workday.</div>
+  </div>
+  <div class="sp-body">
+    <div class="feat-2col">
+      <div>
+        <p class="feat-label">The Story</p>
+        <p class="feat-p">Imagine arriving at work and instantly knowing exactly where you stand. Not buried in emails. Not digging through spreadsheets. Just a clean, intelligent dashboard that says: "Good Morning, [Name]" — and actually shows you what matters.</p>
+        <p class="feat-p">The Employee Dashboard is the heartbeat of the Tapvera experience. At a glance, every team member can see their total tasks, what's due today, what's high priority, what's completed, and what's been rejected. Five numbers. Complete clarity.</p>
+        <ul class="feat-list">
+          <li>Personalized greeting with real-time date and time display</li>
+          <li>Task summary cards: All Tasks, Due Today, High Priority, Completed, Rejected</li>
+          <li>Quick Action shortcuts — Punch In, View Tasks, Attendance — one click away</li>
+          <li>Today's Tasks section showing assignments with assignee, priority, and due date</li>
+          <li>Live notification pop-ups for new task assignments appear in real time</li>
+          <li>Online status indicator — employees and their managers can see active sessions</li>
+          <li>Sidebar navigation providing instant access to all modules</li>
+        </ul>
+        <div class="callout-box">
+          <p>The dashboard eliminates the "where do I start?" problem. Every employee begins their day informed, focused, and ready — without a single back-and-forth message.</p>
+        </div>
+      </div>
+      <div>
+        <div class="full-screen-wrap">
+          <img src="Crm screenshots/emp dashboard.png" alt="Employee Dashboard"/>
+        </div>
+        <p class="screen-caption">Employee Dashboard — real-time task overview and quick actions</p>
+        <div style="margin-top:10px;display:grid;grid-template-columns:1fr 1fr;gap:7px">
+          <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:7px;padding:8px 10px">
+            <div style="font-size:9px;font-weight:700;color:var(--or);margin-bottom:2px">TASK VISIBILITY</div>
+            <div style="font-size:10.5px;color:#444">See all 16 assigned tasks across every project at once</div>
+          </div>
+          <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:7px;padding:8px 10px">
+            <div style="font-size:9px;font-weight:700;color:var(--or);margin-bottom:2px">QUICK ACTIONS</div>
+            <div style="font-size:10.5px;color:#444">Punch in, view tasks, and mark attendance in under 3 clicks</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="page-footer">
+    <div class="pf-brand"><span class="pf-name">TAPVERA</span></div>
+    <span class="pf-page">6 / Employee Dashboard</span>
+    <span class="pf-conf">Confidential</span>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════
+     PAGE 7 — PUNCH IN / PUNCH OUT
+══════════════════════════════════════ -->
+<div class="page sp">
+  <div class="sp-header">
+    <span class="sp-tag">Employee Experience · Step 3</span>
+    <div class="sp-title">Punch In / Punch Out — Every Second Accounted For</div>
+    <div class="sp-subtitle">A fully automated time-tracking system that records work hours, breaks, and arrival times with precision and zero paperwork.</div>
+  </div>
+  <div class="sp-body">
+    <div class="feat-2col">
+      <div>
+        <p class="feat-label">The Story</p>
+        <p class="feat-p">Time tracking used to mean paper registers, manual entries, and disputes at month-end. Not anymore. When an employee clicks "Punch In," a live work timer starts. The system captures their exact arrival time, tracks work duration to the second, and manages every break they take — all automatically.</p>
+        <p class="feat-p">The "Today's Timeline" shows a chronological log of every punch-in and punch-out event. The Week Summary on the right gives the employee a complete picture of their total hours, average daily work, break time, and on-time rate — empowering them to self-manage.</p>
+        <ul class="feat-list">
+          <li>One-click Punch In with instant confirmation notification</li>
+          <li>Live work duration counter — tracks hours, minutes, and seconds in real time</li>
+          <li>Break Management with three types: Lunch, Coffee, and Personal</li>
+          <li>Arrival Time recorded and displayed (e.g., "Arrived: 09:04 AM")</li>
+          <li>Today's Timeline showing full punch history for the day</li>
+          <li>Week Summary: Total Hours, Avg Daily Work, Total Break, On-Time Rate, Breaks Taken</li>
+          <li>Flexible Shift Request option for employees needing schedule changes</li>
+          <li>Real-time status indicator showing "Currently Working" or break type</li>
+        </ul>
+        <div class="callout-box">
+          <p>No more disputes. No more guesswork. Employees and managers both have access to the same precise, timestamped record — transparency that builds trust on both sides.</p>
+        </div>
+      </div>
+      <div>
+        <div class="full-screen-wrap">
+          <img src="Crm screenshots/punchinpunchout.png" alt="Punch In / Punch Out"/>
+        </div>
+        <p class="screen-caption">Punch In / Out — live work timer, break management, and weekly summary</p>
+        <div style="margin-top:10px" class="gradient-accent">
+          <div style="font-size:9px;font-weight:700;color:var(--or);margin-bottom:8px;text-transform:uppercase;letter-spacing:1px">Break Types Available</div>
+          <div style="display:flex;gap:8px">
+            <div style="flex:1;background:var(--bg);border-radius:6px;padding:7px;text-align:center;border:1px solid var(--bd)"><div style="font-size:14px">🍽️</div><div style="font-size:9px;color:var(--m1);margin-top:2px">Lunch</div></div>
+            <div style="flex:1;background:var(--bg);border-radius:6px;padding:7px;text-align:center;border:1px solid var(--bd)"><div style="font-size:14px">☕</div><div style="font-size:9px;color:var(--m1);margin-top:2px">Coffee</div></div>
+            <div style="flex:1;background:var(--bg);border-radius:6px;padding:7px;text-align:center;border:1px solid var(--bd)"><div style="font-size:14px">🚶</div><div style="font-size:9px;color:var(--m1);margin-top:2px">Personal</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="page-footer">
+    <div class="pf-brand"><span class="pf-name">TAPVERA</span></div>
+    <span class="pf-page">7 / Punch In / Punch Out</span>
+    <span class="pf-conf">Confidential</span>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════
+     PAGE 8 — MY ATTENDANCE
+══════════════════════════════════════ -->
+<div class="page sp">
+  <div class="sp-header">
+    <span class="sp-tag">Employee Experience · Step 4</span>
+    <div class="sp-title">My Attendance — Full Visibility Into Your Work History</div>
+    <div class="sp-subtitle">A comprehensive attendance dashboard that gives employees complete, honest visibility into their own work patterns, streaks, and statistics.</div>
+  </div>
+  <div class="sp-body">
+    <div class="feat-2col">
+      <div>
+        <p class="feat-label">The Story</p>
+        <p class="feat-p">Employees shouldn't need to guess whether they've been on time or wonder how many leaves they have left. The Attendance module gives every team member a full, data-rich report card on their own work habits — month by month.</p>
+        <p class="feat-p">Twelve stat cards cover every dimension: attendance rate, present days, working hours, full days, late arrivals, on-time rate, half days, absent days, current status, and today's hours. Below that, a full calendar shows every day of the month color-coded — present, absent, or leave. And a Weekly Hours Chart on the right shows actual vs. target hours, efficiency percentage, and whether the target was met.</p>
+        <ul class="feat-list">
+          <li>Attendance Rate (%) — overall punctuality at a glance</li>
+          <li>Present Days counter vs. expected working days</li>
+          <li>Working Hours tracked against daily and monthly averages</li>
+          <li>Full Days (8+ hours), Half Days (4–7.5 hours) breakdown</li>
+          <li>Late Arrivals count with "punch-in after shift start time" detail</li>
+          <li>On-Time Rate percentage — punctuality metric</li>
+          <li>Absent Days — days not present in the period</li>
+          <li>Color-coded monthly Attendance Calendar</li>
+          <li>Weekly Hours Chart — total hours, target met days, efficiency rate</li>
+          <li>Current Status live indicator — "Work", "Break", or "Absent"</li>
+        </ul>
+      </div>
+      <div>
+        <div class="full-screen-wrap">
+          <img src="Crm screenshots/empattendancestats.png" alt="My Attendance Statistics"/>
+        </div>
+        <p class="screen-caption">My Attendance — 10 stat cards, monthly calendar, and weekly chart</p>
+        <div class="callout-box" style="margin-top:10px">
+          <p>When employees can see their own data in real time, accountability improves naturally — without pressure from management. Self-awareness drives better habits.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="page-footer">
+    <div class="pf-brand"><span class="pf-name">TAPVERA</span></div>
+    <span class="pf-page">8 / My Attendance</span>
+    <span class="pf-conf">Confidential</span>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════
+     PAGE 9 — MY TASKS
+══════════════════════════════════════ -->
+<div class="page sp">
+  <div class="sp-header">
+    <span class="sp-tag">Employee Experience · Step 5</span>
+    <div class="sp-title">My Tasks — Know What's Assigned. Know What's Due.</div>
+    <div class="sp-subtitle">A powerful personal task manager that shows every assigned task, its status, priority, and progress — so nothing ever falls through the cracks.</div>
+  </div>
+  <div class="sp-body">
+    <div class="feat-2col">
+      <div>
+        <p class="feat-label">The Story</p>
+        <p class="feat-p">No one should arrive at a deadline surprised. The My Tasks module gives every employee a crystal-clear view of their entire workload — across all projects, all priorities, all deadlines — in one unified place.</p>
+        <p class="feat-p">Four headline numbers at the top tell the story immediately: 16 total tasks, 4 completed, 0 in progress, 12 overdue. A progress bar shows overall completion at 25%. Below, every individual task is listed with its assignee, due date, description, priority badge, status dropdown, and a remarks section for leaving comments. Employees can also switch to Kanban view to drag and drop tasks across stages.</p>
+        <ul class="feat-list">
+          <li>Task summary header: Total, Completed, In Progress, Overdue, Rejected counts</li>
+          <li>Overall Progress bar — percentage completion across all tasks</li>
+          <li>List View with task title, assigned by, due date, description, and priority badge</li>
+          <li>Kanban View — drag tasks between Pending, In Progress, Completed columns</li>
+          <li>Real-time status update — change task status inline with a dropdown</li>
+          <li>Remarks system — leave comments and notes on individual tasks</li>
+          <li>Smart filters — filter by status, priority, overdue-only, or search by keyword</li>
+          <li>Export button for sharing task reports with management</li>
+          <li>Quick tabs: All, Overdue, High Priority, In Progress, Completed Today</li>
+        </ul>
+        <div class="callout-box">
+          <p>Employees always know what's expected. Managers always know progress. No status meetings needed just to find out "where things stand."</p>
+        </div>
+      </div>
+      <div>
+        <div class="full-screen-wrap">
+          <img src="Crm screenshots/emptaskmanagement.png" alt="My Tasks"/>
+        </div>
+        <p class="screen-caption">My Tasks — list view with priority badges, filters, and inline status updates</p>
+        <div style="margin-top:10px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
+          <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:7px;padding:8px;text-align:center">
+            <div style="font-size:16px;margin-bottom:3px">📋</div>
+            <div style="font-size:9px;font-weight:700;color:#111">List View</div>
+            <div style="font-size:9px;color:#666;margin-top:2px">Detailed task info</div>
+          </div>
+          <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:7px;padding:8px;text-align:center">
+            <div style="font-size:16px;margin-bottom:3px">🗂️</div>
+            <div style="font-size:9px;font-weight:700;color:#111">Kanban View</div>
+            <div style="font-size:9px;color:#666;margin-top:2px">Drag &amp; drop stages</div>
+          </div>
+          <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:7px;padding:8px;text-align:center">
+            <div style="font-size:16px;margin-bottom:3px">💬</div>
+            <div style="font-size:9px;font-weight:700;color:#111">Remarks</div>
+            <div style="font-size:9px;color:#666;margin-top:2px">Comment on tasks</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="page-footer">
+    <div class="pf-brand"><span class="pf-name">TAPVERA</span></div>
+    <span class="pf-page">9 / My Tasks</span>
+    <span class="pf-conf">Confidential</span>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════
+     PAGE 10 — MY PROJECTS
+══════════════════════════════════════ -->
+<div class="page sp">
+  <div class="sp-header">
+    <span class="sp-tag">Employee Experience · Step 6</span>
+    <div class="sp-title">My Projects — See the Bigger Picture</div>
+    <div class="sp-subtitle">Every project an employee is assigned to, presented as a rich card with status, client, team, and timeline — so context is never missing.</div>
+  </div>
+  <div class="sp-body">
+    <div class="feat-2col">
+      <div>
+        <p class="feat-label">The Story</p>
+        <p class="feat-p">Context is everything. An employee working on a task needs to understand the project it belongs to — who the client is, who else is on the team, what the deadline is, and how far along the project really is. The My Projects module answers all of those questions without requiring a single meeting.</p>
+        <p class="feat-p">The page opens with three headline numbers: 10 total projects, 4 active, 1 completed. Below, every project appears as a visual card with the project name, client name, status badge (Active, Hold, Completed), tag chips (e.g. "React," "Node," "Google Marketing"), team member avatars, start date, and a "View Details" link that drills into the full project breakdown.</p>
+        <ul class="feat-list">
+          <li>Project card grid showing all assigned projects at once</li>
+          <li>Summary counters: Total, Active, Completed project counts</li>
+          <li>Status badges — Active, On Hold, Completed, in color</li>
+          <li>Technology / service tag chips on each project card</li>
+          <li>Team member avatars showing who's working on what</li>
+          <li>Client name displayed on every card — full context at a glance</li>
+          <li>Start date and deadline visibility</li>
+          <li>Search bar to quickly find projects by name</li>
+          <li>View Details link to open the full project page with tasks, reports, and files</li>
+        </ul>
+        <div class="callout-box">
+          <p>When employees understand the full project — not just their individual tasks — the quality of their work improves. Tapvera gives them that visibility automatically.</p>
+        </div>
+      </div>
+      <div>
+        <div class="full-screen-wrap">
+          <img src="Crm screenshots/empprojectmanage.png" alt="My Projects"/>
+        </div>
+        <p class="screen-caption">My Projects — project cards with client, status, tags, and team</p>
+        <div style="margin-top:10px" class="gradient-accent">
+          <div style="font-size:9px;font-weight:700;color:var(--or);margin-bottom:7px;text-transform:uppercase;letter-spacing:1px">Inside Every Project</div>
+          <div style="display:flex;flex-direction:column;gap:5px">
+            <div style="font-size:10.5px;color:#444">📌 Task list with assignment and deadlines</div>
+            <div style="font-size:10.5px;color:#444">📊 Project reports and velocity metrics</div>
+            <div style="font-size:10.5px;color:#444">💬 Project-specific chat and comments</div>
+            <div style="font-size:10.5px;color:#444">📸 Screenshot tracking and SEO analytics</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="page-footer">
+    <div class="pf-brand"><span class="pf-name">TAPVERA</span></div>
+    <span class="pf-page">10 / My Projects</span>
+    <span class="pf-conf">Confidential</span>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════
+     PAGE 11 — PROJECT COMMUNICATION
+══════════════════════════════════════ -->
+<div class="page sp">
+  <div class="sp-header">
+    <span class="sp-tag">Employee Experience · Step 7</span>
+    <div class="sp-title">Project Communication — Stay in Sync, Across Every Project</div>
+    <div class="sp-subtitle">A communication health dashboard that shows every project's messaging activity, pending responses, and overdue conversations in one view.</div>
+  </div>
+  <div class="sp-body">
+    <div class="feat-2col">
+      <div>
+        <p class="feat-label">The Story</p>
+        <p class="feat-p">In most companies, project communication is scattered — some in email, some in WhatsApp, some in Slack. Important messages get buried. Clients feel ignored. Deadlines are missed not because of effort, but because of miscommunication.</p>
+        <p class="feat-p">Tapvera's Project Communication module centralizes all project-level messaging into one dashboard. At the top, a Communication Health Overview shows if urgent action is required — critical overdue items, clinically overdue messages, and active communication threads. Below that, every project is listed with its last activity date, pending tasks count, and the number of analytics actions outstanding — all filterable by client, status, or type.</p>
+        <ul class="feat-list">
+          <li>Communication Health Overview with Urgent Action, Critically Overdue, and Active counts</li>
+          <li>Total Projects, Rooms Status, To-Dos, Member Count, and Ready Response stats</li>
+          <li>Per-project row: Name, Client, Status, Last Activity, Last Sender, Pending Tasks, Analytics</li>
+          <li>Status badges on each project — Active, Hold, Completed</li>
+          <li>Overdue indicators highlighting projects needing immediate attention</li>
+          <li>Quick filter by All Communication, All Clients, and All Status</li>
+          <li>Click any project to enter its dedicated communication room</li>
+        </ul>
+        <div class="callout-box">
+          <p>Employees never miss a conversation again. Managers can spot communication gaps before they become client complaints. Everyone stays in the loop — automatically.</p>
+        </div>
+      </div>
+      <div>
+        <div class="full-screen-wrap">
+          <img src="Crm screenshots/empprojectcommunication1.png" alt="Project Communication"/>
+        </div>
+        <p class="screen-caption">Project Communication — health overview and per-project message tracking</p>
+        <div style="margin-top:10px;display:grid;grid-template-columns:1fr 1fr;gap:7px">
+          <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:7px;padding:8px 10px">
+            <div style="font-size:9px;font-weight:700;color:var(--or);margin-bottom:2px">HEALTH SCORE</div>
+            <div style="font-size:10.5px;color:#444">Color-coded urgency for every project communication thread</div>
+          </div>
+          <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:7px;padding:8px 10px">
+            <div style="font-size:9px;font-weight:700;color:var(--or);margin-bottom:2px">OVERDUE ALERTS</div>
+            <div style="font-size:10.5px;color:#444">Flags projects where client responses have gone unanswered</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="page-footer">
+    <div class="pf-brand"><span class="pf-name">TAPVERA</span></div>
+    <span class="pf-page">11 / Project Communication</span>
+    <span class="pf-conf">Confidential</span>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════
+     PAGE 12 — LEAVE REQUESTS
+══════════════════════════════════════ -->
+<div class="page sp">
+  <div class="sp-header">
+    <span class="sp-tag">Employee Experience · Step 8</span>
+    <div class="sp-title">Leave Requests — Apply, Track, and Plan with Zero Friction</div>
+    <div class="sp-subtitle">A self-service leave management system that lets employees apply for leaves, view approval status, check balances, and plan time off — no forms, no follow-ups.</div>
+  </div>
+  <div class="sp-body">
+    <div class="feat-2col">
+      <div>
+        <p class="feat-label">The Story</p>
+        <p class="feat-p">Applying for leave used to mean finding the right form, emailing HR, waiting for a reply, and then hoping the calendar was updated. It was a process that frustrated employees and overwhelmed HR teams equally.</p>
+        <p class="feat-p">With Tapvera's Leave module, the entire experience takes under a minute. An employee selects their leave type, picks the dates from a calendar, writes a reason, and submits. That's it. Their request is immediately visible to their manager, who can approve or reject with a click. The employee gets notified instantly.</p>
+        <ul class="feat-list">
+          <li>Multiple leave types: Casual Leave, Sick Leave, Earned Leave, Medical, and more</li>
+          <li>Date range picker for single-day or multi-day leave applications</li>
+          <li>Reason field for providing context to the approving manager</li>
+          <li>Leave balance summary — see how many days remain in each category</li>
+          <li>Status tracking — Pending, Approved, or Rejected with timestamp</li>
+          <li>Team Leave Calendar — view colleagues' approved leaves to plan overlap-free time off</li>
+          <li>Important Notice alerts for leave policy updates from HR</li>
+          <li>Edit option for pending leave requests before approval</li>
+          <li>Recent Leave Requests section showing complete leave history</li>
+        </ul>
+        <div class="callout-box">
+          <p>HR no longer drowns in leave requests. Employees are never left wondering. The system handles it — from application to approval to payroll deduction — seamlessly.</p>
+        </div>
+      </div>
+      <div>
+        <div class="mock">
+          <div class="mock-bar"><div class="mock-dots"><span class="mock-dot r"></span><span class="mock-dot y"></span><span class="mock-dot g"></span></div><div class="mock-url">tapvera.com · Leave Requests</div></div>
+          <div class="mock-body" style="height:200px">
+            <div class="mock-sidebar">
+              <div class="mock-sb-logo"></div>
+              <div class="mock-sb-item">📅</div>
+              <div class="mock-sb-item active">🏖️</div>
+              <div class="mock-sb-item">💰</div>
+              <div class="mock-sb-item">🔔</div>
+            </div>
+            <div class="mock-content">
+              <div style="display:flex;gap:6px">
+                <div class="mc" style="background:rgba(34,197,94,0.12);border-color:rgba(34,197,94,0.3)"><div class="mc-val" style="font-size:12px;color:#4ade80">12</div><div class="mc-lbl">Casual Days Left</div></div>
+                <div class="mc" style="background:rgba(59,130,246,0.12);border-color:rgba(59,130,246,0.3)"><div class="mc-val" style="font-size:12px;color:#60a5fa">6</div><div class="mc-lbl">Sick Days Left</div></div>
+                <div class="mc" style="background:rgba(171,78,225,0.12);border-color:rgba(171,78,225,0.3)"><div class="mc-val" style="font-size:12px;color:#c084fc">8</div><div class="mc-lbl">Earned Leaves</div></div>
+              </div>
+              <div style="background:var(--s1);border:1px solid var(--bd);border-radius:7px;padding:8px">
+                <div style="font-size:8px;font-weight:600;color:var(--m2);margin-bottom:6px;font-family:'Inter',sans-serif">RECENT LEAVE REQUESTS</div>
+                <div class="leave-row"><span class="leave-type">Casual Leave</span><span class="leave-dates">15 Mar – 16 Mar 2026</span><span class="leave-days">2d</span><span class="mb mb-g">Approved</span></div>
+                <div class="leave-row"><span class="leave-type">Sick Leave</span><span class="leave-dates">22 Feb 2026</span><span class="leave-days">1d</span><span class="mb mb-o">Pending</span></div>
+                <div class="leave-row"><span class="leave-type">Medical Leave</span><span class="leave-dates">10 Jan – 12 Jan 2026</span><span class="leave-days">3d</span><span class="mb mb-g">Approved</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div style="margin-top:10px" class="gradient-accent">
+          <div style="font-size:9px;font-weight:700;color:var(--or);margin-bottom:6px;text-transform:uppercase;letter-spacing:1px">Approver Benefits</div>
+          <ul class="feat-list" style="gap:4px">
+            <li>See all pending leave requests in one queue</li>
+            <li>View team calendar to spot coverage gaps before approving</li>
+            <li>One-click approve or reject with optional comments</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="page-footer">
+    <div class="pf-brand"><span class="pf-name">TAPVERA</span></div>
+    <span class="pf-page">12 / Leave Requests</span>
+    <span class="pf-conf">Confidential</span>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════
+     PAGE 13 — MY PAYSLIPS
+══════════════════════════════════════ -->
+<div class="page sp">
+  <div class="sp-header">
+    <span class="sp-tag">Employee Experience · Step 9</span>
+    <div class="sp-title">My Payslips — Financial Clarity, Every Month</div>
+    <div class="sp-subtitle">Employees access a complete history of all payslips — month by month — with gross salary, deductions, working days, and net pay — all downloadable anytime.</div>
+  </div>
+  <div class="sp-body">
+    <div class="feat-2col">
+      <div>
+        <p class="feat-label">The Story</p>
+        <p class="feat-p">Employees deserve transparency about their compensation. No more emailing HR for a payslip copy. No more uncertainty about deductions. With the My Payslips module, every team member has instant access to their full salary history — going back as far as they've been with the organization.</p>
+        <p class="feat-p">Each payslip card shows the month and year, gross salary, deductions, working days, leaves taken, and the final net payment. The "View Details" button opens a complete itemized breakdown, and payslips can be downloaded for records, loan applications, or personal accounting. A year filter lets employees navigate to any previous period instantly.</p>
+        <ul class="feat-list">
+          <li>Monthly payslip cards showing Gross Salary, Deductions, and Net Payment</li>
+          <li>Working Days and Leaves Taken for each pay period</li>
+          <li>Year filter to jump across historical payslip records</li>
+          <li>View Details — full itemized breakdown of earnings and deductions</li>
+          <li>Download payslip as a formatted PDF for personal use</li>
+          <li>Salary components visible: Base Pay, HRA, Allowances, PF, TDS, etc.</li>
+          <li>Status indicator — Processed or Pending for each month</li>
+          <li>Automatic refresh when HR generates new payslips</li>
+        </ul>
+        <div class="callout-box">
+          <p>Financial transparency builds trust. When employees can always see exactly what they've earned and why, it eliminates salary disputes and boosts confidence in the organization.</p>
+        </div>
+      </div>
+      <div>
+        <div class="full-screen-wrap">
+          <img src="Crm screenshots/emppayslip.png" alt="My Payslips"/>
+        </div>
+        <p class="screen-caption">My Payslips — 7 months of salary history with gross, deductions, and net pay</p>
+        <div style="margin-top:10px;display:flex;flex-direction:column;gap:6px">
+          <div class="payslip-card">
+            <div class="payslip-header">
+              <div><div class="payslip-month">December 2025</div><div style="font-size:7.5px;color:var(--gr);font-family:'Inter',sans-serif;">● Processed</div></div>
+              <div class="payslip-amount">₹41,244</div>
+            </div>
+            <div class="payslip-body">
+              <div class="payslip-row"><span class="label">Gross Salary</span><span class="val">₹45,000</span></div>
+              <div class="payslip-row"><span class="label">Deductions</span><span class="val" style="color:var(--rd)">-₹3,756</span></div>
+              <div class="payslip-row"><span class="label">Working Days / Leaves</span><span class="val">22 / 1</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="page-footer">
+    <div class="pf-brand"><span class="pf-name">TAPVERA</span></div>
+    <span class="pf-page">13 / My Payslips</span>
+    <span class="pf-conf">Confidential</span>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════
+     PAGE 14 — TODO
+══════════════════════════════════════ -->
+<div class="page sp">
+  <div class="sp-header">
+    <span class="sp-tag">Employee Experience · Step 10</span>
+    <div class="sp-title">Todo — Your Personal Task List, Always Organized</div>
+    <div class="sp-subtitle">A lightweight personal task manager built for individual productivity — separate from assigned project tasks, this is the employee's own space to plan and prioritize.</div>
+  </div>
+  <div class="sp-body">
+    <div class="feat-2col">
+      <div>
+        <p class="feat-label">The Story</p>
+        <p class="feat-p">Not everything at work fits neatly into a project task. Sometimes you need to remind yourself to follow up on an email, prepare for a meeting, or complete a small administrative task. The Todo module gives every employee a private, clean, personal task list that lives outside the project management system.</p>
+        <p class="feat-p">It's elegantly simple: tasks are organized into Today's Tasks, Upcoming Tasks, and Completed Tasks — with a live progress bar at the top showing overall completion. Each task carries a priority label (High, Medium, Low), a due date and time, and a checkbox to mark it done. The system timestamps every completed task automatically.</p>
+        <ul class="feat-list">
+          <li>Overall Completion progress bar with today/upcoming/completed counts</li>
+          <li>Today's Tasks section — tasks due on the current date</li>
+          <li>Upcoming Tasks — future tasks visible in advance to plan ahead</li>
+          <li>Completed Tasks — full history with completion timestamp</li>
+          <li>Priority tags: High (red), Medium (orange), Low (green)</li>
+          <li>Create new tasks with a title, due date, time, and priority</li>
+          <li>Edit and delete tasks at any time</li>
+          <li>Filter tasks to view by priority or completion status</li>
+          <li>Private — only visible to the individual employee</li>
+        </ul>
+        <div class="callout-box">
+          <p>The Todo module respects the way humans actually think and work. Some tasks need a ticket — others just need a reminder. Tapvera handles both.</p>
+        </div>
+      </div>
+      <div>
+        <div class="full-screen-wrap">
+          <img src="Crm screenshots/emptodo.png" alt="Todo"/>
+        </div>
+        <p class="screen-caption">Todo — personal tasks organized by today, upcoming, and completed</p>
+        <div style="margin-top:10px" class="gradient-accent">
+          <div style="font-size:9px;font-weight:700;color:var(--or);margin-bottom:6px;text-transform:uppercase;letter-spacing:1px">How It Differs from My Tasks</div>
+          <div style="display:flex;flex-direction:column;gap:5px">
+            <div style="font-size:10.5px;color:#444"><strong>My Tasks</strong> — assigned by managers, tied to projects, tracked by the whole team</div>
+            <div style="font-size:10.5px;color:#444"><strong>Todo</strong> — personal reminders, private, self-created, for individual day planning</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="page-footer">
+    <div class="pf-brand"><span class="pf-name">TAPVERA</span></div>
+    <span class="pf-page">14 / Todo</span>
+    <span class="pf-conf">Confidential</span>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════
+     PAGE 15 — MESSAGES
+══════════════════════════════════════ -->
+<div class="page sp">
+  <div class="sp-header">
+    <span class="sp-tag">Employee Experience · Step 11</span>
+    <div class="sp-title">Messages — Team Communication Built Right Into Work</div>
+    <div class="sp-subtitle">A full-featured messaging system for one-on-one and group conversations — so your team never needs a separate chat app for internal communication.</div>
+  </div>
+  <div class="sp-body">
+    <div class="feat-2col">
+      <div>
+        <p class="feat-label">The Story</p>
+        <p class="feat-p">When work conversations live in WhatsApp, important context gets lost. Work decisions get mixed with personal chats. Sensitive business information ends up on personal phones. Tapvera's Messages module brings all internal communication into the workplace — where it belongs.</p>
+        <p class="feat-p">Every employee has access to the Messages module from their sidebar. They can start a direct message with any colleague, create group chats for teams or projects, and manage group settings. Messages load instantly, are organized chronologically, and come with online presence indicators so employees know when a teammate is available to respond.</p>
+        <ul class="feat-list">
+          <li>Direct messaging between any two employees in the organization</li>
+          <li>Group chats — create project teams, department groups, or custom groups</li>
+          <li>Create Group and Manage Group modals for full group administration</li>
+          <li>Online / Offline presence status for every contact</li>
+          <li>Real-time message delivery with no page refresh required</li>
+          <li>Search through conversation history to find past discussions</li>
+          <li>Notifications badge on the sidebar icon for unread messages</li>
+          <li>Fully contained within the CRM — no external apps needed</li>
+          <li>Message history preserved for organizational record-keeping</li>
+        </ul>
+        <div class="callout-box">
+          <p>Internal communication stays internal. Context stays with the work. Teams collaborate faster when chat and tasks live in the same place.</p>
+        </div>
+      </div>
+      <div>
+        <div class="mock">
+          <div class="mock-bar"><div class="mock-dots"><span class="mock-dot r"></span><span class="mock-dot y"></span><span class="mock-dot g"></span></div><div class="mock-url">tapvera.com · Messages</div></div>
+          <div class="chat-mock" style="height:195px">
+            <div class="chat-sidebar">
+              <div class="chat-s-head">CHATS</div>
+              <div class="chat-item active"><div class="av" style="background:rgba(255,153,0,0.2);color:var(--or)">AJ</div><span class="chat-item-name">Anish J.</span></div>
+              <div class="chat-item"><div class="av" style="background:rgba(59,130,246,0.2);color:#60a5fa">SK</div><span class="chat-item-name">Sahil K.</span></div>
+              <div class="chat-item"><div class="av" style="background:rgba(34,197,94,0.2);color:#4ade80">RD</div><span class="chat-item-name">Rajesh D.</span></div>
+              <div class="chat-item"><div class="av" style="background:rgba(171,78,225,0.2);color:#c084fc">PM</div><span class="chat-item-name">Priya M.</span></div>
+              <div style="margin-top:8px;border-top:1px solid var(--bd);padding-top:6px">
+                <div class="chat-s-head">GROUPS</div>
+                <div class="chat-item"><div class="av" style="background:rgba(245,158,11,0.2);color:#fbbf24">🏢</div><span class="chat-item-name">Dev Team</span></div>
+                <div class="chat-item"><div class="av" style="background:rgba(239,68,68,0.2);color:#f87171">🎯</div><span class="chat-item-name">Sales</span></div>
+              </div>
+            </div>
+            <div class="chat-main">
+              <div class="chat-top"><div class="av" style="background:rgba(255,153,0,0.2);color:var(--or);width:24px;height:24px;font-size:8px">AJ</div><div><div class="chat-top-name">Anish Jaiswal</div><div class="chat-top-sub">● Online</div></div></div>
+              <div class="chat-messages">
+                <div class="msg them"><div class="msg-text">Hey, the new project assets are ready for review.</div><div class="msg-time">10:22 AM</div></div>
+                <div class="msg me"><div class="msg-text">Great! I'll check them after the standup.</div><div class="msg-time">10:24 AM</div></div>
+                <div class="msg them"><div class="msg-text">Also can you share the report link?</div><div class="msg-time">10:25 AM</div></div>
+                <div class="msg me"><div class="msg-text">Sending now — it's in the Shared Sheets module.</div><div class="msg-time">10:26 AM</div></div>
+              </div>
+              <div class="chat-input"><div class="chat-input-box">Type a message...</div><div style="width:22px;height:22px;background:var(--or);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;flex-shrink:0">➤</div></div>
+            </div>
+          </div>
+        </div>
+        <div style="margin-top:10px;display:grid;grid-template-columns:1fr 1fr;gap:7px">
+          <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:7px;padding:8px 10px">
+            <div style="font-size:9px;font-weight:700;color:var(--or);margin-bottom:2px">DIRECT MESSAGES</div>
+            <div style="font-size:10.5px;color:#444">One-on-one with any colleague in the org</div>
+          </div>
+          <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:7px;padding:8px 10px">
+            <div style="font-size:9px;font-weight:700;color:var(--or);margin-bottom:2px">GROUP CHATS</div>
+            <div style="font-size:10.5px;color:#444">Create and manage teams, departments, projects</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="page-footer">
+    <div class="pf-brand"><span class="pf-name">TAPVERA</span></div>
+    <span class="pf-page">15 / Messages</span>
+    <span class="pf-conf">Confidential</span>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════
+     PAGE 16 — NOTIFICATION CENTER
+══════════════════════════════════════ -->
+<div class="page sp">
+  <div class="sp-header">
+    <span class="sp-tag">Employee Experience · Step 12</span>
+    <div class="sp-title">Notification Center — Always in the Loop, Never Overwhelmed</div>
+    <div class="sp-subtitle">A centralized notification hub that collects every alert — task assignments, messages, project updates, and system notifications — in one searchable, manageable list.</div>
+  </div>
+  <div class="sp-body">
+    <div class="feat-2col">
+      <div>
+        <p class="feat-label">The Story</p>
+        <p class="feat-p">Important updates get lost. Employees miss task assignments because the notification was buried in an email. Managers wonder why nothing was acted on. The Tapvera Notification Center solves this by creating a single, persistent record of every important event — visible anytime, searchable, and fully manageable.</p>
+        <p class="feat-p">Every action in the system that requires an employee's attention generates a notification: a new task assigned, a message received, a project update posted, a leave approved or rejected, a payslip generated. The center shows all 16+ unread notifications, timestamped and categorized with context tags (chat, task, project). Employees can search, bulk select, mark all as read, or delete read notifications.</p>
+        <ul class="feat-list">
+          <li>Centralized feed of all system notifications in one place</li>
+          <li>Unread badge count on the sidebar icon — always visible</li>
+          <li>Search bar to find specific notifications by keyword</li>
+          <li>Category tags on each notification (chat, task, leave, project)</li>
+          <li>Timestamp for every notification — exact date and time</li>
+          <li>Bulk Select — select multiple notifications at once</li>
+          <li>Mark All Read — clear the unread count with one click</li>
+          <li>Delete Read — clean up the center by removing seen notifications</li>
+          <li>Real-time pop-up alerts on the dashboard for instant awareness</li>
+        </ul>
+        <div class="callout-box">
+          <p>With 16 unread notifications visible and searchable, employees are never left wondering what they missed. Everything is timestamped, tagged, and tracked.</p>
+        </div>
+      </div>
+      <div>
+        <div class="full-screen-wrap">
+          <img src="Crm screenshots/empnotificationcenter.png" alt="Notification Center"/>
+        </div>
+        <p class="screen-caption">Notification Center — 16 unread notifications, searchable and bulk-manageable</p>
+        <div style="margin-top:10px" class="gradient-accent">
+          <div style="font-size:9px;font-weight:700;color:var(--or);margin-bottom:6px;text-transform:uppercase;letter-spacing:1px">Types of Notifications</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px">
+            <div style="font-size:10px;color:#444">📌 New task assigned</div>
+            <div style="font-size:10px;color:#444">💬 New message received</div>
+            <div style="font-size:10px;color:#444">✅ Leave approved/rejected</div>
+            <div style="font-size:10px;color:#444">📊 Project updates</div>
+            <div style="font-size:10px;color:#444">💰 Payslip generated</div>
+            <div style="font-size:10px;color:#444">📅 Attendance alerts</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="page-footer">
+    <div class="pf-brand"><span class="pf-name">TAPVERA</span></div>
+    <span class="pf-page">16 / Notification Center</span>
+    <span class="pf-conf">Confidential</span>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════
+     PAGE 17 — MY NOTEPAD
+══════════════════════════════════════ -->
+<div class="page sp">
+  <div class="sp-header">
+    <span class="sp-tag">Employee Experience · Step 13</span>
+    <div class="sp-title">My Notepad — Think Privately. Write Freely.</div>
+    <div class="sp-subtitle">A personal, private digital notepad built into the CRM — auto-saving, searchable, version-tracked, and completely invisible to anyone else.</div>
+  </div>
+  <div class="sp-body">
+    <div class="feat-2col">
+      <div>
+        <p class="feat-label">The Story</p>
+        <p class="feat-p">Every professional has notes they need to keep — ideas, meeting summaries, personal goals, things to remember, rough drafts. Most people scatter these across sticky notes, WhatsApp "Saved Messages," phone notes apps, and scrap paper. Then they can't find them when they need them.</p>
+        <p class="feat-p">Tapvera's Notepad is built into the workplace itself, available with a single click from the sidebar. It auto-saves every 2 seconds after you stop typing — no manual save required. It tracks character count, word count, and lines. It lets you search within your notes with Ctrl+F. It keeps a version history of the last 5 saved states. And most importantly: it's completely private — only the individual employee can ever see it.</p>
+        <ul class="feat-list">
+          <li>Private notepad — invisible to all other users including admins</li>
+          <li>Auto-saves 2 seconds after every keystroke — zero data loss</li>
+          <li>Manual save with Ctrl+S (Cmd+S on Mac)</li>
+          <li>Real-time character count, word count, and line count</li>
+          <li>50,000 character capacity — enough for pages of notes</li>
+          <li>In-note search with Ctrl+F</li>
+          <li>Version History — view last 5 saved states and restore any version</li>
+          <li>Download notepad content as a .txt file for offline use</li>
+          <li>Clear button with confirmation — to wipe and start fresh</li>
+          <li>Last saved timestamp always visible at the bottom</li>
+        </ul>
+        <div class="callout-box">
+          <p>The Notepad brings the last piece of every employee's workflow into Tapvera — their private thinking space. Now everything is in one platform.</p>
+        </div>
+      </div>
+      <div>
+        <div class="full-screen-wrap">
+          <img src="Crm screenshots/empnotepad.png" alt="My Notepad"/>
+        </div>
+        <p class="screen-caption">My Notepad — auto-saving, version history, character tracking, fully private</p>
+        <div style="margin-top:10px" class="gradient-accent">
+          <div style="font-size:9px;font-weight:700;color:var(--or);margin-bottom:6px;text-transform:uppercase;letter-spacing:1px">Keyboard Shortcuts</div>
+          <div style="display:flex;flex-direction:column;gap:4px">
+            <div style="display:flex;justify-content:space-between;font-size:10px"><code style="background:#f3f4f6;padding:1px 5px;border-radius:3px;font-size:9px">Ctrl+S</code><span style="color:#444">Save manually</span></div>
+            <div style="display:flex;justify-content:space-between;font-size:10px"><code style="background:#f3f4f6;padding:1px 5px;border-radius:3px;font-size:9px">Ctrl+F</code><span style="color:#444">Search within notes</span></div>
+            <div style="display:flex;justify-content:space-between;font-size:10px"><code style="background:#f3f4f6;padding:1px 5px;border-radius:3px;font-size:9px">History Icon</code><span style="color:#444">View last 5 versions</span></div>
+            <div style="display:flex;justify-content:space-between;font-size:10px"><code style="background:#f3f4f6;padding:1px 5px;border-radius:3px;font-size:9px">Download</code><span style="color:#444">Export as .txt file</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="page-footer">
+    <div class="pf-brand"><span class="pf-name">TAPVERA</span></div>
+    <span class="pf-page">17 / My Notepad</span>
+    <span class="pf-conf">Confidential</span>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════
+     PAGE 18 — ACHIEVEMENTS
+══════════════════════════════════════ -->
+<div class="page sp">
+  <div class="sp-header">
+    <span class="sp-tag">Employee Experience · Step 14</span>
+    <div class="sp-title">Achievements — Work Gets Recognized. Progress Gets Rewarded.</div>
+    <div class="sp-subtitle">A gamification system that turns everyday work into a leveling journey — with points, streaks, badges, and milestones that make productivity feel like progress.</div>
+  </div>
+  <div class="sp-body">
+    <div class="feat-2col">
+      <div>
+        <p class="feat-label">The Story</p>
+        <p class="feat-p">The most underrated driver of employee performance is recognition. Not just a "good job" from a manager — but a visible, measurable record of how far someone has come, built into the tools they use every day. Tapvera's Achievements module does exactly this through gamification.</p>
+        <p class="feat-p">Every employee has a level, a point total, and a set of achievements to unlock. Points are earned through meaningful work activity: completing high-priority tasks, maintaining a perfect attendance streak, adding detailed task comments, using custom filters, and more. The system shows earned achievements, the 12 available ones not yet unlocked, and a Stats tab with real-time metrics on tasks completed, current streak, best streak, and overall completion percentage.</p>
+        <ul class="feat-list">
+          <li>Level system — starts at Level 1, progresses through point accumulation</li>
+          <li>Points earned for task completion, attendance streaks, high-priority tasks</li>
+          <li>Three tabs: Earned, Available (12 achievements to unlock), and Stats</li>
+          <li>Stats Panel: Tasks Completed, High Priority count, Current Streak, Best Streak</li>
+          <li>Achievement Progress: Unlocked count, Remaining, Completion percentage</li>
+          <li>Recent Activity tracking: Comments Added, Perfect Streak, Custom Filters used</li>
+          <li>Visual level progress bar toward the next milestone (0/100 points to Level 2)</li>
+          <li>Motivation-first design — employees see what they've earned and what's next</li>
+        </ul>
+        <div class="callout-box">
+          <p>When employees see their streak, their level, and their badges — they show up differently. Achievements turn abstract performance into something visible, personal, and motivating.</p>
+        </div>
+      </div>
+      <div>
+        <div class="full-screen-wrap">
+          <img src="Crm screenshots/empachievement.png" alt="Achievements"/>
+        </div>
+        <p class="screen-caption">Achievements — level system, stats panel, and 12 available badges to unlock</p>
+        <div style="margin-top:10px" class="gradient-accent">
+          <div style="font-size:9px;font-weight:700;color:var(--or);margin-bottom:7px;text-transform:uppercase;letter-spacing:1px">Ways to Earn Points</div>
+          <div style="display:flex;flex-direction:column;gap:4px">
+            <div style="display:flex;align-items:center;gap:7px;font-size:10.5px;color:#444"><span>🏆</span> Complete high-priority tasks</div>
+            <div style="display:flex;align-items:center;gap:7px;font-size:10.5px;color:#444"><span>🔥</span> Maintain a perfect attendance streak</div>
+            <div style="display:flex;align-items:center;gap:7px;font-size:10.5px;color:#444"><span>💬</span> Add detailed comments on tasks</div>
+            <div style="display:flex;align-items:center;gap:7px;font-size:10.5px;color:#444"><span>⚡</span> Use advanced filters and features</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="page-footer">
+    <div class="pf-brand"><span class="pf-name">TAPVERA</span></div>
+    <span class="pf-page">18 / Achievements</span>
+    <span class="pf-conf">Confidential</span>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════
+     PAGE 19 — PROFILE & DAILY UPDATES
+══════════════════════════════════════ -->
+<div class="page sp">
+  <div class="sp-header">
+    <span class="sp-tag">Employee Experience · Step 15</span>
+    <div class="sp-title">Profile &amp; Daily Updates — Own Your Identity at Work</div>
+    <div class="sp-subtitle">Every employee has a full profile and a one-click Daily Updates sender — keeping personal records accurate and managers informed without extra effort.</div>
+  </div>
+  <div class="sp-body">
+    <div class="feat-2col" style="align-items:start;gap:28px">
+      <div>
+        <p class="feat-label">My Profile</p>
+        <p class="feat-p">The employee profile is more than a name and photo. It's the employee's official record within Tapvera — containing personal details, contact information, job role, department, joining date, bank account details for payroll, emergency contacts, and document uploads. Employees can update their own profile information at any time, keeping records current without going through HR for every minor change.</p>
+        <ul class="feat-list" style="margin-bottom:14px">
+          <li>Personal information: Name, photo, DOB, contact number, email</li>
+          <li>Professional details: Role, department, reporting manager, joining date</li>
+          <li>Bank account details for accurate payroll processing</li>
+          <li>Emergency contact information</li>
+          <li>Document upload section for ID proofs, certificates</li>
+          <li>Self-editable — employees keep their own records up to date</li>
+        </ul>
+        <div class="s-div"></div>
+        <p class="feat-label">Send Daily Updates</p>
+        <p class="feat-p">The "Send Daily Updates" button — visible at the bottom of every sidebar — is one of Tapvera's most beloved features. With a single click, employees can send a structured end-of-day update to their manager, summarizing what they accomplished. No lengthy email. No separate tool. Just one click, and the team is informed.</p>
+        <ul class="feat-list">
+          <li>One-click daily update submission from the sidebar</li>
+          <li>Structured format keeping updates consistent across the team</li>
+          <li>Sent directly to the relevant manager or team lead</li>
+          <li>Builds a culture of proactive communication and accountability</li>
+          <li>Available from any page — always one click away</li>
+        </ul>
+      </div>
+      <div>
+        <div class="mock" style="margin-bottom:14px">
+          <div class="mock-bar"><div class="mock-dots"><span class="mock-dot r"></span><span class="mock-dot y"></span><span class="mock-dot g"></span></div><div class="mock-url">tapvera.com · My Profile</div></div>
+          <div style="background:var(--bg);padding:12px">
+            <div style="display:flex;gap:12px;align-items:center;margin-bottom:10px">
+              <div style="width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg,var(--or),var(--dark));display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:800;color:#000">AD</div>
+              <div>
+                <div style="font-size:11px;font-weight:700;color:var(--txt);font-family:'Inter',sans-serif">Archisman Dutta</div>
+                <div style="font-size:8px;color:var(--or);font-family:'Inter',sans-serif">Frontend Developer</div>
+                <div style="font-size:8px;color:var(--m3);font-family:'Inter',sans-serif">Joined: March 12, 2024</div>
+              </div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px">
+              <div style="background:var(--s1);border:1px solid var(--bd);border-radius:5px;padding:6px">
+                <div style="font-size:6.5px;color:var(--m3);font-family:'Inter',sans-serif;margin-bottom:2px">DEPARTMENT</div>
+                <div style="font-size:8px;color:var(--txt);font-family:'Inter',sans-serif;font-weight:600">Engineering</div>
+              </div>
+              <div style="background:var(--s1);border:1px solid var(--bd);border-radius:5px;padding:6px">
+                <div style="font-size:6.5px;color:var(--m3);font-family:'Inter',sans-serif;margin-bottom:2px">REPORTING TO</div>
+                <div style="font-size:8px;color:var(--txt);font-family:'Inter',sans-serif;font-weight:600">Anish Jaiswal</div>
+              </div>
+              <div style="background:var(--s1);border:1px solid var(--bd);border-radius:5px;padding:6px">
+                <div style="font-size:6.5px;color:var(--m3);font-family:'Inter',sans-serif;margin-bottom:2px">CONTACT</div>
+                <div style="font-size:8px;color:var(--txt);font-family:'Inter',sans-serif;font-weight:600">+91 98765 43210</div>
+              </div>
+              <div style="background:var(--s1);border:1px solid var(--bd);border-radius:5px;padding:6px">
+                <div style="font-size:6.5px;color:var(--m3);font-family:'Inter',sans-serif;margin-bottom:2px">STATUS</div>
+                <div style="font-size:8px;color:var(--gr);font-family:'Inter',sans-serif;font-weight:600">● Active</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="callout-box">
+          <p>The Employee Profile doubles as the organization's living HR database — always current, always accurate, because the employees themselves maintain it.</p>
+        </div>
+        <div style="margin-top:10px;background:linear-gradient(135deg,rgba(255,153,0,0.15),rgba(255,153,0,0.05));border:1px solid rgba(255,153,0,0.3);border-radius:8px;padding:12px;text-align:center">
+          <div style="font-size:22px;margin-bottom:5px">📤</div>
+          <div style="font-size:12px;font-weight:700;color:var(--or);margin-bottom:4px">Send Daily Updates</div>
+          <div style="font-size:10.5px;color:#555">One click. Manager notified. Team aligned.<br/>Available from every page, every time.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="page-footer">
+    <div class="pf-brand"><span class="pf-name">TAPVERA</span></div>
+    <span class="pf-page">19 / Profile &amp; Daily Updates</span>
+    <span class="pf-conf">Confidential</span>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════
+     PAGE 20 — ADMIN SECTION DIVIDER
+══════════════════════════════════════ -->
+<div class="page sec-div">
+  <div class="cover-glow"></div>
+  <div class="cover-grid"></div>
+  <div class="sec-div-inner">
+    <div class="sec-badge"><span class="cbadge-dot"></span> Part Two</div>
+    <div class="sec-title">The Admin &amp;<br/>Management Suite</div>
+    <p class="sec-desc">Built for the people who make the decisions — HR managers, business owners, sales leads, and operations teams who need the full picture to run things right.</p>
+    <div class="sec-chapters">
+      <div class="sec-ch"><span class="sec-ch-n">1</span> HR Dashboard — Workforce at a Glance</div>
+      <div class="sec-ch"><span class="sec-ch-n">2</span> Employee &amp; Attendance Management</div>
+      <div class="sec-ch"><span class="sec-ch-n">3</span> Payroll, Leaves &amp; Shift Controls</div>
+      <div class="sec-ch"><span class="sec-ch-n">4</span> Lead Pipeline &amp; Client Management</div>
+      <div class="sec-ch"><span class="sec-ch-n">5</span> Project Delivery &amp; SEO Analytics</div>
+      <div class="sec-ch"><span class="sec-ch-n">6</span> Call Intelligence &amp; Communications</div>
+    </div>
+  </div>
+  <div class="cover-footer">
+    <span>Tapvera CRM</span>
+    <span>Admin Suite — Pages 21 to 33</span>
+    <span>tapvera.com</span>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════
+     PAGE 21 — HR DASHBOARD
+══════════════════════════════════════ -->
+<div class="page sp">
+  <div class="sp-header">
+    <span class="sp-tag">Admin Suite · Module 1</span>
+    <div class="sp-title">HR Dashboard — Your Entire Workforce, One Screen</div>
+    <div class="sp-subtitle">The admin's command center — a living, breathing overview of team health, active leaves, upcoming birthdays, anniversaries, and workforce statistics in real time.</div>
+  </div>
+  <div class="sp-body">
+    <div class="feat-2col">
+      <div>
+        <p class="feat-label">The Story</p>
+        <p class="feat-p">For an HR manager or business owner, starting the day means answering a dozen questions: Who's on leave today? Whose birthday is it this week? Are there any flexible shift requests pending? What's the overall attendance rate? Getting answers to these questions used to require checking multiple systems or calling people.</p>
+        <p class="feat-p">The HR Dashboard answers all of them in a single screen. Stat cards at the top show total employees, on-leave count, pending requests, and attendance metrics. Scrolling down reveals Upcoming Birthdays, Work Anniversaries, Recent Activities, Active Leaves, and Flexible Shift Requests — all live and actionable.</p>
+        <ul class="feat-list">
+          <li>Stat Cards: Total Employees, On Leave Today, Pending Requests, Attendance Rate</li>
+          <li>Upcoming Birthdays — with wishing capability built in (send message or celebrate button)</li>
+          <li>Work Anniversaries — recognize milestones automatically</li>
+          <li>Active Leaves — modal showing all currently active leave requests</li>
+          <li>Flexible Shift Requests — approve or reject employee shift change requests</li>
+          <li>Recent Activities — live feed of team actions (task completed, leave applied, punched in)</li>
+          <li>Celebration popup system for birthdays and anniversaries</li>
+          <li>Quick navigation to Employee Management, Attendance, Payroll from one place</li>
+        </ul>
+        <div class="callout-box">
+          <p>The HR Dashboard turns reactive management into proactive leadership. Managers know what's happening before employees even need to ask.</p>
+        </div>
+      </div>
+      <div>
+        <div class="mock">
+          <div class="mock-bar"><div class="mock-dots"><span class="mock-dot r"></span><span class="mock-dot y"></span><span class="mock-dot g"></span></div><div class="mock-url">tapvera.com · HR Dashboard</div></div>
+          <div class="mock-body" style="height:215px">
+            <div class="mock-sidebar">
+              <div class="mock-sb-logo"></div>
+              <div class="mock-sb-item active">🏠</div>
+              <div class="mock-sb-item">👥</div>
+              <div class="mock-sb-item">📅</div>
+              <div class="mock-sb-item">💰</div>
+              <div class="mock-sb-item">🎯</div>
+            </div>
+            <div class="mock-content">
+              <div class="mc-row">
+                <div class="mc"><div class="mc-val">48</div><div class="mc-lbl">Total Employees</div><div class="mc-chg up">+3 this month</div></div>
+                <div class="mc"><div class="mc-val" style="color:var(--am)">6</div><div class="mc-lbl">On Leave Today</div></div>
+                <div class="mc"><div class="mc-val" style="color:var(--rd)">4</div><div class="mc-lbl">Pending Requests</div></div>
+                <div class="mc"><div class="mc-val" style="color:var(--gr)">91%</div><div class="mc-lbl">Attendance Rate</div></div>
+              </div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;flex:1">
+                <div style="background:var(--s1);border:1px solid var(--bd);border-radius:7px;padding:8px">
+                  <div class="chart-title">🎂 Upcoming Birthdays</div>
+                  <div style="display:flex;flex-direction:column;gap:4px">
+                    <div style="display:flex;align-items:center;gap:5px"><div class="av" style="background:rgba(255,153,0,0.2);color:var(--or);width:18px;height:18px;font-size:6px">SK</div><div style="font-size:7.5px;color:var(--txt);font-family:'Inter',sans-serif">Sahil K. — Apr 5</div></div>
+                    <div style="display:flex;align-items:center;gap:5px"><div class="av" style="background:rgba(59,130,246,0.2);color:#60a5fa;width:18px;height:18px;font-size:6px">PM</div><div style="font-size:7.5px;color:var(--txt);font-family:'Inter',sans-serif">Priya M. — Apr 9</div></div>
+                    <div style="display:flex;align-items:center;gap:5px"><div class="av" style="background:rgba(34,197,94,0.2);color:#4ade80;width:18px;height:18px;font-size:6px">RD</div><div style="font-size:7.5px;color:var(--txt);font-family:'Inter',sans-serif">Rajesh D. — Apr 14</div></div>
+                  </div>
+                </div>
+                <div style="background:var(--s1);border:1px solid var(--bd);border-radius:7px;padding:8px">
+                  <div class="chart-title">🏅 Work Anniversaries</div>
+                  <div style="display:flex;flex-direction:column;gap:4px">
+                    <div style="font-size:7.5px;color:var(--txt);font-family:'Inter',sans-serif">Anish J. — 3 Years (Apr 2)</div>
+                    <div style="font-size:7.5px;color:var(--txt);font-family:'Inter',sans-serif">Meera S. — 1 Year (Apr 11)</div>
+                    <div style="font-size:7.5px;color:var(--txt);font-family:'Inter',sans-serif">Dev P. — 5 Years (Apr 18)</div>
+                  </div>
+                </div>
+                <div style="background:var(--s1);border:1px solid var(--bd);border-radius:7px;padding:8px">
+                  <div class="chart-title">📋 Active Leaves</div>
+                  <div style="display:flex;flex-direction:column;gap:3px">
+                    <div style="font-size:7.5px;color:var(--txt);font-family:'Inter',sans-serif">Kiran B. — Sick (Apr 2–3)</div>
+                    <div style="font-size:7.5px;color:var(--txt);font-family:'Inter',sans-serif">Tina R. — Casual (Apr 2)</div>
+                  </div>
+                </div>
+                <div style="background:var(--s1);border:1px solid var(--bd);border-radius:7px;padding:8px">
+                  <div class="chart-title">⚡ Recent Activity</div>
+                  <div style="display:flex;flex-direction:column;gap:3px">
+                    <div style="font-size:7px;color:var(--m2);font-family:'Inter',sans-serif">Archisman punched in — 9:04 AM</div>
+                    <div style="font-size:7px;color:var(--m2);font-family:'Inter',sans-serif">Sahil completed Task #23</div>
+                    <div style="font-size:7px;color:var(--m2);font-family:'Inter',sans-serif">Priya applied Casual Leave</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="page-footer">
+    <div class="pf-brand"><span class="pf-name">TAPVERA</span></div>
+    <span class="pf-page">21 / HR Dashboard</span>
+    <span class="pf-conf">Confidential</span>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════
+     PAGE 22 — EMPLOYEE MANAGEMENT
+══════════════════════════════════════ -->
+<div class="page sp">
+  <div class="sp-header">
+    <span class="sp-tag">Admin Suite · Module 2</span>
+    <div class="sp-title">Employee Management — The Complete People Directory</div>
+    <div class="sp-subtitle">Add, view, update, and manage every employee in the organization from a centralized panel — with full profile data, role assignment, and access control.</div>
+  </div>
+  <div class="sp-body">
+    <div class="feat-2col">
+      <div>
+        <p class="feat-label">The Story</p>
+        <p class="feat-p">Every growing organization needs a single source of truth for its people. Employee Management in Tapvera is that source. When a new hire joins, their profile is created here — and from that moment, their attendance, tasks, payslips, leaves, and performance are all linked to this one record.</p>
+        <p class="feat-p">The Employee Directory lists every team member with their photo, name, role, department, contact, and status. Admins can search by name, filter by department or role, activate or deactivate accounts, reset passwords, assign roles, and access full employee profiles — all from one unified screen. The Directory and the Management panels work together for complete workforce control.</p>
+        <ul class="feat-list">
+          <li>Add new employees with full profile creation — personal, professional, and bank details</li>
+          <li>Role assignment — Employee, Admin, HR, Sales, or custom roles</li>
+          <li>Department &amp; position management with Position Management module</li>
+          <li>Search and filter employees by name, role, or department</li>
+          <li>Activate or deactivate employee accounts with one toggle</li>
+          <li>Transfer Management — handle interdepartmental or location transfers</li>
+          <li>Password reset capability for locked-out employees</li>
+          <li>View complete employee profile: attendance history, tasks, payslips</li>
+          <li>Salary Management linked directly to employee records</li>
+        </ul>
+        <div class="callout-box">
+          <p>When all employee data lives in one place — not spread across Excel files, HR software, and WhatsApp — people management becomes a strength, not a headache.</p>
+        </div>
+      </div>
+      <div>
+        <div class="mock">
+          <div class="mock-bar"><div class="mock-dots"><span class="mock-dot r"></span><span class="mock-dot y"></span><span class="mock-dot g"></span></div><div class="mock-url">tapvera.com · Employee Management</div></div>
+          <div class="mock-body" style="height:130px">
+            <div class="mock-sidebar">
+              <div class="mock-sb-logo"></div>
+              <div class="mock-sb-item">🏠</div>
+              <div class="mock-sb-item active">👥</div>
+              <div class="mock-sb-item">📅</div>
+            </div>
+            <div class="mock-content">
+              <div style="display:flex;justify-content:space-between;align-items:center">
+                <div style="font-size:9px;font-weight:700;color:var(--txt);font-family:'Inter',sans-serif">Employee Directory (48)</div>
+                <div style="background:var(--or);border-radius:4px;padding:3px 8px;font-size:7px;font-weight:700;color:#000;font-family:'Inter',sans-serif">+ Add Employee</div>
+              </div>
+              <table class="mtable">
+                <thead><tr><th>Name</th><th>Role</th><th>Dept.</th><th>Status</th><th>Actions</th></tr></thead>
+                <tbody>
+                  <tr><td><span style="display:flex;align-items:center;gap:4px"><span class="av" style="background:rgba(255,153,0,0.2);color:var(--or);width:16px;height:16px;font-size:5.5px">AJ</span>Anish Jaiswal</span></td><td>Super Admin</td><td>Management</td><td><span class="mb mb-g">Active</span></td><td style="color:var(--or);font-size:8px">Edit · View</td></tr>
+                  <tr><td><span style="display:flex;align-items:center;gap:4px"><span class="av" style="background:rgba(59,130,246,0.2);color:#60a5fa;width:16px;height:16px;font-size:5.5px">AD</span>Archisman D.</span></td><td>Employee</td><td>Engineering</td><td><span class="mb mb-g">Active</span></td><td style="color:var(--or);font-size:8px">Edit · View</td></tr>
+                  <tr><td><span style="display:flex;align-items:center;gap:4px"><span class="av" style="background:rgba(34,197,94,0.2);color:#4ade80;width:16px;height:16px;font-size:5.5px">SK</span>Sahil Kureshi</span></td><td>Admin</td><td>Operations</td><td><span class="mb mb-g">Active</span></td><td style="color:var(--or);font-size:8px">Edit · View</td></tr>
+                  <tr><td><span style="display:flex;align-items:center;gap:4px"><span class="av" style="background:rgba(171,78,225,0.2);color:#c084fc;width:16px;height:16px;font-size:5.5px">PM</span>Priya Mehta</span></td><td>HR</td><td>Human Resources</td><td><span class="mb mb-am">On Leave</span></td><td style="color:var(--or);font-size:8px">Edit · View</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+        <div style="margin-top:12px" class="benefit-grid">
+          <div class="benefit"><h4>Position Management</h4><p>Create roles, define job titles, and assign employees to positions within the org structure</p></div>
+          <div class="benefit"><h4>Transfer Management</h4><p>Move employees between departments, locations, or reporting lines with a full transfer log</p></div>
+          <div class="benefit"><h4>Salary Assignment</h4><p>Link each employee to a salary structure for automated payslip generation each month</p></div>
+          <div class="benefit"><h4>Role-Based Access</h4><p>Control exactly which modules each employee can access based on their role</p></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="page-footer">
+    <div class="pf-brand"><span class="pf-name">TAPVERA</span></div>
+    <span class="pf-page">22 / Employee Management</span>
+    <span class="pf-conf">Confidential</span>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════
+     PAGE 23 — ATTENDANCE & SHIFTS
+══════════════════════════════════════ -->
+<div class="page sp">
+  <div class="sp-header">
+    <span class="sp-tag">Admin Suite · Module 3</span>
+    <div class="sp-title">Attendance &amp; Shift Management — Total Control of Time</div>
+    <div class="sp-subtitle">Monitor every employee's attendance in real time, manage shift schedules, approve flexible shift requests, and correct attendance records — all from one admin panel.</div>
+  </div>
+  <div class="sp-body">
+    <div class="feat-2col">
+      <div>
+        <p class="feat-label">The Story</p>
+        <p class="feat-p">For business owners and HR managers, attendance oversight is non-negotiable. But checking who came in, who was late, and who didn't show up used to require registers, biometric exports, and manual spreadsheets. Tapvera eliminates all of that.</p>
+        <p class="feat-p">The Admin Attendance module shows every employee's punch-in and punch-out times for any selected date. Late arrivals are highlighted. Absences are flagged. Flexible shift requests — when an employee needs to work different hours — are queued for approval. And if a manual correction is ever needed (e.g., an employee forgot to punch in), admins can log attendance on their behalf.</p>
+        <ul class="feat-list">
+          <li>Date-selectable attendance view — see any day's attendance across all employees</li>
+          <li>Punch In / Out times visible for every employee on the selected date</li>
+          <li>Work duration, break time, and on-time status per employee</li>
+          <li>Late arrival flagging — instantly spots who exceeded shift start time</li>
+          <li>Flexible Shift Requests queue — approve or reject shift change requests</li>
+          <li>Manual Attendance Entry — admin can log attendance if employee forgot to punch</li>
+          <li>Attendance export for payroll and compliance reporting</li>
+          <li>Shift Management — create and assign multiple shift templates (Morning, Night, Custom)</li>
+          <li>Shift assignment per employee — different teams on different schedules</li>
+        </ul>
+        <div class="callout-box">
+          <p>Attendance management at scale requires automation, not effort. Tapvera gives admins complete visibility with minimal daily work — exceptions surface automatically.</p>
+        </div>
+      </div>
+      <div>
+        <div class="mock">
+          <div class="mock-bar"><div class="mock-dots"><span class="mock-dot r"></span><span class="mock-dot y"></span><span class="mock-dot g"></span></div><div class="mock-url">tapvera.com · Admin Attendance</div></div>
+          <div class="mock-body" style="height:145px">
+            <div class="mock-sidebar">
+              <div class="mock-sb-logo"></div>
+              <div class="mock-sb-item">🏠</div>
+              <div class="mock-sb-item active">📅</div>
+              <div class="mock-sb-item">⏱️</div>
+            </div>
+            <div class="mock-content">
+              <div style="display:flex;justify-content:space-between;align-items:center;font-size:8px;font-family:'Inter',sans-serif">
+                <span style="color:var(--txt);font-weight:700">Attendance — April 2, 2026</span>
+                <span style="color:var(--or);cursor:pointer">+ Manual Entry</span>
+              </div>
+              <table class="mtable">
+                <thead><tr><th>Employee</th><th>Punch In</th><th>Punch Out</th><th>Duration</th><th>Status</th></tr></thead>
+                <tbody>
+                  <tr><td>Archisman D.</td><td>09:04 AM</td><td>—</td><td>6h 32m</td><td><span class="mb mb-g">On Time</span></td></tr>
+                  <tr><td>Sahil K.</td><td>09:48 AM</td><td>—</td><td>5h 48m</td><td><span class="mb mb-am">Late</span></td></tr>
+                  <tr><td>Rajesh D.</td><td>08:55 AM</td><td>06:10 PM</td><td>9h 15m</td><td><span class="mb mb-g">On Time</span></td></tr>
+                  <tr><td>Priya M.</td><td colspan="3" style="color:var(--m3);font-size:7px;font-style:italic">On Approved Leave</td><td><span class="mb mb-v">Leave</span></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+        <div style="margin-top:12px">
+          <div style="font-size:9px;font-weight:700;color:var(--or);margin-bottom:8px;text-transform:uppercase;letter-spacing:1px">Shift Templates</div>
+          <div style="display:flex;flex-direction:column;gap:4px">
+            <div class="shift-row"><span class="shift-name">🌅 Morning Shift</span><span class="shift-time">09:00 AM – 06:00 PM (Mon–Sat)</span><span class="mb mb-g">Assigned: 32</span></div>
+            <div class="shift-row"><span class="shift-name">🌙 Night Shift</span><span class="shift-time">10:00 PM – 07:00 AM</span><span class="mb mb-b">Assigned: 8</span></div>
+            <div class="shift-row"><span class="shift-name">⚡ Flexible Shift</span><span class="shift-time">Employee-defined hours</span><span class="mb mb-v">Assigned: 8</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="page-footer">
+    <div class="pf-brand"><span class="pf-name">TAPVERA</span></div>
+    <span class="pf-page">23 / Attendance &amp; Shift Management</span>
+    <span class="pf-conf">Confidential</span>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════
+     PAGE 24 — PAYROLL & SALARY
+══════════════════════════════════════ -->
+<div class="page sp">
+  <div class="sp-header">
+    <span class="sp-tag">Admin Suite · Module 4</span>
+    <div class="sp-title">Payroll &amp; Salary — End-to-End, Error-Free, Every Month</div>
+    <div class="sp-subtitle">A complete payroll engine that calculates salary, generates payslips, tracks payment status, and delivers financial records to every employee — automatically.</div>
+  </div>
+  <div class="sp-body">
+    <div class="feat-2col">
+      <div>
+        <p class="feat-label">The Story</p>
+        <p class="feat-p">Payroll is the most critical monthly task for any business — and the most error-prone when done manually. Late payslips erode trust. Wrong calculations cause disputes. Missing records create compliance risk. Tapvera's Payroll module eliminates all three.</p>
+        <p class="feat-p">Admins configure salary structures for each employee once. The Auto Payroll system then calculates gross pay, applies deductions (PF, TDS, leaves, penalties), and generates individual payslips for the entire organization in a single run. Each payslip is immediately available to the respective employee in their My Payslips section. No printing. No emailing. No manual computation.</p>
+        <ul class="feat-list">
+          <li>Salary Management — configure base salary, allowances, and deductions per employee</li>
+          <li>Auto Payroll — generate payslips for all employees in one click, per month</li>
+          <li>Payslip Management — view, edit, and regenerate any employee's payslip</li>
+          <li>Attendance-linked deductions — absent days and late penalties computed automatically</li>
+          <li>Leave deduction integration — unpaid leaves reflected in net pay</li>
+          <li>Tax &amp; PF calculations — TDS, Provident Fund handled in the salary structure</li>
+          <li>Net Pay summary with full breakdown: earnings and deductions itemized</li>
+          <li>Employee self-service — payslips instantly available after generation</li>
+          <li>Payment activation control — mark salary as paid for tracking</li>
+          <li>Payment history and pending payment visibility for cash flow management</li>
+        </ul>
+        <div class="callout-box">
+          <p>Payroll that used to take 2-3 days of manual work now completes in minutes. With Tapvera, every employee gets the right payslip at the right time — every single month.</p>
+        </div>
+      </div>
+      <div>
+        <div class="mock" style="margin-bottom:10px">
+          <div class="mock-bar"><div class="mock-dots"><span class="mock-dot r"></span><span class="mock-dot y"></span><span class="mock-dot g"></span></div><div class="mock-url">tapvera.com · Payroll Management</div></div>
+          <div class="mock-body" style="height:130px">
+            <div class="mock-sidebar"><div class="mock-sb-logo"></div><div class="mock-sb-item">🏠</div><div class="mock-sb-item active">💰</div><div class="mock-sb-item">📊</div></div>
+            <div class="mock-content">
+              <div class="mc-row">
+                <div class="mc"><div class="mc-val" style="color:var(--gr)">₹22.4L</div><div class="mc-lbl">Total Payroll (Mar)</div></div>
+                <div class="mc"><div class="mc-val" style="color:var(--gr)">44</div><div class="mc-lbl">Payslips Generated</div></div>
+                <div class="mc"><div class="mc-val" style="color:var(--am)">4</div><div class="mc-lbl">Pending Payment</div></div>
+              </div>
+              <table class="mtable" style="margin-top:4px">
+                <thead><tr><th>Employee</th><th>Gross</th><th>Deduction</th><th>Net Pay</th><th>Status</th></tr></thead>
+                <tbody>
+                  <tr><td>Archisman D.</td><td>₹45,000</td><td>₹3,756</td><td>₹41,244</td><td><span class="mb mb-g">Paid</span></td></tr>
+                  <tr><td>Sahil K.</td><td>₹38,000</td><td>₹2,940</td><td>₹35,060</td><td><span class="mb mb-g">Paid</span></td></tr>
+                  <tr><td>Rajesh D.</td><td>₹52,000</td><td>₹4,100</td><td>₹47,900</td><td><span class="mb mb-o">Pending</span></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+        <div class="benefit-grid">
+          <div class="benefit"><h4>Auto Payroll</h4><p>Generate all payslips for a month in one click — linked to attendance and salary structures</p></div>
+          <div class="benefit"><h4>Tax &amp; PF Ready</h4><p>Pre-built deduction support for TDS, Provident Fund, and custom deduction categories</p></div>
+          <div class="benefit"><h4>Payment Tracking</h4><p>Know instantly which employees have been paid and which payments are still pending</p></div>
+          <div class="benefit"><h4>Employee Self-Access</h4><p>Generated payslips appear immediately in each employee's My Payslips — no distribution needed</p></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="page-footer">
+    <div class="pf-brand"><span class="pf-name">TAPVERA</span></div>
+    <span class="pf-page">24 / Payroll &amp; Salary</span>
+    <span class="pf-conf">Confidential</span>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════
+     PAGE 25 — LEAD PIPELINE
+══════════════════════════════════════ -->
+<div class="page sp">
+  <div class="sp-header">
+    <span class="sp-tag">Admin Suite · Module 5</span>
+    <div class="sp-title">Lead Pipeline — Your Sales Funnel, Visualized and Moving</div>
+    <div class="sp-subtitle">A drag-and-drop Kanban lead management system that turns a sales team's pipeline into a living visual board — every lead tracked, every stage visible, every deal moving.</div>
+  </div>
+  <div class="sp-body">
+    <div class="feat-2col">
+      <div>
+        <p class="feat-label">The Story</p>
+        <p class="feat-p">Most businesses lose deals not because they lacked interest — but because leads fell through the cracks. A follow-up missed here, a proposal delayed there, and a prospect moves on. The Tapvera Lead Pipeline makes sure that never happens.</p>
+        <p class="feat-p">Every lead enters the pipeline with a name, expected revenue, contact details, and source. From there, the sales team moves them through six defined stages using drag-and-drop. The board shows instantly what's new, what's been contacted, what's qualified, what's in negotiation, and what's won or lost. Filters let managers slice the pipeline by salesperson, date, or expected value.</p>
+        <ul class="feat-list">
+          <li>Six-stage pipeline: New Leads → Contacted → Qualified → Negotiation → Closed Won → Closed Lost</li>
+          <li>Drag-and-drop lead cards between stages — update status instantly</li>
+          <li>Lead cards show: Name, Expected Revenue, Source, Priority, and Contact</li>
+          <li>Add Lead form with full contact and deal information capture</li>
+          <li>Stage-level revenue totals — see total deal value per pipeline stage</li>
+          <li>Filter by salesperson, date range, or expected revenue range</li>
+          <li>Lead detail view — full history, notes, and contact activity</li>
+          <li>Add remarks and follow-up notes on individual leads</li>
+          <li>View Leads page — table view of all leads with sorting and search</li>
+        </ul>
+        <div class="callout-box">
+          <p>A deal that's visible gets followed up. A deal that's invisible gets lost. The Lead Pipeline makes every opportunity visible — every day, for everyone on the sales team.</p>
+        </div>
+      </div>
+      <div>
+        <div class="mock">
+          <div class="mock-bar"><div class="mock-dots"><span class="mock-dot r"></span><span class="mock-dot y"></span><span class="mock-dot g"></span></div><div class="mock-url">tapvera.com · Lead Pipeline</div></div>
+          <div style="background:var(--bg);padding:8px">
+            <div class="kanban">
+              <div class="kb-col">
+                <div class="kb-head">🆕 NEW LEADS (4)</div>
+                <div class="kb-card"><div class="kb-name">TechSoft Solutions</div><div class="kb-meta">₹2.4L · Inbound</div><span class="kb-badge" style="background:rgba(239,68,68,0.15);color:#f87171">High</span></div>
+                <div class="kb-card"><div class="kb-name">Retail Corp</div><div class="kb-meta">₹85K · Referral</div><span class="kb-badge" style="background:rgba(245,158,11,0.15);color:#fbbf24">Med</span></div>
+              </div>
+              <div class="kb-col">
+                <div class="kb-head">📞 CONTACTED (3)</div>
+                <div class="kb-card"><div class="kb-name">Buildmart India</div><div class="kb-meta">₹1.8L · Cold Call</div><span class="kb-badge" style="background:rgba(239,68,68,0.15);color:#f87171">High</span></div>
+                <div class="kb-card"><div class="kb-name">FinEdge Pvt</div><div class="kb-meta">₹3.2L · Partner</div><span class="kb-badge" style="background:rgba(239,68,68,0.15);color:#f87171">High</span></div>
+              </div>
+              <div class="kb-col">
+                <div class="kb-head">✅ QUALIFIED (2)</div>
+                <div class="kb-card"><div class="kb-name">GreenPath Labs</div><div class="kb-meta">₹5.5L · Website</div><span class="kb-badge" style="background:rgba(245,158,11,0.15);color:#fbbf24">Med</span></div>
+              </div>
+              <div class="kb-col">
+                <div class="kb-head">🤝 NEGOTIATION (2)</div>
+                <div class="kb-card"><div class="kb-name">Wonderseed Co.</div><div class="kb-meta">₹8.2L · Direct</div><span class="kb-badge" style="background:rgba(34,197,94,0.15);color:#4ade80">Low</span></div>
+              </div>
+              <div class="kb-col">
+                <div class="kb-head">🏆 WON (5)</div>
+                <div class="kb-card"><div class="kb-name">Nova Designs</div><div class="kb-meta">₹4.4L · Closed</div><span class="kb-badge" style="background:rgba(34,197,94,0.15);color:#4ade80">Won</span></div>
+                <div class="kb-card"><div class="kb-name">Orbit Brands</div><div class="kb-meta">₹6.1L · Closed</div><span class="kb-badge" style="background:rgba(34,197,94,0.15);color:#4ade80">Won</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p class="screen-caption" style="margin-top:6px">Lead Kanban — 5-stage drag-and-drop pipeline with live deal values</p>
+        <div style="margin-top:8px" class="gradient-accent">
+          <div style="font-size:9px;font-weight:700;color:var(--or);margin-bottom:5px;text-transform:uppercase;letter-spacing:1px">Pipeline Revenue Summary</div>
+          <div style="display:flex;gap:6px">
+            <div style="flex:1;text-align:center"><div style="font-size:11px;font-weight:800;color:var(--or)">₹32.4L</div><div style="font-size:7.5px;color:#666">Total Pipeline</div></div>
+            <div style="flex:1;text-align:center"><div style="font-size:11px;font-weight:800;color:var(--gr)">₹18.6L</div><div style="font-size:7.5px;color:#666">Closed Won</div></div>
+            <div style="flex:1;text-align:center"><div style="font-size:11px;font-weight:800;color:var(--am)">₹13.8L</div><div style="font-size:7.5px;color:#666">In Progress</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="page-footer">
+    <div class="pf-brand"><span class="pf-name">TAPVERA</span></div>
+    <span class="pf-page">25 / Lead Pipeline</span>
+    <span class="pf-conf">Confidential</span>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════
+     PAGE 26 — CALLBACKS & SALES TRACKING
+══════════════════════════════════════ -->
+<div class="page sp">
+  <div class="sp-header">
+    <span class="sp-tag">Admin Suite · Module 6</span>
+    <div class="sp-title">Callbacks &amp; Sales Tracking — No Follow-Up Ever Gets Missed</div>
+    <div class="sp-subtitle">A dedicated callback scheduling and tracking system that ensures every sales promise is kept — with a calendar view, Kanban board, and complete callback history.</div>
+  </div>
+  <div class="sp-body">
+    <div class="feat-2col">
+      <div>
+        <p class="feat-label">The Story</p>
+        <p class="feat-p">The most common reason deals are lost isn't price — it's follow-up failure. A salesperson says "I'll call you back Thursday" and Thursday comes and goes. The prospect goes to a competitor. Tapvera's Callback module is built specifically to prevent this.</p>
+        <p class="feat-p">When a salesperson schedules a callback, it appears on a dedicated calendar with the contact name, scheduled time, and purpose. It also appears in the Kanban board under its status: Scheduled, Completed, or Missed. Managers can see every salesperson's callback commitments, track completion rates, and follow up on missed callbacks. The full callback history is searchable for account management.</p>
+        <ul class="feat-list">
+          <li>Add Callback — log a follow-up with contact name, date, time, and notes</li>
+          <li>Callback Calendar — visual calendar view of all scheduled follow-ups</li>
+          <li>Callback Kanban — drag-and-drop board: Scheduled → Completed / Missed</li>
+          <li>View Callbacks — full searchable list of all callbacks with status and history</li>
+          <li>Salesperson-level tracking — managers see each rep's follow-up rate</li>
+          <li>Overdue callback alerts — highlights missed follow-ups immediately</li>
+          <li>Notes field for recording what was discussed in each call</li>
+          <li>Link callbacks to specific leads for full deal history in one place</li>
+        </ul>
+        <div class="callout-box">
+          <p>Callbacks are promises. Tapvera makes sure those promises have a record, a reminder, and a responsible owner — so nothing falls through the cracks in the sales cycle.</p>
+        </div>
+      </div>
+      <div>
+        <div class="mock">
+          <div class="mock-bar"><div class="mock-dots"><span class="mock-dot r"></span><span class="mock-dot y"></span><span class="mock-dot g"></span></div><div class="mock-url">tapvera.com · Callback Calendar</div></div>
+          <div style="background:var(--bg);padding:10px">
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1fr 1fr 1fr;gap:4px;margin-bottom:8px">
+              <div style="text-align:center;font-size:7px;color:var(--m3);font-family:'Inter',sans-serif;padding:2px">Sun</div>
+              <div style="text-align:center;font-size:7px;color:var(--m3);font-family:'Inter',sans-serif;padding:2px">Mon</div>
+              <div style="text-align:center;font-size:7px;color:var(--m3);font-family:'Inter',sans-serif;padding:2px">Tue</div>
+              <div style="text-align:center;font-size:7px;color:var(--m3);font-family:'Inter',sans-serif;padding:2px">Wed</div>
+              <div style="text-align:center;font-size:7px;color:var(--m3);font-family:'Inter',sans-serif;padding:2px">Thu</div>
+              <div style="text-align:center;font-size:7px;color:var(--m3);font-family:'Inter',sans-serif;padding:2px">Fri</div>
+              <div style="text-align:center;font-size:7px;color:var(--m3);font-family:'Inter',sans-serif;padding:2px">Sat</div>
+              <div style="background:var(--s2);border-radius:3px;padding:5px 3px;text-align:center"><div style="font-size:8px;font-weight:700;color:var(--m1);font-family:'Inter',sans-serif">30</div></div>
+              <div style="background:var(--s2);border-radius:3px;padding:5px 3px;text-align:center"><div style="font-size:8px;font-weight:700;color:var(--m1);font-family:'Inter',sans-serif">31</div></div>
+              <div style="background:rgba(255,153,0,0.15);border:1px solid rgba(255,153,0,0.4);border-radius:3px;padding:3px;text-align:center"><div style="font-size:8px;font-weight:700;color:var(--or);font-family:'Inter',sans-serif">1</div><div style="font-size:6px;color:var(--or);font-family:'Inter',sans-serif">2 calls</div></div>
+              <div style="background:rgba(59,130,246,0.15);border:1px solid rgba(59,130,246,0.3);border-radius:3px;padding:3px;text-align:center"><div style="font-size:8px;font-weight:700;color:#60a5fa;font-family:'Inter',sans-serif">2</div><div style="font-size:6px;color:#60a5fa;font-family:'Inter',sans-serif">3 calls</div></div>
+              <div style="background:var(--s2);border-radius:3px;padding:5px 3px;text-align:center"><div style="font-size:8px;font-weight:700;color:var(--m1);font-family:'Inter',sans-serif">3</div></div>
+              <div style="background:rgba(34,197,94,0.12);border:1px solid rgba(34,197,94,0.3);border-radius:3px;padding:3px;text-align:center"><div style="font-size:8px;font-weight:700;color:#4ade80;font-family:'Inter',sans-serif">4</div><div style="font-size:6px;color:#4ade80;font-family:'Inter',sans-serif">1 call</div></div>
+              <div style="background:var(--s2);border-radius:3px;padding:5px 3px;text-align:center"><div style="font-size:8px;font-weight:700;color:var(--m1);font-family:'Inter',sans-serif">5</div></div>
+            </div>
+            <div style="font-size:8px;font-weight:600;color:var(--m2);font-family:'Inter',sans-serif;margin-bottom:6px">UPCOMING CALLBACKS — April 2</div>
+            <div style="display:flex;flex-direction:column;gap:4px">
+              <div style="background:var(--s1);border:1px solid var(--bd);border-radius:5px;padding:6px;display:flex;justify-content:space-between;align-items:center"><div><div style="font-size:8px;font-weight:600;color:var(--txt);font-family:'Inter',sans-serif">TechSoft Solutions</div><div style="font-size:7px;color:var(--m3);font-family:'Inter',sans-serif">10:30 AM · Pricing discussion</div></div><span class="mb mb-am">Scheduled</span></div>
+              <div style="background:var(--s1);border:1px solid var(--bd);border-radius:5px;padding:6px;display:flex;justify-content:space-between;align-items:center"><div><div style="font-size:8px;font-weight:600;color:var(--txt);font-family:'Inter',sans-serif">FinEdge Pvt Ltd</div><div style="font-size:7px;color:var(--m3);font-family:'Inter',sans-serif">2:00 PM · Proposal review</div></div><span class="mb mb-am">Scheduled</span></div>
+              <div style="background:var(--s1);border:1px solid var(--bd);border-radius:5px;padding:6px;display:flex;justify-content:space-between;align-items:center"><div><div style="font-size:8px;font-weight:600;color:var(--txt);font-family:'Inter',sans-serif">Retail Corp</div><div style="font-size:7px;color:var(--m3);font-family:'Inter',sans-serif">4:30 PM · Demo walkthrough</div></div><span class="mb mb-g">Completed</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="page-footer">
+    <div class="pf-brand"><span class="pf-name">TAPVERA</span></div>
+    <span class="pf-page">26 / Callbacks &amp; Sales Tracking</span>
+    <span class="pf-conf">Confidential</span>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════
+     PAGE 27 — CLIENT MANAGEMENT
+══════════════════════════════════════ -->
+<div class="page sp">
+  <div class="sp-header">
+    <span class="sp-tag">Admin Suite · Module 7</span>
+    <div class="sp-title">Client Management — Know Your Clients Better Than They Know Themselves</div>
+    <div class="sp-subtitle">A centralized client database with contact details, status tracking, remarks history, project links, and payment records — everything you need to serve clients exceptionally.</div>
+  </div>
+  <div class="sp-body">
+    <div class="feat-2col">
+      <div>
+        <p class="feat-label">The Story</p>
+        <p class="feat-p">Great client relationships are built on memory, context, and consistency. But when client data is scattered — some in email, some in spreadsheets, some only in the salesperson's head — relationships suffer and service quality drops. Tapvera's Client Management module gives the entire team a shared, complete view of every client.</p>
+        <p class="feat-p">Each client record includes contact details, business information, current status (Active or Inactive), linked projects, payment records, and a full remarks history where team members can log interactions, decisions, and follow-ups. Admins can filter clients by status, sort by any field, search by name, and select multiple clients for bulk actions.</p>
+        <ul class="feat-list">
+          <li>Complete client records: name, company, contact, email, website, address</li>
+          <li>Status management — Active or Inactive with filter toggle</li>
+          <li>Client Portal view — everything about one client in a single, focused view</li>
+          <li>Linked Projects — see all projects associated with each client</li>
+          <li>Client Remarks — log interaction notes and follow-up history</li>
+          <li>Payment records tied to client accounts for billing visibility</li>
+          <li>Search, filter, and sort — find any client instantly</li>
+          <li>Bulk selection for group actions like status updates or exports</li>
+          <li>Animated card layout with smooth transitions for fast navigation</li>
+        </ul>
+        <div class="callout-box">
+          <p>When your team has the same information about every client, service becomes consistent. Clients feel known, not just served — and that's what drives retention.</p>
+        </div>
+      </div>
+      <div>
+        <div class="mock">
+          <div class="mock-bar"><div class="mock-dots"><span class="mock-dot r"></span><span class="mock-dot y"></span><span class="mock-dot g"></span></div><div class="mock-url">tapvera.com · Client Management</div></div>
+          <div class="mock-body" style="height:155px">
+            <div class="mock-sidebar"><div class="mock-sb-logo"></div><div class="mock-sb-item">🏠</div><div class="mock-sb-item">🎯</div><div class="mock-sb-item active">👥</div></div>
+            <div class="mock-content">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+                <div class="mc-row" style="gap:5px;flex:1">
+                  <div class="mc"><div class="mc-val" style="font-size:12px;color:var(--or)">38</div><div class="mc-lbl">Total Clients</div></div>
+                  <div class="mc"><div class="mc-val" style="font-size:12px;color:var(--gr)">31</div><div class="mc-lbl">Active</div></div>
+                  <div class="mc"><div class="mc-val" style="font-size:12px;color:var(--rd)">7</div><div class="mc-lbl">Inactive</div></div>
+                </div>
+              </div>
+              <table class="mtable">
+                <thead><tr><th>Client Name</th><th>Company</th><th>Projects</th><th>Status</th><th>Actions</th></tr></thead>
+                <tbody>
+                  <tr><td>Wonderseed</td><td>Wonderseed Co.</td><td>3</td><td><span class="mb mb-g">Active</span></td><td style="color:var(--or);font-size:8px">View · Edit</td></tr>
+                  <tr><td>Nova Designs</td><td>Nova Creative</td><td>2</td><td><span class="mb mb-g">Active</span></td><td style="color:var(--or);font-size:8px">View · Edit</td></tr>
+                  <tr><td>GreenPath</td><td>GreenPath Labs</td><td>1</td><td><span class="mb mb-g">Active</span></td><td style="color:var(--or);font-size:8px">View · Edit</td></tr>
+                  <tr><td>OldBrand Corp</td><td>OldBrand Inc.</td><td>0</td><td><span class="mb mb-r">Inactive</span></td><td style="color:var(--or);font-size:8px">View · Edit</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+        <div style="margin-top:10px" class="benefit-grid">
+          <div class="benefit"><h4>Client Portal</h4><p>A single-client deep-dive: projects, payments, remarks, and contact — all in one focused view</p></div>
+          <div class="benefit"><h4>Remarks History</h4><p>Log every interaction — meeting notes, decisions, follow-ups — for the full team to reference</p></div>
+          <div class="benefit"><h4>Project Linking</h4><p>See all active and past projects for any client, with status and team assignment at a glance</p></div>
+          <div class="benefit"><h4>Payment Records</h4><p>Track billing, invoicing, and payment status linked directly to each client account</p></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="page-footer">
+    <div class="pf-brand"><span class="pf-name">TAPVERA</span></div>
+    <span class="pf-page">27 / Client Management</span>
+    <span class="pf-conf">Confidential</span>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════
+     PAGE 28 — PROJECT MANAGEMENT (ADMIN)
+══════════════════════════════════════ -->
+<div class="page sp">
+  <div class="sp-header">
+    <span class="sp-tag">Admin Suite · Module 8</span>
+    <div class="sp-title">Project Management — Deliver Every Project on Time, Every Time</div>
+    <div class="sp-subtitle">A complete project delivery engine for creating projects, assigning teams, tracking tasks, monitoring progress, generating reports, and managing client deliverables end-to-end.</div>
+  </div>
+  <div class="sp-body">
+    <div class="feat-2col">
+      <div>
+        <p class="feat-label">The Story</p>
+        <p class="feat-p">Projects fail when communication breaks down, tasks fall unassigned, and progress isn't tracked. Tapvera's Project Management module is built to eliminate every one of those failure points. Admins create projects, assign team members, define tasks, set deadlines, and track delivery — from kick-off to completion.</p>
+        <p class="feat-p">Inside every project is a full task management system, a dedicated communication channel, progress reports, velocity metrics, screenshot tracking for deliverables, and SEO analytics for digital marketing projects. Every project has a client linked, a status, tags, a team, and a complete audit trail of every update.</p>
+        <ul class="feat-list">
+          <li>Create projects with name, client, status, description, tags, and team assignment</li>
+          <li>Task assignment within projects — per-employee with deadlines and priorities</li>
+          <li>Admin Task Page — manage all tasks across all projects in one view</li>
+          <li>Project Detail Page — full breakdown: tasks, team, reports, communication, SEO</li>
+          <li>Project Reports — delivery reports with section-by-section remarks and status</li>
+          <li>Velocity Metrics — track how fast the team is completing tasks over time</li>
+          <li>Screenshot tracking — visual evidence of deliverables and milestones</li>
+          <li>Shared Sheets — collaborative spreadsheet access per project</li>
+          <li>Project Communication — messaging room for every project</li>
+          <li>Blog Updates tracker for content-focused projects</li>
+          <li>On-Page &amp; Off-Page SEO analytics for digital marketing projects</li>
+        </ul>
+      </div>
+      <div>
+        <div class="mock">
+          <div class="mock-bar"><div class="mock-dots"><span class="mock-dot r"></span><span class="mock-dot y"></span><span class="mock-dot g"></span></div><div class="mock-url">tapvera.com · Project Detail — Wonderseed</div></div>
+          <div class="mock-body" style="height:140px">
+            <div class="mock-sidebar"><div class="mock-sb-logo"></div><div class="mock-sb-item active">📁</div><div class="mock-sb-item">💬</div><div class="mock-sb-item">📊</div></div>
+            <div class="mock-content">
+              <div style="display:flex;justify-content:space-between;align-items:center">
+                <div style="font-size:9px;font-weight:700;color:var(--txt);font-family:'Inter',sans-serif">Wonderseed Project</div>
+                <span class="mb mb-g">Active</span>
+              </div>
+              <div class="mc-row">
+                <div class="mc"><div class="mc-val" style="font-size:12px;color:var(--gr)">68%</div><div class="mc-lbl">Completion</div></div>
+                <div class="mc"><div class="mc-val" style="font-size:12px">24</div><div class="mc-lbl">Total Tasks</div></div>
+                <div class="mc"><div class="mc-val" style="font-size:12px;color:var(--am)">8</div><div class="mc-lbl">In Progress</div></div>
+                <div class="mc"><div class="mc-val" style="font-size:12px;color:var(--rd)">3</div><div class="mc-lbl">Overdue</div></div>
+              </div>
+              <div style="display:flex;gap:5px;overflow:hidden">
+                <div style="flex:1;background:var(--s1);border:1px solid var(--bd);border-radius:5px;padding:6px">
+                  <div style="font-size:7px;color:var(--m3);font-family:'Inter',sans-serif;margin-bottom:4px">TEAM MEMBERS</div>
+                  <div style="display:flex;gap:3px"><div class="av" style="background:rgba(255,153,0,0.2);color:var(--or);width:18px;height:18px;font-size:5.5px">AJ</div><div class="av" style="background:rgba(59,130,246,0.2);color:#60a5fa;width:18px;height:18px;font-size:5.5px">AD</div><div class="av" style="background:rgba(34,197,94,0.2);color:#4ade80;width:18px;height:18px;font-size:5.5px">SK</div><div class="av" style="background:rgba(171,78,225,0.2);color:#c084fc;width:18px;height:18px;font-size:5.5px">PM</div></div>
+                </div>
+                <div style="flex:2;background:var(--s1);border:1px solid var(--bd);border-radius:5px;padding:6px">
+                  <div style="font-size:7px;color:var(--m3);font-family:'Inter',sans-serif;margin-bottom:3px">PROGRESS</div>
+                  <div class="prog" style="height:5px"><div class="prog-fill" style="width:68%"></div></div>
+                  <div style="font-size:7px;color:var(--or);font-family:'Inter',sans-serif;margin-top:2px">16 of 24 tasks completed</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div style="margin-top:10px" class="tag-cloud">
+          <span class="tag"><span class="tag-dot" style="background:var(--or)"></span>Task Management</span>
+          <span class="tag"><span class="tag-dot" style="background:var(--bl)"></span>SEO Analytics</span>
+          <span class="tag"><span class="tag-dot" style="background:var(--gr)"></span>Velocity Metrics</span>
+          <span class="tag"><span class="tag-dot" style="background:var(--vi)"></span>Project Reports</span>
+          <span class="tag"><span class="tag-dot" style="background:var(--pk)"></span>Screenshots</span>
+          <span class="tag"><span class="tag-dot" style="background:var(--am)"></span>Blog Updates</span>
+          <span class="tag"><span class="tag-dot" style="background:var(--rd)"></span>Communication</span>
+          <span class="tag"><span class="tag-dot" style="background:var(--or)"></span>Shared Sheets</span>
+        </div>
+        <div class="callout-box" style="margin-top:10px">
+          <p>From day one of a project to the final delivery report — every detail, every task, every team interaction is captured, tracked, and visible to the people who need to act on it.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="page-footer">
+    <div class="pf-brand"><span class="pf-name">TAPVERA</span></div>
+    <span class="pf-page">28 / Project Management</span>
+    <span class="pf-conf">Confidential</span>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════
+     PAGE 29 — SEO & CONTENT ANALYTICS
+══════════════════════════════════════ -->
+<div class="page sp">
+  <div class="sp-header">
+    <span class="sp-tag">Admin Suite · Module 9</span>
+    <div class="sp-title">SEO &amp; Content Analytics — Prove the Value of Every Campaign</div>
+    <div class="sp-subtitle">Built for agencies and digital teams — track keyword rankings, on-page and off-page SEO progress, blog performance, and backlinks — directly inside the project.</div>
+  </div>
+  <div class="sp-body">
+    <div class="feat-2col">
+      <div>
+        <p class="feat-label">The Story</p>
+        <p class="feat-p">For agencies delivering digital marketing services, client reporting is as important as the work itself. Clients want to see results. The SEO and Analytics modules inside every Tapvera project give teams the tools to track, record, and report every digital metric — without ever leaving the CRM.</p>
+        <p class="feat-p">Inside a project's analytics section, teams can track keyword rankings over time with a visual calendar heatmap, record on-page SEO activities and their completion status, manage off-page SEO work like backlinks and citations, track blog post publications, and add section-by-section remarks for client reports. Every update feeds directly into the Project Report that can be shared with clients.</p>
+        <ul class="feat-list">
+          <li>Keyword Ranking Calendar Heatmap — track keyword position changes over time</li>
+          <li>On-Page SEO module — log meta tags, headings, content, speed fixes, and status</li>
+          <li>Off-Page SEO module — track backlinks, citations, guest posts, and outreach</li>
+          <li>Blog Updates tracker — record published articles with date, URL, and performance</li>
+          <li>Section Remarks — add notes and status to each report section</li>
+          <li>Project Report Tab — a unified client-ready report combining all analytics</li>
+          <li>Communication Analytics — measure client response rates and messaging health</li>
+          <li>Screenshot capture and storage for before/after visual evidence</li>
+          <li>Velocity Metrics — track team output speed and task completion rate over time</li>
+        </ul>
+        <div class="callout-box">
+          <p>Agencies using Tapvera don't just do the work — they document it, analyze it, and present it. Clients get proof of results, and teams get credit for the work they've done.</p>
+        </div>
+      </div>
+      <div>
+        <div class="mock" style="margin-bottom:10px">
+          <div class="mock-bar"><div class="mock-dots"><span class="mock-dot r"></span><span class="mock-dot y"></span><span class="mock-dot g"></span></div><div class="mock-url">tapvera.com · Project Analytics — SEO</div></div>
+          <div style="background:var(--bg);padding:10px">
+            <div style="font-size:8px;font-weight:700;color:var(--m2);font-family:'Inter',sans-serif;margin-bottom:6px;text-transform:uppercase;letter-spacing:1px">Keyword Ranking Heatmap — April 2026</div>
+            <div style="display:grid;grid-template-columns:repeat(14,1fr);gap:3px;margin-bottom:8px">
+              <div style="height:16px;background:rgba(34,197,94,0.8);border-radius:2px"></div><div style="height:16px;background:rgba(34,197,94,0.6);border-radius:2px"></div><div style="height:16px;background:rgba(245,158,11,0.6);border-radius:2px"></div><div style="height:16px;background:rgba(239,68,68,0.4);border-radius:2px"></div><div style="height:16px;background:rgba(239,68,68,0.6);border-radius:2px"></div><div style="height:16px;background:rgba(245,158,11,0.5);border-radius:2px"></div><div style="height:16px;background:rgba(34,197,94,0.5);border-radius:2px"></div><div style="height:16px;background:rgba(34,197,94,0.9);border-radius:2px"></div><div style="height:16px;background:rgba(34,197,94,0.7);border-radius:2px"></div><div style="height:16px;background:rgba(34,197,94,0.8);border-radius:2px"></div><div style="height:16px;background:rgba(59,130,246,0.5);border-radius:2px"></div><div style="height:16px;background:rgba(34,197,94,0.6);border-radius:2px"></div><div style="height:16px;background:rgba(34,197,94,1);border-radius:2px"></div><div style="height:16px;background:rgba(34,197,94,0.8);border-radius:2px"></div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+              <div style="background:var(--s1);border:1px solid var(--bd);border-radius:5px;padding:7px">
+                <div style="font-size:7.5px;font-weight:700;color:var(--or);font-family:'Inter',sans-serif;margin-bottom:4px">ON-PAGE SEO</div>
+                <div style="font-size:7.5px;color:var(--m1);font-family:'Inter',sans-serif">Meta Tags <span class="mb mb-g" style="margin-left:4px">Done</span></div>
+                <div style="font-size:7.5px;color:var(--m1);font-family:'Inter',sans-serif;margin-top:2px">Page Speed <span class="mb mb-am" style="margin-left:4px">In Progress</span></div>
+                <div style="font-size:7.5px;color:var(--m1);font-family:'Inter',sans-serif;margin-top:2px">Content Opt. <span class="mb mb-g" style="margin-left:4px">Done</span></div>
+              </div>
+              <div style="background:var(--s1);border:1px solid var(--bd);border-radius:5px;padding:7px">
+                <div style="font-size:7.5px;font-weight:700;color:var(--or);font-family:'Inter',sans-serif;margin-bottom:4px">OFF-PAGE SEO</div>
+                <div style="font-size:7.5px;color:var(--m1);font-family:'Inter',sans-serif">Backlinks Built: <span style="color:var(--gr);font-weight:700">24</span></div>
+                <div style="font-size:7.5px;color:var(--m1);font-family:'Inter',sans-serif;margin-top:2px">Citations: <span style="color:var(--bl);font-weight:700">12</span></div>
+                <div style="font-size:7.5px;color:var(--m1);font-family:'Inter',sans-serif;margin-top:2px">Guest Posts: <span style="color:var(--vi);font-weight:700">3</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="benefit-grid">
+          <div class="benefit"><h4>Keyword Heatmap</h4><p>Visual calendar showing ranking position changes — green is top 3, red is page 2+</p></div>
+          <div class="benefit"><h4>Project Reports</h4><p>Section-by-section client reports built from tracked activities — professional and complete</p></div>
+          <div class="benefit"><h4>Blog Tracking</h4><p>Log every published article with URL, date, and performance notes for content campaigns</p></div>
+          <div class="benefit"><h4>Screenshot Evidence</h4><p>Capture before/after screenshots for rankings, UI, and deliverables — stored in the project</p></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="page-footer">
+    <div class="pf-brand"><span class="pf-name">TAPVERA</span></div>
+    <span class="pf-page">29 / SEO &amp; Content Analytics</span>
+    <span class="pf-conf">Confidential</span>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════
+     PAGE 30 — CALL INTELLIGENCE
+══════════════════════════════════════ -->
+<div class="page sp">
+  <div class="sp-header">
+    <span class="sp-tag">Admin Suite · Module 10</span>
+    <div class="sp-title">Call Intelligence — Know What's Being Said. Know Who's Performing.</div>
+    <div class="sp-subtitle">A call analytics module that gives business owners and sales managers visibility into call activity, duration patterns, and team performance across all client interactions.</div>
+  </div>
+  <div class="sp-body">
+    <div class="feat-2col">
+      <div>
+        <p class="feat-label">The Story</p>
+        <p class="feat-p">For sales-driven organizations, calls are the frontline of the business. But most businesses have zero visibility into what's actually happening on those calls. Who's making the most calls? Who's closing? Are reps following up or going quiet? Call Intelligence changes that.</p>
+        <p class="feat-p">The Call Intelligence module provides a summary view of all call activity across the sales team. Each employee row shows their call count, total call duration, average call length, and a breakdown by outcome. Managers can spot top performers, identify reps who need coaching, and ensure no prospect is going uncontacted. The Call Summary Card displays key metrics at a glance with visual indicators for performance trends.</p>
+        <ul class="feat-list">
+          <li>Employee-level call activity — calls made, duration, frequency per rep</li>
+          <li>Call Summary Cards with performance metrics and outcome breakdowns</li>
+          <li>Total calls, average call duration, and success rate tracking</li>
+          <li>Visual comparison of call performance across team members</li>
+          <li>Date-range filtering to analyze any time period</li>
+          <li>Identify high performers and reps who need follow-up training</li>
+          <li>Integration with lead records — calls linked to active leads</li>
+          <li>Supports organizations with Vicidial or IP telephony systems</li>
+        </ul>
+        <div class="callout-box">
+          <p>Visibility creates accountability. When sales reps know their call data is tracked, call frequency improves. When managers can see outcomes, coaching becomes targeted and effective.</p>
+        </div>
+      </div>
+      <div>
+        <div class="mock">
+          <div class="mock-bar"><div class="mock-dots"><span class="mock-dot r"></span><span class="mock-dot y"></span><span class="mock-dot g"></span></div><div class="mock-url">tapvera.com · Call Intelligence</div></div>
+          <div class="mock-body" style="height:175px">
+            <div class="mock-sidebar"><div class="mock-sb-logo"></div><div class="mock-sb-item">🏠</div><div class="mock-sb-item">🎯</div><div class="mock-sb-item active">📞</div></div>
+            <div class="mock-content">
+              <div class="mc-row">
+                <div class="mc"><div class="mc-val" style="color:var(--or)">284</div><div class="mc-lbl">Total Calls (Apr)</div></div>
+                <div class="mc"><div class="mc-val" style="color:var(--gr)">4m 32s</div><div class="mc-lbl">Avg Duration</div></div>
+                <div class="mc"><div class="mc-val" style="color:var(--bl)">62%</div><div class="mc-lbl">Connect Rate</div></div>
+              </div>
+              <div style="background:var(--s1);border:1px solid var(--bd);border-radius:7px;padding:8px;flex:1">
+                <div class="chart-title">CALLS BY REP — This Week</div>
+                <div style="display:flex;flex-direction:column;gap:5px">
+                  <div style="display:flex;align-items:center;gap:8px"><div class="av" style="background:rgba(255,153,0,0.2);color:var(--or);width:18px;height:18px;font-size:5.5px">SK</div><div style="font-size:8px;color:var(--m1);font-family:'Inter',sans-serif;flex:1">Sahil K.</div><div style="background:rgba(255,255,255,0.05);border-radius:100px;height:6px;flex:2;overflow:hidden"><div style="width:82%;height:100%;background:var(--or);border-radius:100px"></div></div><div style="font-size:8px;color:var(--or);font-weight:700;font-family:'Inter',sans-serif;margin-left:5px">68</div></div>
+                  <div style="display:flex;align-items:center;gap:8px"><div class="av" style="background:rgba(59,130,246,0.2);color:#60a5fa;width:18px;height:18px;font-size:5.5px">RD</div><div style="font-size:8px;color:var(--m1);font-family:'Inter',sans-serif;flex:1">Rajesh D.</div><div style="background:rgba(255,255,255,0.05);border-radius:100px;height:6px;flex:2;overflow:hidden"><div style="width:67%;height:100%;background:#60a5fa;border-radius:100px"></div></div><div style="font-size:8px;color:#60a5fa;font-weight:700;font-family:'Inter',sans-serif;margin-left:5px">52</div></div>
+                  <div style="display:flex;align-items:center;gap:8px"><div class="av" style="background:rgba(34,197,94,0.2);color:#4ade80;width:18px;height:18px;font-size:5.5px">PM</div><div style="font-size:8px;color:var(--m1);font-family:'Inter',sans-serif;flex:1">Priya M.</div><div style="background:rgba(255,255,255,0.05);border-radius:100px;height:6px;flex:2;overflow:hidden"><div style="width:55%;height:100%;background:#4ade80;border-radius:100px"></div></div><div style="font-size:8px;color:#4ade80;font-weight:700;font-family:'Inter',sans-serif;margin-left:5px">43</div></div>
+                  <div style="display:flex;align-items:center;gap:8px"><div class="av" style="background:rgba(171,78,225,0.2);color:#c084fc;width:18px;height:18px;font-size:5.5px">AD</div><div style="font-size:8px;color:var(--m1);font-family:'Inter',sans-serif;flex:1">Archisman D.</div><div style="background:rgba(255,255,255,0.05);border-radius:100px;height:6px;flex:2;overflow:hidden"><div style="width:38%;height:100%;background:#c084fc;border-radius:100px"></div></div><div style="font-size:8px;color:#c084fc;font-weight:700;font-family:'Inter',sans-serif;margin-left:5px">29</div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div style="margin-top:10px" class="gradient-accent">
+          <div style="font-size:9px;font-weight:700;color:var(--or);margin-bottom:6px;text-transform:uppercase;letter-spacing:1px">What Managers Learn</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px">
+            <div style="font-size:10px;color:#444">Who is making the most calls</div>
+            <div style="font-size:10px;color:#444">Which rep has the best connect rate</div>
+            <div style="font-size:10px;color:#444">Average call quality by duration</div>
+            <div style="font-size:10px;color:#444">Who needs coaching vs. recognition</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="page-footer">
+    <div class="pf-brand"><span class="pf-name">TAPVERA</span></div>
+    <span class="pf-page">30 / Call Intelligence</span>
+    <span class="pf-conf">Confidential</span>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════
+     PAGE 31 — NOTICE BOARD & LEAVE ADMIN
+══════════════════════════════════════ -->
+<div class="page sp">
+  <div class="sp-header">
+    <span class="sp-tag">Admin Suite · Module 11</span>
+    <div class="sp-title">Notice Board &amp; Leave Administration — Keep the Team Informed and Compliant</div>
+    <div class="sp-subtitle">Broadcast important announcements to the entire organization, manage holiday calendars, and handle all leave approvals from a unified administration panel.</div>
+  </div>
+  <div class="sp-body">
+    <div class="feat-2col">
+      <div>
+        <p class="feat-label">Notice Board</p>
+        <p class="feat-p">Important company announcements used to get buried in email chains or missed entirely. The Notice Board gives admins a dedicated channel to publish organization-wide notices — policy updates, holiday announcements, event reminders, or urgent alerts — that every employee sees when they log in.</p>
+        <ul class="feat-list" style="margin-bottom:14px">
+          <li>Create and publish notices visible to all employees</li>
+          <li>Important Notice modal alerts employees immediately upon login</li>
+          <li>Notices organized chronologically with date, title, and content</li>
+          <li>Admin can edit or delete notices at any time</li>
+          <li>Employees see notices in their Leave module and notification feed</li>
+        </ul>
+        <div class="s-div"></div>
+        <p class="feat-label">Leave Administration</p>
+        <p class="feat-p">When employees apply for leave, it queues in the admin panel for review. Admins see the employee name, leave type, dates, duration, and reason — all in one screen. One click approves or rejects, and the employee is notified instantly. Holiday Management lets admins define the company's holiday calendar for the year.</p>
+        <ul class="feat-list">
+          <li>All pending leave requests in a centralized approval queue</li>
+          <li>One-click Approve or Reject with optional comments</li>
+          <li>Leave history per employee — complete record of all past leaves</li>
+          <li>Holiday Management — define yearly holidays for the entire organization</li>
+          <li>Leave balance tracking per employee per leave type</li>
+          <li>Team Leave Calendar — see all approved leaves in a monthly view</li>
+          <li>Leave policy configuration — allowances per leave type per year</li>
+        </ul>
+      </div>
+      <div>
+        <div class="mock" style="margin-bottom:10px">
+          <div class="mock-bar"><div class="mock-dots"><span class="mock-dot r"></span><span class="mock-dot y"></span><span class="mock-dot g"></span></div><div class="mock-url">tapvera.com · Admin Leave Requests</div></div>
+          <div class="mock-body" style="height:130px">
+            <div class="mock-sidebar"><div class="mock-sb-logo"></div><div class="mock-sb-item">🏠</div><div class="mock-sb-item active">🏖️</div><div class="mock-sb-item">📢</div></div>
+            <div class="mock-content">
+              <div style="font-size:8.5px;font-weight:700;color:var(--txt);font-family:'Inter',sans-serif;margin-bottom:5px">Leave Approval Queue (6 Pending)</div>
+              <table class="mtable">
+                <thead><tr><th>Employee</th><th>Type</th><th>Dates</th><th>Days</th><th>Action</th></tr></thead>
+                <tbody>
+                  <tr><td>Sahil K.</td><td>Sick</td><td>Apr 4–5</td><td>2</td><td style="display:flex;gap:3px"><div style="background:rgba(34,197,94,0.2);color:#4ade80;border-radius:3px;padding:1px 5px;font-size:6.5px;font-weight:700;cursor:pointer">✓ Approve</div><div style="background:rgba(239,68,68,0.2);color:#f87171;border-radius:3px;padding:1px 5px;font-size:6.5px;font-weight:700;cursor:pointer">✕ Reject</div></td></tr>
+                  <tr><td>Meera S.</td><td>Casual</td><td>Apr 6</td><td>1</td><td style="display:flex;gap:3px"><div style="background:rgba(34,197,94,0.2);color:#4ade80;border-radius:3px;padding:1px 5px;font-size:6.5px;font-weight:700;cursor:pointer">✓ Approve</div><div style="background:rgba(239,68,68,0.2);color:#f87171;border-radius:3px;padding:1px 5px;font-size:6.5px;font-weight:700;cursor:pointer">✕ Reject</div></td></tr>
+                  <tr><td>Kiran B.</td><td>Medical</td><td>Apr 7–9</td><td>3</td><td style="display:flex;gap:3px"><div style="background:rgba(34,197,94,0.2);color:#4ade80;border-radius:3px;padding:1px 5px;font-size:6.5px;font-weight:700;cursor:pointer">✓ Approve</div><div style="background:rgba(239,68,68,0.2);color:#f87171;border-radius:3px;padding:1px 5px;font-size:6.5px;font-weight:700;cursor:pointer">✕ Reject</div></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+        <div class="mock">
+          <div class="mock-bar"><div class="mock-dots"><span class="mock-dot r"></span><span class="mock-dot y"></span><span class="mock-dot g"></span></div><div class="mock-url">tapvera.com · Notice Board</div></div>
+          <div style="background:var(--bg);padding:10px">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px"><div style="font-size:8.5px;font-weight:700;color:var(--txt);font-family:'Inter',sans-serif">Company Notices</div><div style="background:var(--or);border-radius:4px;padding:2px 7px;font-size:7px;font-weight:700;color:#000;font-family:'Inter',sans-serif">+ New Notice</div></div>
+            <div style="display:flex;flex-direction:column;gap:4px">
+              <div style="background:var(--s1);border:1px solid rgba(255,153,0,0.3);border-left:3px solid var(--or);border-radius:5px;padding:7px">
+                <div style="font-size:8px;font-weight:700;color:var(--txt);font-family:'Inter',sans-serif">📢 Office Closed — Good Friday</div>
+                <div style="font-size:7px;color:var(--m3);font-family:'Inter',sans-serif;margin-top:2px">April 18, 2026 · Admin</div>
+              </div>
+              <div style="background:var(--s1);border:1px solid var(--bd);border-radius:5px;padding:7px">
+                <div style="font-size:8px;font-weight:700;color:var(--txt);font-family:'Inter',sans-serif">📋 Updated Leave Policy — Q2 2026</div>
+                <div style="font-size:7px;color:var(--m3);font-family:'Inter',sans-serif;margin-top:2px">April 1, 2026 · HR Team</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="page-footer">
+    <div class="pf-brand"><span class="pf-name">TAPVERA</span></div>
+    <span class="pf-page">31 / Notice Board &amp; Leave Administration</span>
+    <span class="pf-conf">Confidential</span>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════
+     PAGE 32 — SUPER ADMIN
+══════════════════════════════════════ -->
+<div class="page sp">
+  <div class="sp-header">
+    <span class="sp-tag">Super Administration</span>
+    <div class="sp-title">Super Admin Portal — Complete System Control</div>
+    <div class="sp-subtitle">The highest level of access in Tapvera — a Super Admin sees everything, controls everyone, and has access to tools that no other role can touch.</div>
+  </div>
+  <div class="sp-body">
+    <div class="feat-2col">
+      <div>
+        <p class="feat-label">The Story</p>
+        <p class="feat-p">In any organization, there needs to be someone who has the complete picture — who can see every employee's live status, access any account, view private data when necessary for operations, and make system-wide changes. The Super Admin role in Tapvera is built for exactly this level of responsibility.</p>
+        <p class="feat-p">The Super Admin Dashboard shows a live feed of every employee's attendance status for the current day — who is working, who is on break, who hasn't logged in. It updates in real time. The Super Admin can switch between table view and card view, search any employee, filter by status, and see exact work duration for every person at that moment. They also have access to every employee's Notepad through the Notepad Viewer — for organizational auditing if required.</p>
+        <ul class="feat-list">
+          <li>Live employee attendance status — real-time for all employees at once</li>
+          <li>Work duration counter per employee — updated every minute</li>
+          <li>Table view and Card view toggle for different oversight needs</li>
+          <li>Filter by status: All, Working, On Break, Not Started, Left</li>
+          <li>Search any employee by name instantly</li>
+          <li>Date selector — view attendance for any historical date</li>
+          <li>Super Admin Attendance Portal — separate deep attendance analytics view</li>
+          <li>Notepad Viewer — access any employee's private notepad for admin auditing</li>
+          <li>Full access to all CRM modules: HR, Payroll, Projects, Leads, Clients</li>
+          <li>System-wide controls not available to any other role</li>
+        </ul>
+        <div class="callout-box">
+          <p>The Super Admin role is not about micromanagement — it's about having the visibility to make the right decisions fast, with confidence, and with complete information.</p>
+        </div>
+      </div>
+      <div>
+        <div class="mock">
+          <div class="mock-bar"><div class="mock-dots"><span class="mock-dot r"></span><span class="mock-dot y"></span><span class="mock-dot g"></span></div><div class="mock-url">tapvera.com · Super Admin Dashboard — Live View</div></div>
+          <div class="mock-body" style="height:180px">
+            <div class="mock-sidebar"><div class="mock-sb-logo"></div><div class="mock-sb-item active">🛡️</div><div class="mock-sb-item">👥</div><div class="mock-sb-item">📊</div><div class="mock-sb-item">📝</div></div>
+            <div class="mock-content">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+                <div style="font-size:8px;font-weight:700;color:var(--txt);font-family:'Inter',sans-serif">Live Attendance — April 2, 2026 · 3:42 PM</div>
+                <div style="display:flex;gap:4px;font-size:7px;font-family:'Inter',sans-serif">
+                  <span style="background:rgba(255,255,255,0.06);border:1px solid var(--bd);border-radius:3px;padding:2px 5px;color:var(--m2)">Table</span>
+                  <span style="background:rgba(255,153,0,0.15);border:1px solid rgba(255,153,0,0.3);border-radius:3px;padding:2px 5px;color:var(--or)">Cards</span>
+                </div>
+              </div>
+              <div class="mc-row" style="margin-bottom:4px">
+                <div class="mc"><div class="mc-val" style="font-size:11px;color:var(--gr)">38</div><div class="mc-lbl">Working</div></div>
+                <div class="mc"><div class="mc-val" style="font-size:11px;color:var(--am)">4</div><div class="mc-lbl">On Break</div></div>
+                <div class="mc"><div class="mc-val" style="font-size:11px;color:var(--rd)">6</div><div class="mc-lbl">Not Started</div></div>
+                <div class="mc"><div class="mc-val" style="font-size:11px;color:var(--m3)">0</div><div class="mc-lbl">Left</div></div>
+              </div>
+              <table class="mtable">
+                <thead><tr><th>Employee</th><th>Status</th><th>Punch In</th><th>Duration</th><th>Break</th></tr></thead>
+                <tbody>
+                  <tr><td>Archisman D.</td><td><span class="mb mb-g">● Working</span></td><td>09:04 AM</td><td>6h 38m</td><td>0h 20m</td></tr>
+                  <tr><td>Sahil K.</td><td><span class="mb mb-am">☕ Break</span></td><td>09:48 AM</td><td>5h 54m</td><td>0h 35m</td></tr>
+                  <tr><td>Rajesh D.</td><td><span class="mb mb-g">● Working</span></td><td>08:55 AM</td><td>6h 47m</td><td>0h 15m</td></tr>
+                  <tr><td>Kiran B.</td><td><span class="mb mb-v">🏖️ Leave</span></td><td>—</td><td>—</td><td>—</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+        <div style="margin-top:10px" class="gradient-accent">
+          <div style="font-size:9px;font-weight:700;color:var(--or);margin-bottom:6px;text-transform:uppercase;letter-spacing:1px">Super Admin Exclusive Access</div>
+          <div style="display:flex;flex-direction:column;gap:4px">
+            <div style="font-size:10.5px;color:#444">🔐 View any employee's private Notepad</div>
+            <div style="font-size:10.5px;color:#444">📊 System-wide attendance portal with full analytics</div>
+            <div style="font-size:10.5px;color:#444">👁️ Real-time live status of all 48 employees</div>
+            <div style="font-size:10.5px;color:#444">⚙️ System configuration and access control</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="page-footer">
+    <div class="pf-brand"><span class="pf-name">TAPVERA</span></div>
+    <span class="pf-page">32 / Super Admin Portal</span>
+    <span class="pf-conf">Confidential</span>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════
+     PAGE 33 — SHARED SHEETS
+══════════════════════════════════════ -->
+<div class="page sp">
+  <div class="sp-header">
+    <span class="sp-tag">Collaboration Tools</span>
+    <div class="sp-title">Shared Sheets — Collaborative Data Management Inside the CRM</div>
+    <div class="sp-subtitle">A built-in spreadsheet collaboration tool that lets teams create, share, and edit data sheets together — without leaving Tapvera for Google Sheets or Excel.</div>
+  </div>
+  <div class="sp-body">
+    <div class="feat-2col">
+      <div>
+        <p class="feat-label">The Story</p>
+        <p class="feat-p">Every team has shared data they need to manage together — a content calendar, a lead list, a project tracker, a budget sheet. Most teams use Google Sheets, which means another browser tab, another login, another place where data gets siloed away from the CRM context.</p>
+        <p class="feat-p">Tapvera's Shared Sheets module brings collaborative spreadsheets directly into the platform. Sheets can be created by admins, shared with specific employees or the whole team, and edited in real time. They live inside Tapvera — searchable, linked to projects, and accessible from the sidebar — so the team's shared data stays where the team's work happens.</p>
+        <ul class="feat-list">
+          <li>Create spreadsheets directly inside Tapvera — no external tool needed</li>
+          <li>Share sheets with specific team members or make them org-wide</li>
+          <li>Real-time collaborative editing with change tracking</li>
+          <li>Link sheets to specific projects for contextual data access</li>
+          <li>Accessible by employees from their sidebar — always one click away</li>
+          <li>Admin control over who can view, edit, or create sheets</li>
+          <li>Sheet Manager Page — admin view of all sheets in the organization</li>
+          <li>Organized by project or department for easy navigation</li>
+        </ul>
+        <div class="callout-box">
+          <p>When shared data lives inside the CRM, it stays connected to the work it supports. No copy-pasting between tabs. No version confusion. Just one platform, one source of truth.</p>
+        </div>
+      </div>
+      <div>
+        <div class="mock" style="margin-bottom:14px">
+          <div class="mock-bar"><div class="mock-dots"><span class="mock-dot r"></span><span class="mock-dot y"></span><span class="mock-dot g"></span></div><div class="mock-url">tapvera.com · Shared Sheets</div></div>
+          <div class="mock-body" style="height:140px">
+            <div class="mock-sidebar"><div class="mock-sb-logo"></div><div class="mock-sb-item">📁</div><div class="mock-sb-item active">📊</div><div class="mock-sb-item">💬</div></div>
+            <div class="mock-content">
+              <div style="font-size:8px;font-weight:700;color:var(--txt);font-family:'Inter',sans-serif;margin-bottom:6px">My Shared Sheets (12)</div>
+              <div style="display:flex;flex-direction:column;gap:4px">
+                <div style="background:var(--s1);border:1px solid var(--bd);border-radius:5px;padding:7px;display:flex;justify-content:space-between;align-items:center"><div><div style="font-size:8px;font-weight:600;color:var(--txt);font-family:'Inter',sans-serif">Content Calendar — April 2026</div><div style="font-size:6.5px;color:var(--m3);font-family:'Inter',sans-serif;margin-top:1px">Wonderseed Project · 4 editors</div></div><span class="mb mb-g">Shared</span></div>
+                <div style="background:var(--s1);border:1px solid var(--bd);border-radius:5px;padding:7px;display:flex;justify-content:space-between;align-items:center"><div><div style="font-size:8px;font-weight:600;color:var(--txt);font-family:'Inter',sans-serif">Lead Tracking — Q2 2026</div><div style="font-size:6.5px;color:var(--m3);font-family:'Inter',sans-serif;margin-top:1px">Sales Team · 6 editors</div></div><span class="mb mb-b">Team</span></div>
+                <div style="background:var(--s1);border:1px solid var(--bd);border-radius:5px;padding:7px;display:flex;justify-content:space-between;align-items:center"><div><div style="font-size:8px;font-weight:600;color:var(--txt);font-family:'Inter',sans-serif">Employee Onboarding Checklist</div><div style="font-size:6.5px;color:var(--m3);font-family:'Inter',sans-serif;margin-top:1px">HR Team · Admin only</div></div><span class="mb mb-v">Private</span></div>
+                <div style="background:var(--s1);border:1px solid var(--bd);border-radius:5px;padding:7px;display:flex;justify-content:space-between;align-items:center"><div><div style="font-size:8px;font-weight:600;color:var(--txt);font-family:'Inter',sans-serif">Blog Content Planner</div><div style="font-size:6.5px;color:var(--m3);font-family:'Inter',sans-serif;margin-top:1px">Nova Designs Project · 3 editors</div></div><span class="mb mb-g">Shared</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="benefit-grid">
+          <div class="benefit"><h4>No Extra Tools</h4><p>Sheets live inside Tapvera — no Google Sheets, no Excel exports, no broken links</p></div>
+          <div class="benefit"><h4>Access Control</h4><p>Admins control exactly who can see and edit each sheet — per person or per team</p></div>
+          <div class="benefit"><h4>Project Context</h4><p>Sheets linked to projects keep data and work connected in one logical place</p></div>
+          <div class="benefit"><h4>Always Available</h4><p>Accessible from every employee's sidebar — sheets are always one click away</p></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="page-footer">
+    <div class="pf-brand"><span class="pf-name">TAPVERA</span></div>
+    <span class="pf-page">33 / Shared Sheets</span>
+    <span class="pf-conf">Confidential</span>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════
+     PAGE 34 — WHY TAPVERA
+══════════════════════════════════════ -->
+<div class="page sp">
+  <div class="sp-header">
+    <span class="sp-tag">The Tapvera Advantage</span>
+    <div class="sp-title">Why Tapvera? Because Businesses Deserve Better.</div>
+    <div class="sp-subtitle">35+ modules. 4 user roles. One platform. Zero compromise on the features that make real businesses run better every single day.</div>
+  </div>
+  <div class="sp-body">
+    <div class="mini-cards">
+      <div class="mini-card"><div class="mini-card-n">35+</div><div class="mini-card-l">Platform Modules</div></div>
+      <div class="mini-card"><div class="mini-card-n">4</div><div class="mini-card-l">User Role Types</div></div>
+      <div class="mini-card"><div class="mini-card-n">100%</div><div class="mini-card-l">Web-Based</div></div>
+      <div class="mini-card"><div class="mini-card-n">∞</div><div class="mini-card-l">Scalability</div></div>
+    </div>
+    <div class="benefit-grid" style="margin-bottom:14px">
+      <div class="benefit"><h4>Everything in One Place</h4><p>HR, attendance, payroll, projects, leads, clients, chat, analytics — all in a single platform. No more switching between 6 different tools.</p></div>
+      <div class="benefit"><h4>Role-Based Access</h4><p>Every user sees exactly what they need — no more, no less. Employees, admins, sales teams, and super admins each get a tailored experience.</p></div>
+      <div class="benefit"><h4>Real-Time &amp; Live</h4><p>Attendance is live. Notifications are instant. Task updates happen in real time. The information you act on is never stale.</p></div>
+      <div class="benefit"><h4>Self-Service for Everyone</h4><p>Employees manage their leaves, payslips, profile, and attendance. HR doesn't get buried in requests. Everyone is empowered to own their data.</p></div>
+      <div class="benefit"><h4>Built for Growth</h4><p>Start with 5 employees. Scale to 500. The system grows with you — no re-implementation, no migration pain, no limits.</p></div>
+      <div class="benefit"><h4>Gamified Productivity</h4><p>Achievements, levels, streaks, and points turn daily work into a motivating journey. Employees who see their progress perform better.</p></div>
+      <div class="benefit"><h4>No Paper. No Spreadsheets.</h4><p>Attendance registers, payroll spreadsheets, leave forms, and status reports — all eliminated. Digital, auditable, and always accurate.</p></div>
+      <div class="benefit"><h4>Agency-Ready</h4><p>Built-in SEO analytics, keyword tracking, project communication, and client reporting make Tapvera the tool that agencies have been waiting for.</p></div>
+    </div>
+    <div class="s-div"></div>
+    <div style="text-align:center;padding:10px 0">
+      <p style="font-size:12.5px;color:#555;margin-bottom:8px">From the first punch-in of the day to the last payslip of the month — Tapvera is there at every step. For every person. Every department. Every decision.</p>
+      <div class="tag-cloud" style="justify-content:center">
+        <span class="tag"><span class="tag-dot" style="background:var(--or)"></span>Employee Productivity</span>
+        <span class="tag"><span class="tag-dot" style="background:var(--bl)"></span>HR Automation</span>
+        <span class="tag"><span class="tag-dot" style="background:var(--gr)"></span>Sales Management</span>
+        <span class="tag"><span class="tag-dot" style="background:var(--vi)"></span>Project Delivery</span>
+        <span class="tag"><span class="tag-dot" style="background:var(--pk)"></span>Client Success</span>
+        <span class="tag"><span class="tag-dot" style="background:var(--am)"></span>Payroll Accuracy</span>
+        <span class="tag"><span class="tag-dot" style="background:var(--rd)"></span>Team Communication</span>
+        <span class="tag"><span class="tag-dot" style="background:var(--or)"></span>SEO Analytics</span>
+      </div>
+    </div>
+  </div>
+  <div class="page-footer">
+    <div class="pf-brand"><span class="pf-name">TAPVERA</span></div>
+    <span class="pf-page">34 / Why Tapvera</span>
+    <span class="pf-conf">Confidential</span>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════
+     PAGE 35 — CLOSING
+══════════════════════════════════════ -->
+<div class="page closing">
+  <div class="cover-glow"></div>
+  <div class="cover-grid"></div>
+  <div class="closing-inner">
+    <div class="closing-title">Ready to Run Your<br/>Business Smarter?</div>
+    <p class="closing-sub">Tapvera CRM is more than software — it's the operating system for your team. From the first login to the last deal closed, every workflow is designed to save time, eliminate confusion, and help your people do their best work.</p>
+    <div class="closing-card">
+      <div class="closing-card-logo">Tapvera</div>
+      <div class="closing-card-text">
+        <div>Tapping Innovations</div>
+        <div>Complete CRM · HR · Sales · Analytics</div>
+      </div>
+    </div>
+    <div class="credits">Built by <span>Tapvera Technologies</span> · April 2026 · All rights reserved</div>
+    <div style="margin-top:24px;display:flex;justify-content:center;gap:16px">
+      <div style="background:rgba(255,255,255,0.04);border:1px solid var(--bd);border-radius:8px;padding:10px 18px;text-align:center">
+        <div style="font-size:9px;color:var(--m3);margin-bottom:3px">EMPLOYEES</div>
+        <div style="font-size:11px;color:var(--m1);font-weight:600">15+ personal tools</div>
+      </div>
+      <div style="background:rgba(255,255,255,0.04);border:1px solid var(--bd);border-radius:8px;padding:10px 18px;text-align:center">
+        <div style="font-size:9px;color:var(--m3);margin-bottom:3px">ADMINS</div>
+        <div style="font-size:11px;color:var(--m1);font-weight:600">Full HR &amp; ops suite</div>
+      </div>
+      <div style="background:rgba(255,255,255,0.04);border:1px solid var(--bd);border-radius:8px;padding:10px 18px;text-align:center">
+        <div style="font-size:9px;color:var(--m3);margin-bottom:3px">SALES</div>
+        <div style="font-size:11px;color:var(--m1);font-weight:600">Pipeline &amp; clients</div>
+      </div>
+      <div style="background:rgba(255,255,255,0.04);border:1px solid var(--bd);border-radius:8px;padding:10px 18px;text-align:center">
+        <div style="font-size:9px;color:var(--m3);margin-bottom:3px">AGENCIES</div>
+        <div style="font-size:11px;color:var(--m1);font-weight:600">SEO &amp; delivery</div>
+      </div>
+    </div>
+  </div>
+  <div class="cover-footer">
+    <span>tapvera.com</span>
+    <span>Complete Platform Overview · 35 Pages · Confidential</span>
+    <span>© Tapvera Technologies 2026</span>
+  </div>
+</div>
+
+</body>
+</html>
