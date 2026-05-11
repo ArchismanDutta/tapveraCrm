@@ -9,23 +9,17 @@ import axios from "axios";
 import { Link, useNavigate } from "react-router-dom";
 import dayjs from "dayjs";
 import {
-  TrendingUp,
   Clock,
   Target,
-  Activity,
   Calendar,
   CheckSquare,
   AlertTriangle,
   Coffee,
   Play,
-  Pause,
   RefreshCw,
   BarChart3,
   Zap,
-  Timer,
 } from "lucide-react";
-
-import SummaryCards from "../components/dashboard/SummaryCards";
 import TodayTasks from "../components/dashboard/TodayTasks";
 import Sidebar from "../components/dashboard/Sidebar";
 import NotificationBell from "../components/dashboard/NotificationBell";
@@ -630,12 +624,14 @@ const EmployeeDashboard = ({ onLogout }) => {
     return actions;
   }, [workStatus, navigate, handlePunchIn, handleTakeBreak, handleResumeWork]);
 
-  // Show payment block overlay if there's an active payment
   if (checkingPayment) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-900">
+      <div className="flex items-center justify-center min-h-screen bg-[#0f1419]">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-indigo-600 mx-auto"></div>
+          <div className="relative">
+            <div className="w-16 h-16 border-4 border-cyan-300/40 rounded-full"></div>
+            <div className="absolute top-0 left-0 w-16 h-16 border-4 border-cyan-600 border-t-transparent rounded-full animate-spin"></div>
+          </div>
           <p className="mt-4 text-gray-300">Loading...</p>
         </div>
       </div>
@@ -653,7 +649,7 @@ const EmployeeDashboard = ({ onLogout }) => {
 
   return (
     <>
-      <div className="flex bg-gradient-to-br from-[#141a21] via-[#191f2b] to-[#101218] font-sans text-blue-100 min-h-screen">
+      <div className="flex min-h-screen bg-[#0f1419] font-sans text-gray-100">
         <Sidebar
           collapsed={collapsed}
           setCollapsed={setCollapsed}
@@ -662,103 +658,60 @@ const EmployeeDashboard = ({ onLogout }) => {
         />
 
         <main
-          className={`flex-1 p-8 overflow-y-auto transition-all duration-300 ${
+          className={`flex-1 p-2 transition-all duration-300 h-screen overflow-hidden flex flex-col ${
             collapsed ? "ml-20" : "ml-72"
           }`}
         >
-          {/* Enhanced Header */}
-          <div className="flex flex-col lg:flex-row lg:justify-between lg:items-start gap-6 mb-8">
-            <div className="flex-1">
-              <div className="flex items-center gap-4 mb-2">
-                <h1 className="text-3xl font-bold text-white tracking-tight">
-                  Good{" "}
-                  {currentTime.getHours() < 12
-                    ? "Morning"
-                    : currentTime.getHours() < 18
-                    ? "Afternoon"
-                    : "Evening"}
-                  , {userName}
-                </h1>
+          {/* Compact Header */}
+          <div className="flex justify-between items-center mb-2 gap-2 flex-wrap">
+            <div className="flex items-center gap-3 flex-wrap">
+              <h1 className="text-lg font-bold text-gray-100">
+                Dashboard
+                {userName && <span className="text-cyan-400"> - {userName}</span>}
+              </h1>
+
+              {/* Inline Status Badge */}
+              <div className="flex items-center gap-2 bg-[#161c2c] rounded px-2 py-1 border border-[#232945]">
+                <div className={`w-1.5 h-1.5 rounded-full ${
+                  workStatus?.currentlyWorking
+                    ? workStatus?.onBreak ? "bg-yellow-400 animate-pulse" : "bg-green-400 animate-pulse"
+                    : "bg-gray-500"
+                }`}></div>
+                <span className="text-xs">
+                  {workStatus?.currentlyWorking
+                    ? workStatus?.onBreak ? "On Break" : "Working"
+                    : "Offline"}
+                </span>
+                {workStatus?.arrivalTimeFormatted && (
+                  <span className="text-xs text-gray-400">• {workStatus.arrivalTimeFormatted}</span>
+                )}
                 {workStatus && (
-                  <div
-                    className={`flex items-center gap-2 px-3 py-1 rounded-full text-sm font-medium ${
-                      workStatus.currentlyWorking
-                        ? workStatus.onBreak
-                          ? "bg-yellow-500/20 text-yellow-400"
-                          : "bg-green-500/20 text-green-400"
-                        : "bg-gray-500/20 text-gray-400"
-                    }`}
-                  >
-                    <div
-                      className={`w-2 h-2 rounded-full animate-pulse ${
-                        workStatus.currentlyWorking
-                          ? workStatus.onBreak
-                            ? "bg-yellow-400"
-                            : "bg-green-400"
-                          : "bg-gray-400"
-                      }`}
-                    ></div>
-                    {workStatus.currentlyWorking
-                      ? workStatus.onBreak
-                        ? "On Break"
-                        : "Working"
-                      : "Offline"}
-                  </div>
+                  <span className="text-xs text-green-400">
+                    {(() => {
+                      const s = workStatus.workDurationSeconds || 0;
+                      return `${Math.floor(s / 3600)}h ${String(Math.floor((s % 3600) / 60)).padStart(2, "0")}m`;
+                    })()}
+                  </span>
                 )}
               </div>
-              <p className="text-blue-300 mb-3">
-                {currentTime.toLocaleDateString("en-US", {
-                  weekday: "long",
-                  year: "numeric",
-                  month: "long",
-                  day: "numeric",
-                })}{" "}
-                •{" "}
-                {currentTime.toLocaleTimeString("en-US", {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                  second: "2-digit",
-                })}
-              </p>
 
-              {/* Work Status Summary */}
-              {workStatus && (
-                <div className="flex items-center gap-6 text-sm text-gray-300">
-                  <div className="flex items-center gap-2">
-                    <Clock className="w-4 h-4 text-blue-400" />
-                    <span>
-                      Today:{" "}
-                      {(() => {
-                        const seconds = workStatus.workDurationSeconds || 0;
-                        const hours = Math.floor(seconds / 3600);
-                        const minutes = Math.floor((seconds % 3600) / 60);
-                        return `${hours}h ${minutes}m`;
-                      })()}
-                    </span>
-                  </div>
-                  {workStatus.arrivalTimeFormatted && (
-                    <div className="flex items-center gap-2">
-                      <Timer className="w-4 h-4 text-green-400" />
-                      <span>Arrived: {workStatus.arrivalTimeFormatted}</span>
-                    </div>
-                  )}
-                  <div className="text-xs text-gray-500">
-                    Last updated: {lastRefresh.toLocaleTimeString()}
-                  </div>
-                </div>
-              )}
+              {/* Date/time pill */}
+              <span className="hidden sm:block text-xs text-gray-400">
+                {currentTime.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
+                {" · "}
+                {currentTime.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+              </span>
             </div>
 
-            <div className="flex items-center gap-3">
-              {/* Refresh Button */}
+            {/* Right Side Actions */}
+            <div className="flex items-center gap-2">
               <button
                 onClick={handleRefreshAll}
-                className="p-2 rounded-lg bg-blue-600/20 hover:bg-blue-600/40 text-blue-400 border border-blue-500/30 transition-colors"
+                className="p-1.5 rounded bg-blue-600/20 hover:bg-blue-600/40 text-blue-400 border border-blue-500/30 transition-colors"
                 title="Refresh all data"
               >
-                <RefreshCw className="w-4 h-4" />
+                <RefreshCw className="w-3.5 h-3.5" />
               </button>
-
               <NotificationBell
                 notifications={notifications}
                 onDismiss={handleDismissNotification}
@@ -768,92 +721,204 @@ const EmployeeDashboard = ({ onLogout }) => {
                 <img
                   src="https://i.pravatar.cc/40?img=3"
                   alt="Profile Avatar"
-                  className="w-9 h-9 rounded-full cursor-pointer border-2 border-orange-500 shadow-lg hover:border-orange-400 transition-colors"
+                  className="w-8 h-8 rounded-full cursor-pointer border-2 border-orange-500 hover:border-orange-400 transition-colors"
                 />
               </Link>
             </div>
           </div>
 
-          {/* Enhanced Dashboard Grid */}
-          <div className="space-y-6">
-            {/* Enhanced Summary Cards */}
-            <SummaryCards data={summaryData} />
+          {/* Main scrollable content */}
+          <div className="flex-1 flex flex-col gap-2 overflow-auto">
 
-            {/* Quick Actions Panel */}
-            <div className="bg-[#191f2b]/70 rounded-xl shadow-xl border border-[#232945] p-6">
-              <div className="flex items-center gap-2 mb-4">
-                <Zap className="w-5 h-5 text-yellow-400" />
-                <h3 className="text-lg font-semibold text-white">
-                  Quick Actions
-                </h3>
+            {/* Top Row: Work Status + Quick Actions */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+
+              {/* Work Status Card */}
+              <div className="bg-[#161c2c] rounded-lg border border-[#232945] p-3 relative">
                 {dataLoading.status && (
-                  <div className="w-4 h-4 border-2 border-yellow-500/20 border-t-yellow-500 rounded-full animate-spin"></div>
+                  <div className="absolute inset-0 bg-black/40 z-10 flex items-center justify-center rounded-lg">
+                    <div className="flex items-center gap-1.5 bg-[#161c2c] px-2 py-1 rounded border border-[#232945]">
+                      <div className="w-3 h-3 border-2 border-cyan-500/20 border-t-cyan-500 rounded-full animate-spin"></div>
+                      <span className="text-xs text-gray-200">Updating...</span>
+                    </div>
+                  </div>
+                )}
+                <div className="flex items-center gap-2 mb-3">
+                  <Clock className="w-4 h-4 text-cyan-400" />
+                  <h3 className="text-sm font-semibold text-white">Work Status</h3>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="bg-[#0f1419] rounded p-2 border border-[#232945]">
+                    <div className="text-xs text-gray-400 mb-1">Work Time</div>
+                    <div className="text-sm font-bold text-green-400">
+                      {workStatus
+                        ? (() => {
+                            const s = workStatus.workDurationSeconds || 0;
+                            return `${Math.floor(s / 3600)}h ${String(Math.floor((s % 3600) / 60)).padStart(2, "0")}m`;
+                          })()
+                        : "--"}
+                    </div>
+                  </div>
+                  <div className="bg-[#0f1419] rounded p-2 border border-[#232945]">
+                    <div className="text-xs text-gray-400 mb-1">Break</div>
+                    <div className="text-sm font-bold text-orange-400">
+                      {workStatus
+                        ? (() => {
+                            const s = workStatus.breakDurationSeconds || 0;
+                            return `${Math.floor(s / 3600)}h ${String(Math.floor((s % 3600) / 60)).padStart(2, "0")}m`;
+                          })()
+                        : "--"}
+                    </div>
+                  </div>
+                  <div className="bg-[#0f1419] rounded p-2 border border-[#232945]">
+                    <div className="text-xs text-gray-400 mb-1">Arrived</div>
+                    <div className="text-sm font-bold text-blue-400">
+                      {workStatus?.arrivalTimeFormatted || "--"}
+                    </div>
+                  </div>
+                </div>
+                {workStatus?.isLate && (
+                  <div className="mt-2 flex items-center gap-1 text-xs text-red-400">
+                    <AlertTriangle className="w-3 h-3" />
+                    <span>Late arrival</span>
+                  </div>
                 )}
               </div>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                {quickActions.map((action, idx) => {
-                  const Icon = action.icon;
+
+              {/* Quick Actions */}
+              <div className="bg-[#161c2c] rounded-lg border border-[#232945] p-3">
+                <div className="flex items-center gap-2 mb-3">
+                  <Zap className="w-4 h-4 text-yellow-400" />
+                  <h3 className="text-sm font-semibold text-white">Quick Actions</h3>
+                  {dataLoading.status && (
+                    <div className="w-3 h-3 border-2 border-yellow-500/20 border-t-yellow-500 rounded-full animate-spin ml-auto"></div>
+                  )}
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  {quickActions.map((action, idx) => {
+                    const Icon = action.icon;
+                    return (
+                      <button
+                        key={`${action.label}-${idx}`}
+                        onClick={action.action}
+                        disabled={action.disabled || dataLoading.status}
+                        className={`flex flex-col items-center gap-1.5 p-2.5 rounded border transition-all duration-200 hover:scale-105 ${
+                          action.disabled || dataLoading.status
+                            ? "bg-gray-700/50 border-gray-600 text-gray-500 cursor-not-allowed"
+                            : action.color === "green"
+                            ? "bg-green-600/20 border-green-500/50 text-green-400 hover:bg-green-600/30"
+                            : action.color === "orange"
+                            ? "bg-orange-600/20 border-orange-500/50 text-orange-400 hover:bg-orange-600/30"
+                            : action.color === "blue"
+                            ? "bg-blue-600/20 border-blue-500/50 text-blue-400 hover:bg-blue-600/30"
+                            : "bg-purple-600/20 border-purple-500/50 text-purple-400 hover:bg-purple-600/30"
+                        }`}
+                      >
+                        {dataLoading.status &&
+                        (action.label.includes("Punch") ||
+                          action.label.includes("Break") ||
+                          action.label.includes("Resume")) ? (
+                          <div className="w-4 h-4 border-2 border-gray-500/20 border-t-gray-500 rounded-full animate-spin"></div>
+                        ) : (
+                          <Icon className="w-4 h-4" />
+                        )}
+                        <span className="text-xs font-medium leading-tight text-center">
+                          {action.label}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            {/* Task Overview — compact stat grid */}
+            <div className="bg-[#161c2c] rounded-lg border border-[#232945] p-3">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <BarChart3 className="w-4 h-4 text-blue-400" />
+                  <h3 className="text-sm font-semibold text-white">Task Overview</h3>
+                </div>
+                <Link
+                  to="/tasks"
+                  className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
+                >
+                  View All →
+                </Link>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+                {summaryData.map((item, idx) => {
+                  const Icon = item.icon;
                   return (
-                    <button
-                      key={`${action.label}-${idx}`}
-                      onClick={action.action}
-                      disabled={action.disabled || dataLoading.status}
-                      className={`flex flex-col items-center gap-2 p-4 rounded-lg border transition-all duration-200 hover:scale-105 ${
-                        action.disabled || dataLoading.status
-                          ? "bg-gray-700/50 border-gray-600 text-gray-500 cursor-not-allowed"
-                          : action.color === "green"
-                          ? "bg-green-600/20 border-green-500/50 text-green-400 hover:bg-green-600/30"
-                          : action.color === "orange"
-                          ? "bg-orange-600/20 border-orange-500/50 text-orange-400 hover:bg-orange-600/30"
-                          : action.color === "red"
-                          ? "bg-red-600/20 border-red-500/50 text-red-400 hover:bg-red-600/30"
-                          : action.color === "blue"
-                          ? "bg-blue-600/20 border-blue-500/50 text-blue-400 hover:bg-blue-600/30"
-                          : "bg-purple-600/20 border-purple-500/50 text-purple-400 hover:bg-purple-600/30"
-                      }`}
+                    <div
+                      key={idx}
+                      className={`bg-[#0f1419] rounded p-2.5 border ${
+                        item.urgent ? "border-red-500/40" : "border-[#232945]"
+                      } relative overflow-hidden`}
                     >
-                      {dataLoading.status &&
-                      (action.label.includes("Punch") ||
-                        action.label.includes("Break") ||
-                        action.label.includes("Resume")) ? (
-                        <div className="w-5 h-5 border-2 border-gray-500/20 border-t-gray-500 rounded-full animate-spin"></div>
-                      ) : (
-                        <Icon className="w-5 h-5" />
+                      {item.urgent && (
+                        <div className="absolute top-1 right-1 w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse"></div>
                       )}
-                      <span className="text-sm font-medium">
-                        {action.label}
-                      </span>
-                    </button>
+                      <div className="flex items-center gap-1.5 mb-1.5">
+                        {Icon && (
+                          <Icon
+                            className={`w-3.5 h-3.5 ${
+                              item.color === "red"
+                                ? "text-red-400"
+                                : item.color === "orange"
+                                ? "text-orange-400"
+                                : item.color === "green"
+                                ? "text-green-400"
+                                : item.color === "rose"
+                                ? "text-rose-400"
+                                : "text-blue-400"
+                            }`}
+                          />
+                        )}
+                        <span className="text-xs text-gray-400 truncate">{item.label}</span>
+                      </div>
+                      <div
+                        className={`text-2xl font-bold ${
+                          item.urgent ? "text-red-400" : "text-white"
+                        }`}
+                      >
+                        {item.count}
+                      </div>
+                      {item.trend && (
+                        <div className="text-xs text-gray-500 mt-0.5">{item.trend}</div>
+                      )}
+                    </div>
                   );
                 })}
               </div>
             </div>
 
-            {/* Tasks Section */}
-            <div className="bg-[#191f2b]/70 rounded-xl shadow-xl border border-[#232945] p-6">
-              <div className="flex items-center justify-between mb-4">
+            {/* Today's Tasks */}
+            <div className="bg-[#161c2c] rounded-lg border border-[#232945] p-3 flex-1 min-h-0 flex flex-col">
+              <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
-                  <CheckSquare className="w-5 h-5 text-blue-400" />
-                  <h3 className="text-lg font-semibold text-white">
-                    Today's Tasks
-                  </h3>
+                  <CheckSquare className="w-4 h-4 text-blue-400" />
+                  <h3 className="text-sm font-semibold text-white">Today's Tasks</h3>
                   {loading && (
-                    <div className="w-4 h-4 border-2 border-blue-500/20 border-t-blue-500 rounded-full animate-spin"></div>
+                    <div className="w-3 h-3 border-2 border-blue-500/20 border-t-blue-500 rounded-full animate-spin"></div>
                   )}
                 </div>
                 <Link
                   to="/tasks"
-                  className="text-sm text-blue-400 hover:text-blue-300 transition-colors"
+                  className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
                 >
                   View All →
                 </Link>
               </div>
-              <TodayTasks data={tasks} loading={loading} />
+              <div className="overflow-auto flex-1">
+                <TodayTasks data={tasks} loading={loading} />
+              </div>
             </div>
+
           </div>
         </main>
 
-        {/* Error Messages */}
+        {/* Error toasts */}
         {Object.entries(errors).map(
           ([key, error]) =>
             error && (
@@ -863,28 +928,15 @@ const EmployeeDashboard = ({ onLogout }) => {
               >
                 <div className="flex items-center gap-2">
                   <AlertTriangle className="w-4 h-4" />
-                  <span>
-                    Failed to load {key}: {error}
-                  </span>
+                  <span>Failed to load {key}: {error}</span>
                 </div>
               </div>
             )
         )}
 
-        {/* Wishes Popup */}
-        <WishPopup
-          isOpen={showWishPopup}
-          wishes={wishes}
-          onClose={handleCloseWishPopup}
-        />
-
-        {/* Notice Overlay */}
+        <WishPopup isOpen={showWishPopup} wishes={wishes} onClose={handleCloseWishPopup} />
         <NoticeOverlay />
-
-        {/* Dynamic Notification Overlay */}
         <DynamicNotificationOverlay />
-
-        {/* Global Celebration Popup */}
         <CelebrationPopup
           celebrations={celebrations}
           isOpen={showCelebrationPopup}

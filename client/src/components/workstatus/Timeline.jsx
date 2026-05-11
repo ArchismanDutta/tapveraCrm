@@ -107,7 +107,7 @@ const Timeline = ({ timeline = [] }) => {
   });
 
   return (
-    <div className="bg-slate-800/50 backdrop-blur-sm border border-slate-700/50 rounded-lg shadow-xl p-3 transition-all h-full flex flex-col max-h-[300px]">
+    <div className="bg-slate-800/50 backdrop-blur-sm border border-slate-700/50 rounded-lg shadow-xl p-3 transition-all h-full flex flex-col md:max-h-[300px]">
       {/* Header */}
       <div className="flex items-center justify-between mb-2">
         <h3 className="text-sm font-bold text-white">Timeline</h3>

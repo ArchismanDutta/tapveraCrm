@@ -1547,13 +1547,13 @@ const TodayStatusPage = ({ onLogout }) => {
       />
 
       <main
-        className={`flex-1 p-2 transition-all duration-300 h-screen overflow-hidden flex flex-col ${
-          collapsed ? "ml-20" : "ml-72"
+        className={`flex-1 p-2 transition-all duration-300 flex flex-col overflow-auto md:h-screen md:overflow-hidden ${
+          collapsed ? "ml-16 sm:ml-20" : "ml-16 sm:ml-72"
         }`}
       >
         {/* Compact Header */}
-        <div className="flex justify-between items-center mb-2">
-          <div className="flex items-center gap-4">
+        <div className="flex flex-wrap justify-between items-center mb-2 gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <h1 className="text-lg font-bold text-gray-100">
               Today's Status{userName && <span className="text-cyan-400"> - {userName}</span>}
             </h1>
@@ -1575,11 +1575,11 @@ const TodayStatusPage = ({ onLogout }) => {
               {(() => {
                 const arrivalTime = getFormattedArrivalTime(status);
                 return arrivalTime !== "--" ? (
-                  <span className="text-xs text-gray-400">{arrivalTime}</span>
+                  <span className="hidden sm:inline text-xs text-gray-400">{arrivalTime}</span>
                 ) : null;
               })()}
-              <span className="text-xs text-blue-400">{formatHMS(liveWork)}</span>
-              <span className="text-xs text-orange-400">{formatHMS(liveBreak)}</span>
+              <span className="hidden sm:inline text-xs text-blue-400">{formatHMS(liveWork)}</span>
+              <span className="hidden sm:inline text-xs text-orange-400">{formatHMS(liveBreak)}</span>
             </div>
           </div>
 
@@ -1598,7 +1598,7 @@ const TodayStatusPage = ({ onLogout }) => {
         </div>
 
         {/* Main Content - Flex column layout */}
-        <div className="flex-1 flex flex-col gap-2 overflow-auto">
+        <div className="flex-1 flex flex-col gap-2 md:overflow-auto">
           {/* Top Section - Status and Actions */}
           <div className="flex flex-col gap-2">
             <div className="bg-[#161c2c] rounded-lg border border-[#232945] relative">
@@ -1624,7 +1624,7 @@ const TodayStatusPage = ({ onLogout }) => {
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
               <div className="bg-[#161c2c] rounded-lg border border-[#232945]">
                 <BreakManagement
                   breakDuration={formatHMS(liveBreak)}
@@ -1645,8 +1645,8 @@ const TodayStatusPage = ({ onLogout }) => {
           </div>
         </div>
 
-        {/* Bottom Section - Weekly Summary sticky to bottom */}
-        <div className="sticky bottom-0 bg-[#0f1419] pt-2">
+        {/* Bottom Section - Weekly Summary */}
+        <div className="md:sticky md:bottom-0 bg-[#0f1419] pt-2">
           <div className="bg-[#161c2c] rounded-lg border border-[#232945] relative">
             {dataLoadingStates.weeklySummary && (
               <div className="absolute inset-0 bg-black/50 z-10 flex items-center justify-center rounded-lg">

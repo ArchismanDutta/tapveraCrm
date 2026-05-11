@@ -3,31 +3,6 @@ import React, { useState, useEffect } from "react";
 
 const breakTypes = ["Lunch", "Coffee", "Personal"];
 
-const breakTypeIcons = {
-  Lunch: (
-    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-      <path
-        fillRule="evenodd"
-        d="M6 2a2 2 0 00-2 2v12a2 2 0 002 2h8a2 2 0 002-2V4a2 2 0 00-2-2H6zm4 14a4 4 0 004-4v-2a4 4 0 00-4-4 4 4 0 00-4 4v2a4 4 0 004 4z"
-        clipRule="evenodd"
-      />
-    </svg>
-  ),
-  Coffee: (
-    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-      <path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" />
-    </svg>
-  ),
-  Personal: (
-    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-      <path
-        fillRule="evenodd"
-        d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z"
-        clipRule="evenodd"
-      />
-    </svg>
-  ),
-};
 
 const BreakManagement = ({
   breakDuration = "0h 00m",
@@ -70,7 +45,7 @@ const BreakManagement = ({
   };
 
   return (
-    <div className="bg-slate-800/50 backdrop-blur-sm border border-slate-700/50 rounded-lg shadow-xl p-3 transition-all h-full flex flex-col max-h-[300px]">
+    <div className="bg-slate-800/50 backdrop-blur-sm border border-slate-700/50 rounded-lg shadow-xl p-3 transition-all h-full flex flex-col md:max-h-[300px]">
       {/* Header */}
       <div className="flex items-center justify-between mb-2">
         <h3 className="text-sm font-bold text-white">Break</h3>

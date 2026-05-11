@@ -33,7 +33,7 @@ const SummaryCard = ({ weeklySummary, dailyData }) => {
   if (!weeklySummary) {
     return (
       <div className="bg-slate-800/50 backdrop-blur-sm border border-slate-700/50 rounded-lg shadow-xl p-3 w-full">
-        <div className="flex items-center gap-6">
+        <div className="flex flex-wrap items-center gap-3">
           <h3 className="text-sm font-bold text-white whitespace-nowrap">
             Week Summary
           </h3>
@@ -103,45 +103,33 @@ const SummaryCard = ({ weeklySummary, dailyData }) => {
 
   return (
     <div className="bg-slate-800/50 backdrop-blur-sm border border-slate-700/50 rounded-lg shadow-xl p-3 w-full transition-all">
-      <div className="flex items-center gap-6">
+      <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
         <h3 className="text-sm font-bold text-white whitespace-nowrap">
           Week Summary
         </h3>
-        <div className="flex-1 grid grid-cols-6 gap-2">
+        <div className="flex-1 grid grid-cols-3 sm:grid-cols-3 md:grid-cols-6 gap-2">
           <div className="bg-slate-900/60 p-2 rounded border border-slate-700/30 flex flex-col items-center">
-            <p className="text-gray-400 text-xs mb-0.5">
-              Total Hours
-            </p>
+            <p className="text-gray-400 text-xs mb-0.5 text-center">Total Hours</p>
             <p className="text-green-400 text-sm font-bold">{totalWork || "0h 0m"}</p>
           </div>
           <div className="bg-slate-900/60 p-2 rounded border border-slate-700/30 flex flex-col items-center">
-            <p className="text-gray-400 text-xs mb-0.5">
-              Avg. Daily
-            </p>
+            <p className="text-gray-400 text-xs mb-0.5 text-center">Avg. Daily</p>
             <p className="text-green-400 text-sm font-bold">{avgDailyWork || "0h 0m"}</p>
           </div>
           <div className="bg-slate-900/60 p-2 rounded border border-slate-700/30 flex flex-col items-center">
-            <p className="text-gray-400 text-xs mb-0.5">
-              Total Break
-            </p>
+            <p className="text-gray-400 text-xs mb-0.5 text-center">Total Break</p>
             <p className="text-orange-400 text-sm font-bold">{totalBreak || "0h 0m"}</p>
           </div>
           <div className="bg-slate-900/60 p-2 rounded border border-slate-700/30 flex flex-col items-center">
-            <p className="text-gray-400 text-xs mb-0.5">
-              Avg. Break
-            </p>
+            <p className="text-gray-400 text-xs mb-0.5 text-center">Avg. Break</p>
             <p className="text-orange-400 text-sm font-bold">{avgDailyBreak || "0h 0m"}</p>
           </div>
           <div className="bg-slate-900/60 p-2 rounded border border-slate-700/30 flex flex-col items-center">
-            <p className="text-gray-400 text-xs mb-0.5">
-              On-Time Rate
-            </p>
+            <p className="text-gray-400 text-xs mb-0.5 text-center">On-Time</p>
             <p className="text-purple-400 text-sm font-bold">{formattedOnTimeRate}</p>
           </div>
           <div className="bg-slate-900/60 p-2 rounded border border-slate-700/30 flex flex-col items-center">
-            <p className="text-gray-400 text-xs mb-0.5">
-              Breaks Taken
-            </p>
+            <p className="text-gray-400 text-xs mb-0.5 text-center">Breaks</p>
             <p className="text-red-400 text-sm font-bold">{breaksTaken ?? 0}</p>
           </div>
         </div>
