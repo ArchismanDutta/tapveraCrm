@@ -127,6 +127,109 @@ router.post("/:projectId/backlinks", protect, async (req, res) => {
   }
 });
 
+// @route   POST /api/projects/:projectId/backlinks/bulk
+// @desc    Add multiple backlinks at once
+// @access  Private (Admin, SuperAdmin, or assigned employees)
+router.post("/:projectId/backlinks/bulk", protect, async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const { backlinks } = req.body;
+
+    // Validate input
+    if (!backlinks || !Array.isArray(backlinks) || backlinks.length === 0) {
+      return res.status(400).json({
+        message: "Backlinks array is required and must not be empty",
+      });
+    }
+
+    // Limit batch size
+    if (backlinks.length > 50) {
+      return res.status(400).json({
+        message: "Maximum 50 backlinks allowed per batch",
+      });
+    }
+
+    // Check if project exists
+    const project = await Project.findById(projectId);
+    if (!project) {
+      return res.status(404).json({ message: "Project not found" });
+    }
+
+    // Check access
+    if (req.user.role === "employee") {
+      const isAssigned = project.assignedTo.some(
+        (emp) => emp.toString() === req.user._id.toString()
+      );
+      if (!isAssigned) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+    }
+
+    // Process all backlinks
+    const results = {
+      added: 0,
+      failed: 0,
+      backlinks: [],
+      errors: [],
+    };
+
+    // Create all backlinks in parallel
+    const createPromises = backlinks.map(async (backlinkData, index) => {
+      try {
+        const { url, category, notes } = backlinkData;
+
+        if (!url || !category) {
+          throw new Error("URL and category are required");
+        }
+
+        // Detect platform if it's social media
+        let platform = null;
+        if (category === "Social Media") {
+          platform = detectPlatform(url);
+        }
+
+        // Create backlink
+        const backlink = await Backlink.create({
+          project: projectId,
+          url: url.trim(),
+          category,
+          platform,
+          notes: notes || "",
+          addedBy: req.user._id,
+        });
+
+        const populatedBacklink = await Backlink.findById(backlink._id).populate(
+          "addedBy",
+          "name email employeeId"
+        );
+
+        results.added++;
+        results.backlinks.push(populatedBacklink);
+      } catch (error) {
+        results.failed++;
+        results.errors.push({
+          index,
+          url: backlinkData.url,
+          error: error.message,
+        });
+      }
+    });
+
+    await Promise.all(createPromises);
+
+    res.status(201).json({
+      success: true,
+      message: `${results.added} backlink(s) added successfully${
+        results.failed > 0 ? `, ${results.failed} failed` : ""
+      }`,
+      data: results,
+    });
+  } catch (error) {
+    console.error("Error adding bulk backlinks:", error);
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
+});
+
 // @route   PUT /api/projects/:projectId/backlinks/:backlinkId
 // @desc    Update a backlink
 // @access  Private (Admin, SuperAdmin, or assigned employees)

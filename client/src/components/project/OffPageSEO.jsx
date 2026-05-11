@@ -14,6 +14,11 @@ import {
   CheckSquare,
   Square,
   Undo2,
+  List,
+  AlertCircle,
+  CheckCircle,
+  AlertTriangle,
+  Loader2,
 } from "lucide-react";
 import SectionRemarks from "./SectionRemarks";
 
@@ -118,6 +123,13 @@ const OffPageSEO = ({ projectId, userRole, userId }) => {
     category: "Others",
     notes: "",
   });
+
+  // Bulk add states
+  const [showBulkAddModal, setShowBulkAddModal] = useState(false);
+  const [bulkStep, setBulkStep] = useState(1);
+  const [bulkUrls, setBulkUrls] = useState("");
+  const [parsedBacklinks, setParsedBacklinks] = useState([]);
+  const [bulkSubmitting, setBulkSubmitting] = useState(false);
 
   const canEdit = ["admin", "super-admin", "superadmin", "employee"].includes(userRole);
 
@@ -388,6 +400,225 @@ const OffPageSEO = ({ projectId, userRole, userId }) => {
     return matchesSearch && matchesCategory;
   });
 
+  // Bulk add helper functions
+  const parseAndValidateUrls = () => {
+    // Split by newlines and clean up
+    const lines = bulkUrls
+      .split('\n')
+      .map(line => line.trim())
+      .filter(line => line.length > 0);
+
+    if (lines.length === 0) {
+      showNotification("Please enter at least one URL", "error");
+      return;
+    }
+
+    if (lines.length > 50) {
+      showNotification("Maximum 50 URLs allowed per batch", "error");
+      return;
+    }
+
+    // Get existing URLs for duplicate checking
+    const existingUrls = backlinks.map(b => b.url.toLowerCase());
+
+    // First pass: normalize all URLs
+    const normalizedUrls = lines.map(line => {
+      let url = line;
+      // Auto-prepend https:// if no protocol
+      if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        url = 'https://' + url;
+      }
+      return url;
+    });
+
+    // Parse and validate each URL
+    const parsed = normalizedUrls.map((url, index) => {
+      let status = "valid";
+      let errorMessage = "";
+      let category = "Others";
+
+      // Validate URL format
+      try {
+        new URL(url);
+      } catch (e) {
+        status = "invalid";
+        errorMessage = "Invalid URL format";
+      }
+
+      // Check for duplicates within batch FIRST (only mark if this is NOT the first occurrence)
+      if (status === "valid") {
+        const firstOccurrence = normalizedUrls.findIndex(
+          (u) => u.toLowerCase() === url.toLowerCase()
+        );
+        if (firstOccurrence !== -1 && firstOccurrence < index) {
+          // This is a duplicate, not the first occurrence
+          status = "duplicate";
+          errorMessage = "Duplicate in batch";
+        }
+      }
+
+      // Check for duplicates in existing backlinks (only if not already marked as duplicate in batch)
+      if (status === "valid" && existingUrls.includes(url.toLowerCase())) {
+        status = "duplicate";
+        errorMessage = "Already exists in project";
+      }
+
+      // Auto-detect social media category
+      if (status === "valid") {
+        const urlLower = url.toLowerCase();
+        if (
+          urlLower.includes('facebook.com') ||
+          urlLower.includes('twitter.com') ||
+          urlLower.includes('x.com') ||
+          urlLower.includes('instagram.com') ||
+          urlLower.includes('linkedin.com') ||
+          urlLower.includes('youtube.com') ||
+          urlLower.includes('pinterest.com') ||
+          urlLower.includes('tiktok.com') ||
+          urlLower.includes('reddit.com') ||
+          urlLower.includes('github.com') ||
+          urlLower.includes('medium.com')
+        ) {
+          category = "Social Media";
+        }
+      }
+
+      return {
+        id: `temp-${Date.now()}-${index}`,
+        url,
+        category,
+        notes: "",
+        status,
+        errorMessage,
+      };
+    });
+
+    setParsedBacklinks(parsed);
+    setBulkStep(2);
+  };
+
+  const updateParsedBacklink = (id, field, value) => {
+    setParsedBacklinks(prev =>
+      prev.map(item =>
+        item.id === id ? { ...item, [field]: value } : item
+      )
+    );
+  };
+
+  const removeParsedBacklink = (id) => {
+    setParsedBacklinks(prev => {
+      const filtered = prev.filter(item => item.id !== id);
+
+      // Re-validate duplicates within batch after removal
+      return filtered.map((item, index) => {
+        if (item.status === "duplicate" && item.errorMessage === "Duplicate in batch") {
+          // Check if this URL is still a duplicate
+          const hasDuplicate = filtered.some(
+            (other, otherIndex) =>
+              otherIndex !== index &&
+              other.url.toLowerCase() === item.url.toLowerCase()
+          );
+
+          if (!hasDuplicate) {
+            // No longer a duplicate, mark as valid
+            return { ...item, status: "valid", errorMessage: "" };
+          }
+        }
+        return item;
+      });
+    });
+  };
+
+  const getStatusIcon = (status) => {
+    switch (status) {
+      case "valid":
+        return <CheckCircle className="w-5 h-5 text-green-400" />;
+      case "invalid":
+        return <AlertCircle className="w-5 h-5 text-red-400" />;
+      case "duplicate":
+        return <AlertTriangle className="w-5 h-5 text-yellow-400" />;
+      default:
+        return null;
+    }
+  };
+
+  const getStatusBadge = (status, errorMessage) => {
+    if (status === "valid") return null;
+
+    const colors = {
+      invalid: "bg-red-600/20 text-red-400 border-red-500/50",
+      duplicate: "bg-yellow-600/20 text-yellow-400 border-yellow-500/50",
+    };
+
+    return (
+      <span className={`px-2 py-1 rounded border text-xs font-medium ${colors[status]}`}>
+        {errorMessage}
+      </span>
+    );
+  };
+
+  const handleBulkSubmit = async () => {
+    // Filter only valid backlinks
+    const validBacklinks = parsedBacklinks
+      .filter(item => item.status === "valid")
+      .map(item => ({
+        url: item.url,
+        category: item.category,
+        notes: item.notes,
+      }));
+
+    if (validBacklinks.length === 0) {
+      showNotification("No valid backlinks to add", "error");
+      return;
+    }
+
+    try {
+      setBulkSubmitting(true);
+      const token = localStorage.getItem("token");
+
+      const response = await axios.post(
+        `${API_BASE}/api/projects/${projectId}/backlinks/bulk`,
+        { backlinks: validBacklinks },
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+
+      const { data } = response.data;
+
+      // Show success notification
+      if (data.failed > 0) {
+        showNotification(
+          `${data.added} backlink(s) added, ${data.failed} failed`,
+          "success"
+        );
+      } else {
+        showNotification(
+          `${data.added} backlink(s) added successfully!`,
+          "success"
+        );
+      }
+
+      // Close modal and reset
+      setShowBulkAddModal(false);
+      setBulkStep(1);
+      setBulkUrls("");
+      setParsedBacklinks([]);
+
+      // Refresh data
+      fetchBacklinks();
+      fetchStats();
+    } catch (error) {
+      console.error("Error adding bulk backlinks:", error);
+      showNotification(
+        error.response?.data?.message || "Error adding backlinks",
+        "error"
+      );
+    } finally {
+      setBulkSubmitting(false);
+    }
+  };
+
   return (
     <div className="p-4 sm:p-6 space-y-6">
       {/* Notification */}
@@ -440,13 +671,27 @@ const OffPageSEO = ({ projectId, userRole, userId }) => {
             </button>
           )}
           {canEdit && (
-            <button
-              onClick={() => setShowAddModal(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-lg transition-all font-medium shadow-lg"
-            >
-              <Plus className="w-4 h-4" />
-              Add Backlink
-            </button>
+            <>
+              <button
+                onClick={() => {
+                  setShowBulkAddModal(true);
+                  setBulkStep(1);
+                  setBulkUrls("");
+                  setParsedBacklinks([]);
+                }}
+                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white rounded-lg transition-all font-medium shadow-lg"
+              >
+                <List className="w-4 h-4" />
+                Bulk Add
+              </button>
+              <button
+                onClick={() => setShowAddModal(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-lg transition-all font-medium shadow-lg"
+              >
+                <Plus className="w-4 h-4" />
+                Add Backlink
+              </button>
+            </>
           )}
         </div>
       </div>
@@ -855,6 +1100,217 @@ const OffPageSEO = ({ projectId, userRole, userId }) => {
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Add Backlinks Modal */}
+      {showBulkAddModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70">
+          <div className="bg-[#191f2b] rounded-xl shadow-2xl border border-[#232945] w-full max-w-3xl max-h-[90vh] flex flex-col">
+            <div className="p-6 border-b border-[#232945]">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xl font-bold text-white">
+                  {bulkStep === 1 ? "Add Multiple Backlinks" : "Configure Backlinks"}
+                </h3>
+                <button
+                  onClick={() => {
+                    if (bulkStep === 2 && parsedBacklinks.length > 0) {
+                      if (window.confirm("Are you sure? Your progress will be lost.")) {
+                        setShowBulkAddModal(false);
+                        setBulkStep(1);
+                        setBulkUrls("");
+                        setParsedBacklinks([]);
+                      }
+                    } else {
+                      setShowBulkAddModal(false);
+                      setBulkStep(1);
+                      setBulkUrls("");
+                      setParsedBacklinks([]);
+                    }
+                  }}
+                  className="p-1 hover:bg-[#0f1419] rounded transition-colors"
+                >
+                  <X className="w-5 h-5 text-gray-400" />
+                </button>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-6">
+              {bulkStep === 1 ? (
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Paste URLs (one per line)
+                    </label>
+                    <textarea
+                      value={bulkUrls}
+                      onChange={(e) => setBulkUrls(e.target.value)}
+                      className="w-full h-64 px-4 py-3 bg-[#0f1419] border border-[#232945] rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 font-mono text-sm"
+                      placeholder="https://facebook.com/yourpage&#10;https://twitter.com/yourprofile&#10;https://example.com/blog&#10;..."
+                    />
+                    <p className="text-xs text-gray-500 mt-2">
+                      Maximum 50 URLs per batch. Protocol (https://) will be added automatically if missing.
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="bg-blue-600/10 border border-blue-500/30 rounded-lg p-3 mb-4">
+                    <p className="text-sm text-blue-300">
+                      {parsedBacklinks.filter(b => b.status === "valid").length} valid,{" "}
+                      {parsedBacklinks.filter(b => b.status === "invalid").length} invalid,{" "}
+                      {parsedBacklinks.filter(b => b.status === "duplicate").length} duplicate
+                    </p>
+                  </div>
+
+                  <div className="space-y-3 max-h-96 overflow-y-auto">
+                    {parsedBacklinks.map((item) => (
+                      <div
+                        key={item.id}
+                        className={`bg-[#0f1419] border rounded-lg p-4 ${
+                          item.status === "valid"
+                            ? "border-[#232945]"
+                            : item.status === "invalid"
+                            ? "border-red-500/50"
+                            : "border-yellow-500/50"
+                        }`}
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className="mt-1">{getStatusIcon(item.status)}</div>
+                          <div className="flex-1 space-y-3">
+                            <div>
+                              <div className="flex items-center gap-2 mb-1">
+                                <a
+                                  href={item.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-sm text-blue-400 hover:text-blue-300 flex items-center gap-1"
+                                >
+                                  <LinkIcon className="w-3 h-3" />
+                                  <span className="break-all">{item.url}</span>
+                                  <ExternalLink className="w-3 h-3" />
+                                </a>
+                              </div>
+                              {getStatusBadge(item.status, item.errorMessage)}
+                            </div>
+
+                            {item.status === "valid" && (
+                              <>
+                                <div>
+                                  <label className="block text-xs font-medium text-gray-400 mb-1">
+                                    Category
+                                  </label>
+                                  <select
+                                    value={item.category}
+                                    onChange={(e) =>
+                                      updateParsedBacklink(item.id, "category", e.target.value)
+                                    }
+                                    className="w-full px-3 py-2 bg-[#141a21] border border-[#232945] rounded text-white text-sm focus:outline-none focus:border-blue-500"
+                                  >
+                                    <option value="Social Media">Social Media</option>
+                                    <option value="Others">Others</option>
+                                  </select>
+                                </div>
+
+                                <div>
+                                  <label className="block text-xs font-medium text-gray-400 mb-1">
+                                    Notes (optional)
+                                  </label>
+                                  <textarea
+                                    value={item.notes}
+                                    onChange={(e) =>
+                                      updateParsedBacklink(item.id, "notes", e.target.value)
+                                    }
+                                    className="w-full px-3 py-2 bg-[#141a21] border border-[#232945] rounded text-white text-sm focus:outline-none focus:border-blue-500"
+                                    rows="2"
+                                    placeholder="Add notes..."
+                                  />
+                                </div>
+                              </>
+                            )}
+                          </div>
+                          <button
+                            onClick={() => removeParsedBacklink(item.id)}
+                            className="p-1.5 text-red-400 hover:bg-red-500/20 rounded transition-colors"
+                            title="Remove"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="p-6 border-t border-[#232945] flex gap-3">
+              {bulkStep === 1 ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowBulkAddModal(false);
+                      setBulkUrls("");
+                    }}
+                    className="flex-1 px-4 py-2 bg-[#0f1419] border border-[#232945] text-white rounded-lg hover:bg-[#141a21] transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={parseAndValidateUrls}
+                    disabled={!bulkUrls.trim()}
+                    className="flex-1 px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:from-blue-700 hover:to-purple-700 transition-all font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Next
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setBulkStep(1);
+                    }}
+                    className="px-4 py-2 bg-[#0f1419] border border-[#232945] text-white rounded-lg hover:bg-[#141a21] transition-colors"
+                  >
+                    Back
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowBulkAddModal(false);
+                      setBulkStep(1);
+                      setBulkUrls("");
+                      setParsedBacklinks([]);
+                    }}
+                    className="px-4 py-2 bg-[#0f1419] border border-[#232945] text-white rounded-lg hover:bg-[#141a21] transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleBulkSubmit}
+                    disabled={
+                      bulkSubmitting ||
+                      parsedBacklinks.filter(b => b.status === "valid").length === 0
+                    }
+                    className="flex-1 px-4 py-2 bg-gradient-to-r from-green-600 to-blue-600 text-white rounded-lg hover:from-green-700 hover:to-blue-700 transition-all font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {bulkSubmitting ? (
+                      <span className="flex items-center justify-center gap-2">
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Adding...
+                      </span>
+                    ) : (
+                      `Add ${parsedBacklinks.filter(b => b.status === "valid").length} Backlinks`
+                    )}
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>
