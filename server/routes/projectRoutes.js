@@ -2,44 +2,63 @@
 const express = require("express");
 const router = express.Router();
 const fetch = require("node-fetch"); // Polyfill for Node.js < 18
+const mongoose = require("mongoose");
 const Project = require("../models/Project");
 const { protect, authorize } = require("../middlewares/authMiddleware");
 const { uploadToS3, getFileType, convertToCloudFrontUrl, isS3Configured } = require("../config/s3Config");
 const emailNotificationService = require("../services/emailNotificationService");
 
 // @route   GET /api/projects
-// @desc    Get all projects (with filters and population)
+// @desc    Get projects (paginated, filtered, with aggregate stats)
 // @access  Private
 router.get("/", protect, async (req, res) => {
   try {
     const {
-      type,
-      status,
-      assignedTo,
-      client,
-      startDate,
-      endDate,
-      priority,
-      search,
+      type, status, assignedTo, client,
+      startDate, endDate, priority, search,
+      page = 1, limit = 20, sort = "createdAt",
+      dateRange, createdBy,
     } = req.query;
 
-    // Build filter object
+    // Cast a string to ObjectId if valid — needed for aggregation $match compatibility
+    const toOid = (val) => {
+      if (!val) return null;
+      try { return new mongoose.Types.ObjectId(val); } catch { return null; }
+    };
+
     let filter = {};
 
     if (type) filter.type = type;
     if (status) filter.status = status;
-    if (assignedTo) filter.assignedTo = assignedTo;
-    if (client) filter.clients = client; // Filter projects that include this client
+    if (assignedTo) { const oid = toOid(assignedTo); if (oid) filter.assignedTo = oid; }
+    if (client)     { const oid = toOid(client);     if (oid) filter.clients = oid; }
     if (priority) filter.priority = priority;
+    if (createdBy)  { const oid = toOid(createdBy);  if (oid) filter.createdBy = oid; }
 
-    // Date range filters
+    // Explicit date range from query params
     if (startDate || endDate) {
       filter.endDate = {};
       if (startDate) filter.endDate.$gte = new Date(startDate);
       if (endDate) filter.endDate.$lte = new Date(endDate);
     }
 
-    // Search functionality
+    // Named date range filter (next7days / next30days / expired)
+    if (dateRange && dateRange !== "all" && !startDate && !endDate) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      if (dateRange === "next7days") {
+        const cutoff = new Date();
+        cutoff.setDate(cutoff.getDate() + 7);
+        filter.endDate = { $gte: today, $lte: cutoff };
+      } else if (dateRange === "next30days") {
+        const cutoff = new Date();
+        cutoff.setDate(cutoff.getDate() + 30);
+        filter.endDate = { $gte: today, $lte: cutoff };
+      } else if (dateRange === "expired") {
+        filter.endDate = { $lt: today };
+      }
+    }
+
     if (search) {
       filter.$or = [
         { projectName: { $regex: search, $options: "i" } },
@@ -52,94 +71,114 @@ router.get("/", protect, async (req, res) => {
       filter.assignedTo = req.user._id;
     }
 
-    // Region-based filtering (for admin and hr)
+    // Region-based filtering
     const user = req.user;
-    let accessibleClientIds = null;
-
-    console.log(`\n========== PROJECT FILTERING START ==========`);
-    console.log(`[Project Filtering] User: ${user.email}, Role: ${user.role}`);
-    console.log(`[Project Filtering] user.regions:`, user.regions);
-    console.log(`[Project Filtering] user.region:`, user.region);
-
-    // Check if user has region restrictions
-    // Safety: Treat undefined/empty regions as Global access (backward compatibility)
     const hasRegionsUndefined = !user.regions || user.regions.length === 0;
     const hasOldRegionUndefined = !user.region;
-    const hasGlobalAccess = user.role === 'super-admin' || user.role === 'superadmin' ||
-                           (user.regions && user.regions.includes('Global')) ||
-                           (user.region === 'Global') ||
-                           (hasRegionsUndefined && hasOldRegionUndefined); // Safety fallback
-
-    console.log(`[Project Filtering] Is super-admin: ${user.role === 'super-admin' || user.role === 'superadmin'}`);
-    console.log(`[Project Filtering] Has Global in regions array: ${user.regions && user.regions.includes('Global')}`);
-    console.log(`[Project Filtering] Has Global in region field: ${user.region === 'Global'}`);
-    console.log(`[Project Filtering] Safety fallback (no regions): ${hasRegionsUndefined && hasOldRegionUndefined}`);
-    console.log(`[Project Filtering] Final hasGlobalAccess: ${hasGlobalAccess}`);
+    const hasGlobalAccess =
+      user.role === "super-admin" || user.role === "superadmin" ||
+      (user.regions && user.regions.includes("Global")) ||
+      user.region === "Global" ||
+      (hasRegionsUndefined && hasOldRegionUndefined);
 
     if (!hasGlobalAccess) {
-      // Get clients in user's regions (strict filtering - NO Global fallback)
       const Client = require("../models/Client");
       let regionQuery;
-
       if (user.regions && user.regions.length > 0) {
-        // New multi-region field - strict filtering
         regionQuery = { region: { $in: user.regions } };
-        console.log('[Project Filtering] Strict filtering by regions:', user.regions);
       } else if (user.region) {
-        // Fallback for old single region field (backwards compatibility)
         regionQuery = { region: user.region };
-        console.log('[Project Filtering] Strict filtering by single region:', user.region);
       }
-
       if (regionQuery) {
-        console.log('[Project Filtering] Region query:', JSON.stringify(regionQuery));
-        const accessibleClients = await Client.find(regionQuery).select('_id');
-        accessibleClientIds = accessibleClients.map(c => c._id);
-
-        console.log(`[Project Filtering] Found ${accessibleClientIds.length} accessible clients:`, accessibleClientIds);
-
-        // IMPORTANT: Only skip region filtering for employees
-        // Admins/HR with region restrictions MUST have region filtering applied even if assignedTo is set
-        if (user.role === 'employee') {
-          // Employees already filtered by assignedTo on line 52, no need for region filtering
-          console.log('[Project Filtering] Employee role - skipping region filter (already filtered by assignedTo)');
-        } else {
-          // Strict filtering: ONLY show projects from clients in user's regions
-          // This applies to admins/HR even if they use assignedTo filter
+        const accessibleClients = await Client.find(regionQuery).select("_id");
+        const accessibleClientIds = accessibleClients.map((c) => c._id);
+        if (user.role !== "employee") {
           filter.$and = filter.$and || [];
-          const projectFilter = {
-            clients: { $in: accessibleClientIds }  // ONLY clients in assigned regions
-          };
-          filter.$and.push(projectFilter);
-          console.log('[Project Filtering] Applied STRICT project filter (no assignment override):', JSON.stringify(projectFilter));
+          filter.$and.push({ clients: { $in: accessibleClientIds } });
         }
       }
     }
 
-    console.log('[Project Filtering] Final filter:', JSON.stringify(filter));
+    // Sort mapping
+    const sortMap = {
+      name: { projectName: 1 },
+      startDate: { startDate: -1 },
+      endDate: { endDate: 1 },
+    };
+    const sortObj = sortMap[sort] || { createdAt: -1 };
 
-    const projects = await Project.find(filter)
-      .populate("assignedTo", "name email employeeId designation status")
-      .populate("client", "clientName businessName email region")  // ✅ Populate old field (backwards compatibility)
-      .populate("clients", "clientName businessName email region")
-      .populate("createdBy", "name email")
-      .populate("tasks", "title status priority dueDate")  // ✅ Populate tasks for progress calculation
-      .sort({ createdAt: -1 });
+    const isExport = req.query.export === "true";
+    const pageNum = Math.max(1, parseInt(page) || 1);
+    const limitNum = isExport
+      ? Math.min(parseInt(limit) || 10000, 10000)
+      : Math.min(Math.max(1, parseInt(limit) || 20), 100);
+    const skip = (pageNum - 1) * limitNum;
 
-    console.log(`[Project Filtering] Found ${projects.length} projects matching filter`);
+    const TYPES = ["Website", "SEO", "Google Marketing", "SMO", "Hosting", "Invoice App"];
 
-    // Log details of each project to understand why they're showing
-    console.log(`\n--- PROJECTS RETURNED ---`);
-    projects.forEach((project, index) => {
-      const clientNames = project.clients?.map(c => c.clientName || c.businessName).join(', ') || 'NO CLIENTS';
-      const clientRegions = project.clients?.map(c => c.region).join(', ') || 'NO REGIONS';
-      const isAssignedToUser = project.assignedTo?.some(emp => emp._id.toString() === user._id.toString());
-      console.log(`${index + 1}. "${project.projectName}"`);
-      console.log(`   Clients: "${clientNames}" | Regions: "${clientRegions}" | Assigned to user: ${isAssignedToUser}`);
+    // Run paginated query and stats aggregation in parallel
+    const [projects, [aggResult]] = await Promise.all([
+      Project.find(filter)
+        .populate("assignedTo", "name email employeeId designation status")
+        .populate("client", "clientName businessName email region")
+        .populate("clients", "clientName businessName email region")
+        .populate("createdBy", "name email")
+        .populate("tasks", "status")
+        .sort(sortObj)
+        .skip(skip)
+        .limit(limitNum)
+        .lean(),
+      Project.aggregate([
+        { $match: filter },
+        {
+          $facet: {
+            total: [{ $count: "count" }],
+            statusCounts: [{ $group: { _id: "$status", count: { $sum: 1 } } }],
+            typeCounts: [
+              { $unwind: { path: "$type", preserveNullAndEmptyArrays: true } },
+              { $group: { _id: { type: "$type", status: "$status" }, count: { $sum: 1 } } },
+            ],
+          },
+        },
+      ]),
+    ]);
+
+    const total = aggResult?.total?.[0]?.count || 0;
+
+    // Build overall status stats
+    const statusCounts = { new: 0, ongoing: 0, expired: 0, completed: 0 };
+    (aggResult?.statusCounts || []).forEach(({ _id, count }) => {
+      if (_id && statusCounts.hasOwnProperty(_id)) statusCounts[_id] = count;
     });
-    console.log(`========== PROJECT FILTERING END ==========\n`);
 
-    res.json(projects);
+    // Build per-type stats
+    const byType = {};
+    TYPES.forEach((t) => {
+      byType[t] = { total: 0, new: 0, ongoing: 0, expired: 0, completed: 0 };
+    });
+    (aggResult?.typeCounts || []).forEach(({ _id, count }) => {
+      const { type: t, status: s } = _id || {};
+      if (t && byType[t]) {
+        byType[t].total += count;
+        if (s && byType[t].hasOwnProperty(s)) byType[t][s] += count;
+      }
+    });
+
+    console.log(`[Projects] total=${total} page=${pageNum}/${Math.ceil(total / limitNum) || 1} returned=${projects.length} user=${user.email} role=${user.role}`);
+
+    res.json({
+      projects,
+      pagination: {
+        total,
+        page: pageNum,
+        totalPages: Math.ceil(total / limitNum) || 1,
+        limit: limitNum,
+      },
+      stats: {
+        overall: { total, ...statusCounts },
+        byType,
+      },
+    });
   } catch (error) {
     console.error("Error fetching projects:", error);
     res.status(500).json({ message: "Server error", error: error.message });

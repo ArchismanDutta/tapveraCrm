@@ -152,6 +152,16 @@ const statCounterVariants = {
   },
 };
 
+const BLANK_TYPE_STATS = { total: 0, new: 0, ongoing: 0, expired: 0, completed: 0 };
+const INITIAL_BY_TYPE = {
+  Website: { ...BLANK_TYPE_STATS },
+  SEO: { ...BLANK_TYPE_STATS },
+  "Google Marketing": { ...BLANK_TYPE_STATS },
+  SMO: { ...BLANK_TYPE_STATS },
+  Hosting: { ...BLANK_TYPE_STATS },
+  "Invoice App": { ...BLANK_TYPE_STATS },
+};
+
 const ProjectsPage = ({ onLogout }) => {
   const navigate = useNavigate();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -211,9 +221,14 @@ const ProjectsPage = ({ onLogout }) => {
   const [sortBy, setSortBy] = useState("createdAt");
   const [expandedStats, setExpandedStats] = useState({});
 
-  // Pagination state
+  // Pagination state (server-driven)
   const [currentPage, setCurrentPage] = useState(1);
-  const projectsPerPage = 10;
+  const projectsPerPage = 20;
+  const [pagination, setPagination] = useState({ total: 0, page: 1, totalPages: 1, limit: 20 });
+  const [serverStats, setServerStats] = useState({
+    overall: { total: 0, new: 0, ongoing: 0, expired: 0, completed: 0 },
+    byType: INITIAL_BY_TYPE,
+  });
 
   // Bulk action state
   const [selectedProjects, setSelectedProjects] = useState([]);
@@ -249,7 +264,7 @@ const ProjectsPage = ({ onLogout }) => {
       console.error("Error parsing user data:", error);
     }
 
-    fetchAllData();
+    fetchAllData(1);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -293,11 +308,11 @@ const ProjectsPage = ({ onLogout }) => {
     };
   }, []);
 
-  const fetchAllData = async () => {
+  const fetchAllData = async (page) => {
     setLoading(true);
     try {
       await Promise.all([
-        fetchProjects(),
+        fetchProjects(page ?? currentPage),
         fetchClients(),
         fetchEmployees()
       ]);
@@ -322,11 +337,26 @@ const ProjectsPage = ({ onLogout }) => {
     });
   };
 
-  const fetchProjects = async () => {
+  const fetchProjects = async (page = 1) => {
     try {
-      const res = await API.get("/api/projects");
-      const normalizedProjects = normalizeProjects(res.data);
-      setProjects(normalizedProjects);
+      const params = new URLSearchParams();
+      params.set("page", page);
+      params.set("limit", projectsPerPage);
+      if (sortBy !== "createdAt") params.set("sort", sortBy);
+      if (debouncedSearchTerm) params.set("search", debouncedSearchTerm);
+      if (filterType !== "all") params.set("type", filterType);
+      if (filterStatus !== "all") params.set("status", filterStatus);
+      if (filterEmployee !== "all") params.set("assignedTo", filterEmployee);
+      if (filterClient !== "all") params.set("client", filterClient);
+      if (filterPriority !== "all") params.set("priority", filterPriority);
+      if (filterDateRange !== "all") params.set("dateRange", filterDateRange);
+      if (showMyProjectsOnly && currentUserId) params.set("createdBy", currentUserId);
+
+      const res = await API.get(`/api/projects?${params.toString()}`);
+      const { projects: rawProjects, pagination: pg, stats } = res.data;
+      setProjects(normalizeProjects(rawProjects));
+      setPagination(pg);
+      if (stats) setServerStats(stats);
     } catch {
       showNotification("Error fetching projects", "error");
     }
@@ -500,10 +530,10 @@ const ProjectsPage = ({ onLogout }) => {
   };
 
   const toggleSelectAll = () => {
-    if (selectedProjects.length === paginatedProjects.length) {
+    if (selectedProjects.length === projects.length) {
       setSelectedProjects([]);
     } else {
-      setSelectedProjects(paginatedProjects.map(p => p._id));
+      setSelectedProjects(projects.map(p => p._id));
     }
   };
 
@@ -658,146 +688,17 @@ const ProjectsPage = ({ onLogout }) => {
     return health;
   };
 
-  // Calculate statistics by type
-  const projectStats = useMemo(() => {
-    const types = ["Website", "SEO", "Google Marketing", "SMO", "Hosting", "Invoice App"];
-    const stats = {};
+  // Stats from server (accurate across all pages)
+  const projectStats = serverStats.byType;
+  const overallStats = serverStats.overall;
+  const totalPages = pagination.totalPages;
 
-    types.forEach(type => {
-      const typeProjects = projects.filter(p => Array.isArray(p.type) ? p.type.includes(type) : p.type === type);
-      stats[type] = {
-        total: typeProjects.length,
-        new: typeProjects.filter(p => getProjectStatus(p) === "new").length,
-        ongoing: typeProjects.filter(p => getProjectStatus(p) === "ongoing").length,
-        expired: typeProjects.filter(p => getProjectStatus(p) === "expired").length,
-        completed: typeProjects.filter(p => getProjectStatus(p) === "completed").length,
-      };
-    });
-
-    return stats;
-  }, [projects]);
-
-  // Overall statistics
-  const overallStats = useMemo(() => {
-    return {
-      total: projects.length,
-      new: projects.filter(p => getProjectStatus(p) === "new").length,
-      ongoing: projects.filter(p => getProjectStatus(p) === "ongoing").length,
-      expired: projects.filter(p => getProjectStatus(p) === "expired").length,
-      completed: projects.filter(p => getProjectStatus(p) === "completed").length,
-    };
-  }, [projects]);
-
-  // Filtered and sorted projects
-  const filteredProjects = useMemo(() => {
-    let filtered = projects.filter(p => {
-      // Comprehensive search across ALL fields
-      const searchLower = debouncedSearchTerm.toLowerCase();
-      const matchesSearch = !debouncedSearchTerm ||
-        p.projectName?.toLowerCase().includes(searchLower) ||
-        p.description?.toLowerCase().includes(searchLower) ||
-        p.remarks?.toLowerCase().includes(searchLower) ||
-        p.budget?.toString().toLowerCase().includes(searchLower) ||
-        p.priority?.toLowerCase().includes(searchLower) ||
-        // Search in clients
-        p.clients?.some(client =>
-          client?.businessName?.toLowerCase().includes(searchLower) ||
-          client?.clientName?.toLowerCase().includes(searchLower) ||
-          client?.email?.toLowerCase().includes(searchLower)
-        ) ||
-        // Search in assigned employees
-        p.assignedTo?.some(emp =>
-          emp?.name?.toLowerCase().includes(searchLower) ||
-          emp?.email?.toLowerCase().includes(searchLower) ||
-          emp?.employeeId?.toLowerCase().includes(searchLower) ||
-          emp?.designation?.toLowerCase().includes(searchLower)
-        ) ||
-        // Search in project types
-        (Array.isArray(p.type) ? p.type : [p.type])?.some(t =>
-          t?.toLowerCase().includes(searchLower)
-        ) ||
-        // Search in created by
-        p.createdBy?.name?.toLowerCase().includes(searchLower) ||
-        p.createdBy?.email?.toLowerCase().includes(searchLower) ||
-        // Search in dates
-        new Date(p.startDate).toLocaleDateString().toLowerCase().includes(searchLower) ||
-        new Date(p.endDate).toLocaleDateString().toLowerCase().includes(searchLower) ||
-        // Search in status
-        p.status?.toLowerCase().includes(searchLower);
-
-      const matchesType = filterType === "all" || (Array.isArray(p.type) ? p.type.includes(filterType) : p.type === filterType);
-
-      const projectStatus = getProjectStatus(p);
-      const matchesStatus =
-        filterStatus === "all" ||
-        (filterStatus === "new" && projectStatus === "new") ||
-        (filterStatus === "ongoing" && projectStatus === "ongoing") ||
-        (filterStatus === "expired" && projectStatus === "expired") ||
-        (filterStatus === "completed" && projectStatus === "completed");
-
-      const matchesEmployee =
-        filterEmployee === "all" ||
-        p.assignedTo?.some(e => (e._id || e) === filterEmployee);
-
-      const matchesClient =
-        filterClient === "all" ||
-        p.clients?.some(c => (c._id || c) === filterClient);
-
-      const matchesPriority =
-        filterPriority === "all" ||
-        p.priority === filterPriority;
-
-      // Date range filter
-      const today = new Date();
-      const endDate = new Date(p.endDate);
-      const daysUntilEnd = Math.ceil((endDate - today) / (1000 * 60 * 60 * 24));
-
-      const matchesDateRange =
-        filterDateRange === "all" ||
-        (filterDateRange === "next7days" && daysUntilEnd >= 0 && daysUntilEnd <= 7) ||
-        (filterDateRange === "next30days" && daysUntilEnd >= 0 && daysUntilEnd <= 30) ||
-        (filterDateRange === "expired" && daysUntilEnd < 0);
-
-      // My Projects filter - only show projects created by current user
-      const matchesMyProjects =
-        !showMyProjectsOnly ||
-        (currentUserId && (p.createdBy?._id === currentUserId || p.createdBy === currentUserId));
-
-      return matchesSearch && matchesType && matchesStatus && matchesEmployee && matchesClient && matchesPriority && matchesDateRange && matchesMyProjects;
-    });
-
-    // Sort
-    filtered.sort((a, b) => {
-      switch (sortBy) {
-        case "name":
-          return a.projectName.localeCompare(b.projectName);
-        case "startDate":
-          return new Date(b.startDate) - new Date(a.startDate);
-        case "endDate":
-          return new Date(a.endDate) - new Date(b.endDate);
-        case "type":
-          return a.type.localeCompare(b.type);
-        default:
-          return new Date(b.createdAt) - new Date(a.createdAt);
-      }
-    });
-
-    return filtered;
-  }, [projects, debouncedSearchTerm, filterType, filterStatus, filterEmployee, filterClient, filterPriority, filterDateRange, showMyProjectsOnly, currentUserId, sortBy]);
-
-  // Paginated projects
-  const paginatedProjects = useMemo(() => {
-    const startIndex = (currentPage - 1) * projectsPerPage;
-    const endIndex = startIndex + projectsPerPage;
-    return filteredProjects.slice(startIndex, endIndex);
-  }, [filteredProjects, currentPage, projectsPerPage]);
-
-  const totalPages = Math.ceil(filteredProjects.length / projectsPerPage);
-
-  // Reset to page 1 when filters change
+  // Re-fetch when filters change (reset to page 1)
   useEffect(() => {
     setCurrentPage(1);
-  }, [debouncedSearchTerm, filterType, filterStatus, filterEmployee, filterClient, filterPriority, filterDateRange, showMyProjectsOnly]);
+    fetchProjects(1);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedSearchTerm, filterType, filterStatus, filterEmployee, filterClient, filterPriority, filterDateRange, showMyProjectsOnly, sortBy]);
 
   // Check if user can export data (only admin, super-admin, hr)
   const canExportData = () => {
@@ -805,33 +706,51 @@ const ProjectsPage = ({ onLogout }) => {
     return allowedRoles.includes(userRole?.toLowerCase());
   };
 
-  const exportToCSV = () => {
-    // Double check permission
+  const exportToCSV = async () => {
     if (!canExportData()) {
       showNotification("You don't have permission to export data", "error");
       return;
     }
+    try {
+      const params = new URLSearchParams();
+      params.set("page", 1);
+      params.set("limit", 10000);
+      params.set("export", "true");
+      if (debouncedSearchTerm) params.set("search", debouncedSearchTerm);
+      if (filterType !== "all") params.set("type", filterType);
+      if (filterStatus !== "all") params.set("status", filterStatus);
+      if (filterEmployee !== "all") params.set("assignedTo", filterEmployee);
+      if (filterClient !== "all") params.set("client", filterClient);
+      if (filterPriority !== "all") params.set("priority", filterPriority);
+      if (filterDateRange !== "all") params.set("dateRange", filterDateRange);
+      if (showMyProjectsOnly && currentUserId) params.set("createdBy", currentUserId);
 
-    const csvContent = [
-      ["Project Name", "Type", "Client", "Assigned To", "Start Date", "End Date", "Status"],
-      ...filteredProjects.map(p => [
-        p.projectName,
-        Array.isArray(p.type) ? p.type.join("; ") : p.type,
-        p.clients?.map(c => c.businessName || c.clientName || "Unknown").join("; ") || "N/A",
-        p.assignedTo?.map(e => e.name || "Unknown").join("; ") || "N/A",
-        p.startDate ? new Date(p.startDate).toLocaleDateString() : "N/A",
-        p.endDate ? new Date(p.endDate).toLocaleDateString() : "N/A",
-        getProjectStatus(p)
-      ])
-    ].map(row => row.join(",")).join("\n");
+      const res = await API.get(`/api/projects?${params.toString()}`);
+      const allProjects = normalizeProjects(res.data.projects || []);
 
-    const blob = new Blob([csvContent], { type: "text/csv" });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `projects_export_${new Date().toISOString().split("T")[0]}.csv`;
-    a.click();
-    showNotification("Projects exported successfully!", "success");
+      const csvContent = [
+        ["Project Name", "Type", "Client", "Assigned To", "Start Date", "End Date", "Status"],
+        ...allProjects.map(p => [
+          p.projectName,
+          Array.isArray(p.type) ? p.type.join("; ") : p.type,
+          p.clients?.map(c => c.businessName || c.clientName || "Unknown").join("; ") || "N/A",
+          p.assignedTo?.map(e => e.name || "Unknown").join("; ") || "N/A",
+          p.startDate ? new Date(p.startDate).toLocaleDateString() : "N/A",
+          p.endDate ? new Date(p.endDate).toLocaleDateString() : "N/A",
+          getProjectStatus(p)
+        ])
+      ].map(row => row.join(",")).join("\n");
+
+      const blob = new Blob([csvContent], { type: "text/csv" });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `projects_export_${new Date().toISOString().split("T")[0]}.csv`;
+      a.click();
+      showNotification("Projects exported successfully!", "success");
+    } catch {
+      showNotification("Error exporting projects", "error");
+    }
   };
 
   return (
@@ -1245,7 +1164,7 @@ const ProjectsPage = ({ onLogout }) => {
                   <th className="text-left p-4 text-sm font-semibold text-gray-400">
                     <input
                       type="checkbox"
-                      checked={selectedProjects.length === paginatedProjects.length && paginatedProjects.length > 0}
+                      checked={selectedProjects.length === projects.length && projects.length > 0}
                       onChange={toggleSelectAll}
                       className="w-4 h-4 rounded border-[#232945] bg-[#0f1419] text-purple-600 focus:ring-purple-500 focus:ring-offset-0"
                     />
@@ -1262,7 +1181,7 @@ const ProjectsPage = ({ onLogout }) => {
                 </tr>
               </thead>
               <tbody>
-                {paginatedProjects.length === 0 ? (
+                {projects.length === 0 ? (
                   <tr>
                     <td colSpan="10" className="text-center py-12">
                       <FolderKanban className="w-12 h-12 text-gray-600 mx-auto mb-3" />
@@ -1270,7 +1189,7 @@ const ProjectsPage = ({ onLogout }) => {
                     </td>
                   </tr>
                 ) : (
-                  paginatedProjects.map((project) => {
+                  projects.map((project) => {
                     const status = getProjectStatus(project);
                     // Handle array of types - use first type for icon/color
                     const projectTypes = Array.isArray(project.type) ? project.type : [project.type];
@@ -1472,18 +1391,18 @@ const ProjectsPage = ({ onLogout }) => {
           </div>
 
           {/* Pagination Controls - Centered */}
-          {filteredProjects.length > 0 && (
+          {pagination.total > 0 && (
             <div className="mt-4 sm:mt-5 md:mt-6 mb-3 sm:mb-4 flex flex-col items-center gap-2 sm:gap-3 pb-3 sm:pb-4 border-t border-[#232945] pt-3 sm:pt-4">
               {/* Page count info */}
               <div className="text-xs sm:text-sm text-gray-400">
-                Showing {((currentPage - 1) * projectsPerPage) + 1} to {Math.min(currentPage * projectsPerPage, filteredProjects.length)} of {filteredProjects.length} projects
+                Showing {((currentPage - 1) * projectsPerPage) + 1} to {Math.min(currentPage * projectsPerPage, pagination.total)} of {pagination.total} projects
               </div>
 
               {/* Pagination buttons - only show if more than 1 page */}
               {totalPages > 1 && (
                 <div className="flex items-center justify-center gap-1 sm:gap-2">
                   <button
-                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                    onClick={() => { const p = Math.max(1, currentPage - 1); setCurrentPage(p); fetchProjects(p); }}
                     disabled={currentPage === 1}
                     className={`px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg border transition-all ${
                       currentPage === 1
@@ -1499,7 +1418,7 @@ const ProjectsPage = ({ onLogout }) => {
                     {currentPage > 2 && (
                       <>
                         <button
-                          onClick={() => setCurrentPage(1)}
+                          onClick={() => { setCurrentPage(1); fetchProjects(1); }}
                           className="min-w-[32px] sm:min-w-[40px] px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg border border-[#232945] text-gray-300 hover:bg-[#0f1419] hover:text-white hover:border-blue-500/50 transition-all text-xs sm:text-sm"
                         >
                           1
@@ -1518,7 +1437,7 @@ const ProjectsPage = ({ onLogout }) => {
                       .map(page => (
                         <button
                           key={page}
-                          onClick={() => setCurrentPage(page)}
+                          onClick={() => { setCurrentPage(page); fetchProjects(page); }}
                           className={`min-w-[32px] sm:min-w-[40px] px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg border transition-all font-semibold text-xs sm:text-sm ${
                             currentPage === page
                               ? "border-blue-500 bg-blue-500/20 text-blue-400 shadow-md"
@@ -1534,7 +1453,7 @@ const ProjectsPage = ({ onLogout }) => {
                       <>
                         {currentPage < totalPages - 2 && <span className="text-gray-600 px-1 sm:px-2 text-xs sm:text-sm">...</span>}
                         <button
-                          onClick={() => setCurrentPage(totalPages)}
+                          onClick={() => { setCurrentPage(totalPages); fetchProjects(totalPages); }}
                           className="min-w-[32px] sm:min-w-[40px] px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg border border-[#232945] text-gray-300 hover:bg-[#0f1419] hover:text-white hover:border-blue-500/50 transition-all text-xs sm:text-sm"
                         >
                           {totalPages}
@@ -1544,7 +1463,7 @@ const ProjectsPage = ({ onLogout }) => {
                   </div>
 
                   <button
-                    onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                    onClick={() => { const p = Math.min(totalPages, currentPage + 1); setCurrentPage(p); fetchProjects(p); }}
                     disabled={currentPage === totalPages}
                     className={`px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg border transition-all ${
                       currentPage === totalPages
