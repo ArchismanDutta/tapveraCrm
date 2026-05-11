@@ -133,6 +133,21 @@ const TodayStatusPage = ({ onLogout }) => {
 
   const token = localStorage.getItem("token");
 
+  // Get user name from localStorage
+  const [userName, setUserName] = useState("");
+
+  useEffect(() => {
+    try {
+      const userStr = localStorage.getItem("user");
+      if (userStr) {
+        const user = JSON.parse(userStr);
+        setUserName(user.name || "");
+      }
+    } catch (err) {
+      console.error("Failed to parse user from localStorage:", err);
+    }
+  }, []);
+
   // Helper function to create axios config
   const getAxiosConfig = () => ({
     headers: { Authorization: `Bearer ${token}` },
@@ -1532,84 +1547,66 @@ const TodayStatusPage = ({ onLogout }) => {
       />
 
       <main
-        className={`flex-1 p-6 space-y-6 transition-all duration-300 ${
+        className={`flex-1 p-2 transition-all duration-300 h-screen overflow-hidden flex flex-col ${
           collapsed ? "ml-20" : "ml-72"
         }`}
       >
-        {/* Header */}
-        <div className="flex justify-between items-start">
-          <div className="flex-1">
-            <h1 className="text-3xl font-bold text-gray-100 mb-2">Today's Status</h1>
-            <p className="text-gray-400 mb-3">Monitor your daily work activity and manage your time</p>
+        {/* Compact Header */}
+        <div className="flex justify-between items-center mb-2">
+          <div className="flex items-center gap-4">
+            <h1 className="text-lg font-bold text-gray-100">
+              Today's Status{userName && <span className="text-cyan-400"> - {userName}</span>}
+            </h1>
 
-            {/* Status indicator */}
-            <div className="flex items-center gap-4 bg-[#161c2c] rounded-lg px-4 py-2 border border-[#232945]">
-              <div className="flex items-center gap-2">
-                <div className={`w-2 h-2 rounded-full ${
+            {/* Inline Status indicator */}
+            <div className="flex items-center gap-2 bg-[#161c2c] rounded px-2 py-1 border border-[#232945]">
+              <div className="flex items-center gap-1">
+                <div className={`w-1.5 h-1.5 rounded-full ${
                   status?.currentlyWorking
                     ? status?.onBreak
                       ? 'bg-yellow-400 animate-pulse'
                       : 'bg-green-400 animate-pulse'
                     : 'bg-gray-500'
                 }`}></div>
-                <span className="text-sm font-medium">
-                  {status?.currentlyWorking
-                    ? status?.onBreak
-                      ? 'On Break'
-                      : 'Working'
-                    : 'Offline'
-                  }
-                </span>
-              </div>
-
-              {/* System indicator */}
-              <div className="flex items-center gap-1 px-2 py-1 rounded-md bg-gray-700/50">
-                <div className="w-1.5 h-1.5 rounded-full bg-green-400"></div>
-                <span className="text-xs text-gray-300">
-                  Live
+                <span className="text-xs">
+                  {status?.currentlyWorking ? (status?.onBreak ? 'Break' : 'Working') : 'Offline'}
                 </span>
               </div>
               {(() => {
                 const arrivalTime = getFormattedArrivalTime(status);
                 return arrivalTime !== "--" ? (
-                  <div className="text-sm text-gray-400">
-                    Arrived: {arrivalTime}
-                  </div>
+                  <span className="text-xs text-gray-400">{arrivalTime}</span>
                 ) : null;
               })()}
-              <div className="text-sm text-blue-400">
-                Work: {formatHMS(liveWork)}
-              </div>
-              <div className="text-sm text-orange-400">
-                Break: {formatHMS(liveBreak)}
-              </div>
+              <span className="text-xs text-blue-400">{formatHMS(liveWork)}</span>
+              <span className="text-xs text-orange-400">{formatHMS(liveBreak)}</span>
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
-            {(dataErrors.status || dataErrors.weeklySummary || connectionStatus !== 'online') && (
-              <button
-                onClick={() => fetchAllData({ force: true })}
-                className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-4 py-2 rounded-lg transition-colors text-sm font-medium flex items-center gap-2"
-                disabled={dataLoadingStates.status || dataLoadingStates.weeklySummary}
-              >
-                <svg className={`w-4 h-4 ${(dataLoadingStates.status || dataLoadingStates.weeklySummary) ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
-                {(dataLoadingStates.status || dataLoadingStates.weeklySummary) ? 'Syncing...' : 'Retry'}
-              </button>
-            )}
-          </div>
+          {(dataErrors.status || dataErrors.weeklySummary || connectionStatus !== 'online') && (
+            <button
+              onClick={() => fetchAllData({ force: true })}
+              className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-2 py-1 rounded text-xs flex items-center gap-1"
+              disabled={dataLoadingStates.status || dataLoadingStates.weeklySummary}
+            >
+              <svg className={`w-3 h-3 ${(dataLoadingStates.status || dataLoadingStates.weeklySummary) ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              {(dataLoadingStates.status || dataLoadingStates.weeklySummary) ? 'Sync' : 'Retry'}
+            </button>
+          )}
         </div>
 
-        <div className="grid grid-cols-1 xl:grid-cols-5 gap-6">
-          <div className="xl:col-span-3 space-y-6">
-            <div className="bg-[#161c2c] rounded-xl shadow-md border border-[#232945] relative">
+        {/* Main Content - Flex column layout */}
+        <div className="flex-1 flex flex-col gap-2 overflow-auto">
+          {/* Top Section - Status and Actions */}
+          <div className="flex flex-col gap-2">
+            <div className="bg-[#161c2c] rounded-lg border border-[#232945] relative">
               {dataLoadingStates.status && (
-                <div className="absolute inset-0 bg-black/50 z-10 flex items-center justify-center rounded-xl">
-                  <div className="flex items-center gap-3 bg-[#161c2c] p-4 rounded-lg border border-[#232945]">
-                    <div className="w-5 h-5 border-2 border-blue-500/20 border-t-blue-500 rounded-full animate-spin"></div>
-                    <span className="text-gray-200">Updating status...</span>
+                <div className="absolute inset-0 bg-black/50 z-10 flex items-center justify-center rounded-lg">
+                  <div className="flex items-center gap-1.5 bg-[#161c2c] p-2 rounded border border-[#232945]">
+                    <div className="w-3 h-3 border-2 border-blue-500/20 border-t-blue-500 rounded-full animate-spin"></div>
+                    <span className="text-xs text-gray-200">Updating...</span>
                   </div>
                 </div>
               )}
@@ -1627,8 +1624,8 @@ const TodayStatusPage = ({ onLogout }) => {
               />
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div className="bg-[#161c2c] rounded-xl shadow-md border border-[#232945]">
+            <div className="grid grid-cols-2 gap-2">
+              <div className="bg-[#161c2c] rounded-lg border border-[#232945]">
                 <BreakManagement
                   breakDuration={formatHMS(liveBreak)}
                   onBreak={status.onBreak}
@@ -1641,28 +1638,29 @@ const TodayStatusPage = ({ onLogout }) => {
                   isLoading={isLoading}
                 />
               </div>
-              <div className="bg-[#161c2c] rounded-xl shadow-md border border-[#232945]">
+              <div className="bg-[#161c2c] rounded-lg border border-[#232945]">
                 <Timeline timeline={status.timeline || []} />
               </div>
             </div>
           </div>
+        </div>
 
-          <div className="xl:col-span-2">
-            <div className="bg-[#161c2c] rounded-xl shadow-md border border-[#232945] sticky top-8 relative">
-              {dataLoadingStates.weeklySummary && (
-                <div className="absolute inset-0 bg-black/50 z-10 flex items-center justify-center rounded-xl">
-                  <div className="flex items-center gap-3 bg-[#161c2c] p-4 rounded-lg border border-[#232945]">
-                    <div className="w-5 h-5 border-2 border-blue-500/20 border-t-blue-500 rounded-full animate-spin"></div>
-                    <span className="text-gray-200">Loading summary...</span>
-                  </div>
+        {/* Bottom Section - Weekly Summary sticky to bottom */}
+        <div className="sticky bottom-0 bg-[#0f1419] pt-2">
+          <div className="bg-[#161c2c] rounded-lg border border-[#232945] relative">
+            {dataLoadingStates.weeklySummary && (
+              <div className="absolute inset-0 bg-black/50 z-10 flex items-center justify-center rounded-lg">
+                <div className="flex items-center gap-1.5 bg-[#161c2c] p-2 rounded border border-[#232945]">
+                  <div className="w-3 h-3 border-2 border-blue-500/20 border-t-blue-500 rounded-full animate-spin"></div>
+                  <span className="text-xs text-gray-200">Loading...</span>
                 </div>
-              )}
-              <SummaryCard
-                key={`summary-${weeklySummary?.presentDays}-${weeklySummary?.totalWorkTime}-${Date.now()}`}
-                weeklySummary={weeklySummaryWithQuickStats}
-                dailyData={adjustedDailyData}
-              />
-            </div>
+              </div>
+            )}
+            <SummaryCard
+              key={`summary-${weeklySummary?.presentDays}-${weeklySummary?.totalWorkTime}-${Date.now()}`}
+              weeklySummary={weeklySummaryWithQuickStats}
+              dailyData={adjustedDailyData}
+            />
           </div>
         </div>
 

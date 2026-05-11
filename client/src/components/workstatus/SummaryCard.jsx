@@ -32,11 +32,13 @@ const parseArrivalTime = (timeStr) => {
 const SummaryCard = ({ weeklySummary, dailyData }) => {
   if (!weeklySummary) {
     return (
-      <div className="bg-slate-800/50 backdrop-blur-sm border border-slate-700/50 rounded-2xl shadow-xl p-8 w-full">
-        <h3 className="text-xl font-bold text-white border-b border-slate-700 pb-3 mb-4">
-          Week Summary
-        </h3>
-        <p className="text-gray-300">No weekly data available.</p>
+      <div className="bg-slate-800/50 backdrop-blur-sm border border-slate-700/50 rounded-lg shadow-xl p-3 w-full">
+        <div className="flex items-center gap-6">
+          <h3 className="text-sm font-bold text-white whitespace-nowrap">
+            Week Summary
+          </h3>
+          <p className="text-gray-300 text-xs">No data available.</p>
+        </div>
       </div>
     );
   }
@@ -100,46 +102,48 @@ const SummaryCard = ({ weeklySummary, dailyData }) => {
       : "0%";
 
   return (
-    <div className="bg-slate-800/50 backdrop-blur-sm border border-slate-700/50 rounded-2xl shadow-xl p-8 w-full space-y-8 transition-all hover:shadow-2xl hover:border-slate-600/50">
-      <h3 className="text-xl font-bold text-white border-b border-slate-700 pb-3 mb-6">
-        Week Summary
-      </h3>
-      <div className="flex flex-col gap-4">
-        <div className="bg-slate-900/60 p-5 rounded-xl border border-slate-700/30 flex flex-col items-center">
-          <p className="text-gray-400 text-xs uppercase tracking-wide mb-1">
-            Total Hours
-          </p>
-          <p className="text-green-400 text-2xl font-bold">{totalWork || "0h 0m"}</p>
-        </div>
-        <div className="bg-slate-900/60 p-5 rounded-xl border border-slate-700/30 flex flex-col items-center">
-          <p className="text-gray-400 text-xs uppercase tracking-wide mb-1">
-            Avg. Daily Work
-          </p>
-          <p className="text-green-400 text-2xl font-bold">{avgDailyWork || "0h 0m"}</p>
-        </div>
-        <div className="bg-slate-900/60 p-5 rounded-xl border border-slate-700/30 flex flex-col items-center">
-          <p className="text-gray-400 text-xs uppercase tracking-wide mb-1">
-            Total Break
-          </p>
-          <p className="text-orange-400 text-2xl font-bold">{totalBreak || "0h 0m"}</p>
-        </div>
-        <div className="bg-slate-900/60 p-5 rounded-xl border border-slate-700/30 flex flex-col items-center">
-          <p className="text-gray-400 text-xs uppercase tracking-wide mb-1">
-            Avg. Daily Break
-          </p>
-          <p className="text-orange-400 text-2xl font-bold">{avgDailyBreak || "0h 0m"}</p>
-        </div>
-        <div className="bg-slate-900/60 p-5 rounded-xl border border-slate-700/30 flex flex-col items-center">
-          <p className="text-gray-400 text-xs uppercase tracking-wide mb-1">
-            On-Time Rate
-          </p>
-          <p className="text-purple-400 text-2xl font-bold">{formattedOnTimeRate}</p>
-        </div>
-        <div className="bg-slate-900/60 p-5 rounded-xl border border-slate-700/30 flex flex-col items-center">
-          <p className="text-gray-400 text-xs uppercase tracking-wide mb-1">
-            Breaks Taken
-          </p>
-          <p className="text-red-400 text-2xl font-bold">{breaksTaken ?? 0}</p>
+    <div className="bg-slate-800/50 backdrop-blur-sm border border-slate-700/50 rounded-lg shadow-xl p-3 w-full transition-all">
+      <div className="flex items-center gap-6">
+        <h3 className="text-sm font-bold text-white whitespace-nowrap">
+          Week Summary
+        </h3>
+        <div className="flex-1 grid grid-cols-6 gap-2">
+          <div className="bg-slate-900/60 p-2 rounded border border-slate-700/30 flex flex-col items-center">
+            <p className="text-gray-400 text-xs mb-0.5">
+              Total Hours
+            </p>
+            <p className="text-green-400 text-sm font-bold">{totalWork || "0h 0m"}</p>
+          </div>
+          <div className="bg-slate-900/60 p-2 rounded border border-slate-700/30 flex flex-col items-center">
+            <p className="text-gray-400 text-xs mb-0.5">
+              Avg. Daily
+            </p>
+            <p className="text-green-400 text-sm font-bold">{avgDailyWork || "0h 0m"}</p>
+          </div>
+          <div className="bg-slate-900/60 p-2 rounded border border-slate-700/30 flex flex-col items-center">
+            <p className="text-gray-400 text-xs mb-0.5">
+              Total Break
+            </p>
+            <p className="text-orange-400 text-sm font-bold">{totalBreak || "0h 0m"}</p>
+          </div>
+          <div className="bg-slate-900/60 p-2 rounded border border-slate-700/30 flex flex-col items-center">
+            <p className="text-gray-400 text-xs mb-0.5">
+              Avg. Break
+            </p>
+            <p className="text-orange-400 text-sm font-bold">{avgDailyBreak || "0h 0m"}</p>
+          </div>
+          <div className="bg-slate-900/60 p-2 rounded border border-slate-700/30 flex flex-col items-center">
+            <p className="text-gray-400 text-xs mb-0.5">
+              On-Time Rate
+            </p>
+            <p className="text-purple-400 text-sm font-bold">{formattedOnTimeRate}</p>
+          </div>
+          <div className="bg-slate-900/60 p-2 rounded border border-slate-700/30 flex flex-col items-center">
+            <p className="text-gray-400 text-xs mb-0.5">
+              Breaks Taken
+            </p>
+            <p className="text-red-400 text-sm font-bold">{breaksTaken ?? 0}</p>
+          </div>
         </div>
       </div>
     </div>
