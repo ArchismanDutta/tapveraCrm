@@ -92,18 +92,27 @@ const ClientPortal = ({ onLogout, clientId, clientEmail }) => {
 
   useEffect(() => {
     fetchProjects();
-  }, []);
+  }, [clientId]);
 
   const fetchProjects = async () => {
     setLoading(true);
     try {
       const token = localStorage.getItem("token");
-      const res = await axios.get(`${API_BASE}/api/projects`, {
+      const params = new URLSearchParams({ limit: "100" });
+      if (clientId) params.set("client", clientId);
+
+      const res = await axios.get(`${API_BASE}/api/projects?${params.toString()}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
+      const rawProjects = Array.isArray(res.data)
+        ? res.data
+        : Array.isArray(res.data?.projects)
+        ? res.data.projects
+        : [];
+
       // Normalize projects to handle both old (client) and new (clients) schema
-      const normalizedProjects = res.data.map(project => {
+      const normalizedProjects = rawProjects.map(project => {
         // If project has old 'client' field but no 'clients', convert it
         if (project.client && (!project.clients || project.clients.length === 0)) {
           return {
@@ -115,13 +124,13 @@ const ClientPortal = ({ onLogout, clientId, clientEmail }) => {
       });
 
       // Filter projects for this client (clients is an array)
-      const clientProjects = normalizedProjects.filter((p) => {
+      const clientProjects = clientId ? normalizedProjects.filter((p) => {
         if (!p.clients || !Array.isArray(p.clients)) return false;
         return p.clients.some((c) => {
           const cId = typeof c === 'object' ? c._id : c;
-          return cId === clientId;
+          return String(cId) === String(clientId);
         });
-      });
+      }) : normalizedProjects;
       setProjects(clientProjects);
     } catch (error) {
       console.error("Error fetching projects:", error);

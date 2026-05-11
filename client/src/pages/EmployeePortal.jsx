@@ -199,7 +199,13 @@ const EmployeePortal = ({ onLogout }) => {
 
   // Normalize project data to handle both old (client) and new (clients) schema
   const normalizeProjects = (projectsData) => {
-    return projectsData.map(project => {
+    const projectList = Array.isArray(projectsData)
+      ? projectsData
+      : Array.isArray(projectsData?.projects)
+      ? projectsData.projects
+      : [];
+
+    return projectList.map(project => {
       // If project has old 'client' field but no 'clients', convert it
       if (project.client && (!project.clients || project.clients.length === 0)) {
         return {
@@ -215,7 +221,7 @@ const EmployeePortal = ({ onLogout }) => {
     try {
       setLoading(true);
       const token = localStorage.getItem("token");
-      const response = await fetch(`${API_BASE}/api/projects`, {
+      const response = await fetch(`${API_BASE}/api/projects?limit=100`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'

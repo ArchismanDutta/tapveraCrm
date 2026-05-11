@@ -27,11 +27,18 @@ router.get("/", protect, async (req, res) => {
     };
 
     let filter = {};
+    const addAndFilter = (condition) => {
+      filter.$and = filter.$and || [];
+      filter.$and.push(condition);
+    };
 
     if (type) filter.type = type;
     if (status) filter.status = status;
     if (assignedTo) { const oid = toOid(assignedTo); if (oid) filter.assignedTo = oid; }
-    if (client)     { const oid = toOid(client);     if (oid) filter.clients = oid; }
+    if (client) {
+      const oid = toOid(client);
+      if (oid) addAndFilter({ $or: [{ clients: oid }, { client: oid }] });
+    }
     if (priority) filter.priority = priority;
     if (createdBy)  { const oid = toOid(createdBy);  if (oid) filter.createdBy = oid; }
 
@@ -69,6 +76,13 @@ router.get("/", protect, async (req, res) => {
     // Role-based filtering
     if (req.user.role === "employee") {
       filter.assignedTo = req.user._id;
+    } else if (req.user.role === "client") {
+      addAndFilter({
+        $or: [
+          { clients: req.user._id },
+          { client: req.user._id },
+        ],
+      });
     }
 
     // Region-based filtering
@@ -93,8 +107,12 @@ router.get("/", protect, async (req, res) => {
         const accessibleClients = await Client.find(regionQuery).select("_id");
         const accessibleClientIds = accessibleClients.map((c) => c._id);
         if (user.role !== "employee") {
-          filter.$and = filter.$and || [];
-          filter.$and.push({ clients: { $in: accessibleClientIds } });
+          addAndFilter({
+            $or: [
+              { clients: { $in: accessibleClientIds } },
+              { client: { $in: accessibleClientIds } },
+            ],
+          });
         }
       }
     }
@@ -508,6 +526,16 @@ router.get("/:id", protect, async (req, res) => {
       if (!isAssigned) {
         return res.status(403).json({ message: "Access denied" });
       }
+    } else if (req.user.role === "client") {
+      const hasClientAccess =
+        project.clients?.some(
+          (client) => client._id.toString() === req.user._id.toString()
+        ) ||
+        project.client?._id?.toString() === req.user._id.toString();
+
+      if (!hasClientAccess) {
+        return res.status(403).json({ message: "Access denied" });
+      }
     }
 
     res.json(project);
@@ -892,7 +920,19 @@ router.get("/employee/:employeeId", protect, async (req, res) => {
 // @access  Private
 router.get("/client/:clientId", protect, async (req, res) => {
   try {
-    const projects = await Project.find({ clients: req.params.clientId })
+    if (
+      req.user.role === "client" &&
+      req.user._id.toString() !== req.params.clientId.toString()
+    ) {
+      return res.status(403).json({ message: "Access denied" });
+    }
+
+    const projects = await Project.find({
+      $or: [
+        { clients: req.params.clientId },
+        { client: req.params.clientId },
+      ],
+    })
       .populate("assignedTo", "name email employeeId designation status")
       .populate("client", "clientName businessName email")  // ✅ Populate old field (backwards compatibility)
       .populate("clients", "clientName businessName email")
