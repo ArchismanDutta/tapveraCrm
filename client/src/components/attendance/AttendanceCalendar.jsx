@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { Calendar, Clock, AlertTriangle, CheckCircle, Filter, ChevronLeft, ChevronRight, CalendarDays, Timer, XCircle, Activity } from "lucide-react";
 import timeUtils from "../../utils/timeUtils";
 
@@ -391,15 +392,14 @@ const AttendanceCalendar = ({ data, onDateFilterChange, onMonthChange }) => {
 
       {/* Lightweight Hover Tooltip */}
       {console.log('Tooltip render check:', { hoveredDay: !!hoveredDay, showTooltip, tooltipPosition }) || null}
-      {hoveredDay && showTooltip && tooltipPosition?.x !== undefined && tooltipPosition?.y !== undefined && (
-        <div className="fixed z-[9999] pointer-events-none">
-          <div
-            className="absolute bg-slate-900 border-2 border-cyan-400 rounded-lg p-3 shadow-2xl text-sm w-[200px]"
-            style={{
-              left: `${tooltipPosition.x}px`,
-              top: `${tooltipPosition.y}px`,
-            }}
-          >
+      {hoveredDay && showTooltip && tooltipPosition?.x !== undefined && tooltipPosition?.y !== undefined && createPortal(
+        <div
+          className="fixed z-[9999] pointer-events-none bg-slate-900 border-2 border-cyan-400 rounded-lg p-3 shadow-2xl text-sm w-[200px]"
+          style={{
+            left: `${tooltipPosition.x}px`,
+            top: `${tooltipPosition.y}px`,
+          }}
+        >
             {/* Header */}
             <div className="flex items-center justify-between mb-2">
               <div className="font-semibold text-white">
@@ -481,8 +481,8 @@ const AttendanceCalendar = ({ data, onDateFilterChange, onMonthChange }) => {
             <div className="text-xs text-gray-500 mt-2 pt-2 border-t border-slate-600/30 text-center">
               Click for detailed view
             </div>
-          </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Enhanced Selected Day Details */}
