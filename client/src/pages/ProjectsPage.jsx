@@ -353,11 +353,16 @@ const ProjectsPage = ({ onLogout }) => {
       if (showMyProjectsOnly && currentUserId) params.set("createdBy", currentUserId);
 
       const res = await API.get(`/api/projects?${params.toString()}`);
-      const { projects: rawProjects, pagination: pg, stats } = res.data;
-      setProjects(normalizeProjects(rawProjects));
-      setPagination(pg);
+      // Handle both old API format (plain array) and new format ({ projects, pagination, stats })
+      const isOldFormat = Array.isArray(res.data);
+      const rawProjects = isOldFormat ? res.data : res.data.projects;
+      const pg = isOldFormat ? null : res.data.pagination;
+      const stats = isOldFormat ? null : res.data.stats;
+      setProjects(normalizeProjects(rawProjects || []));
+      if (pg) setPagination(pg);
       if (stats) setServerStats(stats);
-    } catch {
+    } catch (err) {
+      console.error("Error fetching projects:", err);
       showNotification("Error fetching projects", "error");
     }
   };
