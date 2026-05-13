@@ -134,8 +134,8 @@ router.get("/", protect, async (req, res) => {
 
     const TYPES = ["Website", "SEO", "Google Marketing", "SMO", "Hosting", "Invoice App"];
 
-    // Run paginated query and stats aggregation in parallel
-    const [projects, [aggResult]] = await Promise.all([
+    // Run all queries in parallel — separate simple queries are more reliable than $facet
+    const [projects, total, statusGroups, typeGroups] = await Promise.all([
       Project.find(filter)
         .populate("assignedTo", "name email employeeId designation status")
         .populate("client", "clientName businessName email region")
@@ -146,26 +146,21 @@ router.get("/", protect, async (req, res) => {
         .skip(skip)
         .limit(limitNum)
         .lean(),
+      Project.countDocuments(filter),
       Project.aggregate([
         { $match: filter },
-        {
-          $facet: {
-            total: [{ $count: "count" }],
-            statusCounts: [{ $group: { _id: "$status", count: { $sum: 1 } } }],
-            typeCounts: [
-              { $unwind: { path: "$type", preserveNullAndEmptyArrays: true } },
-              { $group: { _id: { type: "$type", status: "$status" }, count: { $sum: 1 } } },
-            ],
-          },
-        },
+        { $group: { _id: "$status", count: { $sum: 1 } } },
+      ]),
+      Project.aggregate([
+        { $match: filter },
+        { $unwind: { path: "$type", preserveNullAndEmptyArrays: true } },
+        { $group: { _id: { type: "$type", status: "$status" }, count: { $sum: 1 } } },
       ]),
     ]);
 
-    const total = aggResult?.total?.[0]?.count || 0;
-
     // Build overall status stats
     const statusCounts = { new: 0, ongoing: 0, expired: 0, completed: 0 };
-    (aggResult?.statusCounts || []).forEach(({ _id, count }) => {
+    statusGroups.forEach(({ _id, count }) => {
       if (_id && statusCounts.hasOwnProperty(_id)) statusCounts[_id] = count;
     });
 
@@ -174,7 +169,7 @@ router.get("/", protect, async (req, res) => {
     TYPES.forEach((t) => {
       byType[t] = { total: 0, new: 0, ongoing: 0, expired: 0, completed: 0 };
     });
-    (aggResult?.typeCounts || []).forEach(({ _id, count }) => {
+    typeGroups.forEach(({ _id, count }) => {
       const { type: t, status: s } = _id || {};
       if (t && byType[t]) {
         byType[t].total += count;
