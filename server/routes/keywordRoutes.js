@@ -15,7 +15,7 @@ function isEmployeeAssigned(project, userId) {
 router.get("/:projectId/keywords", protect, async (req, res) => {
   try {
     const { projectId } = req.params;
-    const { activeOnly = "true" } = req.query;
+    const { activeOnly = "true", historyLimit = "10" } = req.query;
 
     const project = await Project.findById(projectId);
     if (!project) return res.status(404).json({ message: "Project not found" });
@@ -24,8 +24,24 @@ router.get("/:projectId/keywords", protect, async (req, res) => {
       return res.status(403).json({ message: "Access denied" });
     }
 
-    const keywords = await KeywordRank.getProjectKeywords(projectId, activeOnly === "true");
-    res.json({ success: true, data: keywords, count: keywords.length });
+    const filter = { project: projectId };
+    if (activeOnly === "true") filter.isActive = true;
+
+    const limit = parseInt(historyLimit) || 10;
+
+    // Fetch keywords with limited rankHistory
+    const keywords = await KeywordRank.find(filter)
+      .populate("createdBy", "name email employeeId")
+      .sort({ createdAt: -1 })
+      .lean();
+
+    // Limit rankHistory to prevent large responses
+    const optimizedKeywords = keywords.map(kw => ({
+      ...kw,
+      rankHistory: (kw.rankHistory || []).slice(0, limit)
+    }));
+
+    res.json({ success: true, data: optimizedKeywords, count: optimizedKeywords.length });
   } catch (error) {
     console.error("Error fetching keywords:", error);
     res.status(500).json({ message: "Server error", error: error.message });

@@ -1692,4 +1692,82 @@ router.get("/:id/messages/:messageId/attachments/:attachmentId/download", protec
   }
 });
 
+// =====================
+// Message Status Endpoints
+// =====================
+const messageController = require('../controllers/messageController');
+
+// @route   POST /api/projects/:id/messages/:messageId/read
+// @desc    Mark message as read
+// @access  Private
+router.post(
+  '/:id/messages/:messageId/read',
+  protect,
+  messageController.markMessageRead
+);
+
+// @route   PUT /api/projects/:id/messages/:messageId/status
+// @desc    Update message status
+// @access  Private
+router.put(
+  '/:id/messages/:messageId/status',
+  protect,
+  messageController.updateMessageStatus
+);
+
+// =====================
+// Pinned Messages Endpoints
+// =====================
+
+// @route   POST /api/projects/:projectId/messages/:messageId/pin
+// @desc    Pin a message (admin only)
+// @access  Private (Admin/SuperAdmin)
+router.post(
+  '/:projectId/messages/:messageId/pin',
+  protect,
+  authorize('admin', 'super-admin', 'superadmin'),
+  messageController.pinMessage
+);
+
+// @route   DELETE /api/projects/:projectId/messages/:messageId/pin
+// @desc    Unpin a message (admin only)
+// @access  Private (Admin/SuperAdmin)
+router.delete(
+  '/:projectId/messages/:messageId/pin',
+  protect,
+  authorize('admin', 'super-admin', 'superadmin'),
+  messageController.unpinMessage
+);
+
+// @route   GET /api/projects/:projectId/messages/pinned
+// @desc    Get all pinned messages for a project
+// @access  Private
+router.get(
+  '/:projectId/messages/pinned',
+  protect,
+  messageController.getPinnedMessages
+);
+
+// =====================
+// Starred Messages Endpoints
+// =====================
+
+// @route   POST /api/projects/:projectId/messages/:messageId/star
+// @desc    Toggle star on a message (personal bookmark)
+// @access  Private
+router.post(
+  '/:projectId/messages/:messageId/star',
+  protect,
+  messageController.toggleStarMessage
+);
+
+// @route   GET /api/projects/:projectId/messages/starred
+// @desc    Get all starred messages for current user in a project
+// @access  Private
+router.get(
+  '/:projectId/messages/starred',
+  protect,
+  messageController.getStarredMessages
+);
+
 module.exports = router;

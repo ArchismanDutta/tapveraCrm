@@ -23,7 +23,22 @@ module.exports = {
       },
       backdropBlur: {
         sm: '4px', // Enable blur small for backdrop-blur-sm usage
-      }
+      },
+      keyframes: {
+        slideIn: {
+          '0%': { opacity: '0', transform: 'translateY(10px)' },
+          '100%': { opacity: '1', transform: 'translateY(0)' },
+        },
+        highlightFlash: {
+          '0%': { backgroundColor: 'rgba(234, 179, 8, 0)' },
+          '50%': { backgroundColor: 'rgba(234, 179, 8, 0.3)' },
+          '100%': { backgroundColor: 'rgba(234, 179, 8, 0)' },
+        },
+      },
+      animation: {
+        slideIn: 'slideIn 0.3s ease-out',
+        highlightFlash: 'highlightFlash 2s ease-in-out',
+      },
     },
   },
   plugins: [

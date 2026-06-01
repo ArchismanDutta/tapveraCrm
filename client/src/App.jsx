@@ -30,9 +30,9 @@ import NotificationToast from "./components/NotificationToast";
 // Tap AI Assistant (Old - Chat-based)
 // import TapAssistant from "./components/tap/TapAssistant";
 
-// Tap Agent (New - Autonomous UI Controller)
-import { AgentProvider } from "./contexts/AgentContext";
-import TapAgent from "./components/agent/TapAgent";
+// Tap Agent (New - Autonomous UI Controller) - REMOVED
+// import { AgentProvider } from "./contexts/AgentContext";
+// import TapAgent from "./components/agent/TapAgent";
 
 // Redux
 import { useDispatch } from "react-redux";
@@ -1118,11 +1118,8 @@ const App = () => (
   <Router>
     <WebSocketProvider>
       <AchievementProvider>
-        <AgentProvider>
-          <AppWrapper />
-          <AchievementNotificationContainer />
-          <TapAgent />
-        </AgentProvider>
+        <AppWrapper />
+        <AchievementNotificationContainer />
       </AchievementProvider>
     </WebSocketProvider>
   </Router>

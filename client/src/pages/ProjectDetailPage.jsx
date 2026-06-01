@@ -11,8 +11,15 @@ import ProjectTaskEditModal from "../components/project/ProjectTaskEditModal";
 import UnreadMessageBadge from "../components/message/UnreadMessageBadge";
 import ProjectReportTab from "../components/project/ProjectReportTab";
 import MentionInput from "../components/common/MentionInput";
+import MessageStatus from "../components/message/MessageStatus";
+import TypingIndicator from "../components/message/TypingIndicator";
+import MessageDateSeparator from "../components/message/MessageDateSeparator";
+import PinnedMessagesModal from "../components/message/PinnedMessagesModal";
+import EmojiPickerEnhanced from "../components/chat/EmojiPickerEnhanced";
+import NewMessagesButton from "../components/chat/NewMessagesButton";
 import {
   ArrowLeft,
+  ArrowDown,
   Globe,
   TrendingUp,
   Package,
@@ -50,6 +57,13 @@ import {
   Star,
   Briefcase,
   BarChart3,
+  Pin,
+  Menu,
+  X,
+  Info,
+  ChevronRight,
+  ChevronUp,
+  ChevronDown,
 } from "lucide-react";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
@@ -123,6 +137,7 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
   const [showFilters, setShowFilters] = useState(false);
   const [showFormatting, setShowFormatting] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(null);
+  const [showActions, setShowActions] = useState(false);
   const commonEmojis = ["👍", "❤️", "😂", "😮", "😢", "🎉", "🔥", "👏"];
   const [showSummaryModal, setShowSummaryModal] = useState(false);
   const [summary, setSummary] = useState("");
@@ -148,14 +163,26 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
   const [suggestions, setSuggestions] = useState([]);
   const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(0);
   const [showSuggestions, setShowSuggestions] = useState(false);
+
+  // New state for Tasks 8-11
+  const [typingUsers, setTypingUsers] = useState([]);
+  const [showPinnedModal, setShowPinnedModal] = useState(false);
+  const [showEnhancedEmojiPicker, setShowEnhancedEmojiPicker] = useState(false);
+  const typingTimeoutRef = useRef(null);
   const [quickReplies, setQuickReplies] = useState([]);
   const [showQuickReplies, setShowQuickReplies] = useState(true);
+  const [starredMessageIds, setStarredMessageIds] = useState(new Set());
+  const [showStarredOnly, setShowStarredOnly] = useState(false);
+  const [newMessagesCount, setNewMessagesCount] = useState(0);
+  const [showNewMessagesButton, setShowNewMessagesButton] = useState(false);
+  const [showSidebar, setShowSidebar] = useState(true);
   const suggestionsRef = useRef(null);
 
   // WebSocket connection with exponential backoff reconnection
   useEffect(() => {
     fetchProjectDetails();
     fetchMessages();
+    fetchStarredMessages();
 
     const token = localStorage.getItem("token");
     let isComponentMounted = true;
@@ -253,6 +280,38 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                   icon: "/icon.png",
                   requireInteraction: false,
                 }
+              );
+            }
+          } else if (data.type === "user_typing") {
+            // Handle typing indicator
+            if (data.projectId === projectId && data.userId !== userId) {
+              setTypingUsers((prev) => {
+                const exists = prev.some(u => u.userId === data.userId);
+                if (!exists) {
+                  return [...prev, { userId: data.userId, userName: data.userName }];
+                }
+                return prev;
+              });
+
+              // Remove typing indicator after 3 seconds
+              setTimeout(() => {
+                setTypingUsers((prev) => prev.filter(u => u.userId !== data.userId));
+              }, 3000);
+            }
+          } else if (data.type === "user_stopped_typing") {
+            // Handle stop typing
+            if (data.projectId === projectId) {
+              setTypingUsers((prev) => prev.filter(u => u.userId !== data.userId));
+            }
+          } else if (data.type === "message_read") {
+            // Handle message read receipts
+            if (data.projectId === projectId) {
+              setMessages((prevMessages) =>
+                prevMessages.map((msg) =>
+                  msg._id === data.messageId
+                    ? { ...msg, status: 'read' }
+                    : msg
+                )
               );
             }
           }
@@ -398,7 +457,12 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
   }, [showEmojiPicker]);
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (chatContainerRef.current) {
+      chatContainerRef.current.scrollTo({
+        top: chatContainerRef.current.scrollHeight,
+        behavior: "smooth"
+      });
+    }
   };
 
   const fetchProjectDetails = async () => {
@@ -584,7 +648,12 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
 
       // Scroll to messages after a short delay to ensure content is rendered
       setTimeout(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+        if (chatContainerRef.current) {
+          chatContainerRef.current.scrollTo({
+            top: chatContainerRef.current.scrollHeight,
+            behavior: "smooth"
+          });
+        }
       }, 300);
 
       // Clear navigation state
@@ -684,6 +753,73 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
       fetchTasks();
     }
   }, [activeTab, projectId]);
+
+  // Scroll detection for New Messages Button
+  useEffect(() => {
+    const container = chatContainerRef.current;
+    if (!container) return;
+
+    const handleScroll = () => {
+      const { scrollTop, scrollHeight, clientHeight } = container;
+      const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+
+      // Show button if user scrolled up more than 200px from bottom
+      if (distanceFromBottom > 200) {
+        setShowNewMessagesButton(true);
+      } else {
+        setShowNewMessagesButton(false);
+        setNewMessagesCount(0);
+      }
+    };
+
+    container.addEventListener('scroll', handleScroll);
+    return () => container.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  // Track new messages when scrolled up
+  useEffect(() => {
+    if (showNewMessagesButton && messages.length > prevMessagesLengthRef.current) {
+      const newMsgsCount = messages.length - prevMessagesLengthRef.current;
+      setNewMessagesCount((prev) => prev + newMsgsCount);
+    }
+  }, [messages.length, showNewMessagesButton]);
+
+  // Intersection Observer for read receipts
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach(async (entry) => {
+          if (entry.isIntersecting) {
+            const messageId = entry.target.getAttribute('data-message-id');
+            const messageOwnerId = entry.target.getAttribute('data-owner-id');
+
+            // Only mark as read if not own message
+            if (messageId && messageOwnerId !== userId) {
+              try {
+                await axios.post(
+                  `${API_BASE}/api/projects/${projectId}/messages/${messageId}/read`,
+                  {},
+                  {
+                    headers: {
+                      Authorization: `Bearer ${localStorage.getItem("token")}`,
+                    },
+                  }
+                );
+              } catch (error) {
+                console.error('Error marking message as read:', error);
+              }
+            }
+          }
+        });
+      },
+      { threshold: 0.5 }
+    );
+
+    const messageElements = document.querySelectorAll('[data-message-id]');
+    messageElements.forEach(el => observer.observe(el));
+
+    return () => observer.disconnect();
+  }, [messages, projectId, userId]);
 
   const handleSendMessage = async (e) => {
     e.preventDefault();
@@ -831,6 +967,51 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
     }
   };
 
+  // Typing indicator functions
+  const sendTypingIndicator = () => {
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({
+        type: "typing",
+        projectId: projectId,
+        userId: userId,
+        userName: project?.assignedTo?.find(u => u._id === userId)?.name || "User"
+      }));
+
+      // Clear existing timeout
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+
+      // Stop typing after 3 seconds
+      typingTimeoutRef.current = setTimeout(() => {
+        stopTypingIndicator();
+      }, 3000);
+    }
+  };
+
+  const stopTypingIndicator = () => {
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({
+        type: "stop_typing",
+        projectId: projectId,
+        userId: userId
+      }));
+    }
+  };
+
+  // Jump to message function for pinned messages modal
+  const handleJumpToMessage = (messageId) => {
+    const messageElement = document.getElementById(`message-${messageId}`);
+    if (messageElement) {
+      messageElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      // Highlight the message briefly with flash animation
+      messageElement.classList.add('animate-highlightFlash');
+      setTimeout(() => {
+        messageElement.classList.remove('animate-highlightFlash');
+      }, 2000);
+    }
+  };
+
   const clearFilters = () => {
     setSearchTerm("");
     setSearchSender("");
@@ -918,6 +1099,58 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
     setCopiedText(text);
     setTimeout(() => setCopiedText(null), 2000);
     showNotification("Copied to clipboard!", "success");
+  };
+
+  // Starred messages functionality
+  const fetchStarredMessages = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      const response = await axios.get(
+        `${API_BASE}/api/projects/${projectId}/messages/starred`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+      const starredIds = new Set(response.data.map((msg) => msg._id));
+      setStarredMessageIds(starredIds);
+    } catch (error) {
+      console.error("Error fetching starred messages:", error);
+    }
+  };
+
+  const toggleStarMessage = async (messageId) => {
+    try {
+      const token = localStorage.getItem("token");
+      const isStarred = starredMessageIds.has(messageId);
+
+      if (isStarred) {
+        await axios.delete(
+          `${API_BASE}/api/projects/${projectId}/messages/${messageId}/star`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        );
+        setStarredMessageIds((prev) => {
+          const newSet = new Set(prev);
+          newSet.delete(messageId);
+          return newSet;
+        });
+        showNotification("Removed from starred messages", "success");
+      } else {
+        await axios.post(
+          `${API_BASE}/api/projects/${projectId}/messages/${messageId}/star`,
+          {},
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        );
+        setStarredMessageIds((prev) => new Set(prev).add(messageId));
+        showNotification("Added to starred messages", "success");
+      }
+    } catch (error) {
+      console.error("Error toggling star:", error);
+      showNotification("Failed to update starred status", "error");
+    }
   };
 
   // Format text helpers
@@ -1041,7 +1274,7 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
   const Icon = PROJECT_TYPE_ICONS[primaryType] || PROJECT_TYPE_ICONS["Website"]; // fallback to Website icon
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#141a21] via-[#191f2b] to-[#101218] text-blue-100">
+    <div className="h-screen bg-gradient-to-br from-[#141a21] via-[#191f2b] to-[#101218] text-blue-100 flex flex-col overflow-hidden">
       {/* Notification Toast */}
       {notification && (
         <div
@@ -1060,49 +1293,119 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
         </div>
       )}
 
-      {/* Header */}
-      <div className="sticky top-0 z-30 bg-[#191f2b]/95 backdrop-blur-sm border-b border-[#232945]">
-        <div className="px-3 sm:px-4 md:px-6 lg:px-8 py-3 sm:py-4">
-          <div className="flex items-center gap-2 sm:gap-3 md:gap-4">
+      {/* Enhanced Header with Project Info Banner */}
+      <div className="sticky top-0 z-30 bg-[#202c33] backdrop-blur-sm border-b border-[#2a3942]">
+        <div className="px-3 sm:px-4 md:px-6 py-3">
+          {/* Top Row - Navigation & Actions */}
+          <div className="flex items-center gap-3 mb-3">
             <button
               onClick={onBack}
-              className="p-1.5 sm:p-2 rounded-lg text-gray-400 hover:text-white hover:bg-[#0f1419] transition-all"
+              className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-[#2a3942] transition-all"
               title="Go back"
             >
-              <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
+              <ArrowLeft className="w-5 h-5" />
             </button>
-            <div className="flex items-center gap-1.5 sm:gap-2 md:gap-3 flex-1 min-w-0">
-              <Icon
-                className={`w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 ${colors.text} flex-shrink-0`}
-              />
+
+            <div className="flex items-center gap-3 flex-1 min-w-0">
+              <Icon className={`w-6 h-6 ${colors.text} flex-shrink-0`} />
               <div className="min-w-0 flex-1">
-                <h1 className="text-sm sm:text-base md:text-lg lg:text-xl xl:text-2xl font-bold text-white truncate">
+                <h1 className="text-lg font-bold text-white truncate">
                   {project.projectName}
                 </h1>
-                <p className="text-[10px] sm:text-xs md:text-sm text-gray-400 truncate">
+                <p className="text-xs text-gray-400 truncate">
                   {project.clients && project.clients.length > 0
                     ? project.clients.map(c => c?.businessName || c?.clientName).join(", ")
                     : "N/A"}
                 </p>
               </div>
             </div>
-            <span
-              className={`hidden sm:inline-flex px-2 sm:px-3 py-1 rounded-full text-[10px] sm:text-xs font-medium ${colors.bg} ${colors.text} border ${colors.border} flex-shrink-0`}
+
+            <button
+              onClick={() => setShowSidebar(!showSidebar)}
+              className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all ${
+                showSidebar
+                  ? 'bg-[#00a884] text-white hover:bg-[#128C7E]'
+                  : 'text-gray-400 hover:text-white hover:bg-[#2a3942]'
+              }`}
+              title={showSidebar ? "Hide project details" : "Show project details"}
             >
+              <Info className="w-5 h-5" />
+              <span className="hidden md:inline text-sm font-medium">
+                {showSidebar ? 'Hide Details' : 'Show Details'}
+              </span>
+            </button>
+          </div>
+
+          {/* Info Pills Row */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium ${colors.bg} ${colors.text} border ${colors.border}`}>
               {Array.isArray(project.type) ? project.type.join(", ") : project.type}
             </span>
+
+            <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium ${
+              project.status === "new"
+                ? "bg-blue-500/20 text-blue-400 border border-blue-500/50"
+                : project.status === "ongoing"
+                ? "bg-green-500/20 text-green-400 border border-green-500/50"
+                : project.status === "completed"
+                ? "bg-purple-500/20 text-purple-400 border border-purple-500/50"
+                : "bg-red-500/20 text-red-400 border border-red-500/50"
+            }`}>
+              <CheckCircle className="w-3.5 h-3.5" />
+              {project.status}
+            </span>
+
+            {project.startDate && (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-gray-500/20 text-gray-400 border border-gray-500/30">
+                <Calendar className="w-3.5 h-3.5" />
+                {new Date(project.startDate).toLocaleDateString()} - {new Date(project.endDate).toLocaleDateString()}
+              </span>
+            )}
+
+            {project.assignedTo && project.assignedTo.length > 0 && (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-[#00a884]/20 text-[#00a884] border border-[#00a884]/30">
+                <Users className="w-3.5 h-3.5" />
+                {project.assignedTo.length} Team {project.assignedTo.length === 1 ? 'Member' : 'Members'}
+              </span>
+            )}
           </div>
         </div>
       </div>
 
-      {/* Main Content */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4 md:gap-6 p-3 sm:p-4 md:p-6 lg:p-8">
-        {/* Left Column - Project Details */}
-        <div className="lg:col-span-1 space-y-3 sm:space-y-4 md:space-y-6">
+      {/* Main Content - Full Width Layout */}
+      <div className="relative flex flex-1 overflow-hidden">
+        {/* Overlay for mobile when sidebar is open */}
+        {showSidebar && (
+          <div
+            className="absolute inset-0 bg-black/50 z-30 md:hidden"
+            onClick={() => setShowSidebar(false)}
+          />
+        )}
+
+        {/* Slide-out Sidebar - Project Details */}
+        <div className={`absolute top-0 left-0 h-full w-80 bg-[#111b21] border-r border-[#2a3942] transform transition-transform duration-300 ease-in-out z-40 overflow-y-auto ${
+          showSidebar ? 'translate-x-0' : '-translate-x-full'
+        }`}>
+          {/* Sidebar Header */}
+          <div className="sticky top-0 bg-[#202c33] border-b border-[#2a3942] px-4 py-3 flex items-center justify-between z-10">
+            <h3 className="text-white font-semibold flex items-center gap-2">
+              <Info className="w-5 h-5 text-[#00a884]" />
+              Project Details
+            </h3>
+            <button
+              onClick={() => setShowSidebar(false)}
+              className="p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-[#2a3942] transition-all"
+              title="Close sidebar"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          <div className="p-4 space-y-4">
           {/* Project Info Card */}
-          <div className="bg-[#191f2b]/70 rounded-lg sm:rounded-xl shadow-xl border border-[#232945] p-3 sm:p-4 md:p-5 lg:p-6">
-            <h2 className="text-sm sm:text-base md:text-lg font-semibold text-white mb-3 sm:mb-4 flex items-center gap-2">
-              <FileText className="w-4 h-4 sm:w-5 sm:h-5 text-blue-400" />
+          <div className="bg-[#202c33] rounded-xl shadow-lg border border-[#2a3942] p-4">
+            <h2 className="text-base font-semibold text-white mb-4 flex items-center gap-2">
+              <FileText className="w-5 h-5 text-[#00a884]" />
               Project Information
             </h2>
 
@@ -1196,9 +1499,9 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
           </div>
 
           {/* Team Members Card */}
-          <div className="bg-[#191f2b]/70 rounded-xl shadow-xl border border-[#232945] p-4 sm:p-6">
-            <h2 className="text-base sm:text-lg font-semibold text-white mb-4 flex items-center gap-2">
-              <Users className="w-5 h-5 text-purple-400" />
+          <div className="bg-[#202c33] rounded-xl shadow-lg border border-[#2a3942] p-4">
+            <h2 className="text-base font-semibold text-white mb-4 flex items-center gap-2">
+              <Users className="w-5 h-5 text-[#00a884]" />
               Team Members
             </h2>
 
@@ -1207,9 +1510,9 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                 project.assignedTo.map((emp, idx) => (
                   <div
                     key={idx}
-                    className="flex items-center gap-3 p-3 bg-[#0f1419] rounded-lg border border-[#232945]"
+                    className="flex items-center gap-3 p-3 bg-[#111b21] rounded-lg border border-[#2a3942] hover:bg-[#182229] transition-colors"
                   >
-                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white font-semibold flex-shrink-0">
+                    <div className="w-10 h-10 rounded-full bg-[#00a884] flex items-center justify-center text-white font-semibold flex-shrink-0">
                       {(emp.name || emp.employeeId || "U").charAt(0).toUpperCase()}
                     </div>
                     <div className="min-w-0 flex-1">
@@ -1227,7 +1530,7 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                         // Show employee ID and designation for clients
                         <>
                           <div className="flex items-center gap-2 mb-1">
-                            <Briefcase className="w-3 h-3 text-purple-400 flex-shrink-0" />
+                            <Briefcase className="w-3 h-3 text-[#00a884] flex-shrink-0" />
                             <p className="text-white font-medium text-sm">
                               {emp.employeeId || emp._id?.substring(0, 8) || "N/A"}
                             </p>
@@ -1241,7 +1544,7 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                   </div>
                 ))
               ) : (
-                <div className="p-4 bg-[#0f1419] rounded-lg border border-[#232945] text-center">
+                <div className="p-4 bg-[#111b21] rounded-lg border border-[#2a3942] text-center">
                   <Users className="w-8 h-8 text-gray-600 mx-auto mb-2" />
                   <p className="text-gray-400 text-sm">No team members assigned</p>
                 </div>
@@ -1251,13 +1554,13 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
 
           {/* Project Creator Card */}
           {project.createdBy && (
-            <div className="bg-[#191f2b]/70 rounded-lg sm:rounded-xl shadow-xl border border-[#232945] p-3 sm:p-4 md:p-5 lg:p-6">
-              <h2 className="text-sm sm:text-base md:text-lg font-semibold text-white mb-3 sm:mb-4 flex items-center gap-2">
-                <Star className="w-4 h-4 sm:w-5 sm:h-5 text-yellow-400" />
+            <div className="bg-[#202c33] rounded-xl shadow-lg border border-[#2a3942] p-4">
+              <h2 className="text-base font-semibold text-white mb-4 flex items-center gap-2">
+                <Star className="w-5 h-5 text-yellow-400" />
                 Project Creator
               </h2>
 
-              <div className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 bg-[#0f1419] rounded-lg border border-[#232945]">
+              <div className="flex items-center gap-3 p-3 bg-[#111b21] rounded-lg border border-[#2a3942]">
                 <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-gradient-to-br from-yellow-500 to-orange-500 flex items-center justify-center text-white font-semibold flex-shrink-0 text-sm sm:text-base">
                   {(project.createdBy.name || "U").charAt(0).toUpperCase()}
                 </div>
@@ -1277,64 +1580,64 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
 
           {/* Description Card */}
           {project.description && (
-            <div className="bg-[#191f2b]/70 rounded-lg sm:rounded-xl shadow-xl border border-[#232945] p-3 sm:p-4 md:p-5 lg:p-6">
-              <h2 className="text-sm sm:text-base md:text-lg font-semibold text-white mb-3 sm:mb-4">
+            <div className="bg-[#202c33] rounded-xl shadow-lg border border-[#2a3942] p-4">
+              <h2 className="text-base font-semibold text-white mb-4 flex items-center gap-2">
+                <FileText className="w-5 h-5 text-[#00a884]" />
                 Description
               </h2>
-              <p className="text-xs sm:text-sm text-gray-300 leading-relaxed break-words">
+              <p className="text-sm text-gray-300 leading-relaxed break-words">
                 {project.description}
               </p>
             </div>
           )}
         </div>
+      </div>
 
-        {/* Right Column - Chat/Conversation */}
-        <div className="lg:col-span-2">
-          <div className="bg-[#191f2b]/70 rounded-lg sm:rounded-xl shadow-xl border border-[#232945] h-[calc(100vh-10rem)] sm:h-[calc(100vh-8rem)] lg:h-[calc(100vh-7rem)] flex flex-col" style={{ minHeight: "500px" }}>
-            {/* Tabs */}
-            <div className="border-b border-[#232945]">
+        {/* Main Content Area - Full Width with WhatsApp-style Chat */}
+        <div className={`flex-1 transition-all duration-300 ${showSidebar ? 'ml-80' : 'ml-0'}`}>
+          <div className="bg-[#0b141a] h-full flex flex-col">
+            {/* Tabs - WhatsApp Style */}
+            <div className="bg-[#202c33] border-b border-[#2a3942]">
               <div className="flex">
                 <button
                   onClick={() => setActiveTab("chat")}
-                  className={`flex-1 flex items-center justify-center gap-1 sm:gap-2 px-2 sm:px-3 md:px-4 py-2 sm:py-3 md:py-4 text-xs sm:text-sm md:text-base font-medium transition-all ${
+                  className={`flex-1 flex items-center justify-center gap-2 px-4 py-3.5 text-sm font-medium transition-all ${
                     activeTab === "chat"
-                      ? "bg-purple-600/20 text-purple-400 border-b-2 border-purple-500"
-                      : "text-gray-400 hover:text-white hover:bg-[#0f1419]"
+                      ? "text-[#00a884] border-b-2 border-[#00a884]"
+                      : "text-gray-400 hover:text-white"
                   }`}
                 >
-                  <Mail className="w-4 h-4 sm:w-5 sm:h-5" />
-                  <span className="hidden sm:inline">Chat</span>
-                  <span className="sm:hidden">Chat</span>
-                  <UnreadMessageBadge projectId={projectId} refreshInterval={30000} className="text-[10px] sm:text-xs" />
+                  <Mail className="w-5 h-5" />
+                  <span>Chat</span>
+                  <UnreadMessageBadge projectId={projectId} refreshInterval={30000} className="text-xs" />
                 </button>
                 <button
                   onClick={() => setActiveTab("tasks")}
-                  className={`flex-1 flex items-center justify-center gap-1 sm:gap-2 px-2 sm:px-3 md:px-4 py-2 sm:py-3 md:py-4 text-xs sm:text-sm md:text-base font-medium transition-all ${
+                  className={`flex-1 flex items-center justify-center gap-2 px-4 py-3.5 text-sm font-medium transition-all ${
                     activeTab === "tasks"
-                      ? "bg-purple-600/20 text-purple-400 border-b-2 border-purple-500"
-                      : "text-gray-400 hover:text-white hover:bg-[#0f1419]"
+                      ? "text-[#00a884] border-b-2 border-[#00a884]"
+                      : "text-gray-400 hover:text-white"
                   }`}
                 >
-                  <ListTodo className="w-4 h-4 sm:w-5 sm:h-5" />
-                  <span className="hidden sm:inline">Tasks</span>
-                  <span className="sm:hidden">Tasks</span>
+                  <ListTodo className="w-5 h-5" />
+                  <span>Tasks</span>
                   {tasks.length > 0 && (
-                    <span className="px-1.5 sm:px-2 py-0.5 rounded-full bg-green-600/30 text-green-400 text-[10px] sm:text-xs">
+                    <span className="px-2 py-0.5 rounded-full bg-[#00a884] text-white text-xs font-semibold">
                       {tasks.length}
                     </span>
                   )}
                 </button>
                 <button
                   onClick={() => setActiveTab("report")}
-                  className={`flex-1 flex items-center justify-center gap-1 sm:gap-2 px-2 sm:px-3 md:px-4 py-2 sm:py-3 md:py-4 text-xs sm:text-sm md:text-base font-medium transition-all ${
+                  className={`flex-1 flex items-center justify-center gap-2 px-4 py-3.5 text-sm font-medium transition-all ${
                     activeTab === "report"
-                      ? "bg-purple-600/20 text-purple-400 border-b-2 border-purple-500"
-                      : "text-gray-400 hover:text-white hover:bg-[#0f1419]"
+                      ? "text-[#00a884] border-b-2 border-[#00a884]"
+                      : "text-gray-400 hover:text-white"
                   }`}
                 >
-                  <BarChart3 className="w-4 h-4 sm:w-5 sm:h-5" />
-                  <span className="hidden sm:inline">Project Report</span>
-                  <span className="sm:hidden">Report</span>
+                  <BarChart3 className="w-5 h-5" />
+                  <span className="hidden sm:inline">Report</span>
+                  <span className="sm:inline md:hidden">Report</span>
                 </button>
               </div>
             </div>
@@ -1343,32 +1646,61 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
             {activeTab === "chat" && (
               <>
                 {/* Chat Header */}
-                <div className="p-3 sm:p-4 md:p-6 border-b border-[#232945] space-y-2 sm:space-y-3">
-                  <div className="flex items-center justify-between flex-wrap gap-2">
-                    <div>
-                      <h2 className="text-sm sm:text-base md:text-lg font-semibold text-white flex items-center gap-2">
-                        <Mail className="w-4 h-4 sm:w-5 sm:h-5 text-blue-400" />
-                        <span className="hidden sm:inline">Project Conversation</span>
-                        <span className="sm:hidden">Messages</span>
+                <div className="p-2 sm:p-3 bg-[#202c33] border-b border-[#2a3942]">
+                  <div className="flex items-center justify-between gap-3 mb-2">
+                    <div className="flex-1 min-w-0">
+                      <h2 className="text-base font-semibold text-white flex items-center gap-2">
+                        <Mail className="w-5 h-5 text-[#00a884]" />
+                        Project Conversation
                       </h2>
-                      <div className="flex items-center gap-2 sm:gap-3 mt-1">
-                        <p className="text-[10px] sm:text-xs md:text-sm text-gray-400">
+                      <div className="flex items-center gap-3 mt-1">
+                        <p className="text-xs text-gray-400">
                           {messages.length} message{messages.length !== 1 ? "s" : ""}
                         </p>
-                        <div className="flex items-center gap-1 sm:gap-1.5">
+                        <div className="flex items-center gap-1.5">
                           <div
-                            className={`w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full ${
+                            className={`w-2 h-2 rounded-full ${
                               wsConnected ? "bg-green-400 animate-pulse" : "bg-red-400"
                             }`}
                           ></div>
-                          <span className="text-[10px] sm:text-xs text-gray-500">
+                          <span className="text-xs text-gray-500">
                             {wsConnected ? "Connected" : "Disconnected"}
                           </span>
                         </div>
                       </div>
                     </div>
 
-                <div className="flex gap-1 sm:gap-2">
+                    <button
+                      onClick={() => setShowActions(!showActions)}
+                      className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-[#2a3942] transition-all flex-shrink-0"
+                      title={showActions ? "Hide actions" : "Show actions"}
+                    >
+                      {showActions ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                    </button>
+                  </div>
+
+                  {showActions && (
+                    <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() => setShowPinnedModal(true)}
+                    className="flex items-center gap-2 px-3 py-2 rounded-lg bg-yellow-600/20 hover:bg-yellow-600/40 text-yellow-400 border border-yellow-500/30 transition-colors text-sm"
+                    title="View pinned messages"
+                  >
+                    <Pin className="w-4 h-4" />
+                    <span className="hidden sm:inline">Pinned</span>
+                  </button>
+                  <button
+                    onClick={() => setShowStarredOnly(!showStarredOnly)}
+                    className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-colors text-sm ${
+                      showStarredOnly
+                        ? "bg-yellow-600/40 text-yellow-300 border border-yellow-500/50"
+                        : "bg-yellow-600/20 hover:bg-yellow-600/40 text-yellow-400 border border-yellow-500/30"
+                    }`}
+                    title={showStarredOnly ? "Show all messages" : "Show starred messages only"}
+                  >
+                    <Star className={`w-4 h-4 ${showStarredOnly ? "fill-yellow-300" : ""}`} />
+                    <span className="hidden sm:inline">Starred</span>
+                  </button>
                   <button
                     onClick={() => setShowFilters(!showFilters)}
                     className="flex items-center gap-2 px-3 py-2 rounded-lg bg-blue-600/20 hover:bg-blue-600/40 text-blue-400 border border-blue-500/30 transition-colors text-sm"
@@ -1379,7 +1711,7 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                   </button>
                   <button
                     onClick={handleSummarize}
-                    className="flex items-center gap-2 px-3 py-2 rounded-lg bg-purple-600/20 hover:bg-purple-600/40 text-purple-400 border border-purple-500/30 transition-colors text-sm"
+                    className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[#00a884]/20 hover:bg-[#00a884]/40 text-[#00a884] border border-[#00a884]/30 transition-colors text-sm"
                     title="Summarize conversation"
                   >
                     <Sparkles className="w-4 h-4" />
@@ -1393,12 +1725,13 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                     <Download className="w-4 h-4" />
                     <span className="hidden sm:inline">Export</span>
                   </button>
+                    </div>
+                  )}
                 </div>
-              </div>
 
               {/* Search and Filters */}
               {showFilters && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-3 border-t border-[#232945]">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-3 border-t border-[#2a3942]">
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
                     <input
@@ -1406,7 +1739,7 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                       placeholder="Search messages..."
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
-                      className="w-full pl-10 pr-4 py-2 bg-[#0f1419] border border-[#232945] rounded-lg text-white text-sm placeholder-gray-500 focus:outline-none focus:border-purple-500"
+                      className="w-full pl-10 pr-4 py-2 bg-[#0f1419] border border-[#232945] rounded-lg text-white text-sm placeholder-gray-500 focus:outline-none focus:border-[#00a884]"
                     />
                   </div>
 
@@ -1415,7 +1748,7 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                     placeholder="Filter by sender..."
                     value={searchSender}
                     onChange={(e) => setSearchSender(e.target.value)}
-                    className="px-4 py-2 bg-[#0f1419] border border-[#232945] rounded-lg text-white text-sm placeholder-gray-500 focus:outline-none focus:border-purple-500"
+                    className="px-4 py-2 bg-[#0f1419] border border-[#232945] rounded-lg text-white text-sm placeholder-gray-500 focus:outline-none focus:border-[#00a884]"
                   />
 
                   <input
@@ -1423,7 +1756,7 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                     placeholder="Start date"
                     value={dateFilter.start}
                     onChange={(e) => setDateFilter({ ...dateFilter, start: e.target.value })}
-                    className="px-4 py-2 bg-[#0f1419] border border-[#232945] rounded-lg text-white text-sm focus:outline-none focus:border-purple-500"
+                    className="px-4 py-2 bg-[#0f1419] border border-[#232945] rounded-lg text-white text-sm focus:outline-none focus:border-[#00a884]"
                   />
 
                   <div className="flex gap-2">
@@ -1432,7 +1765,7 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                       placeholder="End date"
                       value={dateFilter.end}
                       onChange={(e) => setDateFilter({ ...dateFilter, end: e.target.value })}
-                      className="flex-1 px-4 py-2 bg-[#0f1419] border border-[#232945] rounded-lg text-white text-sm focus:outline-none focus:border-purple-500"
+                      className="flex-1 px-4 py-2 bg-[#0f1419] border border-[#232945] rounded-lg text-white text-sm focus:outline-none focus:border-[#00a884]"
                     />
                     {(searchTerm || searchSender || dateFilter.start || dateFilter.end) && (
                       <button
@@ -1446,25 +1779,24 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                   </div>
                 </div>
               )}
-            </div>
 
             {/* Messages Container */}
             <div
               ref={chatContainerRef}
-              className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4"
+              className="flex-1 overflow-y-auto bg-[#0b141a]"
             >
               {messages.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full text-center">
-                  <Mail className="w-12 h-12 sm:w-16 sm:h-16 text-gray-600 mb-4" />
-                  <p className="text-gray-500 text-sm sm:text-base">
+                  <Mail className="w-12 h-12 sm:w-16 sm:h-16 text-gray-400 mb-4" />
+                  <p className="text-gray-300 text-sm sm:text-base">
                     No messages yet
                   </p>
-                  <p className="text-gray-600 text-xs sm:text-sm mt-2">
+                  <p className="text-gray-400 text-xs sm:text-sm mt-2">
                     Start the conversation by sending a message
                   </p>
                 </div>
               ) : (
-                <>
+                <div className="max-w-5xl mx-auto p-3 sm:p-4 space-y-3">
                   {/* Load More Messages Button - At Top */}
                   {hasMoreMessages && (
                     <div className="flex justify-center py-4">
@@ -1488,7 +1820,7 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                     </div>
                   )}
 
-                  {messages.map((msg, idx) => {
+                  {messages.filter((msg) => !showStarredOnly || starredMessageIds.has(msg._id)).map((msg, idx) => {
                   const isOwnMessage =
                     msg.sentBy?._id === userId || msg.sentBy === userId;
                   const senderType = msg.senderType || "user";
@@ -1499,48 +1831,56 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                     ? "Client"
                     : senderDesignation;
 
+                  // Check if we need to show date separator
+                  const showDateSeparator = idx === 0 ||
+                    new Date(messages[idx - 1].createdAt).toDateString() !== new Date(msg.createdAt).toDateString();
+
                   return (
-                    <div
-                      key={idx}
-                      className={`flex ${
-                        isOwnMessage ? "justify-end" : "justify-start"
-                      }`}
-                    >
+                    <React.Fragment key={idx}>
+                      {showDateSeparator && <MessageDateSeparator date={msg.createdAt} />}
                       <div
-                        className={`max-w-[85%] sm:max-w-[75%] ${
+                        id={`message-${msg._id}`}
+                        data-message-id={msg._id}
+                        data-owner-id={msg.sentBy?._id || msg.sentBy}
+                        className={`flex ${
+                          isOwnMessage ? "justify-end" : "justify-start"
+                        } transition-colors duration-300 animate-slideIn`}
+                      >
+                      <div
+                        className={`max-w-[75%] min-w-0 ${
                           isOwnMessage ? "items-end" : "items-start"
                         } flex flex-col`}
                       >
-                        <div className="flex items-center gap-2 mb-1 px-1">
+                        <div className="flex items-center gap-2 mb-1 px-1 max-w-full">
                           {!isOwnMessage && (
-                            <div className="w-6 h-6 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white text-xs font-semibold flex-shrink-0">
+                            <div className="w-6 h-6 rounded-full bg-[#2a3942] flex items-center justify-center text-gray-300 text-xs font-semibold flex-shrink-0">
                               {senderDisplay.charAt(0).toUpperCase()}
                             </div>
                           )}
-                          <span className="text-xs text-blue-400 truncate">
+                          <span className="text-xs text-gray-400 truncate">
                             {senderDisplay}
                           </span>
                         </div>
 
                         <div
-                          className={`relative group ${
+                          className={`relative group w-fit max-w-full ${
                             isOwnMessage
-                              ? "bg-gradient-to-r from-purple-600 to-pink-600"
-                              : "bg-[#0f1419] border border-[#232945]"
-                          } rounded-lg p-3 sm:p-4`}
+                              ? "bg-[#005c4b] hover:bg-[#004c3f]" // WhatsApp dark green for team messages
+                              : "bg-[#202c33] hover:bg-[#2a3942]" // Dark gray for client messages
+                          } rounded-lg p-3 sm:p-4 text-white transition-all duration-200 hover:shadow-lg break-words overflow-hidden`}
                         >
                           {/* Reply Preview */}
                           {msg.replyTo && (
-                            <div className="mb-2 p-2 bg-black/20 rounded border-l-2 border-purple-400/50 overflow-hidden" style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
+                            <div className="mb-2 p-2 bg-black/20 rounded border-l-4 border-[#00a884] overflow-hidden" style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
                               <div className="flex items-center gap-1 mb-1">
-                                <Reply className="w-3 h-3 text-purple-400 flex-shrink-0" />
-                                <span className="text-xs text-purple-300 font-semibold truncate">
+                                <Reply className="w-3 h-3 text-[#00a884] flex-shrink-0" />
+                                <span className="text-xs text-gray-200 font-semibold truncate">
                                   {msg.replyTo.sentBy ?
                                     (msg.replyTo.senderType === "client" ? "Client" : (msg.replyTo.sentBy.designation || "Team Member")) :
                                     "Unknown User"}
                                 </span>
                               </div>
-                              <div className="text-xs text-gray-300 overflow-hidden whitespace-pre-wrap" style={{
+                              <div className="text-xs text-gray-400 overflow-hidden whitespace-pre-wrap" style={{
                                 display: '-webkit-box',
                                 WebkitLineClamp: 2,
                                 WebkitBoxOrient: 'vertical',
@@ -1555,18 +1895,18 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                           {/* Message with Markdown rendering */}
                           {msg.message && (
                             <>
-                              <div className="text-white text-sm leading-relaxed break-words prose prose-invert prose-sm max-w-none">
+                              <div className="text-white text-sm leading-relaxed break-words overflow-wrap-anywhere prose prose-sm max-w-none prose-invert">
                                 <ReactMarkdown
                                   remarkPlugins={[remarkGfm]}
                                   rehypePlugins={[rehypeRaw]}
                                   components={{
-                                    p: ({ children }) => <p className="mb-2 last:mb-0 whitespace-pre-wrap">{children}</p>,
+                                    p: ({ children }) => <p className="mb-2 last:mb-0 whitespace-pre-wrap break-words">{children}</p>,
                                     h1: ({ children }) => <h1 className="text-lg font-bold mb-2">{children}</h1>,
                                     h2: ({ children }) => <h2 className="text-base font-bold mb-2">{children}</h2>,
                                     h3: ({ children }) => <h3 className="text-sm font-bold mb-2">{children}</h3>,
-                                    ul: ({ children }) => <ul className="list-disc list-inside mb-2 space-y-1">{children}</ul>,
-                                    ol: ({ children }) => <ol className="list-decimal list-inside mb-2 space-y-1">{children}</ol>,
-                                    li: ({ children }) => <li className="ml-2">{children}</li>,
+                                    ul: ({ children }) => <ul className="list-disc mb-2 space-y-1 pl-5">{children}</ul>,
+                                    ol: ({ children }) => <ol className="list-decimal mb-2 space-y-1 pl-5">{children}</ol>,
+                                    li: ({ children }) => <li className="ml-0 break-words">{children}</li>,
                                     code: ({ inline, children }) =>
                                       inline ? (
                                         <code className="bg-black/30 px-1 rounded text-xs">{children}</code>
@@ -1581,7 +1921,25 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                                     br: () => <br />,
                                   }}
                                 >
-                                  {msg.message.replace(/\n/g, '  \n')}
+                                  {(() => {
+                                    let text = msg.message;
+
+                                    // Convert common bullet patterns to markdown
+                                    text = text.replace(/^[\u2022\u25E6\u2023\u2043]\s*/gm, '- '); // • ◦ ‣ ⁃
+                                    text = text.replace(/^[*]\s+/gm, '- '); // * bullets
+                                    text = text.replace(/^[-]\s*(?=\S)/gm, '- '); // Normalize existing - bullets
+
+                                    // Convert numbered lists (1. 2. 3. etc)
+                                    text = text.replace(/^(\d+)[.)]\s*/gm, '$1. ');
+
+                                    // Add empty line before lists for proper markdown parsing
+                                    text = text.replace(/([^\n])\n([-*+]|\d+\.)\s/g, '$1\n\n$2 ');
+
+                                    // Preserve line breaks with markdown syntax
+                                    text = text.replace(/\n/g, '  \n');
+
+                                    return text;
+                                  })()}
                                 </ReactMarkdown>
                               </div>
                               {/* Mentioned Users */}
@@ -1718,14 +2076,20 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                           )}
 
                           <div className="flex items-center justify-between gap-3 mt-2">
-                            <span className="text-xs text-gray-400">
-                              {new Date(msg.createdAt).toLocaleTimeString([], {
-                                hour: "2-digit",
-                                minute: "2-digit",
-                                month: "short",
-                                day: "numeric",
-                              })}
-                            </span>
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs text-gray-400">
+                                {new Date(msg.createdAt).toLocaleTimeString([], {
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                  month: "short",
+                                  day: "numeric",
+                                })}
+                              </span>
+                              {/* Only show status for own messages (team messages) */}
+                              {isOwnMessage && (
+                                <MessageStatus status={msg.status || 'sent'} />
+                              )}
+                            </div>
 
                             <div className="flex gap-1 relative">
                               <button
@@ -1733,7 +2097,7 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                                 className="p-1.5 rounded-md hover:bg-white/10 transition-colors"
                                 title="Reply to message"
                               >
-                                <Reply className="w-3.5 h-3.5 text-gray-400 hover:text-purple-400" />
+                                <Reply className="w-3.5 h-3.5 text-gray-400 hover:text-[#00a884]" />
                               </button>
                               <button
                                 onClick={() =>
@@ -1756,6 +2120,13 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                                 ) : (
                                   <Copy className="w-3.5 h-3.5 text-gray-400 hover:text-blue-400" />
                                 )}
+                              </button>
+                              <button
+                                onClick={() => toggleStarMessage(msg._id)}
+                                className="p-1.5 rounded-md hover:bg-white/10 transition-colors"
+                                title={starredMessageIds.has(msg._id) ? "Remove from starred" : "Add to starred"}
+                              >
+                                <Star className={`w-3.5 h-3.5 ${starredMessageIds.has(msg._id) ? "text-yellow-400 fill-yellow-400" : "text-gray-400 hover:text-yellow-400"}`} />
                               </button>
 
                               {/* Emoji Picker Popup */}
@@ -1781,21 +2152,33 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                         </div>
                       </div>
                     </div>
+                    </React.Fragment>
                   );
                   })}
 
                   <div ref={messagesEndRef} />
-                </>
+                </div>
               )}
             </div>
 
+            {/* New Messages Button - Scroll to Bottom */}
+            {showNewMessagesButton && (
+              <NewMessagesButton
+                count={newMessagesCount}
+                onClick={() => {
+                  scrollToBottom();
+                  setNewMessagesCount(0);
+                }}
+              />
+            )}
+
             {/* Message Input */}
-            <div className="p-4 sm:p-6 border-t border-[#232945]">
+            <div className="p-2 sm:p-3 border-t border-[#232945]">
               {/* Reply Preview */}
               {replyingTo && (
-                <div className="mb-3 p-3 bg-purple-600/20 border border-purple-500/30 rounded-lg flex items-start justify-between gap-2 overflow-hidden" style={{ maxWidth: '100%' }}>
+                <div className="mb-2 p-2 bg-[#00a884]/20 border border-[#00a884]/30 rounded-lg flex items-start justify-between gap-2 overflow-hidden" style={{ maxWidth: '100%' }}>
                   <div className="flex-1 min-w-0 overflow-hidden">
-                    <div className="flex items-center gap-2 text-sm text-purple-300 mb-1">
+                    <div className="flex items-center gap-2 text-sm text-gray-300 mb-1">
                       <Reply className="w-4 h-4 flex-shrink-0" />
                       <span className="font-medium truncate">
                         Replying to {replyingTo.sentBy ?
@@ -1825,13 +2208,13 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
 
               {/* Selected Files Preview */}
               {selectedFiles.length > 0 && (
-                <div className="mb-3 flex flex-wrap gap-2">
+                <div className="mb-2 flex flex-wrap gap-2">
                   {selectedFiles.map((file, idx) => (
                     <div
                       key={idx}
-                      className="flex items-center gap-2 px-3 py-2 bg-purple-600/20 border border-purple-500/30 rounded-lg"
+                      className="flex items-center gap-2 px-3 py-2 bg-[#00a884]/20 border border-[#00a884]/30 rounded-lg"
                     >
-                      <File className="w-4 h-4 text-purple-300" />
+                      <File className="w-4 h-4 text-gray-300" />
                       <span className="text-xs text-white truncate max-w-[150px]">
                         {file.name}
                       </span>
@@ -1843,39 +2226,6 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                       </button>
                     </div>
                   ))}
-                </div>
-              )}
-
-              {/* Quick Replies */}
-              {quickReplies.length > 0 && newMessage.length === 0 && showQuickReplies && (
-                <div className="mb-3 p-3 bg-[#0f1419] border border-[#232945] rounded-lg">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <Zap className="w-4 h-4 text-yellow-400" />
-                      <span className="text-xs text-gray-400">Quick Replies:</span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setShowQuickReplies(false)}
-                      className="p-1 hover:bg-[#232945] rounded transition-colors"
-                      title="Hide quick replies"
-                    >
-                      <XCircle className="w-4 h-4 text-gray-400" />
-                    </button>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {quickReplies.map((reply, idx) => (
-                      <button
-                        key={idx}
-                        type="button"
-                        onClick={() => handleQuickReply(reply)}
-                        className="px-3 py-1.5 bg-gradient-to-r from-blue-600/20 to-purple-600/20 hover:from-blue-600/30 hover:to-purple-600/30 border border-blue-500/30 rounded-full text-xs text-gray-200 transition-all hover:scale-105 flex items-center gap-1"
-                      >
-                        <Lightbulb className="w-3 h-3 text-yellow-400" />
-                        {reply}
-                      </button>
-                    ))}
-                  </div>
                 </div>
               )}
 
@@ -1912,9 +2262,12 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                 </div>
               )}
 
+              {/* Typing Indicator */}
+              <TypingIndicator typingUsers={typingUsers} />
+
               <form
                 onSubmit={handleSendMessage}
-                className="flex gap-2 sm:gap-3"
+                className="flex gap-2"
               >
                 <input
                   ref={fileInputRef}
@@ -1928,20 +2281,41 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className="flex-shrink-0 px-3 py-3 bg-gray-600/20 hover:bg-gray-600/40 text-gray-300 rounded-lg transition-colors"
+                  className="flex-shrink-0 px-2 py-2 bg-gray-600/20 hover:bg-gray-600/40 text-gray-300 rounded-lg transition-colors"
                   title="Attach files"
                 >
-                  <Paperclip className="w-5 h-5" />
+                  <Paperclip className="w-4 h-4" />
                 </button>
 
                 <button
                   type="button"
                   onClick={() => setShowFormatting(!showFormatting)}
-                  className="flex-shrink-0 px-3 py-3 bg-gray-600/20 hover:bg-gray-600/40 text-gray-300 rounded-lg transition-colors"
+                  className="flex-shrink-0 px-2 py-2 bg-gray-600/20 hover:bg-gray-600/40 text-gray-300 rounded-lg transition-colors"
                   title="Text formatting"
                 >
-                  <Type className="w-5 h-5" />
+                  <Type className="w-4 h-4" />
                 </button>
+
+                <div className="flex-shrink-0 relative">
+                  <button
+                    type="button"
+                    onClick={() => setShowEnhancedEmojiPicker(!showEnhancedEmojiPicker)}
+                    className="px-2 py-2 bg-gray-600/20 hover:bg-gray-600/40 text-gray-300 rounded-lg transition-colors"
+                    title="Insert emoji"
+                  >
+                    <Smile className="w-4 h-4" />
+                  </button>
+                  {showEnhancedEmojiPicker && (
+                    <EmojiPickerEnhanced
+                      onSelect={(emoji) => {
+                        setNewMessage((prev) => prev + emoji);
+                        setShowEnhancedEmojiPicker(false);
+                        textareaRef.current?.focus();
+                      }}
+                      onClose={() => setShowEnhancedEmojiPicker(false)}
+                    />
+                  )}
+                </div>
 
                 <div className="flex-1 relative">
                   {/* Suggestions Dropdown */}
@@ -1982,7 +2356,7 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                                 <File className="w-3 h-3 text-blue-400" />
                               )}
                               {suggestion.type === "frequent" && (
-                                <Sparkles className="w-3 h-3 text-purple-400" />
+                                <Sparkles className="w-3 h-3 text-[#00a884]" />
                               )}
                             </div>
                             <div className="flex-1 min-w-0">
@@ -2009,11 +2383,15 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                     onChange={(newValue, mentions) => {
                       setNewMessage(newValue);
                       setMentionedUsers(mentions);
+                      // Send typing indicator when user types
+                      if (newValue.length > 0) {
+                        sendTypingIndicator();
+                      }
                     }}
                     users={project?.assignedTo || []}
-                    placeholder="Type @ to mention someone... (Ctrl+B for bold)"
-                    rows={2}
-                    className="w-full bg-[#0f1419] border-[#232945] text-white placeholder-gray-500 focus:border-purple-500"
+                    placeholder="Type @ to mention someone..."
+                    rows={1}
+                    className="w-full bg-[#0f1419] border-[#232945] text-white placeholder-gray-500 focus:border-[#00a884]"
                     onKeyDown={(e) => {
                       // Handle suggestion navigation
                       if (showSuggestions && suggestions.length > 0) {
@@ -2127,21 +2505,18 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                 <button
                   type="submit"
                   disabled={sending || (!newMessage.trim() && selectedFiles.length === 0)}
-                  className="flex-shrink-0 px-4 sm:px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  className="flex-shrink-0 px-3 sm:px-4 py-2 bg-[#00a884] hover:bg-[#128C7E] text-white rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
                   {sending ? (
-                    <div className="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin"></div>
+                    <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin"></div>
                   ) : (
                     <>
-                      <Send className="w-4 h-4 sm:w-5 sm:h-5" />
-                      <span className="hidden sm:inline">Send</span>
+                      <Send className="w-4 h-4" />
+                      <span className="hidden sm:inline text-sm">Send</span>
                     </>
                   )}
                 </button>
               </form>
-              <p className="text-xs text-gray-500 mt-2">
-                <span className="font-medium">Shortcuts:</span> Shift+Enter (new line) • Ctrl+B (bold) • Ctrl+I (italic) • Max 5 files • Click formatting button for more options
-              </p>
             </div>
               </>
             )}
@@ -2151,20 +2526,20 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
               <div className="flex-1 flex flex-col overflow-hidden">
                 {/* Tasks Header with Create Button */}
                 {(userRole === "super-admin" || userRole === "superadmin" || userRole === "admin") && (
-                  <div className="p-4 sm:p-6 border-b border-[#232945]">
+                  <div className="p-4 bg-[#202c33] border-b border-[#2a3942]">
                     <div className="flex items-center justify-between">
                       <div>
-                        <h2 className="text-base sm:text-lg font-semibold text-white flex items-center gap-2">
-                          <ListTodo className="w-5 h-5 text-green-400" />
+                        <h2 className="text-base font-semibold text-white flex items-center gap-2">
+                          <ListTodo className="w-5 h-5 text-[#00a884]" />
                           Project Tasks
                         </h2>
-                        <p className="text-xs sm:text-sm text-gray-400 mt-1">
+                        <p className="text-xs text-gray-400 mt-1">
                           {tasks.length} task{tasks.length !== 1 ? "s" : ""}
                         </p>
                       </div>
                       <button
                         onClick={() => setShowTaskModal(true)}
-                        className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white rounded-lg transition-all font-medium shadow-lg"
+                        className="flex items-center gap-2 px-4 py-2 bg-[#00a884] hover:bg-[#128C7E] text-white rounded-lg transition-all font-medium shadow-lg"
                       >
                         <Plus className="w-5 h-5" />
                         <span className="hidden sm:inline">Create Task</span>
@@ -2175,27 +2550,27 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                 )}
 
                 {/* Tasks List */}
-                <div className="flex-1 overflow-y-auto p-4 sm:p-6">
+                <div className="flex-1 overflow-y-auto p-4 bg-[#0b141a]">
                   {loadingTasks ? (
                     <div className="flex items-center justify-center h-full">
-                      <div className="w-12 h-12 border-4 border-blue-500/20 border-t-blue-500 rounded-full animate-spin"></div>
+                      <div className="w-12 h-12 border-4 border-[#00a884]/20 border-t-[#00a884] rounded-full animate-spin"></div>
                     </div>
                   ) : tasks.length === 0 ? (
                     <div className="flex flex-col items-center justify-center h-full text-center">
-                      <ListTodo className="w-12 h-12 sm:w-16 sm:h-16 text-gray-600 mb-4" />
-                      <p className="text-gray-500 text-sm sm:text-base">No tasks for this project</p>
-                      <p className="text-gray-600 text-xs sm:text-sm mt-2">
+                      <ListTodo className="w-16 h-16 text-gray-600 mb-4" />
+                      <p className="text-gray-500 text-base">No tasks for this project</p>
+                      <p className="text-gray-600 text-sm mt-2">
                         {(userRole === "super-admin" || userRole === "superadmin" || userRole === "admin")
                           ? "Click 'Create Task' to assign tasks to team members"
                           : "Tasks will appear here when assigned by your admin"}
                       </p>
                     </div>
                   ) : (
-                  <div className="space-y-4">
+                  <div className="space-y-3">
                     {tasks.map((task) => (
                       <div
                         key={task._id}
-                        className="bg-[#0f1419] rounded-lg border border-[#232945] p-4 sm:p-6 hover:border-purple-500/50 transition-colors"
+                        className="bg-[#202c33] rounded-xl border border-[#2a3942] p-4 hover:border-[#00a884] transition-colors"
                       >
                         <div className="flex items-start justify-between gap-4 mb-4">
                           <div className="flex-1 min-w-0">
@@ -2246,12 +2621,12 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                                     {task.assignedTo.map((emp, idx) => (
                                       <div
                                         key={idx}
-                                        className="flex items-center gap-2 bg-purple-600/10 border border-purple-500/30 rounded-full px-3 py-1"
+                                        className="flex items-center gap-2 bg-[#00a884]/10 border border-[#00a884]/30 rounded-full px-3 py-1"
                                       >
                                         {(userRole === "admin" || userRole === "super-admin" || userRole === "superadmin") ? (
                                           // Show name for admins/super-admins
                                           <>
-                                            <div className="w-5 h-5 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white text-[10px] font-semibold flex-shrink-0">
+                                            <div className="w-5 h-5 rounded-full bg-[#00a884] flex items-center justify-center text-white text-[10px] font-semibold flex-shrink-0">
                                               {(emp.name || "U").charAt(0).toUpperCase()}
                                             </div>
                                             <span className="text-white text-xs font-medium">
@@ -2261,7 +2636,7 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                                         ) : (
                                           // Show employee ID and designation for clients
                                           <>
-                                            <Briefcase className="w-3 h-3 text-purple-400" />
+                                            <Briefcase className="w-3 h-3 text-[#00a884]" />
                                             <span className="text-white text-xs font-medium">
                                               {emp.employeeId || emp._id?.substring(0, 8) || "N/A"}
                                             </span>
@@ -2359,7 +2734,7 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                               {task.approvalRemark && (
                                 <div className="mb-3">
                                   <p className="text-xs text-gray-400 mb-1">Admin Feedback:</p>
-                                  <p className="text-white text-sm bg-purple-600/10 p-3 rounded border border-purple-500/30">
+                                  <p className="text-white text-sm bg-[#00a884]/10 p-3 rounded border border-[#00a884]/30">
                                     {task.approvalRemark}
                                   </p>
                                 </div>
@@ -2374,7 +2749,7 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                                         value={approvalRemark}
                                         onChange={(e) => setApprovalRemark(e.target.value)}
                                         placeholder="Add feedback (optional for approval, required for rejection)..."
-                                        className="w-full px-3 py-2 bg-[#191f2b] border border-[#232945] rounded-lg text-white text-sm placeholder-gray-500 focus:outline-none focus:border-purple-500 h-20 resize-none"
+                                        className="w-full px-3 py-2 bg-[#191f2b] border border-[#232945] rounded-lg text-white text-sm placeholder-gray-500 focus:outline-none focus:border-[#00a884] h-20 resize-none"
                                       />
                                       <div className="flex gap-2">
                                         <button
@@ -2405,7 +2780,7 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                                   ) : (
                                     <button
                                       onClick={() => setSelectedTask(task._id)}
-                                      className="w-full px-4 py-2 bg-purple-600/20 hover:bg-purple-600/40 text-purple-400 rounded-lg border border-purple-500/30 transition-colors font-medium"
+                                      className="w-full px-4 py-2 bg-[#00a884]/20 hover:bg-[#00a884]/40 text-white rounded-lg border border-[#00a884]/30 transition-colors font-medium"
                                     >
                                       Review Submission
                                     </button>
@@ -2479,7 +2854,7 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
             {/* Modal Header */}
             <div className="flex items-center justify-between p-4 border-b border-[#232945]">
               <div className="flex items-center gap-3">
-                <Sparkles className="w-5 h-5 text-purple-400" />
+                <Sparkles className="w-5 h-5 text-[#00a884]" />
                 <h2 className="text-xl font-semibold text-white">
                   AI Project Summary
                 </h2>
@@ -2499,7 +2874,7 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                 <select
                   value={summaryDays}
                   onChange={(e) => setSummaryDays(Number(e.target.value))}
-                  className="px-3 py-1.5 bg-[#0f1419] text-white rounded border border-[#232945] focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm"
+                  className="px-3 py-1.5 bg-[#0f1419] text-white rounded border border-[#232945] focus:outline-none focus:ring-2 focus:ring-[#00a884] text-sm"
                 >
                   <option value={1}>Last 24 hours</option>
                   <option value={3}>Last 3 days</option>
@@ -2510,7 +2885,7 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                 <button
                   onClick={handleSummarize}
                   disabled={summaryLoading}
-                  className="px-4 py-1.5 bg-purple-600 hover:bg-purple-500 text-white rounded text-sm transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  className="px-4 py-1.5 bg-[#00a884] hover:bg-[#128C7E] text-white rounded text-sm transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                 >
                   <Sparkles className="w-4 h-4" />
                   {summaryLoading ? "Generating..." : "Regenerate"}
@@ -2523,8 +2898,8 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
               {summaryLoading ? (
                 <div className="flex flex-col items-center justify-center h-full gap-4">
                   <div className="relative">
-                    <div className="w-16 h-16 border-4 border-purple-500/30 border-t-purple-500 rounded-full animate-spin"></div>
-                    <Sparkles className="w-6 h-6 text-purple-400 absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2" />
+                    <div className="w-16 h-16 border-4 border-[#00a884]/30 border-t-[#00a884] rounded-full animate-spin"></div>
+                    <Sparkles className="w-6 h-6 text-[#00a884] absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2" />
                   </div>
                   <p className="text-gray-400 text-sm">Analyzing project messages with AI...</p>
                 </div>
@@ -2556,11 +2931,11 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                         <li className="ml-2 text-gray-200">{children}</li>
                       ),
                       strong: ({ children }) => (
-                        <strong className="font-bold text-purple-300">{children}</strong>
+                        <strong className="font-bold text-[#00a884]">{children}</strong>
                       ),
                       code: ({ inline, children }) =>
                         inline ? (
-                          <code className="bg-[#0a0e14] px-1.5 py-0.5 rounded text-purple-300 text-xs">
+                          <code className="bg-[#0a0e14] px-1.5 py-0.5 rounded text-[#00a884] text-xs">
                             {children}
                           </code>
                         ) : (
@@ -2605,6 +2980,15 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Pinned Messages Modal */}
+      {showPinnedModal && (
+        <PinnedMessagesModal
+          projectId={projectId}
+          onClose={() => setShowPinnedModal(false)}
+          onJumpToMessage={handleJumpToMessage}
+        />
       )}
     </div>
   );

@@ -1,0 +1,42 @@
+
+> server@1.0.0 start
+> node app.js
+
+[dotenv@17.2.1] injecting env (38) from .env -- tip: 🔐 encrypt with Dotenvx: https://dotenvx.com
+[dotenv@17.2.1] injecting env (0) from .env -- tip: ⚙️  suppress all logs with { quiet: true }
+✅ AWS S3 configured. Files will be uploaded to S3 and served via CloudFront.
+🌐 CORS configured for origins: [
+  'http://localhost:5173',
+  'http://localhost:5173',
+  'https://client.tapvera.io'
+]
+✅ Connected to MongoDB
+Initializing cron jobs...
+Cron jobs initialized successfully!
+   - Media cleanup:                  Daily at 2:00 AM
+   - Chat notification cleanup:       Daily at 3:00 AM
+   - Vicidial recording sync:         Every 2 hours at :00
+   - Call analysis processing:        Every 2 hours at :30
+   - Keyword rank fetch (bi-monthly): 15th and 27th at 6:00 AM
+🌐 FRONTEND_URL for emails: http://localhost:5173
+node:events:486
+      throw er; // Unhandled 'error' event
+      ^
+
+Error: listen EADDRINUSE: address already in use 0.0.0.0:5000
+    at Server.setupListenHandle [as _listen2] (node:net:1940:16)
+    at listenInCluster (node:net:1997:12)
+    at node:net:2206:7
+    at process.processTicksAndRejections (node:internal/process/task_queues:89:21)
+Emitted 'error' event on WebSocketServer instance at:
+    at Server.emit (node:events:508:28)
+    at emitErrorNT (node:net:1976:8)
+    at process.processTicksAndRejections (node:internal/process/task_queues:89:21) {
+  code: 'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '0.0.0.0',
+  port: 5000
+}
+
+Node.js v24.11.1
