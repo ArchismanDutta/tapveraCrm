@@ -66,7 +66,7 @@ const messageSchema = new mongoose.Schema(
           enum: ["User", "Client"],
         },
         readAt: {
-          type: Date,
+          type: Date,  // Individual read timestamp for this user
           default: Date.now,
         },
       },
@@ -104,10 +104,54 @@ const messageSchema = new mongoose.Schema(
         ],
       },
     ],
+    // Message Status Tracking
+    status: {
+      type: String,
+      enum: ['sending', 'sent', 'delivered', 'read', 'failed'],
+      default: 'sent'
+    },
+    // Delivery Tracking
+    deliveredAt: {
+      type: Date
+    },
+    // Read Tracking
+    readAt: {
+      type: Date  // Timestamp when message was first read by any recipient
+    },
+    // Pinned Messages (Admin only - Users can pin, not Clients)
+    isPinned: {
+      type: Boolean,
+      default: false
+    },
+    pinnedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User' // Only Users (admins) can pin messages
+    },
+    pinnedAt: {
+      type: Date
+    },
+    // Starred Messages
+    starredBy: [{
+      user: {
+        type: mongoose.Schema.Types.ObjectId,
+        refPath: 'starredBy.userModel'
+      },
+      userModel: {
+        type: String,
+        enum: ['User', 'Client']
+      }
+    }]
   },
   {
     timestamps: true,
   }
 );
+
+// Indexes for performance
+messageSchema.index({ project: 1, createdAt: -1 });
+messageSchema.index({ project: 1, isPinned: 1 });
+messageSchema.index({ project: 1, status: 1 });
+messageSchema.index({ 'readBy.user': 1 });
+messageSchema.index({ starredBy: 1 });
 
 module.exports = mongoose.model("Message", messageSchema);
