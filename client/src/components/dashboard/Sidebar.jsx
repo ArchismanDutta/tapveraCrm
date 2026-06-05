@@ -174,16 +174,7 @@ const menuConfig = {
       icon: <Fingerprint size={16} animateOnHover />,
       label: "Salary Management",
     },
-    {
-      to: "/admin/auto-payroll",
-      icon: <Zap size={16} />,
-      label: "Auto Payroll",
-    },
-    {
-      to: "/admin/payslips",
-      icon: <FileText size={16} />,
-      label: "All Payslips",
-    },
+
     {
       to: "/my-payslips",
       icon: <DollarSign size={16} />,
@@ -433,16 +424,8 @@ const menuConfig = {
           icon: <Briefcase size={16} />,
           label: "Position Management",
         },
-        {
-          to: "/admin/auto-payroll",
-          icon: <Zap size={16} />,
-          label: "Auto Payroll",
-        },
-        {
-          to: "/admin/payslips",
-          icon: <FileText size={16} />,
-          label: "View Payslips",
-        },
+
+
 
         {
           to: "/directory",

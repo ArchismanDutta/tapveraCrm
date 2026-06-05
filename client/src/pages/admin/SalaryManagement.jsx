@@ -417,11 +417,12 @@ const SalaryManagement = ({ onLogout }) => {
   const handleTogglePublish = async (payslip) => {
     try {
       const res = await fetch(`${API_BASE}/api/payslips/${payslip._id}/publish`, { method: "PATCH", headers: authHeaders() });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      toast.success(data.isPublished ? "Published — employee notified" : "Unpublished");
-      setPayslips((prev) => prev.map((p) => p._id === payslip._id ? { ...p, isPublished: data.isPublished } : p));
-      if (activePayslip?._id === payslip._id) setActivePayslip((p) => ({ ...p, isPublished: data.isPublished }));
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error);
+      const updated = json.data;
+      toast.success(updated.isPublished ? "Published — employee notified" : "Unpublished");
+      setPayslips((prev) => prev.map((p) => p._id === payslip._id ? { ...p, isPublished: updated.isPublished } : p));
+      if (activePayslip?._id === payslip._id) setActivePayslip((p) => ({ ...p, isPublished: updated.isPublished }));
     } catch (err) { toast.error(err.message); }
   };
 

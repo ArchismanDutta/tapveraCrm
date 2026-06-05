@@ -71,7 +71,6 @@ import ShiftManagement from "./components/humanResource/ShiftManagement";
 import ManualAttendanceManagement from "./pages/admin/ManualAttendanceManagement";
 import SalaryManagement from "./pages/admin/SalaryManagement";
 import PositionManagement from "./pages/admin/PositionManagement";
-import AutoPayrollManagement from "./pages/admin/AutoPayrollManagement";
 import PayslipManagement from "./pages/admin/PayslipManagement";
 import MyPayslipsPage from "./pages/MyPayslipsPage";
 import ClientsPage from "./pages/ClientsPage";
@@ -711,27 +710,13 @@ const AppWrapper = () => {
           }
         />
 
-        {/* Automatic Payroll Management */}
-        <Route
-          path="/admin/auto-payroll"
-          element={
-            isAuthenticated && (isHR || isSuperAdmin) ? (
-              <AutoPayrollManagement onLogout={handleLogout} />
-            ) : (
-              <Navigate
-                to={isAuthenticated ? "/dashboard" : "/login"}
-                replace
-              />
-            )
-          }
-        />
 
-        {/* Payslip Management - Admin/HR View */}
+        {/* Payslip Management - redirects to new SalaryManagement */}
         <Route
           path="/admin/payslips"
           element={
             isAuthenticated && (isHR || isSuperAdmin) ? (
-              <PayslipManagement onLogout={handleLogout} />
+              <SalaryManagement onLogout={handleLogout} />
             ) : (
               <Navigate
                 to={isAuthenticated ? "/dashboard" : "/login"}
