@@ -55,6 +55,14 @@ const payslipSchema = new mongoose.Schema({
     type: Number,
     required: true
   },
+  netTotal: {
+    type: Number,
+    default: 0
+  },
+  eligibility: {
+    pf: { type: Boolean, default: false },
+    esi: { type: Boolean, default: false }
+  },
 
   // Bonuses
   bonuses: {
@@ -127,9 +135,7 @@ payslipSchema.pre('save', function(next) {
                         (this.deductions.ptax || 0) +
                         (this.deductions.tds || 0) +
                         (this.deductions.other || 0) +
-                        (this.deductions.advance || 0) +
-                        (this.deductions.lateDeduction || 0) +
-                        (this.deductions.halfDayDeduction || 0);
+                        (this.deductions.advance || 0);
 
   next();
 });

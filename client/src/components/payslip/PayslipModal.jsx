@@ -68,6 +68,9 @@ const PayslipModal = ({ isOpen, onClose, employeeId = null }) => {
     }).format(amount || 0);
   };
 
+  const getPaidEarningsTotal = () =>
+    payslipData?.netTotal ?? payslipData?.grossTotal ?? 0;
+
   const formatDate = (dateString) => {
     return new Date(dateString).toLocaleDateString('en-IN', {
       year: 'numeric',
@@ -441,8 +444,8 @@ const PayslipModal = ({ isOpen, onClose, employeeId = null }) => {
                       <td>${formatCurrency(payslipData.grossComponents?.specialAllowance)}</td>
                     </tr>
                     <tr class="earnings-total">
-                      <td>Gross Earnings</td>
-                      <td>${formatCurrency(payslipData.grossTotal)}</td>
+                      <td>Net Total</td>
+                      <td>${formatCurrency(getPaidEarningsTotal())}</td>
                     </tr>
                   </tbody>
                 </table>
@@ -796,8 +799,8 @@ const PayslipModal = ({ isOpen, onClose, employeeId = null }) => {
                             <td className="py-2 text-right text-white font-medium">{formatCurrency(payslipData.grossComponents?.specialAllowance)}</td>
                           </tr>
                           <tr className="border-t-2 border-green-500/30 bg-green-900/10">
-                            <td className="py-3 text-green-400 font-bold uppercase text-xs">Gross Earnings</td>
-                            <td className="py-3 text-right text-green-400 font-bold text-lg">{formatCurrency(payslipData.grossTotal)}</td>
+                            <td className="py-3 text-green-400 font-bold uppercase text-xs">Net Total</td>
+                            <td className="py-3 text-right text-green-400 font-bold text-lg">{formatCurrency(getPaidEarningsTotal())}</td>
                           </tr>
                         </tbody>
                       </table>
@@ -892,7 +895,7 @@ const PayslipModal = ({ isOpen, onClose, employeeId = null }) => {
                         <h4 className="text-2xl font-bold text-white uppercase tracking-wide">Net Salary</h4>
                       </div>
                       <p className="text-blue-100 text-sm">Amount payable for {new Date(payslipData.payPeriod + '-01').toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}</p>
-                      <p className="text-blue-200 text-xs mt-1">Total CTC: {formatCurrency(payslipData.ctc)} | Gross: {formatCurrency(payslipData.grossTotal)} | Deductions: {formatCurrency(payslipData.totalDeductions)}</p>
+                      <p className="text-blue-200 text-xs mt-1">Total CTC: {formatCurrency(payslipData.ctc)} | Net Total: {formatCurrency(getPaidEarningsTotal())} | Deductions: {formatCurrency(payslipData.totalDeductions)}</p>
                     </div>
                     <div className="text-right bg-white/20 rounded-lg px-6 py-4 border-2 border-white/30">
                       <p className="text-blue-100 text-xs uppercase tracking-wider mb-1">Take Home</p>

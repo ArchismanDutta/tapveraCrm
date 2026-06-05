@@ -459,10 +459,10 @@ class AutoPayrollService {
     paidDays,
     lateDays,
     halfDays,
-    manualDeductions = {},
-    hasPerfectAttendance = false,
-    hasCompletedSixMonths = false
+    manualDeductions = {}
   ) {
+    const safeWorkingDays = workingDays > 0 ? workingDays : 1;
+
     // Step 1: Calculate salary components (monthly breakdown)
     const salaryComponents = {
       basic: monthlySalary * this.SALARY_PERCENTAGES.BASIC,
@@ -473,104 +473,102 @@ class AutoPayrollService {
         monthlySalary * this.SALARY_PERCENTAGES.SPECIAL_ALLOWANCE,
     };
 
-    // Step 2: Calculate gross components (prorated by paid days)
-    const grossComponents = {
-      basic: (salaryComponents.basic / workingDays) * paidDays,
-      hra: (salaryComponents.hra / workingDays) * paidDays,
-      conveyance: (salaryComponents.conveyance / workingDays) * paidDays,
-      medical: (salaryComponents.medical / workingDays) * paidDays,
-      specialAllowance:
-        (salaryComponents.specialAllowance / workingDays) * paidDays,
-    };
-
-    // Step 3: Calculate gross total
-    let grossTotal = Object.values(grossComponents).reduce(
+    // Step 2: Calculate gross total before attendance proration.
+    const grossTotal = Object.values(salaryComponents).reduce(
       (sum, val) => sum + val,
       0
     );
 
-    // Step 3.5: Calculate perfect attendance bonus
-    const perDaySalary = monthlySalary / workingDays;
-    const perfectAttendanceBonus =
-      hasPerfectAttendance && hasCompletedSixMonths
-        ? perDaySalary // One day extra payment
-        : 0;
+    // Step 3: Calculate paid components (component / days * paid days).
+    const grossComponents = {
+      basic: (salaryComponents.basic / safeWorkingDays) * paidDays,
+      hra: (salaryComponents.hra / safeWorkingDays) * paidDays,
+      conveyance: (salaryComponents.conveyance / safeWorkingDays) * paidDays,
+      medical: (salaryComponents.medical / safeWorkingDays) * paidDays,
+      specialAllowance:
+        (salaryComponents.specialAllowance / safeWorkingDays) * paidDays,
+    };
 
-    // Add bonus to gross total
-    grossTotal += perfectAttendanceBonus;
+    // Step 4: Calculate net total (sum of paid components).
+    const netTotal = Object.values(grossComponents).reduce(
+      (sum, val) => sum + val,
+      0
+    );
 
-    // Step 4: Check ESI eligibility
+    // Step 5: Check statutory eligibility.
+    const pfEligible =
+      salaryComponents.basic <= this.DEDUCTION_CONSTANTS.PF_BASIC_LIMIT;
     const esiApplicable =
-      monthlySalary <= this.DEDUCTION_CONSTANTS.ESI_SALARY_LIMIT;
+      grossTotal <= this.DEDUCTION_CONSTANTS.ESI_SALARY_LIMIT;
 
-    // Step 5: Calculate deductions
+    // Step 6: Calculate deductions.
     const deductions = {
       // Employee PF
-      employeePF:
-        salaryComponents.basic <= this.DEDUCTION_CONSTANTS.PF_BASIC_LIMIT
-          ? Math.min(
-              this.DEDUCTION_CONSTANTS.PF_CAP,
-              Math.ceil(
-                salaryComponents.basic * this.DEDUCTION_CONSTANTS.PF_RATE
-              )
-            )
-          : 0,
+      employeePF: pfEligible
+        ? Math.min(
+            this.DEDUCTION_CONSTANTS.PF_CAP,
+            grossComponents.basic * this.DEDUCTION_CONSTANTS.PF_RATE
+          )
+        : 0,
 
       // ESI
       esi: esiApplicable
-        ? Math.round(grossTotal * this.DEDUCTION_CONSTANTS.ESI_EMPLOYEE_RATE)
+        ? netTotal * this.DEDUCTION_CONSTANTS.ESI_EMPLOYEE_RATE
         : 0,
 
       // Professional Tax
       ptax: this.calculatePTax(monthlySalary),
 
-      // Late deduction
-      lateDeduction: this.calculateLateDeduction(lateDays, perDaySalary),
-
-      // Half-day deduction
-      halfDayDeduction:
-        halfDays *
-        (perDaySalary * this.DEDUCTION_CONSTANTS.HALF_DAY_DEDUCTION_RATE),
-
       // Manual deductions
       tds: manualDeductions.tds || 0,
       other: manualDeductions.other || 0,
       advance: manualDeductions.advance || 0,
+
+      // Kept for schema/UI compatibility; excluded from the new formula.
+      lateDeduction: 0,
+      halfDayDeduction: 0,
     };
 
-    // Step 6: Calculate employer contributions
+    // Step 7: Calculate employer contributions.
     const employerContributions = {
-      employerPF:
-        salaryComponents.basic <= this.DEDUCTION_CONSTANTS.PF_BASIC_LIMIT
-          ? Math.min(
-              this.DEDUCTION_CONSTANTS.PF_CAP,
-              Math.ceil(
-                salaryComponents.basic * this.DEDUCTION_CONSTANTS.PF_RATE
-              )
-            )
-          : 0,
+      employerPF: pfEligible
+        ? Math.min(
+            this.DEDUCTION_CONSTANTS.PF_CAP,
+            grossComponents.basic * this.DEDUCTION_CONSTANTS.PF_RATE
+          )
+        : 0,
       employerESI: esiApplicable
-        ? Math.round(grossTotal * this.DEDUCTION_CONSTANTS.ESI_EMPLOYER_RATE)
+        ? netTotal * this.DEDUCTION_CONSTANTS.ESI_EMPLOYER_RATE
         : 0,
     };
 
-    // Step 7: Calculate totals
-    const totalDeductions = Object.values(deductions).reduce(
-      (sum, val) => sum + val,
-      0
-    );
-    const netPayment = grossTotal - totalDeductions;
+    // Step 8: Calculate totals using the requested formula.
+    const totalDeductions =
+      deductions.employeePF +
+      deductions.esi +
+      deductions.tds +
+      deductions.ptax +
+      deductions.other +
+      deductions.advance;
+    const netPayment = netTotal - totalDeductions;
     const ctc =
-      grossTotal +
+      totalDeductions +
+      netPayment +
       employerContributions.employerPF +
       employerContributions.employerESI;
 
     return {
       salaryComponents,
       grossComponents,
+      paidComponents: grossComponents,
       grossTotal: Math.round(grossTotal * 100) / 100,
+      netTotal: Math.round(netTotal * 100) / 100,
+      eligibility: {
+        pf: pfEligible,
+        esi: esiApplicable,
+      },
       bonuses: {
-        perfectAttendanceBonus: Math.round(perfectAttendanceBonus * 100) / 100,
+        perfectAttendanceBonus: 0,
       },
       deductions: {
         employeePF: Math.round(deductions.employeePF * 100) / 100,
@@ -656,9 +654,7 @@ class AutoPayrollService {
       attendanceData.paidDays,
       attendanceData.lateDays,
       attendanceData.halfDays,
-      manualDeductions,
-      attendanceData.hasPerfectAttendance,
-      hasCompletedSixMonths
+      manualDeductions
     );
 
     console.log(
@@ -666,11 +662,7 @@ class AutoPayrollService {
     );
 
     // Step 4: Create payslip
-    let remarks = "Auto-generated from attendance system";
-    if (calculations.bonuses.perfectAttendanceBonus > 0) {
-      remarks +=
-        " | Perfect Attendance Bonus applied (6+ months tenure + 100% attendance)";
-    }
+    const remarks = "Auto-generated from attendance system";
 
     const payslip = new Payslip({
       employee: userId,
@@ -684,6 +676,8 @@ class AutoPayrollService {
       salaryComponents: calculations.salaryComponents,
       grossComponents: calculations.grossComponents,
       grossTotal: calculations.grossTotal,
+      netTotal: calculations.netTotal,
+      eligibility: calculations.eligibility,
       deductions: calculations.deductions,
       totalDeductions: calculations.totalDeductions,
       employerContributions: calculations.employerContributions,
@@ -841,6 +835,23 @@ class AutoPayrollService {
 
     return {
       employee,
+      payPeriod,
+      monthlySalary,
+      calculationBasis: {
+        perDaySalary:
+          attendanceData.workingDays > 0
+            ? Math.round((monthlySalary / attendanceData.workingDays) * 100) /
+              100
+            : 0,
+        paidDayRatio:
+          attendanceData.workingDays > 0
+            ? Math.round(
+                (attendanceData.paidDays / attendanceData.workingDays) * 10000
+              ) / 100
+            : 0,
+        salaryPercentages: this.SALARY_PERCENTAGES,
+        deductionConstants: this.DEDUCTION_CONSTANTS,
+      },
       attendanceData,
       calculations,
     };

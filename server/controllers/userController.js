@@ -421,21 +421,29 @@ exports.updateEmployee = async (req, res) => {
       "dob",
       "gender",
       "bloodGroup",
+      "employeeId",
       "permanentAddress",
       "currentAddress",
       "emergencyContact",
       "ps",
+      "role",
       "department",
       "designation",
+      "position",
+      "positionLevel",
       "jobLevel",
       "employmentType",
       "skills",
       "qualifications",
       "salary",
+      "ref",
+      "totalPl",
       "shiftType",
       "shift",
       "status",
       "location",
+      "avatar",
+      "timeZone",
       "regions",       // <- Added for multi-region access control
       "region"         // <- Keep for backwards compatibility
     ];
@@ -459,14 +467,32 @@ exports.updateEmployee = async (req, res) => {
         marks: q.marks?.trim() || "",
       }));
     }
+    if (updateData.regions && !Array.isArray(updateData.regions)) {
+      updateData.regions = [updateData.regions];
+    }
+    if (updateData.salary) {
+      updateData.salary = {
+        basic: Number(updateData.salary.basic) || 0,
+        total: Number(updateData.salary.total) || 0,
+        paymentMode: updateData.salary.paymentMode || "bank",
+      };
+    }
+    if (updateData.positionLevel !== undefined) {
+      updateData.positionLevel = Number(updateData.positionLevel) || 0;
+    }
+    if (updateData.totalPl !== undefined) {
+      updateData.totalPl = Number(updateData.totalPl) || 0;
+    }
 
     // Ensure shift object is properly formatted
     if (updateData.shift) {
-      const { start, end, durationHours } = updateData.shift;
+      const { name, start, end, durationHours, isFlexible } = updateData.shift;
       updateData.shift = {
+        name: name || "",
         start: start || null,
         end: end || null,
         durationHours: Number(durationHours) || 9,
+        isFlexible: Boolean(isFlexible),
       };
     }
 

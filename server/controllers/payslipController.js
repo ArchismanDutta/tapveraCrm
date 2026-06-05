@@ -30,7 +30,7 @@ function calculateSalaryBreakdown(monthlySalary, workingDays, paidDays, lateDays
     specialAllowance: (salaryComponents.specialAllowance / workingDays) * paidDays
   };
 
-  // Step 3: Calculate gross total
+  // Step 3: Calculate net total (sum of paid components)
   const grossTotal = Object.values(grossComponents).reduce((sum, val) => sum + val, 0);
 
   // Step 3.5: Determine ESI eligibility based on monthly salary
@@ -48,24 +48,11 @@ function calculateSalaryBreakdown(monthlySalary, workingDays, paidDays, lateDays
   // 6 lates = 2 days deduction
   // 7 lates = 2 days deduction + ₹200
   // 9 lates = 3 days deduction
-  const perDaySalary = monthlySalary / workingDays;
-  let lateDeduction = 0;
-
-  if (lateDays >= 3) {
-    const fullLateDays = Math.floor(lateDays / 3); // Number of full 3-day cycles
-    const extraLateDays = lateDays % 3; // Remaining lates (1 or 2)
-    lateDeduction = (fullLateDays * perDaySalary) + (extraLateDays * 200);
-  }
-
-  // Step 4.5: Calculate half-day deduction
-  // Formula: Each half-day = 50% of per-day salary deduction
-  const halfDayDeduction = halfDays * (perDaySalary * 0.5);
-
   // Step 5: Calculate deductions
   const deductions = {
     // Employee PF: MIN(1800, ROUNDUP(Basic * 12%, 0)) if basic <= 15000, else 0
     employeePF: salaryComponents.basic <= 15000
-      ? Math.min(1800, Math.ceil(salaryComponents.basic * 0.12))
+      ? Math.min(1800, grossComponents.basic * 0.12)
       : 0,
 
     // ESI: ROUND(Gross Total * 0.75%, 0) if salary <= 21000, else 0
@@ -80,17 +67,17 @@ function calculateSalaryBreakdown(monthlySalary, workingDays, paidDays, lateDays
     advance: manualDeductions.advance || 0,
 
     // Late deduction
-    lateDeduction: lateDeduction,
+    lateDeduction: 0,
 
     // Half-day deduction
-    halfDayDeduction: halfDayDeduction
+    halfDayDeduction: 0
   };
 
   // Step 6: Calculate employer contributions
   const employerContributions = {
     // Employer PF: MIN(1800, ROUNDUP(Basic * 12%, 0)) if basic <= 15000, else 0
     employerPF: salaryComponents.basic <= 15000
-      ? Math.min(1800, Math.ceil(salaryComponents.basic * 0.12))
+      ? Math.min(1800, grossComponents.basic * 0.12)
       : 0,
 
     // Employer ESI: ROUND(Gross Total * 3.25%, 0) if salary <= 21000, else 0

@@ -110,23 +110,14 @@ exports.generateSinglePayslip = async (req, res) => {
       const employee = await User.findById(employeeId).lean();
       const monthlySalary = AutoPayrollService.getMonthlySalary(employee);
 
-      // Check for perfect attendance and 6 months tenure
-      const [year, month] = payPeriod.split('-').map(Number);
-      const totalWorkingDaysExcludingWeekends = AutoPayrollService.getWorkingDaysExcludingWeekends(year, month);
-      const hasPerfectAttendance = (result.payslip.paidDays >= totalWorkingDaysExcludingWeekends) &&
-                                    (result.payslip.halfDays === 0);
-      const hasCompletedSixMonths = AutoPayrollService.hasCompletedSixMonths(employee.doj, payPeriod);
-
-      // Recalculate with manual values and bonus eligibility
+      // Recalculate with manual values
       const calculations = AutoPayrollService.calculateSalaryBreakdown(
         monthlySalary,
         result.payslip.workingDays,
         result.payslip.paidDays,
         result.payslip.lateDays,
         result.payslip.halfDays,
-        manualDeductions,
-        hasPerfectAttendance,
-        hasCompletedSixMonths
+        manualDeductions
       );
 
       // Update payslip with new calculations
@@ -134,6 +125,8 @@ exports.generateSinglePayslip = async (req, res) => {
       result.payslip.salaryComponents = calculations.salaryComponents;
       result.payslip.grossComponents = calculations.grossComponents;
       result.payslip.grossTotal = calculations.grossTotal;
+      result.payslip.netTotal = calculations.netTotal;
+      result.payslip.eligibility = calculations.eligibility;
       result.payslip.deductions = calculations.deductions;
       result.payslip.totalDeductions = calculations.totalDeductions;
       result.payslip.employerContributions = calculations.employerContributions;
@@ -327,23 +320,14 @@ exports.recalculatePayslip = async (req, res) => {
       const employee = await User.findById(employeeId).lean();
       const monthlySalary = AutoPayrollService.getMonthlySalary(employee);
 
-      // Check for perfect attendance and 6 months tenure
-      const [year, month] = payPeriod.split('-').map(Number);
-      const totalWorkingDaysExcludingWeekends = AutoPayrollService.getWorkingDaysExcludingWeekends(year, month);
-      const hasPerfectAttendance = (result.payslip.paidDays >= totalWorkingDaysExcludingWeekends) &&
-                                    (result.payslip.halfDays === 0);
-      const hasCompletedSixMonths = AutoPayrollService.hasCompletedSixMonths(employee.doj, payPeriod);
-
-      // Recalculate with manual values and bonus eligibility
+      // Recalculate with manual values
       const calculations = AutoPayrollService.calculateSalaryBreakdown(
         monthlySalary,
         result.payslip.workingDays,
         result.payslip.paidDays,
         result.payslip.lateDays,
         result.payslip.halfDays,
-        manualDeductions,
-        hasPerfectAttendance,
-        hasCompletedSixMonths
+        manualDeductions
       );
 
       // Update payslip with new calculations
@@ -351,6 +335,8 @@ exports.recalculatePayslip = async (req, res) => {
       result.payslip.salaryComponents = calculations.salaryComponents;
       result.payslip.grossComponents = calculations.grossComponents;
       result.payslip.grossTotal = calculations.grossTotal;
+      result.payslip.netTotal = calculations.netTotal;
+      result.payslip.eligibility = calculations.eligibility;
       result.payslip.deductions = calculations.deductions;
       result.payslip.totalDeductions = calculations.totalDeductions;
       result.payslip.employerContributions = calculations.employerContributions;
@@ -413,12 +399,12 @@ exports.getCalculationRules = async (req, res) => {
       },
       deductions: {
         employeePF: {
-          description: '12% of basic salary (capped at ₹1800)',
+          description: 'Min(1800, Basic Paid x 12%)',
           applicable: 'Only if basic salary ≤ ₹15,000'
         },
         esi: {
-          description: '0.75% of gross total',
-          applicable: 'Only if monthly salary ≤ ₹21,000'
+          description: 'Net Total x 0.75%',
+          applicable: 'Only if Gross Total ≤ ₹21,000'
         },
         ptax: {
           description: 'Professional Tax based on salary slabs',
@@ -431,6 +417,7 @@ exports.getCalculationRules = async (req, res) => {
           ]
         },
         lateDeduction: {
+          includedInFormula: false,
           description: 'Deduction for late arrivals',
           rules: [
             'First 2 late days: No deduction',
@@ -446,17 +433,18 @@ exports.getCalculationRules = async (req, res) => {
           ]
         },
         halfDayDeduction: {
+          includedInFormula: false,
           description: '50% of per-day salary per half-day'
         }
       },
       employerContributions: {
         employerPF: {
-          description: '12% of basic salary (capped at ₹1800)',
+          description: 'Same as Employee PF',
           applicable: 'Only if basic salary ≤ ₹15,000'
         },
         employerESI: {
-          description: '3.25% of gross total',
-          applicable: 'Only if monthly salary ≤ ₹21,000'
+          description: 'Net Total x 3.25%',
+          applicable: 'Only if Gross Total ≤ ₹21,000'
         }
       },
       workingDays: {
@@ -470,10 +458,12 @@ exports.getCalculationRules = async (req, res) => {
         workFromHome: 'Full day salary credited (no deduction)'
       },
       calculations: {
-        grossSalary: 'Sum of all salary components (prorated by paid days)',
-        totalDeductions: 'Sum of all deductions',
-        netPayment: 'Gross salary - Total deductions',
-        ctc: 'Gross salary + Employer PF + Employer ESI'
+        grossTotal: 'Basic + HRA + Conveyance + Medical + Special Allowance',
+        paidComponent: 'Component / Days x Paid Days',
+        netTotal: 'Sum of paid components',
+        totalDeductions: 'PF + ESI + TDS + PTax + Other + Advance',
+        netPayment: 'Net Total - Total Deduction',
+        ctc: 'Total Deduction + Net Salary + Employer PF + Employer ESI'
       }
     };
 

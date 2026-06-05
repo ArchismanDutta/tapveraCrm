@@ -35,11 +35,35 @@ router.get("/:projectId/keywords", protect, async (req, res) => {
       .sort({ createdAt: -1 })
       .lean();
 
-    // Limit rankHistory to prevent large responses
-    const optimizedKeywords = keywords.map(kw => ({
-      ...kw,
-      rankHistory: (kw.rankHistory || []).slice(0, limit)
-    }));
+    // Manually compute virtuals + limit rankHistory
+    const optimizedKeywords = keywords.map(kw => {
+      const history = kw.rankHistory || [];
+      const currentRank  = history.length >= 1 ? history[history.length - 1] : null;
+      const previousRank = history.length >= 2 ? history[history.length - 2] : null;
+      const pastRank     = history.length >= 3 ? history[history.length - 3] : null;
+
+      // Mirrors calculateRankChange in the model
+      let rankChange = 0;
+      if (currentRank && previousRank) {
+        const p = previousRank.rank, c = currentRank.rank;
+        const pUnranked = p === 0 || p >= 101;
+        const cUnranked = c === 0 || c >= 101;
+        if      ( pUnranked && !cUnranked) rankChange =  100 - c;
+        else if (!pUnranked &&  cUnranked) rankChange = -(100 + p);
+        else if (!pUnranked && !cUnranked) rankChange =  p - c;
+      }
+      const rankTrend = rankChange > 0 ? "improved" : rankChange < 0 ? "declined" : "stable";
+
+      return {
+        ...kw,
+        rankHistory: history.slice(0, limit),
+        currentRank,
+        previousRank,
+        pastRank,
+        rankChange,
+        rankTrend,
+      };
+    });
 
     res.json({ success: true, data: optimizedKeywords, count: optimizedKeywords.length });
   } catch (error) {

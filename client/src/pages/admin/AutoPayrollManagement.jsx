@@ -203,8 +203,7 @@ const AutoPayrollManagement = ({ onLogout }) => {
     }
   };
 
-  const previewSalaryCalculation = async (employeeId) => {
-    setLoading(true);
+  const fetchSalaryPreview = async (employeeId) => {
     try {
       const token = localStorage.getItem("token");
       const response = await fetch(
@@ -216,15 +215,26 @@ const AutoPayrollManagement = ({ onLogout }) => {
 
       if (response.ok) {
         const data = await response.json();
-        setPreviewData(data.data);
-        toast.success("Salary preview generated successfully");
-      } else {
-        const error = await response.json();
-        toast.error(error.error || "Failed to preview salary calculation");
+        return data.data;
       }
+
+      const error = await response.json();
+      throw new Error(error.error || "Failed to preview salary calculation");
+    } catch (error) {
+      console.error("Error fetching salary preview:", error);
+      throw error;
+    }
+  };
+
+  const previewSalaryCalculation = async (employeeId) => {
+    setLoading(true);
+    try {
+      const preview = await fetchSalaryPreview(employeeId);
+      setPreviewData(preview);
+      toast.success("Salary preview generated successfully");
     } catch (error) {
       console.error("Error previewing salary:", error);
-      toast.error("Failed to preview salary calculation");
+      toast.error(error.message || "Failed to preview salary calculation");
     } finally {
       setLoading(false);
     }
@@ -373,21 +383,180 @@ const AutoPayrollManagement = ({ onLogout }) => {
     }).format(amount || 0);
   };
 
-  const openEditModal = () => {
-    if (previewData) {
-      setEditFormData({
-        workingDays: previewData.attendanceData.workingDays,
-        paidDays: previewData.attendanceData.paidDays,
-        lateDays: previewData.attendanceData.lateDays,
-        halfDays: previewData.attendanceData.halfDays,
-        tds: previewData.calculations.deductions.tds || 0,
-        other: previewData.calculations.deductions.other || 0,
-        advance: previewData.calculations.deductions.advance || 0,
-        remarks: "",
-      });
+  const formatNumber = (value, digits = 2) => {
+    const number = Number(value || 0);
+    return new Intl.NumberFormat("en-IN", {
+      maximumFractionDigits: digits,
+    }).format(number);
+  };
+
+  const formatPercent = (value) => `${formatNumber((value || 0) * 100, 2)}%`;
+
+  const formatLabel = (key) =>
+    key
+      .replace(/([A-Z])/g, " $1")
+      .replace(/_/g, " ")
+      .replace(/\b\w/g, (char) => char.toUpperCase());
+
+  const getSalaryPercentage = (key) => {
+    const percentages = previewData?.calculationBasis?.salaryPercentages || {};
+    const percentageKeys = {
+      basic: "BASIC",
+      hra: "HRA",
+      conveyance: "CONVEYANCE",
+      medical: "MEDICAL",
+      specialAllowance: "SPECIAL_ALLOWANCE",
+    };
+
+    return percentages[percentageKeys[key]] || 0;
+  };
+
+  const getPaidWeekendDays = () => {
+    const attendance = previewData?.attendanceData;
+    if (!attendance) return 0;
+
+    const paidDays = attendance.summary?.paidDays || attendance.paidDays || 0;
+    const weekendDays =
+      paidDays -
+      (attendance.presentDays || 0) -
+      (attendance.paidLeaveDays || 0) -
+      (attendance.wfhDays || 0);
+
+    return Math.max(0, weekendDays);
+  };
+
+  const getPreviewNetTotal = () =>
+    previewData?.calculations?.netTotal ??
+    previewData?.calculations?.grossTotal ??
+    0;
+
+  const previewPeriodLabel = previewData?.payPeriod || selectedMonth;
+
+  const calculatePTax = (monthlySalary) => {
+    if (monthlySalary >= 40001) return 200;
+    if (monthlySalary >= 25001) return 150;
+    if (monthlySalary >= 15001) return 130;
+    if (monthlySalary >= 10000) return 110;
+    return 0;
+  };
+
+  const roundAmount = (value) => Math.round((Number(value) || 0) * 100) / 100;
+
+  const calculateEditedPreview = () => {
+    const source = editingPayslip || previewData;
+    if (!source) return null;
+
+    const monthlySalary =
+      source.monthlySalary || source.calculations?.grossTotal || 0;
+    const workingDays = Number(editFormData.workingDays) || 0;
+    const paidDays = Number(editFormData.paidDays) || 0;
+    const safeWorkingDays = workingDays > 0 ? workingDays : 1;
+    const salaryPercentages =
+      previewData?.calculationBasis?.salaryPercentages || {
+        BASIC: 0.5,
+        HRA: 0.35,
+        CONVEYANCE: 0.05,
+        MEDICAL: 0.05,
+        SPECIAL_ALLOWANCE: 0.05,
+      };
+
+    const salaryComponents = {
+      basic: monthlySalary * salaryPercentages.BASIC,
+      hra: monthlySalary * salaryPercentages.HRA,
+      conveyance: monthlySalary * salaryPercentages.CONVEYANCE,
+      medical: monthlySalary * salaryPercentages.MEDICAL,
+      specialAllowance: monthlySalary * salaryPercentages.SPECIAL_ALLOWANCE,
+    };
+    const grossTotal = Object.values(salaryComponents).reduce(
+      (sum, value) => sum + value,
+      0
+    );
+    const paidComponents = {
+      basic: (salaryComponents.basic / safeWorkingDays) * paidDays,
+      hra: (salaryComponents.hra / safeWorkingDays) * paidDays,
+      conveyance: (salaryComponents.conveyance / safeWorkingDays) * paidDays,
+      medical: (salaryComponents.medical / safeWorkingDays) * paidDays,
+      specialAllowance:
+        (salaryComponents.specialAllowance / safeWorkingDays) * paidDays,
+    };
+    const netTotal = Object.values(paidComponents).reduce(
+      (sum, value) => sum + value,
+      0
+    );
+    const pfEligible = salaryComponents.basic <= 15000;
+    const esiEligible = grossTotal <= 21000;
+    const employeePF = pfEligible
+      ? Math.min(1800, paidComponents.basic * 0.12)
+      : 0;
+    const employeeESI = esiEligible ? netTotal * 0.0075 : 0;
+    const ptax = calculatePTax(monthlySalary);
+    const tds = Number(editFormData.tds) || 0;
+    const other = Number(editFormData.other) || 0;
+    const advance = Number(editFormData.advance) || 0;
+    const totalDeductions = employeePF + employeeESI + ptax + tds + other + advance;
+    const netPayment = netTotal - totalDeductions;
+    const employerPF = employeePF;
+    const employerESI = esiEligible ? netTotal * 0.0325 : 0;
+    const ctc = totalDeductions + netPayment + employerPF + employerESI;
+
+    return {
+      monthlySalary: roundAmount(monthlySalary),
+      grossTotal: roundAmount(grossTotal),
+      netTotal: roundAmount(netTotal),
+      netPayment: roundAmount(netPayment),
+      totalDeductions: roundAmount(totalDeductions),
+      ctc: roundAmount(ctc),
+      paidComponents,
+      deductions: {
+        employeePF: roundAmount(employeePF),
+        esi: roundAmount(employeeESI),
+        ptax,
+        tds,
+        other,
+        advance,
+      },
+      employerContributions: {
+        employerPF: roundAmount(employerPF),
+        employerESI: roundAmount(employerESI),
+      },
+      eligibility: {
+        pf: pfEligible,
+        esi: esiEligible,
+      },
+    };
+  };
+
+  const fillEditFormFromPreview = (preview) => {
+    setEditFormData({
+      workingDays: preview.attendanceData.workingDays,
+      paidDays: preview.attendanceData.paidDays,
+      lateDays: preview.attendanceData.lateDays,
+      halfDays: preview.attendanceData.halfDays,
+      tds: preview.calculations.deductions.tds || 0,
+      other: preview.calculations.deductions.other || 0,
+      advance: preview.calculations.deductions.advance || 0,
+      remarks: "",
+    });
+  };
+
+  const openEditModal = async (employeeId = null) => {
+    setLoading(true);
+    try {
+      const preview = employeeId ? await fetchSalaryPreview(employeeId) : previewData;
+      if (!preview) return;
+
+      setEditingPayslip(null);
+      setPreviewData(preview);
+      fillEditFormFromPreview(preview);
       setShowEditModal(true);
+    } catch (error) {
+      toast.error(error.message || "Failed to open payroll editor");
+    } finally {
+      setLoading(false);
     }
   };
+
+  const editedPreview = calculateEditedPreview();
 
   const handleEditSubmit = async () => {
     if (!previewData && !editingPayslip) return;
@@ -890,6 +1059,19 @@ const AutoPayrollManagement = ({ onLogout }) => {
                               Preview
                             </button>
                             <button
+                              onClick={() => openEditModal(emp._id)}
+                              disabled={loading || getMonthlySalary(emp) === 0}
+                              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-purple-400 hover:text-purple-300 hover:bg-purple-500/10 transition-all text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                              title={
+                                getMonthlySalary(emp) === 0
+                                  ? "Salary not configured"
+                                  : "Edit payroll inputs"
+                              }
+                            >
+                              <Edit className="w-3 h-3" />
+                              Edit
+                            </button>
+                            <button
                               onClick={() => generateSinglePayslip(emp._id)}
                               disabled={loading || getMonthlySalary(emp) === 0}
                               className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-green-400 hover:text-green-300 hover:bg-green-500/10 transition-all text-sm disabled:opacity-50 disabled:cursor-not-allowed"
@@ -914,15 +1096,22 @@ const AutoPayrollManagement = ({ onLogout }) => {
         </div>
 
         {/* Preview Panel */}
-        {previewData && (
+        {previewData && !showEditModal && (
           <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-            <div className="bg-[#191f2b] rounded-xl border border-[#232945] max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="bg-[#191f2b] rounded-xl border border-[#232945] max-w-6xl w-full max-h-[90vh] overflow-y-auto">
               <div className="p-6">
                 <div className="flex justify-between items-center mb-6">
-                  <h2 className="text-2xl font-bold text-white flex items-center gap-2">
-                    <Calculator className="w-6 h-6 text-blue-400" />
-                    Salary Preview - {previewData.employee.name}
-                  </h2>
+                  <div>
+                    <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+                      <Calculator className="w-6 h-6 text-blue-400" />
+                      Salary Preview - {previewData.employee.name}
+                    </h2>
+                    <p className="text-sm text-gray-400 mt-1">
+                      {previewData.employee.employeeId || "No employee ID"} -{" "}
+                      {previewData.employee.department || "No department"} -{" "}
+                      {previewPeriodLabel}
+                    </p>
+                  </div>
                   <button
                     onClick={() => setPreviewData(null)}
                     className="text-gray-400 hover:text-white transition-colors"
@@ -938,7 +1127,7 @@ const AutoPayrollManagement = ({ onLogout }) => {
                   </h3>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     <div className="bg-[#0f1419] rounded-lg p-4 border border-[#232945]">
-                      <p className="text-sm text-gray-400 mb-1">Working Days</p>
+                      <p className="text-sm text-gray-400 mb-1">Total Days</p>
                       <p className="text-2xl font-bold text-white">
                         {previewData.attendanceData.workingDays}
                       </p>
@@ -961,6 +1150,54 @@ const AutoPayrollManagement = ({ onLogout }) => {
                         {previewData.attendanceData.halfDays}
                       </p>
                     </div>
+                    <div className="bg-[#0f1419] rounded-lg p-4 border border-[#232945]">
+                      <p className="text-sm text-gray-400 mb-1">Present Days</p>
+                      <p className="text-2xl font-bold text-white">
+                        {previewData.attendanceData.presentDays}
+                      </p>
+                    </div>
+                    <div className="bg-[#0f1419] rounded-lg p-4 border border-[#232945]">
+                      <p className="text-sm text-gray-400 mb-1">Full Days</p>
+                      <p className="text-2xl font-bold text-white">
+                        {previewData.attendanceData.fullDays}
+                      </p>
+                    </div>
+                    <div className="bg-[#0f1419] rounded-lg p-4 border border-[#232945]">
+                      <p className="text-sm text-gray-400 mb-1">WFH Days</p>
+                      <p className="text-2xl font-bold text-white">
+                        {previewData.attendanceData.wfhDays}
+                      </p>
+                    </div>
+                    <div className="bg-[#0f1419] rounded-lg p-4 border border-[#232945]">
+                      <p className="text-sm text-gray-400 mb-1">Paid Leaves</p>
+                      <p className="text-2xl font-bold text-white">
+                        {previewData.attendanceData.paidLeaveDays}
+                      </p>
+                    </div>
+                    <div className="bg-[#0f1419] rounded-lg p-4 border border-[#232945]">
+                      <p className="text-sm text-gray-400 mb-1">Unpaid Leaves</p>
+                      <p className="text-2xl font-bold text-red-400">
+                        {previewData.attendanceData.unpaidLeaveDays}
+                      </p>
+                    </div>
+                    <div className="bg-[#0f1419] rounded-lg p-4 border border-[#232945]">
+                      <p className="text-sm text-gray-400 mb-1">Weekends Paid</p>
+                      <p className="text-2xl font-bold text-white">
+                        {getPaidWeekendDays()}
+                      </p>
+                    </div>
+                    <div className="bg-[#0f1419] rounded-lg p-4 border border-[#232945]">
+                      <p className="text-sm text-gray-400 mb-1">Work Hours</p>
+                      <p className="text-2xl font-bold text-white">
+                        {formatNumber(previewData.attendanceData.totalWorkHours)}
+                      </p>
+                    </div>
+                    <div className="bg-[#0f1419] rounded-lg p-4 border border-[#232945]">
+                      <p className="text-sm text-gray-400 mb-1">Weekdays</p>
+                      <p className="text-2xl font-bold text-white">
+                        {previewData.attendanceData.totalWorkingDaysExcludingWeekends}
+                      </p>
+                    </div>
                   </div>
                 </div>
 
@@ -970,50 +1207,180 @@ const AutoPayrollManagement = ({ onLogout }) => {
                     Salary Calculation
                   </h3>
                   <div className="space-y-3">
-                    <div className="bg-[#0f1419] rounded-lg p-4 border border-[#232945]">
-                      <div className="flex justify-between items-center">
-                        <span className="text-gray-400">Gross Total</span>
-                        <span className="text-xl font-bold text-green-400">
-                          {formatCurrency(previewData.calculations.grossTotal)}
-                        </span>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="bg-[#0f1419] rounded-lg p-4 border border-[#232945]">
+                        <p className="text-sm text-gray-400 mb-1">
+                          Monthly Salary
+                        </p>
+                        <p className="text-xl font-bold text-white">
+                          {formatCurrency(previewData.monthlySalary)}
+                        </p>
+                      </div>
+                      <div className="bg-[#0f1419] rounded-lg p-4 border border-[#232945]">
+                        <p className="text-sm text-gray-400 mb-1">
+                          Per Day Salary
+                        </p>
+                        <p className="text-xl font-bold text-white">
+                          {formatCurrency(previewData.calculationBasis?.perDaySalary)}
+                        </p>
+                      </div>
+                      <div className="bg-[#0f1419] rounded-lg p-4 border border-[#232945]">
+                        <p className="text-sm text-gray-400 mb-1">
+                          Paid Day Ratio
+                        </p>
+                        <p className="text-xl font-bold text-white">
+                          {formatNumber(previewData.calculationBasis?.paidDayRatio)}
+                          %
+                        </p>
                       </div>
                     </div>
 
-                    <div className="bg-[#0f1419] rounded-lg p-4 border border-[#232945]">
-                      <p className="text-sm font-semibold text-red-400 mb-2">
-                        Deductions
-                      </p>
-                      {Object.entries(previewData.calculations.deductions).map(
-                        ([key, value]) =>
-                          value > 0 && (
-                            <div
-                              key={key}
-                              className="flex justify-between text-sm py-1"
-                            >
-                              <span className="text-gray-400 capitalize">
-                                {key.replace(/([A-Z])/g, " $1")}
-                              </span>
-                              <span className="text-red-400">
-                                -{formatCurrency(value)}
-                              </span>
-                            </div>
-                          )
-                      )}
-                      <div className="flex justify-between font-semibold pt-2 border-t border-[#232945] mt-2">
-                        <span className="text-white">Total Deductions</span>
-                        <span className="text-red-400">
-                          -
-                          {formatCurrency(
-                            previewData.calculations.totalDeductions
-                          )}
-                        </span>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="bg-[#0f1419] rounded-lg p-4 border border-[#232945]">
+                        <p className="text-sm font-semibold text-blue-400 mb-2">
+                          Monthly Salary Components
+                        </p>
+                        {Object.entries(
+                          previewData.calculations.salaryComponents
+                        ).map(([key, value]) => (
+                          <div
+                            key={key}
+                            className="flex justify-between text-sm py-1"
+                          >
+                            <span className="text-gray-400">
+                              {formatLabel(key)} (
+                              {formatPercent(getSalaryPercentage(key))}
+                              )
+                            </span>
+                            <span className="text-white">
+                              {formatCurrency(value)}
+                            </span>
+                          </div>
+                        ))}
+                        <div className="flex justify-between font-semibold pt-2 border-t border-[#232945] mt-2">
+                          <span className="text-white">Gross Total</span>
+                          <span className="text-blue-400">
+                            {formatCurrency(previewData.calculations.grossTotal)}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="bg-[#0f1419] rounded-lg p-4 border border-[#232945]">
+                        <p className="text-sm font-semibold text-green-400 mb-2">
+                          Paid Components
+                        </p>
+                        {Object.entries(
+                          previewData.calculations.grossComponents
+                        ).map(([key, value]) => (
+                          <div
+                            key={key}
+                            className="flex justify-between text-sm py-1"
+                          >
+                            <span className="text-gray-400">
+                              {formatLabel(key)}
+                            </span>
+                            <span className="text-white">
+                              {formatCurrency(value)}
+                            </span>
+                          </div>
+                        ))}
+                        <div className="flex justify-between font-semibold pt-2 border-t border-[#232945] mt-2">
+                          <span className="text-white">Net Total</span>
+                          <span className="text-green-400">
+                            {formatCurrency(getPreviewNetTotal())}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="bg-[#0f1419] rounded-lg p-4 border border-[#232945]">
+                        <p className="text-sm text-gray-400 mb-1">
+                          PF Eligibility
+                        </p>
+                        <p className="text-xl font-bold text-white">
+                          Basic &lt;= {formatCurrency(15000)}:{" "}
+                          {previewData.calculations.eligibility?.pf
+                            ? "Y"
+                            : "N"}
+                        </p>
+                      </div>
+                      <div className="bg-[#0f1419] rounded-lg p-4 border border-[#232945]">
+                        <p className="text-sm text-gray-400 mb-1">
+                          ESI Eligibility
+                        </p>
+                        <p className="text-xl font-bold text-white">
+                          Gross Total &lt;= {formatCurrency(21000)}:{" "}
+                          {previewData.calculations.eligibility?.esi
+                            ? "Y"
+                            : "N"}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="bg-[#0f1419] rounded-lg p-4 border border-[#232945]">
+                        <p className="text-sm font-semibold text-red-400 mb-2">
+                          Deductions
+                        </p>
+                        {Object.entries(
+                          previewData.calculations.deductions
+                        ).map(([key, value]) => (
+                          <div
+                            key={key}
+                            className="flex justify-between text-sm py-1"
+                          >
+                            <span className="text-gray-400">
+                              {formatLabel(key)}
+                            </span>
+                            <span className="text-red-400">
+                              -{formatCurrency(value)}
+                            </span>
+                          </div>
+                        ))}
+                        <div className="flex justify-between font-semibold pt-2 border-t border-[#232945] mt-2">
+                          <span className="text-white">Total Deductions</span>
+                          <span className="text-red-400">
+                            -
+                            {formatCurrency(
+                              previewData.calculations.totalDeductions
+                            )}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="bg-[#0f1419] rounded-lg p-4 border border-[#232945]">
+                        <p className="text-sm font-semibold text-purple-400 mb-2">
+                          Employer Contributions
+                        </p>
+                        {Object.entries(
+                          previewData.calculations.employerContributions
+                        ).map(([key, value]) => (
+                          <div
+                            key={key}
+                            className="flex justify-between text-sm py-1"
+                          >
+                            <span className="text-gray-400">
+                              {formatLabel(key)}
+                            </span>
+                            <span className="text-white">
+                              {formatCurrency(value)}
+                            </span>
+                          </div>
+                        ))}
+                        <div className="flex justify-between font-semibold pt-2 border-t border-[#232945] mt-2">
+                          <span className="text-white">CTC</span>
+                          <span className="text-purple-400">
+                            {formatCurrency(previewData.calculations.ctc)}
+                          </span>
+                        </div>
                       </div>
                     </div>
 
                     <div className="bg-gradient-to-r from-blue-600/20 to-purple-600/20 rounded-lg p-4 border border-blue-500/30">
                       <div className="flex justify-between items-center">
                         <span className="text-white font-semibold">
-                          Net Payment
+                          Net Salary
                         </span>
                         <span className="text-3xl font-bold text-white">
                           {formatCurrency(previewData.calculations.netPayment)}
@@ -1022,6 +1389,109 @@ const AutoPayrollManagement = ({ onLogout }) => {
                     </div>
                   </div>
                 </div>
+
+                <div className="mb-6">
+                  <h3 className="text-lg font-semibold text-yellow-400 mb-3">
+                    Calculation Rules
+                  </h3>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="bg-[#0f1419] rounded-lg p-4 border border-[#232945]">
+                      <p className="text-sm text-gray-400 mb-1">PF Rate</p>
+                      <p className="text-xl font-bold text-white">
+                        {formatPercent(
+                          previewData.calculationBasis?.deductionConstants
+                            ?.PF_RATE
+                        )}
+                      </p>
+                    </div>
+                    <div className="bg-[#0f1419] rounded-lg p-4 border border-[#232945]">
+                      <p className="text-sm text-gray-400 mb-1">PF Cap</p>
+                      <p className="text-xl font-bold text-white">
+                        {formatCurrency(
+                          previewData.calculationBasis?.deductionConstants
+                            ?.PF_CAP
+                        )}
+                      </p>
+                    </div>
+                    <div className="bg-[#0f1419] rounded-lg p-4 border border-[#232945]">
+                      <p className="text-sm text-gray-400 mb-1">ESI Employee</p>
+                      <p className="text-xl font-bold text-white">
+                        {formatPercent(
+                          previewData.calculationBasis?.deductionConstants
+                            ?.ESI_EMPLOYEE_RATE
+                        )}
+                      </p>
+                    </div>
+                    <div className="bg-[#0f1419] rounded-lg p-4 border border-[#232945]">
+                      <p className="text-sm text-gray-400 mb-1">ESI Employer</p>
+                      <p className="text-xl font-bold text-white">
+                        {formatPercent(
+                          previewData.calculationBasis?.deductionConstants
+                            ?.ESI_EMPLOYER_RATE
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {previewData.attendanceData.attendanceDetails?.length > 0 && (
+                  <div className="mb-6">
+                    <h3 className="text-lg font-semibold text-blue-400 mb-3">
+                      Daily Attendance Numbers
+                    </h3>
+                    <div className="overflow-x-auto rounded-lg border border-[#232945]">
+                      <table className="w-full text-sm">
+                        <thead className="bg-[#0f1419] text-gray-300">
+                          <tr>
+                            <th className="text-left p-3">Date</th>
+                            <th className="text-left p-3">Status</th>
+                            <th className="text-right p-3">Hours</th>
+                            <th className="text-right p-3">Late Minutes</th>
+                            <th className="text-center p-3">Late</th>
+                            <th className="text-center p-3">Half Day</th>
+                            <th className="text-center p-3">WFH</th>
+                            <th className="text-left p-3">Leave</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {previewData.attendanceData.attendanceDetails.map(
+                            (day) => (
+                              <tr
+                                key={day.date}
+                                className="border-t border-[#232945] text-gray-300"
+                              >
+                                <td className="p-3">
+                                  {new Date(day.date).toLocaleDateString(
+                                    "en-IN"
+                                  )}
+                                </td>
+                                <td className="p-3 capitalize">{day.status}</td>
+                                <td className="p-3 text-right">
+                                  {formatNumber(day.workHours)}
+                                </td>
+                                <td className="p-3 text-right">
+                                  {formatNumber(day.lateMinutes, 0)}
+                                </td>
+                                <td className="p-3 text-center">
+                                  {day.isLate ? "Yes" : "No"}
+                                </td>
+                                <td className="p-3 text-center">
+                                  {day.isHalfDay ? "Yes" : "No"}
+                                </td>
+                                <td className="p-3 text-center">
+                                  {day.isWFH ? "Yes" : "No"}
+                                </td>
+                                <td className="p-3">
+                                  {day.leaveType || "-"}
+                                </td>
+                              </tr>
+                            )
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
 
                 <div className="flex gap-3">
                   <button
@@ -1032,13 +1502,6 @@ const AutoPayrollManagement = ({ onLogout }) => {
                   >
                     <Play className="w-5 h-5" />
                     Generate Payslip
-                  </button>
-                  <button
-                    onClick={openEditModal}
-                    className="px-6 py-3 bg-blue-600/20 hover:bg-blue-600/40 text-blue-400 border border-blue-500/30 rounded-lg transition-colors flex items-center gap-2"
-                  >
-                    <Edit className="w-4 h-4" />
-                    Edit & Generate
                   </button>
                   <button
                     onClick={() => setPreviewData(null)}
@@ -1055,7 +1518,7 @@ const AutoPayrollManagement = ({ onLogout }) => {
         {/* Edit Modal */}
         {showEditModal && (previewData || editingPayslip) && (
           <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-            <div className="bg-[#191f2b] rounded-xl border border-[#232945] max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="bg-[#191f2b] rounded-xl border border-[#232945] max-w-5xl w-full max-h-[90vh] overflow-y-auto">
               <div className="p-6">
                 <div className="flex justify-between items-center mb-6">
                   <h2 className="text-2xl font-bold text-white flex items-center gap-2">
@@ -1068,6 +1531,7 @@ const AutoPayrollManagement = ({ onLogout }) => {
                     onClick={() => {
                       setShowEditModal(false);
                       setEditingPayslip(null);
+                      setPreviewData(null);
                     }}
                     className="text-gray-400 hover:text-white transition-colors"
                   >
@@ -1206,6 +1670,126 @@ const AutoPayrollManagement = ({ onLogout }) => {
                     </div>
                   </div>
 
+                  {editedPreview && (
+                    <div>
+                      <h3 className="text-lg font-semibold text-green-400 mb-4">
+                        Updated Amounts
+                      </h3>
+                      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                        <div className="bg-[#0f1419] rounded-lg p-4 border border-[#232945]">
+                          <p className="text-sm text-gray-400 mb-1">
+                            Gross Total
+                          </p>
+                          <p className="text-xl font-bold text-blue-400">
+                            {formatCurrency(editedPreview.grossTotal)}
+                          </p>
+                        </div>
+                        <div className="bg-[#0f1419] rounded-lg p-4 border border-[#232945]">
+                          <p className="text-sm text-gray-400 mb-1">
+                            Net Total
+                          </p>
+                          <p className="text-xl font-bold text-green-400">
+                            {formatCurrency(editedPreview.netTotal)}
+                          </p>
+                        </div>
+                        <div className="bg-[#0f1419] rounded-lg p-4 border border-[#232945]">
+                          <p className="text-sm text-gray-400 mb-1">
+                            Net Salary
+                          </p>
+                          <p className="text-xl font-bold text-white">
+                            {formatCurrency(editedPreview.netPayment)}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
+                        <div className="bg-[#0f1419] rounded-lg p-4 border border-[#232945]">
+                          <p className="text-sm font-semibold text-green-400 mb-2">
+                            Paid Components
+                          </p>
+                          {Object.entries(editedPreview.paidComponents).map(
+                            ([key, value]) => (
+                              <div
+                                key={key}
+                                className="flex justify-between text-sm py-1"
+                              >
+                                <span className="text-gray-400">
+                                  {formatLabel(key)}
+                                </span>
+                                <span className="text-white">
+                                  {formatCurrency(value)}
+                                </span>
+                              </div>
+                            )
+                          )}
+                        </div>
+
+                        <div className="bg-[#0f1419] rounded-lg p-4 border border-[#232945]">
+                          <p className="text-sm font-semibold text-red-400 mb-2">
+                            Deductions
+                          </p>
+                          {Object.entries(editedPreview.deductions).map(
+                            ([key, value]) => (
+                              <div
+                                key={key}
+                                className="flex justify-between text-sm py-1"
+                              >
+                                <span className="text-gray-400">
+                                  {formatLabel(key)}
+                                </span>
+                                <span className="text-red-400">
+                                  -{formatCurrency(value)}
+                                </span>
+                              </div>
+                            )
+                          )}
+                          <div className="flex justify-between font-semibold pt-2 border-t border-[#232945] mt-2">
+                            <span className="text-white">Total Deduction</span>
+                            <span className="text-red-400">
+                              -{formatCurrency(editedPreview.totalDeductions)}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 mt-4">
+                        <div className="bg-[#0f1419] rounded-lg p-4 border border-[#232945]">
+                          <p className="text-sm text-gray-400 mb-1">
+                            PF Eligibility
+                          </p>
+                          <p className="text-lg font-bold text-white">
+                            {editedPreview.eligibility.pf ? "Y" : "N"}
+                          </p>
+                        </div>
+                        <div className="bg-[#0f1419] rounded-lg p-4 border border-[#232945]">
+                          <p className="text-sm text-gray-400 mb-1">
+                            ESI Eligibility
+                          </p>
+                          <p className="text-lg font-bold text-white">
+                            {editedPreview.eligibility.esi ? "Y" : "N"}
+                          </p>
+                        </div>
+                        <div className="bg-[#0f1419] rounded-lg p-4 border border-[#232945]">
+                          <p className="text-sm text-gray-400 mb-1">
+                            Employer PF + ESI
+                          </p>
+                          <p className="text-lg font-bold text-purple-400">
+                            {formatCurrency(
+                              editedPreview.employerContributions.employerPF +
+                                editedPreview.employerContributions.employerESI
+                            )}
+                          </p>
+                        </div>
+                        <div className="bg-[#0f1419] rounded-lg p-4 border border-[#232945]">
+                          <p className="text-sm text-gray-400 mb-1">CTC</p>
+                          <p className="text-lg font-bold text-purple-400">
+                            {formatCurrency(editedPreview.ctc)}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Remarks */}
                   <div>
                     <label className="block text-sm text-gray-400 mb-2">
@@ -1245,6 +1829,7 @@ const AutoPayrollManagement = ({ onLogout }) => {
                     onClick={() => {
                       setShowEditModal(false);
                       setEditingPayslip(null);
+                      setPreviewData(null);
                     }}
                     className="px-6 py-3 bg-gray-600/20 hover:bg-gray-600/40 text-gray-400 rounded-lg transition-colors"
                   >
@@ -1316,12 +1901,25 @@ const AutoPayrollManagement = ({ onLogout }) => {
                     Salary Breakdown
                   </h3>
                   <div className="space-y-3">
-                    <div className="bg-[#0f1419] rounded-lg p-4 border border-[#232945]">
-                      <div className="flex justify-between items-center">
-                        <span className="text-gray-400">Gross Total</span>
-                        <span className="text-xl font-bold text-green-400">
-                          {formatCurrency(selectedEmployee.grossTotal)}
-                        </span>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="bg-[#0f1419] rounded-lg p-4 border border-[#232945]">
+                        <div className="flex justify-between items-center">
+                          <span className="text-gray-400">Gross Total</span>
+                          <span className="text-xl font-bold text-blue-400">
+                            {formatCurrency(selectedEmployee.grossTotal)}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="bg-[#0f1419] rounded-lg p-4 border border-[#232945]">
+                        <div className="flex justify-between items-center">
+                          <span className="text-gray-400">Net Total</span>
+                          <span className="text-xl font-bold text-green-400">
+                            {formatCurrency(
+                              selectedEmployee.netTotal ||
+                                selectedEmployee.grossTotal
+                            )}
+                          </span>
+                        </div>
                       </div>
                     </div>
 
