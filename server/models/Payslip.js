@@ -1,142 +1,125 @@
 const mongoose = require("mongoose");
 
+// Snapshot of employee statutory details at payslip creation time
+const employeeSnapshotSchema = new mongoose.Schema({
+  name:              { type: String, default: "" },
+  employeeId:        { type: String, default: "" },
+  designation:       { type: String, default: "" },
+  department:        { type: String, default: "" },
+  location:          { type: String, default: "" },
+  doj:               { type: Date },
+  pan:               { type: String, default: "" },
+  uan:               { type: String, default: "" },
+  pfNumber:          { type: String, default: "" },
+  esiNumber:         { type: String, default: "" },
+  bankAccountNumber: { type: String, default: "" },
+  bankName:          { type: String, default: "" },
+  ifscCode:          { type: String, default: "" },
+}, { _id: false });
+
 const payslipSchema = new mongoose.Schema({
   employee: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "User",
-    required: true
+    required: true,
   },
   payPeriod: {
-    type: String, // Format: "YYYY-MM"
-    required: true
+    type: String,   // "YYYY-MM"
+    required: true,
   },
 
-  // Input fields (entered by Super Admin)
-  monthlySalary: {
-    type: Number,
-    required: true
-  },
-  workingDays: {
-    type: Number,
-    required: true
-  },
-  paidDays: {
-    type: Number,
-    required: true
-  },
-  lateDays: {
-    type: Number,
-    default: 0
-  },
-  halfDays: {
-    type: Number,
-    default: 0
+  // Snapshot of employee info at time of generation
+  employeeSnapshot: {
+    type: employeeSnapshotSchema,
+    default: () => ({}),
   },
 
-  // Salary components (calculated from monthly salary)
+  // Attendance inputs
+  totalDays:   { type: Number, required: true },
+  workingDays: { type: Number, required: true },
+  paidDays:    { type: Number, required: true },
+  lwp:         { type: Number, default: 0 },
+
+  // Salary input
+  monthlySalary: { type: Number, required: true },
+
+  // Salary components (monthly, before proration)
   salaryComponents: {
-    basic: { type: Number, default: 0 },           // 50%
-    hra: { type: Number, default: 0 },             // 35%
-    conveyance: { type: Number, default: 0 },      // 5%
-    medical: { type: Number, default: 0 },         // 5%
-    specialAllowance: { type: Number, default: 0 } // 5%
+    basic:            { type: Number, default: 0 },
+    hra:              { type: Number, default: 0 },
+    conveyance:       { type: Number, default: 0 },
+    medical:          { type: Number, default: 0 },
+    specialAllowance: { type: Number, default: 0 },
   },
 
-  // Gross salary components (prorated based on paid days)
-  grossComponents: {
-    basic: { type: Number, default: 0 },
-    hra: { type: Number, default: 0 },
-    conveyance: { type: Number, default: 0 },
-    medical: { type: Number, default: 0 },
-    specialAllowance: { type: Number, default: 0 }
+  // Prorated paid components (component / workingDays * paidDays)
+  paidComponents: {
+    basic:            { type: Number, default: 0 },
+    hra:              { type: Number, default: 0 },
+    conveyance:       { type: Number, default: 0 },
+    medical:          { type: Number, default: 0 },
+    specialAllowance: { type: Number, default: 0 },
   },
 
-  grossTotal: {
-    type: Number,
-    required: true
-  },
-  netTotal: {
-    type: Number,
-    default: 0
-  },
-  eligibility: {
-    pf: { type: Boolean, default: false },
-    esi: { type: Boolean, default: false }
-  },
+  grossTotal: { type: Number, default: 0 },
+  netTotal:   { type: Number, default: 0 },
 
-  // Bonuses
-  bonuses: {
-    perfectAttendanceBonus: { type: Number, default: 0 } // One day extra pay for perfect attendance (6+ months tenure)
-  },
+  // Eligibility flags
+  pfEligible:  { type: Boolean, default: false },
+  esiEligible: { type: Boolean, default: false },
 
   // Deductions
   deductions: {
-    employeePF: { type: Number, default: 0 },     // 12% of basic if basic <= 15000
-    esi: { type: Number, default: 0 },            // 0.75% if total <= 21000
-    ptax: { type: Number, default: 0 },           // Professional tax based on slabs
-    tds: { type: Number, default: 0 },            // Manual entry
-    other: { type: Number, default: 0 },          // Manual entry (penalty)
-    advance: { type: Number, default: 0 },        // Manual entry
-    lateDeduction: { type: Number, default: 0 },  // Auto-calculated
-    halfDayDeduction: { type: Number, default: 0 } // Auto-calculated (50% of day salary per half-day)
+    employeePF:  { type: Number, default: 0 },
+    employeeESI: { type: Number, default: 0 },
+    ptax:        { type: Number, default: 0 },
+    tds:         { type: Number, default: 0 },
+    advance:     { type: Number, default: 0 },
+    other:       { type: Number, default: 0 },
+    otherLabel:  { type: String, default: "" },
   },
 
-  totalDeductions: {
-    type: Number,
-    default: 0
-  },
+  totalDeductions: { type: Number, default: 0 },
 
   // Employer contributions
   employerContributions: {
-    employerPF: { type: Number, default: 0 },     // 12% of basic if basic <= 15000
-    employerESI: { type: Number, default: 0 }     // 3.25% if total <= 21000
+    employerPF:  { type: Number, default: 0 },
+    employerESI: { type: Number, default: 0 },
   },
 
-  // Final amounts
-  netPayment: {
-    type: Number,
-    required: true
-  },
-  ctc: {
-    type: Number,
-    required: true
-  },
+  // Final figures
+  netSalary: { type: Number, required: true },
+  ctc:       { type: Number, required: true },
 
-  remarks: {
-    type: String,
-    default: ""
-  },
+  // Remarks
+  remarks: { type: String, default: "" },
+
+  // Status
+  isPublished: { type: Boolean, default: false },
+  publishedAt: { type: Date },
+
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "User",
-    required: true
+    required: true,
   },
-  generatedAt: {
-    type: Date,
-    default: Date.now
-  }
 }, {
-  timestamps: true
+  timestamps: true,
 });
 
-// Index for unique employee-payPeriod combination
+// Unique per employee-period
 payslipSchema.index({ employee: 1, payPeriod: 1 }, { unique: true });
 
-// Pre-save hook to calculate total deductions
-payslipSchema.pre('save', function(next) {
-  // Ensure deductions object exists
-  if (!this.deductions) {
-    this.deductions = {};
-  }
-
-  // Calculate total deductions
-  this.totalDeductions = (this.deductions.employeePF || 0) +
-                        (this.deductions.esi || 0) +
-                        (this.deductions.ptax || 0) +
-                        (this.deductions.tds || 0) +
-                        (this.deductions.other || 0) +
-                        (this.deductions.advance || 0);
-
+// Auto-compute totalDeductions on save
+payslipSchema.pre("save", function (next) {
+  const d = this.deductions || {};
+  this.totalDeductions =
+    (d.employeePF  || 0) +
+    (d.employeeESI || 0) +
+    (d.ptax        || 0) +
+    (d.tds         || 0) +
+    (d.advance     || 0) +
+    (d.other       || 0);
   next();
 });
 

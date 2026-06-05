@@ -1,619 +1,354 @@
 const Payslip = require("../models/Payslip");
-const User = require("../models/User");
+const User    = require("../models/User");
 const { sendNotificationToUser } = require("../utils/websocket");
 
-/**
- * Calculate all salary components automatically
- * Based on the salary structure:
- * - Basic = 50% of salary
- * - HRA = 35% of salary
- * - Conveyance = 5% of salary
- * - Medical = 5% of salary
- * - Special Allowance = 5% of salary
- */
-function calculateSalaryBreakdown(monthlySalary, workingDays, paidDays, lateDays, halfDays, manualDeductions = {}) {
-  // Step 1: Calculate salary components (monthly breakdown)
+// West Bengal Professional Tax Slabs
+function calculatePTax(monthlySalary) {
+  if (monthlySalary < 10000) return 0;
+  if (monthlySalary <= 15000) return 110;
+  if (monthlySalary <= 25000) return 130;
+  if (monthlySalary <= 40000) return 150;
+  return 200;
+}
+
+// Core salary calculation (mirrors frontend calcBreakdown)
+function calculateSalaryBreakdown(monthlySalary, totalDays, workingDays, paidDays, manualOverrides = {}, manualDeductions = {}) {
   const salaryComponents = {
-    basic: monthlySalary * 0.50,
-    hra: monthlySalary * 0.35,
-    conveyance: monthlySalary * 0.05,
-    medical: monthlySalary * 0.05,
-    specialAllowance: monthlySalary * 0.05
+    basic:            manualOverrides.basic            ?? Math.round(monthlySalary * 0.50),
+    hra:              manualOverrides.hra              ?? Math.round(monthlySalary * 0.35),
+    conveyance:       manualOverrides.conveyance       ?? Math.round(monthlySalary * 0.05),
+    medical:          manualOverrides.medical          ?? Math.round(monthlySalary * 0.05),
+    specialAllowance: manualOverrides.specialAllowance ?? Math.round(monthlySalary * 0.05),
   };
 
-  // Step 2: Calculate gross components (prorated by paid days)
-  const grossComponents = {
-    basic: (salaryComponents.basic / workingDays) * paidDays,
-    hra: (salaryComponents.hra / workingDays) * paidDays,
-    conveyance: (salaryComponents.conveyance / workingDays) * paidDays,
-    medical: (salaryComponents.medical / workingDays) * paidDays,
-    specialAllowance: (salaryComponents.specialAllowance / workingDays) * paidDays
+  const grossTotal = Object.values(salaryComponents).reduce((s, v) => s + v, 0);
+
+  // Prorate by Total Days (calendar days), not working days
+  const ratio = totalDays > 0 ? paidDays / totalDays : 0;
+  const paidComponents = {
+    basic:            Math.round(salaryComponents.basic            * ratio),
+    hra:              Math.round(salaryComponents.hra              * ratio),
+    conveyance:       Math.round(salaryComponents.conveyance       * ratio),
+    medical:          Math.round(salaryComponents.medical          * ratio),
+    specialAllowance: Math.round(salaryComponents.specialAllowance * ratio),
   };
 
-  // Step 3: Calculate net total (sum of paid components)
-  const grossTotal = Object.values(grossComponents).reduce((sum, val) => sum + val, 0);
+  const netTotal = Object.values(paidComponents).reduce((s, v) => s + v, 0);
 
-  // Step 3.5: Determine ESI eligibility based on monthly salary
-  const esiApplicable = monthlySalary <= 21000;
+  const pfEligible  = salaryComponents.basic <= 15000;
+  const esiEligible = grossTotal <= 21000;
 
-  // Step 4: Calculate late deduction
-  // No deduction for first 2 late days
-  // From 3rd late onwards: Every 3 lates = 1 day salary deduction
-  // For lates not in multiples of 3 (4, 5, 7, 8, etc.), add ₹200 per extra late day
-  // Examples:
-  // 0-2 lates = No deduction
-  // 3 lates = 1 day deduction
-  // 4 lates = 1 day deduction + ₹200
-  // 5 lates = 1 day deduction + ₹400
-  // 6 lates = 2 days deduction
-  // 7 lates = 2 days deduction + ₹200
-  // 9 lates = 3 days deduction
-  // Step 5: Calculate deductions
-  const deductions = {
-    // Employee PF: MIN(1800, ROUNDUP(Basic * 12%, 0)) if basic <= 15000, else 0
-    employeePF: salaryComponents.basic <= 15000
-      ? Math.min(1800, grossComponents.basic * 0.12)
-      : 0,
+  // ROUNDUP for PF (Math.ceil)
+  const employeePF  = manualDeductions.employeePF  !== undefined ? manualDeductions.employeePF
+                    : pfEligible  ? Math.min(1800, Math.ceil(paidComponents.basic * 0.12)) : 0;
+  const employeeESI = manualDeductions.employeeESI !== undefined ? manualDeductions.employeeESI
+                    : esiEligible ? Math.round(netTotal * 0.0075) : 0;
+  const ptax        = manualDeductions.ptax    !== undefined ? manualDeductions.ptax    : calculatePTax(monthlySalary);
+  const tds         = manualDeductions.tds     !== undefined ? manualDeductions.tds     : 0;
+  const advance     = manualDeductions.advance !== undefined ? manualDeductions.advance : 0;
+  const other       = manualDeductions.other   !== undefined ? manualDeductions.other   : 0;
+  const otherLabel  = manualDeductions.otherLabel || "";
 
-    // ESI: ROUND(Gross Total * 0.75%, 0) if salary <= 21000, else 0
-    esi: esiApplicable ? Math.round(grossTotal * 0.0075) : 0,
+  const deductions = { employeePF, employeeESI, ptax, tds, advance, other, otherLabel };
+  const totalDeductions = employeePF + employeeESI + ptax + tds + advance + other;
 
-    // Professional Tax based on slabs
-    ptax: calculatePTax(monthlySalary),
+  const employerPF  = pfEligible  ? employeePF : 0;
+  const employerESI = esiEligible ? Math.round(netTotal * 0.0325) : 0;
 
-    // Manual entries (optional)
-    tds: manualDeductions.tds || 0,
-    other: manualDeductions.other || 0,
-    advance: manualDeductions.advance || 0,
-
-    // Late deduction
-    lateDeduction: 0,
-
-    // Half-day deduction
-    halfDayDeduction: 0
-  };
-
-  // Step 6: Calculate employer contributions
-  const employerContributions = {
-    // Employer PF: MIN(1800, ROUNDUP(Basic * 12%, 0)) if basic <= 15000, else 0
-    employerPF: salaryComponents.basic <= 15000
-      ? Math.min(1800, grossComponents.basic * 0.12)
-      : 0,
-
-    // Employer ESI: ROUND(Gross Total * 3.25%, 0) if salary <= 21000, else 0
-    employerESI: esiApplicable ? Math.round(grossTotal * 0.0325) : 0
-  };
-
-  // Step 7: Calculate totals
-  const totalDeductions = Object.values(deductions).reduce((sum, val) => sum + val, 0);
-  const netPayment = grossTotal - totalDeductions;
-  const ctc = grossTotal + employerContributions.employerPF + employerContributions.employerESI;
+  const netSalary = netTotal - totalDeductions;
+  const ctc = totalDeductions + netSalary + employerPF + employerESI;
 
   return {
-    salaryComponents,
-    grossComponents,
-    grossTotal,
-    deductions,
-    totalDeductions,
-    employerContributions,
-    netPayment,
-    ctc
+    salaryComponents, paidComponents,
+    grossTotal, netTotal,
+    pfEligible, esiEligible,
+    deductions, totalDeductions,
+    employerContributions: { employerPF, employerESI },
+    netSalary, ctc,
   };
 }
 
-/**
- * Calculate Professional Tax based on salary slabs
- */
-function calculatePTax(monthlySalary) {
-  if (monthlySalary < 10000) {
-    return 0;
-  } else if (monthlySalary <= 15000) {
-    return 110;
-  } else if (monthlySalary <= 25000) {
-    return 130;
-  } else if (monthlySalary <= 40000) {
-    return 150;
-  } else {
-    return 200;
+// Build employee snapshot (merge DB doc + admin overrides)
+async function buildSnapshot(employee, snapshotOverrides = {}) {
+  return {
+    name:              snapshotOverrides.name              ?? employee.name              ?? "",
+    employeeId:        snapshotOverrides.employeeId        ?? employee.employeeId        ?? "",
+    designation:       snapshotOverrides.designation       ?? employee.designation       ?? "",
+    department:        snapshotOverrides.department        ?? employee.department        ?? "",
+    location:          snapshotOverrides.location          ?? employee.location          ?? "",
+    doj:               snapshotOverrides.doj               ?? employee.doj,
+    pan:               snapshotOverrides.pan               ?? employee.pan               ?? "",
+    uan:               snapshotOverrides.uan               ?? employee.uan               ?? "",
+    pfNumber:          snapshotOverrides.pfNumber          ?? employee.pfNumber          ?? "",
+    esiNumber:         snapshotOverrides.esiNumber         ?? employee.esiNumber         ?? "",
+    bankAccountNumber: snapshotOverrides.bankAccountNumber ?? employee.bankAccountNumber ?? "",
+    bankName:          snapshotOverrides.bankName          ?? employee.bankName          ?? "",
+    ifscCode:          snapshotOverrides.ifscCode          ?? employee.ifscCode          ?? "",
+  };
+}
+
+// Write statutory edits back to User profile for next time
+async function syncStatutoryToProfile(employeeId, overrides = {}) {
+  const fields = ["pan","uan","pfNumber","esiNumber","bankAccountNumber","bankName","ifscCode"];
+  const update = {};
+  for (const f of fields) {
+    if (overrides[f] !== undefined && overrides[f] !== "") update[f] = overrides[f];
+  }
+  if (Object.keys(update).length > 0) {
+    await User.findByIdAndUpdate(employeeId, { $set: update });
   }
 }
 
-// Create payslip with automated calculation
-// Super Admin only needs to enter: monthlySalary, workingDays, paidDays, lateDays
+// CREATE PAYSLIP (draft)
 exports.createPayslip = async (req, res) => {
   try {
     const {
-      employeeId,
-      payPeriod, // Format: "YYYY-MM"
-      monthlySalary,
-      workingDays,
-      paidDays,
-      lateDays = 0,
-      halfDays = 0,
-      manualDeductions = {}, // Optional: { tds, other, advance }
-      remarks = ""
-    } = req.body;
-
-    // Validate required fields
-    if (!employeeId || !payPeriod || !monthlySalary || !workingDays || paidDays === undefined) {
-      return res.status(400).json({
-        error: "Employee ID, pay period, monthly salary, working days, and paid days are required"
-      });
-    }
-
-    // Validate numeric values
-    if (monthlySalary <= 0 || workingDays <= 0 || paidDays < 0 || lateDays < 0 || halfDays < 0) {
-      return res.status(400).json({
-        error: "Invalid numeric values provided"
-      });
-    }
-
-    if (paidDays > workingDays) {
-      return res.status(400).json({
-        error: "Paid days cannot exceed working days"
-      });
-    }
-
-    // Check if employee exists
-    const employee = await User.findById(employeeId);
-    if (!employee) {
-      return res.status(404).json({ error: "Employee not found" });
-    }
-
-    // Check if payslip already exists
-    const existingPayslip = await Payslip.findOne({
-      employee: employeeId,
-      payPeriod: payPeriod
-    });
-
-    if (existingPayslip) {
-      return res.status(409).json({
-        error: "Payslip already exists for this employee and month. Use update endpoint to modify.",
-        payslipId: existingPayslip._id
-      });
-    }
-
-    // Calculate all salary components automatically
-    const calculations = calculateSalaryBreakdown(
-      monthlySalary,
-      workingDays,
-      paidDays,
-      lateDays,
-      halfDays,
-      manualDeductions
-    );
-
-    // Create payslip
-    const payslip = new Payslip({
       employee: employeeId,
       payPeriod,
-      monthlySalary,
+      totalDays,
       workingDays,
       paidDays,
-      lateDays,
-      halfDays,
-      salaryComponents: calculations.salaryComponents,
-      grossComponents: calculations.grossComponents,
-      grossTotal: calculations.grossTotal,
-      deductions: calculations.deductions,
-      totalDeductions: calculations.totalDeductions,
-      employerContributions: calculations.employerContributions,
-      netPayment: calculations.netPayment,
-      ctc: calculations.ctc,
+      lwp,
+      monthlySalary,
+      componentOverrides,
+      deductionOverrides,
+      snapshotOverrides,
       remarks,
-      createdBy: req.user._id
+    } = req.body;
+
+    if (!employeeId || !payPeriod || !totalDays || !workingDays || !paidDays || !monthlySalary) {
+      return res.status(400).json({ error: "Missing required fields" });
+    }
+
+    const employee = await User.findById(employeeId);
+    if (!employee) return res.status(404).json({ error: "Employee not found" });
+
+    // Sync any statutory edits back to profile
+    if (snapshotOverrides) await syncStatutoryToProfile(employeeId, snapshotOverrides);
+
+    const snapshot  = await buildSnapshot(employee, snapshotOverrides || {});
+    const calc      = calculateSalaryBreakdown(
+      Number(monthlySalary),
+      Number(totalDays),
+      Number(workingDays),
+      Number(paidDays),
+      componentOverrides || {},
+      deductionOverrides || {}
+    );
+
+    const payslip = await Payslip.create({
+      employee: employeeId,
+      payPeriod,
+      employeeSnapshot: snapshot,
+      totalDays:   Number(totalDays),
+      workingDays: Number(workingDays),
+      paidDays:    Number(paidDays),
+      lwp:         Number(lwp || 0),
+      monthlySalary: Number(monthlySalary),
+      ...calc,
+      remarks: remarks || "",
+      isPublished: false,
+      createdBy: req.user._id,
     });
 
-    await payslip.save();
-
-    // Populate employee details
-    await payslip.populate('employee', 'name employeeId email department designation');
-    await payslip.populate('createdBy', 'name email');
-
-    // Send real-time notification to employee
-    const notificationSent = sendNotificationToUser(employeeId.toString(), {
-      channel: "payslip",
-      title: "New Payslip Generated",
-      message: `Your payslip for ${new Date(payPeriod + '-01').toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })} has been generated`,
-      payPeriod: payPeriod,
-      netPayment: calculations.netPayment,
-      timestamp: Date.now(),
-      action: "view_payslip"
-    });
-
-    console.log(`Payslip notification sent to ${employeeId}: ${notificationSent ? 'Success' : 'User offline'}`);
-
-    res.status(201).json({
-      success: true,
-      message: "Payslip generated successfully",
-      payslip,
-      calculations: {
-        breakdown: calculations
-      }
-    });
-
-  } catch (error) {
-    console.error("Error generating payslip:", error);
-    res.status(500).json({
-      error: "Internal server error",
-      details: error.message
-    });
+    res.status(201).json({ success: true, data: payslip });
+  } catch (err) {
+    if (err.code === 11000) return res.status(409).json({ error: "Payslip already exists for this employee and period" });
+    console.error(err);
+    res.status(500).json({ error: "Server error" });
   }
 };
 
-// Update payslip record
+// UPDATE PAYSLIP (in-place, stays published)
 exports.updatePayslip = async (req, res) => {
   try {
-    const { id } = req.params;
-    const updateData = req.body;
+    const payslip = await Payslip.findById(req.params.id);
+    if (!payslip) return res.status(404).json({ error: "Payslip not found" });
 
-    const payslip = await Payslip.findById(id);
-    if (!payslip) {
-      return res.status(404).json({ error: "Payslip not found" });
+    const {
+      totalDays, workingDays, paidDays, lwp,
+      monthlySalary, componentOverrides, deductionOverrides,
+      snapshotOverrides, remarks,
+    } = req.body;
+
+    if (snapshotOverrides) await syncStatutoryToProfile(payslip.employee, snapshotOverrides);
+
+    const employee = await User.findById(payslip.employee);
+    if (snapshotOverrides && employee) {
+      payslip.employeeSnapshot = await buildSnapshot(employee, snapshotOverrides);
     }
 
-    // Store employee ID before update
-    const employeeId = payslip.employee.toString();
+    const ms = Number(monthlySalary ?? payslip.monthlySalary);
+    const td = Number(totalDays    ?? payslip.totalDays);
+    const wd = Number(workingDays  ?? payslip.workingDays);
+    const pd = Number(paidDays     ?? payslip.paidDays);
+    const calc = calculateSalaryBreakdown(ms, td, wd, pd, componentOverrides || {}, deductionOverrides || {});
 
-    // If key salary fields are being updated, recalculate everything
-    const salaryFieldsUpdated = updateData.monthlySalary || updateData.workingDays ||
-                                 updateData.paidDays || updateData.lateDays !== undefined ||
-                                 updateData.halfDays !== undefined || updateData.manualDeductions;
-
-    if (salaryFieldsUpdated) {
-      // Use updated values or keep existing ones
-      const monthlySalary = updateData.monthlySalary || payslip.monthlySalary;
-      const workingDays = updateData.workingDays || payslip.workingDays;
-      const paidDays = updateData.paidDays !== undefined ? updateData.paidDays : payslip.paidDays;
-      const lateDays = updateData.lateDays !== undefined ? updateData.lateDays : (payslip.lateDays || 0);
-      const halfDays = updateData.halfDays !== undefined ? updateData.halfDays : (payslip.halfDays || 0);
-      const manualDeductions = updateData.manualDeductions || {
-        tds: payslip.deductions?.tds || 0,
-        other: payslip.deductions?.other || 0,
-        advance: payslip.deductions?.advance || 0
-      };
-
-      // Recalculate all salary components
-      const calculations = calculateSalaryBreakdown(
-        monthlySalary,
-        workingDays,
-        paidDays,
-        lateDays,
-        halfDays,
-        manualDeductions
-      );
-
-      // Update all calculated fields
-      payslip.monthlySalary = monthlySalary;
-      payslip.workingDays = workingDays;
-      payslip.paidDays = paidDays;
-      payslip.lateDays = lateDays;
-      payslip.halfDays = halfDays;
-      payslip.salaryComponents = calculations.salaryComponents;
-      payslip.grossComponents = calculations.grossComponents;
-      payslip.grossTotal = calculations.grossTotal;
-      payslip.deductions = calculations.deductions;
-      payslip.totalDeductions = calculations.totalDeductions;
-      payslip.employerContributions = calculations.employerContributions;
-      payslip.netPayment = calculations.netPayment;
-      payslip.ctc = calculations.ctc;
-
-      // Update remarks if provided
-      if (updateData.remarks !== undefined) {
-        payslip.remarks = updateData.remarks;
-      }
-    } else {
-      // Just update non-salary fields
-      Object.keys(updateData).forEach(key => {
-        if (key !== 'employee' && key !== 'payPeriod') { // Prevent changing employee and period
-          payslip[key] = updateData[key];
-        }
-      });
-    }
+    Object.assign(payslip, {
+      totalDays:    Number(totalDays    ?? payslip.totalDays),
+      workingDays:  wd,
+      paidDays:     pd,
+      lwp:          Number(lwp          ?? payslip.lwp),
+      monthlySalary: ms,
+      ...calc,
+      remarks: remarks !== undefined ? remarks : payslip.remarks,
+    });
 
     await payslip.save();
-
-    // Populate employee details
-    await payslip.populate('employee', 'name employeeId email department designation');
-    await payslip.populate('createdBy', 'name email');
-
-    // Send real-time notification to employee about update
-    const notificationSent = sendNotificationToUser(employeeId, {
-      channel: "payslip",
-      title: "Payslip Updated",
-      message: `Your payslip for ${new Date(payslip.payPeriod + '-01').toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })} has been updated`,
-      payPeriod: payslip.payPeriod,
-      netPayment: payslip.netPayment,
-      timestamp: Date.now(),
-      action: "view_payslip"
-    });
-
-    console.log(`Payslip update notification sent to ${employeeId}: ${notificationSent ? 'Success' : 'User offline'}`);
-
-    res.json(payslip);
-  } catch (error) {
-    console.error("Error updating payslip:", error);
-    res.status(500).json({ error: "Internal server error" });
+    res.json({ success: true, data: payslip });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server error" });
   }
 };
 
-// Get payslip by employee and month (for employees)
-exports.getMyPayslip = async (req, res) => {
+// TOGGLE PUBLISH
+exports.togglePublish = async (req, res) => {
   try {
-    const { month } = req.params;
-    const employeeId = req.user._id;
+    const payslip = await Payslip.findById(req.params.id).populate("employee", "name email");
+    if (!payslip) return res.status(404).json({ error: "Payslip not found" });
 
-    const payslip = await Payslip.findOne({
-      employee: employeeId,
-      payPeriod: month
-    }).populate('employee', 'name employeeId email department designation');
+    payslip.isPublished = !payslip.isPublished;
+    payslip.publishedAt = payslip.isPublished ? new Date() : undefined;
+    await payslip.save();
 
-    if (!payslip) {
-      return res.status(404).json({ error: "Payslip not found for the specified month" });
+    if (payslip.isPublished && payslip.employee) {
+      try {
+        sendNotificationToUser(payslip.employee._id.toString(), {
+          type: "payslip_published",
+          message: "Your payslip for " + payslip.payPeriod + " is now available.",
+          payslipId: payslip._id,
+        });
+      } catch (_) {}
     }
 
-    res.json(payslip);
-  } catch (error) {
-    console.error("Error fetching payslip:", error);
-    res.status(500).json({ error: "Internal server error" });
+    res.json({ success: true, data: payslip });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server error" });
   }
 };
 
-// Get payslip by employee ID and month (for admins)
-exports.getEmployeePayslip = async (req, res) => {
-  try {
-    const { employeeId, month } = req.params;
-
-    const payslip = await Payslip.findOne({
-      employee: employeeId,
-      payPeriod: month
-    }).populate('employee', 'name employeeId email department designation');
-
-    if (!payslip) {
-      return res.status(404).json({ error: "Payslip not found for the specified employee and month" });
-    }
-
-    res.json(payslip);
-  } catch (error) {
-    console.error("Error fetching employee payslip:", error);
-    res.status(500).json({ error: "Internal server error" });
-  }
-};
-
-// Get all payslips (for admins) with filters
+// GET ALL PAYSLIPS (admin)
 exports.getAllPayslips = async (req, res) => {
   try {
-    const { search, month, department, page = 1, limit = 50 } = req.query;
+    const { month, status, search } = req.query;
+    const filter = {};
+    if (month)  filter.payPeriod   = month;
+    if (status === "published") filter.isPublished = true;
+    if (status === "draft")     filter.isPublished = false;
 
-    // Build filter query
-    let filter = {};
+    let payslips = await Payslip.find(filter)
+      .populate("employee", "name employeeId email designation department")
+      .sort({ payPeriod: -1, createdAt: -1 });
 
-    if (month) {
-      filter.payPeriod = month;
-    }
-
-    // Build aggregation pipeline
-    let pipeline = [
-      {
-        $lookup: {
-          from: 'users',
-          localField: 'employee',
-          foreignField: '_id',
-          as: 'employee'
-        }
-      },
-      {
-        $unwind: '$employee'
-      }
-    ];
-
-    // Add department filter
-    if (department) {
-      pipeline.push({
-        $match: { 'employee.department': department }
-      });
-    }
-
-    // Add search filter
     if (search) {
-      pipeline.push({
-        $match: {
-          $or: [
-            { 'employee.name': { $regex: search, $options: 'i' } },
-            { 'employee.employeeId': { $regex: search, $options: 'i' } },
-            { 'employee.email': { $regex: search, $options: 'i' } }
-          ]
-        }
-      });
+      const q = search.toLowerCase();
+      payslips = payslips.filter(p =>
+        (p.employee?.name       || "").toLowerCase().includes(q) ||
+        (p.employee?.employeeId || "").toLowerCase().includes(q) ||
+        (p.employeeSnapshot?.name || "").toLowerCase().includes(q)
+      );
     }
 
-    // Add month filter
-    if (month) {
-      pipeline.push({
-        $match: { payPeriod: month }
-      });
-    }
-
-    // Add sorting
-    pipeline.push({
-      $sort: { createdAt: -1 }
-    });
-
-    // Add pagination
-    const skip = (parseInt(page) - 1) * parseInt(limit);
-    pipeline.push({ $skip: skip }, { $limit: parseInt(limit) });
-
-    // Project fields
-    pipeline.push({
-      $project: {
-        employee: {
-          _id: 1,
-          name: 1,
-          employeeId: 1,
-          email: 1,
-          department: 1,
-          designation: 1
-        },
-        payPeriod: 1,
-        ctc: 1,
-        basicSalary: 1,
-        grossSalary: 1,
-        netSalary: 1,
-        deductions: 1,
-        totalDeductions: 1,
-        workingDays: 1,
-        presentDays: 1,
-        lateDays: 1,
-        remarks: 1,
-        generatedAt: 1,
-        createdAt: 1
-      }
-    });
-
-    const payslips = await Payslip.aggregate(pipeline);
-
-    res.json(payslips);
-  } catch (error) {
-    console.error("Error fetching payslips:", error);
-    res.status(500).json({ error: "Internal server error" });
+    res.json({ success: true, data: payslips });
+  } catch (err) {
+    res.status(500).json({ error: "Server error" });
   }
 };
 
-// Get employee's payslip history
-exports.getEmployeePayslipHistory = async (req, res) => {
-  try {
-    const { employeeId } = req.params;
-    const { page = 1, limit = 12 } = req.query;
-
-    const skip = (parseInt(page) - 1) * parseInt(limit);
-
-    const payslips = await Payslip.find({ employee: employeeId })
-      .populate('employee', 'name employeeId email department designation')
-      .sort({ payPeriod: -1 })
-      .skip(skip)
-      .limit(parseInt(limit));
-
-    const total = await Payslip.countDocuments({ employee: employeeId });
-
-    res.json({
-      payslips,
-      pagination: {
-        current: parseInt(page),
-        pages: Math.ceil(total / parseInt(limit)),
-        total
-      }
-    });
-  } catch (error) {
-    console.error("Error fetching payslip history:", error);
-    res.status(500).json({ error: "Internal server error" });
-  }
-};
-
-// Get current user's payslip history (for employees)
-exports.getMyPayslipHistory = async (req, res) => {
-  try {
-    const employeeId = req.user._id;
-    const { page = 1, limit = 12 } = req.query;
-
-    const skip = (parseInt(page) - 1) * parseInt(limit);
-
-    const payslips = await Payslip.find({ employee: employeeId })
-      .populate('employee', 'name employeeId email department designation')
-      .sort({ payPeriod: -1 })
-      .skip(skip)
-      .limit(parseInt(limit));
-
-    const total = await Payslip.countDocuments({ employee: employeeId });
-
-    res.json({
-      payslips,
-      pagination: {
-        current: parseInt(page),
-        pages: Math.ceil(total / parseInt(limit)),
-        total
-      }
-    });
-  } catch (error) {
-    console.error("Error fetching payslip history:", error);
-    res.status(500).json({ error: "Internal server error" });
-  }
-};
-
-// Delete payslip
-exports.deletePayslip = async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    const payslip = await Payslip.findById(id);
-    if (!payslip) {
-      return res.status(404).json({ error: "Payslip not found" });
-    }
-
-    await payslip.deleteOne();
-
-    res.json({ message: "Payslip deleted successfully" });
-  } catch (error) {
-    console.error("Error deleting payslip:", error);
-    res.status(500).json({ error: "Internal server error" });
-  }
-};
-
-// Get payslip statistics
-// Get payslip by ID
+// GET PAYSLIP BY ID (admin)
 exports.getPayslipById = async (req, res) => {
   try {
     const payslip = await Payslip.findById(req.params.id)
-      .populate('employee', 'name employeeId email department designation')
-      .populate('createdBy', 'name email');
-
-    if (!payslip) {
-      return res.status(404).json({
-        success: false,
-        message: 'Payslip not found'
-      });
-    }
-
-    res.json(payslip);
-  } catch (error) {
-    console.error('Error fetching payslip by ID:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Error fetching payslip',
-      error: error.message
-    });
+      .populate("employee", "name employeeId email designation department");
+    if (!payslip) return res.status(404).json({ error: "Payslip not found" });
+    res.json({ success: true, data: payslip });
+  } catch (err) {
+    res.status(500).json({ error: "Server error" });
   }
 };
 
+// GET EMPLOYEE PAYSLIP HISTORY (admin)
+exports.getEmployeePayslipHistory = async (req, res) => {
+  try {
+    const { employeeId } = req.params;
+    const payslips = await Payslip.find({ employee: employeeId })
+      .populate("employee", "name employeeId email designation department")
+      .sort({ payPeriod: -1 });
+    res.json({ success: true, data: payslips });
+  } catch (err) {
+    res.status(500).json({ error: "Server error" });
+  }
+};
+
+// MY PAYSLIP HISTORY (employee, published only)
+exports.getMyPayslipHistory = async (req, res) => {
+  try {
+    const payslips = await Payslip.find({ employee: req.user._id, isPublished: true })
+      .sort({ payPeriod: -1 });
+    res.json({ success: true, data: payslips });
+  } catch (err) {
+    res.status(500).json({ error: "Server error" });
+  }
+};
+
+// GET SINGLE PAYSLIP BY MONTH (employee, published only)
+exports.getMyPayslip = async (req, res) => {
+  try {
+    const { month } = req.params;
+    const payslip = await Payslip.findOne({
+      employee: req.user._id,
+      payPeriod: month,
+      isPublished: true,
+    });
+    if (!payslip) return res.status(404).json({ error: "Payslip not found" });
+    res.json({ success: true, data: payslip });
+  } catch (err) {
+    res.status(500).json({ error: "Server error" });
+  }
+};
+
+// CALCULATE PREVIEW (no save)
+exports.calculatePreview = async (req, res) => {
+  try {
+    const { monthlySalary, totalDays, workingDays, paidDays, componentOverrides, deductionOverrides } = req.body;
+    if (!monthlySalary || !totalDays || !workingDays || paidDays === undefined) {
+      return res.status(400).json({ error: "monthlySalary, totalDays, workingDays and paidDays are required" });
+    }
+    const calc = calculateSalaryBreakdown(
+      Number(monthlySalary),
+      Number(totalDays),
+      Number(workingDays),
+      Number(paidDays),
+      componentOverrides || {},
+      deductionOverrides || {}
+    );
+    res.json({ success: true, data: calc });
+  } catch (err) {
+    res.status(500).json({ error: "Server error" });
+  }
+};
+
+// GET PAYSLIP STATS (admin)
 exports.getPayslipStats = async (req, res) => {
   try {
-    const currentMonth = new Date().toISOString().slice(0, 7);
+    const total     = await Payslip.countDocuments();
+    const published = await Payslip.countDocuments({ isPublished: true });
+    const drafts    = await Payslip.countDocuments({ isPublished: false });
+    res.json({ success: true, data: { total, published, drafts } });
+  } catch (err) {
+    res.status(500).json({ error: "Server error" });
+  }
+};
 
-    const stats = await Payslip.aggregate([
-      {
-        $group: {
-          _id: null,
-          totalPayslips: { $sum: 1 },
-          currentMonthPayslips: {
-            $sum: { $cond: [{ $eq: ['$payPeriod', currentMonth] }, 1, 0] }
-          },
-          totalSalaryPaid: { $sum: '$netSalary' },
-          averageSalary: { $avg: '$netSalary' },
-          totalDeductions: { $sum: '$totalDeductions' }
-        }
-      }
-    ]);
-
-    const result = stats[0] || {
-      totalPayslips: 0,
-      currentMonthPayslips: 0,
-      totalSalaryPaid: 0,
-      averageSalary: 0,
-      totalDeductions: 0
-    };
-
-    res.json(result);
-  } catch (error) {
-    console.error("Error fetching payslip stats:", error);
-    res.status(500).json({ error: "Internal server error" });
+// DELETE PAYSLIP (admin)
+exports.deletePayslip = async (req, res) => {
+  try {
+    const payslip = await Payslip.findByIdAndDelete(req.params.id);
+    if (!payslip) return res.status(404).json({ error: "Payslip not found" });
+    res.json({ success: true, message: "Payslip deleted" });
+  } catch (err) {
+    res.status(500).json({ error: "Server error" });
   }
 };

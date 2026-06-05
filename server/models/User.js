@@ -88,6 +88,15 @@ const userSchema = new mongoose.Schema(
     avatar: { type: String, trim: true, default: "" },
     timeZone: { type: String, default: "Asia/Kolkata" }, // Added timezone support
 
+    // ====== STATUTORY / PAYROLL FIELDS ======
+    pan:              { type: String, trim: true, uppercase: true, default: "" },
+    uan:              { type: String, trim: true, default: "" },
+    pfNumber:         { type: String, trim: true, default: "" },
+    esiNumber:        { type: String, trim: true, default: "" },
+    bankAccountNumber:{ type: String, trim: true, default: "" },
+    bankName:         { type: String, trim: true, default: "" },
+    ifscCode:         { type: String, trim: true, uppercase: true, default: "" },
+
     // ====== REGION-BASED ACCESS CONTROL ======
 
     // Array of regions the user can access (e.g., ['USA', 'CANADA', 'Global'])
@@ -386,15 +395,7 @@ userSchema.set("toJSON", {
     delete ret.password;
     delete ret.outlookAppPassword;
     return ret;
-  },
-});
-
-userSchema.set("toObject", {
-  transform: (doc, ret) => {
-    delete ret.password;
-    delete ret.outlookAppPassword;
-    return ret;
-  },
+  }
 });
 
 module.exports = mongoose.model("User", userSchema);
