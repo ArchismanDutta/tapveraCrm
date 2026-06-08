@@ -23,8 +23,8 @@ function calculateSalaryBreakdown(monthlySalary, totalDays, workingDays, paidDay
 
   const grossTotal = Object.values(salaryComponents).reduce((s, v) => s + v, 0);
 
-  // Prorate by Total Days (calendar days), not working days
-  const ratio = totalDays > 0 ? paidDays / totalDays : 0;
+  // Prorate by Working Days: weekends don't reduce pay; deduction only when paidDays < workingDays
+  const ratio = workingDays > 0 ? paidDays / workingDays : 0;
   const paidComponents = {
     basic:            Math.round(salaryComponents.basic            * ratio),
     hra:              Math.round(salaryComponents.hra              * ratio),

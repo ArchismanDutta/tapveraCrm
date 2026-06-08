@@ -40,8 +40,8 @@ function calcBreakdown(monthlySalary, totalDays, workingDays, paidDays, co = {},
     specialAllowance: co.specialAllowance !== undefined ? Number(co.specialAllowance) : Math.round(ms * 0.05),
   };
   const grossTotal = Object.values(sc).reduce((s, v) => s + v, 0);
-  // Prorate by Total Days (calendar days), not working days
-  const ratio = td > 0 ? pd / td : 0;
+  // Prorate by Working Days: deduction only when paidDays < workingDays (weekends don't reduce pay)
+  const ratio = wd > 0 ? pd / wd : 0;
   const pc = {
     basic:            Math.round(sc.basic            * ratio),
     hra:              Math.round(sc.hra              * ratio),
@@ -73,24 +73,25 @@ function calcBreakdown(monthlySalary, totalDays, workingDays, paidDays, co = {},
   return { salaryComponents: sc, grossTotal, paidComponents: pc, netTotal, pfEligible, esiEligible, deductions: d, totalDeductions, employerContributions: { employerPF, employerESI }, netSalary, ctc };
 }
 
-function Field({ label, value, onChange, type = "text", readOnly = false, suffix, className = "" }) {
+function Field({ label, value, onChange, type = "text", readOnly = false, suffix, className = "", error = false }) {
   return (
     <div className={`flex flex-col gap-1 ${className}`}>
-      <label className="text-xs text-gray-400 font-medium">{label}</label>
+      <label className={`text-xs font-medium ${error ? "text-red-400" : "text-gray-400"}`}>{label}{error && <span className="ml-1">*</span>}</label>
       <div className="relative">
         <input type={type} value={value ?? ""} onChange={onChange ? (e) => onChange(e.target.value) : undefined}
           readOnly={readOnly}
-          className={`w-full px-3 py-2 rounded-lg text-sm border text-white bg-[#141a21] border-[#2a3340] focus:outline-none focus:ring-1 focus:ring-blue-500 ${readOnly ? "opacity-60 cursor-default" : ""} ${suffix ? "pr-7" : ""}`} />
+          className={`w-full px-3 py-2 rounded-lg text-sm border text-white bg-[#141a21] focus:outline-none focus:ring-1 ${error ? "border-red-500 focus:ring-red-500" : "border-[#2a3340] focus:ring-blue-500"} ${readOnly ? "opacity-60 cursor-default" : ""} ${suffix ? "pr-7" : ""}`} />
         {suffix && <span className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 text-xs">{suffix}</span>}
       </div>
+      {error && <span className="text-xs text-red-400">This field is required</span>}
     </div>
   );
 }
 
-function Section({ title, icon: Icon, children, collapsible = false, defaultOpen = true }) {
+function Section({ title, icon: Icon, children, collapsible = false, defaultOpen = true, overflow = false }) {
   const [open, setOpen] = useState(defaultOpen);
   return (
-    <div className="bg-[#0f1419] border border-[#1e2a35] rounded-xl overflow-hidden">
+    <div className={`bg-[#0f1419] border border-[#1e2a35] rounded-xl ${overflow ? "overflow-visible" : "overflow-hidden"}`}>
       <button type="button" onClick={() => collapsible && setOpen((o) => !o)}
         className={`w-full flex items-center justify-between px-4 py-3 ${collapsible ? "cursor-pointer hover:bg-[#141a21]" : "cursor-default"}`}>
         <div className="flex items-center gap-2">
@@ -131,6 +132,7 @@ function PayslipForm({ employees, onSaved, onClose, editPayslip = null }) {
   const [dd, setDd] = useState({});
   const [snap, setSnap] = useState({ pan: "", uan: "", pfNumber: "", esiNumber: "", bankAccountNumber: "", bankName: "", ifscCode: "" });
   const [remarks, setRemarks] = useState("");
+  const [fieldErrors, setFieldErrors] = useState({});
 
   useEffect(() => {
     if (!editPayslip) return;
@@ -168,18 +170,29 @@ function PayslipForm({ employees, onSaved, onClose, editPayslip = null }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!isEdit && !selectedEmp) { toast.error("Select an employee"); return; }
-    if (!monthlySalary || Number(monthlySalary) <= 0) { toast.error("Monthly salary required"); return; }
-    if (!workingDays || paidDays === "") { toast.error("Working days and paid days required"); return; }
+    // Validate and collect field errors
+    const errs = {};
+    if (!isEdit && !selectedEmp) errs.employee = true;
+    if (!monthlySalary || Number(monthlySalary) <= 0) errs.monthlySalary = true;
+    if (!workingDays) errs.workingDays = true;
+    if (paidDays === "" || paidDays === undefined) errs.paidDays = true;
+    if (Object.keys(errs).length > 0) {
+      setFieldErrors(errs);
+      const missing = Object.keys(errs).join(", ");
+      console.error("[Payslip] Missing required fields:", missing, "| values:", { selectedEmp: selectedEmp?._id, monthlySalary, workingDays, paidDays });
+      toast.error("Please fill in all required fields (highlighted in red)");
+      return;
+    }
     if (Number(paidDays) > Number(workingDays)) { toast.error("Paid days cannot exceed working days"); return; }
+    setFieldErrors({});
     setSaving(true);
     try {
       const payload = {
-        employeeId: isEdit ? (editPayslip.employee._id || editPayslip.employee) : selectedEmp._id,
+        employee: isEdit ? (editPayslip.employee._id || editPayslip.employee) : selectedEmp._id,
         payPeriod, totalDays: Number(totalDays), workingDays: Number(workingDays), paidDays: Number(paidDays),
         monthlySalary: Number(monthlySalary),
         componentOverrides: Object.fromEntries(Object.entries(co).filter(([, v]) => v !== undefined).map(([k, v]) => [k, Number(v)])),
-        manualDeductions: { employeePF: dd.employeePF !== undefined ? Number(dd.employeePF) : undefined, employeeESI: dd.employeeESI !== undefined ? Number(dd.employeeESI) : undefined, ptax: dd.ptax !== undefined ? Number(dd.ptax) : undefined, tds: Number(dd.tds || 0), advance: Number(dd.advance || 0), other: Number(dd.other || 0), otherLabel: dd.otherLabel || "" },
+        deductionOverrides: { employeePF: dd.employeePF !== undefined ? Number(dd.employeePF) : undefined, employeeESI: dd.employeeESI !== undefined ? Number(dd.employeeESI) : undefined, ptax: dd.ptax !== undefined ? Number(dd.ptax) : undefined, tds: Number(dd.tds || 0), advance: Number(dd.advance || 0), other: Number(dd.other || 0), otherLabel: dd.otherLabel || "" },
         snapshotOverrides: snap, remarks,
       };
       const url = isEdit ? `${API_BASE}/api/payslips/${editPayslip._id}` : `${API_BASE}/api/payslips`;
@@ -195,9 +208,9 @@ function PayslipForm({ employees, onSaved, onClose, editPayslip = null }) {
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4">
       {!isEdit ? (
-        <Section title="Employee" icon={User}>
+        <Section title="Employee" icon={User} overflow>
           <div className="relative">
-            <div onClick={() => setEmpDropOpen((o) => !o)} className="flex items-center justify-between px-3 py-2 rounded-lg bg-[#141a21] border border-[#2a3340] cursor-pointer text-sm text-white">
+            <div onClick={() => setEmpDropOpen((o) => !o)} className={`flex items-center justify-between px-3 py-2 rounded-lg bg-[#141a21] border cursor-pointer text-sm text-white ${fieldErrors.employee ? "border-red-500" : "border-[#2a3340]"}`}>
               {selectedEmp ? <span>{selectedEmp.name} <span className="text-gray-500">({selectedEmp.employeeId})</span></span> : <span className="text-gray-500">Select employee…</span>}
               <ChevronDown className="w-4 h-4 text-gray-500" />
             </div>
@@ -217,6 +230,7 @@ function PayslipForm({ employees, onSaved, onClose, editPayslip = null }) {
               </div>
             )}
           </div>
+          {fieldErrors.employee && !selectedEmp && <p className="text-xs text-red-400 mt-1">* Please select an employee</p>}
           {selectedEmp && (
             <div className="mt-3 grid grid-cols-2 gap-x-4 text-xs">
               {[["Department", selectedEmp.department||"—"],["Designation",selectedEmp.designation||"—"],["DOJ", selectedEmp.doj ? new Date(selectedEmp.doj).toLocaleDateString("en-IN"):"—"],["Type",selectedEmp.employmentType||"—"]].map(([k,v]) => (
@@ -252,8 +266,8 @@ function PayslipForm({ employees, onSaved, onClose, editPayslip = null }) {
             <input type="month" value={payPeriod} onChange={(e) => setPayPeriod(e.target.value)} className="w-full px-3 py-2 rounded-lg text-sm border text-white bg-[#141a21] border-[#2a3340] focus:outline-none focus:ring-1 focus:ring-blue-500" />
           </div>
           <Field label="Total Days in Month" value={totalDays}   onChange={setTotalDays}   type="number" />
-          <Field label="Working Days"        value={workingDays} onChange={setWorkingDays} type="number" />
-          <Field label="Paid Days"           value={paidDays}    onChange={setPaidDays}    type="number" />
+          <Field label="Working Days"        value={workingDays} onChange={(v) => { setWorkingDays(v); setFieldErrors((fe) => ({ ...fe, workingDays: false })); }} type="number" error={!!fieldErrors.workingDays} />
+          <Field label="Paid Days"           value={paidDays}    onChange={(v) => { setPaidDays(v);    setFieldErrors((fe) => ({ ...fe, paidDays: false }));    }} type="number" error={!!fieldErrors.paidDays} />
           <div className="flex flex-col gap-1">
             <label className="text-xs text-gray-400 font-medium">LWP (auto)</label>
             <div className="px-3 py-2 rounded-lg text-sm bg-[#141a21] border border-[#2a3340] text-gray-400">{lwp}</div>
@@ -262,7 +276,7 @@ function PayslipForm({ employees, onSaved, onClose, editPayslip = null }) {
       </Section>
 
       <Section title="Monthly CTC Input" icon={DollarSign}>
-        <Field label="Monthly Salary (CTC)" value={monthlySalary} onChange={(v) => { setMonthlySalary(v); setCo({}); }} type="number" suffix="&#8377;" />
+        <Field label="Monthly Salary (CTC)" value={monthlySalary} onChange={(v) => { setMonthlySalary(v); setCo({}); setFieldErrors((fe) => ({ ...fe, monthlySalary: false })); }} type="number" suffix="&#8377;" error={!!fieldErrors.monthlySalary} />
         {calc && (
           <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
             <div className={`rounded-lg px-3 py-2 border ${calc.pfEligible ? "bg-green-500/10 border-green-500/30 text-green-400" : "bg-gray-500/10 border-gray-500/30 text-gray-400"}`}>PF Eligible: <strong>{calc.pfEligible ? "Yes (Basic ≤ ₹15,000)" : "No"}</strong></div>
@@ -283,7 +297,7 @@ function PayslipForm({ employees, onSaved, onClose, editPayslip = null }) {
           </div>
           <div className="border-t border-[#2a3340] pt-2 space-y-1">
             <CalcRow label="Gross Total (full month)" value={calc.grossTotal} />
-            <CalcRow label={`Net Total (${paidDays||0} / ${totalDays||0} days)`} value={calc.netTotal} highlight />
+            <CalcRow label={`Net Total (${paidDays||0} / ${workingDays||0} working days)`} value={calc.netTotal} highlight />
           </div>
         </Section>
       )}

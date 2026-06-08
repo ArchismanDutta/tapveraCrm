@@ -60,7 +60,7 @@ const DateDivider = ({ date }) => {
       : d.toLocaleDateString();
   return (
     <div className="flex justify-center my-3 w-full">
-      <span className="bg-gray-700 text-gray-300 rounded-full px-3 py-1 text-xs select-none">
+      <span className="bg-[#1e2a35] text-gray-400 rounded-full px-3 py-1 text-xs select-none">
         {label}
       </span>
     </div>
@@ -356,21 +356,21 @@ const ProjectMessagePanel = ({ projectId, currentUser }) => {
 
   // ── render ──
   return (
-    <div className="flex flex-col h-full bg-gray-900 text-gray-100">
+    <div className="flex flex-col h-full bg-[#0a0e14] text-blue-100">
 
       {/* ── Search & Filter panel ── */}
-      <div className="bg-gray-800 border-b border-gray-700">
+      <div className="bg-[#0f1419] border-b border-[#1e2a35]">
         <div className="flex items-center">
           <button
             onClick={() => setShowFilters(!showFilters)}
-            className="flex-1 px-4 py-2 text-sm text-left text-gray-300 hover:bg-gray-700 transition flex items-center gap-2"
+            className="flex-1 px-4 py-2 text-sm text-left text-gray-300 hover:bg-[#141a21] transition flex items-center gap-2"
           >
             <Filter className="w-4 h-4" />
             <span>Search & Filters {showFilters ? "▼" : "▶"}</span>
           </button>
           <button
             onClick={handleSummarize}
-            className="px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 transition flex items-center gap-2 border-l border-gray-700"
+            className="px-4 py-2 text-sm text-gray-300 hover:bg-[#141a21] transition flex items-center gap-2 border-l border-[#1e2a35]"
             title="AI summary of this conversation"
           >
             <Sparkles className="w-4 h-4 text-purple-400" />
@@ -379,7 +379,7 @@ const ProjectMessagePanel = ({ projectId, currentUser }) => {
         </div>
 
         {showFilters && (
-          <div className="p-4 space-y-3 border-t border-gray-700">
+          <div className="p-4 space-y-3 border-t border-[#1e2a35]">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
               <input
@@ -387,7 +387,7 @@ const ProjectMessagePanel = ({ projectId, currentUser }) => {
                 placeholder="Search messages..."
                 value={messageSearchTerm}
                 onChange={(e) => setMessageSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 bg-gray-700 text-gray-100 rounded border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                className="w-full pl-10 pr-4 py-2 bg-[#141a21] text-blue-100 rounded border border-[#2a3340] focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
               />
             </div>
             <input
@@ -395,7 +395,7 @@ const ProjectMessagePanel = ({ projectId, currentUser }) => {
               placeholder="Filter by sender name..."
               value={searchSender}
               onChange={(e) => setSearchSender(e.target.value)}
-              className="w-full px-3 py-2 bg-gray-700 text-gray-100 rounded border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+              className="w-full px-3 py-2 bg-[#141a21] text-blue-100 rounded border border-[#2a3340] focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
             />
             <div className="flex gap-2">
               <input
@@ -404,7 +404,7 @@ const ProjectMessagePanel = ({ projectId, currentUser }) => {
                 onChange={(e) =>
                   setDateFilter((p) => ({ ...p, start: e.target.value }))
                 }
-                className="flex-1 px-3 py-2 bg-gray-700 text-gray-100 rounded border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                className="flex-1 px-3 py-2 bg-[#141a21] text-blue-100 rounded border border-[#2a3340] focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
               />
               <input
                 type="date"
@@ -412,7 +412,7 @@ const ProjectMessagePanel = ({ projectId, currentUser }) => {
                 onChange={(e) =>
                   setDateFilter((p) => ({ ...p, end: e.target.value }))
                 }
-                className="flex-1 px-3 py-2 bg-gray-700 text-gray-100 rounded border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                className="flex-1 px-3 py-2 bg-[#141a21] text-blue-100 rounded border border-[#2a3340] focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
               />
             </div>
             {(messageSearchTerm || searchSender || dateFilter.start || dateFilter.end) && (
@@ -470,14 +470,14 @@ const ProjectMessagePanel = ({ projectId, currentUser }) => {
                     className={`px-3 py-2 rounded-lg ${
                       own
                         ? "bg-blue-600 text-white rounded-br-none self-end"
-                        : "bg-gray-700 text-gray-100 rounded-bl-none self-start"
+                        : "bg-[#1a2433] text-blue-100 rounded-bl-none self-start border border-[#1e2a35]"
                     }`}
                   >
                     {/* Reply preview */}
                     {msg.replyTo && (
                       <div
                         onClick={() => scrollToMessage(msg.replyTo._id)}
-                        className="bg-gray-800 bg-opacity-50 px-2 py-1 rounded mb-2 text-xs border-l-2 border-blue-400 cursor-pointer hover:bg-opacity-70 transition overflow-hidden"
+                        className="bg-[#0f1419] bg-opacity-80 px-2 py-1 rounded mb-2 text-xs border-l-2 border-blue-400 cursor-pointer hover:bg-opacity-100 transition overflow-hidden"
                         style={{ wordBreak: "break-word", overflowWrap: "anywhere" }}
                       >
                         <p className="text-blue-300 font-semibold truncate">
@@ -526,11 +526,11 @@ const ProjectMessagePanel = ({ projectId, currentUser }) => {
                             ),
                             code: ({ inline, children }) =>
                               inline ? (
-                                <code className="bg-gray-800 px-1 rounded text-xs">
+                                <code className="bg-[#0f1419] px-1 rounded text-xs">
                                   {children}
                                 </code>
                               ) : (
-                                <code className="block bg-gray-800 p-2 rounded text-xs overflow-x-auto">
+                                <code className="block bg-[#0f1419] p-2 rounded text-xs overflow-x-auto">
                                   {children}
                                 </code>
                               ),
@@ -574,7 +574,7 @@ const ProjectMessagePanel = ({ projectId, currentUser }) => {
                             <div key={ai}>
                               {/* Non-media file */}
                               {!isMedia && (
-                                <div className="flex items-center gap-2 p-2 bg-black/20 rounded">
+                                <div className="flex items-center gap-2 p-2 bg-[#0a0e14]/60 rounded border border-[#1e2a35]">
                                   {getFileIcon(att.fileType)}
                                   <div className="flex-1 min-w-0">
                                     <div className="text-xs text-white truncate">
@@ -671,7 +671,7 @@ const ProjectMessagePanel = ({ projectId, currentUser }) => {
                               className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs transition-all ${
                                 reacted
                                   ? "bg-blue-500/30 border border-blue-400"
-                                  : "bg-gray-700/50 hover:bg-gray-700"
+                                  : "bg-[#141a21]/80 hover:bg-[#1e2a35]"
                               }`}
                             >
                               <span>{reaction.emoji}</span>
@@ -729,7 +729,7 @@ const ProjectMessagePanel = ({ projectId, currentUser }) => {
                             ref={emojiPickerRef}
                             className={`absolute ${
                               own ? "right-0" : "left-0"
-                            } bottom-full mb-1 p-2 bg-gray-800 border border-gray-600 rounded-lg shadow-xl z-50`}
+                            } bottom-full mb-1 p-2 bg-[#0f1419] border border-[#2a3340] rounded-lg shadow-xl z-50`}
                           >
                             <div className="flex gap-1">
                               {commonEmojis.map((emoji, ei) => (
@@ -739,7 +739,7 @@ const ProjectMessagePanel = ({ projectId, currentUser }) => {
                                     e.stopPropagation();
                                     handleReaction(msg._id, emoji);
                                   }}
-                                  className="p-1 hover:bg-gray-700 rounded text-lg transition-transform hover:scale-125"
+                                  className="p-1 hover:bg-[#1e2a35] rounded text-lg transition-transform hover:scale-125"
                                 >
                                   {emoji}
                                 </button>
@@ -761,7 +761,7 @@ const ProjectMessagePanel = ({ projectId, currentUser }) => {
 
       {/* ── Reply preview bar ── */}
       {replyingTo && (
-        <div className="bg-gray-800 border-t border-gray-700 px-4 py-2 flex justify-between items-start gap-2 overflow-hidden">
+        <div className="bg-[#0f1419] border-t border-[#1e2a35] px-4 py-2 flex justify-between items-start gap-2 overflow-hidden">
           <div className="text-sm text-gray-300 flex-1 min-w-0">
             <div className="flex items-center gap-2 text-sm text-blue-400 mb-1">
               <ReplyIcon className="w-3 h-3 flex-shrink-0" />
@@ -793,7 +793,7 @@ const ProjectMessagePanel = ({ projectId, currentUser }) => {
 
       {/* ── File preview chips ── */}
       {selectedFiles.length > 0 && (
-        <div className="bg-gray-800 border-t border-gray-700 px-4 py-2">
+        <div className="bg-[#0f1419] border-t border-[#1e2a35] px-4 py-2">
           <p className="text-xs text-gray-400 mb-2">
             Selected files ({selectedFiles.length}/5):
           </p>
@@ -801,7 +801,7 @@ const ProjectMessagePanel = ({ projectId, currentUser }) => {
             {selectedFiles.map((file, idx) => (
               <div
                 key={idx}
-                className="flex items-center gap-2 bg-gray-700 px-3 py-1 rounded text-xs"
+                className="flex items-center gap-2 bg-[#141a21] border border-[#2a3340] px-3 py-1 rounded text-xs"
               >
                 <FileIcon className="w-4 h-4 text-gray-400" />
                 <span className="text-gray-300 truncate max-w-[150px]">
@@ -821,7 +821,7 @@ const ProjectMessagePanel = ({ projectId, currentUser }) => {
 
       {/* ── Formatting toolbar ── */}
       {showFormatting && (
-        <div className="bg-gray-800 border-t border-gray-700 px-4 py-2">
+        <div className="bg-[#0f1419] border-t border-[#1e2a35] px-4 py-2">
           <div className="flex flex-wrap gap-2">
             {[
               ["B", formatBold, "Bold (Ctrl+B)", "font-bold"],
@@ -836,7 +836,7 @@ const ProjectMessagePanel = ({ projectId, currentUser }) => {
                 key={label}
                 onClick={fn}
                 title={title}
-                className={`px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded text-xs transition-colors ${extra}`}
+                className={`px-3 py-1.5 bg-[#141a21] hover:bg-[#1e2a35] rounded text-xs transition-colors ${extra}`}
               >
                 {label}
               </button>
@@ -849,7 +849,7 @@ const ProjectMessagePanel = ({ projectId, currentUser }) => {
       )}
 
       {/* ── Input area ── */}
-      <div className="sticky bottom-0 bg-gray-800 border-t border-gray-700">
+      <div className="sticky bottom-0 bg-[#0f1419] border-t border-[#1e2a35]">
         <div className="flex items-start gap-2 p-2">
           <input
             type="file"
@@ -861,14 +861,14 @@ const ProjectMessagePanel = ({ projectId, currentUser }) => {
           />
           <button
             onClick={() => fileInputRef.current?.click()}
-            className="px-3 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded transition flex-shrink-0"
+            className="px-3 py-2 bg-[#141a21] hover:bg-[#1e2a35] border border-[#2a3340] text-gray-300 rounded transition flex-shrink-0"
             title="Attach files"
           >
             <Paperclip className="w-5 h-5" />
           </button>
           <button
             onClick={() => setShowFormatting(!showFormatting)}
-            className="px-3 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded transition flex-shrink-0"
+            className="px-3 py-2 bg-[#141a21] hover:bg-[#1e2a35] border border-[#2a3340] text-gray-300 rounded transition flex-shrink-0"
             title="Text formatting"
           >
             <Type className="w-5 h-5" />
@@ -880,7 +880,7 @@ const ProjectMessagePanel = ({ projectId, currentUser }) => {
             onKeyDown={handleKeyDown}
             placeholder="Type a message... (Enter to send, Shift+Enter for new line)"
             rows={2}
-            className="flex-1 bg-gray-700 text-gray-100 border border-gray-600 rounded px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-gray-500"
+            className="flex-1 bg-[#141a21] text-blue-100 border border-[#2a3340] rounded px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-gray-500"
           />
           <button
             onClick={handleSend}
@@ -913,37 +913,37 @@ const ProjectMessagePanel = ({ projectId, currentUser }) => {
       {/* ── AI Summary modal ── */}
       {showSummaryModal && (
         <div
-          className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4"
+          className="fixed inset-0 bg-black/75 flex items-center justify-center p-4"
           style={{ zIndex: 9999 }}
           onClick={() => setShowSummaryModal(false)}
         >
           <div
-            className="bg-gray-800 rounded-lg shadow-2xl max-w-3xl w-full max-h-[80vh] flex flex-col border border-gray-700"
+            className="bg-[#0f1419] rounded-xl shadow-2xl max-w-3xl w-full max-h-[80vh] flex flex-col border border-[#232945]"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
-            <div className="flex items-center justify-between p-4 border-b border-gray-700">
+            <div className="flex items-center justify-between p-4 border-b border-[#1e2a35]">
               <div className="flex items-center gap-3">
                 <Sparkles className="w-5 h-5 text-purple-400" />
-                <h2 className="text-xl font-semibold text-gray-100">
+                <h2 className="text-xl font-semibold text-white">
                   AI Conversation Summary
                 </h2>
               </div>
               <button
                 onClick={() => setShowSummaryModal(false)}
-                className="p-2 hover:bg-gray-700 rounded-lg transition"
+                className="p-2 hover:bg-[#141a21] rounded-lg transition"
               >
                 <XCircle className="w-5 h-5 text-gray-400" />
               </button>
             </div>
 
             {/* Days selector */}
-            <div className="px-4 py-3 border-b border-gray-700 bg-gray-800/50 flex items-center gap-3">
+            <div className="px-4 py-3 border-b border-[#1e2a35] bg-[#0a0e14]/50 flex items-center gap-3">
               <label className="text-sm text-gray-400">Time period:</label>
               <select
                 value={summaryDays}
                 onChange={(e) => setSummaryDays(Number(e.target.value))}
-                className="px-3 py-1.5 bg-gray-700 text-gray-100 rounded border border-gray-600 focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm"
+                className="px-3 py-1.5 bg-[#141a21] text-blue-100 rounded border border-[#2a3340] focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm"
               >
                 <option value={1}>Last 24 hours</option>
                 <option value={3}>Last 3 days</option>
@@ -962,7 +962,7 @@ const ProjectMessagePanel = ({ projectId, currentUser }) => {
             </div>
 
             {/* Body */}
-            <div className="flex-1 overflow-y-auto p-6">
+            <div className="flex-1 overflow-y-auto p-6 bg-[#0a0e14]/30">
               {summaryLoading ? (
                 <div className="flex flex-col items-center justify-center h-full gap-4">
                   <div className="relative">
@@ -983,7 +983,7 @@ const ProjectMessagePanel = ({ projectId, currentUser }) => {
             </div>
 
             {/* Footer */}
-            <div className="p-4 border-t border-gray-700 flex justify-between items-center bg-gray-800/50">
+            <div className="p-4 border-t border-[#1e2a35] flex justify-between items-center bg-[#0a0e14]/50">
               <span className="text-xs text-gray-500">
                 Powered by AI · Last {summaryDays} day
                 {summaryDays !== 1 ? "s" : ""}
@@ -991,7 +991,7 @@ const ProjectMessagePanel = ({ projectId, currentUser }) => {
               <button
                 onClick={() => copyToClipboard(summary)}
                 disabled={!summary || summaryLoading}
-                className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-200 rounded transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 text-sm"
+                className="px-4 py-2 bg-[#141a21] hover:bg-[#1e2a35] border border-[#2a3340] text-gray-200 rounded transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 text-sm"
               >
                 {copiedText === summary ? (
                   <>
