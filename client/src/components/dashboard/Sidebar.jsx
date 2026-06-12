@@ -328,7 +328,7 @@ const menuConfig = {
     {
       to: "/tasks",
       icon: <CircleCheckBig size={18} animateOnHover />,
-      label: "My Tasks",
+      label: "Tasks",
     },
     { to: "/leaves", icon: <FileText size={18} />, label: "My Leaves" },
     {
@@ -376,7 +376,7 @@ const menuConfig = {
     {
       to: "/tasks",
       icon: <CircleCheckBig size={18} animateOnHover />,
-      label: "My Tasks",
+      label: "Tasks",
     },
 
     // 🧑‍💼 Employees Dropdown
@@ -395,7 +395,7 @@ const menuConfig = {
           label: "Attendance Portal",
         },
         {
-          to: "/admin/tasks",
+          to: "/tasks",
           icon: <ClipboardList size={16} animateOnHover />,
           label: "Task Management",
         },

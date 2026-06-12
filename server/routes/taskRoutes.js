@@ -5,51 +5,48 @@ const { protect } = require("../middlewares/authMiddleware");
 const { authorize } = require("../middlewares/roleMiddleware");
 const taskController = require("../controllers/taskController");
 
-// ------------------- REMARK ROUTES -------------------
-// Placed BEFORE :taskId to avoid shadowing
+// ------------------- ANALYTICS -------------------
+// Admin / Super-admin only. Registered before /:taskId routes for clarity.
+router.get(
+  "/analytics/employee/:employeeId",
+  protect,
+  authorize("admin", "super-admin"),
+  taskController.getEmployeeTaskAnalytics
+);
+
+// ------------------- REMARKS -------------------
+// Involved users (assignee, creator) or admins — enforced in controller
 router.post("/:taskId/remarks", protect, taskController.addRemark);
 router.get("/:taskId/remarks", protect, taskController.getRemarks);
 
-// ------------------- TASK ROUTES -------------------
+// ------------------- TASKS -------------------
 
-// Create task (Admin / Super-admin only)
-router.post("/", protect, authorize("admin", "super-admin"), taskController.createTask);
+// Create task — any authenticated user can create and assign tasks
+router.post("/", protect, taskController.createTask);
 
-// Get all tasks
-// Users see their own tasks; Admin/Super-admin see all tasks
+// List tasks
+// Admin/Super-admin: all | Client: their projects' tasks | Others: own tasks
 router.get("/", protect, taskController.getTasks);
 
-// Get single task by ID
-// Only assigned users, assignedBy, or Admin/Super-admin can access
+// Get single task (assignee, creator, or admin — enforced in controller)
 router.get("/:taskId", protect, taskController.getTaskById);
 
-// Update task status
-// Only assigned users or assignedBy can update
+// Update task status (assignee, creator, or admin — enforced in controller)
+// "rejected" is not allowed here; use the reject endpoint
 router.patch("/:taskId/status", protect, taskController.updateTaskStatus);
 
-// Reject task (Admin / Super-admin only)
-router.patch("/:taskId/reject", protect, authorize("admin", "super-admin"), taskController.rejectTask);
+// Reject a completed task with a reason (Admin / Super-admin only)
+router.patch(
+  "/:taskId/reject",
+  protect,
+  authorize("admin", "super-admin"),
+  taskController.rejectTask
+);
 
-// ------------------- SUBMISSION ROUTES -------------------
-// Submit task details (Employee - assigned users only)
-router.post("/:taskId/submit", protect, taskController.submitTaskDetails);
-
-// Approve task submission (Admin / Super-admin / Task Assigner)
-router.patch("/:taskId/approve", protect, taskController.approveTaskSubmission);
-
-// Reject task submission (Admin / Super-admin / Task Assigner)
-router.patch("/:taskId/reject-submission", protect, taskController.rejectTaskSubmission);
-
-// Edit task
-// Admin / Super-admin or assignedBy can edit (authorization handled in controller)
+// Edit task (Admin / Super-admin or creator — enforced in controller)
 router.put("/:taskId", protect, taskController.editTask);
 
-// Delete task
-// Admin / Super-admin or assignedBy can delete (authorization handled in controller)
+// Delete task (Admin / Super-admin or creator — enforced in controller)
 router.delete("/:taskId", protect, taskController.deleteTask);
-
-// Get employee task analytics
-// Admin / Super-admin only
-router.get("/analytics/employee/:employeeId", protect, authorize("admin", "super-admin"), taskController.getEmployeeTaskAnalytics);
 
 module.exports = router;

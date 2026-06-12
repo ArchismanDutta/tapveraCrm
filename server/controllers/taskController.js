@@ -1,21 +1,38 @@
 // File: controllers/taskController.js
 const Task = require("../models/Task");
+const User = require("../models/User");
+const Project = require("../models/Project");
 const { notifyAdmins } = require("../services/whatsappService");
 const { sendNotificationToUser, sendNotificationToMultipleUsers } = require("../utils/websocket");
 const { updateWorkloadOnTaskChange } = require("../services/workloadService");
 const notificationService = require("../services/notificationService");
 
-// Helper: Map task priority to notification priority
+// ------------------- Constants -------------------
+const STATUSES = ["pending", "in-progress", "completed", "rejected"];
+const PRIORITIES = ["High", "Medium", "Low"];
+const ADMIN_ROLES = ["admin", "super-admin"];
+
+// ------------------- Helpers -------------------
+const isAdminRole = (user) => ADMIN_ROLES.includes(user.role);
+
+const isCreator = (task, user) =>
+  task.assignedBy && task.assignedBy.toString() === user._id.toString();
+
+const isAssignee = (task, user) =>
+  task.assignedTo.some((id) => (id._id || id).toString() === user._id.toString());
+
+// Can this user see / comment on this task?
+const canAccessTask = (task, user) =>
+  isAdminRole(user) || isCreator(task, user) || isAssignee(task, user);
+
+// Can this user edit / delete this task?
+const canManageTask = (task, user) => isAdminRole(user) || isCreator(task, user);
+
 const mapTaskPriorityToNotification = (taskPriority) => {
-  const priorityMap = {
-    'High': 'high',
-    'Medium': 'normal',
-    'Low': 'low'
-  };
-  return priorityMap[taskPriority] || 'normal';
+  const priorityMap = { High: "high", Medium: "normal", Low: "low" };
+  return priorityMap[taskPriority] || "normal";
 };
 
-// ------------------- Helper: populate task fields -------------------
 const populateTask = (query) =>
   query
     .populate("assignedTo", "name email employeeId designation")
@@ -23,13 +40,82 @@ const populateTask = (query) =>
     .populate("lastEditedBy", "name email")
     .populate("remarks.user", "name email")
     .populate("statusHistory.changedBy", "name email")
-    .populate("project", "projectName type clients client")
-    .populate("approvedBy", "name email");
+    .populate("project", "projectName type clients client");
+
+// Validate all assignees exist and are active. Returns error message or null.
+const validateAssigneesActive = async (assignedTo) => {
+  const inactive = await User.find({
+    _id: { $in: assignedTo },
+    status: { $ne: "active" },
+  }).select("name status");
+  if (inactive.length > 0) {
+    const names = inactive.map((e) => `${e.name} (${e.status})`).join(", ");
+    return `Cannot assign task to inactive employees: ${names}. Please select only active employees.`;
+  }
+  return null;
+};
+
+// Fire-and-forget notifications: never let a notification failure fail the request.
+const safeNotifyAdmins = (message) => {
+  Promise.resolve(notifyAdmins(message)).catch((err) =>
+    console.error("WhatsApp notify failed:", err.message || err)
+  );
+};
+
+const pushStatusHistory = (task, status, userId, note) => {
+  task.statusHistory.push({
+    status,
+    changedBy: userId,
+    changedAt: new Date(),
+    note,
+  });
+};
+
+// Apply a status transition with consistent rules. Returns error message or null.
+const applyStatusChange = (task, newStatus, user, note) => {
+  if (!STATUSES.includes(newStatus)) return "Invalid status";
+  if (task.status === newStatus) return null; // no-op
+
+  const admin = isAdminRole(user);
+
+  // "rejected" must always go through the reject endpoint (requires a reason)
+  if (newStatus === "rejected") {
+    return "Use the reject endpoint to reject tasks";
+  }
+
+  // Once completed, only admins can move it back
+  if (!admin && task.status === "completed") {
+    return "Cannot change status of completed task. Please wait for admin review.";
+  }
+
+  pushStatusHistory(
+    task,
+    newStatus,
+    user._id,
+    note || `Status changed from ${task.status} to ${newStatus}`
+  );
+
+  if (newStatus === "completed") {
+    task.completedAt = new Date();
+  } else {
+    task.completedAt = null;
+  }
+
+  // Leaving rejected state clears rejection info
+  if (task.status === "rejected") {
+    task.rejectedAt = null;
+    task.rejectionReason = null;
+  }
+
+  task.status = newStatus;
+  return null;
+};
 
 // ------------------- CREATE TASK -------------------
+// Admin / Super-admin only (enforced in routes)
 exports.createTask = async (req, res) => {
   try {
-    const { title, description, assignedTo, dueDate, priority } = req.body;
+    const { title, description, assignedTo, dueDate, priority, project } = req.body;
     const assignedBy = req.user._id;
 
     if (!title || !Array.isArray(assignedTo) || assignedTo.length === 0) {
@@ -38,26 +124,12 @@ exports.createTask = async (req, res) => {
         .json({ message: "Title and at least one assigned user are required." });
     }
 
-    // Validate that all assigned employees are active
-    const User = require("../models/User");
-    const employees = await User.find({
-      _id: { $in: assignedTo },
-      status: { $ne: "active" }
-    }).select("name status");
+    const assigneeError = await validateAssigneesActive(assignedTo);
+    if (assigneeError) return res.status(400).json({ message: assigneeError });
 
-    if (employees.length > 0) {
-      const inactiveNames = employees.map(emp => `${emp.name} (${emp.status})`).join(", ");
-      return res.status(400).json({
-        message: `Cannot assign task to inactive employees: ${inactiveNames}. Please select only active employees.`,
-        inactiveEmployees: employees
-      });
+    if (dueDate && isNaN(new Date(dueDate).getTime())) {
+      return res.status(400).json({ message: "Invalid due date." });
     }
-
-    const allowedPriorities = ["High", "Medium", "Low"];
-    const validatedPriority = allowedPriorities.includes(priority) ? priority : "Medium";
-
-    // Extract project if provided
-    const { project } = req.body;
 
     const task = new Task({
       title,
@@ -65,36 +137,30 @@ exports.createTask = async (req, res) => {
       assignedTo,
       assignedBy,
       dueDate,
-      priority: validatedPriority,
-      project: project || null, // ✅ Add project reference
-      statusHistory: [{
-        status: "pending",
-        changedBy: assignedBy,
-        changedAt: new Date(),
-        note: "Task created"
-      }]
+      priority: PRIORITIES.includes(priority) ? priority : "Medium",
+      project: project || null,
+      statusHistory: [
+        {
+          status: "pending",
+          changedBy: assignedBy,
+          changedAt: new Date(),
+          note: "Task created",
+        },
+      ],
     });
     await task.save();
 
-    // ✅ If task is linked to a project, add task ID to project's tasks array
     if (project) {
-      const Project = require("../models/Project");
-      await Project.findByIdAndUpdate(
-        project,
-        { $addToSet: { tasks: task._id } }, // $addToSet prevents duplicates
-        { new: true }
-      );
+      await Project.findByIdAndUpdate(project, { $addToSet: { tasks: task._id } });
     }
 
     const populated = await populateTask(Task.findById(task._id)).lean();
 
-    // ✅ Update workload for assigned employees
-    updateWorkloadOnTaskChange(task._id).catch(err =>
-      console.error('Error updating workload:', err)
+    updateWorkloadOnTaskChange(task._id).catch((err) =>
+      console.error("Error updating workload:", err)
     );
 
-    // WhatsApp notification
-    await notifyAdmins(
+    safeNotifyAdmins(
       `📝 *New Task Created*\n📌 Title: *${populated.title}*\n📅 Due: *${
         populated.dueDate || "N/A"
       }*\n🎯 Priority: *${populated.priority}*\n👤 Assigned By: *${req.user.name}*\n👥 Assigned To: ${
@@ -102,23 +168,21 @@ exports.createTask = async (req, res) => {
       }`
     );
 
-    // WebSocket notification to assigned users
-    const assignedUserIds = populated.assignedTo.map(u => u._id.toString());
-
-    // Send notifications to all assigned users (save to DB and WebSocket)
-    for (const userId of assignedUserIds) {
-      await notificationService.createAndSend({
-        userId,
-        type: "task",
-        channel: "task",
-        title: "New Task Assigned",
-        body: `${populated.title}\nPriority: ${populated.priority}\nDue: ${populated.dueDate || "No due date"}`,
-        priority: mapTaskPriorityToNotification(populated.priority),
-        relatedData: {
-          taskId: populated._id,
-          url: "/tasks"
-        }
-      });
+    // In-app notifications to assignees (non-blocking)
+    for (const u of populated.assignedTo) {
+      notificationService
+        .createAndSend({
+          userId: u._id.toString(),
+          type: "task",
+          channel: "task",
+          title: "New Task Assigned",
+          body: `${populated.title}\nPriority: ${populated.priority}\nDue: ${
+            populated.dueDate || "No due date"
+          }`,
+          priority: mapTaskPriorityToNotification(populated.priority),
+          relatedData: { taskId: populated._id, url: "/tasks" },
+        })
+        .catch((err) => console.error("Task notification failed:", err));
     }
 
     res.status(201).json(populated);
@@ -129,108 +193,103 @@ exports.createTask = async (req, res) => {
 };
 
 // ------------------- EDIT TASK -------------------
+// Admin / Super-admin or task creator
 exports.editTask = async (req, res) => {
   try {
     const { taskId } = req.params;
-    const { title, description, assignedTo, dueDate, status, priority } = req.body;
+    const { title, description, assignedTo, dueDate, status, priority, project } = req.body;
 
     const task = await Task.findById(taskId);
     if (!task) return res.status(404).json({ message: "Task not found." });
 
-    // Only admin/super-admin or creator can edit
-    if (
-      !["admin", "super-admin"].includes(req.user.role) &&
-      task.assignedBy.toString() !== req.user._id.toString()
-    ) {
+    if (!canManageTask(task, req.user)) {
       return res.status(403).json({ message: "Not authorized" });
     }
 
-    // Validate that all assigned employees are active (if assignedTo is being updated)
-    if (Array.isArray(assignedTo) && assignedTo.length > 0) {
-      const User = require("../models/User");
-      const employees = await User.find({
-        _id: { $in: assignedTo },
-        status: { $ne: "active" }
-      }).select("name status");
+    if (title !== undefined) {
+      if (!title.trim()) return res.status(400).json({ message: "Title cannot be empty." });
+      task.title = title;
+    }
 
-      if (employees.length > 0) {
-        const inactiveNames = employees.map(emp => `${emp.name} (${emp.status})`).join(", ");
-        return res.status(400).json({
-          message: `Cannot assign task to inactive employees: ${inactiveNames}. Please select only active employees.`,
-          inactiveEmployees: employees
-        });
+    // Allow clearing description by sending "" / null
+    if (description !== undefined) task.description = description || "";
+
+    if (assignedTo !== undefined) {
+      if (!Array.isArray(assignedTo) || assignedTo.length === 0) {
+        return res
+          .status(400)
+          .json({ message: "At least one assigned user is required." });
+      }
+      const assigneeError = await validateAssigneesActive(assignedTo);
+      if (assigneeError) return res.status(400).json({ message: assigneeError });
+      task.assignedTo = assignedTo;
+    }
+
+    // Allow clearing dueDate by sending null
+    if (dueDate !== undefined) {
+      if (dueDate && isNaN(new Date(dueDate).getTime())) {
+        return res.status(400).json({ message: "Invalid due date." });
+      }
+      task.dueDate = dueDate || null;
+    }
+
+    if (priority !== undefined) {
+      if (!PRIORITIES.includes(priority)) {
+        return res.status(400).json({ message: "Invalid priority." });
+      }
+      task.priority = priority;
+    }
+
+    if (status !== undefined) {
+      const statusError = applyStatusChange(
+        task,
+        status,
+        req.user,
+        `Status changed from ${task.status} to ${status} via edit`
+      );
+      if (statusError) return res.status(400).json({ message: statusError });
+    }
+
+    // Project change: keep both projects' tasks arrays in sync
+    if (project !== undefined) {
+      const newProject = project || null;
+      const oldProject = task.project ? task.project.toString() : null;
+      const newProjectId = newProject ? newProject.toString() : null;
+      if (oldProject !== newProjectId) {
+        if (oldProject) {
+          await Project.findByIdAndUpdate(oldProject, { $pull: { tasks: task._id } });
+        }
+        if (newProjectId) {
+          await Project.findByIdAndUpdate(newProjectId, {
+            $addToSet: { tasks: task._id },
+          });
+        }
+        task.project = newProject;
       }
     }
 
-    if (title) task.title = title;
-    if (description) task.description = description;
-    if (Array.isArray(assignedTo) && assignedTo.length) task.assignedTo = assignedTo;
-    if (dueDate) task.dueDate = dueDate;
-
-    if (status && ["pending", "in-progress", "completed", "rejected"].includes(status)) {
-      const isAdmin = ["admin", "super-admin"].includes(req.user.role);
-
-      // ✅ Prevent non-admin from changing status away from completed
-      if (!isAdmin && task.status === "completed" && status !== "completed") {
-        return res.status(403).json({
-          message: "Cannot change status of completed task. Please wait for admin review."
-        });
-      }
-
-      // Prevent manually setting rejected status
-      if (status === "rejected" && !isAdmin) {
-        return res.status(403).json({
-          message: "Only admins can reject tasks"
-        });
-      }
-
-      // ✅ Track status change if status is actually changing
-      if (task.status !== status) {
-        task.statusHistory.push({
-          status: status,
-          changedBy: req.user._id,
-          changedAt: new Date(),
-          note: `Status changed from ${task.status} to ${status} via edit`
-        });
-      }
-
-      // ✅ handle completedAt field
-      if (status === "completed" && task.status !== "completed") {
-        task.completedAt = new Date();
-      } else if (task.status === "completed" && status !== "completed") {
-        task.completedAt = null;
-      }
-      task.status = status;
-    }
-
-    if (priority && ["High", "Medium", "Low"].includes(priority)) task.priority = priority;
-
-    // Track who last edited the task
     task.lastEditedBy = req.user._id;
-
-    // Ensure the field is marked as modified for existing documents
-    task.markModified('lastEditedBy');
-
     await task.save();
+
     const populated = await populateTask(Task.findById(taskId)).lean();
 
-    // ✅ Update workload for assigned employees
-    updateWorkloadOnTaskChange(taskId).catch(err =>
-      console.error('Error updating workload:', err)
+    updateWorkloadOnTaskChange(taskId).catch((err) =>
+      console.error("Error updating workload:", err)
     );
 
-    await notifyAdmins(
+    safeNotifyAdmins(
       `✏️ *Task Updated*\n📌 Title: *${populated.title}*\n📅 Due: *${
         populated.dueDate || "N/A"
       }*\n📊 Status: *${populated.status}*\n🎯 Priority: *${populated.priority}*\n👤 Updated By: *${req.user.name}*`
     );
 
-    // WebSocket notification to assigned users and creator
     const notifyUserIds = [
-      ...populated.assignedTo.map(u => u._id.toString()),
-      populated.assignedBy._id.toString()
+      ...populated.assignedTo.map((u) => u._id.toString()),
+      populated.assignedBy._id.toString(),
     ];
-    const uniqueUserIds = [...new Set(notifyUserIds)].filter(id => id !== req.user._id.toString());
+    const uniqueUserIds = [...new Set(notifyUserIds)].filter(
+      (id) => id !== req.user._id.toString()
+    );
 
     sendNotificationToMultipleUsers(uniqueUserIds, {
       channel: "task",
@@ -240,7 +299,7 @@ exports.editTask = async (req, res) => {
       taskId: populated._id,
       status: populated.status,
       priority: populated.priority,
-      action: "task_updated"
+      action: "task_updated",
     });
 
     res.json(populated);
@@ -251,85 +310,51 @@ exports.editTask = async (req, res) => {
 };
 
 // ------------------- UPDATE TASK STATUS -------------------
+// Admin / Super-admin, creator, or assignee
 exports.updateTaskStatus = async (req, res) => {
   try {
     const { taskId } = req.params;
     const { status } = req.body;
 
-    if (!["pending", "in-progress", "completed", "rejected"].includes(status)) {
+    if (!STATUSES.includes(status)) {
       return res.status(400).json({ message: "Invalid status" });
     }
 
     const task = await Task.findById(taskId);
     if (!task) return res.status(404).json({ message: "Task not found." });
 
-    // Only creator or assigned users can change status
-    if (
-      task.assignedBy.toString() !== req.user._id.toString() &&
-      !task.assignedTo.some((id) => id.toString() === req.user._id.toString())
-    ) {
+    if (!canAccessTask(task, req.user)) {
       return res.status(403).json({ message: "Unauthorized" });
     }
 
-    // ✅ Prevent non-admin employees from changing status once task is completed
-    // Only admin/super-admin can change status away from "completed" or "rejected"
-    const isAdmin = ["admin", "super-admin"].includes(req.user.role);
-    if (!isAdmin && task.status === "completed" && status !== "completed") {
-      return res.status(403).json({
-        message: "Cannot change status of completed task. Please wait for admin review."
-      });
-    }
+    const statusError = applyStatusChange(
+      task,
+      status,
+      req.user,
+      `Status updated by ${req.user.name}`
+    );
+    if (statusError) return res.status(400).json({ message: statusError });
 
-    // Prevent anyone from manually setting rejected status (must use reject endpoint)
-    if (status === "rejected") {
-      return res.status(400).json({
-        message: "Use the reject endpoint to reject tasks"
-      });
-    }
-
-    // ✅ Track status change
-    if (task.status !== status) {
-      task.statusHistory.push({
-        status: status,
-        changedBy: req.user._id,
-        changedAt: new Date(),
-        note: `Status updated by ${req.user.role === 'employee' ? 'employee' : 'admin'}`
-      });
-    }
-
-    // ✅ set/unset completedAt
-    if (status === "completed" && !task.completedAt) {
-      task.completedAt = new Date();
-    } else if (status !== "completed" && task.completedAt) {
-      task.completedAt = null;
-    }
-
-    task.status = status;
-    // Track who last edited the task
     task.lastEditedBy = req.user._id;
-
-    // Ensure the field is marked as modified for existing documents
-    task.markModified('lastEditedBy');
-
     await task.save();
 
     const populated = await populateTask(Task.findById(taskId)).lean();
 
-    // ✅ Update workload for assigned employees
-    updateWorkloadOnTaskChange(taskId).catch(err =>
-      console.error('Error updating workload:', err)
+    updateWorkloadOnTaskChange(taskId).catch((err) =>
+      console.error("Error updating workload:", err)
     );
 
-    await notifyAdmins(
+    safeNotifyAdmins(
       `✅ *Task Status Changed*\n📌 Title: *${populated.title}*\n📊 New Status: *${status}*\n👤 Changed By: *${req.user.name}*`
     );
 
-    // WebSocket notification to assigned users and creator
     const notifyUserIds = [
-      ...populated.assignedTo.map(u => u._id.toString()),
-      populated.assignedBy._id.toString()
+      ...populated.assignedTo.map((u) => u._id.toString()),
+      populated.assignedBy._id.toString(),
     ];
-    const uniqueUserIds = [...new Set(notifyUserIds)].filter(id => id !== req.user._id.toString());
+    const uniqueUserIds = [...new Set(notifyUserIds)].filter(
+      (id) => id !== req.user._id.toString()
+    );
 
     sendNotificationToMultipleUsers(uniqueUserIds, {
       channel: "task",
@@ -338,12 +363,66 @@ exports.updateTaskStatus = async (req, res) => {
       body: `${populated.title}\nNew Status: ${status}\nChanged by: ${req.user.name}`,
       taskId: populated._id,
       status: populated.status,
-      action: "task_status_changed"
+      action: "task_status_changed",
     });
 
     res.json(populated);
   } catch (err) {
     console.error("Error updating status:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+// ------------------- REJECT TASK -------------------
+// Admin / Super-admin only (enforced in routes). Requires a reason.
+exports.rejectTask = async (req, res) => {
+  try {
+    const { taskId } = req.params;
+    const { reason } = req.body;
+
+    if (!reason || !reason.trim()) {
+      return res.status(400).json({ message: "Rejection reason is required" });
+    }
+
+    const task = await Task.findById(taskId);
+    if (!task) return res.status(404).json({ message: "Task not found." });
+
+    if (task.status !== "completed") {
+      return res.status(400).json({ message: "Only completed tasks can be rejected" });
+    }
+
+    pushStatusHistory(task, "rejected", req.user._id, `Task rejected: ${reason.trim()}`);
+    task.status = "rejected";
+    task.rejectedAt = new Date();
+    task.rejectionReason = reason.trim();
+    task.completedAt = null;
+    task.lastEditedBy = req.user._id;
+    await task.save();
+
+    const populated = await populateTask(Task.findById(taskId)).lean();
+
+    updateWorkloadOnTaskChange(taskId).catch((err) =>
+      console.error("Error updating workload:", err)
+    );
+
+    safeNotifyAdmins(
+      `❌ *Task Rejected*\n📌 Title: *${populated.title}*\n📝 Reason: *${populated.rejectionReason}*\n👤 Rejected By: *${req.user.name}*`
+    );
+
+    const assignedUserIds = populated.assignedTo.map((u) => u._id.toString());
+    sendNotificationToMultipleUsers(assignedUserIds, {
+      channel: "task",
+      title: "Task Rejected",
+      message: `"${populated.title}" was rejected and needs rework`,
+      body: `Task rejected by ${req.user.name}\nReason: ${populated.rejectionReason}`,
+      taskId: populated._id,
+      status: populated.status,
+      action: "task_rejected",
+    });
+
+    res.json(populated);
+  } catch (err) {
+    console.error("Error rejecting task:", err);
     res.status(500).json({ message: "Server error" });
   }
 };
@@ -358,18 +437,20 @@ exports.getTaskById = async (req, res) => {
     const isAuthorized =
       task.assignedBy._id.toString() === userId ||
       task.assignedTo.some((u) => u._id.toString() === userId) ||
-      ["admin", "super-admin"].includes(req.user.role);
+      isAdminRole(req.user);
 
     if (!isAuthorized) return res.status(403).json({ message: "Not authorized" });
 
-    // ✅ Initialize statusHistory for old tasks that don't have it
+    // Initialize statusHistory for old tasks that don't have it
     if (!task.statusHistory || task.statusHistory.length === 0) {
-      task.statusHistory = [{
-        status: task.status || "pending",
-        changedBy: task.assignedBy,
-        changedAt: task.createdAt || new Date(),
-        note: "Initial status (migrated)"
-      }];
+      task.statusHistory = [
+        {
+          status: task.status || "pending",
+          changedBy: task.assignedBy,
+          changedAt: task.createdAt || new Date(),
+          note: "Initial status (migrated)",
+        },
+      ];
       await task.save();
     }
 
@@ -381,64 +462,65 @@ exports.getTaskById = async (req, res) => {
 };
 
 // ------------------- GET ALL TASKS -------------------
+// Admin / Super-admin: all tasks. Client: tasks of their projects.
+// Everyone else (employee, hr): tasks assigned to or created by them.
+// Supports pagination via ?page=1&limit=10 — returns { tasks, total, page, totalPages }.
 exports.getTasks = async (req, res) => {
   try {
     let query = {};
 
-    // Role-based filtering
-    if (req.user.role === "client") {
-      // For clients: find all projects they own, then find tasks for those projects
-      // Handle both old 'client' field and new 'clients' array
-      const Project = require("../models/Project");
-      const clientProjects = await Project.find({
-        $or: [
-          { client: req.user._id }, // Old schema
-          { clients: req.user._id } // New schema
-        ]
-      }).select("_id");
-      const projectIds = clientProjects.map(p => p._id);
-      query.project = { $in: projectIds };
-    } else if (!["admin", "super-admin"].includes(req.user.role)) {
-      // For employees: show tasks assigned to them or created by them
-      query = { $or: [{ assignedTo: req.user._id }, { assignedBy: req.user._id }] };
-    }
-
-    // Filter by project if provided (override for admins, append for others)
     if (req.query.project) {
+      // Project-scoped request — show ALL tasks for that project to every role.
+      // Clients are still restricted to their own projects.
       if (req.user.role === "client") {
-        // For clients, ensure they can only see tasks from their own projects
-        // Handle both old 'client' field and new 'clients' array
-        const Project = require("../models/Project");
         const projectExists = await Project.findOne({
           _id: req.query.project,
-          $or: [
-            { client: req.user._id }, // Old schema
-            { clients: req.user._id } // New schema
-          ]
+          $or: [{ client: req.user._id }, { clients: req.user._id }],
         });
-        if (projectExists) {
-          query.project = req.query.project;
-        } else {
-          // Client trying to access a project that's not theirs
-          return res.json([]);
+        if (!projectExists) {
+          return res.json({ tasks: [], total: 0, page: 1, totalPages: 0 });
         }
-      } else {
-        query.project = req.query.project;
       }
+      query.project = req.query.project;
+      // Do NOT add assignedTo filter — all roles see all tasks within the project
+    } else if (req.user.role === "client") {
+      const clientProjects = await Project.find({
+        $or: [{ client: req.user._id }, { clients: req.user._id }],
+      }).select("_id");
+      query.project = { $in: clientProjects.map((p) => p._id) };
+    } else if (req.query.scope === "assigned-by-me") {
+      // Tasks this user created — regardless of role
+      query = { assignedBy: req.user._id };
+    } else if (req.query.scope === "mine" || !isAdminRole(req.user)) {
+      // "My Tasks" = only tasks directly assigned TO this user
+      query = { assignedTo: req.user._id };
     }
 
-    // Filter by status if provided
-    if (req.query.status) {
+    if (req.query.status && STATUSES.includes(req.query.status)) {
       query.status = req.query.status;
     }
-
-    // Filter by priority if provided
-    if (req.query.priority) {
+    if (req.query.priority && PRIORITIES.includes(req.query.priority)) {
       query.priority = req.query.priority;
     }
+    if (req.query.search) {
+      query.title = { $regex: req.query.search, $options: "i" };
+    }
 
-    const tasks = await populateTask(Task.find(query)).lean();
-    res.json(tasks);
+    // Pagination — project-scoped fetches (or admin fetches) allow a higher limit
+    const isProjectScoped = !!req.query.project;
+    const isPrivileged = isAdminRole(req.user);
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = (isProjectScoped || isPrivileged)
+      ? Math.min(10000, Math.max(1, parseInt(req.query.limit) || 10))
+      : Math.min(100, Math.max(1, parseInt(req.query.limit) || 10));
+    const skip = (page - 1) * limit;
+
+    const [tasks, total] = await Promise.all([
+      populateTask(Task.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit)).lean(),
+      Task.countDocuments(query),
+    ]);
+
+    res.json({ tasks, total, page, totalPages: Math.ceil(total / limit) });
   } catch (err) {
     console.error("Error fetching tasks:", err);
     res.status(500).json({ message: "Server error" });
@@ -446,31 +528,23 @@ exports.getTasks = async (req, res) => {
 };
 
 // ------------------- DELETE TASK -------------------
+// Admin / Super-admin or task creator
 exports.deleteTask = async (req, res) => {
   try {
     const task = await Task.findById(req.params.taskId);
     if (!task) return res.status(404).json({ message: "Task not found." });
 
-    if (
-      !["admin", "super-admin"].includes(req.user.role) &&
-      task.assignedBy.toString() !== req.user._id.toString()
-    ) {
+    if (!canManageTask(task, req.user)) {
       return res.status(403).json({ message: "Unauthorized" });
     }
 
-    // ✅ If task is linked to a project, remove task ID from project's tasks array
     if (task.project) {
-      const Project = require("../models/Project");
-      await Project.findByIdAndUpdate(
-        task.project,
-        { $pull: { tasks: task._id } }, // $pull removes the task ID from the array
-        { new: true }
-      );
+      await Project.findByIdAndUpdate(task.project, { $pull: { tasks: task._id } });
     }
 
     await task.deleteOne();
 
-    await notifyAdmins(
+    safeNotifyAdmins(
       `🗑️ *Task Deleted*\n📌 Title: *${task.title}*\n👤 Deleted By: *${req.user.name}*`
     );
 
@@ -482,6 +556,7 @@ exports.deleteTask = async (req, res) => {
 };
 
 // ------------------- ADD REMARK -------------------
+// Only people involved with the task (or admins) can comment
 exports.addRemark = async (req, res) => {
   try {
     const { taskId } = req.params;
@@ -494,7 +569,11 @@ exports.addRemark = async (req, res) => {
     const task = await Task.findById(taskId);
     if (!task) return res.status(404).json({ message: "Task not found." });
 
-    task.remarks.push({ user: req.user._id, comment });
+    if (!canAccessTask(task, req.user)) {
+      return res.status(403).json({ message: "Not authorized" });
+    }
+
+    task.remarks.push({ user: req.user._id, comment: comment.trim() });
     await task.save();
 
     const populated = await populateTask(Task.findById(taskId)).lean();
@@ -511,86 +590,14 @@ exports.getRemarks = async (req, res) => {
     const { taskId } = req.params;
     const task = await Task.findById(taskId).populate("remarks.user", "name email");
     if (!task) return res.status(404).json({ message: "Task not found." });
+
+    if (!canAccessTask(task, req.user)) {
+      return res.status(403).json({ message: "Not authorized" });
+    }
+
     res.json(task.remarks || []);
   } catch (err) {
     console.error("Error fetching remarks:", err);
-    res.status(500).json({ message: "Server error" });
-  }
-};
-
-// ------------------- REJECT TASK -------------------
-exports.rejectTask = async (req, res) => {
-  try {
-    const { taskId } = req.params;
-    const { reason } = req.body;
-
-    // ✅ Require rejection reason
-    if (!reason || !reason.trim()) {
-      return res.status(400).json({ message: "Rejection reason is required" });
-    }
-
-    const task = await Task.findById(taskId);
-    if (!task) return res.status(404).json({ message: "Task not found." });
-
-    // Only admin/super-admin can reject tasks
-    if (!["admin", "super-admin"].includes(req.user.role)) {
-      return res.status(403).json({ message: "Only admins can reject tasks" });
-    }
-
-    // Only reject tasks that are marked as completed
-    if (task.status !== "completed") {
-      return res.status(400).json({ message: "Only completed tasks can be rejected" });
-    }
-
-    // ✅ Track status change to rejected
-    task.statusHistory.push({
-      status: "rejected",
-      changedBy: req.user._id,
-      changedAt: new Date(),
-      note: `Task rejected: ${reason.trim()}`
-    });
-
-    // Update task status to rejected
-    task.status = "rejected";
-    task.rejectedAt = new Date();
-    task.rejectionReason = reason.trim();
-    task.completedAt = null; // Clear completed timestamp
-    task.lastEditedBy = req.user._id;
-
-    // Mark fields as modified to ensure they're saved
-    task.markModified('status');
-    task.markModified('rejectedAt');
-    task.markModified('rejectionReason');
-    task.markModified('completedAt');
-    task.markModified('lastEditedBy');
-
-    await task.save();
-
-    // Log to verify the data is being saved
-    console.log('Task rejected:', {
-      id: task._id,
-      status: task.status,
-      rejectionReason: task.rejectionReason,
-      rejectedAt: task.rejectedAt
-    });
-
-    const populated = await populateTask(Task.findById(taskId)).lean();
-
-    // Log to verify the populated data includes rejection fields
-    console.log('Returning rejected task to client:', {
-      id: populated._id,
-      status: populated.status,
-      rejectionReason: populated.rejectionReason,
-      rejectedAt: populated.rejectedAt
-    });
-
-    await notifyAdmins(
-      `❌ *Task Rejected*\n📌 Title: *${populated.title}*\n📝 Reason: *${populated.rejectionReason}*\n👤 Rejected By: *${req.user.name}*`
-    );
-
-    res.json(populated);
-  } catch (err) {
-    console.error("Error rejecting task:", err);
     res.status(500).json({ message: "Server error" });
   }
 };
@@ -600,367 +607,137 @@ exports.getEmployeeTaskAnalytics = async (req, res) => {
   try {
     const { employeeId } = req.params;
 
-    // Check if the employee exists
-    const User = require("../models/User");
     const employee = await User.findById(employeeId).select("name email role");
     if (!employee) {
       return res.status(404).json({ message: "Employee not found" });
     }
 
-    // Get all tasks assigned to this employee
-    const tasks = await Task.find({
-      assignedTo: { $in: [employeeId] }
-    })
-    .populate("assignedBy", "name email")
-    .populate("assignedTo", "name email employeeId designation")
-    .sort({ createdAt: -1 });
+    const tasks = await Task.find({ assignedTo: { $in: [employeeId] } })
+      .populate("assignedBy", "name email")
+      .populate("assignedTo", "name email employeeId designation")
+      .sort({ createdAt: -1 })
+      .lean();
 
-    // Calculate analytics
+    const now = new Date();
     const totalTasks = tasks.length;
-    const completedTasks = tasks.filter(task => task.status === "completed").length;
-    const inProgressTasks = tasks.filter(task => task.status === "in-progress").length;
-    const pendingTasks = tasks.filter(task => task.status === "pending").length;
-    const rejectedTasks = tasks.filter(task => task.status === "rejected").length;
-    const overdueTasks = tasks.filter(task => {
-      const now = new Date();
-      const dueDate = new Date(task.dueDate);
-      return task.status !== "completed" && task.status !== "rejected" && dueDate < now;
-    }).length;
+    const completedTasks = tasks.filter((t) => t.status === "completed").length;
+    const inProgressTasks = tasks.filter((t) => t.status === "in-progress").length;
+    const pendingTasks = tasks.filter((t) => t.status === "pending").length;
+    const rejectedTasks = tasks.filter((t) => t.status === "rejected").length;
+    const overdueTasks = tasks.filter(
+      (t) =>
+        t.dueDate &&
+        t.status !== "completed" &&
+        t.status !== "rejected" &&
+        new Date(t.dueDate) < now
+    ).length;
 
-    // Calculate completion rate
-    const completionRate = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+    const completionRate =
+      totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
 
-    // Group tasks by priority
-    const highPriorityTasks = tasks.filter(task => task.priority === "High").length;
-    const mediumPriorityTasks = tasks.filter(task => task.priority === "Medium").length;
-    const lowPriorityTasks = tasks.filter(task => task.priority === "Low").length;
+    const highPriorityTasks = tasks.filter((t) => t.priority === "High").length;
+    const mediumPriorityTasks = tasks.filter((t) => t.priority === "Medium").length;
+    const lowPriorityTasks = tasks.filter((t) => t.priority === "Low").length;
 
-    // ==================== QUALITY METRICS ====================
-    // Calculate rejection rate
-    const rejectionRate = totalTasks > 0 ? Math.round((rejectedTasks / totalTasks) * 100) : 0;
+    // Quality metrics from status history
+    const rejectionRate =
+      totalTasks > 0 ? Math.round((rejectedTasks / totalTasks) * 100) : 0;
 
-    // Calculate reopened tasks (tasks that were completed but status changed back)
-    const reopenedTasks = tasks.filter(task => {
-      if (!task.statusHistory || task.statusHistory.length < 2) return false;
-
-      // Check if task has been completed and then status changed to something else
+    const reopenedTasks = tasks.filter((t) => {
+      if (!t.statusHistory || t.statusHistory.length < 2) return false;
       let wasCompleted = false;
-      let wasReopened = false;
-
-      for (let i = 0; i < task.statusHistory.length; i++) {
-        if (task.statusHistory[i].status === "completed") {
+      for (const entry of t.statusHistory) {
+        if (entry.status === "completed") {
           wasCompleted = true;
-        } else if (wasCompleted && task.statusHistory[i].status !== "completed" && task.statusHistory[i].status !== "rejected") {
-          wasReopened = true;
-          break;
+        } else if (wasCompleted && entry.status !== "rejected") {
+          return true;
         }
       }
-
-      return wasReopened;
+      return false;
     }).length;
 
-    const reopenedRate = totalTasks > 0 ? Math.round((reopenedTasks / totalTasks) * 100) : 0;
-
-    // Calculate first-time completion rate (completed without being reopened)
-    const firstTimeCompletedTasks = completedTasks - reopenedTasks;
-    const firstTimeSuccessRate = completedTasks > 0 ? Math.round((firstTimeCompletedTasks / completedTasks) * 100) : 0;
+    const reopenedRate =
+      totalTasks > 0 ? Math.round((reopenedTasks / totalTasks) * 100) : 0;
+    const firstTimeCompletedTasks = Math.max(completedTasks - reopenedTasks, 0);
+    const firstTimeSuccessRate =
+      completedTasks > 0
+        ? Math.round((firstTimeCompletedTasks / completedTasks) * 100)
+        : 0;
 
     const qualityMetrics = {
       rejectedTasks,
       rejectionRate,
       reopenedTasks,
       reopenedRate,
-      firstTimeSuccessRate
+      firstTimeSuccessRate,
     };
 
-    // Recent tasks (last 10)
-    const recentTasks = tasks.slice(0, 10).map(task => ({
-      _id: task._id,
-      title: task.title,
-      description: task.description,
-      status: task.status,
-      priority: task.priority,
-      dueDate: task.dueDate,
-      assignedBy: task.assignedBy,
-      createdAt: task.createdAt,
-      updatedAt: task.updatedAt
+    const recentTasks = tasks.slice(0, 10).map((t) => ({
+      _id: t._id,
+      title: t.title,
+      description: t.description,
+      status: t.status,
+      priority: t.priority,
+      dueDate: t.dueDate,
+      assignedBy: t.assignedBy,
+      createdAt: t.createdAt,
+      updatedAt: t.updatedAt,
     }));
 
-    // Tasks by status with details
+    const taskSummary = (t) => ({
+      _id: t._id,
+      title: t.title,
+      status: t.status,
+      priority: t.priority,
+      dueDate: t.dueDate,
+      createdAt: t.createdAt,
+    });
+
     const tasksByStatus = {
-      completed: tasks.filter(task => task.status === "completed").map(task => ({
-        _id: task._id,
-        title: task.title,
-        status: task.status,
-        priority: task.priority,
-        dueDate: task.dueDate,
-        completedAt: task.updatedAt
-      })),
-      inProgress: tasks.filter(task => task.status === "in-progress").map(task => ({
-        _id: task._id,
-        title: task.title,
-        status: task.status,
-        priority: task.priority,
-        dueDate: task.dueDate,
-        createdAt: task.createdAt
-      })),
-      pending: tasks.filter(task => task.status === "pending").map(task => ({
-        _id: task._id,
-        title: task.title,
-        status: task.status,
-        priority: task.priority,
-        dueDate: task.dueDate,
-        createdAt: task.createdAt
-      })),
-      overdue: tasks.filter(task => {
-        const now = new Date();
-        const dueDate = new Date(task.dueDate);
-        return task.status !== "completed" && dueDate < now;
-      }).map(task => ({
-        _id: task._id,
-        title: task.title,
-        status: task.status,
-        priority: task.priority,
-        dueDate: task.dueDate,
-        daysPastDue: Math.ceil((new Date() - new Date(task.dueDate)) / (1000 * 60 * 60 * 24))
-      }))
+      completed: tasks
+        .filter((t) => t.status === "completed")
+        .map((t) => ({ ...taskSummary(t), completedAt: t.completedAt || t.updatedAt })),
+      inProgress: tasks.filter((t) => t.status === "in-progress").map(taskSummary),
+      pending: tasks.filter((t) => t.status === "pending").map(taskSummary),
+      overdue: tasks
+        .filter(
+          (t) =>
+            t.dueDate &&
+            t.status !== "completed" &&
+            t.status !== "rejected" &&
+            new Date(t.dueDate) < now
+        )
+        .map((t) => ({
+          ...taskSummary(t),
+          daysPastDue: Math.ceil((now - new Date(t.dueDate)) / (1000 * 60 * 60 * 24)),
+        })),
     };
 
-    const analytics = {
+    res.json({
       employee: {
         _id: employee._id,
         name: employee.name,
         email: employee.email,
-        role: employee.role
+        role: employee.role,
       },
       summary: {
         totalTasks,
         completedTasks,
         inProgressTasks,
         pendingTasks,
+        rejectedTasks,
         overdueTasks,
         completionRate,
         highPriorityTasks,
         mediumPriorityTasks,
-        lowPriorityTasks
+        lowPriorityTasks,
       },
+      qualityMetrics,
       recentTasks,
-      tasksByStatus
-    };
-
-    res.json(analytics);
+      tasksByStatus,
+    });
   } catch (err) {
     console.error("Error fetching employee task analytics:", err);
-    res.status(500).json({ message: "Server error" });
-  }
-};
-
-// ------------------- SUBMIT TASK DETAILS (Employee) -------------------
-exports.submitTaskDetails = async (req, res) => {
-  try {
-    const { taskId } = req.params;
-    const { submissionUrl, submissionText, submissionRemark } = req.body;
-
-    // Validation: at least one field must be provided
-    if (!submissionUrl && !submissionText && !submissionRemark) {
-      return res.status(400).json({
-        message: "At least one submission field (URL, text, or remark) is required"
-      });
-    }
-
-    const task = await Task.findById(taskId);
-    if (!task) return res.status(404).json({ message: "Task not found." });
-
-    // Only assigned employees can submit
-    const isAssigned = task.assignedTo.some(id => id.toString() === req.user._id.toString());
-    if (!isAssigned) {
-      return res.status(403).json({ message: "Not authorized to submit this task" });
-    }
-
-    // Update submission fields
-    if (submissionUrl) task.submissionUrl = submissionUrl.trim();
-    if (submissionText) task.submissionText = submissionText.trim();
-    if (submissionRemark) task.submissionRemark = submissionRemark.trim();
-    task.submittedAt = new Date();
-    task.approvalStatus = "pending"; // Set to pending for admin review
-    task.lastEditedBy = req.user._id;
-
-    // Mark fields as modified
-    task.markModified('submissionUrl');
-    task.markModified('submissionText');
-    task.markModified('submissionRemark');
-    task.markModified('submittedAt');
-    task.markModified('approvalStatus');
-    task.markModified('lastEditedBy');
-
-    await task.save();
-
-    const populated = await populateTask(Task.findById(taskId)).lean();
-
-    // ✅ Update workload (submission changes task status indirectly)
-    updateWorkloadOnTaskChange(taskId).catch(err =>
-      console.error('Error updating workload:', err)
-    );
-
-    // Notify admins about the submission
-    await notifyAdmins(
-      `📤 *Task Submission Received*\n📌 Title: *${populated.title}*\n👤 Submitted By: *${req.user.name}*\n📝 URL: ${submissionUrl || "N/A"}\n💬 Remark: ${submissionRemark || "N/A"}`
-    );
-
-    // WebSocket notification to task creator
-    sendNotificationToUser(populated.assignedBy._id.toString(), {
-      channel: "task",
-      title: "Task Submission",
-      message: `${req.user.name} submitted details for task: ${populated.title}`,
-      body: `Task submitted for review\nTitle: ${populated.title}\nBy: ${req.user.name}`,
-      taskId: populated._id,
-      action: "task_submitted"
-    });
-
-    res.json(populated);
-  } catch (err) {
-    console.error("Error submitting task details:", err);
-    res.status(500).json({ message: "Server error" });
-  }
-};
-
-// ------------------- APPROVE TASK SUBMISSION (Admin) -------------------
-exports.approveTaskSubmission = async (req, res) => {
-  try {
-    const { taskId } = req.params;
-    const { approvalRemark } = req.body;
-
-    const task = await Task.findById(taskId);
-    if (!task) return res.status(404).json({ message: "Task not found." });
-
-    // Only admin/super-admin or the person who assigned the task can approve
-    const isAdmin = ["admin", "super-admin"].includes(req.user.role);
-    const isTaskAssigner = task.assignedBy && task.assignedBy.toString() === req.user._id.toString();
-
-    if (!isAdmin && !isTaskAssigner) {
-      return res.status(403).json({ message: "Only admins or the task assigner can approve task submissions" });
-    }
-
-    // Check if task has been submitted
-    if (task.approvalStatus === "none") {
-      return res.status(400).json({ message: "Task has not been submitted yet" });
-    }
-
-    // Update approval fields
-    task.approvalStatus = "approved";
-    task.approvedBy = req.user._id;
-    task.approvedAt = new Date();
-    if (approvalRemark) task.approvalRemark = approvalRemark.trim();
-    task.lastEditedBy = req.user._id;
-
-    // Mark fields as modified
-    task.markModified('approvalStatus');
-    task.markModified('approvedBy');
-    task.markModified('approvedAt');
-    task.markModified('approvalRemark');
-    task.markModified('lastEditedBy');
-
-    await task.save();
-
-    const populated = await populateTask(Task.findById(taskId)).lean();
-
-    // ✅ Update workload (approval may affect capacity)
-    updateWorkloadOnTaskChange(taskId).catch(err =>
-      console.error('Error updating workload:', err)
-    );
-
-    // Notify about approval
-    await notifyAdmins(
-      `✅ *Task Submission Approved*\n📌 Title: *${populated.title}*\n👤 Approved By: *${req.user.name}*\n💬 Remark: ${approvalRemark || "N/A"}`
-    );
-
-    // WebSocket notification to assigned users
-    const assignedUserIds = populated.assignedTo.map(u => u._id.toString());
-    sendNotificationToMultipleUsers(assignedUserIds, {
-      channel: "task",
-      title: "Task Approved",
-      message: `Your submission for "${populated.title}" has been approved`,
-      body: `Task approved by ${req.user.name}\nRemark: ${approvalRemark || "Great work!"}`,
-      taskId: populated._id,
-      action: "task_approved"
-    });
-
-    res.json(populated);
-  } catch (err) {
-    console.error("Error approving task submission:", err);
-    res.status(500).json({ message: "Server error" });
-  }
-};
-
-// ------------------- REJECT TASK SUBMISSION (Admin) -------------------
-exports.rejectTaskSubmission = async (req, res) => {
-  try {
-    const { taskId } = req.params;
-    const { approvalRemark } = req.body;
-
-    // Rejection remark is required
-    if (!approvalRemark || !approvalRemark.trim()) {
-      return res.status(400).json({ message: "Rejection remark is required" });
-    }
-
-    const task = await Task.findById(taskId);
-    if (!task) return res.status(404).json({ message: "Task not found." });
-
-    // Only admin/super-admin or the person who assigned the task can reject submissions
-    const isAdmin = ["admin", "super-admin"].includes(req.user.role);
-    const isTaskAssigner = task.assignedBy && task.assignedBy.toString() === req.user._id.toString();
-
-    if (!isAdmin && !isTaskAssigner) {
-      return res.status(403).json({ message: "Only admins or the task assigner can reject task submissions" });
-    }
-
-    // Check if task has been submitted
-    if (task.approvalStatus === "none") {
-      return res.status(400).json({ message: "Task has not been submitted yet" });
-    }
-
-    // Update approval fields
-    task.approvalStatus = "rejected";
-    task.approvedBy = req.user._id;
-    task.approvedAt = new Date();
-    task.approvalRemark = approvalRemark.trim();
-    task.lastEditedBy = req.user._id;
-
-    // Mark fields as modified
-    task.markModified('approvalStatus');
-    task.markModified('approvedBy');
-    task.markModified('approvedAt');
-    task.markModified('approvalRemark');
-    task.markModified('lastEditedBy');
-
-    await task.save();
-
-    const populated = await populateTask(Task.findById(taskId)).lean();
-
-    // ✅ Update workload (rejection means task still active)
-    updateWorkloadOnTaskChange(taskId).catch(err =>
-      console.error('Error updating workload:', err)
-    );
-
-    // Notify about rejection
-    await notifyAdmins(
-      `❌ *Task Submission Rejected*\n📌 Title: *${populated.title}*\n👤 Rejected By: *${req.user.name}*\n📝 Reason: ${approvalRemark}`
-    );
-
-    // WebSocket notification to assigned users
-    const assignedUserIds = populated.assignedTo.map(u => u._id.toString());
-    sendNotificationToMultipleUsers(assignedUserIds, {
-      channel: "task",
-      title: "Task Submission Rejected",
-      message: `Your submission for "${populated.title}" needs revision`,
-      body: `Task submission rejected by ${req.user.name}\nReason: ${approvalRemark}`,
-      taskId: populated._id,
-      action: "task_submission_rejected"
-    });
-
-    res.json(populated);
-  } catch (err) {
-    console.error("Error rejecting task submission:", err);
     res.status(500).json({ message: "Server error" });
   }
 };

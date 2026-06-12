@@ -218,10 +218,13 @@ const EmployeeDashboard = ({ onLogout }) => {
     if (!token) return navigate("/login", { replace: true });
     try {
       setLoading(true);
-      const res = await axios.get(`${API_BASE}/api/tasks`, {
+      // scope=mine: personal dashboard shows only the user's own tasks (even for admins)
+      const res = await axios.get(`${API_BASE}/api/tasks?scope=mine`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      setTasks(res.data.map(formatTask));
+      // backend now returns { tasks, total, page, totalPages } — handle both shapes
+      const rawList = Array.isArray(res.data) ? res.data : (res.data?.tasks || []);
+      setTasks(rawList.map(formatTask));
     } catch (err) {
       console.error("Error fetching tasks", err.response?.data || err.message);
     } finally {

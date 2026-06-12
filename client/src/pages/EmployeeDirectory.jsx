@@ -84,6 +84,28 @@ const EmployeeDirectory = ({ onLogout }) => {
     }
   };
 
+  // Function to change employee role (super-admin only)
+  const updateEmployeeRole = async (employeeId, newRole) => {
+    try {
+      const token = localStorage.getItem("token");
+      const response = await fetch(`${API_BASE}/api/users/${employeeId}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ role: newRole }),
+      });
+      if (!response.ok) throw new Error("Failed to update role");
+      setEmployees(prev =>
+        prev.map(emp => emp._id === employeeId ? { ...emp, role: newRole } : emp)
+      );
+    } catch (error) {
+      console.error("Error updating role:", error);
+      alert("Failed to update employee role. Please try again.");
+    }
+  };
+
   // Function to toggle employee region (add/remove from array)
   const updateEmployeeRegion = async (employeeId, toggleRegion) => {
     console.log(`Toggling region "${toggleRegion}" for employee ${employeeId}`);
@@ -488,6 +510,7 @@ const EmployeeDirectory = ({ onLogout }) => {
               updatingStatus={updatingStatus}
               regions={regions}
               onRegionChange={updateEmployeeRegion}
+              onRoleChange={updateEmployeeRole}
             />
           )}
         </div>

@@ -16,6 +16,7 @@ const {
   getEmployeeById,
   updateEmployeeStatus,
   updateEmployee,
+  getNextEmployeeId,
 } = require("../controllers/userController");
 
 // ================================
@@ -58,6 +59,24 @@ router.get("/all", protect, authorize("admin", "hr", "super-admin"), async (req,
     res.status(500).json({ error: "Failed to fetch users" });
   }
 });
+
+// Assignable users list — minimal info (id, name, email, designation) for task assignment
+// Accessible to any authenticated user so all roles can create and assign tasks
+router.get("/assignable", protect, async (req, res) => {
+  try {
+    const users = await User.find(
+      { status: { $nin: ["terminated", "absconded"] } },
+      "_id name email designation role"
+    ).sort({ name: 1 });
+    res.json(users);
+  } catch (err) {
+    console.error("Fetch assignable users error:", err);
+    res.status(500).json({ error: "Failed to fetch users" });
+  }
+});
+
+// Get next auto-generated employee ID - restricted to admin, hr, super-admin
+router.get("/next-id", protect, authorize("admin", "hr", "super-admin"), getNextEmployeeId);
 
 // Create new employee - restricted to admin, hr, super-admin
 router.post("/create", protect, authorize("admin", "hr", "super-admin"), createEmployee);

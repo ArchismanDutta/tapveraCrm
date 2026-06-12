@@ -1,23 +1,11 @@
-import React, { useState, useEffect } from "react";
+import React from "react";
 import TaskItem from "./TaskItem";
 import TaskKanban from "./TaskKanban";
 
-const TaskList = ({ tasks: initialTasks, onStatusChange, loading, viewMode = 'list', setViewMode }) => {
-  const [tasks, setTasks] = useState(initialTasks);
-
-  useEffect(() => {
-    setTasks(initialTasks);
-  }, [initialTasks]);
-
-  // Handle status update from TaskItem
+const TaskList = ({ tasks, onStatusChange, onTaskUpdated, loading, viewMode = 'list', setViewMode }) => {
+  // Parent owns the task list; pass server-updated tasks straight up
   const handleTaskStatusUpdate = (updatedTask) => {
-    setTasks((prev) =>
-      prev.map((t) => (t._id === updatedTask._id ? updatedTask : t))
-    );
-    // Also call the parent's onStatusChange if provided
-    if (onStatusChange) {
-      onStatusChange(updatedTask._id, updatedTask.status);
-    }
+    if (onTaskUpdated) onTaskUpdated(updatedTask);
   };
 
   if (loading) {
@@ -52,10 +40,7 @@ const TaskList = ({ tasks: initialTasks, onStatusChange, loading, viewMode = 'li
             <div className="text-center py-8 text-blue-400 font-medium bg-[#141a29] border border-blue-950 rounded-lg">
               <p className="text-lg mb-2">📝 No Tasks Found</p>
               <p className="text-sm opacity-75">
-                {initialTasks?.length > 0
-                  ? "Try adjusting your filters to see more tasks"
-                  : "No tasks have been assigned to you yet"
-                }
+                No tasks match the current filters
               </p>
             </div>
           )}
@@ -65,6 +50,7 @@ const TaskList = ({ tasks: initialTasks, onStatusChange, loading, viewMode = 'li
         <TaskKanban
           tasks={tasks}
           onStatusChange={onStatusChange}
+          onTaskUpdated={onTaskUpdated}
           loading={loading}
         />
       )}

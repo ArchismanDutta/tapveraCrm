@@ -61,26 +61,6 @@ const taskSchema = new mongoose.Schema(
       default: null,
     },
 
-    // ✅ Employee submission fields
-    submissionUrl: { type: String, default: null },
-    submissionText: { type: String, default: null },
-    submissionRemark: { type: String, default: null },
-    submittedAt: { type: Date, default: null },
-
-    // ✅ Admin approval status for submissions
-    approvalStatus: {
-      type: String,
-      enum: ["pending", "approved", "rejected", "none"],
-      default: "none", // "none" for tasks not yet submitted
-    },
-    approvedBy: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      default: null,
-    },
-    approvedAt: { type: Date, default: null },
-    approvalRemark: { type: String, default: null },
-
     // Remarks on the task
     remarks: [
       {
@@ -129,8 +109,5 @@ taskSchema.index({ assignedBy: 1, createdAt: -1 });
 
 // Compound index for filtering tasks by status and priority
 taskSchema.index({ status: 1, priority: 1 });
-
-// Index for approval status queries (for pending approvals)
-taskSchema.index({ approvalStatus: 1, submittedAt: -1 });
 
 module.exports = mongoose.model("Task", taskSchema);

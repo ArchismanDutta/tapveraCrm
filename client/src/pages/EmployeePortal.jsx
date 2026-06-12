@@ -1305,10 +1305,7 @@ const EmployeePortal = ({ onLogout }) => {
 const ProjectTasksSection = ({ projectId, API_BASE }) => {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [selectedTask, setSelectedTask] = useState(null);
-  const [submissionUrl, setSubmissionUrl] = useState('');
-  const [submissionText, setSubmissionText] = useState('');
-  const [submissionRemark, setSubmissionRemark] = useState('');
+  const [updatingTaskId, setUpdatingTaskId] = useState(null);
 
   useEffect(() => {
     fetchProjectTasks();
@@ -1332,37 +1329,30 @@ const ProjectTasksSection = ({ projectId, API_BASE }) => {
     }
   };
 
-  const handleSubmit = async (taskId) => {
-    if (!submissionUrl && !submissionText && !submissionRemark) {
-      alert('Please provide at least one field');
-      return;
-    }
-
+  const handleStatusChange = async (taskId, newStatus) => {
+    setUpdatingTaskId(taskId);
     try {
       const token = localStorage.getItem("token");
-      const response = await fetch(`${API_BASE}/api/tasks/${taskId}/submit`, {
-        method: 'POST',
+      const response = await fetch(`${API_BASE}/api/tasks/${taskId}/status`, {
+        method: 'PATCH',
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ submissionUrl, submissionText, submissionRemark })
+        body: JSON.stringify({ status: newStatus })
       });
 
       if (!response.ok) {
-        throw new Error('Submission failed');
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.message || 'Status update failed');
       }
 
-      // Clear form and refresh
-      setSubmissionUrl('');
-      setSubmissionText('');
-      setSubmissionRemark('');
-      setSelectedTask(null);
       fetchProjectTasks();
-      alert('Submission successful!');
     } catch (error) {
-      console.error("Error submitting:", error);
-      alert('Submission failed. Please try again.');
+      console.error("Error updating status:", error);
+      alert(error.message || 'Status update failed. Please try again.');
+    } finally {
+      setUpdatingTaskId(null);
     }
   };
 
@@ -1416,158 +1406,49 @@ const ProjectTasksSection = ({ projectId, API_BASE }) => {
             </div>
           </div>
 
-          {/* Approval Status Badges */}
-          {task.approvalStatus !== 'none' && (
-            <div className={`mb-4 p-3 rounded-lg ${
-              task.approvalStatus === 'approved' ? 'bg-green-500/10 border border-green-500/30' :
-              task.approvalStatus === 'rejected' ? 'bg-red-500/10 border border-red-500/30' :
-              'bg-yellow-500/10 border border-yellow-500/30'
-            }`}>
-              <div className="flex items-center gap-2">
-                {task.approvalStatus === 'approved' && <span className="text-green-400 font-semibold">✅ Submission Approved</span>}
-                {task.approvalStatus === 'rejected' && <span className="text-red-400 font-semibold">❌ Submission Rejected</span>}
-                {task.approvalStatus === 'pending' && <span className="text-yellow-400 font-semibold">⏳ Pending Admin Review</span>}
-              </div>
-              {task.approvalRemark && (
-                <p className="text-sm text-gray-300 mt-2">
-                  <strong>Admin Feedback:</strong> {task.approvalRemark}
-                </p>
-              )}
-              {task.approvedBy && (
-                <p className="text-xs text-gray-500 mt-1">
-                  Reviewed by: {task.approvedBy.name} on {new Date(task.approvedAt).toLocaleString()}
-                </p>
-              )}
-            </div>
-          )}
-
-          {/* Show submitted details if exists */}
-          {task.submittedAt && (
-            <div className="mb-4 p-3 bg-blue-500/5 border border-blue-500/20 rounded-lg">
-              <p className="text-sm text-gray-400 mb-2">
-                <strong>Your Submission:</strong> {new Date(task.submittedAt).toLocaleString()}
+          {/* Rejection info (admin rejected this task with a reason) */}
+          {task.status === 'rejected' && (
+            <div className="mb-4 p-3 bg-red-500/10 border border-red-500/30 rounded-lg">
+              <p className="text-red-400 font-semibold mb-1">❌ Task Rejected by Admin</p>
+              <p className="text-sm text-gray-300">
+                <strong>Reason:</strong> {task.rejectionReason || 'No reason provided'}
               </p>
-              {task.submissionUrl && (
-                <p className="text-sm text-gray-300 mb-1">
-                  <strong>URL:</strong>{' '}
-                  <a
-                    href={task.submissionUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-blue-400 hover:underline break-all"
-                  >
-                    {task.submissionUrl}
-                  </a>
+              {task.rejectedAt && (
+                <p className="text-xs text-gray-500 mt-1">
+                  Rejected on: {new Date(task.rejectedAt).toLocaleString()}
                 </p>
               )}
-              {task.submissionText && (
-                <p className="text-sm text-gray-300 mb-1">
-                  <strong>Text:</strong> {task.submissionText}
-                </p>
-              )}
-              {task.submissionRemark && (
-                <p className="text-sm text-gray-300">
-                  <strong>Remark:</strong> {task.submissionRemark}
-                </p>
-              )}
+              <p className="text-xs text-yellow-300 mt-2 italic">
+                Address the feedback, then update the status below.
+              </p>
             </div>
           )}
 
-          {/* Submission Form - show based on approval status */}
-          {task.approvalStatus !== 'approved' && (
-            <div className="border-t border-[#232945] pt-4">
-              {/* Show message if submission is pending admin review */}
-              {task.approvalStatus === 'pending' && task.submittedAt && (
-                <div className="p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
-                  <p className="text-sm text-yellow-400">
-                    ⏳ Your submission is pending admin review. You cannot update it until the admin approves or rejects it.
-                  </p>
-                </div>
-              )}
-
-              {/* Allow submission only if: no submission yet OR submission was rejected */}
-              {(task.approvalStatus === 'none' || task.approvalStatus === 'rejected') && (
-                <>
-                  {selectedTask === task._id ? (
-                    <div className="space-y-3">
-                      <div>
-                        <label className="block text-sm text-gray-400 mb-1">URL</label>
-                        <input
-                          type="url"
-                          placeholder="https://example.com"
-                          value={submissionUrl}
-                          onChange={(e) => setSubmissionUrl(e.target.value)}
-                          className="w-full px-4 py-2 bg-[#0f1419] border border-[#232945] rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm text-gray-400 mb-1">Additional Text/Description</label>
-                        <textarea
-                          placeholder="Describe your work, challenges faced, etc."
-                          value={submissionText}
-                          onChange={(e) => setSubmissionText(e.target.value)}
-                          rows={3}
-                          className="w-full px-4 py-2 bg-[#0f1419] border border-[#232945] rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 resize-none"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm text-gray-400 mb-1">Remark/Notes</label>
-                        <textarea
-                          placeholder="Any additional notes or comments"
-                          value={submissionRemark}
-                          onChange={(e) => setSubmissionRemark(e.target.value)}
-                          rows={2}
-                          className="w-full px-4 py-2 bg-[#0f1419] border border-[#232945] rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 resize-none"
-                        />
-                      </div>
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => handleSubmit(task._id)}
-                          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors flex items-center gap-2"
-                        >
-                          <Send className="w-4 h-4" />
-                          {task.approvalStatus === 'rejected' ? 'Resubmit for Review' : 'Submit for Review'}
-                        </button>
-                        <button
-                          onClick={() => {
-                            setSelectedTask(null);
-                            setSubmissionUrl('');
-                            setSubmissionText('');
-                            setSubmissionRemark('');
-                          }}
-                          className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <button
-                      onClick={() => {
-                        setSelectedTask(task._id);
-                        // Pre-fill with existing data if resubmitting
-                        setSubmissionUrl(task.submissionUrl || '');
-                        setSubmissionText(task.submissionText || '');
-                        setSubmissionRemark(task.submissionRemark || '');
-                      }}
-                      className={`px-4 py-2 rounded-lg transition-colors flex items-center gap-2 ${
-                        task.approvalStatus === 'rejected'
-                          ? 'bg-orange-600/20 hover:bg-orange-600/40 text-orange-400 border border-orange-500/30'
-                          : 'bg-blue-600/20 hover:bg-blue-600/40 text-blue-400 border border-blue-500/30'
-                      }`}
-                    >
-                      <FileText className="w-4 h-4" />
-                      {task.submittedAt && task.approvalStatus === 'rejected'
-                        ? 'Update & Resubmit'
-                        : task.submittedAt
-                        ? 'Update Submission'
-                        : 'Submit Task Details'}
-                    </button>
+          {/* Status control */}
+          <div className="border-t border-[#232945] pt-4 flex items-center gap-3">
+            {task.status === 'completed' ? (
+              <span className="text-sm text-green-400">
+                ✅ Completed{task.completedAt ? ` on ${new Date(task.completedAt).toLocaleDateString()}` : ''} — awaiting admin review
+              </span>
+            ) : (
+              <>
+                <label className="text-sm text-gray-400">Update status:</label>
+                <select
+                  value={task.status === 'rejected' ? '' : task.status}
+                  onChange={(e) => e.target.value && handleStatusChange(task._id, e.target.value)}
+                  disabled={updatingTaskId === task._id}
+                  className="px-3 py-2 bg-[#0f1419] border border-[#232945] rounded-lg text-white text-sm focus:outline-none focus:border-blue-500"
+                >
+                  {task.status === 'rejected' && (
+                    <option value="" disabled>Rejected — move to...</option>
                   )}
-                </>
-              )}
-            </div>
-          )}
+                  <option value="pending">Pending</option>
+                  <option value="in-progress">In Progress</option>
+                  <option value="completed">Completed</option>
+                </select>
+              </>
+            )}
+          </div>
         </div>
       ))}
     </div>

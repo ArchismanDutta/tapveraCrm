@@ -126,10 +126,13 @@ router.get("/", protect, async (req, res) => {
     const sortObj = sortMap[sort] || { createdAt: -1 };
 
     const isExport = req.query.export === "true";
+    const isPrivileged = ["admin", "super-admin", "hr"].includes(req.user.role);
     const pageNum = Math.max(1, parseInt(page) || 1);
     const limitNum = isExport
       ? Math.min(parseInt(limit) || 10000, 10000)
-      : Math.min(Math.max(1, parseInt(limit) || 20), 100);
+      : isPrivileged
+        ? Math.min(Math.max(1, parseInt(limit) || 20), 10000) // no hard cap for admins
+        : Math.min(Math.max(1, parseInt(limit) || 20), 100);  // employees stay capped at 100
     const skip = (pageNum - 1) * limitNum;
 
     const TYPES = ["Website", "SEO", "Google Marketing", "SMO", "Hosting", "Invoice App"];
@@ -394,11 +397,10 @@ router.get("/communication-status", protect, async (req, res) => {
           }
         }
 
-        // Get pending task count for this project (exclude approved tasks)
+        // Get pending task count for this project
         const pendingTaskCount = await Task.countDocuments({
           project: project._id,
           status: { $in: ["pending", "in-progress"] },
-          approvalStatus: { $ne: "approved" }
         });
 
         return {
@@ -507,7 +509,14 @@ router.get("/:id", protect, async (req, res) => {
       .populate("createdBy", "name email")
       .populate("notes.createdBy", "name email")
       .populate("attachments.uploadedBy", "name email")
-      .populate("tasks", "title description status priority dueDate assignedTo");
+      .populate({
+        path: "tasks",
+        select: "title description status priority dueDate assignedTo assignedBy rejectionReason rejectedAt createdAt",
+        populate: [
+          { path: "assignedTo", select: "name email employeeId designation" },
+          { path: "assignedBy", select: "name email" },
+        ],
+      });
 
     if (!project) {
       return res.status(404).json({ message: "Project not found" });

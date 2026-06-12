@@ -51,9 +51,9 @@ import EmployeeDashboardPage from "./pages/EmployeeDashboard";
 import MyProfile from "./pages/MyProfile";
 import Tasks from "./pages/Tasks";
 import AdminTaskPage from "./pages/AdminTaskPage";
+import UnifiedTaskPage from "./pages/UnifiedTaskPage";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
-import EmployeeManagementPage from "./pages/EmployeeManagement";
 import HolidaysAndLeaves from "./pages/HolidaysAndLeaves";
 import AdminLeaveRequests from "./pages/AdminLeaveRequests";
 import TodayStatusPage from "./pages/TodayStatusPage";
@@ -754,16 +754,16 @@ const AppWrapper = () => {
         />
 
         {/* Admin Task Assignment */}
+        {/* HR is intentionally excluded: backend only allows admin/super-admin
+            to create/manage tasks. HR uses /tasks like employees. */}
+        {/* /admin/tasks redirects to unified /tasks page */}
         <Route
           path="/admin/tasks"
           element={
-            isAuthenticated && (isSuperAdmin || isHR || isAdmin) ? (
-              <AdminTaskPage onLogout={handleLogout} />
+            isAuthenticated ? (
+              <Navigate to="/tasks" replace />
             ) : (
-              <Navigate
-                to={isAuthenticated ? "/dashboard" : "/login"}
-                replace
-              />
+              <Navigate to="/login" replace />
             )
           }
         />
@@ -900,7 +900,7 @@ const AppWrapper = () => {
           path="/tasks"
           element={
             isAuthenticated ? (
-              <Tasks onLogout={handleLogout} />
+              <UnifiedTaskPage onLogout={handleLogout} />
             ) : (
               <Navigate to="/login" replace />
             )

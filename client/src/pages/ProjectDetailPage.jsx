@@ -479,6 +479,10 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
       }
 
       setProject(projectData);
+      // Populate tasks directly from project response — bypasses role-based filter issues
+      if (Array.isArray(projectData.tasks) && projectData.tasks.length > 0) {
+        setTasks(projectData.tasks);
+      }
     } catch (error) {
       console.error("Error fetching project:", error);
       showNotification("Error loading project details", "error");
@@ -665,45 +669,23 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
     setLoadingTasks(true);
     try {
       const token = localStorage.getItem("token");
-      const res = await axios.get(`${API_BASE}/api/tasks`, {
+      // Re-fetch the project to get fresh tasks (avoids role-based API filter issues)
+      const res = await axios.get(`${API_BASE}/api/projects/${projectId}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      // Filter tasks that belong to this project
-      // Handle both cases: project as string ID or as populated object
-      const tasksData = Array.isArray(res.data) ? res.data : [];
-      const projectTasks = tasksData.filter(task => {
-        if (!task || !task.project) return false;
-        const taskProjectId = typeof task.project === 'string' ? task.project : task.project._id;
-        return taskProjectId === projectId;
-      });
-      setTasks(projectTasks);
+      if (Array.isArray(res.data?.tasks)) {
+        setTasks(res.data.tasks);
+      }
     } catch (error) {
       console.error("Error fetching tasks:", error);
       showNotification("Error loading tasks", "error");
-      setTasks([]); // Set empty array on error
     } finally {
       setLoadingTasks(false);
     }
   };
 
-  const handleApproveSubmission = async (taskId) => {
-    try {
-      const token = localStorage.getItem("token");
-      await axios.patch(
-        `${API_BASE}/api/tasks/${taskId}/approve`,
-        { approvalRemark },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      showNotification("Task submission approved!", "success");
-      setSelectedTask(null);
-      setApprovalRemark("");
-      fetchTasks();
-    } catch (error) {
-      showNotification(error.response?.data?.message || "Error approving task", "error");
-    }
-  };
-
-  const handleRejectSubmission = async (taskId) => {
+  // Reject a completed task with a reason (admin / super-admin)
+  const handleRejectCompletedTask = async (taskId) => {
     if (!approvalRemark.trim()) {
       showNotification("Please provide a rejection reason", "error");
       return;
@@ -711,11 +693,11 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
     try {
       const token = localStorage.getItem("token");
       await axios.patch(
-        `${API_BASE}/api/tasks/${taskId}/reject-submission`,
-        { approvalRemark },
+        `${API_BASE}/api/tasks/${taskId}/reject`,
+        { reason: approvalRemark },
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      showNotification("Task submission rejected", "success");
+      showNotification("Task rejected", "success");
       setSelectedTask(null);
       setApprovalRemark("");
       fetchTasks();
@@ -737,6 +719,25 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
   const handleTaskUpdated = () => {
     showNotification("Task updated successfully!", "success");
     fetchTasks(); // Refresh tasks list
+  };
+
+  const handleUpdateTaskStatus = async (taskId, newStatus) => {
+    try {
+      const token = localStorage.getItem("token");
+      await axios.patch(
+        `${API_BASE}/api/tasks/${taskId}/status`,
+        { status: newStatus },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      // Optimistically update local state
+      setTasks((prev) =>
+        prev.map((t) => (t._id === taskId ? { ...t, status: newStatus } : t))
+      );
+      showNotification("Task status updated!", "success");
+    } catch (error) {
+      console.error("Error updating task status:", error);
+      showNotification("Failed to update task status", "error");
+    }
   };
 
   // Re-fetch when filters change (reset to page 1)
@@ -2669,132 +2670,85 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                           </span>
                         </div>
 
-                        {/* Submission Details */}
-                        {task.submittedAt && (
+                        {/* Rejection info */}
+                        {task.status === "rejected" && (
                           <div className="mt-4 pt-4 border-t border-[#232945]">
-                            <div className="mb-3">
-                              <p className="text-xs text-gray-500 mb-2">
-                                Submitted by: {
-                                  (userRole === "admin" || userRole === "super-admin" || userRole === "superadmin")
-                                    ? (task.assignedTo?.[0]?.name || "Unknown")
-                                    : `${task.assignedTo?.[0]?.employeeId || task.assignedTo?.[0]?._id?.substring(0, 8) || "Unknown"} (${task.assignedTo?.[0]?.designation || "No designation"})`
-                                }
+                            <p className="text-red-400 text-sm font-medium mb-1">❌ Rejected</p>
+                            <p className="text-gray-300 text-sm">
+                              {task.rejectionReason || "No reason provided"}
+                            </p>
+                            {task.rejectedAt && (
+                              <p className="text-xs text-gray-500 mt-1">
+                                Rejected on: {new Date(task.rejectedAt).toLocaleString()}
                               </p>
-                              <p className="text-xs text-gray-500">
-                                Submitted on: {new Date(task.submittedAt).toLocaleString()}
-                              </p>
-                            </div>
+                            )}
+                          </div>
+                        )}
 
-                            {task.submissionUrl && (
-                              <div className="mb-2">
-                                <p className="text-xs text-gray-400 mb-1">URL:</p>
-                                <a
-                                  href={task.submissionUrl}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-blue-400 hover:text-blue-300 text-sm flex items-center gap-1 underline"
+                        {/* Status update for assigned employees (non-admin) */}
+                        {userRole !== "admin" && userRole !== "super-admin" && userRole !== "superadmin" &&
+                          task.status !== "completed" && task.status !== "rejected" &&
+                          task.assignedTo?.some((emp) => emp._id?.toString() === userId?.toString()) && (
+                          <div className="mt-4 pt-4 border-t border-[#232945]">
+                            <p className="text-xs text-gray-500 mb-2">Update your status:</p>
+                            <div className="flex gap-2">
+                              {task.status !== "in-progress" && (
+                                <button
+                                  onClick={() => handleUpdateTaskStatus(task._id, "in-progress")}
+                                  className="flex-1 px-3 py-2 bg-blue-600/20 hover:bg-blue-600/40 text-blue-400 rounded-lg border border-blue-500/30 transition-colors text-xs font-medium"
                                 >
-                                  {task.submissionUrl}
-                                  <ExternalLink className="w-3 h-3" />
-                                </a>
-                              </div>
-                            )}
-
-                            {task.submissionText && (
-                              <div className="mb-2">
-                                <p className="text-xs text-gray-400 mb-1">Details:</p>
-                                <p className="text-white text-sm bg-black/20 p-3 rounded">{task.submissionText}</p>
-                              </div>
-                            )}
-
-                            {task.submissionRemark && (
-                              <div className="mb-2">
-                                <p className="text-xs text-gray-400 mb-1">Remark:</p>
-                                <p className="text-gray-300 text-sm italic">{task.submissionRemark}</p>
-                              </div>
-                            )}
-
-                            {/* Approval Status */}
-                            <div className="mt-4">
-                              <div className="flex items-center gap-2 mb-2">
-                                <p className="text-xs text-gray-400">Approval Status:</p>
-                                <span
-                                  className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                                    task.approvalStatus === "approved"
-                                      ? "bg-green-500/20 text-green-400"
-                                      : task.approvalStatus === "rejected"
-                                      ? "bg-red-500/20 text-red-400"
-                                      : "bg-yellow-500/20 text-yellow-400"
-                                  }`}
-                                >
-                                  {task.approvalStatus}
-                                </span>
-                              </div>
-
-                              {task.approvalRemark && (
-                                <div className="mb-3">
-                                  <p className="text-xs text-gray-400 mb-1">Admin Feedback:</p>
-                                  <p className="text-white text-sm bg-[#00a884]/10 p-3 rounded border border-[#00a884]/30">
-                                    {task.approvalRemark}
-                                  </p>
-                                </div>
+                                  Mark In Progress
+                                </button>
                               )}
-
-                              {/* Approval Actions (Only for admin, super-admin, or task assigner for pending submissions) */}
-                              {((userRole === "super-admin" || userRole === "superadmin" || userRole === "admin" || task.assignedBy?._id === userId) && task.approvalStatus === "pending") && (
-                                <div className="mt-3">
-                                  {selectedTask === task._id ? (
-                                    <div className="space-y-3">
-                                      <textarea
-                                        value={approvalRemark}
-                                        onChange={(e) => setApprovalRemark(e.target.value)}
-                                        placeholder="Add feedback (optional for approval, required for rejection)..."
-                                        className="w-full px-3 py-2 bg-[#191f2b] border border-[#232945] rounded-lg text-white text-sm placeholder-gray-500 focus:outline-none focus:border-[#00a884] h-20 resize-none"
-                                      />
-                                      <div className="flex gap-2">
-                                        <button
-                                          onClick={() => handleApproveSubmission(task._id)}
-                                          className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-green-600/20 hover:bg-green-600/40 text-green-400 rounded-lg border border-green-500/30 transition-colors"
-                                        >
-                                          <ThumbsUp className="w-4 h-4" />
-                                          Approve
-                                        </button>
-                                        <button
-                                          onClick={() => handleRejectSubmission(task._id)}
-                                          className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-red-600/20 hover:bg-red-600/40 text-red-400 rounded-lg border border-red-500/30 transition-colors"
-                                        >
-                                          <ThumbsDown className="w-4 h-4" />
-                                          Reject
-                                        </button>
-                                        <button
-                                          onClick={() => {
-                                            setSelectedTask(null);
-                                            setApprovalRemark("");
-                                          }}
-                                          className="px-4 py-2 bg-gray-600/20 hover:bg-gray-600/40 text-gray-400 rounded-lg transition-colors"
-                                        >
-                                          Cancel
-                                        </button>
-                                      </div>
-                                    </div>
-                                  ) : (
-                                    <button
-                                      onClick={() => setSelectedTask(task._id)}
-                                      className="w-full px-4 py-2 bg-[#00a884]/20 hover:bg-[#00a884]/40 text-white rounded-lg border border-[#00a884]/30 transition-colors font-medium"
-                                    >
-                                      Review Submission
-                                    </button>
-                                  )}
-                                </div>
-                              )}
+                              <button
+                                onClick={() => handleUpdateTaskStatus(task._id, "completed")}
+                                className="flex-1 px-3 py-2 bg-green-600/20 hover:bg-green-600/40 text-green-400 rounded-lg border border-green-500/30 transition-colors text-xs font-medium"
+                              >
+                                Mark Complete
+                              </button>
                             </div>
                           </div>
                         )}
 
-                        {/* No submission yet */}
-                        {!task.submittedAt && (
+                        {/* Completion review (admin / task assigner can reject completed tasks with a reason) */}
+                        {task.status === "completed" &&
+                          (userRole === "super-admin" || userRole === "superadmin" || userRole === "admin") && (
                           <div className="mt-4 pt-4 border-t border-[#232945]">
-                            <p className="text-gray-500 text-sm italic">No submission yet</p>
+                            {selectedTask === task._id ? (
+                              <div className="space-y-3">
+                                <textarea
+                                  value={approvalRemark}
+                                  onChange={(e) => setApprovalRemark(e.target.value)}
+                                  placeholder="Rejection reason (required)..."
+                                  className="w-full px-3 py-2 bg-[#191f2b] border border-[#232945] rounded-lg text-white text-sm placeholder-gray-500 focus:outline-none focus:border-[#00a884] h-20 resize-none"
+                                />
+                                <div className="flex gap-2">
+                                  <button
+                                    onClick={() => handleRejectCompletedTask(task._id)}
+                                    className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-red-600/20 hover:bg-red-600/40 text-red-400 rounded-lg border border-red-500/30 transition-colors"
+                                  >
+                                    <ThumbsDown className="w-4 h-4" />
+                                    Reject Task
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      setSelectedTask(null);
+                                      setApprovalRemark("");
+                                    }}
+                                    className="px-4 py-2 bg-gray-600/20 hover:bg-gray-600/40 text-gray-400 rounded-lg transition-colors"
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => setSelectedTask(task._id)}
+                                className="w-full px-4 py-2 bg-red-600/10 hover:bg-red-600/30 text-red-300 rounded-lg border border-red-500/30 transition-colors font-medium"
+                              >
+                                Reject Completed Task...
+                              </button>
+                            )}
                           </div>
                         )}
                       </div>

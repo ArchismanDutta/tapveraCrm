@@ -1,12 +1,29 @@
 import React, { useState, useEffect } from "react";
-import { Eye, Mail, Building2, Badge, User, Crown, ChevronDown, Loader2, X, AlertCircle, Globe } from "lucide-react";
+import { Eye, Mail, Building2, Badge, User, Crown, ChevronDown, Loader2, X, AlertCircle, Globe, ShieldCheck } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
-const EmployeeTable = ({ employees = [], currentUser, onStatusUpdate, updatingStatus, regions = [], onRegionChange }) => {
+const ROLE_STYLES = {
+  "super-admin": "bg-purple-500/20 text-purple-300 border-purple-500/30",
+  admin:         "bg-blue-500/20 text-blue-300 border-blue-500/30",
+  hr:            "bg-teal-500/20 text-teal-300 border-teal-500/30",
+  employee:      "bg-slate-500/20 text-slate-300 border-slate-500/30",
+};
+
+const ROLE_LABELS = {
+  "super-admin": "⚡ Super Admin",
+  admin:         "🛡️ Admin",
+  hr:            "👥 HR",
+  employee:      "👤 Employee",
+};
+
+const EmployeeTable = ({ employees = [], currentUser, onStatusUpdate, updatingStatus, regions = [], onRegionChange, onRoleChange }) => {
   const navigate = useNavigate();
   const [hoveredRow, setHoveredRow] = useState(null);
   const [statusDropdownOpen, setStatusDropdownOpen] = useState(null);
   const [regionDropdownOpen, setRegionDropdownOpen] = useState(null);
+  const [roleDropdownOpen, setRoleDropdownOpen] = useState(null);
+
+  const isSuperAdmin = currentUser?.role === "super-admin";
 
   const handleView = (emp) => {
     if (emp && emp._id) {
@@ -70,6 +87,9 @@ const EmployeeTable = ({ employees = [], currentUser, onStatusUpdate, updatingSt
       }
       if (regionDropdownOpen && !event.target.closest('.region-dropdown')) {
         setRegionDropdownOpen(null);
+      }
+      if (roleDropdownOpen && !event.target.closest('.role-dropdown')) {
+        setRoleDropdownOpen(null);
       }
     };
 

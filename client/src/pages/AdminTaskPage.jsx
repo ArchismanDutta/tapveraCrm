@@ -9,6 +9,7 @@ import TaskForm from "../components/admintask/TaskForm";
 import TaskTable from "../components/admintask/TaskTable";
 import tapveraLogo from "../assets/tapvera.png";
 import API from "../api";
+import taskApi from "../api/taskApi";
 
 // ----------------- Employee Task Analytics Component -----------------
 const EmployeeTaskAnalytics = ({ users }) => {
@@ -367,34 +368,64 @@ const EmployeeTaskAnalytics = ({ users }) => {
 // ----------------- Edit Task Modal -----------------
 const EditTaskModal = ({ task, onSave, onCancel, users }) => {
   const [editedTask, setEditedTask] = useState(task || {});
+  // Multi-assignee support: keep assignee ids separately so none are lost
+  const [assignedIds, setAssignedIds] = useState([]);
+  const [assignDropdownOpen, setAssignDropdownOpen] = useState(false);
+  const [assignSearch, setAssignSearch] = useState("");
+  const assignRef = useRef(null);
 
   useEffect(() => {
     setEditedTask(task ? { ...task } : {});
+    const assigned = Array.isArray(task?.assignedTo)
+      ? task.assignedTo
+      : task?.assignedTo
+      ? [task.assignedTo]
+      : [];
+    setAssignedIds(assigned.map((u) => (typeof u === "object" ? u._id : u)));
   }, [task]);
 
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (assignRef.current && !assignRef.current.contains(e.target)) {
+        setAssignDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const toggleAssignee = (userId) => {
+    setAssignedIds((prev) =>
+      prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId]
+    );
+  };
+
   const handleChange = (field, value) => {
-    setEditedTask((prev) => ({
-      ...prev,
-      [field]: value,
-      ...(field === "assignedTo"
-        ? { assignedAvatar: `https://i.pravatar.cc/40?u=${value}` }
-        : {}),
-    }));
+    setEditedTask((prev) => ({ ...prev, [field]: value }));
   };
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    const payload = {
-      ...editedTask,
-      assignedTo: Array.isArray(editedTask.assignedTo)
-        ? editedTask.assignedTo
-        : editedTask.assignedTo
-        ? [editedTask.assignedTo]
-        : [],
-    };
-    if (!payload.title?.trim() || payload.assignedTo.length === 0) return;
-    onSave(payload);
+    if (!editedTask.title?.trim() || assignedIds.length === 0) return;
+    // Send a clean payload of editable fields only
+    onSave({
+      _id: editedTask._id,
+      title: editedTask.title,
+      description: editedTask.description || "",
+      assignedTo: assignedIds,
+      dueDate: editedTask.dueDate || null,
+      priority: editedTask.priority,
+      status: editedTask.status,
+    });
   };
+
+  const selectedNames = users
+    .filter((u) => assignedIds.includes(u._id))
+    .map((u) => u.name);
+
+  const filteredAssignUsers = users.filter((u) =>
+    u.name.toLowerCase().includes(assignSearch.toLowerCase())
+  );
 
   const dueDateValue =
     editedTask?.dueDate && typeof editedTask.dueDate === "string"
@@ -446,30 +477,50 @@ const EditTaskModal = ({ task, onSave, onCancel, users }) => {
             />
           </div>
 
-          {/* Assign To */}
-          <div>
+          {/* Assign To (multiple) */}
+          <div className="relative" ref={assignRef}>
             <label className="block text-sm font-semibold mb-2 text-gray-300">
-              Assign To
+              Assign To (Multiple)
             </label>
-            <select
-              value={
-                Array.isArray(editedTask.assignedTo)
-                  ? editedTask.assignedTo[0]?._id ||
-                    editedTask.assignedTo[0] ||
-                    ""
-                  : editedTask.assignedTo?._id || editedTask.assignedTo || ""
-              }
-              onChange={(e) => handleChange("assignedTo", e.target.value)}
-              className="bg-slate-800/50 border border-slate-600/50 rounded-xl p-3 w-full text-white focus:ring-2 focus:ring-cyan-400 focus:border-cyan-400 outline-none cursor-pointer transition-all duration-300"
-              required
+            <div
+              onClick={() => setAssignDropdownOpen((prev) => !prev)}
+              className="bg-slate-800/50 border border-slate-600/50 rounded-xl p-3 w-full text-white cursor-pointer transition-all duration-300 min-h-[48px]"
             >
-              <option value="">Select employee</option>
-              {users.map((user) => (
-                <option key={user._id} value={user._id}>
-                  {user.name}
-                </option>
-              ))}
-            </select>
+              {selectedNames.length > 0
+                ? selectedNames.join(", ")
+                : "Select employees..."}
+            </div>
+            {assignDropdownOpen && (
+              <div className="absolute left-0 top-full mt-1 bg-slate-800 border border-slate-600/50 rounded-xl shadow-2xl w-full z-50 max-h-60 overflow-y-auto">
+                <div className="p-2 border-b border-slate-600/50">
+                  <input
+                    type="text"
+                    placeholder="Search users..."
+                    value={assignSearch}
+                    onChange={(e) => setAssignSearch(e.target.value)}
+                    className="bg-slate-900/70 border border-slate-600/50 rounded-lg p-2 w-full text-white outline-none focus:ring-2 focus:ring-cyan-400"
+                  />
+                </div>
+                {filteredAssignUsers.length > 0 ? (
+                  filteredAssignUsers.map((user) => (
+                    <label
+                      key={user._id}
+                      className="flex items-center px-3 py-2 hover:bg-slate-700/60 cursor-pointer"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={assignedIds.includes(user._id)}
+                        onChange={() => toggleAssignee(user._id)}
+                        className="mr-2 cursor-pointer"
+                      />
+                      {user.name}
+                    </label>
+                  ))
+                ) : (
+                  <div className="px-3 py-2 text-sm text-gray-400">No users found</div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Due Date */}
@@ -532,7 +583,10 @@ const EditTaskModal = ({ task, onSave, onCancel, users }) => {
             <option value="pending">Pending</option>
             <option value="in-progress">In Progress</option>
             <option value="completed">Completed</option>
-            <option value="rejected">Rejected</option>
+            {/* "Rejected" is set via the Reject action (requires a reason), not via edit */}
+            {editedTask.status === "rejected" && (
+              <option value="rejected">Rejected (use Reject action to set)</option>
+            )}
           </select>
         </div>
 
@@ -660,12 +714,12 @@ export default function AdminTaskPage({ onLogout }) {
   const handleCreateTask = async (newTask) => {
     try {
       const payload = ensureAssignedArray(newTask);
-      const res = await API.post("/api/tasks", payload);
-      setTasks((prev) => [res.data, ...prev]);
+      const created = await taskApi.createTask(payload);
+      setTasks((prev) => [created, ...prev]);
       showPopup("✅ Task created successfully!");
     } catch (err) {
       console.error(err);
-      showPopup("❌ Failed to create task");
+      showPopup(`❌ ${err.response?.data?.message || "Failed to create task"}`);
     }
   };
 
@@ -673,24 +727,24 @@ export default function AdminTaskPage({ onLogout }) {
     try {
       const payload = ensureAssignedArray(updatedTask);
       const id = payload._id || payload.id;
-      const res = await API.put(`/api/tasks/${id}`, payload);
-      setTasks((prev) => prev.map((t) => (t._id === id ? res.data : t)));
+      const updated = await taskApi.updateTask(id, payload);
+      setTasks((prev) => prev.map((t) => (t._id === id ? updated : t)));
       setEditingTask(null);
       showPopup("✅ Task updated successfully!");
     } catch (err) {
       console.error(err);
-      showPopup("❌ Failed to update task");
+      showPopup(`❌ ${err.response?.data?.message || "Failed to update task"}`);
     }
   };
 
   const handleDeleteTask = async (id) => {
     try {
-      await API.delete(`/api/tasks/${id}`);
+      await taskApi.deleteTask(id);
       setTasks((prev) => prev.filter((t) => t._id !== id));
       showPopup("🗑 Task deleted successfully!");
     } catch (err) {
       console.error(err);
-      showPopup("❌ Failed to delete task");
+      showPopup(`❌ ${err.response?.data?.message || "Failed to delete task"}`);
     }
   };
 

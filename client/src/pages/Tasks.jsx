@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
-import axios from "axios";
+import taskApi from "../api/taskApi";
 import { FaDownload, FaKeyboard, FaSearch, FaTrophy, FaSync } from "react-icons/fa";
 import Sidebar from "../components/dashboard/Sidebar";
 import TaskStats from "../components/task/TaskStats";
@@ -9,7 +9,32 @@ import PaymentBlockOverlay from "../components/payment/PaymentBlockOverlay";
 import usePaymentCheck from "../hooks/usePaymentCheck";
 import { useWebSocketContext } from "../contexts/WebSocketContext";
 
-const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
+// Sort: rejected tasks first (they need rework), then active work, completed last
+const STATUS_ORDER = { rejected: 0, "in-progress": 1, pending: 2, completed: 3 };
+
+const sortTasks = (list) =>
+  [...list].sort((a, b) => {
+    const statusDiff =
+      (STATUS_ORDER[a.status] ?? 99) - (STATUS_ORDER[b.status] ?? 99);
+    if (statusDiff !== 0) return statusDiff;
+    return new Date(a.dueDate) - new Date(b.dueDate);
+  });
+
+const formatTask = (task) => ({
+  _id: task._id,
+  title: task.title,
+  dueDate: task.dueDate,
+  description: task.description,
+  priority: task.priority,
+  status: task.status,
+  assignedTo: Array.isArray(task.assignedTo) ? task.assignedTo : [],
+  assignedBy: task.assignedBy || {},
+  completedAt: task.completedAt || null,
+  rejectedAt: task.rejectedAt || null,
+  rejectionReason: task.rejectionReason || null,
+  remarks: task.remarks || [],
+  project: task.project || null,
+});
 
 const Tasks = ({ onLogout }) => {
   const [collapsed, setCollapsed] = useState(false);
@@ -32,59 +57,14 @@ const Tasks = ({ onLogout }) => {
   // WebSocket hook for real-time task updates
   const { registerNotificationHandler } = useWebSocketContext();
 
-  // Helper: Get token from localStorage
-  const getToken = () => {
-    const storedToken = localStorage.getItem("token");
-    if (!storedToken) return null;
-    return storedToken.startsWith("{") && storedToken.endsWith("}")
-      ? JSON.parse(storedToken).token
-      : storedToken;
-  };
-
   // Fetch tasks from API
   const fetchTasks = useCallback(async () => {
     try {
       setLoading(true);
-      const token = getToken();
-      if (!token) return;
-
-      const config = { headers: { Authorization: `Bearer ${token}` } };
-      const res = await axios.get(`${API_BASE}/api/tasks`, config);
-
-      // Define status hierarchy
-      const statusOrder = {
-        "in-progress": 1,
-        pending: 2,
-        completed: 3,
-      };
-
-      // Format and sort
-      const formattedTasks = res.data
-        .map((task) => ({
-          _id: task._id,
-          title: task.title,
-          dueDate: task.dueDate,
-          description: task.description,
-          priority: task.priority,
-          status: task.status,
-          assignedTo: Array.isArray(task.assignedTo) ? task.assignedTo : [],
-          assignedBy: task.assignedBy || {},
-          completedAt: task.completedAt || null,
-          rejectedAt: task.rejectedAt || null, // ✅ include rejectedAt
-          rejectionReason: task.rejectionReason || null, // ✅ include rejectionReason
-          remarks: task.remarks || [], // ✅ include remarks
-          project: task.project || null, // ✅ include project
-        }))
-        .sort((a, b) => {
-          // First by status hierarchy
-          const statusDiff =
-            (statusOrder[a.status] || 99) - (statusOrder[b.status] || 99);
-          if (statusDiff !== 0) return statusDiff;
-
-          // Then by due date (earliest first)
-          return new Date(a.dueDate) - new Date(b.dueDate);
-        });
-
+      // "My Tasks" page: only tasks assigned to / created by the current user,
+      // even for admins (admins see all tasks on the Task Management page instead)
+      const data = await taskApi.getTasks({ scope: "mine" });
+      const formattedTasks = sortTasks(data.map(formatTask));
       setTasks(formattedTasks);
       setFilteredTasks(formattedTasks);
       setLoading(false);
@@ -165,33 +145,28 @@ const Tasks = ({ onLogout }) => {
     return unregister;
   }, [registerNotificationHandler, fetchTasks]);
 
-  // Update task status locally and re-sort immediately
-  const handleStatusChange = (taskId, newStatus) => {
-    setTasks((prev) => {
-      const updated = prev.map((t) => {
-        if (t._id === taskId) {
-          const updatedTask = {
-            ...t,
-            status: newStatus,
-            completedAt: newStatus === "completed" ? new Date() : null,
-          };
+  // Merge a server-updated task into the list and re-sort (single source of truth)
+  const handleTaskUpdated = useCallback((updatedTask) => {
+    setTasks((prev) =>
+      sortTasks(
+        prev.map((t) => (t._id === updatedTask._id ? formatTask(updatedTask) : t))
+      )
+    );
+  }, []);
 
-
-          return updatedTask;
-        }
-        return t;
-      });
-
-      // re-apply sorting
-      const statusOrder = { "in-progress": 1, pending: 2, completed: 3 };
-      return updated.sort((a, b) => {
-        const statusDiff =
-          (statusOrder[a.status] || 99) - (statusOrder[b.status] || 99);
-        if (statusDiff !== 0) return statusDiff;
-        return new Date(a.dueDate) - new Date(b.dueDate);
-      });
-    });
-  };
+  // Persist a status change (used by Kanban drag & drop), then merge server response
+  const handleStatusChange = useCallback(
+    async (taskId, newStatus) => {
+      try {
+        const updated = await taskApi.updateStatus(taskId, newStatus);
+        handleTaskUpdated(updated);
+      } catch (err) {
+        console.error("Status update failed:", err);
+        alert(err.response?.data?.message || "Failed to update status.");
+      }
+    },
+    [handleTaskUpdated]
+  );
 
   // Clear all filters
   const clearFilters = () => {
@@ -497,6 +472,7 @@ const Tasks = ({ onLogout }) => {
           <TaskList
             tasks={filteredTasks}
             onStatusChange={handleStatusChange}
+            onTaskUpdated={handleTaskUpdated}
             loading={loading}
             viewMode={viewMode}
             setViewMode={setViewMode}

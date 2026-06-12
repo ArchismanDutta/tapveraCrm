@@ -7,6 +7,32 @@ const Shift = require("../models/Shift");
 
 
 // =========================
+// Get next employee ID
+// =========================
+exports.getNextEmployeeId = async (req, res) => {
+  try {
+    // Match TAPV/### format (e.g. TAPV/001, TAPV/072)
+    const users = await User.find(
+      { employeeId: /^TAPV\/\d+$/i },
+      "employeeId"
+    ).lean();
+
+    let maxNum = 0;
+    for (const u of users) {
+      const num = parseInt(u.employeeId.split("/")[1], 10);
+      if (!isNaN(num) && num > maxNum) maxNum = num;
+    }
+
+    const nextNum = maxNum + 1;
+    const nextId = `TAPV/${String(nextNum).padStart(3, "0")}`;
+    res.json({ nextId });
+  } catch (err) {
+    console.error("getNextEmployeeId error:", err);
+    res.status(500).json({ message: "Failed to generate employee ID" });
+  }
+};
+
+// =========================
 // Create employee
 // =========================
 exports.createEmployee = async (req, res) => {

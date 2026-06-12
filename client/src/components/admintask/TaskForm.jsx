@@ -3,6 +3,43 @@ import API from "../../api";
 import ReactDatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 
+// ── Render text with clickable URL highlights ──────────────────────────────────
+const URL_REGEX = /(https?:\/\/[^\s]+)/g;
+
+function RichTextPreview({ text }) {
+  if (!text) return null;
+  const parts = text.split(URL_REGEX);
+  return (
+    <div className="text-xs leading-relaxed text-gray-300 whitespace-pre-wrap break-words">
+      {parts.map((part, i) => {
+        URL_REGEX.lastIndex = 0;
+        return URL_REGEX.test(part) ? (
+          <a
+            key={i}
+            href={part}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-blue-400 underline underline-offset-2 hover:text-blue-300 transition-colors break-all"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <svg className="w-3 h-3 flex-shrink-0 inline" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M12.586 4.586a2 2 0 112.828 2.828l-3 3a2 2 0 01-2.828 0 1 1 0 00-1.414 1.414 4 4 0 005.656 0l3-3a4 4 0 00-5.656-5.656l-1.5 1.5a1 1 0 101.414 1.414l1.5-1.5zm-5 5a2 2 0 012.828 0 1 1 0 101.414-1.414 4 4 0 00-5.656 0l-3 3a4 4 0 105.656 5.656l1.5-1.5a1 1 0 10-1.414-1.414l-1.5 1.5a2 2 0 11-2.828-2.828l3-3z" clipRule="evenodd"/>
+            </svg>
+            {part}
+          </a>
+        ) : (
+          <span key={i}>{part}</span>
+        );
+      })}
+    </div>
+  );
+}
+
+function hasUrl(text) {
+  URL_REGEX.lastIndex = 0;
+  return URL_REGEX.test(text);
+}
+
 const TaskForm = ({ onCreate, users = [] }) => {
   const [task, setTask] = useState({
     title: "",
@@ -33,14 +70,27 @@ const TaskForm = ({ onCreate, users = [] }) => {
   useEffect(() => {
     const fetchProjects = async () => {
       try {
-        const res = await API.get("/api/projects");
-        if (Array.isArray(res.data)) setProjects(res.data);
+        const res = await API.get("/api/projects?limit=10000");
+        // endpoint returns { projects: [...], pagination: ... } — not a bare array
+        const list = Array.isArray(res.data) ? res.data : (res.data?.projects || []);
+        setProjects(list);
       } catch (err) {
         console.error("Failed to fetch projects", err);
       }
     };
     fetchProjects();
   }, []);
+
+  // If no users were passed in as props, fetch from the assignable endpoint
+  // (used when non-admin roles open the create task form)
+  const [fetchedUsers, setFetchedUsers] = useState([]);
+  useEffect(() => {
+    if (!users || users.length === 0) {
+      API.get("/api/users/assignable")
+        .then((r) => setFetchedUsers(Array.isArray(r.data) ? r.data : []))
+        .catch((err) => console.error("Failed to fetch assignable users", err));
+    }
+  }, [users]);
 
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -118,10 +168,13 @@ const TaskForm = ({ onCreate, users = [] }) => {
     setProjectSearchTerm("");
   };
 
+  // Resolve the user list: prefer props, fall back to auto-fetched
+  const allUsers = (users && users.length > 0) ? users : fetchedUsers;
+
   // Filter users based on project selection
   const availableUsers = selectedProject
-    ? selectedProject.assignedTo.filter(u => !u.status || u.status === 'active') // Use only active project employees (treat undefined as active)
-    : users; // Use all users if no project is selected (already filtered by parent)
+    ? selectedProject.assignedTo.filter(u => !u.status || u.status === 'active')
+    : allUsers;
 
   const filteredUsers = availableUsers.filter((u) =>
     u.name.toLowerCase().includes(searchTerm.toLowerCase())
@@ -341,6 +394,18 @@ const TaskForm = ({ onCreate, users = [] }) => {
           value={task.description}
           onChange={(e) => setTask({ ...task, description: e.target.value })}
         />
+        {/* Live URL preview — only shown when description contains a URL */}
+        {task.description && hasUrl(task.description) && (
+          <div className="mt-2 p-3 bg-[#0d1220] border border-[rgba(84,123,209,0.2)] rounded-lg">
+            <div className="flex items-center gap-1.5 mb-2">
+              <svg className="w-3 h-3 text-blue-400 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M12.586 4.586a2 2 0 112.828 2.828l-3 3a2 2 0 01-2.828 0 1 1 0 00-1.414 1.414 4 4 0 005.656 0l3-3a4 4 0 00-5.656-5.656l-1.5 1.5a1 1 0 101.414 1.414l1.5-1.5zm-5 5a2 2 0 012.828 0 1 1 0 101.414-1.414 4 4 0 00-5.656 0l-3 3a4 4 0 105.656 5.656l1.5-1.5a1 1 0 10-1.414-1.414l-1.5 1.5a2 2 0 11-2.828-2.828l3-3z" clipRule="evenodd"/>
+              </svg>
+              <span className="text-xs text-blue-400 font-medium">Preview — links are clickable</span>
+            </div>
+            <RichTextPreview text={task.description} />
+          </div>
+        )}
       </div>
 
       {/* Submit */}

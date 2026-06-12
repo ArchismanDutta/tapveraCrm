@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { FaPlus, FaEllipsisV } from "react-icons/fa";
 import TaskItem from "./TaskItem";
 
-const TaskKanban = ({ tasks, onStatusChange, loading }) => {
+const TaskKanban = ({ tasks, onStatusChange, onTaskUpdated, loading }) => {
   const [draggedTask, setDraggedTask] = useState(null);
   const [draggedOver, setDraggedOver] = useState(null);
 
@@ -97,11 +97,9 @@ const TaskKanban = ({ tasks, onStatusChange, loading }) => {
     return tasksByStatus[columnId]?.length || 0;
   };
 
-  // Handle task status update from TaskItem
+  // TaskItem already persisted the change — just merge the updated task upstream
   const handleTaskStatusUpdate = (updatedTask) => {
-    if (onStatusChange) {
-      onStatusChange(updatedTask._id, updatedTask.status);
-    }
+    if (onTaskUpdated) onTaskUpdated(updatedTask);
   };
 
   if (loading) {

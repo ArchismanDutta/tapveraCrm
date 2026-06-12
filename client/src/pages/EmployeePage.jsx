@@ -7,6 +7,7 @@ import {
   Briefcase,
   Calendar,
   CheckCircle2,
+  ChevronDown,
   Clock,
   Edit,
   GraduationCap,
@@ -15,6 +16,7 @@ import {
   Plus,
   Save,
   Shield,
+  ShieldCheck,
   Trash2,
   User,
   Wallet,
@@ -43,7 +45,14 @@ const REGIONS = ["Global", "USA", "AUS", "CANADA", "IND"];
 const JOB_LEVELS = ["intern", "junior", "mid", "senior", "lead", "director", "executive"];
 const EMPLOYMENT_TYPES = ["full-time", "part-time", "contract", "internship"];
 const STATUSES = ["active", "inactive", "terminated", "absconded"];
-const ROLES = ["employee", "admin", "hr", "super-admin"];
+const ROLES = ["employee", "hr", "admin", "super-admin"];
+
+const ROLE_META = {
+  "super-admin": { label: "Super Admin", color: "text-purple-300 bg-purple-500/10 border-purple-500/30" },
+  admin:         { label: "Admin",       color: "text-blue-300 bg-blue-500/10 border-blue-500/30" },
+  hr:            { label: "HR",          color: "text-teal-300 bg-teal-500/10 border-teal-500/30" },
+  employee:      { label: "Employee",    color: "text-slate-300 bg-slate-700/30 border-slate-600/40" },
+};
 const GENDERS = ["male", "female", "other"];
 const PAYMENT_MODES = ["bank", "cash"];
 const SHIFT_TYPES = ["standard", "flexiblePermanent"];
@@ -199,6 +208,11 @@ const EmployeePage = () => {
   const [activeTab, setActiveTab] = useState("personal");
   const [formData, setFormData] = useState(null);
   const [collapsed, setCollapsed] = useState(false);
+  const [roleDropdownOpen, setRoleDropdownOpen] = useState(false);
+  const [roleChanging, setRoleChanging] = useState(false);
+
+  const currentUserRole = JSON.parse(localStorage.getItem("user"))?.role || localStorage.getItem("role") || "";
+  const isSuperAdmin = currentUserRole === "super-admin";
 
   useEffect(() => {
     const fetchEmployee = async () => {
@@ -320,6 +334,28 @@ const EmployeePage = () => {
     setSaving(false);
   };
 
+  const handleRoleChange = async (newRole) => {
+    setRoleChanging(true);
+    setRoleDropdownOpen(false);
+    const token = localStorage.getItem("token");
+    try {
+      const res = await fetch(`${API_BASE}/api/users/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ role: newRole }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Failed to update role");
+      setSelectedEmployee(prev => ({ ...prev, role: newRole }));
+      setSuccessMessage(`Role updated to ${ROLE_META[newRole]?.label || newRole}`);
+      setTimeout(() => setSuccessMessage(""), 3000);
+    } catch (err) {
+      setError(err.message || "Failed to update role");
+    } finally {
+      setRoleChanging(false);
+    }
+  };
+
   const handleSave = async (e) => {
     e.preventDefault();
     const token = localStorage.getItem("token");
@@ -431,6 +467,42 @@ const EmployeePage = () => {
                     <span className="rounded-md border border-slate-700 bg-slate-950 px-2 py-1 text-xs font-semibold capitalize text-slate-300">
                       {selectedEmployee.status || "active"}
                     </span>
+                    {/* Role badge — clickable dropdown for super-admin */}
+                    <div className="relative">
+                      {isSuperAdmin ? (
+                        <>
+                          <button
+                            onClick={() => setRoleDropdownOpen(o => !o)}
+                            disabled={roleChanging}
+                            className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-semibold capitalize transition hover:opacity-80 ${ROLE_META[selectedEmployee.role]?.color || ROLE_META.employee.color}`}
+                          >
+                            <ShieldCheck className="h-3 w-3" />
+                            {roleChanging ? "Updating…" : (ROLE_META[selectedEmployee.role]?.label || selectedEmployee.role)}
+                            <ChevronDown className="h-3 w-3 opacity-60" />
+                          </button>
+                          {roleDropdownOpen && (
+                            <div className="absolute left-0 top-full z-50 mt-1 min-w-[170px] rounded-xl border border-slate-700 bg-slate-900 py-1 shadow-2xl">
+                              <p className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-500">Change Role</p>
+                              {ROLES.map(r => (
+                                <button
+                                  key={r}
+                                  onClick={() => handleRoleChange(r)}
+                                  className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition hover:bg-slate-800 ${selectedEmployee.role === r ? "font-semibold text-white" : "text-slate-400"}`}
+                                >
+                                  <span className={`h-2 w-2 rounded-full flex-shrink-0 ${selectedEmployee.role === r ? "bg-orange-400" : "bg-slate-600"}`} />
+                                  {ROLE_META[r]?.label || r}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <span className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-semibold capitalize ${ROLE_META[selectedEmployee.role]?.color || ROLE_META.employee.color}`}>
+                          <ShieldCheck className="h-3 w-3" />
+                          {ROLE_META[selectedEmployee.role]?.label || selectedEmployee.role}
+                        </span>
+                      )}
+                    </div>
                   </div>
                   <h1 className="truncate text-3xl font-bold text-white">{selectedEmployee.name}</h1>
                   <p className="mt-1 text-sm text-slate-400">
@@ -634,11 +706,7 @@ const EmployeePage = () => {
                       {STATUSES.map((status) => <option key={status} value={status}>{status}</option>)}
                     </select>
                   </Field>
-                  <Field label="Role">
-                    <select className={inputClass} value={formData.role} onChange={(e) => setField("role", e.target.value)}>
-                      {ROLES.map((role) => <option key={role} value={role}>{role}</option>)}
-                    </select>
-                  </Field>
+
                   <Field label="Date of Joining">
                     <input className={inputClass} type="date" value={formData.doj} onChange={(e) => setField("doj", e.target.value)} required />
                   </Field>
