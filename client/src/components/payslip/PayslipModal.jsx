@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
+import { formatDepartment, formatEmploymentType, formatPaymentMode } from "../../utils/formatters";
 
 const PayslipModal = ({ isOpen, onClose, employeeId = null }) => {
   const [payslipData, setPayslipData] = useState(null);
@@ -383,7 +384,7 @@ const PayslipModal = ({ isOpen, onClose, employeeId = null }) => {
                   </div>
                   <div class="detail-row">
                     <span class="detail-label">Department:</span>
-                    <span class="detail-value">${payslipData.employee?.department || 'N/A'}</span>
+                    <span class="detail-value">${formatDepartment(payslipData.employee?.department)}</span>
                   </div>
                 </div>
                 <div>
@@ -721,7 +722,7 @@ const PayslipModal = ({ isOpen, onClose, employeeId = null }) => {
                       </div>
                       <div className="grid grid-cols-2 gap-2">
                         <span className="text-gray-400 text-sm font-medium">Department:</span>
-                        <span className="text-white">{payslipData.employee?.department || 'N/A'}</span>
+                        <span className="text-white">{formatDepartment(payslipData.employee?.department)}</span>
                       </div>
                     </div>
 

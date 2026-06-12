@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { toast } from "react-toastify";
 import Sidebar from "../../components/dashboard/Sidebar";
+import { formatDepartment, formatEmploymentType } from "../../utils/formatters";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
 
@@ -222,7 +223,7 @@ function PayslipForm({ employees, onSaved, onClose, editPayslip = null }) {
                 <div className="max-h-52 overflow-y-auto">
                   {filteredEmps.map((emp) => (
                     <div key={emp._id} onClick={() => { setSelectedEmp(emp); setEmpDropOpen(false); setEmpSearch(""); }} className="px-3 py-2 hover:bg-[#1e2a35] cursor-pointer flex items-center justify-between">
-                      <div><p className="text-sm text-white">{emp.name}</p><p className="text-xs text-gray-500">{emp.designation || emp.department} · {emp.employeeId}</p></div>
+                      <div><p className="text-sm text-white">{emp.name}</p><p className="text-xs text-gray-500">{emp.designation || formatDepartment(emp.department)} · {emp.employeeId}</p></div>
                       {selectedEmp?._id === emp._id && <Check className="w-4 h-4 text-blue-400" />}
                     </div>
                   ))}
@@ -233,7 +234,7 @@ function PayslipForm({ employees, onSaved, onClose, editPayslip = null }) {
           {fieldErrors.employee && !selectedEmp && <p className="text-xs text-red-400 mt-1">* Please select an employee</p>}
           {selectedEmp && (
             <div className="mt-3 grid grid-cols-2 gap-x-4 text-xs">
-              {[["Department", selectedEmp.department||"—"],["Designation",selectedEmp.designation||"—"],["DOJ", selectedEmp.doj ? new Date(selectedEmp.doj).toLocaleDateString("en-IN"):"—"],["Type",selectedEmp.employmentType||"—"]].map(([k,v]) => (
+              {[["Department", formatDepartment(selectedEmp.department)||"—"],["Designation",selectedEmp.designation||"—"],["DOJ", selectedEmp.doj ? new Date(selectedEmp.doj).toLocaleDateString("en-IN"):"—"],["Type",formatEmploymentType(selectedEmp.employmentType)||"—"]].map(([k,v]) => (
                 <div key={k} className="flex justify-between py-1 border-b border-[#1e2a35]"><span className="text-gray-500">{k}</span><span className="text-gray-300">{v}</span></div>
               ))}
             </div>
@@ -355,7 +356,7 @@ function PayslipViewer({ payslip }) {
         </span>
       </div>
       <div className="bg-[#0f1419] border border-[#1e2a35] rounded-xl p-4 grid grid-cols-2 gap-x-6 gap-y-0.5 text-xs">
-        {[["Name",sn.name||emp.name],["Employee ID",sn.employeeId||emp.employeeId],["Designation",sn.designation||"—"],["Department",sn.department||"—"],["Location",sn.location||"—"],["Date of Joining",sn.doj?new Date(sn.doj).toLocaleDateString("en-IN"):"—"],["PAN",sn.pan||"—"],["UAN",sn.uan||"—"],["PF No.",sn.pfNumber||"—"],["ESI No.",sn.esiNumber||"—"],["Bank A/c",sn.bankAccountNumber||"—"],["Bank",sn.bankName||"—"]].map(([k,v]) => (
+        {[["Name",sn.name||emp.name],["Employee ID",sn.employeeId||emp.employeeId],["Designation",sn.designation||"—"],["Department",formatDepartment(sn.department)||"—"],["Location",sn.location||"—"],["Date of Joining",sn.doj?new Date(sn.doj).toLocaleDateString("en-IN"):"—"],["PAN",sn.pan||"—"],["UAN",sn.uan||"—"],["PF No.",sn.pfNumber||"—"],["ESI No.",sn.esiNumber||"—"],["Bank A/c",sn.bankAccountNumber||"—"],["Bank",sn.bankName||"—"]].map(([k,v]) => (
           <div key={k} className="flex justify-between py-1 border-b border-[#1e2a35]"><span className="text-gray-500">{k}</span><span className="text-gray-200 font-medium">{v||"—"}</span></div>
         ))}
       </div>

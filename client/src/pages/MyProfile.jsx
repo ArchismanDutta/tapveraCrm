@@ -6,6 +6,7 @@ import ProfileHeader from "../components/profile/ProfileHeader";
 import PayslipModal from "../components/payslip/PayslipModal";
 import axios from "axios";
 import newAttendanceService from "../services/newAttendanceService";
+import { formatDepartment } from "../utils/formatters";
 
 // Add fade-in animation styles
 const fadeInStyle = `
@@ -164,7 +165,7 @@ const MyProfile = ({ userType = "employee", onLogout }) => {
           location: capitalize(user.location || ""),
         },
         dob: user.dob || "N/A",
-        department: capitalize(user.department || ""),
+        department: formatDepartment(user.department),
         designation: capitalize(user.designation || ""),
         employeeId: user.employeeId || user.id?.toString().slice(-6) || "N/A",
         joinDate: user.doj || user.createdAt || "N/A",

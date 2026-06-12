@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import tapveraLogo from "../assets/tapvera.png";
 import { FileText, Download, Calendar, DollarSign, X, ChevronLeft, ChevronRight } from "lucide-react";
 import Sidebar from "../components/dashboard/Sidebar";
+import { formatDepartment } from "../utils/formatters";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
 
@@ -24,7 +25,7 @@ function PayslipDocument({ payslip }) {
   const name        = sn.name        || emp.name        || "—";
   const empId       = sn.employeeId  || emp.employeeId  || "—";
   const designation = sn.designation || emp.designation || "—";
-  const department  = sn.department  || emp.department  || "—";
+  const department  = formatDepartment(sn.department  || emp.department);
   const location    = sn.location    || emp.location    || "—";
   const doj         = sn.doj ? new Date(sn.doj).toLocaleDateString("en-IN") : "—";
 
@@ -161,7 +162,7 @@ function printPayslip(payslip) {
   const name        = sn.name        || emp.name        || "—";
   const empId       = sn.employeeId  || emp.employeeId  || "—";
   const designation = sn.designation || emp.designation || "—";
-  const department  = sn.department  || emp.department  || "—";
+  const department  = formatDepartment(sn.department  || emp.department);
   const location    = sn.location    || emp.location    || "—";
   const doj         = sn.doj ? new Date(sn.doj).toLocaleDateString("en-IN") : "—";
 

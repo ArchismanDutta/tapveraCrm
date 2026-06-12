@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Search, Filter, UserPlus, X, Users, Building2 } from "lucide-react";
+import { formatDepartment } from "../../utils/formatters";
 
 const EmployeeFilters = ({ filters, setFilters }) => {
   const navigate = useNavigate();
@@ -146,7 +147,7 @@ const EmployeeFilters = ({ filters, setFilters }) => {
                 )}
                 {filters.department !== "all" && (
                   <span className="inline-flex items-center gap-1 px-2 py-1 bg-purple-500/20 text-purple-300 rounded-lg text-xs">
-                    Department: {filters.department}
+                    Department: {formatDepartment(filters.department)}
                     <button onClick={() => setFilters(f => ({ ...f, department: "all" }))} className="hover:text-red-400">
                       <X className="h-3 w-3" />
                     </button>

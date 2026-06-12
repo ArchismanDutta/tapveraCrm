@@ -29,6 +29,7 @@ import EmploymentDetails from "../components/employeeinfo/EmploymentDetails";
 import SalaryCard from "../components/employeeinfo/SalaryCard";
 import QualificationsSkills from "../components/employeeinfo/QualificationsSkills";
 import ShiftDetails from "../components/employeeinfo/ShiftDetails";
+import { formatDepartment } from "../utils/formatters";
 
 const SIDEBAR_WIDTH = 250;
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
@@ -266,7 +267,7 @@ const EmployeePage = () => {
     return [
       { icon: Mail, label: "Email", value: selectedEmployee.email },
       { icon: Phone, label: "Contact", value: selectedEmployee.contact },
-      { icon: Briefcase, label: "Department", value: selectedEmployee.department },
+      { icon: Briefcase, label: "Department", value: formatDepartment(selectedEmployee.department) },
       { icon: Calendar, label: "Joined", value: formatDateInput(selectedEmployee.doj) },
     ];
   }, [selectedEmployee]);
@@ -507,7 +508,7 @@ const EmployeePage = () => {
                   <h1 className="truncate text-3xl font-bold text-white">{selectedEmployee.name}</h1>
                   <p className="mt-1 text-sm text-slate-400">
                     {selectedEmployee.designation || "No designation"} at{" "}
-                    {selectedEmployee.department || "Unassigned department"}
+                    {formatDepartment(selectedEmployee.department) || "Unassigned department"}
                   </p>
                 </div>
               </div>

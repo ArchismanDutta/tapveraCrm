@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { formatDepartment } from "../../utils/formatters";
 import {
   FileText,
   Eye,
@@ -225,7 +226,7 @@ const PayslipManagement = ({ onLogout }) => {
             >
               <option value="">All Departments</option>
               {departments.map(dept => (
-                <option key={dept} value={dept}>{dept}</option>
+                <option key={dept} value={dept}>{formatDepartment(dept)}</option>
               ))}
             </select>
 
@@ -291,7 +292,7 @@ const PayslipManagement = ({ onLogout }) => {
                             </div>
                           </div>
                         </td>
-                        <td className="pl-6 pr-4 py-5 text-gray-300">{payslip.employee?.department || 'N/A'}</td>
+                        <td className="pl-6 pr-4 py-5 text-gray-300">{formatDepartment(payslip.employee?.department)}</td>
                         <td className="pl-6 pr-4 py-5">
                           <span className="inline-flex items-center gap-1 px-3 py-1 bg-blue-600/20 text-blue-400 rounded-full text-sm">
                             <Calendar className="w-3 h-3" />

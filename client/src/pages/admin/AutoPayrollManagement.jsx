@@ -26,6 +26,7 @@ import {
 import { toast } from "react-toastify";
 import Sidebar from "../../components/dashboard/Sidebar";
 import PayslipModal from "../../components/payslip/PayslipModal";
+import { formatDepartment } from "../../utils/formatters";
 
 const AutoPayrollManagement = ({ onLogout }) => {
   const [collapsed, setCollapsed] = useState(false);
@@ -1032,7 +1033,7 @@ const AutoPayrollManagement = ({ onLogout }) => {
                           </div>
                         </td>
                         <td className="pl-6 pr-4 py-5 text-gray-300">
-                          {emp.department || "N/A"}
+                          {formatDepartment(emp.department)}
                         </td>
                         <td className="pl-6 pr-4 py-5 text-white font-semibold">
                           {getMonthlySalary(emp) > 0 ? (
@@ -1108,7 +1109,7 @@ const AutoPayrollManagement = ({ onLogout }) => {
                     </h2>
                     <p className="text-sm text-gray-400 mt-1">
                       {previewData.employee.employeeId || "No employee ID"} -{" "}
-                      {previewData.employee.department || "No department"} -{" "}
+                      {formatDepartment(previewData.employee.department)} -{" "}
                       {previewPeriodLabel}
                     </p>
                   </div>
