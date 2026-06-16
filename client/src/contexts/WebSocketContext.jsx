@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from "react";
 import notificationManager from "../utils/browserNotifications";
+import { audioManager } from '../utils/audioManager';
 
 const WebSocketContext = createContext(null);
 
@@ -59,26 +60,7 @@ export const WebSocketProvider = ({ children }) => {
 
   // Play notification sound
   const playNotificationSound = useCallback(() => {
-    try {
-      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-      const oscillator = audioContext.createOscillator();
-      const gainNode = audioContext.createGain();
-
-      oscillator.connect(gainNode);
-      gainNode.connect(audioContext.destination);
-
-      oscillator.type = 'sine';
-      oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
-      oscillator.frequency.setValueAtTime(600, audioContext.currentTime + 0.1);
-
-      gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
-      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
-
-      oscillator.start(audioContext.currentTime);
-      oscillator.stop(audioContext.currentTime + 0.3);
-    } catch (error) {
-      console.error("Failed to play notification sound:", error);
-    }
+    audioManager.playNotificationSound();
   }, []);
 
   // Update active conversation
