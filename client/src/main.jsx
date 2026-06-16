@@ -8,12 +8,25 @@ import { Provider } from "react-redux";
 import store from "./store/index.js";
 import { initializeViewportHeight } from './utils/viewportHeight';
 import { initializeKeyboardDetection } from "./utils/keyboardDetection";
+import { initializeAudioOnUserInteraction } from './utils/audioManager';
+import { addIOSMetadata, logIOSInfo } from './utils/iosCompatibility';
 
 // Initialize viewport height for iOS
 initializeViewportHeight();
 
 // Initialize keyboard detection for iOS
 initializeKeyboardDetection();
+
+// Initialize audio for iOS
+initializeAudioOnUserInteraction();
+
+// Add iOS metadata
+addIOSMetadata();
+
+// Log iOS info in development
+if (import.meta.env.DEV) {
+  logIOSInfo();
+}
 
 // iOS Safari debugging - log app startup
 console.log('App starting...', {
