@@ -10,6 +10,7 @@ import { initializeViewportHeight } from './utils/viewportHeight';
 import { initializeKeyboardDetection } from "./utils/keyboardDetection";
 import { initializeAudioOnUserInteraction } from './utils/audioManager';
 import { addIOSMetadata, logIOSInfo } from './utils/iosCompatibility';
+import { initPerformanceMonitoring } from './utils/performanceMonitor';
 
 // Initialize viewport height for iOS
 initializeViewportHeight();
@@ -26,6 +27,7 @@ addIOSMetadata();
 // Log iOS info in development
 if (import.meta.env.DEV) {
   logIOSInfo();
+  initPerformanceMonitoring();
 }
 
 // iOS Safari debugging - log app startup
