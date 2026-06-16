@@ -61,6 +61,7 @@ export default function FileUploader({
         ref={inputRef}
         type="file"
         accept={acceptAttr}
+        capture={acceptAttr?.includes('image') ? 'environment' : undefined}
         multiple
         className="hidden"
         onChange={(e) => e.target.files && onFiles(e.target.files)}

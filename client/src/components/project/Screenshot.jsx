@@ -551,7 +551,8 @@ const Screenshot = ({ projectId, userRole, userId }) => {
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept="image/*"
+                  accept="image/*,image/heic"
+                  capture="environment"
                   onChange={handleFileSelect}
                   className="hidden"
                 />
