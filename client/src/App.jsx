@@ -1100,14 +1100,16 @@ const AppWrapper = () => {
 
 // ------------------- Main App -------------------
 const App = () => (
-  <Router>
-    <WebSocketProvider>
-      <AchievementProvider>
-        <AppWrapper />
-        <AchievementNotificationContainer />
-      </AchievementProvider>
-    </WebSocketProvider>
-  </Router>
+  <ErrorBoundary>
+    <Router>
+      <WebSocketProvider>
+        <AchievementProvider>
+          <AppWrapper />
+          <AchievementNotificationContainer />
+        </AchievementProvider>
+      </WebSocketProvider>
+    </Router>
+  </ErrorBoundary>
 );
 
 export default App;
