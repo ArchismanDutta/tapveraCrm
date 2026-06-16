@@ -29,12 +29,18 @@ const EmployeeTable = ({ employees, onEdit, onDelete, onViewDetails, regions, on
           {employees.map((emp) => (
             <tr key={emp.id} className="border-b hover:bg-gray-50">
               <td className="p-3 flex items-center gap-3">
-                <img
-                  src={emp.avatar}
-                  alt={emp.name}
-                  className="w-10 h-10 rounded-full"
-                />
-                {emp.name}
+                {emp.avatar ? (
+                  <img
+                    src={emp.avatar}
+                    alt={emp.name || 'Employee'}
+                    className="w-10 h-10 rounded-full"
+                  />
+                ) : (
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-cyan-500 to-blue-500 flex items-center justify-center text-white font-semibold">
+                    {emp.name?.charAt(0)?.toUpperCase() || '?'}
+                  </div>
+                )}
+                {emp.name || 'Unknown'}
               </td>
               <td className="p-3">{emp.id}</td>
               <td className="p-3">{emp.department}</td>
@@ -45,11 +51,13 @@ const EmployeeTable = ({ employees, onEdit, onDelete, onViewDetails, regions, on
                   onChange={(e) => onRegionChange(emp.id, e.target.value)}
                   className="px-2 py-1 rounded border border-gray-300 text-sm focus:outline-none focus:border-blue-500"
                 >
-                  {regions && regions.map(region => (
+                  {Array.isArray(regions) && regions.length > 0 ? regions.map(region => (
                     <option key={region} value={region}>
                       {region === 'Global' ? '🌍 Global' : `📍 ${region}`}
                     </option>
-                  ))}
+                  )) : (
+                    <option value="Global">Global</option>
+                  )}
                 </select>
               </td>
               <td className="p-3">
@@ -60,7 +68,7 @@ const EmployeeTable = ({ employees, onEdit, onDelete, onViewDetails, regions, on
                 </span>
               </td>
               <td className="p-3">{emp.attendance}%</td>
-              <td className="p-3">${emp.salary.toLocaleString()}</td>
+              <td className="p-3">${emp.salary ? emp.salary.toLocaleString() : 'N/A'}</td>
               <td className="p-3 flex gap-2">
                 <button
                   className="text-green-500 hover:text-green-700"
