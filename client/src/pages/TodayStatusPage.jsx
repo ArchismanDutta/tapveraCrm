@@ -216,8 +216,9 @@ const TodayStatusPage = ({ onLogout }) => {
            err.response?.status >= 500 ||
            err.code === 'ECONNABORTED')) {
         console.log(`Retrying in ${retryDelay}ms...`);
-        setTimeout(() => fetchStatus(retryCount + 1), retryDelay);
-        return null;
+        const retryTimer = setTimeout(() => fetchStatus(retryCount + 1), retryDelay);
+        // Store timer for cleanup if component unmounts
+        return () => clearTimeout(retryTimer);
       }
 
       // Update error state and show error toast on final failure
@@ -373,8 +374,9 @@ const TodayStatusPage = ({ onLogout }) => {
            err.response?.status >= 500 ||
            err.code === 'ECONNABORTED')) {
         console.log(`🔄 Retrying weekly summary in ${retryDelay}ms...`);
-        setTimeout(() => fetchWeeklySummary(retryCount + 1), retryDelay);
-        return null;
+        const retryTimer = setTimeout(() => fetchWeeklySummary(retryCount + 1), retryDelay);
+        // Store timer for cleanup if component unmounts
+        return () => clearTimeout(retryTimer);
       }
 
       // Update error state and show error on final failure
@@ -432,8 +434,9 @@ const TodayStatusPage = ({ onLogout }) => {
            err.response?.status >= 500 ||
            err.code === 'ECONNABORTED')) {
         console.log(`🔄 Retrying flexible requests in ${retryDelay}ms...`);
-        setTimeout(() => fetchFlexibleRequests(retryCount + 1), retryDelay);
-        return null;
+        const retryTimer = setTimeout(() => fetchFlexibleRequests(retryCount + 1), retryDelay);
+        // Store timer for cleanup if component unmounts
+        return () => clearTimeout(retryTimer);
       }
 
       // Update error state - silently fail for flexible requests as they're not critical
@@ -597,7 +600,7 @@ const TodayStatusPage = ({ onLogout }) => {
 
       // IMMEDIATE: Trigger weekly summary refresh for responsive UI
       console.log("🚀 Immediate weekly summary refresh trigger");
-      setTimeout(() => {
+      const immediateRefreshTimer = setTimeout(() => {
         fetchWeeklySummary().catch(err => {
           console.warn("⚠️ Immediate weekly summary refresh failed:", err);
         });
@@ -617,9 +620,10 @@ const TodayStatusPage = ({ onLogout }) => {
 
       // For punch-in events, refresh status to ensure arrival time is properly synced
       const eventType = payload.timelineEvent?.type?.toLowerCase() || '';
+      let punchInRefreshTimer;
       if (eventType.includes('punch in')) {
         console.log("🔄 Refreshing status after punch-in to sync arrival time...");
-        setTimeout(() => {
+        punchInRefreshTimer = setTimeout(() => {
           fetchStatus().catch(err => {
             console.warn("⚠️ Failed to refresh status after punch-in:", err);
           });
@@ -627,19 +631,24 @@ const TodayStatusPage = ({ onLogout }) => {
       }
 
       // Refresh related data in background with delay to ensure backend processing is complete
-      setTimeout(() => {
+      const summaryRefreshTimer = setTimeout(() => {
         console.log("🔄 Refreshing weekly summary after status update...");
         fetchWeeklySummary().catch(err => {
           console.error("❌ Failed to refresh weekly summary after status update:", err);
           // Try again with a shorter delay
-          setTimeout(() => {
+          const retryTimer = setTimeout(() => {
             console.log("🔄 Retrying weekly summary refresh...");
             fetchWeeklySummary().catch(retryErr => {
               console.error("❌ Weekly summary retry also failed:", retryErr);
             });
           }, 1000);
+          // Store retry timer for cleanup
+          return () => clearTimeout(retryTimer);
         });
       }, 1000); // Reduced delay from 2 seconds to 1 second
+
+      // Store all timers for potential cleanup
+      const timersToCleanup = [immediateRefreshTimer, punchInRefreshTimer, summaryRefreshTimer].filter(Boolean);
 
       // Notify other components
       window.dispatchEvent(new CustomEvent("statusUpdate", {
@@ -1041,6 +1050,8 @@ const TodayStatusPage = ({ onLogout }) => {
 
   // External update listener with enhanced event handling
   useEffect(() => {
+    let refreshScheduledTimer = null;
+
     const handler = (event) => {
       console.log("🔔 External data update event received:", event.detail);
 
@@ -1049,7 +1060,7 @@ const TodayStatusPage = ({ onLogout }) => {
         fetchAllData({ force: true });
       } else {
         // Schedule refresh after current request completes
-        setTimeout(() => {
+        refreshScheduledTimer = setTimeout(() => {
           if (!requestInProgress) {
             fetchAllData({ force: true });
           }
@@ -1064,6 +1075,11 @@ const TodayStatusPage = ({ onLogout }) => {
     });
 
     return () => {
+      // Cleanup scheduled timer
+      if (refreshScheduledTimer) {
+        clearTimeout(refreshScheduledTimer);
+      }
+      // Remove all event listeners
       events.forEach(eventType => {
         window.removeEventListener(eventType, handler);
       });
