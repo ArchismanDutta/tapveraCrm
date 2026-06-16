@@ -4,6 +4,10 @@ import "./styles/ios-scrolling.css";
 import App from "./App.jsx";
 import { Provider } from "react-redux";
 import store from "./store/index.js";
+import { initializeViewportHeight } from './utils/viewportHeight';
+
+// Initialize viewport height for iOS
+initializeViewportHeight();
 
 // iOS Safari debugging - log app startup
 console.log('App starting...', {
