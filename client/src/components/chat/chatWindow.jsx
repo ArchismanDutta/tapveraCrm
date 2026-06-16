@@ -323,8 +323,8 @@ const ChatWindow = ({
   };
 
   const getSenderName = (senderId) => {
-    const member = conversationMembers.find((m) => m._id === senderId);
-    return member ? member.name : "Unknown";
+    const member = Array.isArray(conversationMembers) ? conversationMembers.find((m) => m._id === senderId) : null;
+    return member?.name || "Unknown";
   };
 
   const getFileIcon = (fileType) => {
@@ -424,11 +424,11 @@ const ChatWindow = ({
 
   // Update quick replies based on last message
   useEffect(() => {
-    if (messages && messages.length > 0) {
+    if (Array.isArray(messages) && messages.length > 0) {
       const lastMessage = messages[messages.length - 1];
-      if (String(lastMessage.senderId || lastMessage.sender?._id) !== String(currentUserId)) {
-        const replies = getQuickReplies(lastMessage.message || lastMessage.text);
-        setQuickReplies(replies);
+      if (lastMessage && String(lastMessage?.senderId || lastMessage?.sender?._id) !== String(currentUserId)) {
+        const replies = getQuickReplies(lastMessage?.message || lastMessage?.text || '');
+        setQuickReplies(replies || []);
       } else {
         setQuickReplies([]);
       }
@@ -560,13 +560,13 @@ const ChatWindow = ({
                       {/* Reply Preview */}
                       {msg.replyTo && (
                         <div
-                          onClick={() => scrollToMessage(msg.replyTo._id || msg.replyTo.messageId)}
+                          onClick={() => scrollToMessage(msg.replyTo?._id || msg.replyTo?.messageId)}
                           className="bg-gray-800 bg-opacity-50 px-2 py-1 rounded mb-2 text-xs border-l-2 border-blue-400 cursor-pointer hover:bg-opacity-70 transition overflow-hidden"
                           style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}
                         >
                           <p className="text-blue-300 font-semibold truncate">
-                            {msg.replyTo.senderId?.name ||
-                             conversationMembers.find(m => m._id === msg.replyTo.senderId)?.name ||
+                            {msg.replyTo?.senderId?.name ||
+                             (Array.isArray(conversationMembers) ? conversationMembers.find(m => m?._id === msg.replyTo?.senderId) : null)?.name ||
                              "Unknown"}
                           </p>
                           <p className="text-gray-400 italic overflow-hidden" style={{
@@ -576,13 +576,13 @@ const ChatWindow = ({
                             wordBreak: 'break-word',
                             overflowWrap: 'anywhere'
                           }}>
-                            {msg.replyTo.message || "..."}
+                            {msg.replyTo?.message || "..."}
                           </p>
                         </div>
                       )}
 
                       {/* Message with Markdown rendering */}
-                      {msg.message && (
+                      {msg.message || msg.text ? (
                         <div className="text-sm prose prose-invert prose-sm max-w-none">
                           <ReactMarkdown
                             remarkPlugins={[remarkGfm]}
@@ -638,7 +638,7 @@ const ChatWindow = ({
                               ),
                               a: ({ href, children }) => (
                                 <a
-                                  href={href}
+                                  href={href || '#'}
                                   target="_blank"
                                   rel="noopener noreferrer"
                                   className="text-blue-400 underline hover:text-blue-300"
@@ -648,33 +648,34 @@ const ChatWindow = ({
                               ),
                             }}
                           >
-                            {msg.message}
+                            {msg.message || msg.text || ''}
                           </ReactMarkdown>
                         </div>
-                      )}
+                      ) : null}
 
                       {/* Attachments */}
-                      {msg.attachments && msg.attachments.length > 0 && (
+                      {Array.isArray(msg.attachments) && msg.attachments.length > 0 && (
                         <div className="mt-3 space-y-2">
                           {msg.attachments.map((att, attIdx) => {
-                            const isMedia = att.fileType === "image" || att.fileType === "video";
-                            const mediaAttachments = msg.attachments.filter(a => a.fileType === "image" || a.fileType === "video");
+                            if (!att) return null;
+                            const isMedia = att?.fileType === "image" || att?.fileType === "video";
+                            const mediaAttachments = Array.isArray(msg.attachments) ? msg.attachments.filter(a => a?.fileType === "image" || a?.fileType === "video") : [];
 
                             return (
-                              <div key={attIdx}>
-                                {!isMedia && (
+                              <div key={att?._id || attIdx}>
+                                {!isMedia && att?.url && (
                                   <div className="flex items-center gap-2 p-2 bg-black/20 rounded">
-                                    {getFileIcon(att.fileType)}
+                                    {getFileIcon(att?.fileType)}
                                     <div className="flex-1 min-w-0">
                                       <div className="text-xs text-white truncate">
-                                        {att.filename}
+                                        {att?.filename || 'Unknown file'}
                                       </div>
                                       <div className="text-xs text-gray-400">
-                                        {att.size ? `${(att.size / 1024).toFixed(1)} KB` : 'N/A'}
+                                        {att?.size ? `${(att.size / 1024).toFixed(1)} KB` : 'N/A'}
                                       </div>
                                     </div>
                                     <a
-                                      href={att.url.startsWith('http') ? att.url : `${import.meta.env.VITE_API_BASE || 'http://localhost:5000'}${att.url}`}
+                                      href={att.url?.startsWith('http') ? att.url : `${import.meta.env.VITE_API_BASE || 'http://localhost:5000'}${att.url || ''}`}
                                       target="_blank"
                                       rel="noopener noreferrer"
                                       className="p-1 hover:bg-white/10 rounded"
@@ -685,15 +686,15 @@ const ChatWindow = ({
                                   </div>
                                 )}
 
-                                {att.fileType === "image" && (
+                                {att?.fileType === "image" && att?.url && (
                                   <div className="relative group">
                                     <img
-                                      src={att.url.startsWith('http') ? att.url : `${import.meta.env.VITE_API_BASE || 'http://localhost:5000'}${att.url}`}
-                                      alt={att.filename}
+                                      src={att.url?.startsWith('http') ? att.url : `${import.meta.env.VITE_API_BASE || 'http://localhost:5000'}${att.url || ''}`}
+                                      alt={att?.filename || 'Image'}
                                       className="w-48 h-48 object-cover rounded cursor-pointer hover:opacity-90 transition-opacity"
                                       onClick={() => {
                                         setLightboxAllMedia(mediaAttachments);
-                                        setLightboxIndex(mediaAttachments.indexOf(att));
+                                        setLightboxIndex(mediaAttachments.findIndex(a => a?._id === att._id));
                                         setLightboxMedia(att);
                                       }}
                                     />
@@ -701,14 +702,14 @@ const ChatWindow = ({
                                   </div>
                                 )}
 
-                                {att.fileType === "video" && (
+                                {att?.fileType === "video" && att?.url && (
                                   <div className="relative">
                                     <video
-                                      src={att.url.startsWith('http') ? att.url : `${import.meta.env.VITE_API_BASE || 'http://localhost:5000'}${att.url}`}
+                                      src={att.url?.startsWith('http') ? att.url : `${import.meta.env.VITE_API_BASE || 'http://localhost:5000'}${att.url || ''}`}
                                       className="w-48 h-48 object-cover rounded cursor-pointer"
                                       onClick={() => {
                                         setLightboxAllMedia(mediaAttachments);
-                                        setLightboxIndex(mediaAttachments.indexOf(att));
+                                        setLightboxIndex(mediaAttachments.findIndex(a => a?._id === att._id));
                                         setLightboxMedia(att);
                                       }}
                                     />
@@ -726,14 +727,15 @@ const ChatWindow = ({
                       )}
 
                       {/* Reactions Display */}
-                      {msg.reactions && msg.reactions.length > 0 && (
+                      {Array.isArray(msg.reactions) && msg.reactions.length > 0 && (
                         <div className="flex flex-wrap gap-1 mt-2">
                           {msg.reactions.map((reaction, idx) => {
-                            const userReacted = reaction.users?.includes(String(currentUserId));
+                            if (!reaction) return null;
+                            const userReacted = Array.isArray(reaction?.users) && reaction.users.includes(String(currentUserId));
                             return (
                               <button
                                 key={idx}
-                                onClick={() => handleReaction(msg.messageId, reaction.emoji)}
+                                onClick={() => handleReaction(msg.messageId, reaction?.emoji)}
                                 className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs transition-all ${
                                   userReacted
                                     ? "bg-blue-500/30 border border-blue-400"
@@ -741,9 +743,9 @@ const ChatWindow = ({
                                 }`}
                                 title={userReacted ? "Remove reaction" : "Add reaction"}
                               >
-                                <span>{reaction.emoji}</span>
+                                <span>{reaction?.emoji || ''}</span>
                                 <span className="text-gray-300 text-[10px]">
-                                  {reaction.users?.length || 0}
+                                  {Array.isArray(reaction?.users) ? reaction.users.length : 0}
                                 </span>
                               </button>
                             );
@@ -753,10 +755,10 @@ const ChatWindow = ({
 
                       <div className="flex items-center justify-between mt-1">
                         <span className="text-[10px] text-gray-400">
-                          {new Date(msg.timestamp).toLocaleTimeString([], {
+                          {msg?.timestamp ? new Date(msg.timestamp).toLocaleTimeString([], {
                             hour: "2-digit",
                             minute: "2-digit",
-                          })}
+                          }) : ''}
                         </span>
                         <div className="flex items-center gap-1 relative">
                           <button
@@ -767,11 +769,11 @@ const ChatWindow = ({
                             <ReplyIcon className="w-3 h-3 text-gray-400 hover:text-purple-400" />
                           </button>
                           <button
-                            onClick={() => copyToClipboard(msg.message)}
+                            onClick={() => copyToClipboard(msg.message || msg.text || '')}
                             className="p-1 rounded hover:bg-white/10 transition-colors"
                             title="Copy message"
                           >
-                            {copiedText === msg.message ? (
+                            {copiedText === (msg.message || msg.text) ? (
                               <Check className="w-3 h-3 text-green-400" />
                             ) : (
                               <Copy className="w-3 h-3 text-gray-400 hover:text-blue-400" />
@@ -830,7 +832,7 @@ const ChatWindow = ({
           <div className="text-sm text-gray-300 flex-1 min-w-0 overflow-hidden">
             <div className="flex items-center gap-2 text-sm text-blue-400 mb-1">
               <ReplyIcon className="w-3 h-3 flex-shrink-0" />
-              <span className="font-medium truncate">Replying to {getSenderName(replyingTo.senderId)}</span>
+              <span className="font-medium truncate">Replying to {getSenderName(replyingTo?.senderId)}</span>
             </div>
             <div className="text-xs text-gray-400 overflow-hidden" style={{
               display: '-webkit-box',
@@ -839,7 +841,7 @@ const ChatWindow = ({
               wordBreak: 'break-word',
               overflowWrap: 'anywhere'
             }}>
-              {replyingTo.message}
+              {replyingTo?.message || ''}
             </div>
           </div>
           <button
