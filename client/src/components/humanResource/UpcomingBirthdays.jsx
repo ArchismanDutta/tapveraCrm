@@ -1,4 +1,5 @@
 import React from "react";
+import { parseDate } from '../../utils/safeDateParser';
 
 const formatDate = (date) => {
   if (!date) return "-";
@@ -7,7 +8,23 @@ const formatDate = (date) => {
   return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 };
 
-const UpcomingBirthdays = ({ birthdays }) => {
+const UpcomingBirthdays = ({ birthdays: rawBirthdays }) => {
+  // Filter and parse birthdays using safe date parser
+  const birthdays = rawBirthdays
+    .filter(b => b.originalDob)
+    .map(b => {
+      const date = parseDate(b.originalDob);
+      if (!date) return null;
+
+      return {
+        ...b,
+        date,
+        name: b.name || 'Unknown'
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.date - b.date);
+
   return (
     <div className="bg-[#1a1f36] border border-gray-700 rounded-2xl shadow-lg p-5">
       <h3 className="text-lg font-semibold text-gray-100 mb-4 flex items-center">
@@ -21,7 +38,7 @@ const UpcomingBirthdays = ({ birthdays }) => {
         )}
         {birthdays.map((b, idx) => {
           const birthYear = b.originalDob
-            ? new Date(b.originalDob).getFullYear()
+            ? parseDate(b.originalDob)?.getFullYear()
             : null;
 
           return (
@@ -38,7 +55,7 @@ const UpcomingBirthdays = ({ birthdays }) => {
                   />
                 ) : (
                   <div className="w-10 h-10 bg-pink-600 rounded-full flex items-center justify-center font-bold text-white">
-                    {b.name.charAt(0)}
+                    {b.name?.charAt(0)?.toUpperCase() || '?'}
                   </div>
                 )}
                 <div>
