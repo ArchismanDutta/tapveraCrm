@@ -1,0 +1,59 @@
+/* client/src/styles/z-index.css */
+/**
+ * Standardized Z-Index Scale
+ * Prevents conflicts and ensures proper stacking order
+ */
+
+:root {
+  /* Base layers */
+  --z-base: 0;
+  --z-content: 1;
+
+  /* Interactive elements */
+  --z-dropdown: 1000;
+  --z-sticky: 1020;
+  --z-fixed: 1030;
+
+  /* Overlays */
+  --z-modal-backdrop: 1040;
+  --z-modal: 1050;
+  --z-popover: 1060;
+  --z-tooltip: 1070;
+
+  /* System UI */
+  --z-notification: 1080;
+  --z-toast: 1090;
+
+  /* Tap Agent/Assistant (highest) */
+  --z-tap-fab: 1100;
+  --z-tap-panel: 1110;
+}
+
+/* Apply to common components */
+.modal-backdrop {
+  z-index: var(--z-modal-backdrop);
+}
+
+.modal,
+[role="dialog"] {
+  z-index: var(--z-modal);
+}
+
+.dropdown,
+[role="menu"] {
+  z-index: var(--z-dropdown);
+}
+
+.notification-bell {
+  z-index: var(--z-notification);
+}
+
+.toast,
+[role="alert"] {
+  z-index: var(--z-toast);
+}
+
+.tooltip,
+[role="tooltip"] {
+  z-index: var(--z-tooltip);
+}

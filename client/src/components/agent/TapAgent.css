@@ -15,7 +15,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 9998;
+  z-index: var(--z-tap-fab);
   transition: all 0.3s ease;
 }
 
@@ -48,7 +48,7 @@
   background: white;
   border-radius: 16px;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-  z-index: 9999;
+  z-index: var(--z-tap-panel);
   display: flex;
   flex-direction: column;
   overflow: hidden;

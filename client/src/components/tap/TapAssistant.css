@@ -16,7 +16,7 @@
   align-items: center;
   justify-content: center;
   font-size: 26px;
-  z-index: 9998;
+  z-index: var(--z-tap-fab);
   transition: transform 0.2s, box-shadow 0.2s;
 }
 
@@ -65,7 +65,7 @@
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
   display: flex;
   flex-direction: column;
-  z-index: 9998;
+  z-index: var(--z-tap-panel);
   animation: slideUp 0.3s ease-out;
   overflow: hidden;
 }

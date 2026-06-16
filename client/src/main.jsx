@@ -1,5 +1,6 @@
 import { createRoot } from "react-dom/client";
 import "./index.css";
+import "./styles/z-index.css";
 import "./styles/ios-scrolling.css";
 import "./styles/ios-fixed.css";
 import App from "./App.jsx";
