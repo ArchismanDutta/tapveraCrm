@@ -1,13 +1,18 @@
 import { createRoot } from "react-dom/client";
 import "./index.css";
 import "./styles/ios-scrolling.css";
+import "./styles/ios-fixed.css";
 import App from "./App.jsx";
 import { Provider } from "react-redux";
 import store from "./store/index.js";
 import { initializeViewportHeight } from './utils/viewportHeight';
+import { initializeKeyboardDetection } from "./utils/keyboardDetection";
 
 // Initialize viewport height for iOS
 initializeViewportHeight();
+
+// Initialize keyboard detection for iOS
+initializeKeyboardDetection();
 
 // iOS Safari debugging - log app startup
 console.log('App starting...', {

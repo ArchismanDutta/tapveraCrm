@@ -1,0 +1,47 @@
+/* client/src/styles/ios-fixed.css */
+/**
+ * iOS-safe fixed positioning
+ * Handles keyboard appearance and safe areas
+ */
+
+/* iOS safe area support */
+@supports (padding: env(safe-area-inset-bottom)) {
+  .fixed-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .fixed-top {
+    padding-top: env(safe-area-inset-top);
+  }
+
+  .fixed-left {
+    padding-left: env(safe-area-inset-left);
+  }
+
+  .fixed-right {
+    padding-right: env(safe-area-inset-right);
+  }
+}
+
+/* Floating action button adjustments */
+.tap-float-button {
+  position: fixed;
+  bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+  right: calc(24px + env(safe-area-inset-right, 0px));
+
+  /* Smooth transition when keyboard appears */
+  transition: transform 0.3s ease;
+}
+
+/* Move FAB up when keyboard is visible */
+@media (max-width: 768px) {
+  body.keyboard-visible .tap-float-button {
+    transform: translateY(-260px);
+  }
+}
+
+/* Prevent fixed elements from being covered by keyboard */
+body.keyboard-visible .fixed-bottom {
+  transform: translateY(-260px);
+  transition: transform 0.3s ease;
+}
