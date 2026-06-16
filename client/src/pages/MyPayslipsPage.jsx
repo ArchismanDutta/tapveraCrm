@@ -3,6 +3,7 @@ import tapveraLogo from "../assets/tapvera.png";
 import { FileText, Download, Calendar, DollarSign, X, ChevronLeft, ChevronRight } from "lucide-react";
 import Sidebar from "../components/dashboard/Sidebar";
 import { formatDepartment } from "../utils/formatters";
+import { parseDate, formatDateForDisplay } from "../utils/safeDateParser";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
 
@@ -12,7 +13,9 @@ function authHeaders() {
 const fmt = (n) => (n ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 function monthLabel(ym) {
   if (!ym) return "";
-  return new Date(ym + "-01").toLocaleDateString("en-IN", { month: "long", year: "numeric" });
+  const date = parseDate(ym + "-01");
+  if (!date) return ym; // Fallback to original string if parsing fails
+  return formatDateForDisplay(date, "en-IN", { month: "long", year: "numeric" });
 }
 
 function PayslipDocument({ payslip }) {
@@ -27,7 +30,7 @@ function PayslipDocument({ payslip }) {
   const designation = sn.designation || emp.designation || "—";
   const department  = formatDepartment(sn.department  || emp.department);
   const location    = sn.location    || emp.location    || "—";
-  const doj         = sn.doj ? new Date(sn.doj).toLocaleDateString("en-IN") : "—";
+  const doj         = sn.doj ? (() => { const d = parseDate(sn.doj); return d ? formatDateForDisplay(d, "en-IN") : "—"; })() : "—";
 
   const earningsRows = [
     ["Basic",                pc.basic],
@@ -164,7 +167,7 @@ function printPayslip(payslip) {
   const designation = sn.designation || emp.designation || "—";
   const department  = formatDepartment(sn.department  || emp.department);
   const location    = sn.location    || emp.location    || "—";
-  const doj         = sn.doj ? new Date(sn.doj).toLocaleDateString("en-IN") : "—";
+  const doj         = sn.doj ? (() => { const d = parseDate(sn.doj); return d ? formatDateForDisplay(d, "en-IN") : "—"; })() : "—";
 
   const earningsRows = [
     ["Basic",                pc.basic],
