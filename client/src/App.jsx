@@ -1,5 +1,5 @@
 // src/App.jsx
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, lazy, Suspense } from "react";
 import {
   BrowserRouter as Router,
   Routes,
@@ -13,6 +13,7 @@ import "react-toastify/dist/ReactToastify.css";
 import "./styles/toastify-custom.css";
 import { Toaster } from "react-hot-toast";
 import "./styles/custom-scrollbar.css";
+import LoadingSpinner from "./components/LoadingSpinner";
 
 // Achievement System
 import { AchievementProvider } from "./contexts/AchievementContext";
@@ -47,38 +48,41 @@ import ErrorBoundary from "./components/ErrorBoundary";
 // Pages
 import Login from "./pages/LoginPage";
 import Signup from "./pages/SignUp";
-import EmployeeDashboardPage from "./pages/EmployeeDashboard";
 import MyProfile from "./pages/MyProfile";
 import Tasks from "./pages/Tasks";
 import AdminTaskPage from "./pages/AdminTaskPage";
-import UnifiedTaskPage from "./pages/UnifiedTaskPage";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 import HolidaysAndLeaves from "./pages/HolidaysAndLeaves";
 import AdminLeaveRequests from "./pages/AdminLeaveRequests";
-import TodayStatusPage from "./pages/TodayStatusPage";
-import AttendancePage from "./pages/AttendancePage";
 import NoticeBoard from "./pages/NoticeBoard";
 import TodoPage from "./pages/TodoPage";
-import ChatPage from "./pages/ChatPage";
 import EmployeeDirectory from "./pages/EmployeeDirectory";
-import EmployeePage from "./pages/EmployeePage";
 import HRDashboard from "./pages/HRDashboard";
 import HolidayManagementPage from "./pages/HolidayManagementPage";
-import SuperAdminDashboard from "./pages/SuperAdminDashboard";
 import SuperAdminAttendancePortal from "./pages/SuperAdminAttendancePortal";
 import ShiftManagement from "./components/humanResource/ShiftManagement";
 import ManualAttendanceManagement from "./pages/admin/ManualAttendanceManagement";
 import SalaryManagement from "./pages/admin/SalaryManagement";
 import PositionManagement from "./pages/admin/PositionManagement";
 import PayslipManagement from "./pages/admin/PayslipManagement";
-import MyPayslipsPage from "./pages/MyPayslipsPage";
 import ClientsPage from "./pages/ClientsPage";
-import ProjectsPage from "./pages/ProjectsPage";
 import ProjectCommunicationPage from "./pages/ProjectCommunicationPage";
 import ClientPortal from "./pages/ClientPortal";
 import EmployeePortal from "./pages/EmployeePortal";
-import ProjectDetailPage from "./pages/ProjectDetailPage";
+
+// Lazy load heavy page components
+const EmployeeDashboardPage = lazy(() => import("./pages/EmployeeDashboard"));
+const ProjectDetailPage = lazy(() => import("./pages/ProjectDetailPage"));
+const ProjectsPage = lazy(() => import("./pages/ProjectsPage"));
+const ChatPage = lazy(() => import("./pages/ChatPage"));
+const TodayStatusPage = lazy(() => import("./pages/TodayStatusPage"));
+const SuperAdminDashboard = lazy(() => import("./pages/SuperAdminDashboard"));
+const AttendancePage = lazy(() => import("./pages/AttendancePage"));
+const LeavesPage = lazy(() => import("./pages/HolidaysAndLeaves"));
+const UnifiedTaskPage = lazy(() => import("./pages/UnifiedTaskPage"));
+const MyPayslipsPage = lazy(() => import("./pages/MyPayslipsPage"));
+const EmployeePage = lazy(() => import("./pages/EmployeePage"));
 // Lead & Callback Management
 import ViewLeads from "./pages/ViewLeads";
 import AddLead from "./pages/AddLead";
@@ -420,7 +424,8 @@ const AppWrapper = () => {
   // ------------------- Routes -------------------
   return (
     <>
-      <Routes>
+      <Suspense fallback={<LoadingSpinner />}>
+        <Routes>
         {/* Login */}
         <Route
           path="/login"
@@ -1082,6 +1087,7 @@ const AppWrapper = () => {
           }
         />
       </Routes>
+      </Suspense>
 
       <ToastContainer position="top-right" autoClose={3000} />
       <Toaster position="top-right" />
