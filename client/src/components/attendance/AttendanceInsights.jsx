@@ -17,15 +17,16 @@ import {
 } from 'lucide-react';
 
 const AttendanceInsights = ({ analysis, employeeName }) => {
-  if (!analysis || !analysis.summary) {
-    return (
-      <div className="bg-slate-800/50 border border-slate-600/30 rounded-xl p-6">
-        <p className="text-gray-400 text-center">No analysis data available</p>
-      </div>
-    );
-  }
-
-  const { summary, alerts, latePatterns, burnoutSignals, punctualityTrend, insights, riskScore, weekdayPatterns } = analysis;
+  const {
+    summary,
+    alerts,
+    latePatterns,
+    burnoutSignals,
+    punctualityTrend,
+    insights,
+    riskScore,
+    weekdayPatterns = {},
+  } = analysis || {};
 
   // Risk level colors
   const getRiskColor = (level) => {
@@ -72,6 +73,14 @@ const AttendanceInsights = ({ analysis, employeeName }) => {
 
     return weekdayData;
   }, [weekdayPatterns]);
+
+  if (!summary) {
+    return (
+      <div className="rounded-xl border border-slate-600/30 bg-slate-800/50 p-6">
+        <p className="text-center text-gray-400">No analysis data available</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

@@ -56,7 +56,7 @@ router.get("/:projectId/keywords", protect, async (req, res) => {
 
       return {
         ...kw,
-        rankHistory: history.slice(0, limit),
+        rankHistory: history.slice(-limit),
         currentRank,
         previousRank,
         pastRank,

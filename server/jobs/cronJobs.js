@@ -115,13 +115,31 @@ function initializeCronJobs() {
     }
   });
 
-  // Keyword rank — 15th of every month at 6:00 AM
+  // Keyword rank — daily keywords — every day at 6:00 AM
+  cron.schedule("0 6 * * *", async () => {
+    console.log("[KeywordRank] Daily fetch triggered...");
+    await runKeywordRankFetch("daily");
+  });
+
+  // Keyword rank — weekly keywords — every Monday at 7:00 AM
+  cron.schedule("0 7 * * 1", async () => {
+    console.log("[KeywordRank] Weekly fetch triggered...");
+    await runKeywordRankFetch("weekly");
+  });
+
+  // Keyword rank — monthly keywords — 1st of every month at 8:00 AM
+  cron.schedule("0 8 1 * *", async () => {
+    console.log("[KeywordRank] Monthly fetch triggered...");
+    await runKeywordRankFetch("monthly");
+  });
+
+  // Keyword rank — 15th of every month at 6:00 AM (all keywords)
   cron.schedule("0 6 15 * *", async () => {
     console.log("[KeywordRank] Bi-monthly fetch triggered (15th)...");
     await runAllKeywordsFetch();
   });
 
-  // Keyword rank — 27th of every month at 6:00 AM
+  // Keyword rank — 27th of every month at 6:00 AM (all keywords)
   cron.schedule("0 6 27 * *", async () => {
     console.log("[KeywordRank] Bi-monthly fetch triggered (27th)...");
     await runAllKeywordsFetch();
@@ -132,6 +150,9 @@ function initializeCronJobs() {
   console.log("   - Chat notification cleanup:       Daily at 3:00 AM");
   console.log("   - Vicidial recording sync:         Every 2 hours at :00");
   console.log("   - Call analysis processing:        Every 2 hours at :30");
+  console.log("   - Keyword rank fetch (daily):      Every day at 6:00 AM");
+  console.log("   - Keyword rank fetch (weekly):     Every Monday at 7:00 AM");
+  console.log("   - Keyword rank fetch (monthly):    1st of month at 8:00 AM");
   console.log("   - Keyword rank fetch (bi-monthly): 15th and 27th at 6:00 AM");
 }
 

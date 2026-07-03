@@ -1,13 +1,10 @@
-import React, { useState, useEffect } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import API from "../api";
 import { useNavigate } from "react-router-dom";
 import {
   MessageSquare,
   Search,
   RefreshCw,
-  Filter,
-  ArrowRight,
-  Users,
   Calendar,
   AlertCircle,
   CheckCircle,
@@ -27,6 +24,7 @@ const ProjectCommunicationPage = ({ onLogout }) => {
   const navigate = useNavigate();
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState("all"); // all, needsResponse, waitingOnClient
   const [filterClient, setFilterClient] = useState("all"); // all, or specific client ID
@@ -35,10 +33,25 @@ const ProjectCommunicationPage = ({ onLogout }) => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [userRole, setUserRole] = useState("admin");
   const [selectedProjectForAnalytics, setSelectedProjectForAnalytics] = useState(null);
+  const mainRef = useRef(null);
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
+
+  const fetchProjects = useCallback(async () => {
+    setLoading(true);
+    setLoadError("");
+    try {
+      const res = await API.get("/api/projects/communication-status");
+      setProjects(Array.isArray(res.data) ? res.data : []);
+    } catch (error) {
+      console.error("Error fetching projects:", error);
+      setLoadError("We could not load project communication data. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     // Get user role from localStorage
@@ -53,50 +66,38 @@ const ProjectCommunicationPage = ({ onLogout }) => {
     }
 
     fetchProjects();
-  }, []);
-
-  const fetchProjects = async () => {
-    setLoading(true);
-    try {
-      const res = await API.get("/api/projects/communication-status");
-      setProjects(res.data);
-    } catch (error) {
-      console.error("Error fetching projects:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  }, [fetchProjects]);
 
   // Get color indicator based on communication status
   const getStatusColor = (status) => {
     switch (status) {
       case "recent": // Today
         return {
-          bg: "bg-green-500/20",
-          text: "text-green-400",
-          border: "border-green-500/50",
-          dot: "bg-green-400",
+          bg: "bg-emerald-50 dark:bg-emerald-400/10",
+          text: "text-emerald-700 dark:text-emerald-300",
+          border: "border-emerald-200 dark:border-emerald-400/20",
+          dot: "bg-emerald-500",
         };
       case "thisWeek": // 1-7 days
         return {
-          bg: "bg-yellow-500/20",
-          text: "text-yellow-400",
-          border: "border-yellow-500/50",
-          dot: "bg-yellow-400",
+          bg: "bg-amber-50 dark:bg-amber-400/10",
+          text: "text-amber-700 dark:text-amber-300",
+          border: "border-amber-200 dark:border-amber-400/20",
+          dot: "bg-amber-500",
         };
       case "overdue": // 7+ days
         return {
-          bg: "bg-red-500/20",
-          text: "text-red-400",
-          border: "border-red-500/50",
-          dot: "bg-red-400",
+          bg: "bg-rose-50 dark:bg-rose-400/10",
+          text: "text-rose-700 dark:text-rose-300",
+          border: "border-rose-200 dark:border-rose-400/20",
+          dot: "bg-rose-500",
         };
       default: // No messages
         return {
-          bg: "bg-gray-500/20",
-          text: "text-gray-400",
-          border: "border-gray-500/50",
-          dot: "bg-gray-400",
+          bg: "bg-slate-100 dark:bg-white/[0.06]",
+          text: "text-slate-600 dark:text-slate-300",
+          border: "border-slate-200 dark:border-white/10",
+          dot: "bg-slate-400",
         };
     }
   };
@@ -116,13 +117,11 @@ const ProjectCommunicationPage = ({ onLogout }) => {
     if (!communication.lastSenderType) return null;
 
     const isClient = communication.lastSenderType === "client";
-    const isAdmin = communication.lastSenderType === "admin" || communication.lastSenderType === "super-admin";
-
     return {
       icon: isClient ? User : Briefcase,
       text: isClient ? "Client sent last" : "Admin sent last",
       needsResponse: isClient, // If client sent last, admin needs to respond
-      color: isClient ? "text-blue-400" : "text-purple-400",
+      color: isClient ? "text-blue-600 dark:text-blue-300" : "text-violet-600 dark:text-violet-300",
     };
   };
 
@@ -224,7 +223,7 @@ const ProjectCommunicationPage = ({ onLogout }) => {
 
   const handlePageChange = (page) => {
     setCurrentPage(page);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    mainRef.current?.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const handleItemsPerPageChange = (newItemsPerPage) => {
@@ -232,8 +231,24 @@ const ProjectCommunicationPage = ({ onLogout }) => {
     setCurrentPage(1);
   };
 
+  const clearFilters = () => {
+    setSearchTerm("");
+    setFilterStatus("all");
+    setFilterClient("all");
+    setFilterProjectStatus("all");
+    setFilterCommunicationStatus("all");
+  };
+
+  const hasActiveFilters = Boolean(
+    searchTerm ||
+    filterStatus !== "all" ||
+    filterClient !== "all" ||
+    filterProjectStatus !== "all" ||
+    filterCommunicationStatus !== "all"
+  );
+
   return (
-    <div className="flex bg-gradient-to-br from-[#141a21] via-[#191f2b] to-[#101218] font-sans text-blue-100 min-h-screen">
+    <div className="relative flex h-[100dvh] overflow-hidden bg-slate-50 text-slate-900 dark:bg-[#0b0d12] dark:text-slate-100">
       {/* Sidebar */}
       <Sidebar
         collapsed={sidebarCollapsed}
@@ -244,190 +259,125 @@ const ProjectCommunicationPage = ({ onLogout }) => {
 
       {/* Main Content */}
       <main
-        className={`flex-1 p-8 overflow-y-auto transition-all duration-300 ${
-          sidebarCollapsed ? "ml-20" : "ml-72"
+        ref={mainRef}
+        className={`relative z-10 h-[100dvh] min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 transition-all duration-300 [overscroll-behavior-y:auto] [scrollbar-gutter:stable] sm:px-5 lg:px-6 ${
+          sidebarCollapsed ? "ml-16" : "ml-16 sm:ml-56"
         }`}
+        style={{ WebkitOverflowScrolling: "touch" }}
       >
+        <div className="mx-auto max-w-[1500px] space-y-4 pb-8 sm:space-y-5">
         {/* Header */}
-        <div className="flex flex-col lg:flex-row lg:justify-between lg:items-start gap-6 mb-8">
-          <div>
-            <h1 className="text-3xl font-bold text-white tracking-tight mb-2">
-              Communication Tracking
-            </h1>
-            <p className="text-blue-300">
-              Monitor project communication and identify projects needing attention
-            </p>
+        <div className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm dark:border-white/10 dark:bg-[#10131c] sm:px-6 sm:py-5 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex items-start gap-3">
+            <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-400/10 dark:text-blue-300">
+              <MessageSquare className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Project operations</p>
+              <h1 className="text-2xl font-semibold tracking-tight text-slate-950 dark:text-white">Communication tracking</h1>
+              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                Monitor project communication and identify projects needing attention
+              </p>
+            </div>
           </div>
 
           <button
+            type="button"
             onClick={fetchProjects}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600/20 hover:bg-blue-600/40 text-blue-400 border border-blue-500/30 transition-colors"
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300 dark:hover:bg-white/[0.07]"
             disabled={loading}
           >
-            <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
+            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
             <span className="hidden sm:inline">Refresh</span>
           </button>
         </div>
 
         {/* Enhanced Summary Dashboard */}
-        <div className="bg-gradient-to-r from-purple-600/20 to-pink-600/20 rounded-xl shadow-xl border border-purple-500/30 p-6 mb-8">
-          <div className="flex items-center gap-3 mb-4">
-            <TrendingUp className="w-6 h-6 text-purple-400" />
-            <h2 className="text-xl font-bold text-white">Communication Health Overview</h2>
+        <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-[#10131c] sm:p-5">
+          <div className="mb-4 flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-violet-50 text-violet-600 dark:bg-violet-400/10 dark:text-violet-300"><TrendingUp className="h-4 w-4" /></div>
+            <div>
+              <h2 className="text-base font-semibold text-slate-950 dark:text-white">Attention overview</h2>
+              <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">Select a category to filter the project list</p>
+            </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            <div
-              className="bg-[#191f2b]/50 rounded-lg p-4 border border-[#232945] cursor-pointer hover:bg-[#191f2b] transition-all hover:scale-105"
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <button
+              type="button"
+              className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-left transition hover:bg-rose-100 dark:border-rose-400/20 dark:bg-rose-400/[0.07] dark:hover:bg-rose-400/10"
               onClick={() => {
                 setFilterStatus('needsResponse');
                 setFilterCommunicationStatus('all');
               }}
             >
               <div className="flex items-center justify-between mb-2">
-                <p className="text-sm text-gray-400">Urgent Action Required</p>
-                <AlertCircle className="w-4 h-4 text-red-400" />
+                <p className="text-sm font-medium text-rose-900 dark:text-rose-100">Urgent action required</p>
+                <AlertCircle className="h-4 w-4 text-rose-600 dark:text-rose-300" />
               </div>
-              <p className="text-3xl font-bold text-red-400">{stats.needsResponse}</p>
-              <p className="text-xs text-gray-500 mt-1">Clients waiting for response</p>
-            </div>
+              <p className="text-3xl font-semibold text-rose-700 dark:text-rose-200">{stats.needsResponse}</p>
+              <p className="mt-1 text-xs text-rose-700/70 dark:text-rose-200/60">Clients waiting for response</p>
+            </button>
 
-            <div
-              className="bg-[#191f2b]/50 rounded-lg p-4 border border-[#232945] cursor-pointer hover:bg-[#191f2b] transition-all hover:scale-105"
+            <button
+              type="button"
+              className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-left transition hover:bg-amber-100 dark:border-amber-400/20 dark:bg-amber-400/[0.07] dark:hover:bg-amber-400/10"
               onClick={() => {
                 setFilterStatus('all');
                 setFilterCommunicationStatus('criticallyOverdue');
               }}
             >
               <div className="flex items-center justify-between mb-2">
-                <p className="text-sm text-gray-400">Critically Overdue</p>
-                <Clock className="w-4 h-4 text-orange-400" />
+                <p className="text-sm font-medium text-amber-900 dark:text-amber-100">Critically overdue</p>
+                <Clock className="h-4 w-4 text-amber-600 dark:text-amber-300" />
               </div>
-              <p className="text-3xl font-bold text-orange-400">{stats.criticallyOverdue}</p>
-              <p className="text-xs text-gray-500 mt-1">No communication for 14+ days</p>
-            </div>
+              <p className="text-3xl font-semibold text-amber-700 dark:text-amber-200">{stats.criticallyOverdue}</p>
+              <p className="mt-1 text-xs text-amber-700/70 dark:text-amber-200/60">No communication for 14+ days</p>
+            </button>
 
-            <div
-              className="bg-[#191f2b]/50 rounded-lg p-4 border border-[#232945] cursor-pointer hover:bg-[#191f2b] transition-all hover:scale-105"
+            <button
+              type="button"
+              className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-left transition hover:bg-emerald-100 dark:border-emerald-400/20 dark:bg-emerald-400/[0.07] dark:hover:bg-emerald-400/10 md:col-span-2 xl:col-span-1"
               onClick={() => {
                 setFilterStatus('all');
                 setFilterCommunicationStatus('active');
               }}
             >
               <div className="flex items-center justify-between mb-2">
-                <p className="text-sm text-gray-400">Active Communication</p>
-                <CheckCircle className="w-4 h-4 text-green-400" />
+                <p className="text-sm font-medium text-emerald-900 dark:text-emerald-100">Active communication</p>
+                <CheckCircle className="h-4 w-4 text-emerald-600 dark:text-emerald-300" />
               </div>
-              <p className="text-3xl font-bold text-green-400">{stats.recent + stats.thisWeek}</p>
-              <p className="text-xs text-gray-500 mt-1">Communicated in last 7 days</p>
-            </div>
+              <p className="text-3xl font-semibold text-emerald-700 dark:text-emerald-200">{stats.recent + stats.thisWeek}</p>
+              <p className="mt-1 text-xs text-emerald-700/70 dark:text-emerald-200/60">Communicated in last 7 days</p>
+            </button>
           </div>
-        </div>
-
-        {/* Statistics Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
-          <div
-            className="bg-[#191f2b]/70 rounded-xl shadow-xl border border-[#232945] p-6 cursor-pointer hover:bg-[#191f2b] transition-all hover:scale-105"
-            onClick={() => {
-              setFilterStatus('all');
-              setFilterCommunicationStatus('all');
-            }}
-          >
-            <div className="flex items-center justify-between mb-3">
-              <div className="p-3 rounded-lg bg-blue-600/20">
-                <MessageSquare className="w-6 h-6 text-blue-400" />
-              </div>
-            </div>
-            <p className="text-sm text-gray-400 mb-1">Total Projects</p>
-            <p className="text-3xl font-bold text-white">{stats.total}</p>
-          </div>
-
-          <div
-            className="bg-[#191f2b]/70 rounded-xl shadow-xl border border-[#232945] p-6 cursor-pointer hover:bg-[#191f2b] transition-all hover:scale-105"
-            onClick={() => {
-              setFilterStatus('all');
-              setFilterCommunicationStatus('recent');
-            }}
-          >
-            <div className="flex items-center justify-between mb-3">
-              <div className="p-3 rounded-lg bg-green-600/20">
-                <CheckCircle className="w-6 h-6 text-green-400" />
-              </div>
-            </div>
-            <p className="text-sm text-gray-400 mb-1">Recent (Today)</p>
-            <p className="text-3xl font-bold text-green-400">{stats.recent}</p>
-          </div>
-
-          <div
-            className="bg-[#191f2b]/70 rounded-xl shadow-xl border border-[#232945] p-6 cursor-pointer hover:bg-[#191f2b] transition-all hover:scale-105"
-            onClick={() => {
-              setFilterStatus('all');
-              setFilterCommunicationStatus('thisWeek');
-            }}
-          >
-            <div className="flex items-center justify-between mb-3">
-              <div className="p-3 rounded-lg bg-yellow-600/20">
-                <Clock className="w-6 h-6 text-yellow-400" />
-              </div>
-            </div>
-            <p className="text-sm text-gray-400 mb-1">This Week</p>
-            <p className="text-3xl font-bold text-yellow-400">{stats.thisWeek}</p>
-          </div>
-
-          <div
-            className="bg-[#191f2b]/70 rounded-xl shadow-xl border border-[#232945] p-6 cursor-pointer hover:bg-[#191f2b] transition-all hover:scale-105"
-            onClick={() => {
-              setFilterStatus('all');
-              setFilterCommunicationStatus('overdue');
-            }}
-          >
-            <div className="flex items-center justify-between mb-3">
-              <div className="p-3 rounded-lg bg-red-600/20">
-                <AlertCircle className="w-6 h-6 text-red-400" />
-              </div>
-            </div>
-            <p className="text-sm text-gray-400 mb-1">Overdue (7+ days)</p>
-            <p className="text-3xl font-bold text-red-400">{stats.overdue}</p>
-          </div>
-
-          <div
-            className="bg-[#191f2b]/70 rounded-xl shadow-xl border border-[#232945] p-6 cursor-pointer hover:bg-[#191f2b] transition-all hover:scale-105"
-            onClick={() => {
-              setFilterStatus('needsResponse');
-              setFilterCommunicationStatus('all');
-            }}
-          >
-            <div className="flex items-center justify-between mb-3">
-              <div className="p-3 rounded-lg bg-orange-600/20">
-                <TrendingUp className="w-6 h-6 text-orange-400" />
-              </div>
-            </div>
-            <p className="text-sm text-gray-400 mb-1">Needs Response</p>
-            <p className="text-3xl font-bold text-orange-400">{stats.needsResponse}</p>
-          </div>
-        </div>
+        </section>
 
         {/* Filters and Table */}
-        <div className="bg-[#191f2b]/70 rounded-xl shadow-xl border border-[#232945] p-6">
-          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
+        <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-[#10131c] sm:p-5">
+          <div className="mb-5 flex flex-col gap-5">
             <div className="flex items-center gap-2">
-              <MessageSquare className="w-5 h-5 text-blue-400" />
-              <h3 className="text-lg font-semibold text-white">All Projects</h3>
+              <MessageSquare className="h-5 w-5 text-blue-600 dark:text-blue-300" />
+              <div>
+                <h3 className="text-base font-semibold text-slate-950 dark:text-white">Projects</h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400">{filteredProjects.length} of {projects.length} projects</p>
+              </div>
               {loading && (
-                <div className="w-4 h-4 border-2 border-blue-500/20 border-t-blue-500 rounded-full animate-spin"></div>
+                <div className="h-4 w-4 animate-spin rounded-full border-2 border-blue-500/20 border-t-blue-600"></div>
               )}
             </div>
 
-            <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto">
+            <div className="grid w-full gap-3 sm:grid-cols-2 xl:grid-cols-3">
               {/* Search Bar */}
-              <div className="relative flex-1 lg:flex-initial lg:w-64">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-500" />
+              <div className="relative min-w-0 sm:col-span-2 xl:col-span-1">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                 <input
-                  type="text"
-                  placeholder="Search projects..."
+                  type="search"
+                  aria-label="Search projects"
+                  placeholder="Search projects"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 bg-[#0f1419] border border-[#232945] rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 transition-colors"
+                  className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-500/15 dark:border-white/10 dark:bg-white/[0.04] dark:text-white dark:focus:border-blue-400"
                 />
               </div>
 
@@ -435,7 +385,8 @@ const ProjectCommunicationPage = ({ onLogout }) => {
               <select
                 value={filterStatus}
                 onChange={(e) => setFilterStatus(e.target.value)}
-                className="px-4 py-2 bg-[#0f1419] border border-[#232945] rounded-lg text-white focus:outline-none focus:border-blue-500 transition-colors"
+                aria-label="Filter by response status"
+                className="h-10 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-700 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 dark:border-white/10 dark:bg-[#151923] dark:text-slate-200 dark:focus:border-blue-400"
               >
                 <option value="all">All Communication</option>
                 <option value="needsResponse">Needs Response</option>
@@ -446,7 +397,8 @@ const ProjectCommunicationPage = ({ onLogout }) => {
               <select
                 value={filterClient}
                 onChange={(e) => setFilterClient(e.target.value)}
-                className="px-4 py-2 bg-[#0f1419] border border-[#232945] rounded-lg text-white focus:outline-none focus:border-blue-500 transition-colors"
+                aria-label="Filter by client"
+                className="h-10 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-700 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 dark:border-white/10 dark:bg-[#151923] dark:text-slate-200 dark:focus:border-blue-400"
               >
                 <option value="all">All Clients</option>
                 {uniqueClients.map((client) => (
@@ -460,53 +412,144 @@ const ProjectCommunicationPage = ({ onLogout }) => {
               <select
                 value={filterProjectStatus}
                 onChange={(e) => setFilterProjectStatus(e.target.value)}
-                className="px-4 py-2 bg-[#0f1419] border border-[#232945] rounded-lg text-white focus:outline-none focus:border-blue-500 transition-colors"
+                aria-label="Filter by project status"
+                className="h-10 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-700 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 dark:border-white/10 dark:bg-[#151923] dark:text-slate-200 dark:focus:border-blue-400"
               >
                 <option value="all">All Status</option>
                 <option value="new">New</option>
                 <option value="ongoing">Ongoing</option>
                 <option value="completed">Completed</option>
               </select>
+
+              <select
+                value={filterCommunicationStatus}
+                onChange={(e) => setFilterCommunicationStatus(e.target.value)}
+                aria-label="Filter by communication recency"
+                className="h-10 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-700 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 dark:border-white/10 dark:bg-[#151923] dark:text-slate-200 dark:focus:border-blue-400"
+              >
+                <option value="all">Any activity</option>
+                <option value="recent">Today</option>
+                <option value="thisWeek">This week</option>
+                <option value="overdue">Overdue</option>
+                <option value="criticallyOverdue">Critical</option>
+                <option value="noMessages">No messages</option>
+              </select>
             </div>
           </div>
 
-          {/* Table */}
-          <div className="overflow-x-auto">
+          {loadError && projects.length === 0 && (
+            <div className="mb-5 flex flex-col items-center rounded-xl border border-rose-200 bg-rose-50 px-4 py-8 text-center dark:border-rose-400/20 dark:bg-rose-400/[0.07]">
+              <AlertCircle className="h-7 w-7 text-rose-600 dark:text-rose-300" />
+              <p className="mt-3 text-sm font-semibold text-rose-900 dark:text-rose-100">Communication data unavailable</p>
+              <p className="mt-1 text-xs text-rose-700/70 dark:text-rose-200/60">{loadError}</p>
+              <button type="button" onClick={fetchProjects} className="mt-4 h-9 rounded-lg bg-rose-600 px-4 text-xs font-semibold text-white transition hover:bg-rose-700">Try again</button>
+            </div>
+          )}
+
+          {/* Mobile project cards */}
+          <div className="space-y-4 2xl:hidden">
+            {paginatedProjects.map((project) => {
+              const statusColor = getStatusColor(project.communication.status);
+              const senderInfo = getSenderIndicator(project.communication);
+              const SenderIcon = senderInfo?.icon;
+
+              return (
+                <article key={project._id} className="rounded-xl border border-slate-200 p-4 dark:border-white/10 dark:bg-white/[0.02]">
+                  <button type="button" onClick={() => navigate(`/project/${project._id}`)} className="w-full text-left">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className={`h-2 w-2 shrink-0 rounded-full ${statusColor.dot}`} />
+                          <h4 className="truncate text-sm font-semibold text-slate-950 dark:text-white">{project.projectName}</h4>
+                        </div>
+                        <p className="mt-1 truncate pl-4 text-xs text-slate-500 dark:text-slate-400">
+                          {project.clients?.length ? project.clients.map((client) => client.clientName || client.businessName).join(", ") : "No client assigned"}
+                        </p>
+                      </div>
+                      <span className={`inline-flex shrink-0 items-center rounded-lg border px-2 py-1 text-[11px] font-semibold ${statusColor.bg} ${statusColor.text} ${statusColor.border}`}>
+                        {getStatusLabel(project.communication)}
+                      </span>
+                    </div>
+
+                    <div className="mt-4 grid grid-cols-2 gap-3 border-t border-slate-100 pt-3 dark:border-white/[0.07]">
+                      <div>
+                        <p className="text-[11px] text-slate-400">Last sender</p>
+                        {senderInfo ? (
+                          <div className="mt-1 flex items-center gap-1.5">
+                            <SenderIcon className={`h-3.5 w-3.5 ${senderInfo.color}`} />
+                            <p className={`truncate text-xs font-medium ${senderInfo.color}`}>{project.communication.lastSenderDesignation || project.communication.lastSender || "Team member"}</p>
+                          </div>
+                        ) : <p className="mt-1 text-xs text-slate-500">No messages</p>}
+                      </div>
+                      <div>
+                        <p className="text-[11px] text-slate-400">Pending tasks</p>
+                        <p className="mt-1 text-xs font-semibold text-slate-700 dark:text-slate-200">{project.pendingTaskCount || 0}</p>
+                      </div>
+                    </div>
+                  </button>
+
+                  <div className="mt-3 flex gap-2">
+                    <button type="button" onClick={() => navigate(`/project/${project._id}`, { state: { scrollToMessages: true } })} className="inline-flex h-9 flex-1 items-center justify-center gap-2 rounded-lg border border-blue-200 bg-blue-50 text-xs font-semibold text-blue-700 transition hover:bg-blue-100 dark:border-blue-400/20 dark:bg-blue-400/10 dark:text-blue-200 dark:hover:bg-blue-400/15">
+                      <MessageSquare className="h-3.5 w-3.5" /> Open chat
+                    </button>
+                    <button type="button" onClick={() => setSelectedProjectForAnalytics({ id: project._id, name: project.projectName })} className="inline-flex h-9 flex-1 items-center justify-center gap-2 rounded-lg border border-slate-200 text-xs font-semibold text-slate-600 transition hover:bg-slate-50 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/[0.06]">
+                      <BarChart3 className="h-3.5 w-3.5" /> Analytics
+                    </button>
+                  </div>
+                </article>
+              );
+            })}
+
+            {!loadError && !loading && paginatedProjects.length === 0 && (
+              <div className="flex flex-col items-center py-12 text-center">
+                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-slate-100 text-slate-400 dark:bg-white/[0.06]"><MessageSquare className="h-5 w-5" /></div>
+                <p className="mt-3 text-sm font-medium text-slate-700 dark:text-slate-200">No projects found</p>
+                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{hasActiveFilters ? "Try adjusting or clearing your filters." : "Projects will appear here when available."}</p>
+              </div>
+            )}
+          </div>
+
+          {/* Desktop table */}
+          <div className="hidden overflow-x-auto 2xl:block">
             <table className="w-full">
               <thead>
-                <tr className="border-b-2 border-[#232945]">
-                  <th className="text-left pl-6 pr-4 py-4 text-base font-semibold text-gray-400 w-[20%]">
+                <tr className="border-b border-slate-200 dark:border-white/10">
+                  <th className="w-[20%] px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                     Project Name
                   </th>
-                  <th className="text-left pl-6 pr-4 py-4 text-base font-semibold text-gray-400 w-[15%]">
+                  <th className="w-[15%] px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                     Client
                   </th>
-                  <th className="text-left pl-6 pr-4 py-4 text-base font-semibold text-gray-400 w-[12%]">
+                  <th className="w-[12%] px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                     Status
                   </th>
-                  <th className="text-left pl-6 pr-4 py-4 text-base font-semibold text-gray-400 w-[12%]">
+                  <th className="w-[12%] px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                     Last Activity
                   </th>
-                  <th className="text-left pl-6 pr-4 py-4 text-base font-semibold text-gray-400 w-[13%]">
+                  <th className="w-[13%] px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                     Last Sender
                   </th>
-                  <th className="text-left pl-6 pr-4 py-4 text-base font-semibold text-gray-400 w-[10%]">
+                  <th className="w-[10%] px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                     Pending Tasks
                   </th>
-                  <th className="text-left pl-6 pr-4 py-4 text-base font-semibold text-gray-400 w-[18%]">
+                  <th className="w-[18%] px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                     Actions
                   </th>
                 </tr>
               </thead>
               <tbody>
-                {paginatedProjects.length === 0 ? (
+                {loadError && projects.length === 0 ? null : loading && projects.length === 0 ? (
                   <tr>
-                    <td colSpan="7" className="text-center py-12">
-                      <MessageSquare className="w-12 h-12 text-gray-600 mx-auto mb-3" />
-                      <p className="text-gray-500 text-base">
-                        {searchTerm || filterStatus !== "all" || filterClient !== "all" || filterProjectStatus !== "all" || filterCommunicationStatus !== "all"
-                          ? "No projects found matching your filters"
-                          : "No projects found"}
+                    <td colSpan="7" className="py-14 text-center">
+                      <div className="inline-flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400"><RefreshCw className="h-4 w-4 animate-spin" /> Loading projects</div>
+                    </td>
+                  </tr>
+                ) : paginatedProjects.length === 0 ? (
+                  <tr>
+                    <td colSpan="7" className="py-14 text-center">
+                      <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-xl bg-slate-100 text-slate-400 dark:bg-white/[0.06]"><MessageSquare className="h-5 w-5" /></div>
+                      <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">
+                        {hasActiveFilters ? "No projects match your filters" : "No projects found"}
                       </p>
                     </td>
                   </tr>
@@ -519,46 +562,46 @@ const ProjectCommunicationPage = ({ onLogout }) => {
                     return (
                       <tr
                         key={project._id}
-                        className="border-b border-[#232945] hover:bg-[#0f1419] transition-colors cursor-pointer"
+                        className="cursor-pointer border-b border-slate-100 transition-colors last:border-b-0 hover:bg-slate-50 dark:border-white/[0.07] dark:hover:bg-white/[0.025]"
                         onClick={() => navigate(`/project/${project._id}`)}
                       >
-                        <td className="pl-6 pr-4 py-5">
+                        <td className="px-4 py-4">
                           <div className="flex items-center gap-2">
                             <div
                               className={`w-2 h-2 rounded-full ${statusColor.dot}`}
                             ></div>
-                            <span className="text-white font-semibold text-base">
+                            <span className="text-sm font-semibold text-slate-950 dark:text-white">
                               {project.projectName}
                             </span>
                             {/* Response time warning badge */}
                             {senderInfo && senderInfo.needsResponse && project.communication.daysSinceLastMessage >= 3 && (
-                              <span className="px-2 py-0.5 rounded text-xs font-semibold bg-orange-500/20 text-orange-400 border border-orange-500/50">
-                                ⚠️ {project.communication.daysSinceLastMessage}d
+                              <span className="inline-flex items-center gap-1 rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-300">
+                                <AlertCircle className="h-3 w-3" /> {project.communication.daysSinceLastMessage}d
                               </span>
                             )}
                             {project.communication.daysSinceLastMessage > 14 && (
-                              <span className="px-2 py-0.5 rounded text-xs font-semibold bg-red-500/20 text-red-400 border border-red-500/50">
-                                🚨 Critical
+                              <span className="inline-flex items-center gap-1 rounded-md border border-rose-200 bg-rose-50 px-2 py-0.5 text-[11px] font-semibold text-rose-700 dark:border-rose-400/20 dark:bg-rose-400/10 dark:text-rose-300">
+                                <AlertCircle className="h-3 w-3" /> Critical
                               </span>
                             )}
                           </div>
                         </td>
-                        <td className="pl-6 pr-4 py-5 text-gray-300 text-base">
+                        <td className="px-4 py-4 text-sm text-slate-600 dark:text-slate-300">
                           {project.clients && project.clients.length > 0
                             ? project.clients.map((c) => c.clientName || c.businessName).join(", ")
                             : "No client"}
                         </td>
-                        <td className="pl-6 pr-4 py-5">
+                        <td className="px-4 py-4">
                           <span
                             className={`px-3 py-1.5 rounded-full text-xs font-semibold ${statusColor.bg} ${statusColor.text} border ${statusColor.border} inline-flex items-center gap-1.5`}
                           >
                             {getStatusLabel(project.communication)}
                           </span>
                         </td>
-                        <td className="pl-6 pr-4 py-5 text-gray-300 text-sm">
+                        <td className="px-4 py-4 text-sm text-slate-600 dark:text-slate-300">
                           {project.communication.lastActivityDate ? (
                             <div className="flex items-center gap-2">
-                              <Calendar className="w-4 h-4 text-gray-500" />
+                              <Calendar className="h-4 w-4 text-slate-400" />
                               {new Date(
                                 project.communication.lastActivityDate
                               ).toLocaleDateString()}
@@ -567,7 +610,7 @@ const ProjectCommunicationPage = ({ onLogout }) => {
                             "N/A"
                           )}
                         </td>
-                        <td className="pl-6 pr-4 py-5">
+                        <td className="px-4 py-4">
                           {senderInfo ? (
                             <div className="flex items-center gap-2">
                               <SenderIcon className={`w-4 h-4 ${senderInfo.color}`} />
@@ -575,7 +618,7 @@ const ProjectCommunicationPage = ({ onLogout }) => {
                                 <p className={`text-sm font-medium ${senderInfo.color}`}>
                                   {project.communication.lastSenderDesignation || project.communication.lastSender || "Team Member"}
                                 </p>
-                                <p className="text-xs text-gray-500">
+                                <p className="text-xs text-slate-500 dark:text-slate-400">
                                   {senderInfo.needsResponse
                                     ? "Needs response"
                                     : "Waiting on client"}
@@ -583,27 +626,27 @@ const ProjectCommunicationPage = ({ onLogout }) => {
                               </div>
                             </div>
                           ) : (
-                            <span className="text-gray-500 text-sm">No messages</span>
+                            <span className="text-sm text-slate-500 dark:text-slate-400">No messages</span>
                           )}
                         </td>
-                        <td className="pl-6 pr-4 py-5">
+                        <td className="px-4 py-4">
                           <div className="flex items-center gap-2">
-                            <ListTodo className="w-4 h-4 text-blue-400" />
+                            <ListTodo className="h-4 w-4 text-blue-600 dark:text-blue-300" />
                             <span className={`text-base font-semibold ${
-                              project.pendingTaskCount > 0 ? 'text-blue-400' : 'text-gray-500'
+                              project.pendingTaskCount > 0 ? 'text-blue-600 dark:text-blue-300' : 'text-slate-400'
                             }`}>
                               {project.pendingTaskCount || 0}
                             </span>
                           </div>
                         </td>
-                        <td className="pl-6 pr-4 py-5">
+                        <td className="px-4 py-4">
                           <div className="flex items-center gap-2">
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
                                 navigate(`/project/${project._id}`, { state: { scrollToMessages: true } });
                               }}
-                              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 transition-all text-sm"
+                              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 text-xs font-semibold text-blue-700 transition hover:bg-blue-100 dark:border-blue-400/20 dark:bg-blue-400/10 dark:text-blue-200 dark:hover:bg-blue-400/15"
                               title="View project and messages"
                             >
                               <MessageSquare className="w-3 h-3" />
@@ -617,7 +660,7 @@ const ProjectCommunicationPage = ({ onLogout }) => {
                                   name: project.projectName
                                 });
                               }}
-                              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-purple-400 hover:text-purple-300 hover:bg-purple-500/10 transition-all text-sm"
+                              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-200 px-3 text-xs font-semibold text-slate-600 transition hover:bg-slate-50 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/[0.06]"
                               title="View detailed analytics"
                             >
                               <BarChart3 className="w-3 h-3" />
@@ -625,7 +668,7 @@ const ProjectCommunicationPage = ({ onLogout }) => {
                             </button>
                             {senderInfo && senderInfo.needsResponse && (
                               <span
-                                className="px-2 py-1 rounded text-xs font-semibold bg-orange-500/20 text-orange-400 border border-orange-500/50"
+                                className="rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-700 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-300"
                                 title="Client is waiting for your response"
                               >
                                 Reply
@@ -642,16 +685,17 @@ const ProjectCommunicationPage = ({ onLogout }) => {
           </div>
 
           {/* Pagination Controls */}
-          <div className="mt-6 space-y-4">
+          {!(loadError && projects.length === 0) && (
+          <div className="mt-5 space-y-4 border-t border-slate-200 pt-4 dark:border-white/10">
             {/* Top Row: Items per page & Results info */}
             <div className="flex flex-col sm:flex-row items-center justify-between gap-4 text-sm">
               <div className="flex items-center gap-4">
                 <div className="flex items-center gap-2">
-                  <span className="text-gray-400">Show</span>
+                  <span className="text-slate-500 dark:text-slate-400">Show</span>
                   <select
                     value={itemsPerPage}
                     onChange={(e) => handleItemsPerPageChange(Number(e.target.value))}
-                    className="px-3 py-1.5 bg-[#0f1419] border border-[#232945] rounded-lg text-white focus:outline-none focus:border-blue-500 transition-colors"
+                    className="h-9 rounded-lg border border-slate-200 bg-slate-50 px-3 text-sm text-slate-700 outline-none focus:border-blue-500 dark:border-white/10 dark:bg-[#151923] dark:text-slate-200"
                   >
                     <option value={5}>5</option>
                     <option value={10}>10</option>
@@ -659,28 +703,23 @@ const ProjectCommunicationPage = ({ onLogout }) => {
                     <option value={50}>50</option>
                     <option value={100}>100</option>
                   </select>
-                  <span className="text-gray-400">per page</span>
+                  <span className="text-slate-500 dark:text-slate-400">per page</span>
                 </div>
 
-                <div className="text-gray-400">
+                <div className="text-slate-500 dark:text-slate-400">
                   Showing {filteredProjects.length === 0 ? 0 : startIndex + 1}-{Math.min(endIndex, filteredProjects.length)} of {filteredProjects.length}
                   {filteredProjects.length !== projects.length && (
-                    <span className="text-gray-500"> (filtered from {projects.length})</span>
+                    <span className="text-slate-400 dark:text-slate-500"> (filtered from {projects.length})</span>
                   )}
                 </div>
               </div>
 
               {/* Clear filters */}
-              {(searchTerm || filterStatus !== "all" || filterClient !== "all" || filterProjectStatus !== "all" || filterCommunicationStatus !== "all") && (
+              {hasActiveFilters && (
                 <button
-                  onClick={() => {
-                    setSearchTerm("");
-                    setFilterStatus("all");
-                    setFilterClient("all");
-                    setFilterProjectStatus("all");
-                    setFilterCommunicationStatus("all");
-                  }}
-                  className="text-blue-400 hover:text-blue-300 transition-colors whitespace-nowrap"
+                  type="button"
+                  onClick={clearFilters}
+                  className="whitespace-nowrap text-sm font-semibold text-blue-600 transition-colors hover:text-blue-700 dark:text-blue-300 dark:hover:text-blue-200"
                 >
                   Clear all filters
                 </button>
@@ -695,10 +734,11 @@ const ProjectCommunicationPage = ({ onLogout }) => {
                   <button
                     onClick={() => handlePageChange(currentPage - 1)}
                     disabled={currentPage === 1}
-                    className={`p-2 rounded-lg border transition-all ${
+                    aria-label="Previous page"
+                    className={`rounded-lg border p-2 transition ${
                       currentPage === 1
-                        ? 'bg-[#0f1419] border-[#232945] text-gray-600 cursor-not-allowed'
-                        : 'bg-[#0f1419] border-[#232945] text-blue-400 hover:bg-blue-500/10 hover:border-blue-500/50'
+                        ? 'cursor-not-allowed border-slate-200 bg-slate-100 text-slate-300 dark:border-white/10 dark:bg-white/[0.03] dark:text-slate-600'
+                        : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300 dark:hover:bg-white/[0.07]'
                     }`}
                   >
                     <ChevronLeft className="w-4 h-4" />
@@ -718,7 +758,7 @@ const ProjectCommunicationPage = ({ onLogout }) => {
 
                       if (showEllipsisBefore || showEllipsisAfter) {
                         return (
-                          <span key={page} className="px-2 text-gray-600">
+                          <span key={page} className="px-2 text-slate-400">
                             ...
                           </span>
                         );
@@ -730,10 +770,12 @@ const ProjectCommunicationPage = ({ onLogout }) => {
                         <button
                           key={page}
                           onClick={() => handlePageChange(page)}
-                          className={`min-w-[36px] h-9 px-3 rounded-lg border transition-all ${
+                          aria-label={`Page ${page}`}
+                          aria-current={currentPage === page ? "page" : undefined}
+                          className={`h-9 min-w-[36px] rounded-lg border px-3 text-sm transition ${
                             currentPage === page
-                              ? 'bg-blue-600 border-blue-500 text-white font-semibold'
-                              : 'bg-[#0f1419] border-[#232945] text-gray-400 hover:bg-blue-500/10 hover:border-blue-500/50 hover:text-blue-400'
+                              ? 'border-blue-600 bg-blue-600 font-semibold text-white'
+                              : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300 dark:hover:bg-white/[0.07]'
                           }`}
                         >
                           {page}
@@ -746,10 +788,11 @@ const ProjectCommunicationPage = ({ onLogout }) => {
                   <button
                     onClick={() => handlePageChange(currentPage + 1)}
                     disabled={currentPage === totalPages}
-                    className={`p-2 rounded-lg border transition-all ${
+                    aria-label="Next page"
+                    className={`rounded-lg border p-2 transition ${
                       currentPage === totalPages
-                        ? 'bg-[#0f1419] border-[#232945] text-gray-600 cursor-not-allowed'
-                        : 'bg-[#0f1419] border-[#232945] text-blue-400 hover:bg-blue-500/10 hover:border-blue-500/50'
+                        ? 'cursor-not-allowed border-slate-200 bg-slate-100 text-slate-300 dark:border-white/10 dark:bg-white/[0.03] dark:text-slate-600'
+                        : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300 dark:hover:bg-white/[0.07]'
                     }`}
                   >
                     <ChevronRight className="w-4 h-4" />
@@ -758,6 +801,8 @@ const ProjectCommunicationPage = ({ onLogout }) => {
               </div>
             )}
           </div>
+          )}
+        </section>
         </div>
       </main>
 

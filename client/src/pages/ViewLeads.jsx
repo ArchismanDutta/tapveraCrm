@@ -210,10 +210,6 @@ const ViewLeads = ({ onLogout }) => {
     }
   };
 
-  const handleAddCallback = (leadId) => {
-    navigate(`/callbacks/add?leadId=${leadId}`);
-  };
-
   const handleViewLead = (lead) => {
     setSelectedLead(lead);
     setViewModalOpen(true);
@@ -402,7 +398,7 @@ const ViewLeads = ({ onLogout }) => {
   };
 
   return (
-    <div className="flex min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 overflow-x-hidden">
+    <div className="app-shell h-[100dvh] overflow-hidden">
       <Sidebar
         collapsed={sidebarCollapsed}
         setCollapsed={setSidebarCollapsed}
@@ -410,12 +406,14 @@ const ViewLeads = ({ onLogout }) => {
         userRole={userRole}
       />
 
-      <main className={`flex-1 transition-all duration-300 ${sidebarCollapsed ? "ml-16" : "ml-56"} p-8 max-w-full overflow-x-hidden`}>
+      <main className={`app-main h-[100dvh] overflow-y-auto px-3 py-4 transition-all duration-300 sm:px-5 lg:px-6 ${sidebarCollapsed ? "ml-16" : "ml-16 sm:ml-56"}`}>
         {/* Header */}
-        <div className="mb-8">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
+        <div className="app-page pb-8">
+        <div className="app-header mb-5">
+          <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
             <div>
-              <h1 className="text-4xl font-bold bg-gradient-to-r from-cyan-400 to-blue-400 bg-clip-text text-transparent mb-2">
+              <p className="app-eyebrow">Sales workspace</p>
+              <h1 className="app-title">
                 {userPosition && (userPosition.toLowerCase().includes("supervisor") ||
                   userPosition.toLowerCase().includes("team lead") ||
                   userPosition.toLowerCase().includes("manager"))
@@ -424,7 +422,7 @@ const ViewLeads = ({ onLogout }) => {
                   ? "Lead Management"
                   : "My Leads"}
               </h1>
-              <p className="text-gray-400">
+              <p className="app-description">
                 {userPosition && (userPosition.toLowerCase().includes("supervisor") ||
                   userPosition.toLowerCase().includes("team lead") ||
                   userPosition.toLowerCase().includes("manager"))
@@ -435,7 +433,7 @@ const ViewLeads = ({ onLogout }) => {
             {(userRole === "super-admin" || userDepartment === "marketingAndSales") && (
               <button
                 onClick={() => navigate("/leads/add")}
-                className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 text-white rounded-lg font-medium transition-all duration-300 shadow-lg hover:shadow-cyan-500/50"
+                className="app-primary-button flex h-10 items-center gap-2 px-4 text-sm font-semibold"
               >
                 <Plus className="h-5 w-5" />
                 Add New Lead
@@ -445,7 +443,7 @@ const ViewLeads = ({ onLogout }) => {
 
           {/* Stats Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 mb-6">
-            <div className="bg-gradient-to-br from-blue-500/20 to-cyan-500/20 backdrop-blur-sm border border-blue-500/30 rounded-xl p-6">
+            <div className="app-panel p-5">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-gray-400 text-sm mb-1">Total Leads</p>
@@ -457,7 +455,7 @@ const ViewLeads = ({ onLogout }) => {
               </div>
             </div>
 
-            <div className="bg-gradient-to-br from-green-500/20 to-emerald-500/20 backdrop-blur-sm border border-green-500/30 rounded-xl p-6">
+            <div className="app-panel p-5">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-gray-400 text-sm mb-1">Converted</p>
@@ -469,7 +467,7 @@ const ViewLeads = ({ onLogout }) => {
               </div>
             </div>
 
-            <div className="bg-gradient-to-br from-purple-500/20 to-pink-500/20 backdrop-blur-sm border border-purple-500/30 rounded-xl p-6">
+            <div className="app-panel p-5">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-gray-400 text-sm mb-1">Conversion Rate</p>
@@ -487,7 +485,7 @@ const ViewLeads = ({ onLogout }) => {
         {userPosition && (userPosition.toLowerCase().includes("supervisor") ||
           userPosition.toLowerCase().includes("team lead") ||
           userPosition.toLowerCase().includes("manager")) && (
-          <div className="bg-gradient-to-br from-cyan-500/10 to-blue-500/10 backdrop-blur-sm rounded-xl p-6 border border-cyan-500/30 mb-6">
+          <div className="app-panel mb-5 p-5">
             <h3 className="text-lg font-semibold text-cyan-400 mb-4 flex items-center gap-2">
               <Filter className="h-5 w-5" />
               View Mode
@@ -528,7 +526,7 @@ const ViewLeads = ({ onLogout }) => {
 
         {/* Super Admin Lookup Section */}
         {userRole === "super-admin" && (
-          <div className="bg-gradient-to-br from-indigo-500/10 to-purple-500/10 backdrop-blur-sm rounded-xl p-6 border border-indigo-500/30 mb-6">
+          <div className="app-panel mb-5 p-5">
             <div className="mb-3">
               <h2 className="text-xl font-semibold text-indigo-400 flex items-center gap-2">
                 <Search className="h-5 w-5" />
@@ -547,7 +545,7 @@ const ViewLeads = ({ onLogout }) => {
                   value={lookupQuery}
                   onChange={(e) => setLookupQuery(e.target.value)}
                   onKeyPress={(e) => e.key === "Enter" && handleLookup()}
-                  className="w-full pl-10 pr-4 py-3 bg-slate-700/50 border border-slate-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
+                  className="app-control w-full py-3 pl-10 pr-4 text-sm focus:outline-none"
                 />
               </div>
               <button
@@ -572,7 +570,7 @@ const ViewLeads = ({ onLogout }) => {
         )}
 
         {/* Filters and Search */}
-        <div className="bg-slate-800/50 backdrop-blur-sm rounded-xl p-6 border border-slate-700/50 mb-6 overflow-hidden">
+        <div className="app-panel mb-5 overflow-hidden p-5">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 mb-4">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
@@ -581,7 +579,7 @@ const ViewLeads = ({ onLogout }) => {
                 placeholder="Search leads..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 bg-slate-700/50 border border-slate-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition-all"
+                className="app-control w-full py-2 pl-10 pr-4 text-sm focus:outline-none"
               />
             </div>
 
@@ -589,7 +587,7 @@ const ViewLeads = ({ onLogout }) => {
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                className="w-full px-4 py-2 bg-slate-700/50 border border-slate-600 rounded-lg text-white focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition-all appearance-none cursor-pointer hover:bg-slate-700"
+                className="app-control w-full cursor-pointer px-4 py-2 text-sm focus:outline-none"
               >
                 <option value="">📊 All Status</option>
                 <option value="New">🆕 New</option>
@@ -612,7 +610,7 @@ const ViewLeads = ({ onLogout }) => {
               <select
                 value={priorityFilter}
                 onChange={(e) => setPriorityFilter(e.target.value)}
-                className="w-full px-4 py-2 bg-slate-700/50 border border-slate-600 rounded-lg text-white focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition-all appearance-none cursor-pointer hover:bg-slate-700"
+                className="app-control w-full cursor-pointer px-4 py-2 text-sm focus:outline-none"
               >
                 <option value="">⚡ All Priority</option>
                 <option value="Low">🟢 Low</option>
@@ -1396,6 +1394,7 @@ const ViewLeads = ({ onLogout }) => {
             </div>
           </div>
         )}
+        </div>
       </main>
     </div>
   );

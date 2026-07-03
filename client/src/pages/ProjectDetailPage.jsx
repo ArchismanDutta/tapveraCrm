@@ -10,6 +10,7 @@ import ProjectTaskModal from "../components/project/ProjectTaskModal";
 import ProjectTaskEditModal from "../components/project/ProjectTaskEditModal";
 import UnreadMessageBadge from "../components/message/UnreadMessageBadge";
 import ProjectReportTab from "../components/project/ProjectReportTab";
+import ProjectCommunicationContext from "../components/project/ProjectCommunicationContext";
 import MentionInput from "../components/common/MentionInput";
 import MessageStatus from "../components/message/MessageStatus";
 import TypingIndicator from "../components/message/TypingIndicator";
@@ -64,6 +65,7 @@ import {
   ChevronRight,
   ChevronUp,
   ChevronDown,
+  MoreHorizontal,
 } from "lucide-react";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
@@ -159,7 +161,7 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
   const [wsConnected, setWsConnected] = useState(false);
 
   // Message suggestions
-  const { getSuggestions, getQuickReplies } = useMessageSuggestions(projectId, messages);
+  const { getSuggestions } = useMessageSuggestions(projectId, messages);
   const [suggestions, setSuggestions] = useState([]);
   const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(0);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -169,13 +171,14 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
   const [showPinnedModal, setShowPinnedModal] = useState(false);
   const [showEnhancedEmojiPicker, setShowEnhancedEmojiPicker] = useState(false);
   const typingTimeoutRef = useRef(null);
-  const [quickReplies, setQuickReplies] = useState([]);
-  const [showQuickReplies, setShowQuickReplies] = useState(true);
   const [starredMessageIds, setStarredMessageIds] = useState(new Set());
   const [showStarredOnly, setShowStarredOnly] = useState(false);
   const [newMessagesCount, setNewMessagesCount] = useState(0);
   const [showNewMessagesButton, setShowNewMessagesButton] = useState(false);
-  const [showSidebar, setShowSidebar] = useState(true);
+  const [showSidebar, setShowSidebar] = useState(
+    () => typeof window === "undefined" || window.innerWidth >= 768
+  );
+  const [showComposerTools, setShowComposerTools] = useState(false);
   const suggestionsRef = useRef(null);
 
   // WebSocket connection with exponential backoff reconnection
@@ -395,29 +398,10 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
     }
   }, [newMessage, getSuggestions]);
 
-  // Update quick replies based on last message
-  useEffect(() => {
-    if (messages && messages.length > 0) {
-      const lastMessage = messages[messages.length - 1];
-      if (String(lastMessage.sentBy?._id || lastMessage.sentBy) !== String(userId)) {
-        const replies = getQuickReplies(lastMessage.message);
-        setQuickReplies(replies);
-      } else {
-        setQuickReplies([]);
-      }
-    }
-  }, [messages, userId, getQuickReplies]);
-
   // Handle suggestion selection
   const acceptSuggestion = (suggestion) => {
     setNewMessage(suggestion.text);
     setShowSuggestions(false);
-    textareaRef.current?.focus();
-  };
-
-  // Handle quick reply click
-  const handleQuickReply = (text) => {
-    setNewMessage(text);
     textareaRef.current?.focus();
   };
 
@@ -1273,6 +1257,21 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
   const primaryType = Array.isArray(project.type) ? project.type[0] : project.type;
   const colors = PROJECT_TYPE_COLORS[primaryType] || PROJECT_TYPE_COLORS["Website"]; // fallback to Website colors
   const Icon = PROJECT_TYPE_ICONS[primaryType] || PROJECT_TYPE_ICONS["Website"]; // fallback to Website icon
+  const projectClientName = project.clients?.length
+    ? project.clients.map((client) => client?.businessName || client?.clientName).filter(Boolean).join(", ")
+    : "No client assigned";
+  const lastMessage = messages[messages.length - 1];
+  const isClientUser = userRole === "client";
+  const lastMessageFromClient = lastMessage?.senderType === "client";
+  const responseState = !lastMessage
+    ? { label: "Start the conversation", classes: "border-slate-500/20 bg-slate-500/10 text-slate-300" }
+    : isClientUser
+      ? lastMessageFromClient
+        ? { label: "Waiting on project team", classes: "border-sky-400/20 bg-sky-500/10 text-sky-300" }
+        : { label: "Your response requested", classes: "border-amber-400/25 bg-amber-500/10 text-amber-300" }
+      : lastMessageFromClient
+        ? { label: "Team response required", classes: "border-amber-400/25 bg-amber-500/10 text-amber-300" }
+        : { label: "Waiting on client", classes: "border-sky-400/20 bg-sky-500/10 text-sky-300" };
 
   return (
     <div className="h-screen bg-gradient-to-br from-[#141a21] via-[#191f2b] to-[#101218] text-blue-100 flex flex-col overflow-hidden">
@@ -1294,351 +1293,124 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
         </div>
       )}
 
-      {/* Enhanced Header with Project Info Banner */}
-      <div className="sticky top-0 z-30 bg-[#202c33] backdrop-blur-sm border-b border-[#2a3942]">
-        <div className="px-3 sm:px-4 md:px-6 py-3">
-          {/* Top Row - Navigation & Actions */}
-          <div className="flex items-center gap-3 mb-3">
-            <button
-              onClick={onBack}
-              className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-[#2a3942] transition-all"
-              title="Go back"
-            >
-              <ArrowLeft className="w-5 h-5" />
-            </button>
+      {/* Compact project header */}
+      <header className="relative z-30 border-b border-white/10 bg-[#0c1319]/95 backdrop-blur-xl">
+        <div className="flex min-h-16 flex-wrap items-center gap-3 px-3 py-2 sm:px-5">
+          <button
+            type="button"
+            onClick={onBack}
+            className="rounded-lg p-2 text-slate-400 transition hover:bg-white/5 hover:text-white"
+            aria-label="Go back"
+          >
+            <ArrowLeft className="h-5 w-5" />
+          </button>
 
-            <div className="flex items-center gap-3 flex-1 min-w-0">
-              <Icon className={`w-6 h-6 ${colors.text} flex-shrink-0`} />
-              <div className="min-w-0 flex-1">
-                <h1 className="text-lg font-bold text-white truncate">
-                  {project.projectName}
-                </h1>
-                <p className="text-xs text-gray-400 truncate">
-                  {project.clients && project.clients.length > 0
-                    ? project.clients.map(c => c?.businessName || c?.clientName).join(", ")
-                    : "N/A"}
-                </p>
-              </div>
+          <div className={`rounded-xl border p-2 ${colors.bg} ${colors.border}`}>
+            <Icon className={`h-5 w-5 ${colors.text}`} />
+          </div>
+
+          <div className="min-w-[12rem] flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="max-w-xl truncate text-lg font-semibold tracking-tight text-white sm:text-xl">
+                {project.projectName}
+              </h1>
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-teal-400/20 bg-teal-500/10 px-2.5 py-1 text-[11px] font-medium capitalize text-teal-300">
+                <span className="h-1.5 w-1.5 rounded-full bg-teal-400" />
+                {project.status || status}
+              </span>
+              <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium ${responseState.classes}`}>
+                <Clock className="h-3 w-3" />
+                {responseState.label}
+              </span>
             </div>
-
-            <button
-              onClick={() => setShowSidebar(!showSidebar)}
-              className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all ${
-                showSidebar
-                  ? 'bg-[#00a884] text-white hover:bg-[#128C7E]'
-                  : 'text-gray-400 hover:text-white hover:bg-[#2a3942]'
-              }`}
-              title={showSidebar ? "Hide project details" : "Show project details"}
-            >
-              <Info className="w-5 h-5" />
-              <span className="hidden md:inline text-sm font-medium">
-                {showSidebar ? 'Hide Details' : 'Show Details'}
-              </span>
-            </button>
+            <p className="mt-1 truncate text-xs text-slate-400">{projectClientName}</p>
           </div>
 
-          {/* Info Pills Row */}
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium ${colors.bg} ${colors.text} border ${colors.border}`}>
-              {Array.isArray(project.type) ? project.type.join(", ") : project.type}
-            </span>
-
-            <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium ${
-              project.status === "new"
-                ? "bg-blue-500/20 text-blue-400 border border-blue-500/50"
-                : project.status === "ongoing"
-                ? "bg-green-500/20 text-green-400 border border-green-500/50"
-                : project.status === "completed"
-                ? "bg-purple-500/20 text-purple-400 border border-purple-500/50"
-                : "bg-red-500/20 text-red-400 border border-red-500/50"
-            }`}>
-              <CheckCircle className="w-3.5 h-3.5" />
-              {project.status}
-            </span>
-
-            {project.startDate && (
-              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-gray-500/20 text-gray-400 border border-gray-500/30">
-                <Calendar className="w-3.5 h-3.5" />
-                {new Date(project.startDate).toLocaleDateString()} - {new Date(project.endDate).toLocaleDateString()}
-              </span>
-            )}
-
-            {project.assignedTo && project.assignedTo.length > 0 && (
-              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-[#00a884]/20 text-[#00a884] border border-[#00a884]/30">
-                <Users className="w-3.5 h-3.5" />
-                {project.assignedTo.length} Team {project.assignedTo.length === 1 ? 'Member' : 'Members'}
-              </span>
-            )}
-          </div>
+          <button
+            type="button"
+            onClick={() => setShowSidebar((visible) => !visible)}
+            className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition ${
+              showSidebar
+                ? "border-teal-400/25 bg-teal-500/10 text-teal-300"
+                : "border-white/10 bg-white/[0.035] text-slate-300 hover:bg-white/[0.06] hover:text-white"
+            }`}
+            aria-label={showSidebar ? "Hide project details" : "Show project details"}
+          >
+            <Info className="h-4 w-4" />
+            <span className="hidden sm:inline">Project details</span>
+          </button>
         </div>
-      </div>
+      </header>
 
       {/* Main Content - Full Width Layout */}
       <div className="relative flex flex-1 overflow-hidden">
         {/* Overlay for mobile when sidebar is open */}
         {showSidebar && (
           <div
-            className="absolute inset-0 bg-black/50 z-30 md:hidden"
+            className="absolute inset-0 z-30 bg-black/60 backdrop-blur-[1px] md:hidden"
             onClick={() => setShowSidebar(false)}
           />
         )}
 
-        {/* Slide-out Sidebar - Project Details */}
-        <div className={`absolute top-0 left-0 h-full w-80 bg-[#111b21] border-r border-[#2a3942] transform transition-transform duration-300 ease-in-out z-40 overflow-y-auto ${
-          showSidebar ? 'translate-x-0' : '-translate-x-full'
-        }`}>
-          {/* Sidebar Header */}
-          <div className="sticky top-0 bg-[#202c33] border-b border-[#2a3942] px-4 py-3 flex items-center justify-between z-10">
-            <h3 className="text-white font-semibold flex items-center gap-2">
-              <Info className="w-5 h-5 text-[#00a884]" />
-              Project Details
-            </h3>
-            <button
-              onClick={() => setShowSidebar(false)}
-              className="p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-[#2a3942] transition-all"
-              title="Close sidebar"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
+        {showSidebar && (
+          <ProjectCommunicationContext
+            project={project}
+            tasks={tasks}
+            messages={messages}
+            userRole={userRole}
+            onClose={() => setShowSidebar(false)}
+            onOpenPinned={() => setShowPinnedModal(true)}
+            onOpenTasks={() => setActiveTab("tasks")}
+          />
+        )}
 
-          <div className="p-4 space-y-4">
-          {/* Project Info Card */}
-          <div className="bg-[#202c33] rounded-xl shadow-lg border border-[#2a3942] p-4">
-            <h2 className="text-base font-semibold text-white mb-4 flex items-center gap-2">
-              <FileText className="w-5 h-5 text-[#00a884]" />
-              Project Information
-            </h2>
-
-            <div className="space-y-3 sm:space-y-4">
-              <div>
-                <p className="text-[10px] sm:text-xs md:text-sm text-gray-400 mb-1">Status</p>
-                <span
-                  className={`inline-flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1 sm:py-1.5 rounded-full text-[10px] sm:text-xs font-medium ${
-                    status === "active"
-                      ? "bg-green-500/20 text-green-400 border border-green-500/50"
-                      : status === "completed"
-                      ? "bg-purple-500/20 text-purple-400 border border-purple-500/50"
-                      : status === "needsRenewal"
-                      ? "bg-orange-500/20 text-orange-400 border border-orange-500/50"
-                      : "bg-red-500/20 text-red-400 border border-red-500/50"
-                  }`}
-                >
-                  <div
-                    className={`w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full ${
-                      status === "active"
-                        ? "bg-green-400"
-                        : status === "completed"
-                        ? "bg-purple-400"
-                        : status === "needsRenewal"
-                        ? "bg-orange-400"
-                        : "bg-red-400"
-                    }`}
-                  ></div>
-                  {status === "active"
-                    ? "Active"
-                    : status === "completed"
-                    ? "Completed"
-                    : status === "needsRenewal"
-                    ? "Needs Renewal"
-                    : "Inactive"}
-                </span>
-              </div>
-
-              <div>
-                <p className="text-[10px] sm:text-xs md:text-sm text-gray-400 mb-1">
-                  Priority
-                </p>
-                <span
-                  className={`inline-flex px-2 sm:px-3 py-1 rounded-full text-[10px] sm:text-xs font-medium ${
-                    project.priority === "High"
-                      ? "bg-red-500/20 text-red-400 border border-red-500/50"
-                      : project.priority === "Medium"
-                      ? "bg-yellow-500/20 text-yellow-400 border border-yellow-500/50"
-                      : "bg-blue-500/20 text-blue-400 border border-blue-500/50"
-                  }`}
-                >
-                  {project.priority || "Medium"}
-                </span>
-              </div>
-
-              <div>
-                <p className="text-[10px] sm:text-xs md:text-sm text-gray-400 mb-1 flex items-center gap-1">
-                  <Calendar className="w-3 h-3" />
-                  Start Date
-                </p>
-                <p className="text-xs sm:text-sm md:text-base text-white">
-                  {project.startDate
-                    ? new Date(project.startDate).toLocaleDateString()
-                    : "N/A"}
-                </p>
-              </div>
-
-              <div>
-                <p className="text-xs sm:text-sm text-gray-400 mb-1 flex items-center gap-1">
-                  <Calendar className="w-3 h-3" />
-                  End Date
-                </p>
-                <p className="text-sm sm:text-base text-white">
-                  {project.endDate
-                    ? new Date(project.endDate).toLocaleDateString()
-                    : "N/A"}
-                </p>
-              </div>
-
-              {project.budget && (
-                <div>
-                  <p className="text-xs sm:text-sm text-gray-400 mb-1">
-                    Budget
-                  </p>
-                  <p className="text-sm sm:text-base text-white font-semibold">
-                    ₹{project.budget}
-                  </p>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Team Members Card */}
-          <div className="bg-[#202c33] rounded-xl shadow-lg border border-[#2a3942] p-4">
-            <h2 className="text-base font-semibold text-white mb-4 flex items-center gap-2">
-              <Users className="w-5 h-5 text-[#00a884]" />
-              Team Members
-            </h2>
-
-            <div className="space-y-3">
-              {project.assignedTo && project.assignedTo.length > 0 ? (
-                project.assignedTo.map((emp, idx) => (
-                  <div
-                    key={idx}
-                    className="flex items-center gap-3 p-3 bg-[#111b21] rounded-lg border border-[#2a3942] hover:bg-[#182229] transition-colors"
-                  >
-                    <div className="w-10 h-10 rounded-full bg-[#00a884] flex items-center justify-center text-white font-semibold flex-shrink-0">
-                      {(emp.name || emp.employeeId || "U").charAt(0).toUpperCase()}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      {(userRole === "admin" || userRole === "super-admin" || userRole === "superadmin") ? (
-                        // Show name for admins/super-admins
-                        <>
-                          <p className="text-white font-medium text-sm">
-                            {emp.name || "Unknown"}
-                          </p>
-                          <p className="text-xs text-blue-400">
-                            {emp.designation || "No designation"}
-                          </p>
-                        </>
-                      ) : (
-                        // Show employee ID and designation for clients
-                        <>
-                          <div className="flex items-center gap-2 mb-1">
-                            <Briefcase className="w-3 h-3 text-[#00a884] flex-shrink-0" />
-                            <p className="text-white font-medium text-sm">
-                              {emp.employeeId || emp._id?.substring(0, 8) || "N/A"}
-                            </p>
-                          </div>
-                          <p className="text-xs text-blue-400">
-                            {emp.designation || "No designation"}
-                          </p>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <div className="p-4 bg-[#111b21] rounded-lg border border-[#2a3942] text-center">
-                  <Users className="w-8 h-8 text-gray-600 mx-auto mb-2" />
-                  <p className="text-gray-400 text-sm">No team members assigned</p>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Project Creator Card */}
-          {project.createdBy && (
-            <div className="bg-[#202c33] rounded-xl shadow-lg border border-[#2a3942] p-4">
-              <h2 className="text-base font-semibold text-white mb-4 flex items-center gap-2">
-                <Star className="w-5 h-5 text-yellow-400" />
-                Project Creator
-              </h2>
-
-              <div className="flex items-center gap-3 p-3 bg-[#111b21] rounded-lg border border-[#2a3942]">
-                <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-gradient-to-br from-yellow-500 to-orange-500 flex items-center justify-center text-white font-semibold flex-shrink-0 text-sm sm:text-base">
-                  {(project.createdBy.name || "U").charAt(0).toUpperCase()}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-white font-medium text-xs sm:text-sm">
-                    {project.createdBy.name || "Unknown"}
-                  </p>
-                  {project.createdBy.email && (
-                    <p className="text-[10px] sm:text-xs text-yellow-400 truncate">
-                      {project.createdBy.email}
-                    </p>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Description Card */}
-          {project.description && (
-            <div className="bg-[#202c33] rounded-xl shadow-lg border border-[#2a3942] p-4">
-              <h2 className="text-base font-semibold text-white mb-4 flex items-center gap-2">
-                <FileText className="w-5 h-5 text-[#00a884]" />
-                Description
-              </h2>
-              <p className="text-sm text-gray-300 leading-relaxed break-words">
-                {project.description}
-              </p>
-            </div>
-          )}
-        </div>
-      </div>
-
-        {/* Main Content Area - Full Width with WhatsApp-style Chat */}
-        <div className={`flex-1 transition-all duration-300 ${showSidebar ? 'ml-80' : 'ml-0'}`}>
-          <div className="bg-[#0b141a] h-full flex flex-col">
-            {/* Tabs - WhatsApp Style */}
-            <div className="bg-[#202c33] border-b border-[#2a3942]">
-              <div className="flex">
+        {/* Main project workspace */}
+        <div className={`min-w-0 flex-1 transition-[margin] duration-300 ${showSidebar ? 'md:mr-[22rem]' : 'mr-0'}`}>
+          <div className="flex h-full flex-col bg-[#090f14]">
+            {/* Project sections */}
+            <div className="border-b border-white/10 bg-[#0d151c]">
+              <div className="flex items-center gap-6 overflow-x-auto px-4 sm:px-5">
                 <button
+                  type="button"
                   onClick={() => setActiveTab("chat")}
-                  className={`flex-1 flex items-center justify-center gap-2 px-4 py-3.5 text-sm font-medium transition-all ${
+                  className={`flex shrink-0 items-center gap-2 border-b-2 px-1 py-2.5 text-sm font-medium transition-all ${
                     activeTab === "chat"
-                      ? "text-[#00a884] border-b-2 border-[#00a884]"
-                      : "text-gray-400 hover:text-white"
+                      ? "border-teal-400 text-teal-300"
+                      : "border-transparent text-slate-400 hover:text-white"
                   }`}
                 >
-                  <Mail className="w-5 h-5" />
+                  <Mail className="h-4 w-4" />
                   <span>Chat</span>
                   <UnreadMessageBadge projectId={projectId} refreshInterval={30000} className="text-xs" />
                 </button>
                 <button
+                  type="button"
                   onClick={() => setActiveTab("tasks")}
-                  className={`flex-1 flex items-center justify-center gap-2 px-4 py-3.5 text-sm font-medium transition-all ${
+                  className={`flex shrink-0 items-center gap-2 border-b-2 px-1 py-2.5 text-sm font-medium transition-all ${
                     activeTab === "tasks"
-                      ? "text-[#00a884] border-b-2 border-[#00a884]"
-                      : "text-gray-400 hover:text-white"
+                      ? "border-teal-400 text-teal-300"
+                      : "border-transparent text-slate-400 hover:text-white"
                   }`}
                 >
-                  <ListTodo className="w-5 h-5" />
+                  <ListTodo className="h-4 w-4" />
                   <span>Tasks</span>
                   {tasks.length > 0 && (
-                    <span className="px-2 py-0.5 rounded-full bg-[#00a884] text-white text-xs font-semibold">
+                    <span className="rounded-full bg-teal-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-teal-300">
                       {tasks.length}
                     </span>
                   )}
                 </button>
                 <button
+                  type="button"
                   onClick={() => setActiveTab("report")}
-                  className={`flex-1 flex items-center justify-center gap-2 px-4 py-3.5 text-sm font-medium transition-all ${
+                  className={`flex shrink-0 items-center gap-2 border-b-2 px-1 py-2.5 text-sm font-medium transition-all ${
                     activeTab === "report"
-                      ? "text-[#00a884] border-b-2 border-[#00a884]"
-                      : "text-gray-400 hover:text-white"
+                      ? "border-teal-400 text-teal-300"
+                      : "border-transparent text-slate-400 hover:text-white"
                   }`}
                 >
-                  <BarChart3 className="w-5 h-5" />
-                  <span className="hidden sm:inline">Report</span>
-                  <span className="sm:inline md:hidden">Report</span>
+                  <BarChart3 className="h-4 w-4" />
+                  <span>Report</span>
                 </button>
               </div>
             </div>
@@ -1647,92 +1419,84 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
             {activeTab === "chat" && (
               <>
                 {/* Chat Header */}
-                <div className="p-2 sm:p-3 bg-[#202c33] border-b border-[#2a3942]">
-                  <div className="flex items-center justify-between gap-3 mb-2">
-                    <div className="flex-1 min-w-0">
-                      <h2 className="text-base font-semibold text-white flex items-center gap-2">
-                        <Mail className="w-5 h-5 text-[#00a884]" />
-                        Project Conversation
-                      </h2>
-                      <div className="flex items-center gap-3 mt-1">
-                        <p className="text-xs text-gray-400">
-                          {messages.length} message{messages.length !== 1 ? "s" : ""}
-                        </p>
-                        <div className="flex items-center gap-1.5">
-                          <div
-                            className={`w-2 h-2 rounded-full ${
-                              wsConnected ? "bg-green-400 animate-pulse" : "bg-red-400"
-                            }`}
-                          ></div>
-                          <span className="text-xs text-gray-500">
-                            {wsConnected ? "Connected" : "Disconnected"}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
+                <div className="relative flex items-center justify-between gap-3 border-b border-white/10 bg-[#0d151c] px-3 py-2 sm:px-4">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <h2 className="truncate text-sm font-medium text-slate-200">Project conversation</h2>
+                    <span className="text-[11px] text-slate-600">
+                      {messages.length} message{messages.length !== 1 ? "s" : ""}
+                    </span>
+                      {!wsConnected && (
+                        <span className="inline-flex items-center gap-1.5 rounded-full bg-rose-500/10 px-2 py-1 text-[10px] text-rose-300">
+                          <span className="h-1.5 w-1.5 rounded-full bg-rose-400" />
+                          Reconnecting
+                        </span>
+                      )}
+                  </div>
 
+                  <div className="flex items-center gap-2">
                     <button
-                      onClick={() => setShowActions(!showActions)}
-                      className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-[#2a3942] transition-all flex-shrink-0"
-                      title={showActions ? "Hide actions" : "Show actions"}
+                      type="button"
+                      onClick={() => setShowFilters((visible) => !visible)}
+                      className={`rounded-lg border p-2 transition ${
+                        showFilters
+                          ? "border-teal-400/25 bg-teal-500/10 text-teal-300"
+                          : "border-white/10 bg-white/[0.03] text-slate-400 hover:bg-white/[0.06] hover:text-white"
+                      }`}
+                      aria-label="Search conversation"
                     >
-                      {showActions ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                      <Search className="h-4 w-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowActions((visible) => !visible)}
+                      className="rounded-lg border border-white/10 bg-white/[0.03] p-2 text-slate-400 transition hover:bg-white/[0.06] hover:text-white"
+                      aria-label="More conversation actions"
+                    >
+                      <MoreHorizontal className="h-4 w-4" />
                     </button>
                   </div>
 
                   {showActions && (
-                    <div className="flex flex-wrap gap-2">
-                  <button
-                    onClick={() => setShowPinnedModal(true)}
-                    className="flex items-center gap-2 px-3 py-2 rounded-lg bg-yellow-600/20 hover:bg-yellow-600/40 text-yellow-400 border border-yellow-500/30 transition-colors text-sm"
-                    title="View pinned messages"
-                  >
-                    <Pin className="w-4 h-4" />
-                    <span className="hidden sm:inline">Pinned</span>
-                  </button>
-                  <button
-                    onClick={() => setShowStarredOnly(!showStarredOnly)}
-                    className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-colors text-sm ${
-                      showStarredOnly
-                        ? "bg-yellow-600/40 text-yellow-300 border border-yellow-500/50"
-                        : "bg-yellow-600/20 hover:bg-yellow-600/40 text-yellow-400 border border-yellow-500/30"
-                    }`}
-                    title={showStarredOnly ? "Show all messages" : "Show starred messages only"}
-                  >
-                    <Star className={`w-4 h-4 ${showStarredOnly ? "fill-yellow-300" : ""}`} />
-                    <span className="hidden sm:inline">Starred</span>
-                  </button>
-                  <button
-                    onClick={() => setShowFilters(!showFilters)}
-                    className="flex items-center gap-2 px-3 py-2 rounded-lg bg-blue-600/20 hover:bg-blue-600/40 text-blue-400 border border-blue-500/30 transition-colors text-sm"
-                    title="Toggle filters"
-                  >
-                    <Filter className="w-4 h-4" />
-                    <span className="hidden sm:inline">Filters</span>
-                  </button>
-                  <button
-                    onClick={handleSummarize}
-                    className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[#00a884]/20 hover:bg-[#00a884]/40 text-[#00a884] border border-[#00a884]/30 transition-colors text-sm"
-                    title="Summarize conversation"
-                  >
-                    <Sparkles className="w-4 h-4" />
-                    <span className="hidden sm:inline">Summarize</span>
-                  </button>
-                  <button
-                    onClick={exportChat}
-                    className="flex items-center gap-2 px-3 py-2 rounded-lg bg-green-600/20 hover:bg-green-600/40 text-green-400 border border-green-500/30 transition-colors text-sm"
-                    title="Export chat"
-                  >
-                    <Download className="w-4 h-4" />
-                    <span className="hidden sm:inline">Export</span>
-                  </button>
+                    <div className="absolute right-3 top-[calc(100%+0.5rem)] z-50 w-52 rounded-xl border border-white/10 bg-[#131c24] p-1.5 shadow-2xl shadow-black/40">
+                      <button
+                        type="button"
+                        onClick={() => { setShowPinnedModal(true); setShowActions(false); }}
+                        className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-slate-300 transition hover:bg-white/5 hover:text-white"
+                      >
+                        <Pin className="h-4 w-4 text-amber-400" />
+                        Pinned messages
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setShowStarredOnly((visible) => !visible); setShowActions(false); }}
+                        className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-slate-300 transition hover:bg-white/5 hover:text-white"
+                      >
+                        <Star className={`h-4 w-4 text-amber-400 ${showStarredOnly ? "fill-amber-400" : ""}`} />
+                        {showStarredOnly ? "Show all messages" : "Starred messages"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { handleSummarize(); setShowActions(false); }}
+                        className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-slate-300 transition hover:bg-white/5 hover:text-white"
+                      >
+                        <Sparkles className="h-4 w-4 text-teal-400" />
+                        Summarize
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { exportChat(); setShowActions(false); }}
+                        className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-slate-300 transition hover:bg-white/5 hover:text-white"
+                      >
+                        <Download className="h-4 w-4 text-sky-400" />
+                        Export conversation
+                      </button>
                     </div>
                   )}
                 </div>
 
               {/* Search and Filters */}
               {showFilters && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-3 border-t border-[#2a3942]">
+                <div className="grid grid-cols-1 gap-3 border-b border-white/10 bg-[#0b1218] p-3 sm:grid-cols-2 lg:grid-cols-4">
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
                     <input
@@ -1784,7 +1548,7 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
             {/* Messages Container */}
             <div
               ref={chatContainerRef}
-              className="flex-1 overflow-y-auto bg-[#0b141a]"
+              className="flex-1 overflow-y-auto bg-[#090f14]"
             >
               {messages.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full text-center">
@@ -1797,7 +1561,7 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                   </p>
                 </div>
               ) : (
-                <div className="max-w-5xl mx-auto p-3 sm:p-4 space-y-3">
+                <div className="w-full space-y-3 p-3 sm:px-5 sm:py-4">
                   {/* Load More Messages Button - At Top */}
                   {hasMoreMessages && (
                     <div className="flex justify-center py-4">
@@ -1826,11 +1590,19 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                     msg.sentBy?._id === userId || msg.sentBy === userId;
                   const senderType = msg.senderType || "user";
 
-                  // Show designation instead of name, similar to team members sidebar
                   const senderDesignation = msg.sentBy?.designation || "Team Member";
-                  const senderDisplay = senderType === "client"
+                  const senderName = msg.sentBy?.name
+                    || msg.sentBy?.clientName
+                    || msg.sentBy?.businessName
+                    || (senderType === "client" ? projectClientName : senderDesignation);
+                  const senderRole = senderType === "client"
                     ? "Client"
-                    : senderDesignation;
+                    : msg.sentBy?.designation || "Project team";
+                  const senderDisplay = isOwnMessage
+                    ? "You"
+                    : isClientUser && senderType !== "client"
+                      ? senderRole
+                      : `${senderName} · ${senderRole}`;
 
                   // Check if we need to show date separator
                   const showDateSeparator = idx === 0 ||
@@ -1848,7 +1620,7 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                         } transition-colors duration-300 animate-slideIn`}
                       >
                       <div
-                        className={`max-w-[75%] min-w-0 ${
+                        className={`min-w-0 max-w-[88%] sm:max-w-[62%] xl:max-w-[56%] ${
                           isOwnMessage ? "items-end" : "items-start"
                         } flex flex-col`}
                       >
@@ -1866,9 +1638,9 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                         <div
                           className={`relative group w-fit max-w-full ${
                             isOwnMessage
-                              ? "bg-[#005c4b] hover:bg-[#004c3f]" // WhatsApp dark green for team messages
-                              : "bg-[#202c33] hover:bg-[#2a3942]" // Dark gray for client messages
-                          } rounded-lg p-3 sm:p-4 text-white transition-all duration-200 hover:shadow-lg break-words overflow-hidden`}
+                              ? "border-teal-400/15 bg-[#075d55]"
+                              : "border-white/10 bg-[#1a242d]"
+                          } overflow-hidden rounded-xl border p-3 text-white shadow-sm shadow-black/10 transition-colors duration-200 break-words`}
                         >
                           {/* Reply Preview */}
                           {msg.replyTo && (
@@ -2076,14 +1848,12 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                             </div>
                           )}
 
-                          <div className="flex items-center justify-between gap-3 mt-2">
+                          <div className="mt-2 flex items-center justify-between gap-3">
                             <div className="flex items-center gap-2">
                               <span className="text-xs text-gray-400">
                                 {new Date(msg.createdAt).toLocaleTimeString([], {
                                   hour: "2-digit",
                                   minute: "2-digit",
-                                  month: "short",
-                                  day: "numeric",
                                 })}
                               </span>
                               {/* Only show status for own messages (team messages) */}
@@ -2092,7 +1862,7 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                               )}
                             </div>
 
-                            <div className="flex gap-1 relative">
+                            <div className="relative flex gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
                               <button
                                 onClick={() => handleReply(msg)}
                                 className="p-1.5 rounded-md hover:bg-white/10 transition-colors"
@@ -2174,10 +1944,10 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
             )}
 
             {/* Message Input */}
-            <div className="p-2 sm:p-3 border-t border-[#232945]">
+            <div className="border-t border-white/10 bg-[#0d151c] p-2 sm:px-3">
               {/* Reply Preview */}
               {replyingTo && (
-                <div className="mb-2 p-2 bg-[#00a884]/20 border border-[#00a884]/30 rounded-lg flex items-start justify-between gap-2 overflow-hidden" style={{ maxWidth: '100%' }}>
+                <div className="mb-2 flex items-start justify-between gap-2 overflow-hidden rounded-lg border border-teal-400/20 bg-teal-500/10 p-2.5" style={{ maxWidth: '100%' }}>
                   <div className="flex-1 min-w-0 overflow-hidden">
                     <div className="flex items-center gap-2 text-sm text-gray-300 mb-1">
                       <Reply className="w-4 h-4 flex-shrink-0" />
@@ -2213,7 +1983,7 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                   {selectedFiles.map((file, idx) => (
                     <div
                       key={idx}
-                      className="flex items-center gap-2 px-3 py-2 bg-[#00a884]/20 border border-[#00a884]/30 rounded-lg"
+                      className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2"
                     >
                       <File className="w-4 h-4 text-gray-300" />
                       <span className="text-xs text-white truncate max-w-[150px]">
@@ -2232,8 +2002,8 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
 
               {/* Formatting Toolbar */}
               {showFormatting && (
-                <div className="mb-3 p-3 bg-[#0f1419] border border-[#232945] rounded-lg">
-                  <div className="flex flex-wrap gap-2 mb-3">
+                <div className="mb-3 rounded-lg border border-white/10 bg-[#101820] p-3">
+                  <div className="flex flex-wrap gap-2">
                     <button type="button" onClick={formatBold} className="px-3 py-1.5 bg-[#232945] hover:bg-[#2a3142] rounded text-xs font-bold text-white transition-colors" title="Bold (Ctrl+B)">
                       <span className="font-bold">B</span>
                     </button>
@@ -2256,7 +2026,7 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                       1. List
                     </button>
                   </div>
-                  <div className="text-xs text-gray-500 space-y-1">
+                  <div className="hidden">
                     <div><strong>Keyboard Shortcuts:</strong> Ctrl+B (Bold) • Ctrl+I (Italic) • Ctrl+U (Strike) • Ctrl+E/K (Code) • Ctrl+D (Heading) • Ctrl+L (Bullet) • Ctrl+Shift+L (Numbered)</div>
                     <div><strong>Markdown:</strong> **bold** *italic* ~~strikethrough~~ `code` ## Heading - Bullet 1. Numbered</div>
                   </div>
@@ -2268,7 +2038,7 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
 
               <form
                 onSubmit={handleSendMessage}
-                className="flex gap-2"
+                className="flex items-center gap-2"
               >
                 <input
                   ref={fileInputRef}
@@ -2279,42 +2049,60 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                   className="hidden"
                 />
 
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="flex-shrink-0 px-2 py-2 bg-gray-600/20 hover:bg-gray-600/40 text-gray-300 rounded-lg transition-colors"
-                  title="Attach files"
-                >
-                  <Paperclip className="w-4 h-4" />
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setShowFormatting(!showFormatting)}
-                  className="flex-shrink-0 px-2 py-2 bg-gray-600/20 hover:bg-gray-600/40 text-gray-300 rounded-lg transition-colors"
-                  title="Text formatting"
-                >
-                  <Type className="w-4 h-4" />
-                </button>
-
-                <div className="flex-shrink-0 relative">
+                <div className="relative flex-shrink-0">
                   <button
                     type="button"
-                    onClick={() => setShowEnhancedEmojiPicker(!showEnhancedEmojiPicker)}
-                    className="px-2 py-2 bg-gray-600/20 hover:bg-gray-600/40 text-gray-300 rounded-lg transition-colors"
-                    title="Insert emoji"
+                    onClick={() => setShowComposerTools((visible) => !visible)}
+                    className={`flex h-11 w-11 items-center justify-center rounded-lg border transition ${
+                      showComposerTools
+                        ? "border-teal-400/30 bg-teal-500/10 text-teal-300"
+                        : "border-white/10 bg-white/[0.035] text-slate-400 hover:bg-white/[0.065] hover:text-white"
+                    }`}
+                    aria-label="Add attachment or formatting"
                   >
-                    <Smile className="w-4 h-4" />
+                    <Plus className={`h-4 w-4 transition-transform ${showComposerTools ? "rotate-45" : ""}`} />
                   </button>
+
+                  {showComposerTools && (
+                    <div className="absolute bottom-[calc(100%+0.5rem)] left-0 z-50 w-44 rounded-xl border border-white/10 bg-[#131c24] p-1.5 shadow-2xl shadow-black/40">
+                      <button
+                        type="button"
+                        onClick={() => { fileInputRef.current?.click(); setShowComposerTools(false); }}
+                        className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-slate-300 transition hover:bg-white/5 hover:text-white"
+                      >
+                        <Paperclip className="h-4 w-4 text-sky-400" />
+                        Attach files
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setShowFormatting((visible) => !visible); setShowComposerTools(false); }}
+                        className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-slate-300 transition hover:bg-white/5 hover:text-white"
+                      >
+                        <Type className="h-4 w-4 text-teal-400" />
+                        Formatting
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setShowEnhancedEmojiPicker(true); setShowComposerTools(false); }}
+                        className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-slate-300 transition hover:bg-white/5 hover:text-white"
+                      >
+                        <Smile className="h-4 w-4 text-amber-400" />
+                        Emoji
+                      </button>
+                    </div>
+                  )}
+
                   {showEnhancedEmojiPicker && (
-                    <EmojiPickerEnhanced
-                      onSelect={(emoji) => {
-                        setNewMessage((prev) => prev + emoji);
-                        setShowEnhancedEmojiPicker(false);
-                        textareaRef.current?.focus();
-                      }}
-                      onClose={() => setShowEnhancedEmojiPicker(false)}
-                    />
+                    <div className="absolute bottom-[calc(100%+0.5rem)] left-0 z-50">
+                      <EmojiPickerEnhanced
+                        onSelect={(emoji) => {
+                          setNewMessage((prev) => prev + emoji);
+                          setShowEnhancedEmojiPicker(false);
+                          textareaRef.current?.focus();
+                        }}
+                        onClose={() => setShowEnhancedEmojiPicker(false)}
+                      />
+                    </div>
                   )}
                 </div>
 
@@ -2390,9 +2178,9 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                       }
                     }}
                     users={project?.assignedTo || []}
-                    placeholder="Type @ to mention someone..."
+                    placeholder="Write a message…"
                     rows={1}
-                    className="w-full bg-[#0f1419] border-[#232945] text-white placeholder-gray-500 focus:border-[#00a884]"
+                    className="h-11 w-full rounded-xl border-white/10 bg-[#101820] py-2.5 text-white placeholder-slate-500 focus:border-teal-400/50"
                     onKeyDown={(e) => {
                       // Handle suggestion navigation
                       if (showSuggestions && suggestions.length > 0) {
@@ -2506,7 +2294,7 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                 <button
                   type="submit"
                   disabled={sending || (!newMessage.trim() && selectedFiles.length === 0)}
-                  className="flex-shrink-0 px-3 sm:px-4 py-2 bg-[#00a884] hover:bg-[#128C7E] text-white rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  className="flex h-11 flex-shrink-0 items-center justify-center gap-2 rounded-lg bg-teal-600 px-3 text-white shadow-lg shadow-teal-950/20 transition hover:bg-teal-500 disabled:cursor-not-allowed disabled:opacity-40 sm:px-4"
                 >
                   {sending ? (
                     <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin"></div>

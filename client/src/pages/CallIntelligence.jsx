@@ -44,7 +44,6 @@ const CallIntelligence = ({ onLogout }) => {
   const [filteredRecordings, setFilteredRecordings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [userRole, setUserRole] = useState("employee");
-  const [currentUser, setCurrentUser] = useState(null);
   const [employees, setEmployees] = useState([]);
   const [stats, setStats] = useState({
     totalRecordings: 0,
@@ -78,7 +77,6 @@ const CallIntelligence = ({ onLogout }) => {
     const user = JSON.parse(localStorage.getItem("user"));
     if (user) {
       setUserRole(user.role);
-      setCurrentUser(user);
     }
     fetchRecordings();
     fetchStats();
@@ -338,35 +336,33 @@ const CallIntelligence = ({ onLogout }) => {
   const isAdmin = userRole === "super-admin" || userRole === "admin";
 
   return (
-    <div className="flex h-screen bg-slate-950 text-white overflow-hidden">
+    <div className="app-shell h-[100dvh] overflow-hidden">
       <Sidebar
         onLogout={onLogout}
         collapsed={sidebarCollapsed}
         setCollapsed={setSidebarCollapsed}
       />
 
-      <div
-        className={`flex-1 transition-all duration-300 ${
-          sidebarCollapsed ? "ml-16" : "ml-72"
-        } overflow-hidden`}
+      <main
+        className={`app-main h-[100dvh] overflow-hidden transition-all duration-300 ${
+          sidebarCollapsed ? "ml-16" : "ml-16 sm:ml-56"
+        }`}
       >
-        <SimpleBar style={{ maxHeight: "100vh" }} className="p-6">
+        <SimpleBar style={{ maxHeight: "100dvh" }} className="px-3 py-4 sm:px-5 lg:px-6">
+          <div className="app-page pb-8">
           {/* Header */}
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+          <div className="app-header mb-5 flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
             <div>
-              <h1 className="text-2xl font-bold bg-gradient-to-r from-cyan-400 to-blue-400 bg-clip-text text-transparent">
-                Call Intelligence
-              </h1>
-              <p className="text-gray-400 text-sm mt-1">
-                AI-powered analysis of Vicidial call recordings
-              </p>
+              <p className="app-eyebrow">Conversation insights</p>
+              <h1 className="app-title">Call intelligence</h1>
+              <p className="app-description">AI-powered analysis of Vicidial call recordings.</p>
             </div>
             <div className="flex gap-3">
               {isAdmin && (
                 <button
                   onClick={handleSync}
                   disabled={syncing}
-                  className="flex items-center gap-2 bg-gradient-to-r from-cyan-500 to-blue-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
+                  className="app-primary-button flex h-10 items-center gap-2 px-4 text-sm font-semibold disabled:opacity-50"
                 >
                   <RefreshCw size={16} className={syncing ? "animate-spin" : ""} />
                   {syncing ? "Syncing..." : "Sync Now"}
@@ -377,7 +373,7 @@ const CallIntelligence = ({ onLogout }) => {
 
           {/* Stats Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-            <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-4">
+            <div className="app-panel p-4">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-gray-400 text-xs">Total Recordings</p>
@@ -391,7 +387,7 @@ const CallIntelligence = ({ onLogout }) => {
               </div>
             </div>
 
-            <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-4">
+            <div className="app-panel p-4">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-gray-400 text-xs">Analyzed</p>
@@ -410,7 +406,7 @@ const CallIntelligence = ({ onLogout }) => {
               </div>
             </div>
 
-            <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-4">
+            <div className="app-panel p-4">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-gray-400 text-xs">Avg Sentiment</p>
@@ -426,7 +422,7 @@ const CallIntelligence = ({ onLogout }) => {
               </div>
             </div>
 
-            <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-4">
+            <div className="app-panel p-4">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-gray-400 text-xs">Avg Performance</p>
@@ -448,7 +444,7 @@ const CallIntelligence = ({ onLogout }) => {
           </div>
 
           {/* Filters */}
-          <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-4 mb-6">
+          <div className="app-panel mb-5 p-4">
             <div className="flex flex-wrap gap-3 items-center">
               <div className="relative flex-1 min-w-[200px]">
                 <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -457,14 +453,14 @@ const CallIntelligence = ({ onLogout }) => {
                   placeholder="Search by ID, phone, or summary..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500"
+                  className="app-control w-full py-2 pl-10 pr-4 text-sm focus:outline-none"
                 />
               </div>
 
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500"
+                className="app-control px-3 py-2 text-sm focus:outline-none"
               >
                 <option value="">All Status</option>
                 <option value="Completed">Completed</option>
@@ -476,7 +472,7 @@ const CallIntelligence = ({ onLogout }) => {
               <select
                 value={outcomeFilter}
                 onChange={(e) => setOutcomeFilter(e.target.value)}
-                className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500"
+                className="app-control px-3 py-2 text-sm focus:outline-none"
               >
                 <option value="">All Outcomes</option>
                 <option value="Interested">Interested</option>
@@ -493,7 +489,7 @@ const CallIntelligence = ({ onLogout }) => {
               <select
                 value={sentimentFilter}
                 onChange={(e) => setSentimentFilter(e.target.value)}
-                className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500"
+                className="app-control px-3 py-2 text-sm focus:outline-none"
               >
                 <option value="">All Sentiments</option>
                 <option value="Very Positive">Very Positive</option>
@@ -928,8 +924,9 @@ const CallIntelligence = ({ onLogout }) => {
               </div>
             </div>
           )}
+          </div>
         </SimpleBar>
-      </div>
+      </main>
     </div>
   );
 };

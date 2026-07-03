@@ -1,397 +1,479 @@
-// components/sheets/ShareSheetModal.jsx
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
-import { X, Users, UserPlus, Trash2, Shield, Check, AlertCircle } from "lucide-react";
+import {
+  AlertCircle,
+  Check,
+  LoaderCircle,
+  Search,
+  Shield,
+  UserPlus,
+  Users,
+  X,
+} from "lucide-react";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
 
+const AVAILABLE_ROLES = [
+  {
+    value: "admin",
+    label: "Admins",
+    description: "Share with every administrator",
+    icon: Shield,
+  },
+  {
+    value: "hr",
+    label: "HR team",
+    description: "Share with people in the HR role",
+    icon: Users,
+  },
+  {
+    value: "employee",
+    label: "Employees",
+    description: "Share with everyone in the employee role",
+    icon: UserPlus,
+  },
+];
+
+const getInitialUsers = (sheet) =>
+  (sheet.sharedWith || [])
+    .map((share) => ({
+      userId:
+        typeof share.user === "object" ? share.user?._id : share.user,
+      permission: share.permission || "view",
+    }))
+    .filter((share) => share.userId);
+
+const getInitialRoles = (sheet) =>
+  (sheet.sharedWithRoles || [])
+    .map((share) => ({
+      role: share.role,
+      permission: share.permission || "view",
+    }))
+    .filter((share) => share.role);
+
 const ShareSheetModal = ({ sheet, onClose, onSuccess }) => {
   const [users, setUsers] = useState([]);
-  const [selectedUsers, setSelectedUsers] = useState([]); // Array of { userId, permission }
-  const [selectedRoles, setSelectedRoles] = useState([]); // Array of { role, permission }
-  const [loading, setLoading] = useState(false);
-  const [notification, setNotification] = useState(null);
+  const [selectedUsers, setSelectedUsers] = useState(() =>
+    getInitialUsers(sheet),
+  );
+  const [selectedRoles, setSelectedRoles] = useState(() =>
+    getInitialRoles(sheet),
+  );
+  const [isFetchingUsers, setIsFetchingUsers] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
 
   useEffect(() => {
-    fetchUsers();
-    initializeSelections();
+    setSelectedUsers(getInitialUsers(sheet));
+    setSelectedRoles(getInitialRoles(sheet));
   }, [sheet]);
 
-  const fetchUsers = async () => {
-    try {
-      const token = localStorage.getItem("token");
-      const response = await axios.get(`${API_BASE}/api/users`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      setUsers(response.data || []);
-    } catch (error) {
-      console.error("Error fetching users:", error);
-      showNotification("Error fetching users", "error");
-    }
-  };
+  useEffect(() => {
+    let isMounted = true;
 
-  const initializeSelections = () => {
-    // Pre-select already shared users with their permissions
-    const sharedUsers = sheet.sharedWith?.map((s) => ({
-      userId: s.user._id || s.user,
-      permission: s.permission || "view"
-    })) || [];
-    setSelectedUsers(sharedUsers);
+    const fetchUsers = async () => {
+      try {
+        setIsFetchingUsers(true);
+        const token = localStorage.getItem("token");
+        const response = await axios.get(`${API_BASE}/api/users`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const responseUsers = Array.isArray(response.data)
+          ? response.data
+          : response.data?.data;
 
-    // Pre-select already shared roles with their permissions
-    const sharedRoles = sheet.sharedWithRoles?.map((s) => ({
-      role: s.role,
-      permission: s.permission || "view"
-    })) || [];
-    setSelectedRoles(sharedRoles);
-  };
+        if (isMounted) setUsers(Array.isArray(responseUsers) ? responseUsers : []);
+      } catch (requestError) {
+        console.error("Error fetching users:", requestError);
+        if (isMounted) setError("We couldn't load the people list. Please try again.");
+      } finally {
+        if (isMounted) setIsFetchingUsers(false);
+      }
+    };
+
+    fetchUsers();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape" && !isSaving) onClose();
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isSaving, onClose]);
+
+  const filteredUsers = useMemo(() => {
+    const query = searchTerm.trim().toLowerCase();
+    const ownerId =
+      typeof sheet.addedBy === "object" ? sheet.addedBy?._id : sheet.addedBy;
+
+    return users.filter((user) => {
+      if (user._id === ownerId) return false;
+      if (!query) return true;
+
+      return [user.name, user.email, user.employeeId]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(query));
+    });
+  }, [searchTerm, sheet.addedBy, users]);
 
   const toggleUserSelection = (userId) => {
-    setSelectedUsers((prev) => {
-      const existingIndex = prev.findIndex((u) => u.userId === userId);
-      if (existingIndex >= 0) {
-        // Remove user
-        return prev.filter((u) => u.userId !== userId);
-      } else {
-        // Add user with default "view" permission
-        return [...prev, { userId, permission: "view" }];
-      }
-    });
+    setSelectedUsers((current) =>
+      current.some((share) => share.userId === userId)
+        ? current.filter((share) => share.userId !== userId)
+        : [...current, { userId, permission: "view" }],
+    );
   };
 
   const updateUserPermission = (userId, permission) => {
-    setSelectedUsers((prev) =>
-      prev.map((u) =>
-        u.userId === userId ? { ...u, permission } : u
-      )
+    setSelectedUsers((current) =>
+      current.map((share) =>
+        share.userId === userId ? { ...share, permission } : share,
+      ),
     );
   };
 
   const toggleRoleSelection = (role) => {
-    setSelectedRoles((prev) => {
-      const existingIndex = prev.findIndex((r) => r.role === role);
-      if (existingIndex >= 0) {
-        // Remove role
-        return prev.filter((r) => r.role !== role);
-      } else {
-        // Add role with default "view" permission
-        return [...prev, { role, permission: "view" }];
-      }
-    });
+    setSelectedRoles((current) =>
+      current.some((share) => share.role === role)
+        ? current.filter((share) => share.role !== role)
+        : [...current, { role, permission: "view" }],
+    );
   };
 
   const updateRolePermission = (role, permission) => {
-    setSelectedRoles((prev) =>
-      prev.map((r) =>
-        r.role === role ? { ...r, permission } : r
-      )
+    setSelectedRoles((current) =>
+      current.map((share) =>
+        share.role === role ? { ...share, permission } : share,
+      ),
     );
   };
 
   const handleShare = async () => {
     try {
-      setLoading(true);
+      setIsSaving(true);
+      setError("");
       const token = localStorage.getItem("token");
 
       await axios.post(
         `${API_BASE}/api/sheets/${sheet._id}/share`,
-        {
-          userShares: selectedUsers,
-          roleShares: selectedRoles,
-        },
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
+        { userShares: selectedUsers, roleShares: selectedRoles },
+        { headers: { Authorization: `Bearer ${token}` } },
       );
 
-      showNotification("Sheet shared successfully!", "success");
-      setTimeout(() => {
-        onSuccess();
-        onClose();
-      }, 1000);
-    } catch (error) {
-      console.error("Error sharing sheet:", error);
-      showNotification(
-        error.response?.data?.message || "Error sharing sheet",
-        "error"
+      await onSuccess?.();
+      onClose();
+    } catch (requestError) {
+      console.error("Error sharing sheet:", requestError);
+      setError(
+        requestError.response?.data?.message ||
+          "We couldn't update sharing. Please try again.",
       );
     } finally {
-      setLoading(false);
+      setIsSaving(false);
     }
   };
 
-  const handleRemoveShare = async () => {
-    try {
-      setLoading(true);
-      const token = localStorage.getItem("token");
-
-      // Get currently shared users and roles
-      const currentUserIds = sheet.sharedWith?.map((s) => s.user._id || s.user) || [];
-      const currentRoles = sheet.sharedWithRoles?.map((s) => s.role) || [];
-
-      // Find users and roles to remove
-      const usersToRemove = currentUserIds.filter((id) => !selectedUsers.includes(id));
-      const rolesToRemove = currentRoles.filter((role) => !selectedRoles.includes(role));
-
-      if (usersToRemove.length === 0 && rolesToRemove.length === 0) {
-        showNotification("No changes to remove", "error");
-        return;
-      }
-
-      await axios.delete(`${API_BASE}/api/sheets/${sheet._id}/share`, {
-        headers: { Authorization: `Bearer ${token}` },
-        data: {
-          userIds: usersToRemove,
-          roles: rolesToRemove,
-        },
-      });
-
-      showNotification("Sharing removed successfully!", "success");
-      setTimeout(() => {
-        onSuccess();
-        onClose();
-      }, 1000);
-    } catch (error) {
-      console.error("Error removing share:", error);
-      showNotification(
-        error.response?.data?.message || "Error removing share",
-        "error"
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const showNotification = (message, type) => {
-    setNotification({ message, type });
-    setTimeout(() => setNotification(null), 3000);
-  };
-
-  const availableRoles = [
-    { value: "admin", label: "Admins", icon: Shield },
-    { value: "hr", label: "HR", icon: Users },
-    { value: "employee", label: "Employees", icon: UserPlus },
-  ];
-
-  const filteredUsers = users.filter((user) => {
-    // Don't show the sheet owner
-    if (user._id === sheet.addedBy?._id) return false;
-
-    const matchesSearch =
-      user.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user.employeeId?.toLowerCase().includes(searchTerm.toLowerCase());
-
-    return matchesSearch;
-  });
+  const selectedCount = selectedUsers.length + selectedRoles.length;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70">
-      {/* Notification */}
-      {notification && (
-        <div
-          className={`fixed top-4 right-4 z-[60] px-6 py-3 rounded-lg shadow-lg flex items-center gap-2 ${
-            notification.type === "success"
-              ? "bg-green-600 text-white"
-              : "bg-red-600 text-white"
-          }`}
-        >
-          {notification.type === "success" ? (
-            <Check className="w-5 h-5" />
-          ) : (
-            <AlertCircle className="w-5 h-5" />
-          )}
-          {notification.message}
-        </div>
-      )}
-
-      <div className="bg-[#191f2b] rounded-xl shadow-2xl border border-[#232945] w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
-        {/* Header */}
-        <div className="p-6 border-b border-[#232945]">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-xl font-bold text-white flex items-center gap-2">
-                <Users className="w-6 h-6 text-purple-400" />
-                Share Sheet
-              </h3>
-              <p className="text-sm text-gray-400 mt-1">{sheet.name}</p>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-3 backdrop-blur-sm sm:p-6"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget && !isSaving) onClose();
+      }}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="share-sheet-title"
+        className="flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900"
+      >
+        <header className="border-b border-slate-200 px-5 py-4 dark:border-slate-800 sm:px-6">
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <div className="mb-1 flex items-center gap-2">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400">
+                  <Users className="h-4 w-4" aria-hidden="true" />
+                </span>
+                <div className="min-w-0">
+                  <h2
+                    id="share-sheet-title"
+                    className="text-lg font-semibold text-slate-900 dark:text-white"
+                  >
+                    Share sheet
+                  </h2>
+                  <p className="truncate text-sm text-slate-500 dark:text-slate-400">
+                    {sheet.name}
+                  </p>
+                </div>
+              </div>
+              <p className="mt-3 text-sm text-slate-600 dark:text-slate-300">
+                Choose who can open this resource and whether they can edit it.
+              </p>
             </div>
             <button
+              type="button"
               onClick={onClose}
-              className="p-1 hover:bg-[#0f1419] rounded transition-colors"
+              disabled={isSaving}
+              aria-label="Close share sheet dialog"
+              className="rounded-lg p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 disabled:opacity-50 dark:hover:bg-slate-800 dark:hover:text-slate-200"
             >
-              <X className="w-5 h-5 text-gray-400" />
+              <X className="h-5 w-5" aria-hidden="true" />
             </button>
           </div>
-        </div>
+        </header>
 
-        {/* Body */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-6">
-          {/* Share with Roles */}
-          <div>
-            <h4 className="text-sm font-medium text-gray-300 mb-3 flex items-center gap-2">
-              <Shield className="w-4 h-4 text-blue-400" />
-              Share with Roles
-            </h4>
-            <div className="space-y-3">
-              {availableRoles.map((roleOption) => {
-                const Icon = roleOption.icon;
-                const roleShare = selectedRoles.find((r) => r.role === roleOption.value);
-                const isSelected = !!roleShare;
+        <div className="flex-1 space-y-6 overflow-y-auto px-5 py-5 sm:px-6">
+          {error && (
+            <div
+              role="alert"
+              className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300"
+            >
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+              <span>{error}</span>
+            </div>
+          )}
+
+          <section aria-labelledby="share-roles-heading">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div>
+                <h3
+                  id="share-roles-heading"
+                  className="text-sm font-semibold text-slate-900 dark:text-white"
+                >
+                  Share by role
+                </h3>
+                <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+                  Give access to an entire group at once.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid gap-3 lg:grid-cols-3">
+              {AVAILABLE_ROLES.map((roleOption) => {
+                const RoleIcon = roleOption.icon;
+                const roleShare = selectedRoles.find(
+                  (share) => share.role === roleOption.value,
+                );
+                const isSelected = Boolean(roleShare);
+
                 return (
-                  <div key={roleOption.value} className="flex items-center gap-3">
+                  <div
+                    key={roleOption.value}
+                    className={`rounded-xl border p-3 transition ${
+                      isSelected
+                        ? "border-blue-300 bg-blue-50 dark:border-blue-700 dark:bg-blue-950/30"
+                        : "border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900"
+                    }`}
+                  >
                     <button
+                      type="button"
                       onClick={() => toggleRoleSelection(roleOption.value)}
-                      className={`flex-1 flex items-center gap-3 p-4 rounded-lg border-2 transition-all ${
-                        isSelected
-                          ? "border-purple-500 bg-purple-500/20"
-                          : "border-[#232945] bg-[#0f1419] hover:border-purple-500/50"
-                      }`}
+                      aria-pressed={isSelected}
+                      className="flex w-full items-start gap-3 text-left"
                     >
-                      <Icon
-                        className={`w-5 h-5 ${
-                          isSelected ? "text-purple-400" : "text-gray-500"
+                      <span
+                        className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
+                          isSelected
+                            ? "bg-blue-600 text-white"
+                            : "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400"
                         }`}
-                      />
-                      <div className="flex-1 text-left">
-                        <p
-                          className={`text-sm font-medium ${
-                            isSelected ? "text-purple-300" : "text-gray-300"
-                          }`}
-                        >
-                          {roleOption.label}
-                        </p>
-                      </div>
-                      {isSelected && <Check className="w-5 h-5 text-purple-400" />}
-                    </button>
-                    {isSelected && (
-                      <select
-                        value={roleShare.permission}
-                        onChange={(e) => updateRolePermission(roleOption.value, e.target.value)}
-                        onClick={(e) => e.stopPropagation()}
-                        className="px-3 py-2 bg-[#0f1419] border border-[#232945] rounded-lg text-white text-sm focus:outline-none focus:border-purple-500"
                       >
-                        <option value="view">View Only</option>
-                        <option value="edit">Can Edit</option>
-                      </select>
+                        <RoleIcon className="h-4 w-4" aria-hidden="true" />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="flex items-center justify-between gap-2">
+                          <span className="text-sm font-medium text-slate-900 dark:text-white">
+                            {roleOption.label}
+                          </span>
+                          {isSelected && (
+                            <Check className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                          )}
+                        </span>
+                        <span className="mt-0.5 block text-xs leading-5 text-slate-500 dark:text-slate-400">
+                          {roleOption.description}
+                        </span>
+                      </span>
+                    </button>
+
+                    {isSelected && (
+                      <label className="mt-3 block border-t border-blue-200 pt-3 text-xs font-medium text-slate-600 dark:border-blue-900/70 dark:text-slate-300">
+                        Permission
+                        <select
+                          value={roleShare.permission}
+                          onChange={(event) =>
+                            updateRolePermission(
+                              roleOption.value,
+                              event.target.value,
+                            )
+                          }
+                          className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                        >
+                          <option value="view">Can view</option>
+                          <option value="edit">Can edit</option>
+                        </select>
+                      </label>
                     )}
                   </div>
                 );
               })}
             </div>
-          </div>
+          </section>
 
-          {/* Share with Specific Users */}
-          <div>
-            <h4 className="text-sm font-medium text-gray-300 mb-3 flex items-center gap-2">
-              <UserPlus className="w-4 h-4 text-green-400" />
-              Share with Specific Users
-            </h4>
+          <section aria-labelledby="share-people-heading">
+            <div className="mb-3">
+              <h3
+                id="share-people-heading"
+                className="text-sm font-semibold text-slate-900 dark:text-white"
+              >
+                Share with people
+              </h3>
+              <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+                Add individual team members for more precise access.
+              </p>
+            </div>
 
-            {/* Search */}
-            <input
-              type="text"
-              placeholder="Search users..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full mb-3 px-4 py-2 bg-[#0f1419] border border-[#232945] rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
-            />
+            <label className="relative block">
+              <span className="sr-only">Search people</span>
+              <Search
+                className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+                aria-hidden="true"
+              />
+              <input
+                type="search"
+                value={searchTerm}
+                onChange={(event) => setSearchTerm(event.target.value)}
+                placeholder="Search by name, email or employee ID"
+                className="w-full rounded-xl border border-slate-300 bg-white py-2.5 pl-10 pr-4 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+              />
+            </label>
 
-            {/* User List */}
-            <div className="space-y-2 max-h-64 overflow-y-auto">
-              {filteredUsers.length === 0 ? (
-                <p className="text-sm text-gray-500 text-center py-4">
-                  No users found
-                </p>
+            <div className="mt-3 max-h-72 space-y-2 overflow-y-auto pr-1">
+              {isFetchingUsers ? (
+                <div className="flex items-center justify-center gap-2 rounded-xl border border-slate-200 py-10 text-sm text-slate-500 dark:border-slate-800 dark:text-slate-400">
+                  <LoaderCircle className="h-4 w-4 animate-spin" />
+                  Loading people...
+                </div>
+              ) : filteredUsers.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-slate-300 py-10 text-center dark:border-slate-700">
+                  <Users className="mx-auto h-6 w-6 text-slate-400" />
+                  <p className="mt-2 text-sm font-medium text-slate-700 dark:text-slate-200">
+                    No people found
+                  </p>
+                  <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                    Try a different name, email or employee ID.
+                  </p>
+                </div>
               ) : (
                 filteredUsers.map((user) => {
-                  const userShare = selectedUsers.find((u) => u.userId === user._id);
-                  const isSelected = !!userShare;
+                  const userShare = selectedUsers.find(
+                    (share) => share.userId === user._id,
+                  );
+                  const isSelected = Boolean(userShare);
+                  const detail = [user.email, user.employeeId]
+                    .filter(Boolean)
+                    .join(" · ");
+
                   return (
-                    <div key={user._id} className="flex items-center gap-2">
+                    <div
+                      key={user._id}
+                      className={`rounded-xl border p-3 transition sm:flex sm:items-center sm:gap-3 ${
+                        isSelected
+                          ? "border-blue-300 bg-blue-50 dark:border-blue-700 dark:bg-blue-950/30"
+                          : "border-slate-200 bg-white hover:border-slate-300 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-slate-700"
+                      }`}
+                    >
                       <button
+                        type="button"
                         onClick={() => toggleUserSelection(user._id)}
-                        className={`flex-1 flex items-center gap-3 p-3 rounded-lg border transition-all ${
-                          isSelected
-                            ? "border-green-500 bg-green-500/20"
-                            : "border-[#232945] bg-[#0f1419] hover:border-green-500/50"
-                        }`}
+                        aria-pressed={isSelected}
+                        className="flex min-w-0 flex-1 items-center gap-3 text-left"
                       >
-                        <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white font-medium">
-                          {user.name?.charAt(0).toUpperCase() || "?"}
-                        </div>
-                        <div className="flex-1 text-left">
-                          <p
-                            className={`text-sm font-medium ${
-                              isSelected ? "text-green-300" : "text-gray-300"
-                            }`}
-                          >
-                            {user.name}
-                          </p>
-                          <p className="text-xs text-gray-500">
-                            {user.email} • {user.employeeId}
-                          </p>
-                        </div>
-                        {isSelected && <Check className="w-5 h-5 text-green-400" />}
+                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-sm font-semibold text-white">
+                          {user.name?.trim()?.charAt(0)?.toUpperCase() || "?"}
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="flex items-center gap-2">
+                            <span className="truncate text-sm font-medium text-slate-900 dark:text-white">
+                              {user.name || "Unnamed user"}
+                            </span>
+                            {isSelected && (
+                              <Check className="h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />
+                            )}
+                          </span>
+                          {detail && (
+                            <span className="mt-0.5 block truncate text-xs text-slate-500 dark:text-slate-400">
+                              {detail}
+                            </span>
+                          )}
+                        </span>
                       </button>
+
                       {isSelected && (
-                        <select
-                          value={userShare.permission}
-                          onChange={(e) => updateUserPermission(user._id, e.target.value)}
-                          onClick={(e) => e.stopPropagation()}
-                          className="px-3 py-2 bg-[#0f1419] border border-[#232945] rounded-lg text-white text-sm focus:outline-none focus:border-green-500"
-                        >
-                          <option value="view">View Only</option>
-                          <option value="edit">Can Edit</option>
-                        </select>
+                        <label className="mt-3 block text-xs font-medium text-slate-600 sm:mt-0 sm:w-32 dark:text-slate-300">
+                          <span className="sr-only">Permission for {user.name}</span>
+                          <select
+                            value={userShare.permission}
+                            onChange={(event) =>
+                              updateUserPermission(user._id, event.target.value)
+                            }
+                            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                          >
+                            <option value="view">Can view</option>
+                            <option value="edit">Can edit</option>
+                          </select>
+                        </label>
                       )}
                     </div>
                   );
                 })
               )}
             </div>
+          </section>
+        </div>
+
+        <footer className="flex flex-col-reverse gap-3 border-t border-slate-200 bg-slate-50 px-5 py-4 dark:border-slate-800 dark:bg-slate-950/50 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            {selectedCount === 0
+              ? "Only you can access this sheet."
+              : `${selectedCount} ${selectedCount === 1 ? "recipient" : "recipients"} selected`}
+          </p>
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={isSaving}
+              className="flex-1 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800 sm:flex-none"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleShare}
+              disabled={isSaving}
+              className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60 sm:flex-none"
+            >
+              {isSaving ? (
+                <LoaderCircle className="h-4 w-4 animate-spin" />
+              ) : (
+                <Check className="h-4 w-4" />
+              )}
+              {isSaving ? "Saving..." : "Save sharing"}
+            </button>
           </div>
-
-          {/* Currently Shared Info */}
-          {(sheet.sharedWith?.length > 0 || sheet.sharedWithRoles?.length > 0) && (
-            <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
-              <h5 className="text-sm font-medium text-blue-300 mb-2">
-                Currently Shared With:
-              </h5>
-              <div className="text-xs text-blue-200 space-y-1">
-                {sheet.sharedWithRoles?.map((share, idx) => (
-                  <p key={idx}>
-                    • Role: <span className="font-medium capitalize">{share.role}</span>
-                  </p>
-                ))}
-                {sheet.sharedWith?.map((share, idx) => (
-                  <p key={idx}>
-                    • User: <span className="font-medium">{share.user?.name || "Unknown"}</span>
-                  </p>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Footer */}
-        <div className="p-6 border-t border-[#232945] flex gap-3">
-          <button
-            onClick={onClose}
-            className="flex-1 px-4 py-2 bg-[#0f1419] border border-[#232945] text-white rounded-lg hover:bg-[#141a21] transition-colors"
-            disabled={loading}
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleShare}
-            disabled={loading}
-            className="flex-1 px-4 py-2 bg-gradient-to-r from-green-600 to-blue-600 text-white rounded-lg hover:from-green-700 hover:to-blue-700 transition-all font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {loading ? "Sharing..." : "Share Sheet"}
-          </button>
-        </div>
+        </footer>
       </div>
     </div>
   );

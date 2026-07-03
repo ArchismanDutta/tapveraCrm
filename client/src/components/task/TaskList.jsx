@@ -1,59 +1,58 @@
 import React from "react";
+import { FaCheckCircle } from "react-icons/fa";
 import TaskItem from "./TaskItem";
 import TaskKanban from "./TaskKanban";
 
-const TaskList = ({ tasks, onStatusChange, onTaskUpdated, loading, viewMode = 'list', setViewMode }) => {
-  // Parent owns the task list; pass server-updated tasks straight up
+const TaskList = ({ tasks, onStatusChange, onTaskUpdated, loading, viewMode = "list" }) => {
   const handleTaskStatusUpdate = (updatedTask) => {
-    if (onTaskUpdated) onTaskUpdated(updatedTask);
+    onTaskUpdated?.(updatedTask);
   };
 
   if (loading) {
     return (
-      <div className="bg-[#181d2a] rounded-lg shadow-lg p-4 border border-blue-950">
-        <h3 className="font-semibold mb-4 text-blue-100">Tasks</h3>
-        <div className="flex items-center justify-center py-8">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#ff8000]"></div>
-          <span className="ml-3 text-blue-400">Loading tasks...</span>
-        </div>
+      <div className="space-y-3" aria-label="Loading tasks">
+        {[0, 1, 2].map((item) => (
+          <div
+            key={item}
+            className="h-28 animate-pulse rounded-2xl border border-slate-200 bg-white dark:border-white/10 dark:bg-white/[0.035]"
+          />
+        ))}
+      </div>
+    );
+  }
+
+  if (viewMode === "kanban") {
+    return (
+      <TaskKanban
+        tasks={tasks}
+        onStatusChange={onStatusChange}
+        onTaskUpdated={onTaskUpdated}
+        loading={loading}
+      />
+    );
+  }
+
+  if (!tasks?.length) {
+    return (
+      <div className="flex min-h-52 flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-6 text-center dark:border-white/10 dark:bg-white/[0.02]">
+        <span className="mb-3 grid h-10 w-10 place-items-center rounded-full bg-slate-200 text-slate-500 dark:bg-white/[0.07] dark:text-slate-400">
+          <FaCheckCircle size={16} />
+        </span>
+        <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">No tasks to show</p>
+        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Try changing the filters, or enjoy the clear list.</p>
       </div>
     );
   }
 
   return (
-    <div className="bg-[#181d2a] rounded-lg shadow-lg p-4 border border-blue-950">
-      <h3 className="font-semibold mb-4 text-blue-100">
-        Tasks {viewMode === 'kanban' ? '(Kanban View)' : '(List View)'}
-      </h3>
-
-      {viewMode === 'list' ? (
-        <div className="flex flex-col gap-4">
-          {tasks && tasks.length > 0 ? (
-            tasks.map((task, index) => (
-              <TaskItem
-                key={task._id || `task-${index}`}
-                task={task}
-                onStatusUpdated={handleTaskStatusUpdate}
-              />
-            ))
-          ) : (
-            <div className="text-center py-8 text-blue-400 font-medium bg-[#141a29] border border-blue-950 rounded-lg">
-              <p className="text-lg mb-2">📝 No Tasks Found</p>
-              <p className="text-sm opacity-75">
-                No tasks match the current filters
-              </p>
-            </div>
-          )}
-        </div>
-      ) : (
-        // Kanban view
-        <TaskKanban
-          tasks={tasks}
-          onStatusChange={onStatusChange}
-          onTaskUpdated={onTaskUpdated}
-          loading={loading}
+    <div className="space-y-3">
+      {tasks.map((task, index) => (
+        <TaskItem
+          key={task._id || `task-${index}`}
+          task={task}
+          onStatusUpdated={handleTaskStatusUpdate}
         />
-      )}
+      ))}
     </div>
   );
 };

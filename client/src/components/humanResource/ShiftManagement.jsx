@@ -4,6 +4,7 @@ import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import Sidebar from "../dashboard/Sidebar";
 import newAttendanceService from "../../services/newAttendanceService";
+import { useTheme } from "../../contexts/ThemeContext";
 import { 
   Clock, 
   Users, 
@@ -31,6 +32,7 @@ const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
 const USE_NEW_ATTENDANCE_SYSTEM = import.meta.env.VITE_USE_NEW_ATTENDANCE === 'true' || true;
 
 const ShiftManagement = ({ onLogout }) => {
+  const { theme } = useTheme();
   const [shifts, setShifts] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -1058,7 +1060,7 @@ const ShiftManagement = ({ onLogout }) => {
         </div>
       )}
 
-      <ToastContainer position="top-right" autoClose={3000} theme="dark" />
+      <ToastContainer position="top-right" autoClose={3000} theme={theme} />
     </div>
   );
 };

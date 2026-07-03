@@ -1,4 +1,41 @@
 import React from "react";
+import { Check, Download, FileText, Save, UserRound, X } from "lucide-react";
+
+const leaveTypeLabels = {
+  annual: "Annual leave",
+  paid: "Paid leave",
+  unpaid: "Unpaid leave",
+  sick: "Sick leave",
+  workFromHome: "Work from home",
+  maternity: "Maternity leave",
+  halfDay: "Half day",
+};
+
+const statusStyles = {
+  Pending:
+    "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-200",
+  Approved:
+    "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-200",
+  Rejected:
+    "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-400/20 dark:bg-rose-400/10 dark:text-rose-200",
+};
+
+const formatPeriod = (period) => {
+  if (!period.start || !period.end) return "N/A";
+  const start = new Date(period.start);
+  const end = new Date(period.end);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return "N/A";
+  const options = { day: "numeric", month: "short", year: "numeric" };
+  return `${start.toLocaleDateString("en-IN", options)} – ${end.toLocaleDateString("en-IN", options)}`;
+};
+
+const formatFileSize = (size) => {
+  if (!size) return "";
+  const kilobytes = Number.parseInt(size, 10) / 1024;
+  return kilobytes < 1024
+    ? `${kilobytes.toFixed(2)} KB`
+    : `${(kilobytes / 1024).toFixed(2)} MB`;
+};
 
 const LeaveRequestDetails = ({
   request,
@@ -10,232 +47,173 @@ const LeaveRequestDetails = ({
 }) => {
   if (!request) {
     return (
-      <div className="h-full flex flex-col items-center justify-center text-center space-y-6 p-6">
-        <div className="w-20 h-20 bg-gradient-to-br from-purple-500/20 to-pink-600/20 rounded-full flex items-center justify-center">
-          <svg className="w-10 h-10 text-purple-400" fill="currentColor" viewBox="0 0 20 20">
-            <path fillRule="evenodd" d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 0v12h8V4H6z" clipRule="evenodd" />
-          </svg>
-        </div>
-        <div>
-          <h3 className="text-xl font-semibold text-white mb-2">No Request Selected</h3>
-          <p className="text-gray-400 max-w-sm leading-relaxed">
-            Click on a leave request from the table to view detailed information and take action.
-          </p>
-        </div>
-        <div className="w-full max-w-xs h-1 bg-gradient-to-r from-purple-500/30 to-pink-600/30 rounded-full"></div>
+      <div className="flex min-h-[390px] flex-col items-center justify-center px-6 text-center">
+        <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-slate-100 text-slate-400 dark:bg-white/[0.05]">
+          <FileText className="h-5 w-5" />
+        </span>
+        <h3 className="mt-4 text-sm font-semibold text-slate-900 dark:text-white">
+          No request selected
+        </h3>
+        <p className="mt-1 max-w-xs text-sm text-slate-500 dark:text-slate-400">
+          Select a leave request from the queue to review its details.
+        </p>
       </div>
     );
   }
 
-  const { employee = {}, period = {}, type, reason, document, status, approvedBy } = request;
-
-  const leaveTypeLabels = {
-    annual: "Annual Leave",
-    paid: "Paid Leave",
-    unpaid: "Unpaid Leave",
-    sick: "Sick Leave",
-    workFromHome: "Work From Home",
-    maternity: "Maternity Leave",
-    halfDay: "Half Day",
-  };
-
-  const formatPeriod = (period) => {
-    if (!period.start || !period.end) return "N/A";
-    const start = new Date(period.start);
-    const end = new Date(period.end);
-    if (isNaN(start.getTime()) || isNaN(end.getTime())) return "N/A";
-
-    const options = {
-      month: 'short',
-      day: 'numeric',
-      year: start.getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined
-    };
-
-    return `${start.toLocaleDateString('en-US', options)} - ${end.toLocaleDateString('en-US', options)}`;
-  };
-
-  const formatFileSize = (size) => {
-    if (!size) return "";
-    const kb = parseInt(size) / 1024;
-    if (kb < 1024) return `${kb.toFixed(2)} KB`;
-    return `${(kb / 1024).toFixed(2)} MB`;
-  };
-
-  const getStatusColor = (status) => {
-    switch (status) {
-      case "Pending": return "bg-yellow-500/20 text-yellow-300 border border-yellow-500/30";
-      case "Approved": return "bg-green-500/20 text-green-300 border border-green-500/30";
-      case "Rejected": return "bg-red-500/20 text-red-300 border border-red-500/30";
-      default: return "bg-gray-500/20 text-gray-300 border border-gray-500/30";
-    }
-  };
+  const {
+    employee = {},
+    period = {},
+    type,
+    reason,
+    document,
+    status,
+    approvedBy,
+  } = request;
 
   return (
     <div className="space-y-4">
-      {/* Employee Info */}
-      <div className="bg-slate-800/30 border border-slate-600/30 rounded-2xl p-4 hover:border-purple-500/30 transition-all duration-300">
-        <div className="flex items-center space-x-4">
-          <img
-            src={employee.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(employee.name || 'Unknown')}&background=6366f1&color=ffffff`}
-            alt={employee.name || "Employee"}
-            className="w-12 h-12 rounded-full object-cover border-2 border-purple-400/50 shadow-lg"
-          />
-          <div className="flex-1 min-w-0">
-            <h3 className="text-lg font-bold text-white truncate">{employee.name || "Unknown Employee"}</h3>
-            <p className="text-purple-300 text-sm truncate">{employee.email || "-"}</p>
-            <div className="flex items-center space-x-3 mt-1 text-xs text-gray-400">
-              <span>
-                <span className="text-gray-500">Dept:</span> {employee.department || "-"}
-              </span>
-              <span>
-                <span className="text-gray-500">Role:</span> {employee.designation || "-"}
-              </span>
-            </div>
-          </div>
+      <div className="flex items-center gap-3 rounded-xl border border-slate-200 p-4 dark:border-white/10">
+        <img
+          src={
+            employee.avatar ||
+            `https://ui-avatars.com/api/?name=${encodeURIComponent(
+              employee.name || "Unknown",
+            )}&background=6366f1&color=ffffff`
+          }
+          alt={employee.name || "Employee"}
+          className="h-11 w-11 rounded-full object-cover"
+        />
+        <div className="min-w-0 flex-1">
+          <h3 className="truncate text-sm font-semibold text-slate-900 dark:text-white">
+            {employee.name || "Unknown employee"}
+          </h3>
+          <p className="truncate text-xs text-slate-500 dark:text-slate-400">
+            {employee.email || "—"}
+          </p>
+          <p className="mt-1 truncate text-[11px] text-slate-500 dark:text-slate-400">
+            {employee.department || "No department"} · {employee.designation || "No designation"}
+          </p>
         </div>
       </div>
 
-      {/* Leave Details */}
-      <div className="bg-slate-800/30 border border-slate-600/30 rounded-2xl p-4 space-y-3 hover:border-purple-500/30 transition-all duration-300">
-        <h4 className="text-lg font-semibold text-white mb-3">Leave Information</h4>
-
-        {/* Status Badge */}
-        <div className="flex items-center justify-between">
-          <span className="text-gray-400 text-sm">Status:</span>
-          <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${getStatusColor(status)}`}>
-            {status === "Pending" && (
-              <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
-              </svg>
-            )}
-            {status === "Approved" && (
-              <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-              </svg>
-            )}
-            {status === "Rejected" && (
-              <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-              </svg>
-            )}
+      <div className="space-y-3 rounded-xl border border-slate-200 p-4 dark:border-white/10">
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-xs text-slate-500 dark:text-slate-400">Status</span>
+          <span
+            className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${
+              statusStyles[status] ||
+              "border-slate-200 bg-slate-100 text-slate-600 dark:border-white/10 dark:bg-white/[0.05] dark:text-slate-300"
+            }`}
+          >
             {status}
           </span>
         </div>
-
-        <div className="space-y-3">
-          <div className="flex justify-between items-center">
-            <span className="text-gray-400 text-sm">Leave Type:</span>
-            <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-500/20 text-blue-300 border border-blue-500/30">
-              {leaveTypeLabels[type] || type || "-"}
-            </span>
-          </div>
-
-          <div className="flex justify-between items-center">
-            <span className="text-gray-400 text-sm">Duration:</span>
-            <span className="text-white font-medium text-sm">{formatPeriod(period)}</span>
-          </div>
-
-          <div className="flex flex-col space-y-2">
-            <span className="text-gray-400 text-sm">Reason:</span>
-            <div className="bg-slate-700/30 rounded-lg p-3 max-h-20 overflow-y-auto">
-              <p className="text-white text-xs leading-relaxed">{reason || "No reason provided"}</p>
-            </div>
-          </div>
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-xs text-slate-500 dark:text-slate-400">Leave type</span>
+          <span className="rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700 dark:border-blue-400/20 dark:bg-blue-400/10 dark:text-blue-200">
+            {leaveTypeLabels[type] || type || "—"}
+          </span>
+        </div>
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-xs text-slate-500 dark:text-slate-400">Duration</span>
+          <span className="text-right text-xs font-medium text-slate-700 dark:text-slate-200">
+            {formatPeriod(period)}
+          </span>
+        </div>
+        <div className="border-t border-slate-200 pt-3 dark:border-white/10">
+          <p className="text-xs text-slate-500 dark:text-slate-400">Reason</p>
+          <p className="mt-1.5 rounded-lg bg-slate-50 p-3 text-xs leading-5 text-slate-700 dark:bg-white/[0.035] dark:text-slate-200">
+            {reason || "No reason provided"}
+          </p>
         </div>
       </div>
 
-      {/* Supporting Document */}
       {document?.url && (
-        <div className="bg-slate-800/30 border border-slate-600/30 rounded-2xl p-4 hover:border-purple-500/30 transition-all duration-300">
-          <h4 className="text-sm font-semibold text-white mb-3">Supporting Document</h4>
-          <div className="bg-slate-700/30 rounded-lg p-3 flex items-center justify-between">
-            <div className="flex items-center space-x-3 min-w-0 flex-1">
-              <div className="w-8 h-8 bg-purple-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
-                <svg className="w-4 h-4 text-purple-400" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 0v12h8V4H6z" clipRule="evenodd" />
-                </svg>
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-white font-medium text-sm truncate">{document.name || "Document"}</p>
-                <p className="text-gray-400 text-xs">{formatFileSize(document.size)}</p>
-              </div>
+        <div className="rounded-xl border border-slate-200 p-4 dark:border-white/10">
+          <p className="text-xs font-semibold text-slate-700 dark:text-slate-200">
+            Supporting document
+          </p>
+          <div className="mt-3 flex items-center gap-3 rounded-lg bg-slate-50 p-3 dark:bg-white/[0.035]">
+            <FileText className="h-4 w-4 shrink-0 text-blue-600 dark:text-blue-300" />
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-xs font-medium text-slate-700 dark:text-slate-200">
+                {document.name || "Document"}
+              </p>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                {formatFileSize(document.size)}
+              </p>
             </div>
             <a
               href={document.url}
               target="_blank"
               rel="noopener noreferrer"
               download={document.name}
-              className="bg-purple-600 hover:bg-purple-700 text-white px-3 py-1 rounded-lg text-xs font-medium transition-all duration-200 hover:scale-105 flex-shrink-0"
+              className="rounded-lg border border-slate-200 bg-white p-2 text-slate-600 transition hover:bg-slate-50 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300"
+              aria-label="Download supporting document"
             >
-              Download
+              <Download className="h-4 w-4" />
             </a>
           </div>
         </div>
       )}
 
-      {/* Approved By */}
       {status === "Approved" && approvedBy && (
-        <div className="bg-green-500/10 border border-green-500/30 rounded-2xl p-4">
-          <h4 className="text-sm font-semibold text-green-300 mb-3">Approved By</h4>
-          <div className="flex items-center space-x-3">
-            <div className="w-8 h-8 bg-green-500/20 rounded-full flex items-center justify-center">
-              <svg className="w-4 h-4 text-green-400" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
-              </svg>
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-green-300 font-semibold text-sm truncate">{approvedBy.name || "Unknown"}</p>
-              <p className="text-green-200 text-xs truncate">{approvedBy.email || "-"}</p>
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-400/20 dark:bg-emerald-400/10">
+          <div className="flex items-center gap-3">
+            <UserRound className="h-4 w-4 text-emerald-600 dark:text-emerald-300" />
+            <div className="min-w-0">
+              <p className="text-xs font-semibold text-emerald-800 dark:text-emerald-200">
+                Approved by {approvedBy.name || "Unknown"}
+              </p>
+              <p className="truncate text-[11px] text-emerald-700 dark:text-emerald-300">
+                {approvedBy.email || "—"}
+              </p>
             </div>
           </div>
         </div>
       )}
 
-      {/* Admin Remarks */}
-      <div className="bg-slate-800/30 border border-slate-600/30 rounded-2xl p-4 hover:border-purple-500/30 transition-all duration-300">
-        <div className="flex items-center justify-between mb-3">
-          <h4 className="text-sm font-semibold text-white">Admin Remarks</h4>
+      <div className="rounded-xl border border-slate-200 p-4 dark:border-white/10">
+        <div className="mb-2 flex items-center justify-between gap-3">
+          <label htmlFor="admin-remarks" className="text-xs font-semibold text-slate-700 dark:text-slate-200">
+            Admin remarks
+          </label>
           {onSaveRemarks && (
             <button
               type="button"
               onClick={() => onSaveRemarks(request._id)}
-              className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded-lg transition-colors"
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-600 hover:text-blue-700 dark:text-blue-300"
             >
-              Save Remarks
+              <Save className="h-3.5 w-3.5" /> Save
             </button>
           )}
         </div>
         <textarea
+          id="admin-remarks"
           value={adminRemarks}
-          onChange={(e) => onChangeRemarks(e.target.value)}
-          className="w-full bg-slate-700/50 border border-slate-600/50 rounded-xl p-3 text-white placeholder-gray-400 focus:ring-2 focus:ring-purple-400 focus:border-purple-400 outline-none transition-all duration-300 resize-none text-sm"
-          placeholder="Add your remarks here..."
+          onChange={(event) => onChangeRemarks(event.target.value)}
+          className="w-full resize-none rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 dark:border-white/10 dark:bg-white/[0.035] dark:text-white"
+          placeholder="Add remarks for this request"
           rows={3}
         />
       </div>
 
-      {/* Actions */}
       {status !== "Approved" && status !== "Rejected" && (
-        <div className="flex gap-3 pt-2">
+        <div className="grid grid-cols-2 gap-3">
           <button
             type="button"
-            className="flex-1 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white font-semibold py-2 px-4 rounded-xl transition-all duration-200 hover:scale-105 hover:shadow-lg hover:shadow-green-500/25 flex items-center justify-center space-x-2 text-sm"
             onClick={() => onApprove(request._id)}
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 text-sm font-semibold text-white transition hover:bg-emerald-700"
           >
-            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-            </svg>
-            <span>Approve</span>
+            <Check className="h-4 w-4" /> Approve
           </button>
           <button
             type="button"
-            className="flex-1 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white font-semibold py-2 px-4 rounded-xl transition-all duration-200 hover:scale-105 hover:shadow-lg hover:shadow-red-500/25 flex items-center justify-center space-x-2 text-sm"
             onClick={() => onReject(request._id)}
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-rose-600 px-4 text-sm font-semibold text-white transition hover:bg-rose-700"
           >
-            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-            </svg>
-            <span>Reject</span>
+            <X className="h-4 w-4" /> Reject
           </button>
         </div>
       )}

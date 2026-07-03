@@ -1,13 +1,15 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   AlertCircle,
-  IndianRupee,
-  XCircle,
   CheckCircle,
   Clock,
-  Search,
+  CreditCard,
   Filter,
+  IndianRupee,
   RefreshCw,
+  Search,
+  Users,
+  XCircle,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import Sidebar from "../dashboard/Sidebar";
@@ -16,39 +18,49 @@ import PendingPaymentsModal from "./PendingPaymentsModal";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
+const performanceStyles = {
+  excellent:
+    "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-200",
+  good: "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-200",
+  attention:
+    "border-orange-200 bg-orange-50 text-orange-700 dark:border-orange-400/20 dark:bg-orange-400/10 dark:text-orange-200",
+  critical:
+    "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-400/20 dark:bg-rose-400/10 dark:text-rose-200",
+};
+
+const getPerformance = (employee) => {
+  const total =
+    (employee.taskStats?.dueTasks || 0) +
+    (employee.taskStats?.rejectedTasks || 0);
+  if (total === 0) return { label: "Excellent", style: performanceStyles.excellent };
+  if (total < 3) return { label: "Good", style: performanceStyles.good };
+  if (total < 5)
+    return { label: "Needs attention", style: performanceStyles.attention };
+  return { label: "Critical", style: performanceStyles.critical };
+};
+
 const EmployeePaymentManagement = ({ onLogout }) => {
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
-  const [filterBy, setFilterBy] = useState("all"); // all, dueTasks, rejectedTasks, hasPayment
+  const [filterBy, setFilterBy] = useState("all");
   const [selectedEmployee, setSelectedEmployee] = useState(null);
   const [showActivateModal, setShowActivateModal] = useState(false);
   const [showPendingPayments, setShowPendingPayments] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
-  useEffect(() => {
-    fetchEmployees();
-  }, []);
-
   const fetchEmployees = async () => {
     try {
       setLoading(true);
       const token = localStorage.getItem("token");
-
       const response = await fetch(`${API_URL}/api/payments/employees-stats`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { Authorization: `Bearer ${token}` },
       });
-
       const data = await response.json();
 
-      if (data.success) {
-        setEmployees(data.data);
-      } else {
-        toast.error(data.message || "Failed to fetch employees");
-      }
+      if (data.success) setEmployees(data.data);
+      else toast.error(data.message || "Failed to fetch employees");
     } catch (error) {
       console.error("Error fetching employees:", error);
       toast.error("Failed to fetch employee data");
@@ -57,6 +69,41 @@ const EmployeePaymentManagement = ({ onLogout }) => {
       setRefreshing(false);
     }
   };
+
+  useEffect(() => {
+    fetchEmployees();
+  }, []);
+
+  const filteredEmployees = useMemo(() => {
+    const query = searchTerm.trim().toLowerCase();
+    return employees.filter((employee) => {
+      const matchesSearch =
+        !query ||
+        employee.name?.toLowerCase().includes(query) ||
+        employee.employeeId?.toLowerCase().includes(query) ||
+        employee.email?.toLowerCase().includes(query);
+
+      if (!matchesSearch) return false;
+      if (filterBy === "dueTasks") return employee.taskStats?.dueTasks > 0;
+      if (filterBy === "rejectedTasks")
+        return employee.taskStats?.rejectedTasks > 0;
+      if (filterBy === "hasPayment") return employee.hasActivePayment;
+      return true;
+    });
+  }, [employees, filterBy, searchTerm]);
+
+  const stats = useMemo(
+    () => ({
+      total: employees.length,
+      due: employees.filter((employee) => employee.taskStats?.dueTasks > 0)
+        .length,
+      rejected: employees.filter(
+        (employee) => employee.taskStats?.rejectedTasks > 0,
+      ).length,
+      active: employees.filter((employee) => employee.hasActivePayment).length,
+    }),
+    [employees],
+  );
 
   const handleRefresh = () => {
     setRefreshing(true);
@@ -74,354 +121,328 @@ const EmployeePaymentManagement = ({ onLogout }) => {
     fetchEmployees();
   };
 
-  // Filter employees
-  const filteredEmployees = employees.filter((emp) => {
-    const matchesSearch =
-      emp.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      emp.employeeId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      emp.email.toLowerCase().includes(searchTerm.toLowerCase());
-
-    if (!matchesSearch) return false;
-
-    switch (filterBy) {
-      case "dueTasks":
-        return emp.taskStats.dueTasks > 0;
-      case "rejectedTasks":
-        return emp.taskStats.rejectedTasks > 0;
-      case "hasPayment":
-        return emp.hasActivePayment;
-      default:
-        return true;
-    }
-  });
-
-  const getPerformanceColor = (dueTasks, rejectedTasks) => {
-    const total = dueTasks + rejectedTasks;
-    if (total === 0) return "bg-green-500/20 text-green-400 border border-green-500/30";
-    if (total < 3) return "bg-yellow-500/20 text-yellow-400 border border-yellow-500/30";
-    if (total < 5) return "bg-orange-500/20 text-orange-400 border border-orange-500/30";
-    return "bg-red-500/20 text-red-400 border border-red-500/30";
-  };
-
-  const getPerformanceLabel = (dueTasks, rejectedTasks) => {
-    const total = dueTasks + rejectedTasks;
-    if (total === 0) return "Excellent";
-    if (total < 3) return "Good";
-    if (total < 5) return "Needs Attention";
-    return "Critical";
-  };
+  const summaryMetrics = [
+    ["Employees", stats.total, Users, "text-blue-600 dark:text-blue-300"],
+    ["Due tasks", stats.due, AlertCircle, "text-rose-600 dark:text-rose-300"],
+    [
+      "With rejections",
+      stats.rejected,
+      XCircle,
+      "text-orange-600 dark:text-orange-300",
+    ],
+    [
+      "Active payments",
+      stats.active,
+      CreditCard,
+      "text-violet-600 dark:text-violet-300",
+    ],
+  ];
 
   return (
-    <>
-      <div className="flex bg-[#0f1419] min-h-screen text-white relative overflow-hidden">
-        {/* Animated Background */}
-        <div className="absolute inset-0 bg-gradient-to-br from-slate-900/20 via-blue-900/10 to-purple-900/20"></div>
-        <div className="absolute inset-0">
-          <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-cyan-500/5 rounded-full blur-3xl animate-pulse"></div>
-          <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-purple-500/5 rounded-full blur-3xl animate-pulse"></div>
-        </div>
+    <div className="relative flex h-[100dvh] overflow-hidden bg-slate-50 text-slate-900 dark:bg-[#0b0d12] dark:text-slate-100">
+      <Sidebar
+        collapsed={sidebarCollapsed}
+        setCollapsed={setSidebarCollapsed}
+        userRole="super-admin"
+        onLogout={onLogout}
+      />
 
-        {/* Sidebar */}
-        <Sidebar
-          collapsed={sidebarCollapsed}
-          setCollapsed={setSidebarCollapsed}
-          userRole="super-admin"
-          onLogout={onLogout}
-        />
-
-        {/* Main Content */}
-        <main className={`relative z-10 flex-1 transition-all duration-300 ${sidebarCollapsed ? "ml-24" : "ml-72"} p-8`}>
-          {loading ? (
-            <div className="flex items-center justify-center min-h-screen">
-              <div className="text-center">
-                <div className="relative">
-                  <div className="w-16 h-16 border-4 border-cyan-300/40 rounded-full"></div>
-                  <div className="absolute top-0 left-0 w-16 h-16 border-4 border-cyan-600 border-t-transparent rounded-full animate-spin"></div>
+      <main
+        className={`h-[100dvh] min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 transition-all duration-300 sm:px-5 lg:px-6 ${
+          sidebarCollapsed ? "ml-16" : "ml-16 sm:ml-56"
+        }`}
+      >
+        <div className="mx-auto max-w-[1500px] space-y-4 pb-8 sm:space-y-5">
+          <header className="rounded-2xl border border-slate-200 bg-white px-5 py-5 shadow-sm dark:border-white/10 dark:bg-[#10131c] sm:px-6">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <div className="inline-flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 dark:border-blue-400/20 dark:bg-blue-400/10 dark:text-blue-200">
+                  <IndianRupee className="h-3.5 w-3.5" />
+                  Payment operations
                 </div>
-                <p className="mt-4 text-gray-300">Loading employee data...</p>
+                <h1 className="mt-3 text-2xl font-semibold tracking-tight text-slate-950 dark:text-white">
+                  Employee payments
+                </h1>
+                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                  Review employee task status, activate payment requests, and process pending payments.
+                </p>
               </div>
-            </div>
-          ) : (
-            <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-5xl font-bold mb-2">
-            <span className="bg-gradient-to-r from-emerald-400 via-cyan-400 to-blue-400 bg-clip-text text-transparent">
-              Employee Payment Management
-            </span>
-          </h1>
-          <p className="text-xl text-gray-300">
-            Monitor employee performance and manage payment QR codes
-          </p>
-        </div>
-
-        {/* Action Bar */}
-        <div className="bg-slate-700/30 backdrop-blur-sm border border-slate-600/30 rounded-xl shadow-lg p-6 mb-6">
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-            {/* Search */}
-            <div className="relative flex-1 max-w-md">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-              <input
-                type="text"
-                placeholder="Search by name, ID, or email..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-3 bg-slate-800/50 border border-slate-600/30 text-gray-200 placeholder-gray-500 rounded-xl focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition-all"
-              />
-            </div>
-
-            {/* Filter */}
-            <div className="flex items-center gap-3">
-              <Filter className="text-gray-400 w-5 h-5" />
-              <select
-                value={filterBy}
-                onChange={(e) => setFilterBy(e.target.value)}
-                className="px-4 py-3 bg-slate-800/50 border border-slate-600/30 text-gray-200 rounded-xl focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition-all"
-              >
-                <option value="all">All Employees</option>
-                <option value="dueTasks">Has Due Tasks</option>
-                <option value="rejectedTasks">Has Rejections</option>
-                <option value="hasPayment">Has Active Payment</option>
-              </select>
-
-              {/* Refresh Button */}
               <button
-                onClick={handleRefresh}
-                disabled={refreshing}
-                className="p-3 text-gray-300 hover:bg-slate-600/50 rounded-xl transition-all disabled:opacity-50 border border-slate-600/30"
-                title="Refresh data"
-              >
-                <RefreshCw
-                  className={`w-5 h-5 ${refreshing ? "animate-spin" : ""}`}
-                />
-              </button>
-
-              {/* Pending Payments Button */}
-              <button
+                type="button"
                 onClick={() => setShowPendingPayments(true)}
-                className="px-4 py-3 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white rounded-xl transition-all flex items-center gap-2 shadow-lg shadow-cyan-500/20"
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 text-sm font-semibold text-white transition hover:bg-blue-700"
               >
-                <Clock className="w-5 h-5" />
-                Pending Payments
+                <Clock className="h-4 w-4" />
+                Pending payments
+                {stats.active > 0 && (
+                  <span className="rounded-full bg-white/20 px-1.5 py-0.5 text-[10px]">
+                    {stats.active}
+                  </span>
+                )}
               </button>
             </div>
-          </div>
+          </header>
 
-          {/* Stats */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6 pt-6 border-t border-slate-600/30">
-            <div className="text-center">
-              <p className="text-3xl font-bold text-gray-100">
-                {employees.length}
-              </p>
-              <p className="text-sm text-gray-400 mt-1">Total Employees</p>
-            </div>
-            <div className="text-center">
-              <p className="text-3xl font-bold text-red-400">
-                {employees.filter((e) => e.taskStats.dueTasks > 0).length}
-              </p>
-              <p className="text-sm text-gray-400 mt-1">With Due Tasks</p>
-            </div>
-            <div className="text-center">
-              <p className="text-3xl font-bold text-orange-400">
-                {employees.filter((e) => e.taskStats.rejectedTasks > 0).length}
-              </p>
-              <p className="text-sm text-gray-400 mt-1">With Rejections</p>
-            </div>
-            <div className="text-center">
-              <p className="text-3xl font-bold text-cyan-400">
-                {employees.filter((e) => e.hasActivePayment).length}
-              </p>
-              <p className="text-sm text-gray-400 mt-1">Active Payments</p>
-            </div>
-          </div>
-        </div>
+          <section
+            className="grid grid-cols-2 gap-3 lg:grid-cols-4"
+            aria-label="Payment summary"
+          >
+            {summaryMetrics.map(([label, value, Icon, tone]) => (
+              <article
+                key={label}
+                className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-[#10131c]"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-medium text-slate-500 dark:text-slate-400">
+                      {label}
+                    </p>
+                    <p className="mt-1 text-2xl font-semibold text-slate-950 dark:text-white">
+                      {loading ? "—" : value}
+                    </p>
+                  </div>
+                  <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-100 dark:bg-white/[0.05]">
+                    {React.createElement(Icon, {
+                      className: `h-4 w-4 ${tone}`,
+                    })}
+                  </span>
+                </div>
+              </article>
+            ))}
+          </section>
 
-        {/* Employee Table */}
-        <div className="bg-slate-700/30 backdrop-blur-sm border border-slate-600/30 rounded-xl shadow-lg overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-slate-600/30">
-              <thead className="bg-slate-800/50">
-                <tr>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">
-                    Employee
-                  </th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">
-                    Department
-                  </th>
-                  <th className="px-6 py-4 text-center text-xs font-semibold text-gray-300 uppercase tracking-wider">
-                    Due Tasks
-                  </th>
-                  <th className="px-6 py-4 text-center text-xs font-semibold text-gray-300 uppercase tracking-wider">
-                    Rejections
-                  </th>
-                  <th className="px-6 py-4 text-center text-xs font-semibold text-gray-300 uppercase tracking-wider">
-                    Performance
-                  </th>
-                  <th className="px-6 py-4 text-center text-xs font-semibold text-gray-300 uppercase tracking-wider">
-                    Status
-                  </th>
-                  <th className="px-6 py-4 text-center text-xs font-semibold text-gray-300 uppercase tracking-wider">
-                    Action
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-slate-800/30 divide-y divide-slate-600/30">
-                {filteredEmployees.length === 0 ? (
-                  <tr>
-                    <td colSpan="7" className="px-6 py-8 text-center">
-                      <div className="flex flex-col items-center justify-center text-gray-400">
-                        <Search className="w-12 h-12 mb-2 opacity-50" />
-                        <p>No employees found</p>
-                      </div>
-                    </td>
-                  </tr>
-                ) : (
-                  filteredEmployees.map((employee) => (
-                    <tr
-                      key={employee._id}
-                      className="hover:bg-slate-700/50 transition-colors"
+          <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-white/10 dark:bg-[#10131c]">
+            <div className="border-b border-slate-200 p-4 dark:border-white/10 sm:p-5">
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                <div className="grid min-w-0 flex-1 gap-3 md:grid-cols-[minmax(0,1fr)_210px] lg:max-w-3xl">
+                  <label className="relative block">
+                    <span className="sr-only">Search employees</span>
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="search"
+                      value={searchTerm}
+                      onChange={(event) => setSearchTerm(event.target.value)}
+                      placeholder="Search name, ID, or email"
+                      className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 pl-10 pr-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-500/15 dark:border-white/10 dark:bg-white/[0.035] dark:text-white dark:focus:bg-white/[0.05]"
+                    />
+                  </label>
+                  <label className="relative block">
+                    <span className="sr-only">Filter employees</span>
+                    <Filter className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                    <select
+                      value={filterBy}
+                      onChange={(event) => setFilterBy(event.target.value)}
+                      className="h-10 w-full appearance-none rounded-xl border border-slate-200 bg-white pl-10 pr-8 text-sm text-slate-700 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 dark:border-white/10 dark:bg-[#151923] dark:text-slate-200"
                     >
-                      {/* Employee Info */}
-                      <td className="px-6 py-4">
-                        <div className="flex items-center">
-                          <div className="flex-shrink-0 h-10 w-10">
-                            <div className="h-10 w-10 rounded-full bg-gradient-to-br from-cyan-500/20 to-blue-500/20 border border-cyan-500/30 flex items-center justify-center">
-                              <span className="text-cyan-400 font-semibold">
-                                {employee.name.charAt(0).toUpperCase()}
-                              </span>
-                            </div>
-                          </div>
-                          <div className="ml-4">
-                            <div className="text-sm font-medium text-gray-200">
-                              {employee.name}
-                            </div>
-                            <div className="text-sm text-gray-400">
-                              {employee.employeeId}
-                            </div>
-                          </div>
-                        </div>
-                      </td>
-
-                      {/* Department */}
-                      <td className="px-6 py-4">
-                        <div className="text-sm text-gray-200 capitalize">
-                          {employee.department?.replace(/([A-Z])/g, " $1").trim()}
-                        </div>
-                        <div className="text-sm text-gray-400">
-                          {employee.designation}
-                        </div>
-                      </td>
-
-                      {/* Due Tasks */}
-                      <td className="px-6 py-4 text-center">
-                        <span
-                          className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
-                            employee.taskStats.dueTasks > 0
-                              ? "bg-red-500/20 text-red-400 border border-red-500/30"
-                              : "bg-green-500/20 text-green-400 border border-green-500/30"
-                          }`}
-                        >
-                          {employee.taskStats.dueTasks > 0 && (
-                            <AlertCircle className="w-4 h-4 mr-1" />
-                          )}
-                          {employee.taskStats.dueTasks}
-                        </span>
-                      </td>
-
-                      {/* Rejections */}
-                      <td className="px-6 py-4 text-center">
-                        <span
-                          className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
-                            employee.taskStats.rejectedTasks > 0
-                              ? "bg-orange-500/20 text-orange-400 border border-orange-500/30"
-                              : "bg-green-500/20 text-green-400 border border-green-500/30"
-                          }`}
-                        >
-                          {employee.taskStats.rejectedTasks > 0 && (
-                            <XCircle className="w-4 h-4 mr-1" />
-                          )}
-                          {employee.taskStats.rejectedTasks}
-                        </span>
-                      </td>
-
-                      {/* Performance */}
-                      <td className="px-6 py-4 text-center">
-                        <span
-                          className={`px-3 py-1 rounded-full text-xs font-semibold ${getPerformanceColor(
-                            employee.taskStats.dueTasks,
-                            employee.taskStats.rejectedTasks
-                          )}`}
-                        >
-                          {getPerformanceLabel(
-                            employee.taskStats.dueTasks,
-                            employee.taskStats.rejectedTasks
-                          )}
-                        </span>
-                      </td>
-
-                      {/* Status */}
-                      <td className="px-6 py-4 text-center">
-                        {employee.hasActivePayment ? (
-                          <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-yellow-500/20 text-yellow-400 border border-yellow-500/30">
-                            <Clock className="w-3 h-3 mr-1" />
-                            Payment Pending
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-gray-500/20 text-gray-400 border border-gray-500/30">
-                            <CheckCircle className="w-3 h-3 mr-1" />
-                            Normal
-                          </span>
-                        )}
-                      </td>
-
-                      {/* Action */}
-                      <td className="px-6 py-4 text-center">
-                        {employee.hasActivePayment ? (
-                          <button
-                            disabled
-                            className="px-4 py-2 bg-gray-600/30 text-gray-500 rounded-xl cursor-not-allowed text-sm border border-gray-600/30"
-                          >
-                            QR Active
-                          </button>
-                        ) : (
-                          <button
-                            onClick={() => handleActivatePayment(employee)}
-                            className="px-4 py-2 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white rounded-xl transition-all text-sm flex items-center gap-2 mx-auto shadow-lg shadow-cyan-500/20"
-                          >
-                            <IndianRupee className="w-4 h-4" />
-                            Activate QR
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
+                      <option value="all">All employees</option>
+                      <option value="dueTasks">Has due tasks</option>
+                      <option value="rejectedTasks">Has rejections</option>
+                      <option value="hasPayment">Active payment</option>
+                    </select>
+                  </label>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleRefresh}
+                  disabled={refreshing}
+                  className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-200 dark:hover:bg-white/[0.07]"
+                >
+                  <RefreshCw
+                    className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`}
+                  />
+                  Refresh
+                </button>
+              </div>
+              <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">
+                Showing {filteredEmployees.length} of {employees.length} employees
+              </p>
             </div>
-          )}
-        </main>
 
-        {/* Activate Payment Modal */}
-        {showActivateModal && (
-          <ActivatePaymentModal
-            employee={selectedEmployee}
-            onClose={() => setShowActivateModal(false)}
-            onSuccess={handlePaymentActivated}
-          />
-        )}
+            {loading ? (
+              <div className="space-y-3 p-4 sm:p-5">
+                {[0, 1, 2, 3, 4].map((item) => (
+                  <div
+                    key={item}
+                    className="h-16 animate-pulse rounded-xl bg-slate-100 dark:bg-white/[0.04]"
+                  />
+                ))}
+              </div>
+            ) : filteredEmployees.length === 0 ? (
+              <div className="px-6 py-16 text-center">
+                <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-slate-100 text-slate-400 dark:bg-white/[0.05]">
+                  <Search className="h-5 w-5" />
+                </span>
+                <h2 className="mt-4 text-sm font-semibold text-slate-900 dark:text-white">
+                  No matching employees
+                </h2>
+                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                  Try changing the search term or payment filter.
+                </p>
+              </div>
+            ) : (
+              <>
+                <div className="space-y-3 p-4 md:hidden">
+                  {filteredEmployees.map((employee) => {
+                    const performance = getPerformance(employee);
+                    return (
+                      <article
+                        key={employee._id}
+                        className="rounded-xl border border-slate-200 p-4 dark:border-white/10"
+                      >
+                        <div className="flex items-start gap-3">
+                          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-sm font-semibold text-white">
+                            {employee.name?.charAt(0)?.toUpperCase() || "?"}
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-semibold text-slate-900 dark:text-white">
+                              {employee.name}
+                            </p>
+                            <p className="truncate text-xs text-slate-500 dark:text-slate-400">
+                              {employee.employeeId} · {employee.department || "No department"}
+                            </p>
+                          </div>
+                          <span className={`rounded-full border px-2 py-1 text-[11px] font-semibold ${performance.style}`}>
+                            {performance.label}
+                          </span>
+                        </div>
+                        <div className="mt-4 grid grid-cols-2 gap-3 border-t border-slate-200 pt-3 text-xs dark:border-white/10">
+                          <div>
+                            <span className="text-slate-500 dark:text-slate-400">Due tasks</span>
+                            <p className="mt-1 font-semibold text-slate-900 dark:text-white">
+                              {employee.taskStats?.dueTasks || 0}
+                            </p>
+                          </div>
+                          <div>
+                            <span className="text-slate-500 dark:text-slate-400">Rejections</span>
+                            <p className="mt-1 font-semibold text-slate-900 dark:text-white">
+                              {employee.taskStats?.rejectedTasks || 0}
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleActivatePayment(employee)}
+                          disabled={employee.hasActivePayment}
+                          className="mt-4 inline-flex h-9 w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-3 text-xs font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400 dark:disabled:bg-white/[0.05]"
+                        >
+                          {employee.hasActivePayment ? (
+                            <><Clock className="h-3.5 w-3.5" />Payment pending</>
+                          ) : (
+                            <><IndianRupee className="h-3.5 w-3.5" />Activate payment</>
+                          )}
+                        </button>
+                      </article>
+                    );
+                  })}
+                </div>
 
-        {/* Pending Payments Modal */}
-        {showPendingPayments && (
-          <PendingPaymentsModal
-            onClose={() => setShowPendingPayments(false)}
-            onPaymentUpdated={fetchEmployees}
-          />
-        )}
-      </div>
-    </>
+                <div className="hidden overflow-x-auto md:block">
+                  <table className="w-full min-w-[980px] text-left">
+                    <thead className="bg-slate-50 dark:bg-white/[0.02]">
+                      <tr className="border-b border-slate-200 dark:border-white/10">
+                        {["Employee", "Department", "Due tasks", "Rejections", "Performance", "Status", ""].map(
+                          (heading) => (
+                            <th
+                              key={heading || "actions"}
+                              className="px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400"
+                            >
+                              {heading}
+                            </th>
+                          ),
+                        )}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200 dark:divide-white/10">
+                      {filteredEmployees.map((employee) => {
+                        const performance = getPerformance(employee);
+                        return (
+                          <tr
+                            key={employee._id}
+                            className="transition hover:bg-slate-50 dark:hover:bg-white/[0.025]"
+                          >
+                            <td className="px-5 py-3.5">
+                              <div className="flex items-center gap-3">
+                                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-sm font-semibold text-white">
+                                  {employee.name?.charAt(0)?.toUpperCase() || "?"}
+                                </span>
+                                <div className="min-w-0">
+                                  <p className="truncate text-sm font-semibold text-slate-900 dark:text-white">
+                                    {employee.name}
+                                  </p>
+                                  <p className="truncate text-xs text-slate-500 dark:text-slate-400">
+                                    {employee.employeeId}
+                                  </p>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-5 py-3.5">
+                              <p className="text-sm text-slate-700 dark:text-slate-200">
+                                {employee.department?.replace(/([A-Z])/g, " $1").trim() || "—"}
+                              </p>
+                              <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+                                {employee.designation || "No designation"}
+                              </p>
+                            </td>
+                            <td className="px-5 py-3.5 text-center text-sm font-semibold text-slate-700 dark:text-slate-200">
+                              {employee.taskStats?.dueTasks || 0}
+                            </td>
+                            <td className="px-5 py-3.5 text-center text-sm font-semibold text-slate-700 dark:text-slate-200">
+                              {employee.taskStats?.rejectedTasks || 0}
+                            </td>
+                            <td className="px-5 py-3.5">
+                              <span className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${performance.style}`}>
+                                {performance.label}
+                              </span>
+                            </td>
+                            <td className="px-5 py-3.5">
+                              {employee.hasActivePayment ? (
+                                <span className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-700 dark:text-amber-300">
+                                  <Clock className="h-3.5 w-3.5" /> Payment pending
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-700 dark:text-emerald-300">
+                                  <CheckCircle className="h-3.5 w-3.5" /> Available
+                                </span>
+                              )}
+                            </td>
+                            <td className="px-5 py-3.5 text-right">
+                              <button
+                                type="button"
+                                onClick={() => handleActivatePayment(employee)}
+                                disabled={employee.hasActivePayment}
+                                className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-3 text-xs font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400 dark:disabled:bg-white/[0.05]"
+                              >
+                                <IndianRupee className="h-3.5 w-3.5" />
+                                {employee.hasActivePayment ? "QR active" : "Activate"}
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+          </section>
+        </div>
+      </main>
+
+      {showActivateModal && selectedEmployee && (
+        <ActivatePaymentModal
+          employee={selectedEmployee}
+          onClose={() => setShowActivateModal(false)}
+          onSuccess={handlePaymentActivated}
+        />
+      )}
+
+      {showPendingPayments && (
+        <PendingPaymentsModal
+          onClose={() => setShowPendingPayments(false)}
+          onPaymentUpdated={fetchEmployees}
+        />
+      )}
+    </div>
   );
 };
 

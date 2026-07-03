@@ -335,20 +335,6 @@ const MentionInput = forwardRef(({
         </div>
       )}
 
-      {/* Mentioned Users Pills (hidden by default, kept for reference) */}
-      {false && mentionedUsers.length > 0 && (
-        <div className="mt-2 flex flex-wrap gap-1">
-          {mentionedUsers.map((user) => (
-            <span
-              key={user._id}
-              className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-full"
-            >
-              <AtSign size={10} />
-              {user.name}
-            </span>
-          ))}
-        </div>
-      )}
     </div>
   );
 });

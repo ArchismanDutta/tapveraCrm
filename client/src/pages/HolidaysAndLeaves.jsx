@@ -6,13 +6,22 @@ import HolidayList from "../components/leaves/HolidayList";
 import TeamLeaveCalendar from "../components/leaves/TeamLeaveCalendar";
 import EditLeaveRequestModal from "../components/leaves/EditLeaveRequestModal";
 import Sidebar from "../components/dashboard/Sidebar";
+import { AlertCircle, CalendarDays, RefreshCw } from "lucide-react";
 import { fetchLeavesForEmployee, submitLeaveRequest, updateLeaveRequest } from "../api/leaveApi";
 import axios from "axios";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
 
 const MAX_REQUESTS = 4;
-const POLL_INTERVAL = 5000; // 5 seconds
+const POLL_INTERVAL = 30000;
+
+const getRequestedDays = (request) => {
+  if (request?.type === "halfDay") return 0.5;
+  const start = request?.period?.start ? new Date(request.period.start) : null;
+  const end = request?.period?.end ? new Date(request.period.end) : null;
+  if (!start || !end || Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return 0;
+  return Math.max(0, Math.floor((end - start) / 86400000) + 1);
+};
 
 const HolidaysAndLeaves = ({ onLogout }) => {
   const [collapsed, setCollapsed] = useState(false);
@@ -38,7 +47,7 @@ const HolidaysAndLeaves = ({ onLogout }) => {
     "All leaves should be applied at least 7 days in advance.",
     "Unconfirmed employees are only eligible for unpaid leaves.",
     "Leaves on Fridays or Mondays will lead to a club deduction with weekends too.",
-    "Sudden sick leave needs to reported the same day with supporting documents.",
+    "Sudden sick leave must be reported the same day with supporting documents.",
     "Uninformed leave of more than 3 days is regarded as absconding.",
     "Confirmed employees not taking leaves are eligible for encashment after 6 months.",
   ];
@@ -49,12 +58,12 @@ const HolidaysAndLeaves = ({ onLogout }) => {
       const data = await fetchLeavesForEmployee();
       const safeData = Array.isArray(data) ? data : [];
 
-      const takenLeaves = safeData.filter(
-        (r) => r.status === "Approved"
-      ).length;
-      const pendingLeaves = safeData.filter(
-        (r) => r.status === "Pending"
-      ).length;
+      const takenLeaves = safeData
+        .filter((request) => request.status === "Approved")
+        .reduce((total, request) => total + getRequestedDays(request), 0);
+      const pendingLeaves = safeData
+        .filter((request) => request.status === "Pending")
+        .reduce((total, request) => total + getRequestedDays(request), 0);
 
       setLeaveRequests(safeData.slice(0, MAX_REQUESTS));
       setLeaveSummary({
@@ -75,7 +84,8 @@ const HolidaysAndLeaves = ({ onLogout }) => {
     try {
       setLoadingHolidays(true);
       const res = await axios.get(`${API_BASE}/api/holidays?shift=ALL`);
-      const data = res.data.map((h) => ({
+      const source = Array.isArray(res.data) ? res.data : [];
+      const data = source.map((h) => ({
         name: h.name,
         date: new Date(h.date).toLocaleDateString("en-GB", {
           day: "numeric",
@@ -111,14 +121,15 @@ const HolidaysAndLeaves = ({ onLogout }) => {
 
       setLeaveRequests((prev) => [newLeave, ...prev].slice(0, MAX_REQUESTS));
       setLeaveSummary((prev) => ({
-        available: Math.max(0, prev.available - 1),
+        available: prev.available,
         taken: prev.taken,
-        pending: prev.pending + 1,
+        pending: prev.pending + getRequestedDays(newLeave),
       }));
       setErrorLeaves(null);
     } catch (err) {
       console.error(err);
       setErrorLeaves(err.message || "Failed to submit leave request");
+      throw err;
     }
   };
 
@@ -144,6 +155,8 @@ const HolidaysAndLeaves = ({ onLogout }) => {
         prev.map((req) => (req._id === leaveId ? updatedLeave : req))
       );
 
+      await loadLeaves();
+
       setErrorLeaves(null);
     } catch (err) {
       console.error("Failed to update leave request:", err);
@@ -151,23 +164,22 @@ const HolidaysAndLeaves = ({ onLogout }) => {
     }
   };
 
-  // Global loading/error
+  // Initial loading state
   if (loadingLeaves && loadingHolidays)
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#141a29] via-[#181d2a] to-[#1b2233] text-blue-100 font-medium text-lg">
-        Loading your leave and holiday data...
-      </div>
-    );
-  if (errorLeaves || errorHolidays)
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-[#141a29] via-[#181d2a] to-[#1b2233] text-red-600 font-semibold text-lg">
-        {errorLeaves && <p>Error fetching leaves: {errorLeaves}</p>}
-        {errorHolidays && <p>Error fetching holidays: {errorHolidays}</p>}
+      <div className="flex h-[100dvh] items-center justify-center bg-slate-50 dark:bg-[#0b0d12]">
+        <div className="text-center">
+          <div className="relative mx-auto h-14 w-14">
+            <div className="h-14 w-14 rounded-full border-2 border-blue-200 dark:border-blue-300/20" />
+            <div className="absolute inset-0 animate-spin rounded-full border-2 border-blue-600 border-t-transparent dark:border-blue-400" />
+          </div>
+          <p className="mt-4 text-sm font-medium text-slate-600 dark:text-slate-300">Preparing leave requests...</p>
+        </div>
       </div>
     );
 
   return (
-    <div className="flex bg-gradient-to-br from-[#141a29] via-[#181d2a] to-[#1b2233] min-h-screen font-sans text-blue-100">
+    <div className="relative flex h-[100dvh] overflow-hidden bg-slate-50 text-slate-900 dark:bg-[#0b0d12] dark:text-slate-100">
       <Sidebar
         collapsed={collapsed}
         setCollapsed={setCollapsed}
@@ -175,16 +187,40 @@ const HolidaysAndLeaves = ({ onLogout }) => {
         onLogout={onLogout}
       />
       <main
-        className={`flex-1 p-8 transition-all duration-300 overflow-y-auto ${
-          collapsed ? "ml-24" : "ml-72"
+        className={`relative z-10 h-[100dvh] min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 transition-all duration-300 [overscroll-behavior-y:auto] [scrollbar-gutter:stable] sm:px-5 lg:px-6 ${
+          collapsed ? "ml-16" : "ml-16 sm:ml-56"
         }`}
+        style={{ WebkitOverflowScrolling: "touch" }}
       >
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="mx-auto max-w-[1500px] space-y-4 pb-8 sm:space-y-5">
+          <header className="flex flex-col justify-between gap-4 rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm dark:border-white/10 dark:bg-[#10131c] sm:flex-row sm:items-center sm:px-6 sm:py-5">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-400/10 dark:text-blue-300"><CalendarDays className="h-5 w-5" /></div>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Time away</p>
+                <h1 className="text-2xl font-semibold tracking-tight text-slate-950 dark:text-white">Leave requests</h1>
+                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Plan leave, review requests, and keep team dates in view.</p>
+              </div>
+            </div>
+            <button type="button" onClick={() => { loadLeaves(); loadHolidays(); }} disabled={loadingLeaves || loadingHolidays} className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300 dark:hover:bg-white/[0.07]">
+              <RefreshCw className={`h-4 w-4 ${loadingLeaves || loadingHolidays ? "animate-spin" : ""}`} /> Refresh
+            </button>
+          </header>
+
+          {(errorLeaves || errorHolidays) && (
+            <div className="flex flex-col gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-400/20 dark:bg-rose-400/10 dark:text-rose-200">
+              <div className="flex items-center gap-2 font-medium"><AlertCircle className="h-4 w-4" /> Some leave information could not be loaded.</div>
+              {errorLeaves && <p className="text-xs">Requests: {errorLeaves}</p>}
+              {errorHolidays && <p className="text-xs">Holidays: {errorHolidays}</p>}
+            </div>
+          )}
+
+        <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,1.6fr)_minmax(320px,0.8fr)]">
           {/* Employee Leaves */}
-          <section className="lg:col-span-2 space-y-6">
+          <section className="space-y-4">
             <div>
-              <h2 className="text-2xl font-semibold text-blue-100 mb-4">
-                Your Leaves
+              <h2 className="mb-3 text-base font-semibold text-slate-950 dark:text-white">
+                Your leave balance
               </h2>
               <LeaveSummary
                 {...leaveSummary}
@@ -201,13 +237,14 @@ const HolidaysAndLeaves = ({ onLogout }) => {
           </section>
 
           {/* Team & Holidays */}
-          <section className="space-y-6">
-            <h2 className="text-2xl font-semibold text-blue-100 mb-4">
-              Team & Holidays
+          <section className="space-y-4">
+            <h2 className="text-base font-semibold text-slate-950 dark:text-white">
+              Team & holidays
             </h2>
-            <HolidayList holidays={holidays} />
+            <HolidayList holidays={holidays} loading={loadingHolidays} error={errorHolidays} />
             <TeamLeaveCalendar />
           </section>
+        </div>
         </div>
       </main>
 

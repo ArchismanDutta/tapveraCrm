@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useRef, useMemo, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { Calendar, Clock, AlertTriangle, CheckCircle, Filter, ChevronLeft, ChevronRight, CalendarDays, Timer, XCircle, Activity } from "lucide-react";
 import timeUtils from "../../utils/timeUtils";
@@ -23,7 +23,15 @@ const STATUS_COLOR = {
   default: "bg-gradient-to-br from-slate-600 to-slate-700 text-slate-300 border-slate-500",
 };
 
-const AttendanceCalendar = ({ data, onDateFilterChange, onMonthChange }) => {
+const EMPTY_CALENDAR_DATA = {
+  month: "January",
+  year: 1970,
+  startDayOfWeek: 0,
+  days: [],
+};
+
+const AttendanceCalendar = ({ data: providedData, onDateFilterChange, onMonthChange }) => {
+  const data = providedData || EMPTY_CALENDAR_DATA;
   const [selectedDay, setSelectedDay] = useState(null);
   const [showFilters, setShowFilters] = useState(false);
   const [viewMode, setViewMode] = useState('month'); // month, week, day
@@ -31,8 +39,6 @@ const AttendanceCalendar = ({ data, onDateFilterChange, onMonthChange }) => {
   const [showTooltip, setShowTooltip] = useState(false);
   const [tooltipPosition, setTooltipPosition] = useState(null);
   const containerRef = useRef(null);
-
-  if (!data) return null;
 
   const daysOfWeek = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   const monthIndex = new Date(`${data.month} 1, ${data.year}`).getMonth();
@@ -146,6 +152,8 @@ const AttendanceCalendar = ({ data, onDateFilterChange, onMonthChange }) => {
   }
 }, []);
 
+  if (!providedData) return null;
+
 
   const getStatusIcon = (status) => {
     switch (status) {
@@ -257,7 +265,7 @@ const AttendanceCalendar = ({ data, onDateFilterChange, onMonthChange }) => {
                     : 'bg-slate-600/50 text-gray-300 hover:bg-slate-500/50 hover:text-white'
                 }`}
               >
-                <Icon className="w-4 h-4" />
+                {React.createElement(Icon, { className: "h-4 w-4" })}
                 {label}
               </button>
             ))}

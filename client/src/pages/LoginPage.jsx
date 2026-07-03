@@ -38,13 +38,13 @@ const Login = ({ onLoginSuccess }) => {
 
       const data = await res.json();
 
-      console.log("Login response:", data);
-      console.log("User role from response:", data.user.role);
-      console.log("User type from response:", data.userType);
-
       if (!res.ok) {
         setError(data.message || "Invalid email or password.");
-        setLoading(false);
+        return;
+      }
+
+      if (!data?.token || !data?.user?.role) {
+        setError("The server returned an incomplete login response.");
         return;
       }
 
@@ -53,8 +53,6 @@ const Login = ({ onLoginSuccess }) => {
       localStorage.setItem("role", data.user.role);
 
       const role = data.user.role?.toLowerCase();
-      console.log("Normalized role for navigation:", role);
-
       // Redirect based on user role
       if (role === "client") {
         navigate("/client-portal");
@@ -65,7 +63,7 @@ const Login = ({ onLoginSuccess }) => {
       }
 
       if (onLoginSuccess) onLoginSuccess(data.token);
-    } catch (err) {
+    } catch {
       setError("Failed to connect to the server. Please try again.");
     } finally {
       setLoading(false);
@@ -122,7 +120,7 @@ const Login = ({ onLoginSuccess }) => {
           />
 
           {error && (
-            <div className="text-sm text-red-400 bg-red-900/40 border border-red-700 p-2 rounded-lg text-center">
+            <div className="rounded-lg border border-red-300 bg-red-50 p-2 text-center text-sm font-medium text-red-700 dark:border-red-700 dark:bg-red-900/40 dark:text-red-300">
               {error}
             </div>
           )}

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import Sidebar from "../components/dashboard/Sidebar";
 import InfoCard from "../components/profile/InfoCard";
 import StatCard from "../components/profile/StatCard";
@@ -58,6 +58,8 @@ import {
 const capitalize = (str) =>
   str ? str.charAt(0).toUpperCase() + str.slice(1) : "N/A";
 
+const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
+
 const MyProfile = ({ userType = "employee", onLogout }) => {
   const [profileData, setProfileData] = useState(null);
   const [collapsed, setCollapsed] = useState(false);
@@ -65,19 +67,16 @@ const MyProfile = ({ userType = "employee", onLogout }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editData, setEditData] = useState(null);
   const [activeTab, setActiveTab] = useState("overview");
-  const [attendanceData, setAttendanceData] = useState(null);
-  const [systemInfo, setSystemInfo] = useState(null);
+  const [error, setError] = useState("");
   const [showPayslipModal, setShowPayslipModal] = useState(false);
 
-  const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
-
-  const fetchProfile = async () => {
+  const fetchProfile = useCallback(async () => {
     try {
       setLoading(true);
+      setError("");
       const token = localStorage.getItem("token");
       if (!token) {
-        console.error("No token found in localStorage");
-        alert("You must be logged in to view this page.");
+        setError("Your session is unavailable. Please sign in again.");
         return;
       }
 
@@ -244,7 +243,7 @@ const MyProfile = ({ userType = "employee", onLogout }) => {
         attendanceInfo: [
           {
             label: "Current Status",
-            value: currentStatus.currentlyWorking ? "🟢 Working" : currentStatus.onBreak ? "🟡 On Break" : "🔴 Offline",
+            value: currentStatus.currentlyWorking ? "Working" : currentStatus.onBreak ? "On Break" : "Offline",
             icon: <FaClock className="text-blue-400" />,
           },
           {
@@ -276,13 +275,6 @@ const MyProfile = ({ userType = "employee", onLogout }) => {
         activities: [],
       });
 
-      // Set additional data
-      setAttendanceData(attendance);
-      setSystemInfo({
-        accountType: userType,
-        permissions: user.permissions || [],
-        lastUpdate: new Date().toISOString(),
-      });
     } catch (err) {
       console.error("Error fetching profile:", err);
       console.error("Error details:", {
@@ -294,29 +286,28 @@ const MyProfile = ({ userType = "employee", onLogout }) => {
 
       // Provide specific error messages based on status code
       if (err.response?.status === 401) {
-        alert("Session expired. Please log in again.");
         localStorage.removeItem("token");
         localStorage.removeItem("role");
         window.location.href = "/login";
       } else if (err.response?.status === 403) {
-        alert("You don't have permission to view this profile.");
+        setError("You do not have permission to view this profile.");
       } else if (err.response?.status === 404) {
-        alert("User profile not found. Please contact support.");
+        setError("Your employee profile could not be found.");
       } else if (err.response?.status >= 500) {
-        alert(`Server error (${err.response.status}). Please try again later or contact support.`);
+        setError("The profile service is unavailable right now. Please try again.");
       } else if (err.request && !err.response) {
-        alert("Network error. Please check your internet connection.");
+        setError("We could not reach the server. Check your connection and try again.");
       } else {
-        alert(`Failed to load profile: ${err.message || "Unknown error"}. Please try again.`);
+        setError("Your profile could not be loaded. Please try again.");
       }
     } finally {
       setLoading(false);
     }
-  };
+  }, [userType]);
 
   useEffect(() => {
     fetchProfile();
-  }, [userType]);
+  }, [fetchProfile]);
 
   const handleEditClick = () => {
     setEditData({
@@ -372,10 +363,37 @@ const MyProfile = ({ userType = "employee", onLogout }) => {
 
   if (loading || !profileData) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#141a29] via-[#181d2a] to-[#1b2233]">
-        <div className="text-blue-200 font-medium text-lg">
-          Loading profile...
-        </div>
+      <div className="app-shell">
+        <Sidebar
+          onLogout={onLogout}
+          collapsed={collapsed}
+          setCollapsed={setCollapsed}
+        />
+        <main className={`app-main flex h-[100dvh] items-center justify-center px-4 transition-all duration-300 ${
+          collapsed ? "ml-16" : "ml-16 sm:ml-56"
+        }`}>
+          <section className="app-panel w-full max-w-md p-6 text-center">
+            {loading ? (
+              <>
+                <div className="mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-2 border-slate-400/30 border-t-cyan-400" />
+                <h1 className="text-lg font-semibold text-[var(--app-text)]">Loading your profile</h1>
+                <p className="mt-2 text-sm text-[var(--app-subtle)]">Fetching your latest employee and attendance details.</p>
+              </>
+            ) : (
+              <>
+                <h1 className="text-lg font-semibold text-[var(--app-text)]">Profile unavailable</h1>
+                <p className="mt-2 text-sm text-[var(--app-subtle)]">{error || "Your profile could not be loaded."}</p>
+                <button
+                  type="button"
+                  onClick={fetchProfile}
+                  className="app-primary-button mt-5 h-10 px-5 text-sm font-semibold"
+                >
+                  Try again
+                </button>
+              </>
+            )}
+          </section>
+        </main>
       </div>
     );
   }
@@ -392,54 +410,54 @@ const MyProfile = ({ userType = "employee", onLogout }) => {
     switch (activeTab) {
       case "overview":
         return (
-          <div className="space-y-8">
+          <div className="space-y-5">
             {/* Stats Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-              <div className="bg-[#161c2c] rounded-xl shadow-md p-6 border border-[#232945]">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="app-panel p-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-gray-400 text-sm font-medium">Tasks Completed</p>
-                    <p className="text-3xl font-bold text-white mt-1">{profileData.stats.tasksCompleted}</p>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-[var(--app-subtle)]">Tasks completed</p>
+                    <p className="mt-1 text-2xl font-semibold text-[var(--app-text)]">{profileData.stats.tasksCompleted}</p>
                   </div>
-                  <FaCheckCircle className="text-4xl text-cyan-400" />
+                  <FaCheckCircle className="text-2xl text-cyan-400" />
                 </div>
               </div>
-              <div className="bg-[#161c2c] rounded-xl shadow-md p-6 border border-[#232945]">
+              <div className="app-panel p-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-gray-400 text-sm font-medium">Attendance Rate</p>
-                    <p className="text-3xl font-bold text-white mt-1">{profileData.stats.attendancePercent}%</p>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-[var(--app-subtle)]">Attendance rate</p>
+                    <p className="mt-1 text-2xl font-semibold text-[var(--app-text)]">{profileData.stats.attendancePercent}%</p>
                   </div>
-                  <FaChartLine className="text-4xl text-green-400" />
+                  <FaChartLine className="text-2xl text-green-400" />
                 </div>
               </div>
-              <div className="bg-[#161c2c] rounded-xl shadow-md p-6 border border-[#232945]">
+              <div className="app-panel p-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-gray-400 text-sm font-medium">Present Days</p>
-                    <p className="text-3xl font-bold text-white mt-1">{profileData.stats.presentDays}</p>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-[var(--app-subtle)]">Present days</p>
+                    <p className="mt-1 text-2xl font-semibold text-[var(--app-text)]">{profileData.stats.presentDays}</p>
                   </div>
-                  <FaCalendarCheck className="text-4xl text-purple-400" />
+                  <FaCalendarCheck className="text-2xl text-purple-400" />
                 </div>
               </div>
-              <div className="bg-[#161c2c] rounded-xl shadow-md p-6 border border-[#232945]">
+              <div className="app-panel p-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-gray-400 text-sm font-medium">On-Time Rate</p>
-                    <p className="text-3xl font-bold text-white mt-1">{profileData.stats.onTimeRate}</p>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-[var(--app-subtle)]">On-time rate</p>
+                    <p className="mt-1 text-2xl font-semibold text-[var(--app-text)]">{profileData.stats.onTimeRate}</p>
                   </div>
-                  <FaTrophy className="text-4xl text-orange-400" />
+                  <FaTrophy className="text-2xl text-orange-400" />
                 </div>
               </div>
             </div>
 
             {/* Quick Actions */}
-            <div className="bg-[#161c2c] rounded-xl shadow-md p-6 border border-[#232945]">
-              <h3 className="text-lg font-semibold text-white mb-4">Quick Actions</h3>
+            <div className="app-panel p-4">
+              <h3 className="mb-3 text-base font-semibold text-[var(--app-text)]">Quick actions</h3>
               <div className="flex flex-wrap gap-3">
                 <button
                   onClick={() => setShowPayslipModal(true)}
-                  className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white rounded-lg font-medium transition-all duration-200 hover:scale-105 shadow-lg hover:shadow-green-500/25"
+                  className="app-primary-button flex h-10 items-center gap-2 px-4 text-sm font-semibold"
                 >
                   <FaFileInvoiceDollar className="text-lg" />
                   View Payslip
@@ -470,22 +488,24 @@ const MyProfile = ({ userType = "employee", onLogout }) => {
       {/* Inject styles */}
       <style dangerouslySetInnerHTML={{ __html: fadeInStyle }} />
 
-      <div className="flex min-h-screen bg-[#0f1419] text-gray-100">
+      <div className="app-shell">
         <Sidebar
           onLogout={onLogout}
           collapsed={collapsed}
           setCollapsed={setCollapsed}
         />
-        <main className={`flex-1 p-8 transition-all duration-300 ${
-          collapsed ? "ml-24" : "ml-72"
+        <main className={`app-main h-[100dvh] overflow-y-auto px-3 py-4 transition-all duration-300 sm:px-5 lg:px-6 ${
+          collapsed ? "ml-16" : "ml-16 sm:ml-56"
         }`}>
         {/* Header */}
-        <h1 className="text-3xl font-bold text-white mb-6">
-          My Profile
-        </h1>
+        <header className="app-header mb-5">
+          <p className="app-eyebrow">Account</p>
+          <h1 className="app-title">My profile</h1>
+          <p className="app-description">Review your employment details and keep contact information current.</p>
+        </header>
 
         {/* Profile Header Card */}
-        <div className="bg-[#161c2c] rounded-xl shadow-md mb-6 p-6 border border-[#232945]">
+        <div className="app-panel mb-5 p-4 sm:p-6">
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
             <div className="flex items-center gap-6">
               <div className="relative">
@@ -500,8 +520,8 @@ const MyProfile = ({ userType = "employee", onLogout }) => {
                 }`}></div>
               </div>
               <div>
-                <h1 className="text-3xl font-bold text-white mb-2">{profileData.name}</h1>
-                <div className="flex flex-wrap items-center gap-4 text-gray-300">
+                <h2 className="mb-2 text-2xl font-semibold tracking-tight text-white">{profileData.name}</h2>
+                <div className="flex flex-wrap items-center gap-4 text-sm text-gray-300">
                   <span className="flex items-center gap-2">
                     <MdWork className="text-cyan-400" />
                     {profileData.designation}
@@ -522,13 +542,13 @@ const MyProfile = ({ userType = "employee", onLogout }) => {
             <div className="flex gap-3">
               <button
                 onClick={handleEditClick}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
+                className="app-primary-button flex h-10 items-center gap-2 px-4 text-sm font-semibold"
               >
                 <FaEdit /> Edit Profile
               </button>
               <button
                 onClick={fetchProfile}
-                className="flex items-center gap-2 px-4 py-2 bg-[#232945] hover:bg-[#2c3454] text-gray-200 rounded-lg font-medium transition-colors"
+                className="app-secondary-button flex h-10 items-center gap-2 px-4 text-sm font-semibold"
               >
                 <FaSync /> Refresh
               </button>
@@ -537,7 +557,7 @@ const MyProfile = ({ userType = "employee", onLogout }) => {
         </div>
 
         {isEditing ? (
-          <div className="bg-[#161c2c] rounded-xl shadow-md p-8 mx-auto w-full max-w-2xl border border-[#232945]">
+          <div className="app-panel mx-auto w-full max-w-2xl p-5 sm:p-8">
             <h2 className="text-2xl font-bold mb-6 text-white">
               Edit Profile
             </h2>

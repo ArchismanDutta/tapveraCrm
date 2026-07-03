@@ -17,7 +17,6 @@ import TaskTable from "../components/admintask/TaskTable";
 import TaskList from "../components/task/TaskList";
 import PaymentBlockOverlay from "../components/payment/PaymentBlockOverlay";
 import usePaymentCheck from "../hooks/usePaymentCheck";
-import { useWebSocketContext } from "../contexts/WebSocketContext";
 import API from "../api";
 import taskApi from "../api/taskApi";
 
@@ -34,19 +33,19 @@ const ADMIN_ROLES = ["admin", "super-admin"];
 const isAdmin = (r) => ADMIN_ROLES.includes(normalizeRole(r));
 const PAGE_SIZE = 10;
 
-const INPUT_CLS = "bg-[#0d1220] border border-[rgba(84,123,209,0.2)] rounded-xl text-white text-xs focus:outline-none focus:ring-2 focus:ring-cyan-500/40 cursor-pointer";
+const INPUT_CLS = "rounded-xl border border-slate-200 bg-white text-slate-700 text-xs outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 cursor-pointer dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-200";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Tab Bar (shared)
 // ─────────────────────────────────────────────────────────────────────────────
 const TabBar = ({ tabs, active, onChange }) => (
-  <div className="flex items-center gap-1 mb-6 bg-[#141c2e] border border-[rgba(84,123,209,0.15)] rounded-xl p-1 w-fit flex-wrap">
+  <div role="tablist" aria-label="Task views" className="mb-5 flex w-fit max-w-full items-center gap-1 overflow-x-auto rounded-xl border border-slate-200 bg-white p-1 shadow-sm dark:border-white/10 dark:bg-[#12151c]">
     {tabs.map((t) => (
-      <button key={t.id} onClick={() => onChange(t.id)}
-        className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap ${
+      <button key={t.id} type="button" role="tab" aria-selected={active === t.id} onClick={() => onChange(t.id)}
+        className={`flex items-center gap-2 whitespace-nowrap rounded-lg border px-4 py-2.5 text-xs font-medium transition ${
           active === t.id
-            ? "bg-gradient-to-r from-cyan-500/20 to-blue-600/20 text-cyan-400 border border-cyan-500/30"
-            : "text-gray-400 hover:text-gray-200 hover:bg-white/5"}`}>
+            ? "border-blue-600 bg-blue-600 text-white shadow-sm dark:border-blue-400/30 dark:bg-blue-500 dark:text-white"
+            : "border-transparent text-slate-500 hover:border-slate-200 hover:bg-slate-100 hover:text-slate-800 dark:text-slate-400 dark:hover:border-white/10 dark:hover:bg-white/[0.06] dark:hover:text-slate-100"}`}>
         {t.icon}<span>{t.label}</span>
       </button>
     ))}
@@ -339,7 +338,7 @@ const AllTasksPanel = ({ users, onEditTask, onRefreshStats }) => {
 
   const handleDelete = async (id) => {
     if (!window.confirm("Delete this task?")) return;
-    try { await taskApi.deleteTask(id); fetchTasks(page); onRefreshStats?.(); } catch {}
+    try { await taskApi.deleteTask(id); fetchTasks(page); onRefreshStats?.(); } catch (error) { console.error("Failed to delete task:", error); }
   };
 
   const clearFilters = () => setFilters({ search: "", status: "all", priority: "all", assignee: "all", dateFrom: "", dateTo: "" });
@@ -522,12 +521,34 @@ const ScopedTaskPanel = ({ scope, onTaskCreated }) => {
   const clearFilters = () => setFilters({ status: "all", priority: "all", search: "" });
   const hasFilter = filters.status !== "all" || filters.priority !== "all" || !!filters.search;
 
+  const toggleStatusPill = (status) => {
+    setFilters((current) => ({
+      ...current,
+      status:
+        current.status === status && current.priority === "all"
+          ? "all"
+          : status,
+      priority: "all",
+    }));
+  };
+
+  const toggleHighPill = () => {
+    setFilters((current) => ({
+      ...current,
+      status: "all",
+      priority:
+        current.priority === "High" && current.status === "all"
+          ? "all"
+          : "High",
+    }));
+  };
+
   const quickPills = [
     { label: "All", active: !hasFilter, onClick: clearFilters },
-    { label: "Pending", active: filters.status === "pending", onClick: () => setFilters((p) => ({ ...p, status: "pending" })) },
-    { label: "In Progress", active: filters.status === "in-progress", onClick: () => setFilters((p) => ({ ...p, status: "in-progress" })) },
-    { label: "High", active: filters.priority === "High", onClick: () => setFilters((p) => ({ ...p, priority: "High" })) },
-    { label: "Completed", active: filters.status === "completed", onClick: () => setFilters((p) => ({ ...p, status: "completed" })) },
+    { label: "Pending", active: filters.status === "pending" && filters.priority === "all", onClick: () => toggleStatusPill("pending") },
+    { label: "In Progress", active: filters.status === "in-progress" && filters.priority === "all", onClick: () => toggleStatusPill("in-progress") },
+    { label: "High", active: filters.priority === "High" && filters.status === "all", onClick: toggleHighPill },
+    { label: "Completed", active: filters.status === "completed" && filters.priority === "all", onClick: () => toggleStatusPill("completed") },
   ];
 
   // Mini stat counts (from current page only — good enough for a quick summary)
@@ -540,29 +561,27 @@ const ScopedTaskPanel = ({ scope, onTaskCreated }) => {
 
   return (
     <div className="space-y-4">
-      {/* Mini stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-white/10 dark:bg-[#12151c] sm:grid-cols-4">
         {[
-          { label: "Total", value: totalTasks, c: "text-blue-400", b: "border-blue-500/20" },
-          { label: "Pending", value: counts.pending, c: "text-yellow-400", b: "border-yellow-500/20" },
-          { label: "In Progress", value: counts.inProgress, c: "text-cyan-400", b: "border-cyan-500/20" },
-          { label: "Completed", value: counts.completed, c: "text-green-400", b: "border-green-500/20" },
+          { label: "Total", value: totalTasks, c: "text-slate-900 dark:text-slate-100" },
+          { label: "Pending", value: counts.pending, c: "text-amber-600 dark:text-amber-300" },
+          { label: "In progress", value: counts.inProgress, c: "text-blue-600 dark:text-blue-300" },
+          { label: "Completed", value: counts.completed, c: "text-emerald-600 dark:text-emerald-300" },
         ].map((s) => (
-          <div key={s.label} className={`bg-[#141c2e] border ${s.b} rounded-xl p-3 text-center`}>
-            <p className={`text-xl font-bold ${s.c}`}>{s.value}</p>
-            <p className="text-xs text-gray-500 mt-0.5">{s.label}</p>
+          <div key={s.label} className="border-b border-r border-slate-100 px-4 py-3 last:border-r-0 dark:border-white/[0.07] sm:border-b-0">
+            <p className="text-[11px] font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">{s.label}</p>
+            <p className={`mt-1 text-xl font-semibold ${s.c}`}>{s.value}</p>
           </div>
         ))}
       </div>
 
-      {/* Filters */}
-      <div className="bg-[#141c2e] border border-[rgba(84,123,209,0.15)] rounded-2xl p-4">
-        <div className="flex flex-col lg:flex-row gap-3 items-start lg:items-center justify-between">
-          <div className="relative flex-1 w-full max-w-xs">
-            <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={11} />
-            <input type="text" placeholder="Search tasks…" value={filters.search}
+      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-[#12151c]">
+        <div className="flex flex-col items-start justify-between gap-3 lg:flex-row lg:items-center">
+          <div className="relative w-full flex-1 lg:max-w-sm">
+            <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={11} />
+            <input type="text" placeholder="Search tasks..." value={filters.search}
               onChange={(e) => setFilters({ ...filters, search: e.target.value })}
-              className="w-full pl-8 pr-3 py-2 bg-[#0d1220] border border-[rgba(84,123,209,0.2)] rounded-xl text-white text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/40" />
+              className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-9 pr-3 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-500/15 dark:border-white/10 dark:bg-white/[0.035] dark:text-slate-100 dark:focus:bg-white/[0.05]" />
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             <select value={filters.status} onChange={(e) => setFilters({ ...filters, status: e.target.value })}
@@ -581,44 +600,41 @@ const ScopedTaskPanel = ({ scope, onTaskCreated }) => {
               <option value="Low">Low</option>
             </select>
             {hasFilter && (
-              <button onClick={clearFilters} className="px-3 py-2 bg-red-500/10 border border-red-500/25 text-red-400 rounded-xl text-xs hover:bg-red-500/20 transition">Clear</button>
+              <button onClick={clearFilters} className="rounded-xl px-3 py-2 text-xs font-medium text-rose-600 transition hover:bg-rose-50 dark:text-rose-300 dark:hover:bg-rose-500/10">Clear</button>
             )}
-            <button onClick={() => fetchTasks(page)} disabled={loading} className={`p-2 ${INPUT_CLS} hover:border-cyan-500/40 transition`}>
+            <button aria-label="Refresh tasks" onClick={() => fetchTasks(page)} disabled={loading} className={`p-2.5 ${INPUT_CLS}`}>
               <FaSync className={loading ? "animate-spin" : ""} size={11} />
             </button>
-            <button onClick={exportCSV} className={`p-2 ${INPUT_CLS} hover:border-green-500/40 transition`}>
+            <button aria-label="Export tasks" onClick={exportCSV} className={`p-2.5 ${INPUT_CLS}`}>
               <FaDownload size={11} />
             </button>
           </div>
         </div>
 
-        <div className="flex flex-wrap gap-1.5 mt-3">
+        <div className="mt-3 flex flex-wrap gap-1.5 border-t border-slate-100 pt-3 dark:border-white/[0.07]">
           {quickPills.map((qp) => (
-            <button key={qp.label} onClick={qp.onClick}
-              className={`px-3 py-1 rounded-full text-xs font-medium transition border ${
+            <button key={qp.label} type="button" aria-pressed={qp.active} onClick={qp.onClick}
+              className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${
                 qp.active
-                  ? "bg-cyan-500/20 border-cyan-500/40 text-cyan-300"
-                  : "bg-[#0d1220] border-[rgba(84,123,209,0.15)] text-gray-400 hover:border-cyan-500/30 hover:text-gray-200"}`}>
+                  ? "border-blue-600 bg-blue-600 text-white shadow-sm dark:border-blue-400 dark:bg-blue-500 dark:text-white"
+                  : "border-slate-200 bg-white text-slate-500 hover:border-slate-300 hover:text-slate-800 dark:border-white/10 dark:bg-white/[0.03] dark:text-slate-400 dark:hover:border-white/20 dark:hover:text-slate-100"}`}>
               {qp.label}
             </button>
           ))}
         </div>
 
-        <p className="text-gray-600 text-xs mt-2.5 pt-2.5 border-t border-[rgba(84,123,209,0.08)]">
-          {tasks.length} tasks on page · page {page} of {totalPages}
-        </p>
       </div>
 
       <TaskList tasks={tasks} onStatusChange={handleStatusChange} onTaskUpdated={handleTaskUpdated} loading={loading} viewMode="list" />
 
       {totalPages > 1 && (
-        <div className="flex items-center justify-between pt-3 border-t border-[rgba(84,123,209,0.1)]">
-          <p className="text-xs text-gray-400">Page {page} of {totalPages} · {totalTasks} total</p>
+        <div className="flex items-center justify-between border-t border-slate-200 pt-3 dark:border-white/10">
+          <p className="text-xs text-slate-500 dark:text-slate-400">Page {page} of {totalPages} · {totalTasks} total</p>
           <div className="flex gap-1">
             <button disabled={page === 1} onClick={() => setPage((p) => p - 1)}
-              className="px-3 py-1.5 bg-[#141c2e] border border-[rgba(84,123,209,0.2)] rounded-xl text-xs text-gray-400 hover:text-white hover:border-cyan-500/40 disabled:opacity-30 disabled:cursor-not-allowed transition">← Prev</button>
+              className={`px-3 py-2 ${INPUT_CLS} disabled:cursor-not-allowed disabled:opacity-40`}>Previous</button>
             <button disabled={page === totalPages} onClick={() => setPage((p) => p + 1)}
-              className="px-3 py-1.5 bg-[#141c2e] border border-[rgba(84,123,209,0.2)] rounded-xl text-xs text-gray-400 hover:text-white hover:border-cyan-500/40 disabled:opacity-30 disabled:cursor-not-allowed transition">Next →</button>
+              className={`px-3 py-2 ${INPUT_CLS} disabled:cursor-not-allowed disabled:opacity-40`}>Next</button>
           </div>
         </div>
       )}
@@ -630,29 +646,60 @@ const ScopedTaskPanel = ({ scope, onTaskCreated }) => {
 // Create Task Panel
 // ─────────────────────────────────────────────────────────────────────────────
 const CreateTaskPanel = ({ users = [], onCreated }) => {
-  const [success, setSuccess] = useState("");
   const handleCreate = async (task) => {
     try {
       const payload = { ...task, assignedTo: Array.isArray(task.assignedTo) ? task.assignedTo : task.assignedTo ? [task.assignedTo] : [] };
-      await taskApi.createTask(payload);
-      setSuccess("✅ Task created!"); setTimeout(() => setSuccess(""), 3000);
-      onCreated?.();
-    } catch (err) { alert(err.response?.data?.message || "Failed to create task."); }
+      const createdTask = await taskApi.createTask(payload);
+      onCreated?.(createdTask);
+      return createdTask;
+    } catch (err) {
+      console.error("Failed to create task:", err);
+      throw err;
+    }
   };
+
   return (
-    <div className="bg-[#141c2e] border border-[rgba(84,123,209,0.15)] rounded-2xl overflow-hidden max-w-3xl">
-      {success && (
-        <div className="mx-5 mt-5 flex items-center gap-2 px-4 py-3 bg-green-500/10 border border-green-500/25 rounded-xl text-green-400 text-sm">
-          <div className="w-1.5 h-1.5 bg-green-400 rounded-full" />{success}
+    <div className="grid max-w-6xl items-start gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
+      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-white/10 dark:bg-[#12151c]">
+        <div className="border-b border-slate-100 px-5 py-4 dark:border-white/[0.07]">
+          <p className="text-xs font-semibold uppercase tracking-wider text-blue-600 dark:text-blue-300">New assignment</p>
+          <h2 className="mt-1 text-lg font-semibold text-slate-950 dark:text-white">Create a task</h2>
+          <p className="mt-1 max-w-2xl text-sm text-slate-500 dark:text-slate-400">
+            Define the outcome, choose the right assignees, and set a realistic deadline.
+          </p>
         </div>
-      )}
-      <div className="px-5 py-4 border-b border-[rgba(84,123,209,0.1)]">
-        <h2 className="text-base font-semibold text-white">Create New Task</h2>
-        <p className="text-gray-500 text-xs mt-0.5">Assign to anyone in the team</p>
-      </div>
-      <div className="p-5">
-        <TaskForm onCreate={handleCreate} users={users} />
-      </div>
+        <div className="p-4 sm:p-5">
+          <TaskForm onCreate={handleCreate} users={users} />
+        </div>
+      </section>
+
+      <aside className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-[#12151c] xl:sticky xl:top-5">
+        <h3 className="text-sm font-semibold text-slate-950 dark:text-white">Before you assign</h3>
+        <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">
+          A useful task gives the assignees enough context to act without another meeting.
+        </p>
+        <ol className="mt-4 space-y-4">
+          {[
+            ["01", "Name the outcome", "Use a specific, action-led title."],
+            ["02", "Add the context", "Include links, constraints, or acceptance criteria."],
+            ["03", "Choose assignees", "Select the people responsible for delivery."],
+            ["04", "Set the deadline", "Use priority to signal urgency, not importance alone."],
+          ].map(([number, title, description]) => (
+            <li key={number} className="flex gap-3">
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-blue-200 bg-blue-50 text-[10px] font-bold text-blue-700 dark:border-blue-400/20 dark:bg-blue-400/10 dark:text-blue-200">
+                {number}
+              </span>
+              <span>
+                <span className="block text-xs font-semibold text-slate-800 dark:text-slate-200">{title}</span>
+                <span className="mt-0.5 block text-[11px] leading-4 text-slate-500 dark:text-slate-400">{description}</span>
+              </span>
+            </li>
+          ))}
+        </ol>
+        <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-800 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-200">
+          Selecting a project limits the assignee list to active members of that project.
+        </div>
+      </aside>
     </div>
   );
 };
@@ -675,7 +722,6 @@ export default function UnifiedTaskPage({ onLogout }) {
   const refreshMineRef = useRef(null);
   const refreshAssignedRef = useRef(null);
   const { activePayment, checkingPayment, clearPayment } = usePaymentCheck();
-  const navigate = useNavigate();
 
   const showPopup = (msg) => { setPopupMsg(msg); setTimeout(() => setPopupMsg(""), 3000); };
 
@@ -695,7 +741,7 @@ export default function UnifiedTaskPage({ onLogout }) {
         completed: all.filter((t) => t.status === "completed").length,
         rejected: all.filter((t) => t.status === "rejected").length,
       });
-    } catch {}
+    } catch (error) { console.error("Failed to fetch task statistics:", error); }
   }, [adminUser]);
 
   const handleEditSave = async (task) => {
@@ -717,8 +763,8 @@ export default function UnifiedTaskPage({ onLogout }) {
   }, [fetchStats]);
 
   if (checkingPayment) return (
-    <div className="flex items-center justify-center min-h-screen bg-[#0d1220]">
-      <div className="w-10 h-10 border-4 border-cyan-500/40 border-t-cyan-500 rounded-full animate-spin" />
+    <div className="flex h-[100dvh] items-center justify-center bg-slate-50 dark:bg-[#0b0d12]">
+      <div className="h-9 w-9 animate-spin rounded-full border-2 border-slate-200 border-t-blue-600 dark:border-white/10 dark:border-t-blue-400" />
     </div>
   );
   if (activePayment) return <PaymentBlockOverlay payment={activePayment} onPaymentCleared={clearPayment} />;
@@ -749,44 +795,60 @@ export default function UnifiedTaskPage({ onLogout }) {
   ];
 
   return (
-    <div className="flex bg-[#0d1220] min-h-screen text-white">
+    <div className="relative flex h-[100dvh] overflow-hidden bg-slate-50 text-slate-900 dark:bg-[#0b0d12] dark:text-slate-100">
       <Sidebar collapsed={collapsed} setCollapsed={setCollapsed} userRole={adminUser ? "admin" : role} onLogout={onLogout} />
-      <main className={`flex-1 transition-all duration-300 ${collapsed ? "ml-20" : "ml-72"} p-6 overflow-y-auto`}>
+      <main className={`min-w-0 flex-1 overflow-y-auto transition-[margin] duration-300 ${collapsed ? "ml-16" : "ml-16 sm:ml-56"}`}>
+        <div className="mx-auto w-full max-w-[1500px] px-4 py-5 sm:px-6 lg:px-8 lg:py-7">
 
         {popupMsg && (
-          <div className="fixed top-5 right-5 z-50 bg-[#1a2340] border border-[rgba(84,123,209,0.3)] text-white px-5 py-3 rounded-xl shadow-2xl flex items-center gap-2">
-            <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
-            <span className="text-sm font-medium">{popupMsg}</span>
+          <div className="fixed right-5 top-5 z-50 flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-slate-800 shadow-xl dark:border-white/10 dark:bg-[#171a22] dark:text-slate-100">
+            <div className="h-2 w-2 rounded-full bg-emerald-500" />
+            <span className="text-sm font-medium">{popupMsg.replace(/[✅❌]/g, "").trim()}</span>
           </div>
         )}
 
-        {/* Header */}
-        <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-3 mb-7">
-          <div>
-            <h1 className="text-3xl font-bold bg-gradient-to-r from-cyan-400 via-blue-400 to-purple-400 bg-clip-text text-transparent">
-              Tasks
-            </h1>
-            <p className="text-gray-400 text-sm mt-1">
-              {adminUser ? `Good ${greeting}, ${user.name || "Admin"} 👋` : `Hi ${user.name || "there"} 👋`}
-            </p>
-          </div>
-          {adminUser && (
-            <div className="bg-[#141c2e] border border-[rgba(84,123,209,0.15)] rounded-xl px-4 py-2 flex items-center gap-2">
-              <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
-              <span className="text-cyan-400 font-mono text-sm">
-                {currentTime.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
-              </span>
+        <section className="mb-5 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-white/10 dark:bg-[#10131c]">
+          <div className="flex flex-col gap-5 p-4 lg:flex-row lg:items-center lg:justify-between lg:p-5">
+            <div className="min-w-0">
+              <div className="mb-4 inline-flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 dark:border-blue-400/20 dark:bg-blue-400/10 dark:text-blue-200">
+                <span className="h-1.5 w-1.5 rounded-full bg-blue-500" />
+                {currentTime.toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
+              </div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Work</p>
+              <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950 dark:text-white">
+                {adminUser ? "Task management" : "My tasks"}
+              </h1>
+              <p className="mt-1 max-w-2xl text-sm text-slate-500 dark:text-slate-400">
+                {adminUser ? `Good ${greeting}, ${user.name || "Admin"}. Review priorities, assignments, and team progress.` : "Focus on what is due, update progress, and keep work moving."}
+              </p>
             </div>
-          )}
-        </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-right dark:border-white/10 dark:bg-white/[0.03]">
+                <p className="text-[10px] font-medium uppercase tracking-wider text-slate-400">Local time</p>
+                <p className="font-mono text-sm font-semibold text-slate-700 dark:text-slate-200">
+                  {currentTime.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActiveTab(activeTab === "create" ? "mine" : "create")}
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 text-sm font-semibold text-white transition hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-400"
+              >
+                {activeTab === "create" ? <FaUserAlt size={12} /> : <FaPlus size={12} />}
+                {activeTab === "create" ? "View my tasks" : "Create task"}
+              </button>
+            </div>
+          </div>
+        </section>
 
         {/* Admin summary stats */}
         {adminUser && (
-          <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3 mb-7">
+          <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
             {STAT_DEFS.map((s) => (
-              <div key={s.label} className={`bg-[#141c2e] border ${s.b} rounded-2xl p-4`}>
-                <p className={`text-2xl font-bold ${s.c}`}>{s.value}</p>
-                <p className="text-xs text-gray-500 uppercase tracking-wide mt-0.5">{s.label}</p>
+              <div key={s.label} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-[#12151c]">
+                <p className={`text-2xl font-semibold ${s.c}`}>{s.value}</p>
+                <p className="mt-0.5 text-xs font-medium text-slate-500 dark:text-slate-400">{s.label}</p>
               </div>
             ))}
           </div>
@@ -799,11 +861,11 @@ export default function UnifiedTaskPage({ onLogout }) {
 
         {/* All Tasks (admin only) */}
         {activeTab === "all" && adminUser && (
-          <div className="bg-[#141c2e] border border-[rgba(84,123,209,0.15)] rounded-2xl overflow-hidden">
-            <div className="px-5 py-4 border-b border-[rgba(84,123,209,0.1)] flex items-center justify-between">
+          <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-white/10 dark:bg-[#12151c]">
+            <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4 dark:border-white/[0.07]">
               <div>
-                <h2 className="text-base font-semibold text-white">All Tasks</h2>
-                <p className="text-gray-500 text-xs mt-0.5">{statCounts.total} total across the team</p>
+                <h2 className="text-base font-semibold text-slate-950 dark:text-white">All tasks</h2>
+                <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{statCounts.total} total across the team</p>
               </div>
             </div>
             <div className="p-5">
@@ -814,28 +876,12 @@ export default function UnifiedTaskPage({ onLogout }) {
 
         {/* My Tasks */}
         {activeTab === "mine" && (
-          <div className="bg-[#141c2e] border border-[rgba(84,123,209,0.15)] rounded-2xl overflow-hidden">
-            <div className="px-5 py-4 border-b border-[rgba(84,123,209,0.1)]">
-              <h2 className="text-base font-semibold text-white">My Tasks</h2>
-              <p className="text-gray-500 text-xs mt-0.5">Tasks assigned to you</p>
-            </div>
-            <div className="p-5">
-              <ScopedTaskPanel scope="mine" onTaskCreated={refreshMineRef} />
-            </div>
-          </div>
+          <ScopedTaskPanel scope="mine" onTaskCreated={refreshMineRef} />
         )}
 
         {/* Assigned by Me */}
         {activeTab === "assigned-by-me" && (
-          <div className="bg-[#141c2e] border border-[rgba(84,123,209,0.15)] rounded-2xl overflow-hidden">
-            <div className="px-5 py-4 border-b border-[rgba(84,123,209,0.1)]">
-              <h2 className="text-base font-semibold text-white">Assigned by Me</h2>
-              <p className="text-gray-500 text-xs mt-0.5">Tasks you created and assigned to others</p>
-            </div>
-            <div className="p-5">
-              <ScopedTaskPanel scope="assigned-by-me" onTaskCreated={refreshAssignedRef} />
-            </div>
-          </div>
+          <ScopedTaskPanel scope="assigned-by-me" onTaskCreated={refreshAssignedRef} />
         )}
 
         {/* Create Task */}
@@ -854,10 +900,10 @@ export default function UnifiedTaskPage({ onLogout }) {
 
         {/* Analytics (admin only) */}
         {activeTab === "analytics" && adminUser && (
-          <div className="bg-[#141c2e] border border-[rgba(84,123,209,0.15)] rounded-2xl overflow-hidden">
-            <div className="px-5 py-4 border-b border-[rgba(84,123,209,0.1)]">
-              <h2 className="text-base font-semibold text-white">Employee Analytics</h2>
-              <p className="text-gray-500 text-xs mt-0.5">Individual performance and completion rates</p>
+          <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-white/10 dark:bg-[#12151c]">
+            <div className="border-b border-slate-100 px-5 py-4 dark:border-white/[0.07]">
+              <h2 className="text-base font-semibold text-slate-950 dark:text-white">Employee analytics</h2>
+              <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">Individual performance and completion rates</p>
             </div>
             <div className="p-5">
               <AnalyticsPanel users={users} />
@@ -866,6 +912,7 @@ export default function UnifiedTaskPage({ onLogout }) {
         )}
 
         {editingTask && <EditTaskModal task={editingTask} onSave={handleEditSave} onCancel={() => setEditingTask(null)} users={users} />}
+        </div>
       </main>
     </div>
   );

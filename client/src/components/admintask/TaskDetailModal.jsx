@@ -5,12 +5,6 @@ import dayjs from "dayjs";
 const TaskDetailModal = ({ task, onClose }) => {
   const modalRef = useRef(null);
 
-  if (!task) return null;
-
-  // Debug logging
-  console.log("TaskDetailModal - Full task data:", task);
-  console.log("TaskDetailModal - statusHistory:", task.statusHistory);
-
   const priorityColors = {
     High: "text-red-400 bg-red-500/10 border-red-500/30",
     Medium: "text-yellow-400 bg-yellow-500/10 border-yellow-500/30",
@@ -47,6 +41,8 @@ const TaskDetailModal = ({ task, onClose }) => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
   }, [onClose]);
+
+  if (!task) return null;
 
   return (
     <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-xl overflow-y-auto">

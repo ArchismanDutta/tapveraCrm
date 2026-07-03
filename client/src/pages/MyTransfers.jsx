@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import {
   Search,
@@ -22,7 +21,6 @@ import "../styles/custom-scrollbar.css";
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
 
 const MyTransfers = ({ onLogout }) => {
-  const navigate = useNavigate();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [transfers, setTransfers] = useState([]);
   const [filteredTransfers, setFilteredTransfers] = useState([]);
@@ -190,29 +188,29 @@ const MyTransfers = ({ onLogout }) => {
   const paginate = (pageNumber) => setCurrentPage(pageNumber);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 text-white flex">
+    <div className="app-shell h-[100dvh] overflow-hidden">
       <Sidebar
-        sidebarCollapsed={sidebarCollapsed}
-        setSidebarCollapsed={setSidebarCollapsed}
+        collapsed={sidebarCollapsed}
+        setCollapsed={setSidebarCollapsed}
         onLogout={onLogout}
         userRole={userRole}
       />
 
-      <main className={`flex-1 transition-all duration-300 ${sidebarCollapsed ? "ml-16" : "ml-56"} p-8 max-w-full overflow-x-hidden`}>
+      <main className={`app-main h-[100dvh] overflow-y-auto px-3 py-4 transition-all duration-300 sm:px-5 lg:px-6 ${sidebarCollapsed ? "ml-16" : "ml-16 sm:ml-56"}`}>
         {/* Header */}
-        <div className="mb-8">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
+        <div className="app-page pb-8">
+        <div className="app-header mb-5">
+          <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
             <div>
-              <h1 className="text-4xl font-bold bg-gradient-to-r from-orange-400 to-red-400 bg-clip-text text-transparent mb-2">
-                My Transfers
-              </h1>
-              <p className="text-gray-400">Manage callbacks transferred to you</p>
+              <p className="app-eyebrow">Sales handoff</p>
+              <h1 className="app-title">My transfers</h1>
+              <p className="app-description">Review and manage callbacks transferred to you.</p>
             </div>
           </div>
 
           {/* Stats Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-6">
-            <div className="bg-gradient-to-br from-yellow-500/20 to-orange-500/20 backdrop-blur-sm border border-yellow-500/30 rounded-xl p-6">
+            <div className="app-panel p-5">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-gray-400 text-sm mb-1">Pending</p>
@@ -224,7 +222,7 @@ const MyTransfers = ({ onLogout }) => {
               </div>
             </div>
 
-            <div className="bg-gradient-to-br from-blue-500/20 to-cyan-500/20 backdrop-blur-sm border border-blue-500/30 rounded-xl p-6">
+            <div className="app-panel p-5">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-gray-400 text-sm mb-1">Accepted</p>
@@ -236,7 +234,7 @@ const MyTransfers = ({ onLogout }) => {
               </div>
             </div>
 
-            <div className="bg-gradient-to-br from-green-500/20 to-emerald-500/20 backdrop-blur-sm border border-green-500/30 rounded-xl p-6">
+            <div className="app-panel p-5">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-gray-400 text-sm mb-1">Completed</p>
@@ -248,7 +246,7 @@ const MyTransfers = ({ onLogout }) => {
               </div>
             </div>
 
-            <div className="bg-gradient-to-br from-red-500/20 to-pink-500/20 backdrop-blur-sm border border-red-500/30 rounded-xl p-6">
+            <div className="app-panel p-5">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-gray-400 text-sm mb-1">Rejected</p>
@@ -263,7 +261,7 @@ const MyTransfers = ({ onLogout }) => {
         </div>
 
         {/* Filters */}
-        <div className="bg-slate-800/50 backdrop-blur-sm rounded-xl p-6 border border-slate-700/50 mb-6">
+        <div className="app-panel mb-5 p-5">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
@@ -272,7 +270,7 @@ const MyTransfers = ({ onLogout }) => {
                 placeholder="Search transfers..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 bg-slate-700/50 border border-slate-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all"
+                className="app-control w-full py-2 pl-10 pr-4 text-sm focus:outline-none"
               />
             </div>
 
@@ -280,7 +278,7 @@ const MyTransfers = ({ onLogout }) => {
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                className="w-full px-4 py-2 bg-slate-700/50 border border-slate-600 rounded-lg text-white focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all appearance-none cursor-pointer hover:bg-slate-700"
+                className="app-control w-full cursor-pointer px-4 py-2 text-sm focus:outline-none"
               >
                 <option value="">📊 All Status</option>
                 <option value="Transferred">⏳ Pending</option>
@@ -303,7 +301,7 @@ const MyTransfers = ({ onLogout }) => {
         </div>
 
         {/* Transfers Table */}
-        <div className="bg-slate-800/50 backdrop-blur-sm rounded-xl border border-slate-700/50 overflow-hidden">
+        <div className="app-panel overflow-hidden">
           <SimpleBar style={{ maxHeight: "600px" }}>
             {loading ? (
               <div className="flex items-center justify-center py-12">
@@ -440,6 +438,7 @@ const MyTransfers = ({ onLogout }) => {
               </>
             )}
           </SimpleBar>
+        </div>
         </div>
       </main>
 

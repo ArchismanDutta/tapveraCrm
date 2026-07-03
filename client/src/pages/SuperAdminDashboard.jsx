@@ -1,1020 +1,823 @@
-
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
-import { attendanceUtils } from "../api.js";
 import {
-  Users,
+  Activity,
+  AlertCircle,
+  ArrowRight,
+  Calendar,
+  CheckCircle2,
   Clock,
   Coffee,
-  TrendingUp,
-  RefreshCw,
-  Calendar,
-  Activity,
-  BarChart3,
-  Eye,
   Download,
-  Filter,
-  Search,
-  AlertCircle,
-  CheckCircle,
-  Timer,
-  UserCheck,
-  Building2,
-  Zap,
   FileText,
-  Settings
+  Filter,
+  RefreshCw,
+  Search,
+  Timer,
+  TrendingUp,
+  UserCheck,
+  Users,
+  UserX,
 } from "lucide-react";
-import EmployeeRow from "../components/superadmin/EmployeeRow";
+import { attendanceUtils } from "../api.js";
 import Sidebar from "../components/dashboard/Sidebar";
 import CelebrationPopup from "../components/common/CelebrationPopup";
 import useCelebrationNotifications from "../hooks/useCelebrationNotifications";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
 
-// Helper function to parse work duration string (e.g., "8h 30m") to hours
-const parseWorkDuration = (durationStr) => {
-  if (!durationStr || typeof durationStr !== 'string') return 0;
+const getLocalDateInput = (date = new Date()) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
 
-  const hours = durationStr.match(/(\d+)h/);
-  const minutes = durationStr.match(/(\d+)m/);
+const parseWorkDuration = (duration) => {
+  if (!duration || typeof duration !== "string") return 0;
+  const hours = Number(duration.match(/(\d+)h/)?.[1] || 0);
+  const minutes = Number(duration.match(/(\d+)m/)?.[1] || 0);
+  return hours + minutes / 60;
+};
 
-  const h = hours ? parseInt(hours[1]) : 0;
-  const m = minutes ? parseInt(minutes[1]) : 0;
+const formatTime = (value) => {
+  if (!value) return "—";
 
-  return h + (m / 60);
+  try {
+    return attendanceUtils.formatTime(value) || "—";
+  } catch {
+    const date = new Date(value);
+    return Number.isNaN(date.getTime())
+      ? "—"
+      : date.toLocaleTimeString("en-IN", {
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+  }
+};
+
+const getStatusKey = (employee) => {
+  if (employee.onBreak) return "break";
+  if (employee.currentlyWorking) return "working";
+  if (employee.punchOutTime) return "completed";
+  if (!employee.arrivalTime) return "absent";
+  return "inactive";
+};
+
+const STATUS_META = {
+  working: {
+    label: "Working",
+    dot: "bg-emerald-500",
+    badge:
+      "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-200",
+  },
+  break: {
+    label: "On break",
+    dot: "bg-amber-500",
+    badge:
+      "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-200",
+  },
+  completed: {
+    label: "Shift complete",
+    dot: "bg-violet-500",
+    badge:
+      "border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-400/20 dark:bg-violet-400/10 dark:text-violet-200",
+  },
+  absent: {
+    label: "Not checked in",
+    dot: "bg-slate-400",
+    badge:
+      "border-slate-200 bg-slate-100 text-slate-600 dark:border-white/10 dark:bg-white/[0.05] dark:text-slate-300",
+  },
+  inactive: {
+    label: "Inactive",
+    dot: "bg-sky-500",
+    badge:
+      "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-400/20 dark:bg-sky-400/10 dark:text-sky-200",
+  },
+};
+
+const TONE_STYLES = {
+  blue: "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-400/20 dark:bg-blue-400/10 dark:text-blue-200",
+  emerald:
+    "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-200",
+  amber:
+    "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-200",
+  rose: "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-400/20 dark:bg-rose-400/10 dark:text-rose-200",
+};
+
+const MetricCard = ({ icon, label, value, helper, tone }) => (
+  <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-[#10131c]">
+    <div className="flex items-start justify-between gap-3">
+      <div>
+        <p className="text-xs font-medium text-slate-500 dark:text-slate-400">
+          {label}
+        </p>
+        <p className="mt-1 text-2xl font-semibold tracking-tight text-slate-950 dark:text-white">
+          {value}
+        </p>
+        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+          {helper}
+        </p>
+      </div>
+      <span
+        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border ${TONE_STYLES[tone]}`}
+      >
+        {React.createElement(icon, {
+          className: "h-4 w-4",
+          "aria-hidden": "true",
+        })}
+      </span>
+    </div>
+  </article>
+);
+
+const StatusBadge = ({ employee }) => {
+  const status = getStatusKey(employee);
+  const meta = STATUS_META[status];
+
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold ${meta.badge}`}
+    >
+      <span className={`h-1.5 w-1.5 rounded-full ${meta.dot}`} />
+      {meta.label}
+    </span>
+  );
+};
+
+const EmployeeIdentity = ({ employee }) => (
+  <div className="flex min-w-0 items-center gap-3">
+    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-sm font-semibold text-white">
+      {employee.name?.trim()?.charAt(0)?.toUpperCase() || "?"}
+    </span>
+    <div className="min-w-0">
+      <p className="truncate text-sm font-semibold text-slate-900 dark:text-white">
+        {employee.name}
+      </p>
+      <p className="mt-0.5 truncate text-xs text-slate-500 dark:text-slate-400">
+        {employee.employeeId} · {employee.role || "Employee"}
+      </p>
+    </div>
+  </div>
+);
+
+const EmployeeMobileCard = ({ employee }) => {
+  const breakMinutes = attendanceUtils.calculateBreakMinutes(
+    employee,
+    employee.onBreak,
+  );
+
+  return (
+    <article className="rounded-xl border border-slate-200 bg-white p-4 dark:border-white/10 dark:bg-white/[0.02]">
+      <div className="flex items-start justify-between gap-3">
+        <EmployeeIdentity employee={employee} />
+        <StatusBadge employee={employee} />
+      </div>
+      <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 border-t border-slate-200 pt-3 text-xs dark:border-white/10">
+        <div>
+          <dt className="text-slate-400">Punch in</dt>
+          <dd className="mt-1 font-semibold text-slate-700 dark:text-slate-200">
+            {formatTime(employee.arrivalTime)}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-slate-400">Punch out</dt>
+          <dd className="mt-1 font-semibold text-slate-700 dark:text-slate-200">
+            {formatTime(employee.punchOutTime)}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-slate-400">Work time</dt>
+          <dd className="mt-1 font-semibold text-slate-700 dark:text-slate-200">
+            {employee.workDuration}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-slate-400">Break time</dt>
+          <dd className="mt-1 font-semibold text-slate-700 dark:text-slate-200">
+            {breakMinutes} min
+          </dd>
+        </div>
+      </dl>
+    </article>
+  );
 };
 
 const SuperAdminDashboard = ({ onLogout }) => {
   const navigate = useNavigate();
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [selectedDate, setSelectedDate] = useState(
-    new Date().toISOString().split("T")[0]
-  );
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState("");
+  const [selectedDate, setSelectedDate] = useState(getLocalDateInput);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
-  const [viewMode, setViewMode] = useState("table"); // table or cards
   const [lastUpdateTime, setLastUpdateTime] = useState(null);
 
-  // Celebration notifications
   const {
     celebrations,
     showPopup: showCelebrationPopup,
-    closePopup: closeCelebrationPopup
+    closePopup: closeCelebrationPopup,
   } = useCelebrationNotifications();
 
-  // Update time every second
-  useEffect(() => {
-    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
-    return () => clearInterval(timer);
-  }, []);
+  const fetchEmployees = useCallback(async (date, { background = false } = {}) => {
+    if (background) setRefreshing(true);
+    else setLoading(true);
+    setError("");
 
-  const token = localStorage.getItem("token");
-  const axiosConfig = {
-    headers: { Authorization: `Bearer ${token}` },
-  };
-
-  const fetchEmployees = async (date) => {
     try {
-      setLoading(true);
-      setError(null);
-      console.log("Fetching employees for date:", date);
-
-      const res = await axios.get(
+      const token = localStorage.getItem("token");
+      const response = await axios.get(
         `${API_BASE}/api/super-admin/employees-today`,
         {
-          ...axiosConfig,
-          params: {
-            date,
-            _timestamp: Date.now() // Cache-busting parameter
-          },
-        }
+          headers: { Authorization: `Bearer ${token}` },
+          params: { date, _timestamp: Date.now() },
+        },
       );
+      const responseData = Array.isArray(response.data)
+        ? response.data
+        : response.data?.data;
 
-      console.log("Employees data received:", res.data);
-      console.log("API response status:", res.status);
-      console.log("Number of employees fetched:", res.data?.length || 0);
+      const normalizedEmployees = (Array.isArray(responseData)
+        ? responseData
+        : []
+      ).map((employee) => ({
+        ...employee,
+        employeeId: employee.employeeId || "ID unavailable",
+        name: employee.name || "Unknown employee",
+        role: employee.role || "employee",
+        arrivalTime: employee.arrivalTime || null,
+        punchOutTime: employee.punchOutTime || null,
+        onBreak: Boolean(employee.onBreak),
+        currentlyWorking: Boolean(employee.currentlyWorking),
+        breakDurationMinutes: Number(employee.breakDurationMinutes) || 0,
+        workDuration: employee.workDuration || "0h 0m",
+        totalWorkHours: parseWorkDuration(employee.workDuration),
+      }));
 
-      let empData = res.data || [];
-
-      if (empData.length > 0) {
-        console.log("Sample employee data structure:", empData[0]);
-
-        // Check for data quality issues
-        const employeesWithMissingData = empData.filter(emp =>
-          !emp.name || !emp.employeeId || emp.name === 'Unknown Employee'
-        );
-
-        if (employeesWithMissingData.length > 0) {
-          console.warn(`Found ${employeesWithMissingData.length} employees with missing data:`,
-            employeesWithMissingData.map(emp => ({
-              id: emp.employeeId,
-              name: emp.name,
-              userId: emp.userId
-            }))
-          );
-        }
-
-        // Check for break data issues
-        const employeesWithBreakIssues = empData.filter(emp =>
-          emp.onBreak && (!emp.breakDurationMinutes || emp.breakDurationMinutes === 0)
-        );
-
-        if (employeesWithBreakIssues.length > 0) {
-          console.warn(`Found ${employeesWithBreakIssues.length} employees on break with no break duration:`,
-            employeesWithBreakIssues.map(emp => ({
-              id: emp.employeeId,
-              name: emp.name,
-              onBreak: emp.onBreak,
-              breakDuration: emp.breakDurationMinutes
-            }))
-          );
-        }
-      }
-
-      // Map backend data structure to frontend expectations with validation
-      empData = empData.map(emp => {
-        // Validate and clean data
-        const cleanEmp = {
-          ...emp,
-          // Ensure all required fields exist with defaults
-          employeeId: emp.employeeId || 'Unknown',
-          name: emp.name || 'Unknown Employee',
-          arrivalTime: emp.arrivalTime || null,
-          punchOutTime: emp.punchOutTime || null,
-          onBreak: Boolean(emp.onBreak),
-          breakDurationMinutes: Number(emp.breakDurationMinutes) || 0,
-          breakType: emp.breakType || null,
-          workDuration: emp.workDuration || '0h 0m',
-          currentlyWorking: Boolean(emp.currentlyWorking),
-
-          // Map backend fields to frontend expected fields
-          totalWorkHours: emp.workDuration ? parseWorkDuration(emp.workDuration) : 0,
-          totalBreakMinutes: Number(emp.breakDurationMinutes) || 0,
-          departureTime: emp.punchOutTime || null,
-        };
-
-        // Debug logging for problematic employees
-        if (!emp.name || !emp.employeeId) {
-          console.warn("Employee with missing critical data:", emp);
-        }
-
-        return cleanEmp;
-      });
-
-      console.log("Mapped employee data sample:", empData.length > 0 ? empData[0] : "No data");
-
-      // Log summary of data quality
-      const dataQualityReport = {
-        total: empData.length,
-        withStatus: empData.filter(emp => emp.hasStatus).length,
-        withDailyWork: empData.filter(emp => emp.hasDailyWork).length,
-        currentlyWorking: empData.filter(emp => emp.currentlyWorking).length,
-        onBreak: empData.filter(emp => emp.onBreak).length,
-        withArrivalTime: empData.filter(emp => emp.arrivalTime).length,
-        withBreakData: empData.filter(emp => emp.onBreak && emp.totalBreakMinutes > 0).length,
-        withErrors: empData.filter(emp => emp.error).length
+      const priority = {
+        working: 0,
+        break: 1,
+        inactive: 2,
+        completed: 3,
+        absent: 4,
       };
 
-      console.log("Data quality report:", dataQualityReport);
-
-      // Log employees with issues
-      const problematicEmployees = empData.filter(emp =>
-        emp.error || !emp.hasStatus || !emp.hasDailyWork || (emp.onBreak && emp.totalBreakMinutes === 0)
-      );
-
-      if (problematicEmployees.length > 0) {
-        console.warn("Employees with data issues:", problematicEmployees.map(emp => ({
-          name: emp.name,
-          id: emp.employeeId,
-          issues: {
-            hasError: !!emp.error,
-            missingStatus: !emp.hasStatus,
-            missingDailyWork: !emp.hasDailyWork,
-            breakWithoutDuration: emp.onBreak && emp.totalBreakMinutes === 0
-          },
-          error: emp.error
-        })));
-      }
-
-      // Simple sorting: Working -> Break -> Punched Out -> Rest
-      empData.sort((a, b) => {
-        // Define status priority (lower number = higher priority)
-        const getStatusPriority = (emp) => {
-          if (emp.currentlyWorking && !emp.onBreak) return 1; // Working (Green)
-          if (emp.onBreak) return 2; // On Break (Yellow)
-          if (emp.punchOutTime) return 3; // Punched out (Violet)
-          return 4; // Rest (Normal)
-        };
-
-        const priorityA = getStatusPriority(a);
-        const priorityB = getStatusPriority(b);
-
-        // Sort by priority first
-        if (priorityA !== priorityB) {
-          return priorityA - priorityB;
-        }
-
-        // If same priority, sort by name alphabetically
-        return (a.name || '').localeCompare(b.name || '');
+      normalizedEmployees.sort((left, right) => {
+        const statusDifference =
+          priority[getStatusKey(left)] - priority[getStatusKey(right)];
+        return (
+          statusDifference || left.name.localeCompare(right.name, "en-IN")
+        );
       });
 
-      setEmployees(empData);
+      setEmployees(normalizedEmployees);
       setLastUpdateTime(new Date());
-      console.log("Successfully set employees state with", empData.length, "employees");
-    } catch (err) {
-      console.error("Error fetching employees:", err);
-      console.error("Error details:", {
-        message: err.message,
-        status: err.response?.status,
-        statusText: err.response?.statusText,
-        data: err.response?.data
-      });
-
-      let errorMessage = "Failed to fetch employees. Please try again.";
-
-      if (err.response?.status === 401) {
-        errorMessage = "Authentication failed. Please log in again.";
-      } else if (err.response?.status === 403) {
-        errorMessage = "Access denied. Insufficient permissions.";
-      } else if (err.response?.status === 404) {
-        errorMessage = "API endpoint not found. Please check your configuration.";
-      } else if (err.response?.status >= 500) {
-        errorMessage = "Server error. Please contact support if this persists.";
-      } else if (err.code === 'NETWORK_ERROR' || !err.response) {
-        errorMessage = "Network error. Please check your connection.";
-      }
-
-      setError(errorMessage);
+    } catch (requestError) {
+      console.error("Unable to load workforce status:", requestError);
+      const status = requestError.response?.status;
+      setError(
+        status === 401
+          ? "Your session has expired. Please sign in again."
+          : status === 403
+            ? "You do not have permission to view workforce status."
+            : requestError.response?.data?.message ||
+              requestError.response?.data?.error ||
+              "Workforce status could not be loaded. Please try again.",
+      );
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
-  };
-
-  useEffect(() => {
-    fetchEmployees(selectedDate);
-  }, [selectedDate]);
-
-  // Test connection on component mount
-  useEffect(() => {
-    const runConnectionTest = async () => {
-      const isConnected = await testApiConnection();
-      console.log("Initial connection test result:", isConnected);
-    };
-
-    runConnectionTest();
   }, []);
 
-  // Auto-refresh every 10 seconds for today's data (faster for real-time updates)
   useEffect(() => {
-    const isToday = selectedDate === new Date().toISOString().split("T")[0];
-    if (!isToday) return;
-
-    const interval = setInterval(() => {
-      console.log("Auto-refreshing employee data...");
-      fetchEmployees(selectedDate);
-    }, 10000); // Refresh every 10 seconds for more responsive break time updates
-
-    return () => clearInterval(interval);
-  }, [selectedDate]);
-
-  // Real-time break time update for employees currently on break
-  useEffect(() => {
-    const isToday = selectedDate === new Date().toISOString().split("T")[0];
-    if (!isToday || !employees || employees.length === 0) return;
-
-    const onBreakEmployees = employees.filter(emp => emp.onBreak);
-    if (onBreakEmployees.length === 0) return;
-
-    console.log(`Setting up real-time break tracking for ${onBreakEmployees.length} employees`);
-
-    // Update break times every 5 seconds for employees on break
-    const breakInterval = setInterval(() => {
-      setEmployees(prevEmployees => {
-        let hasUpdates = false;
-        const updatedEmployees = prevEmployees.map(emp => {
-          if (!emp.onBreak) return emp;
-
-          // Calculate real-time break minutes using the utility function
-          const updatedBreakMinutes = attendanceUtils.calculateBreakMinutes(emp, emp.onBreak);
-
-          // Only update if there's a meaningful change
-          if (Math.abs((emp.totalBreakMinutes || 0) - updatedBreakMinutes) >= 1) {
-            hasUpdates = true;
-            return {
-              ...emp,
-              totalBreakMinutes: updatedBreakMinutes,
-              breakDurationMinutes: updatedBreakMinutes
-            };
-          }
-          return emp;
-        });
-
-        if (hasUpdates) {
-          console.log('Updated break times for employees');
-        }
-        return updatedEmployees;
-      });
-    }, 5000); // Update every 5 seconds for balance between accuracy and performance
-
-    return () => {
-      console.log('Cleaning up real-time break tracking');
-      clearInterval(breakInterval);
-    };
-  }, [selectedDate, employees?.filter(emp => emp.onBreak).length]);
-
-  // Manual refresh function
-  const handleRefresh = () => {
-    console.log("Manual refresh triggered");
     fetchEmployees(selectedDate);
-  };
+  }, [fetchEmployees, selectedDate]);
 
-  // Quick action handlers
-  const handleExportData = () => {
-    try {
-      const dataToExport = {
-        date: selectedDate,
-        totalEmployees: stats.total,
-        workingEmployees: stats.working,
-        onBreakEmployees: stats.onBreak,
-        attendanceRate: stats.attendanceRate,
-        avgWorkHours: stats.avgWorkHours,
-        employees: filteredEmployees.map(emp => ({
-          employeeId: emp.employeeId,
-          name: emp.name,
-          arrivalTime: emp.arrivalTime,
-          departureTime: emp.departureTime,
-          totalWorkHours: emp.totalWorkHours,
-          currentlyWorking: emp.currentlyWorking,
-          onBreak: emp.onBreak,
-          breakType: emp.breakType,
-          totalBreakMinutes: emp.totalBreakMinutes
-        }))
-      };
+  useEffect(() => {
+    const timer = window.setInterval(() => setCurrentTime(new Date()), 30000);
+    return () => window.clearInterval(timer);
+  }, []);
 
-      const dataStr = JSON.stringify(dataToExport, null, 2);
-      const dataBlob = new Blob([dataStr], { type: 'application/json' });
-      const url = URL.createObjectURL(dataBlob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `attendance-report-${selectedDate}.json`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-    } catch (error) {
-      console.error('Export failed:', error);
-      alert('Export failed. Please try again.');
-    }
-  };
+  useEffect(() => {
+    if (selectedDate !== getLocalDateInput()) return undefined;
 
-  const handleManageEmployees = () => {
-    navigate('/employee-directory');
-  };
+    const timer = window.setInterval(
+      () => fetchEmployees(selectedDate, { background: true }),
+      30000,
+    );
+    return () => window.clearInterval(timer);
+  }, [fetchEmployees, selectedDate]);
 
-  const handleViewReports = () => {
-    navigate('/admin-attendance-portal');
-  };
+  const stats = useMemo(() => {
+    const presentEmployees = employees.filter(
+      (employee) => employee.arrivalTime,
+    );
+    const working = employees.filter(
+      (employee) => employee.currentlyWorking && !employee.onBreak,
+    ).length;
+    const onBreak = employees.filter((employee) => employee.onBreak).length;
+    const completed = employees.filter(
+      (employee) => employee.punchOutTime,
+    ).length;
+    const totalWorkHours = presentEmployees.reduce(
+      (sum, employee) => sum + employee.totalWorkHours,
+      0,
+    );
 
-  const handleViewAlerts = () => {
-    // Calculate alerts based on current data
-    const alerts = [];
+    return {
+      total: employees.length,
+      present: presentEmployees.length,
+      absent: employees.length - presentEmployees.length,
+      working,
+      onBreak,
+      completed,
+      attendanceRate:
+        employees.length > 0
+          ? Math.round((presentEmployees.length / employees.length) * 100)
+          : 0,
+      averageWorkHours:
+        presentEmployees.length > 0
+          ? totalWorkHours / presentEmployees.length
+          : 0,
+    };
+  }, [employees]);
 
-    if (stats.attendanceRate < 70) {
-      alerts.push(`Low attendance rate: ${stats.attendanceRate}%`);
-    }
+  const filteredEmployees = useMemo(() => {
+    const query = searchTerm.trim().toLowerCase();
 
-    if (stats.avgWorkHours < 6) {
-      alerts.push(`Low average work hours: ${stats.avgWorkHours.toFixed(1)}h`);
-    }
-
-    const lateEmployees = employees.filter(emp => {
-      if (!emp.arrivalTime) return false;
-      const arrivalTime = new Date(emp.arrivalTime);
-      const workStart = new Date(arrivalTime);
-      workStart.setHours(9, 30, 0, 0); // Assuming 9:30 AM start time
-      return arrivalTime > workStart;
+    return employees.filter((employee) => {
+      const matchesQuery =
+        !query ||
+        [employee.name, employee.employeeId, employee.role]
+          .filter(Boolean)
+          .some((value) => String(value).toLowerCase().includes(query));
+      const matchesStatus =
+        filterStatus === "all" || getStatusKey(employee) === filterStatus;
+      return matchesQuery && matchesStatus;
     });
+  }, [employees, filterStatus, searchTerm]);
 
-    if (lateEmployees.length > 0) {
-      alerts.push(`${lateEmployees.length} employees arrived late today`);
-    }
+  const handleExport = () => {
+    if (filteredEmployees.length === 0) return;
 
-    if (alerts.length === 0) {
-      alerts.push('No alerts for today! 🎉');
-    }
+    const escapeCell = (value) =>
+      `"${String(value ?? "").replaceAll('"', '""')}"`;
+    const rows = filteredEmployees.map((employee) => [
+      selectedDate,
+      employee.employeeId,
+      employee.name,
+      employee.role,
+      STATUS_META[getStatusKey(employee)].label,
+      formatTime(employee.arrivalTime),
+      formatTime(employee.punchOutTime),
+      employee.workDuration,
+      attendanceUtils.calculateBreakMinutes(employee, employee.onBreak),
+    ]);
+    const csv = [
+      [
+        "Date",
+        "Employee ID",
+        "Name",
+        "Role",
+        "Status",
+        "Punch In",
+        "Punch Out",
+        "Work Duration",
+        "Break Minutes",
+      ],
+      ...rows,
+    ]
+      .map((row) => row.map(escapeCell).join(","))
+      .join("\n");
 
-    alert(`Current Alerts:\n\n${alerts.join('\n')}`);
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `attendance-${selectedDate}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
   };
 
-  // Test API connection
-  const testApiConnection = async () => {
-    try {
-      console.log("Testing API connection...");
-      console.log("API Base URL:", API_BASE);
-      console.log("Token exists:", !!token);
-      console.log("Selected date:", selectedDate);
+  const isToday = selectedDate === getLocalDateInput();
+  const dateLabel = new Date(`${selectedDate}T00:00:00`).toLocaleDateString(
+    "en-IN",
+    { weekday: "short", day: "numeric", month: "short", year: "numeric" },
+  );
+  const hasFilters = searchTerm || filterStatus !== "all";
 
-      const response = await axios.get(`${API_BASE}/api/super-admin/employees-today`, {
-        ...axiosConfig,
-        params: { date: selectedDate },
-        timeout: 10000 // 10 second timeout
-      });
-
-      console.log("API test successful:", {
-        status: response.status,
-        dataLength: response.data?.length,
-        headers: response.headers
-      });
-
-      return true;
-    } catch (error) {
-      console.error("API test failed:", error);
-      return false;
-    }
-  };
-
-  // Filter employees based on search and status
-  const filteredEmployees = employees.filter(emp => {
-    const matchesSearch = !searchTerm ||
-      emp.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      emp.employeeId?.toLowerCase().includes(searchTerm.toLowerCase());
-
-    const matchesStatus = filterStatus === "all" ||
-      (filterStatus === "working" && emp.currentlyWorking) ||
-      (filterStatus === "break" && emp.onBreak) ||
-      (filterStatus === "absent" && !emp.arrivalTime);
-
-    return matchesSearch && matchesStatus;
-  });
-
-  // Calculate advanced stats with data validation
-  const stats = {
-    total: employees.length || 0,
-    working: employees.filter(emp => emp?.currentlyWorking === true).length || 0,
-    onBreak: employees.filter(emp => emp?.onBreak === true).length || 0,
-    present: employees.filter(emp => emp?.arrivalTime).length || 0,
-    absent: employees.filter(emp => !emp?.arrivalTime).length || 0,
-    attendanceRate: employees.length > 0 ? Math.floor((employees.filter(emp => emp?.arrivalTime).length / employees.length) * 100) : 0,
-    avgWorkHours: employees.length > 0 ?
-      employees.reduce((sum, emp) => {
-        const hours = emp?.totalWorkHours || 0;
-        return sum + (typeof hours === 'number' ? hours : 0);
-      }, 0) / employees.length : 0,
-    // Data quality stats
-    withDataIssues: employees.filter(emp => emp?.error || !emp?.hasStatus || !emp?.hasDailyWork).length || 0,
-    dataQuality: employees.length > 0 ? Math.round(((employees.length - employees.filter(emp => emp?.error || !emp?.hasStatus || !emp?.hasDailyWork).length) / employees.length) * 100) : 100
-  };
-
-  // Debug stats calculation
-  console.log("Stats calculated:", stats);
-  console.log("Employees for stats:", employees.length);
-  if (employees.length > 0) {
-    console.log("Sample employee for stats:", employees[0]);
-  }
+  const quickActions = [
+    {
+      label: "Employee directory",
+      description: "Profiles, roles and employee details",
+      icon: Users,
+      action: () => navigate("/directory"),
+    },
+    {
+      label: "Attendance portal",
+      description: "Review and manage attendance records",
+      icon: Calendar,
+      action: () => navigate("/super-admin/attendance"),
+    },
+    {
+      label: "Leave requests",
+      description: "Review pending employee requests",
+      icon: FileText,
+      action: () => navigate("/admin/leaves"),
+    },
+  ];
 
   return (
-    <>
-      <div className="flex bg-[#0f1419] min-h-screen text-white relative overflow-hidden">
-        {/* Animated Background */}
-        <div className="absolute inset-0 bg-gradient-to-br from-slate-900/20 via-blue-900/10 to-purple-900/20"></div>
-        <div className="absolute inset-0">
-          <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-cyan-500/5 rounded-full blur-3xl animate-pulse"></div>
-          <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-purple-500/5 rounded-full blur-3xl animate-pulse"></div>
-        </div>
+    <div className="relative flex h-[100dvh] overflow-hidden bg-slate-50 text-slate-900 dark:bg-[#0b0d12] dark:text-slate-100">
+      <Sidebar
+        collapsed={sidebarCollapsed}
+        setCollapsed={setSidebarCollapsed}
+        onLogout={onLogout}
+        userRole="super-admin"
+      />
 
-        {/* Sidebar */}
-        <Sidebar
-          collapsed={sidebarCollapsed}
-          setCollapsed={setSidebarCollapsed}
-          onLogout={onLogout}
-          userRole="superadmin"
-        />
-
-      {/* Main Content */}
       <main
-        className={`relative z-10 flex-1 transition-all duration-300 p-4 md:p-6 lg:p-8 overflow-x-hidden`}
-        style={{
-          marginLeft: sidebarCollapsed ? '6rem' : '18rem',
-          width: sidebarCollapsed ? 'calc(100vw - 6rem)' : 'calc(100vw - 18rem)',
-          maxWidth: sidebarCollapsed ? 'calc(100vw - 6rem)' : 'calc(100vw - 18rem)'
-        }}
+        className={`h-[100dvh] min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 transition-all duration-300 sm:px-5 lg:px-6 ${
+          sidebarCollapsed ? "ml-16" : "ml-16 sm:ml-56"
+        }`}
       >
-        {/* Modern Header */}
-        <div className="mb-12">
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between mb-6">
-            <div>
-              <h1 className="text-5xl font-bold mb-2">
-                <span className="bg-gradient-to-r from-emerald-400 via-cyan-400 to-blue-400 bg-clip-text text-transparent">
-                  Super Admin Dashboard
-                </span>
-              </h1>
-              <div className="flex items-center gap-2 mb-4">
-                <p className="text-xl text-gray-300">
-                  Real-time employee attendance and productivity insights
-                </p>
-                <div className="flex items-center gap-1 px-3 py-1 bg-gradient-to-r from-yellow-500/20 to-orange-500/20 border border-yellow-500/30 rounded-full">
-                  <Zap className="h-4 w-4 text-yellow-400" />
-                  <span className="text-xs text-yellow-400 font-medium">Live</span>
-                </div>
-              </div>
-            </div>
-            <div className="flex items-center space-x-4">
-              <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 backdrop-blur-sm border border-slate-600/30 rounded-2xl px-6 py-4">
-                <div className="flex items-center space-x-3">
-                  <div className="w-3 h-3 bg-green-400 rounded-full animate-pulse"></div>
-                  <div>
-                    <p className="text-sm text-gray-400">Live Time</p>
-                    <p className="text-cyan-400 font-mono text-sm">
-                      {currentTime.toLocaleTimeString("en-US", {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                        second: "2-digit",
-                      })}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div className="text-gray-400 text-lg">
-            {currentTime.toLocaleDateString("en-US", {
-              weekday: "long",
-              year: "numeric",
-              month: "long",
-              day: "numeric",
-            })}
-          </div>
-        </div>
-
-        {/* Enhanced Controls and Filters */}
-        <div className="bg-gradient-to-br from-slate-800/40 to-slate-900/40 backdrop-blur-sm border border-slate-600/30 rounded-2xl p-4 md:p-6 mb-8 w-full">
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between mb-6">
-            <h2 className="text-2xl font-bold text-white mb-4 lg:mb-0 flex items-center gap-3">
-              <BarChart3 className="h-7 w-7 text-cyan-400" />
-              Attendance Overview
-            </h2>
-            <div className="flex flex-wrap items-center gap-3">
-              <button
-                onClick={handleRefresh}
-                disabled={loading}
-                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-500 to-cyan-600 hover:from-emerald-600 hover:to-cyan-700 disabled:from-gray-400 disabled:to-gray-500 text-white rounded-xl font-medium transition-all duration-300 hover:scale-105 disabled:scale-100"
-                title="Refresh data"
-              >
-                <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-                <span>{loading ? "Refreshing..." : "Refresh"}</span>
-              </button>
-              {lastUpdateTime && (
-                <div className="text-xs text-gray-400 bg-slate-800/50 px-3 py-2 rounded-xl border border-slate-600/30">
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-                    <span>Last updated: {lastUpdateTime.toLocaleTimeString()}</span>
-                  </div>
-                </div>
-              )}
-              <div className="flex items-center gap-2">
-                <Calendar className="h-4 w-4 text-gray-400" />
-                <input
-                  type="date"
-                  value={selectedDate}
-                  onChange={(e) => setSelectedDate(e.target.value)}
-                  className="bg-slate-800/50 border border-slate-600/50 rounded-xl px-3 py-2 text-white focus:ring-2 focus:ring-cyan-400 focus:border-cyan-400 outline-none transition-all duration-300"
-                  max={new Date().toISOString().split("T")[0]}
-                  title="Select date to view attendance"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Advanced Search and Filters */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-              <input
-                type="text"
-                placeholder="Search employees..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full bg-slate-800/50 border border-slate-600/50 rounded-xl pl-10 pr-4 py-3 text-white placeholder-gray-400 focus:ring-2 focus:ring-cyan-400 focus:border-cyan-400 outline-none transition-all duration-300"
-              />
-            </div>
-            <div className="relative">
-              <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-              <select
-                value={filterStatus}
-                onChange={(e) => setFilterStatus(e.target.value)}
-                className="w-full bg-slate-800/50 border border-slate-600/50 rounded-xl pl-10 pr-4 py-3 text-white focus:ring-2 focus:ring-purple-400 focus:border-purple-400 outline-none transition-all duration-300 appearance-none"
-              >
-                <option value="all">All Status</option>
-                <option value="working">Currently Working</option>
-                <option value="break">On Break</option>
-                <option value="absent">Absent Today</option>
-              </select>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setViewMode(viewMode === "table" ? "cards" : "table")}
-                className="flex items-center gap-2 px-4 py-3 bg-slate-700/50 hover:bg-slate-600/50 border border-slate-600/30 text-gray-300 rounded-xl font-medium transition-all duration-300"
-              >
-                <Eye className="h-4 w-4" />
-                <span>{viewMode === "table" ? "Card View" : "Table View"}</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Results Summary */}
-          {(searchTerm || filterStatus !== "all") && (
-            <div className="bg-slate-700/30 border border-slate-600/30 rounded-xl p-4 mb-6">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Activity className="h-4 w-4 text-cyan-400" />
-                  <span className="text-gray-300">
-                    Showing {filteredEmployees.length} of {employees.length} employees
+        <div className="mx-auto max-w-[1500px] space-y-4 pb-8 sm:space-y-5">
+          <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-white/10 dark:bg-[#10131c]">
+            <div className="flex flex-col gap-5 p-4 lg:flex-row lg:items-center lg:justify-between lg:p-5">
+              <div className="min-w-0">
+                <div className="mb-3 flex flex-wrap items-center gap-2">
+                  <span className="inline-flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 dark:border-blue-400/20 dark:bg-blue-400/10 dark:text-blue-200">
+                    <Activity className="h-3.5 w-3.5" />
+                    Super admin
                   </span>
+                  {isToday && (
+                    <span className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-xs font-medium text-emerald-700 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-200">
+                      <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />
+                      Live workforce
+                    </span>
+                  )}
                 </div>
+                <h1 className="text-2xl font-semibold tracking-tight text-slate-950 dark:text-white">
+                  Workforce control center
+                </h1>
+                <p className="mt-1 max-w-2xl text-sm text-slate-500 dark:text-slate-400">
+                  See who is available, spot attendance gaps, and move directly to the records that need attention.
+                </p>
+              </div>
+
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <label className="relative block">
+                  <span className="sr-only">Attendance date</span>
+                  <Calendar className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="date"
+                    value={selectedDate}
+                    max={getLocalDateInput()}
+                    onChange={(event) => setSelectedDate(event.target.value)}
+                    className="h-10 w-full rounded-lg border border-slate-200 bg-white pl-10 pr-3 text-sm font-medium text-slate-700 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-200 dark:focus:ring-blue-400/10 sm:w-auto"
+                  />
+                </label>
                 <button
-                  onClick={() => {
-                    setSearchTerm("");
-                    setFilterStatus("all");
-                  }}
-                  className="text-sm text-gray-400 hover:text-red-400 transition-colors flex items-center gap-1"
+                  type="button"
+                  onClick={() =>
+                    fetchEmployees(selectedDate, { background: true })
+                  }
+                  disabled={loading || refreshing}
+                  className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-blue-500 dark:hover:bg-blue-400"
                 >
-                  <AlertCircle className="h-3 w-3" />
-                  Clear Filters
+                  <RefreshCw
+                    className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`}
+                  />
+                  {refreshing ? "Refreshing" : "Refresh"}
                 </button>
               </div>
-              {searchTerm && (
-                <div className="mt-2 text-sm text-gray-400">
-                  Search term: <span className="text-cyan-400">"{searchTerm}"</span>
-                </div>
-              )}
             </div>
-          )}
 
-          {loading && (
-            <div className="flex justify-center py-12">
-              <div className="relative">
-                <div className="w-12 h-12 border-4 border-blue-300/40 rounded-full"></div>
-                <div className="absolute top-0 left-0 w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-              </div>
+            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-500 dark:border-white/10 dark:bg-white/[0.02] dark:text-slate-400 lg:px-5">
+              <span>{dateLabel}</span>
+              <span>
+                {lastUpdateTime
+                  ? `Updated ${lastUpdateTime.toLocaleTimeString("en-IN", {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}`
+                  : `Local time ${currentTime.toLocaleTimeString("en-IN", {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}`}
+              </span>
             </div>
-          )}
+          </section>
 
-          {error && (
-            <div className="bg-red-700/20 border border-red-600 text-red-300 p-4 rounded-md mb-6">
-              <div className="flex items-center space-x-2">
-                <span>⚠️</span>
-                <span>{error}</span>
-              </div>
-            </div>
-          )}
+          <section className="grid grid-cols-2 gap-3 lg:grid-cols-4" aria-label="Workforce summary">
+            <MetricCard
+              icon={UserCheck}
+              label="Present"
+              value={loading ? "—" : stats.present}
+              helper={`${stats.attendanceRate}% attendance`}
+              tone="blue"
+            />
+            <MetricCard
+              icon={CheckCircle2}
+              label="Working now"
+              value={loading ? "—" : stats.working}
+              helper={`${stats.completed} completed shift${stats.completed === 1 ? "" : "s"}`}
+              tone="emerald"
+            />
+            <MetricCard
+              icon={Coffee}
+              label="On break"
+              value={loading ? "—" : stats.onBreak}
+              helper="Currently unavailable"
+              tone="amber"
+            />
+            <MetricCard
+              icon={UserX}
+              label="Not checked in"
+              value={loading ? "—" : stats.absent}
+              helper={`Of ${stats.total} team members`}
+              tone="rose"
+            />
+          </section>
 
-          {/* Data Quality Warning */}
-          {!loading && !error && stats.withDataIssues > 0 && (
-            <div className="bg-gradient-to-r from-amber-900/50 to-orange-800/50 backdrop-blur-sm border border-amber-600/30 rounded-2xl p-4 mb-6">
-              <div className="flex items-center gap-3">
-                <AlertCircle className="h-5 w-5 text-amber-400" />
-                <div>
-                  <h4 className="text-amber-200 font-semibold">Data Quality Notice</h4>
-                  <p className="text-amber-300 text-sm">
-                    {stats.withDataIssues} employees have incomplete data. Data quality: {stats.dataQuality}%
-                  </p>
-                  <p className="text-amber-400 text-xs mt-1">
-                    Check console logs for detailed information about missing UserStatus or DailyWork records.
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {!loading && !error && (
-            <>
-              {filteredEmployees.length === 0 ? (
-                <div className="text-center py-16">
-                  <div className="bg-gradient-to-br from-slate-800/40 to-slate-900/40 backdrop-blur-sm border border-slate-600/30 rounded-2xl p-12">
-                    <div className="w-24 h-24 mx-auto mb-6 bg-gradient-to-br from-gray-600/20 to-gray-700/20 rounded-full flex items-center justify-center">
-                      <Calendar className="h-12 w-12 text-gray-400" />
-                    </div>
-                    <h3 className="text-xl font-semibold text-gray-300 mb-2">No employees found</h3>
-                    <p className="text-gray-400">
-                      {searchTerm || filterStatus !== "all"
-                        ? "Try adjusting your search or filter criteria."
-                        : "No employees found for this date."
-                      }
+          <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_330px]">
+            <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-white/10 dark:bg-[#10131c]">
+              <div className="border-b border-slate-200 p-4 dark:border-white/10 sm:p-5">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <h2 className="text-base font-semibold text-slate-950 dark:text-white">
+                      Employee status
+                    </h2>
+                    <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                      {filteredEmployees.length} of {employees.length} team members shown
                     </p>
                   </div>
-                </div>
-              ) : viewMode === "table" ? (
-                <div className="bg-gradient-to-br from-slate-800/40 to-slate-900/40 backdrop-blur-sm border border-slate-600/30 rounded-2xl overflow-hidden shadow-xl">
-                  <div
-                    className="overflow-x-auto overflow-y-visible"
-                    style={{
-                      scrollbarWidth: 'thin',
-                      scrollbarColor: '#475569 #1e293b'
-                    }}
+                  <button
+                    type="button"
+                    onClick={handleExport}
+                    disabled={filteredEmployees.length === 0}
+                    className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-200 dark:hover:bg-white/[0.07]"
                   >
-                    <style>{`
-                      .overflow-x-auto::-webkit-scrollbar {
-                        height: 8px;
-                      }
-                      .overflow-x-auto::-webkit-scrollbar-track {
-                        background: #1e293b;
-                        border-radius: 4px;
-                      }
-                      .overflow-x-auto::-webkit-scrollbar-thumb {
-                        background: #475569;
-                        border-radius: 4px;
-                      }
-                      .overflow-x-auto::-webkit-scrollbar-thumb:hover {
-                        background: #64748b;
-                      }
-                    `}</style>
-                    <table className="w-full table-auto text-gray-100" style={{ minWidth: '1100px' }}>
-                      <thead>
-                        <tr className="bg-gradient-to-r from-slate-900/90 via-slate-800/90 to-slate-900/90 border-b-2 border-slate-600/50">
+                    <Download className="h-3.5 w-3.5" />
+                    Export CSV
+                  </button>
+                </div>
+
+                <div className="mt-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_190px]">
+                  <label className="relative block">
+                    <span className="sr-only">Search employees</span>
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="search"
+                      value={searchTerm}
+                      onChange={(event) => setSearchTerm(event.target.value)}
+                      placeholder="Search name, ID or role"
+                      className="h-10 w-full rounded-lg border border-slate-200 bg-white pl-10 pr-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-400 focus:ring-2 focus:ring-blue-100 dark:border-white/10 dark:bg-white/[0.04] dark:text-white dark:focus:ring-blue-400/10"
+                    />
+                  </label>
+                  <label className="relative block">
+                    <span className="sr-only">Filter employee status</span>
+                    <Filter className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                    <select
+                      value={filterStatus}
+                      onChange={(event) => setFilterStatus(event.target.value)}
+                      className="h-10 w-full appearance-none rounded-lg border border-slate-200 bg-white pl-10 pr-8 text-sm text-slate-700 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100 dark:border-white/10 dark:bg-[#151923] dark:text-slate-200 dark:focus:ring-blue-400/10"
+                    >
+                      <option value="all">All statuses</option>
+                      <option value="working">Working</option>
+                      <option value="break">On break</option>
+                      <option value="completed">Shift complete</option>
+                      <option value="inactive">Inactive</option>
+                      <option value="absent">Not checked in</option>
+                    </select>
+                  </label>
+                </div>
+
+                {hasFilters && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSearchTerm("");
+                      setFilterStatus("all");
+                    }}
+                    className="mt-3 text-xs font-semibold text-blue-600 hover:text-blue-700 dark:text-blue-300 dark:hover:text-blue-200"
+                  >
+                    Clear filters
+                  </button>
+                )}
+              </div>
+
+              {error ? (
+                <div className="m-4 flex flex-col gap-3 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 dark:border-rose-400/20 dark:bg-rose-400/10 dark:text-rose-200 sm:m-5 sm:flex-row sm:items-center sm:justify-between">
+                  <span className="flex items-start gap-2">
+                    <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                    {error}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => fetchEmployees(selectedDate)}
+                    className="rounded-lg border border-rose-200 bg-white px-3 py-2 text-xs font-semibold dark:border-rose-400/20 dark:bg-transparent"
+                  >
+                    Try again
+                  </button>
+                </div>
+              ) : loading ? (
+                <div className="space-y-3 p-4 sm:p-5">
+                  {[0, 1, 2, 3, 4].map((item) => (
+                    <div
+                      key={item}
+                      className="h-16 animate-pulse rounded-xl bg-slate-100 dark:bg-white/[0.04]"
+                    />
+                  ))}
+                </div>
+              ) : filteredEmployees.length === 0 ? (
+                <div className="px-6 py-16 text-center">
+                  <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-slate-100 text-slate-400 dark:bg-white/[0.05]">
+                    <Users className="h-5 w-5" />
+                  </span>
+                  <h3 className="mt-4 text-sm font-semibold text-slate-900 dark:text-white">
+                    {hasFilters ? "No matching employees" : "No attendance data"}
+                  </h3>
+                  <p className="mx-auto mt-1 max-w-sm text-sm text-slate-500 dark:text-slate-400">
+                    {hasFilters
+                      ? "Try changing the search or status filter."
+                      : "No employee records are available for this date."}
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <div className="space-y-3 p-4 md:hidden">
+                    {filteredEmployees.map((employee) => (
+                      <EmployeeMobileCard
+                        key={employee.userId || employee.employeeId}
+                        employee={employee}
+                      />
+                    ))}
+                  </div>
+
+                  <div className="hidden overflow-x-auto md:block">
+                    <table className="w-full min-w-[820px] text-left">
+                      <thead className="bg-slate-50 dark:bg-white/[0.02]">
+                        <tr className="border-b border-slate-200 dark:border-white/10">
                           {[
-                            { key: "Emp ID", icon: <UserCheck className="h-4 w-4 text-purple-400" /> },
-                            { key: "Name", icon: <Users className="h-4 w-4 text-cyan-400" /> },
-                            { key: "Punch In", icon: <Clock className="h-4 w-4 text-green-400" /> },
-                            { key: "Punch Out", icon: <Timer className="h-4 w-4 text-red-400" /> },
-                            { key: "Break Status", icon: <Coffee className="h-4 w-4 text-yellow-400" /> },
-                            { key: "Break Type", icon: <FileText className="h-4 w-4 text-blue-400" /> },
-                            { key: "Break (min)", icon: <Timer className="h-4 w-4 text-orange-400" /> },
-                            { key: "Work Hours", icon: <Activity className="h-4 w-4 text-cyan-400" /> },
-                            { key: "Working?", icon: <CheckCircle className="h-4 w-4 text-emerald-400" /> },
-                          ].map(({ key, icon }) => (
+                            "Employee",
+                            "Status",
+                            "Punch in",
+                            "Punch out",
+                            "Work time",
+                            "Break",
+                          ].map((heading) => (
                             <th
-                              key={key}
-                              className="py-4 px-3 text-left text-xs font-bold tracking-wide text-gray-200 uppercase"
+                              key={heading}
+                              className="px-4 py-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400"
                             >
-                              <div className="flex items-center gap-2">
-                                <div className="w-6 h-6 bg-slate-700/50 rounded-lg flex items-center justify-center">
-                                  {icon}
-                                </div>
-                                <span>{key}</span>
-                              </div>
+                              {heading}
                             </th>
                           ))}
                         </tr>
                       </thead>
-                      <tbody>
-                        {filteredEmployees.map((emp, idx) => (
-                          <EmployeeRow key={emp.userId || idx} employee={emp} />
+                      <tbody className="divide-y divide-slate-200 dark:divide-white/10">
+                        {filteredEmployees.map((employee) => (
+                          <tr
+                            key={employee.userId || employee.employeeId}
+                            className="transition hover:bg-slate-50 dark:hover:bg-white/[0.025]"
+                          >
+                            <td className="px-4 py-3.5">
+                              <EmployeeIdentity employee={employee} />
+                            </td>
+                            <td className="px-4 py-3.5">
+                              <StatusBadge employee={employee} />
+                            </td>
+                            <td className="px-4 py-3.5 text-sm font-medium text-slate-700 dark:text-slate-200">
+                              {formatTime(employee.arrivalTime)}
+                            </td>
+                            <td className="px-4 py-3.5 text-sm font-medium text-slate-700 dark:text-slate-200">
+                              {formatTime(employee.punchOutTime)}
+                            </td>
+                            <td className="px-4 py-3.5 text-sm font-medium text-slate-700 dark:text-slate-200">
+                              {employee.workDuration}
+                            </td>
+                            <td className="px-4 py-3.5 text-sm font-medium text-slate-700 dark:text-slate-200">
+                              {attendanceUtils.calculateBreakMinutes(
+                                employee,
+                                employee.onBreak,
+                              )}{" "}
+                              min
+                            </td>
+                          </tr>
                         ))}
                       </tbody>
                     </table>
                   </div>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {filteredEmployees.map((emp, idx) => (
-                    <EmployeeCard key={emp.userId || idx} employee={emp} />
-                  ))}
-                </div>
+                </>
               )}
-            </>
-          )}
-        </div>
+            </section>
 
-        {/* Enhanced Stats Dashboard */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mt-8">
-          <StatCard
-            icon={<Users className="h-6 w-6" />}
-            label="Total Employees"
-            value={stats.total}
-            subValue="Registered"
-            bg="from-blue-500/20 to-cyan-500/20"
-            iconBg="from-blue-500 to-cyan-500"
-            textColor="text-cyan-400"
-            trend={null}
-          />
-          <StatCard
-            icon={<Zap className="h-6 w-6" />}
-            label="Currently Working"
-            value={stats.working}
-            subValue={`${((stats.working / stats.total) * 100 || 0).toFixed(1)}% active`}
-            bg="from-emerald-500/20 to-green-500/20"
-            iconBg="from-emerald-500 to-green-500"
-            textColor="text-emerald-400"
-            trend={{ value: "+5%", positive: true }}
-          />
-          <StatCard
-            icon={<Coffee className="h-6 w-6" />}
-            label="On Break"
-            value={stats.onBreak}
-            subValue="Taking break"
-            bg="from-amber-500/20 to-orange-500/20"
-            iconBg="from-amber-500 to-orange-500"
-            textColor="text-amber-400"
-            trend={null}
-          />
-          <StatCard
-            icon={<TrendingUp className="h-6 w-6" />}
-            label="Attendance Rate"
-            value={`${stats.attendanceRate}%`}
-            subValue={`${stats.present}/${stats.total} present`}
-            bg="from-purple-500/20 to-pink-500/20"
-            iconBg="from-purple-500 to-pink-500"
-            textColor="text-purple-400"
-            trend={{ value: "+2.3%", positive: true }}
-          />
-        </div>
-
-        {/* Advanced Analytics Cards */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-8">
-          <div className="bg-gradient-to-br from-slate-800/40 to-slate-900/40 backdrop-blur-sm border border-slate-600/30 rounded-2xl p-6">
-            <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-              <Activity className="h-5 w-5 text-cyan-400" />
-              Work Distribution
-            </h3>
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <span className="text-gray-300">Average Work Hours</span>
-                <span className="text-white font-semibold">{stats.avgWorkHours.toFixed(1)}h</span>
-              </div>
-              <div className="w-full bg-slate-700/50 rounded-full h-2">
-                <div
-                  className="bg-gradient-to-r from-cyan-400 to-blue-500 h-2 rounded-full transition-all duration-300"
-                  style={{ width: `${(stats.avgWorkHours / 9) * 100}%` }}
-                ></div>
-              </div>
-              <div className="grid grid-cols-2 gap-4 mt-4">
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-emerald-400">{stats.working}</div>
-                  <div className="text-xs text-gray-400">Active Now</div>
+            <aside className="grid gap-4 md:grid-cols-2 xl:grid-cols-1">
+              <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-[#10131c]">
+                <div className="flex items-center gap-2">
+                  <TrendingUp className="h-4 w-4 text-blue-600 dark:text-blue-300" />
+                  <h2 className="text-sm font-semibold text-slate-950 dark:text-white">
+                    Daily summary
+                  </h2>
                 </div>
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-amber-400">{stats.onBreak}</div>
-                  <div className="text-xs text-gray-400">On Break</div>
-                </div>
-              </div>
-            </div>
-          </div>
 
-          <div className="bg-gradient-to-br from-slate-800/40 to-slate-900/40 backdrop-blur-sm border border-slate-600/30 rounded-2xl p-6">
-            <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-              <Building2 className="h-5 w-5 text-purple-400" />
-              Quick Actions
-            </h3>
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                onClick={handleExportData}
-                className="flex items-center gap-2 p-3 bg-slate-700/50 hover:bg-emerald-600/50 border border-slate-600/30 hover:border-emerald-500/50 rounded-xl transition-all duration-300 text-gray-300 hover:text-emerald-300 hover:scale-105"
-                title="Export attendance data as JSON"
-              >
-                <Download className="h-4 w-4" />
-                <span className="text-sm">Export</span>
-              </button>
-              <button
-                onClick={handleManageEmployees}
-                className="flex items-center gap-2 p-3 bg-slate-700/50 hover:bg-blue-600/50 border border-slate-600/30 hover:border-blue-500/50 rounded-xl transition-all duration-300 text-gray-300 hover:text-blue-300 hover:scale-105"
-                title="Go to Employee Directory"
-              >
-                <Users className="h-4 w-4" />
-                <span className="text-sm">Manage</span>
-              </button>
-              <button
-                onClick={handleViewReports}
-                className="flex items-center gap-2 p-3 bg-slate-700/50 hover:bg-purple-600/50 border border-slate-600/30 hover:border-purple-500/50 rounded-xl transition-all duration-300 text-gray-300 hover:text-purple-300 hover:scale-105"
-                title="View detailed attendance reports"
-              >
-                <FileText className="h-4 w-4" />
-                <span className="text-sm">Reports</span>
-              </button>
-              <button
-                onClick={handleViewAlerts}
-                className="flex items-center gap-2 p-3 bg-slate-700/50 hover:bg-amber-600/50 border border-slate-600/30 hover:border-amber-500/50 rounded-xl transition-all duration-300 text-gray-300 hover:text-amber-300 hover:scale-105"
-                title="View current alerts and notifications"
-              >
-                <AlertCircle className="h-4 w-4" />
-                <span className="text-sm">Alerts</span>
-              </button>
-            </div>
+                <div className="mt-5 flex items-end justify-between gap-4">
+                  <div>
+                    <p className="text-3xl font-semibold tracking-tight text-slate-950 dark:text-white">
+                      {stats.attendanceRate}%
+                    </p>
+                    <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                      Attendance rate
+                    </p>
+                  </div>
+                  <p className="text-right text-xs text-slate-500 dark:text-slate-400">
+                    {stats.present} present
+                    <br />
+                    {stats.absent} not checked in
+                  </p>
+                </div>
+                <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-white/[0.06]">
+                  <div
+                    className="h-full rounded-full bg-blue-600 transition-all dark:bg-blue-400"
+                    style={{ width: `${stats.attendanceRate}%` }}
+                  />
+                </div>
+
+                <dl className="mt-5 grid grid-cols-2 gap-3 border-t border-slate-200 pt-4 dark:border-white/10">
+                  <div className="rounded-xl bg-slate-50 p-3 dark:bg-white/[0.03]">
+                    <dt className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
+                      <Timer className="h-3.5 w-3.5" />
+                      Avg. work
+                    </dt>
+                    <dd className="mt-1 text-lg font-semibold text-slate-900 dark:text-white">
+                      {stats.averageWorkHours.toFixed(1)}h
+                    </dd>
+                  </div>
+                  <div className="rounded-xl bg-slate-50 p-3 dark:bg-white/[0.03]">
+                    <dt className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
+                      <Clock className="h-3.5 w-3.5" />
+                      Completed
+                    </dt>
+                    <dd className="mt-1 text-lg font-semibold text-slate-900 dark:text-white">
+                      {stats.completed}
+                    </dd>
+                  </div>
+                </dl>
+              </section>
+
+              <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-[#10131c]">
+                <h2 className="text-sm font-semibold text-slate-950 dark:text-white">
+                  Admin shortcuts
+                </h2>
+                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                  Open the most-used workforce tools.
+                </p>
+                <div className="mt-4 space-y-2">
+                  {quickActions.map((action) => {
+                    const ActionIcon = action.icon;
+                    return (
+                      <button
+                        key={action.label}
+                        type="button"
+                        onClick={action.action}
+                        className="group flex w-full items-center gap-3 rounded-xl border border-slate-200 p-3 text-left transition hover:border-blue-200 hover:bg-blue-50 dark:border-white/10 dark:hover:border-blue-400/20 dark:hover:bg-blue-400/10"
+                      >
+                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-600 transition group-hover:bg-blue-600 group-hover:text-white dark:bg-white/[0.05] dark:text-slate-300">
+                          <ActionIcon className="h-4 w-4" />
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-sm font-semibold text-slate-800 dark:text-slate-100">
+                            {action.label}
+                          </span>
+                          <span className="mt-0.5 block text-xs leading-4 text-slate-500 dark:text-slate-400">
+                            {action.description}
+                          </span>
+                        </span>
+                        <ArrowRight className="h-4 w-4 shrink-0 text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-blue-600 dark:text-slate-600 dark:group-hover:text-blue-300" />
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
+            </aside>
           </div>
         </div>
-
-        {/* Global Celebration Popup */}
-        <CelebrationPopup
-          celebrations={celebrations}
-          isOpen={showCelebrationPopup}
-          onClose={closeCelebrationPopup}
-        />
       </main>
-      </div>
-    </>
-  );
-};
 
-const StatCard = ({ icon, label, value, subValue, bg, iconBg, textColor, trend }) => (
-  <div className={`bg-gradient-to-br ${bg} backdrop-blur-sm border border-slate-600/30 rounded-2xl p-6 relative overflow-hidden group hover:scale-105 transition-all duration-300`}>
-    <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-    <div className="relative z-10">
-      <div className="flex items-center justify-between mb-4">
-        <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${iconBg} flex items-center justify-center text-white shadow-lg`}>
-          {icon}
-        </div>
-        {trend && (
-          <div className={`flex items-center gap-1 text-xs font-medium ${trend.positive ? 'text-emerald-400' : 'text-red-400'}`}>
-            <TrendingUp className={`h-3 w-3 ${trend.positive ? '' : 'rotate-180'}`} />
-            {trend.value}
-          </div>
-        )}
-      </div>
-      <div>
-        <p className="text-gray-400 text-sm font-medium mb-1">{label}</p>
-        <p className="text-white font-bold text-3xl mb-1">{value}</p>
-        {subValue && <p className="text-gray-400 text-xs">{subValue}</p>}
-      </div>
-    </div>
-  </div>
-);
-
-const EmployeeCard = ({ employee }) => {
-  const getStatusColor = (emp) => {
-    if (emp.currentlyWorking && !emp.onBreak) return 'from-emerald-500/20 to-green-500/20 border-emerald-500/30'; // Working - Green
-    if (emp.onBreak) return 'from-amber-500/20 to-orange-500/20 border-amber-500/30'; // On Break - Yellow
-    if (emp.punchOutTime) return 'from-purple-500/20 to-violet-500/20 border-purple-500/30'; // Punched out - Violet
-    return 'from-gray-500/20 to-slate-500/20 border-gray-500/30'; // Rest - Normal
-  };
-
-  const getStatusText = (emp) => {
-    if (emp.currentlyWorking && !emp.onBreak) return 'Working';
-    if (emp.onBreak) return `On ${emp.breakType || 'Break'}`;
-    if (emp.punchOutTime) return 'Punched Out';
-    return 'Offline';
-  };
-
-  const getStatusIcon = (emp) => {
-    if (emp.currentlyWorking && !emp.onBreak) return <Zap className="h-4 w-4 text-emerald-400" />;
-    if (emp.onBreak) return <Coffee className="h-4 w-4 text-amber-400" />;
-    if (emp.punchOutTime) return <CheckCircle className="h-4 w-4 text-purple-400" />;
-    return <AlertCircle className="h-4 w-4 text-gray-400" />;
-  };
-
-  return (
-    <div className={`bg-gradient-to-br ${getStatusColor(employee)} backdrop-blur-sm border rounded-2xl p-6 hover:scale-105 transition-all duration-300`}>
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-3">
-          <div className="w-12 h-12 bg-gradient-to-br from-slate-600 to-slate-700 rounded-full flex items-center justify-center text-white font-semibold">
-            {employee.name?.charAt(0)?.toUpperCase() || '?'}
-          </div>
-          <div>
-            <h3 className="font-semibold text-white text-lg">{employee.name || 'Unknown'}</h3>
-            <p className="text-gray-400 text-sm">{employee.employeeId}</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-1">
-          {getStatusIcon(employee)}
-          <span className="text-sm font-medium text-gray-300">{getStatusText(employee)}</span>
-        </div>
-      </div>
-
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <span className="text-gray-400 text-sm">Punch In</span>
-          <span className="text-white font-medium">
-            {employee.arrivalTime ? new Date(employee.arrivalTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '--:--'}
-          </span>
-        </div>
-        <div className="flex items-center justify-between">
-          <span className="text-gray-400 text-sm">Punch Out</span>
-          <span className="text-white font-medium">
-            {employee.departureTime ? new Date(employee.departureTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '--:--'}
-          </span>
-        </div>
-        <div className="flex items-center justify-between">
-          <span className="text-gray-400 text-sm">Work Hours</span>
-          <span className="text-white font-medium">
-            {employee.totalWorkHours ? `${Math.floor(employee.totalWorkHours)}h ${Math.round((employee.totalWorkHours % 1) * 60)}m` : '0h 0m'}
-          </span>
-        </div>
-        {employee.onBreak && (
-          <div className="flex items-center justify-between">
-            <span className="text-gray-400 text-sm">Break Duration</span>
-            <span className="text-amber-400 font-medium">
-              {(() => {
-                const breakMinutes = attendanceUtils.calculateBreakMinutes(employee, employee.onBreak);
-                // Debug logging for break calculation
-                if (employee.onBreak) {
-                  console.log(`Break calculation for ${employee.name}:`, {
-                    breakMinutes,
-                    onBreak: employee.onBreak,
-                    timeline: employee.timeline,
-                    breakStartTime: employee.breakStartTime,
-                    breakDurationSeconds: employee.breakDurationSeconds,
-                    totalBreakMinutes: employee.totalBreakMinutes
-                  });
-                }
-                return breakMinutes;
-              })()}m
-            </span>
-          </div>
-        )}
-      </div>
+      <CelebrationPopup
+        celebrations={celebrations}
+        isOpen={showCelebrationPopup}
+        onClose={closeCelebrationPopup}
+      />
     </div>
   );
 };

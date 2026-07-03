@@ -1,204 +1,189 @@
-// components/sheets/SheetViewer.jsx
 import React, { useEffect, useState } from "react";
-import { X, ExternalLink, Edit3, Save, AlertCircle, Eye } from "lucide-react";
+import {
+  AlertCircle,
+  Edit3,
+  ExternalLink,
+  Eye,
+  LoaderCircle,
+  X,
+} from "lucide-react";
 import axios from "axios";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
 
-const SheetViewer = ({ sheet, onClose }) =>
-  
-  {
-  const [isLoading, setIsLoading] = useState(true);
+const SheetViewer = ({ sheet, onClose }) => {
+  const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
-  const [userPermission, setUserPermission] = useState(sheet.userPermission || "view");
+  const [permission, setPermission] = useState(
+    sheet.userPermission || "view"
+  );
 
   useEffect(() => {
-    // Update last accessed info when sheet is opened and fetch permission
+    let active = true;
+
     const updateAccess = async () => {
       try {
         const token = localStorage.getItem("token");
-        const response = await axios.get(`${API_BASE}/api/sheets/${sheet._id}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-
-        // Update user permission state
-        if (response.data.data && response.data.data.userPermission) {
-          setUserPermission(response.data.data.userPermission);
+        const response = await axios.get(
+          `${API_BASE}/api/sheets/${sheet._id}`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        if (active && response.data?.data?.userPermission) {
+          setPermission(response.data.data.userPermission);
         }
       } catch (error) {
-        console.error("Error updating access:", error);
+        console.error("Failed to update sheet access:", error);
       }
     };
 
+    const handleEscape = (event) => {
+      if (event.key === "Escape") onClose();
+    };
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", handleEscape);
     updateAccess();
 
-    // Prevent body scroll when modal is open
-    document.body.style.overflow = "hidden";
-
-    // Handle Escape key to close
-    const handleEscape = (e) => {
-      if (e.key === "Escape") {
-        onClose();
-      }
-    };
-
-    window.addEventListener("keydown", handleEscape);
-
     return () => {
-      document.body.style.overflow = "unset";
+      active = false;
+      document.body.style.overflow = originalOverflow;
       window.removeEventListener("keydown", handleEscape);
     };
-  }, [sheet, onClose]);
+  }, [onClose, sheet._id]);
 
-  const openInNewTab = () => {
-    window.open(sheet.originalUrl, "_blank", "noopener,noreferrer");
-  };
-
-  const handleIframeLoad = () => {
-    setIsLoading(false);
-    setLoadError(false);
-  };
-
-  const handleIframeError = () => {
-    setIsLoading(false);
-    setLoadError(true);
-  };
+  const sourceUrl = sheet.embedUrl || sheet.originalUrl;
+  const canEdit = permission === "edit";
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/95">
-      {/* Header */}
-      <div className="h-14 bg-[#0a0e1a] border-b border-[#232945] flex items-center justify-between px-6">
-        <div className="flex items-center gap-4">
+    <div
+      className="fixed inset-0 z-50 flex h-[100dvh] flex-col bg-slate-100 text-slate-900 dark:bg-[#0b0d12] dark:text-slate-100"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="sheet-viewer-title"
+    >
+      <header className="flex min-h-16 flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-white px-3 py-3 shadow-sm dark:border-white/10 dark:bg-[#10131c] sm:px-5">
+        <div className="flex min-w-0 items-center gap-3">
           <button
+            type="button"
             onClick={onClose}
-            className="p-2 hover:bg-[#1a1f2e] rounded-lg transition-colors"
-            title="Close (Esc)"
+            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50 hover:text-slate-900 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300 dark:hover:bg-white/[0.07] dark:hover:text-white"
+            aria-label="Close sheet viewer"
           >
-            <X className="w-5 h-5 text-gray-400 hover:text-white" />
+            <X className="h-4 w-4" />
           </button>
-          <div>
-            <h3 className="text-white font-medium flex items-center gap-2">
-              {sheet.name}
-              {userPermission === "edit" ? (
-                <span className="flex items-center gap-1 px-2 py-0.5 bg-green-500/20 text-green-400 text-xs rounded border border-green-500/50">
-                  <Edit3 className="w-3 h-3" />
-                  Can Edit
-                </span>
-              ) : (
-                <span className="flex items-center gap-1 px-2 py-0.5 bg-yellow-500/20 text-yellow-400 text-xs rounded border border-yellow-500/50">
-                  <Eye className="w-3 h-3" />
-                  View Only
-                </span>
-              )}
-            </h3>
-            <p className="text-xs text-gray-500 capitalize">
-              {sheet.type} Sheet • {userPermission === "edit" ? "All changes auto-save" : "Read-only access"}
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h1
+                id="sheet-viewer-title"
+                className="max-w-[55vw] truncate text-sm font-semibold text-slate-950 dark:text-white sm:max-w-none"
+              >
+                {sheet.name}
+              </h1>
+              <span
+                className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[10px] font-semibold ${
+                  canEdit
+                    ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-200"
+                    : "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-200"
+                }`}
+              >
+                {canEdit ? (
+                  <Edit3 className="h-3 w-3" />
+                ) : (
+                  <Eye className="h-3 w-3" />
+                )}
+                {canEdit ? "Can edit" : "View only"}
+              </span>
+            </div>
+            <p className="mt-0.5 text-[11px] capitalize text-slate-400">
+              {sheet.type || "online"} spreadsheet
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={openInNewTab}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors text-sm font-medium shadow-lg"
-          >
-            <ExternalLink className="w-4 h-4" />
-            Open in {sheet.type === "google" ? "Google Sheets" : "Excel Online"}
-          </button>
-        </div>
+
+        <a
+          href={sheet.originalUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-blue-600 px-3 text-xs font-semibold text-white transition hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-400"
+        >
+          <ExternalLink className="h-3.5 w-3.5" />
+          <span className="hidden sm:inline">Open in source app</span>
+          <span className="sm:hidden">Open source</span>
+        </a>
+      </header>
+
+      <div
+        className={`flex items-center gap-2 border-b px-4 py-2 text-xs ${
+          canEdit
+            ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-200"
+            : "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-200"
+        }`}
+      >
+        {canEdit ? (
+          <Edit3 className="h-3.5 w-3.5 shrink-0" />
+        ) : (
+          <Eye className="h-3.5 w-3.5 shrink-0" />
+        )}
+        <span>
+          {canEdit
+            ? "Editing is enabled. Changes are saved by the source platform."
+            : "This sheet is read-only for your account. Contact an administrator for edit access."}
+        </span>
       </div>
 
-      {/* Permission Banner */}
-      {userPermission === "edit" ? (
-        <div className="bg-gradient-to-r from-green-600/20 via-blue-600/20 to-purple-600/20 border-b border-green-500/30 px-6 py-2 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="flex items-center gap-2">
-              <Save className="w-4 h-4 text-green-400 animate-pulse" />
-              <p className="text-sm text-green-300 font-medium">
-                ✓ Full Edit Mode Active
+      <div className="relative min-h-0 flex-1">
+        {loading && !loadError && (
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-slate-100 dark:bg-[#0b0d12]">
+            <div className="text-center">
+              <LoaderCircle className="mx-auto h-8 w-8 animate-spin text-blue-600 dark:text-blue-300" />
+              <p className="mt-3 text-sm font-medium text-slate-600 dark:text-slate-300">
+                Loading sheet...
               </p>
             </div>
-            <span className="text-gray-400 text-xs">•</span>
-            <p className="text-xs text-gray-300">
-              You can add/edit/delete rows, columns, formulas, formatting - all changes sync instantly!
-            </p>
           </div>
-          <div className="flex items-center gap-1 text-xs text-gray-400">
-            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-            <span>Auto-saving</span>
-          </div>
-        </div>
-      ) : (
-        <div className="bg-gradient-to-r from-yellow-600/20 via-orange-600/20 to-red-600/20 border-b border-yellow-500/30 px-6 py-2 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="flex items-center gap-2">
-              <Eye className="w-4 h-4 text-yellow-400" />
-              <p className="text-sm text-yellow-300 font-medium">
-                ⚠️ View-Only Mode
+        )}
+
+        {loadError ? (
+          <div className="flex h-full items-center justify-center p-6">
+            <div className="max-w-md text-center">
+              <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl border border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-400/20 dark:bg-rose-400/10 dark:text-rose-200">
+                <AlertCircle className="h-5 w-5" />
+              </span>
+              <h2 className="mt-4 text-base font-semibold text-slate-950 dark:text-white">
+                The embedded sheet could not be loaded
+              </h2>
+              <p className="mt-2 text-sm leading-5 text-slate-500 dark:text-slate-400">
+                The source may block embedding, require a separate sign-in, or no longer be available.
               </p>
+              <a
+                href={sheet.originalUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-5 inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 text-sm font-semibold text-white transition hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-400"
+              >
+                <ExternalLink className="h-4 w-4" />
+                Open in source app
+              </a>
             </div>
-            <span className="text-gray-400 text-xs">•</span>
-            <p className="text-xs text-gray-300">
-              You can view this sheet but cannot make changes. Contact the admin for edit access.
-            </p>
           </div>
-        </div>
-      )}
-
-      {/* Loading Overlay */}
-      {isLoading && (
-        <div className="absolute inset-0 bg-[#0a0e1a] flex items-center justify-center z-10 mt-[6.5rem]">
-          <div className="text-center">
-            <div className="w-16 h-16 border-4 border-blue-500/20 border-t-blue-500 rounded-full animate-spin mx-auto mb-4"></div>
-            <p className="text-gray-400 text-sm">Loading sheet editor...</p>
-            <p className="text-gray-600 text-xs mt-2">This may take a few seconds</p>
-          </div>
-        </div>
-      )}
-
-      {/* Error State */}
-      {loadError && (
-        <div className="absolute inset-0 bg-[#0a0e1a] flex items-center justify-center z-10 mt-[6.5rem]">
-          <div className="text-center max-w-md p-6">
-            <AlertCircle className="w-16 h-16 text-red-400 mx-auto mb-4" />
-            <h3 className="text-white text-lg font-medium mb-2">Unable to Load Sheet</h3>
-            <p className="text-gray-400 text-sm mb-4">
-              The sheet couldn't be loaded. This might be because:
-            </p>
-            <ul className="text-left text-gray-400 text-xs space-y-1 mb-4">
-              <li>• The sheet doesn't have "Anyone with the link can edit" permissions</li>
-              <li>• The sheet has been deleted or moved</li>
-              <li>• You need to be signed into your Google/Microsoft account</li>
-            </ul>
-            <button
-              onClick={openInNewTab}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors text-sm"
-            >
-              Open in New Tab Instead
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* iframe Editor - Full Screen */}
-      <div className="h-[calc(100vh-6.5rem)]">
-        <iframe
-          src={sheet.embedUrl}
-          className="w-full h-full border-0"
-          title={sheet.name}
-          onLoad={handleIframeLoad}
-          onError={handleIframeError}
-          // Enhanced sandbox permissions for full editing
-          sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-modals allow-downloads"
-          // Enhanced allow permissions for clipboard and other features
-          allow="clipboard-read; clipboard-write; fullscreen; autoplay"
-          // Allow credentials for Google sign-in
-          referrerPolicy="no-referrer-when-downgrade"
-        />
-      </div>
-
-      {/* Keyboard Shortcut Helper */}
-      <div className="absolute bottom-4 right-4 bg-[#0a0e1a]/90 backdrop-blur-sm border border-[#232945] rounded-lg px-3 py-2 text-xs text-gray-400">
-        <kbd className="px-2 py-1 bg-[#1a1f2e] rounded text-gray-300">Esc</kbd> to close
+        ) : (
+          <iframe
+            src={sourceUrl}
+            className="h-full w-full border-0 bg-white"
+            title={sheet.name}
+            onLoad={() => {
+              setLoading(false);
+              setLoadError(false);
+            }}
+            onError={() => {
+              setLoading(false);
+              setLoadError(true);
+            }}
+            sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-modals allow-downloads"
+            allow="clipboard-read; clipboard-write; fullscreen"
+            referrerPolicy="no-referrer-when-downgrade"
+          />
+        )}
       </div>
     </div>
   );

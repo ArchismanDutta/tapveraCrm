@@ -1,652 +1,176 @@
-import React, { useState, useEffect, useRef } from "react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
-import rehypeRaw from "rehype-raw";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  Calendar,
-  Clock,
-  Users,
-  MessageSquare,
-  ChevronRight,
-  Search,
-  Filter,
-  FileText,
-  AlertCircle,
-  Send,
   ArrowLeft,
-  Paperclip,
-  X as XCircle,
-  Download,
-  Copy,
-  Check,
-  Reply,
-  Image as ImageIcon,
-  File,
-  Video,
-  Type,
-  Smile,
-  Sparkles,
-  Lightbulb,
-  Zap,
+  ArrowRight,
   BarChart3,
-  Star,
+  CalendarDays,
+  CheckCircle2,
+  CircleDot,
+  ClipboardList,
+  FileText,
+  FolderKanban,
+  MessageSquare,
+  Search,
+  Users,
 } from "lucide-react";
 import Sidebar from "../components/dashboard/Sidebar";
-import MediaLightbox from "../components/common/MediaLightbox";
-import notificationManager from "../utils/browserNotifications";
-import useMessageSuggestions from "../hooks/useMessageSuggestions";
 import PaymentBlockOverlay from "../components/payment/PaymentBlockOverlay";
 import usePaymentCheck from "../hooks/usePaymentCheck";
 import ProjectReportTab from "../components/project/ProjectReportTab";
 import ProjectMessagePanel from "../components/message/ProjectMessagePanel";
 
+const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
+
+const normalizeProjects = (payload) => {
+  const projectList = Array.isArray(payload)
+    ? payload
+    : Array.isArray(payload?.projects)
+    ? payload.projects
+    : [];
+
+  return projectList.map((project) => ({
+    ...project,
+    clients:
+      project.clients?.length > 0
+        ? project.clients
+        : project.client
+        ? [project.client]
+        : [],
+  }));
+};
+
+const formatDate = (value) =>
+  value
+    ? new Date(value).toLocaleDateString("en-IN", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+        timeZone: "Asia/Kolkata",
+      })
+    : "Not set";
+
+const getClientNames = (project) => {
+  const names = (project.clients || [])
+    .map((client) => client?.businessName || client?.clientName)
+    .filter(Boolean);
+  return names.length > 0 ? names.join(", ") : "No client assigned";
+};
+
+const getProjectTypes = (project) => {
+  if (Array.isArray(project.type)) return project.type.filter(Boolean);
+  if (typeof project.type === "string") {
+    return project.type
+      .split(",")
+      .map((type) => type.trim())
+      .filter(Boolean);
+  }
+  return [];
+};
+
+const getStatusStyle = (status) => {
+  switch (String(status || "").toLowerCase()) {
+    case "active":
+    case "in progress":
+    case "in-progress":
+      return "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-400/20 dark:bg-blue-400/10 dark:text-blue-200";
+    case "completed":
+      return "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-200";
+    case "inactive":
+    case "rejected":
+      return "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-400/20 dark:bg-rose-400/10 dark:text-rose-200";
+    case "pending":
+      return "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-200";
+    default:
+      return "border-slate-200 bg-slate-50 text-slate-600 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300";
+  }
+};
+
 const EmployeePortal = ({ onLogout }) => {
-  // API Base URL - use environment variable or fallback
-  const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
-
   const [collapsed, setCollapsed] = useState(false);
-  const [selectedProject, setSelectedProject] = useState(null);
-  const [activeTab, setActiveTab] = useState("overview");
-  const [searchTerm, setSearchTerm] = useState("");
   const [projects, setProjects] = useState([]);
-  const [messages, setMessages] = useState([]);
-  const [newMessage, setNewMessage] = useState("");
   const [loading, setLoading] = useState(true);
-  const [selectedFiles, setSelectedFiles] = useState([]);
-  const [replyingTo, setReplyingTo] = useState(null);
-  const [copiedText, setCopiedText] = useState(null);
-  const [messageSearchTerm, setMessageSearchTerm] = useState("");
-  const [searchSender, setSearchSender] = useState("");
-  const [dateFilter, setDateFilter] = useState({ start: "", end: "" });
-  const [showFilters, setShowFilters] = useState(false);
-  const [showFormatting, setShowFormatting] = useState(false);
-  const [showEmojiPicker, setShowEmojiPicker] = useState(null); // messageId or null
-  const [lightboxMedia, setLightboxMedia] = useState(null);
-  const [lightboxIndex, setLightboxIndex] = useState(0);
-  const [lightboxAllMedia, setLightboxAllMedia] = useState([]);
-  const [showSummaryModal, setShowSummaryModal] = useState(false);
-  const [summary, setSummary] = useState("");
-  const [summaryLoading, setSummaryLoading] = useState(false);
-  const [summaryDays, setSummaryDays] = useState(7);
-  const fileInputRef = useRef(null);
-  const textareaRef = useRef(null);
-  const wsRef = useRef(null);
-  const messagesEndRef = useRef(null);
-  const prevMessagesLengthRef = useRef(0);
-  const emojiPickerRef = useRef(null);
-
-  const commonEmojis = ["👍", "❤️", "😂", "😮", "😢", "🎉", "🔥", "👏"];
-
-  // Message suggestions
-  const { getSuggestions, getQuickReplies } = useMessageSuggestions(selectedProject?._id, messages);
-  const [suggestions, setSuggestions] = useState([]);
-  const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(0);
-  const [showSuggestions, setShowSuggestions] = useState(false);
-  const [quickReplies, setQuickReplies] = useState([]);
-  const [showQuickReplies, setShowQuickReplies] = useState(true);
-  const suggestionsRef = useRef(null);
-
-  // Payment check hook
+  const [error, setError] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedProjectId, setSelectedProjectId] = useState(null);
+  const [activeTab, setActiveTab] = useState("overview");
   const { activePayment, checkingPayment, clearPayment } = usePaymentCheck();
 
-  // Fetch projects assigned to the employee
-  useEffect(() => {
-    fetchEmployeeProjects();
-  }, []);
-
-  // WebSocket connection for real-time messages
-  useEffect(() => {
-    const token = localStorage.getItem("token");
-
-    // Determine WebSocket URL from environment variables
-    const getWebSocketURL = () => {
-      // 1) Explicit WS base overrides everything
-      if (import.meta.env.VITE_WS_BASE) return import.meta.env.VITE_WS_BASE;
-
-      // 2) Prefer API base if provided; convert http(s) -> ws(s)
-      const apiBase = import.meta.env.VITE_API_BASE;
-      if (apiBase) {
-        try {
-          const u = new URL(apiBase);
-          u.protocol = u.protocol === "https:" ? "wss:" : "ws:";
-          return `${u.protocol}//${u.host}`;
-        } catch {}
-      }
-
-      // 3) Fallback to window origin with default port
-      if (typeof window !== "undefined" && window.location) {
-        const protocol = window.location.protocol === "https:" ? "wss" : "ws";
-        const defaultHost = window.location.hostname === "localhost"
-          ? "localhost:5000"
-          : window.location.host;
-        return `${protocol}://${defaultHost}`;
-      }
-
-      // 4) Final fallback
-      return "ws://localhost:5000";
-    };
-
-    const wsURL = getWebSocketURL();
-    console.log("[EmployeePortal] Connecting to WebSocket:", wsURL);
-    const ws = new WebSocket(wsURL);
-    wsRef.current = ws;
-
-    ws.onopen = () => {
-      console.log("WebSocket connected for employee portal");
-      ws.send(JSON.stringify({ type: "authenticate", token }));
-    };
-
-    ws.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-
-        if (data.type === "authenticated") {
-          console.log("WebSocket authenticated");
-        } else if (data.type === "project_message") {
-          console.log("Received real-time project message");
-
-          // Refresh messages if it's for the currently selected project
-          if (data.projectId === selectedProject) {
-            fetchProjectMessages(selectedProject);
-          }
-
-          // Show browser notification for project messages
-          const user = JSON.parse(localStorage.getItem("user") || "{}");
-          const messageData = data.messageData || data.message || {};
-          const senderName = messageData.sentBy?.name || messageData.sentBy?.clientName || "Someone";
-
-          // Don't notify for own messages
-          if (messageData.sentBy?._id !== user._id && messageData.sentBy !== user._id) {
-            notificationManager.showGeneral(
-              "New Project Message",
-              `${senderName}: ${messageData.message || "Sent an attachment"}`,
-              {
-                tag: `project-${data.projectId}`,
-                icon: "/icon.png", // You can customize this
-                requireInteraction: false,
-              }
-            );
-          }
-        }
-      } catch (error) {
-        console.error("WebSocket message error:", error);
-      }
-    };
-
-    ws.onerror = (error) => {
-      console.error("[EmployeePortal] WebSocket error:", error);
-    };
-
-    ws.onclose = () => {
-      console.log("[EmployeePortal] WebSocket disconnected");
-      // Reconnect after 5 seconds if component is still mounted
-      const reconnectTimer = setTimeout(() => {
-        if (wsRef.current === ws) {
-          console.log("[EmployeePortal] Attempting to reconnect...");
-          // Trigger re-connection by updating a dependency
-          // Note: This is a simple approach; in production, use a more robust reconnection strategy
-        }
-      }, 5000);
-      return () => clearTimeout(reconnectTimer);
-    };
-
-    return () => {
-      if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
-        ws.close();
-      }
-      wsRef.current = null;
-    };
-  }, [selectedProject]);
-
-  // Normalize project data to handle both old (client) and new (clients) schema
-  const normalizeProjects = (projectsData) => {
-    const projectList = Array.isArray(projectsData)
-      ? projectsData
-      : Array.isArray(projectsData?.projects)
-      ? projectsData.projects
-      : [];
-
-    return projectList.map(project => {
-      // If project has old 'client' field but no 'clients', convert it
-      if (project.client && (!project.clients || project.clients.length === 0)) {
-        return {
-          ...project,
-          clients: [project.client]  // Convert single client to array
-        };
-      }
-      return project;
-    });
-  };
-
-  const fetchEmployeeProjects = async () => {
+  const fetchEmployeeProjects = useCallback(async () => {
     try {
       setLoading(true);
+      setError("");
       const token = localStorage.getItem("token");
       const response = await fetch(`${API_BASE}/api/projects?limit=100`, {
         headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
       });
 
-      if (!response.ok) {
-        throw new Error('Failed to fetch projects');
-      }
-
-      const data = await response.json();
-      const normalizedProjects = normalizeProjects(data);
-      setProjects(normalizedProjects);
-    } catch (error) {
-      console.error("Error fetching projects:", error);
+      if (!response.ok) throw new Error("Unable to load assigned projects");
+      setProjects(normalizeProjects(await response.json()));
+    } catch (fetchError) {
+      console.error("Error fetching employee projects:", fetchError);
       setProjects([]);
+      setError(fetchError.message || "Unable to load assigned projects");
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  // Handle payment cleared
+  useEffect(() => {
+    fetchEmployeeProjects();
+  }, [fetchEmployeeProjects]);
+
+  const selectedProject = useMemo(
+    () => projects.find((project) => project._id === selectedProjectId) || null,
+    [projects, selectedProjectId]
+  );
+
+  const filteredProjects = useMemo(() => {
+    const query = searchTerm.trim().toLowerCase();
+    if (!query) return projects;
+
+    return projects.filter((project) => {
+      const searchable = [
+        project.projectName,
+        getClientNames(project),
+        project.status,
+        ...getProjectTypes(project),
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return searchable.includes(query);
+    });
+  }, [projects, searchTerm]);
+
+  const stats = useMemo(() => {
+    const active = projects.filter((project) =>
+      ["active", "in progress", "in-progress"].includes(
+        String(project.status || "").toLowerCase()
+      )
+    ).length;
+    const completed = projects.filter(
+      (project) => String(project.status || "").toLowerCase() === "completed"
+    ).length;
+    return { total: projects.length, active, completed };
+  }, [projects]);
+
   const handlePaymentCleared = () => {
     clearPayment();
     fetchEmployeeProjects();
   };
 
-  const fetchProjectMessages = async (projectId) => {
-    try {
-      const token = localStorage.getItem("token");
-      const params = new URLSearchParams();
-      if (messageSearchTerm) params.append("search", messageSearchTerm);
-      if (searchSender) params.append("senderName", searchSender);
-      if (dateFilter.start) params.append("startDate", dateFilter.start);
-      if (dateFilter.end) params.append("endDate", dateFilter.end);
-
-      const queryString = params.toString();
-      const url = `${API_BASE}/api/projects/${projectId}/messages${queryString ? `?${queryString}` : ""}`;
-
-      const response = await fetch(url, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch messages');
-      }
-
-      const data = await response.json();
-      // Handle new pagination response format (data.messages) or old format (array directly)
-      setMessages(data.messages || data);
-    } catch (error) {
-      console.error("Error fetching messages:", error);
-      setMessages([]);
-    }
+  const openProject = (projectId) => {
+    setSelectedProjectId(projectId);
+    setActiveTab("overview");
   };
 
-  // Re-fetch when filters change
-  useEffect(() => {
-    if (selectedProject) {
-      fetchProjectMessages(selectedProject);
-    }
-  }, [messageSearchTerm, searchSender, dateFilter]);
-
-  // Auto-scroll only when new messages are added (not when reactions update)
-  useEffect(() => {
-    if (messages.length > prevMessagesLengthRef.current) {
-      scrollToBottom();
-    }
-    prevMessagesLengthRef.current = messages.length;
-  }, [messages]);
-
-  // Close emoji picker when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (emojiPickerRef.current && !emojiPickerRef.current.contains(event.target)) {
-        setShowEmojiPicker(null);
-      }
-      if (suggestionsRef.current && !suggestionsRef.current.contains(event.target)) {
-        setShowSuggestions(false);
-      }
-    };
-
-    if (showEmojiPicker !== null || showSuggestions) {
-      document.addEventListener('mousedown', handleClickOutside);
-    }
-
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [showEmojiPicker, showSuggestions]);
-
-  // Update suggestions when input changes
-  useEffect(() => {
-    if (newMessage.trim().length >= 2) {
-      const newSuggestions = getSuggestions(newMessage, 8);
-      setSuggestions(newSuggestions);
-      setShowSuggestions(newSuggestions.length > 0);
-      setSelectedSuggestionIndex(0);
-    } else {
-      setShowSuggestions(false);
-      setSuggestions([]);
-    }
-  }, [newMessage, getSuggestions]);
-
-  // Update quick replies based on last message
-  useEffect(() => {
-    if (messages && messages.length > 0) {
-      const currentUserId = JSON.parse(localStorage.getItem("user") || "{}")._id;
-      const lastMessage = messages[messages.length - 1];
-      if (String(lastMessage.sentBy?._id || lastMessage.sentBy) !== String(currentUserId)) {
-        const replies = getQuickReplies(lastMessage.message);
-        setQuickReplies(replies);
-      } else {
-        setQuickReplies([]);
-      }
-    }
-  }, [messages, getQuickReplies]);
-
-  // Handle suggestion selection
-  const acceptSuggestion = (suggestion) => {
-    setNewMessage(suggestion.text);
-    setShowSuggestions(false);
-    textareaRef.current?.focus();
-  };
-
-  // Handle quick reply click
-  const handleQuickReply = (text) => {
-    setNewMessage(text);
-    textareaRef.current?.focus();
-  };
-
-  const clearFilters = () => {
-    setMessageSearchTerm("");
-    setSearchSender("");
-    setDateFilter({ start: "", end: "" });
-  };
-
-  const handleSummarize = async () => {
-    if (!selectedProject) return;
-
-    setSummaryLoading(true);
-    setShowSummaryModal(true);
-    setSummary("");
-
-    try {
-      const token = localStorage.getItem("token");
-      const response = await fetch(
-        `${API_BASE}/api/projects/${selectedProject}/messages/summarize`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ days: summaryDays }),
-        }
-      );
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || "Failed to generate summary");
-      }
-
-      const data = await response.json();
-      setSummary(data.summary || "No summary available.");
-    } catch (error) {
-      console.error("Error generating summary:", error);
-      const errorMsg = error.message || "Failed to generate summary. Please try again.";
-      setSummary(`**Error:** ${errorMsg}\n\nPlease check the backend console for detailed error information.`);
-    } finally {
-      setSummaryLoading(false);
-    }
-  };
-
-  const getStatusColor = (status) => {
-    switch (status?.toLowerCase()) {
-      case "in progress":
-        return "bg-blue-500/20 text-blue-400 border border-blue-500/30";
-      case "active":
-        return "bg-green-500/20 text-green-400 border border-green-500/30";
-      case "completed":
-        return "bg-purple-500/20 text-purple-400 border border-purple-500/30";
-      case "pending":
-        return "bg-yellow-500/20 text-yellow-400 border border-yellow-500/30";
-      default:
-        return "bg-blue-500/20 text-blue-400 border border-blue-500/30";
-    }
-  };
-
-  const handleFileSelect = (e) => {
-    const files = Array.from(e.target.files || []);
-    if (files.length + selectedFiles.length > 5) {
-      alert("Maximum 5 files allowed");
-      return;
-    }
-    setSelectedFiles([...selectedFiles, ...files]);
-  };
-
-  const removeFile = (index) => {
-    setSelectedFiles(selectedFiles.filter((_, i) => i !== index));
-  };
-
-  const handleReply = (message) => {
-    setReplyingTo(message);
-  };
-
-  const scrollToMessage = (messageId) => {
-    const element = document.getElementById(`message-${messageId}`);
-    if (element) {
-      element.scrollIntoView({ behavior: "smooth", block: "center" });
-      // Highlight the message briefly
-      element.classList.add("bg-blue-500", "bg-opacity-20");
-      setTimeout(() => {
-        element.classList.remove("bg-blue-500", "bg-opacity-20");
-      }, 2000);
-    }
-  };
-
-  const copyToClipboard = (text) => {
-    navigator.clipboard.writeText(text);
-    setCopiedText(text);
-    setTimeout(() => setCopiedText(null), 2000);
-  };
-
-  // Format text helpers
-  const insertFormatting = (before, after = before) => {
-    const textarea = textareaRef.current;
-    if (!textarea) return;
-
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    const selectedText = newMessage.substring(start, end);
-    const beforeText = newMessage.substring(0, start);
-    const afterText = newMessage.substring(end);
-
-    const newText = beforeText + before + selectedText + after + afterText;
-    setNewMessage(newText);
-
-    setTimeout(() => {
-      textarea.focus();
-      const newPos = start + before.length + selectedText.length;
-      textarea.setSelectionRange(newPos, newPos);
-    }, 0);
-  };
-
-  const formatBold = () => insertFormatting("**");
-  const formatItalic = () => insertFormatting("*");
-  const formatCode = () => insertFormatting("`");
-  const formatStrikethrough = () => insertFormatting("~~");
-  const formatHeading = () => {
-    const textarea = textareaRef.current;
-    if (!textarea) return;
-    const start = textarea.selectionStart;
-    const lineStart = newMessage.lastIndexOf("\n", start - 1) + 1;
-    const beforeLine = newMessage.substring(0, lineStart);
-    const afterLine = newMessage.substring(lineStart);
-    setNewMessage(beforeLine + "## " + afterLine);
-    setTimeout(() => {
-      textarea.focus();
-      textarea.setSelectionRange(lineStart + 3, lineStart + 3);
-    }, 0);
-  };
-  const formatBullet = () => {
-    const textarea = textareaRef.current;
-    if (!textarea) return;
-    const start = textarea.selectionStart;
-    const lineStart = newMessage.lastIndexOf("\n", start - 1) + 1;
-    const beforeLine = newMessage.substring(0, lineStart);
-    const afterLine = newMessage.substring(lineStart);
-    setNewMessage(beforeLine + "- " + afterLine);
-    setTimeout(() => {
-      textarea.focus();
-      textarea.setSelectionRange(lineStart + 2, lineStart + 2);
-    }, 0);
-  };
-  const formatNumbered = () => {
-    const textarea = textareaRef.current;
-    if (!textarea) return;
-    const start = textarea.selectionStart;
-    const lineStart = newMessage.lastIndexOf("\n", start - 1) + 1;
-    const beforeLine = newMessage.substring(0, lineStart);
-    const afterLine = newMessage.substring(lineStart);
-    setNewMessage(beforeLine + "1. " + afterLine);
-    setTimeout(() => {
-      textarea.focus();
-      textarea.setSelectionRange(lineStart + 3, lineStart + 3);
-    }, 0);
-  };
-
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
-
-  const handleReaction = async (messageId, emoji) => {
-    try {
-      const token = localStorage.getItem("token");
-      const response = await fetch(
-        `${API_BASE}/api/projects/${selectedProject}/messages/${messageId}/react`,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ emoji })
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error('Failed to add reaction');
-      }
-
-      // Refresh messages to show updated reactions
-      await fetchProjectMessages(selectedProject);
-      setShowEmojiPicker(null);
-    } catch (error) {
-      console.error("Error adding reaction:", error);
-    }
-  };
-
-  const getFileIcon = (fileType) => {
-    switch (fileType) {
-      case "image":
-        return <ImageIcon className="w-4 h-4" />;
-      case "video":
-        return <Video className="w-4 h-4" />;
-      default:
-        return <File className="w-4 h-4" />;
-    }
-  };
-
-  const handleSendMessage = async (e) => {
-    e.preventDefault();
-    if (!newMessage.trim() && selectedFiles.length === 0) return;
-
-    try {
-      const token = localStorage.getItem("token");
-      const user = JSON.parse(localStorage.getItem("user") || "{}");
-      const formData = new FormData();
-
-      formData.append("message", newMessage || "(File attachment)");
-      formData.append("sentBy", user._id);
-      formData.append("senderType", user.role || 'employee');
-
-      if (replyingTo) {
-        formData.append("replyTo", replyingTo._id);
-      }
-
-      // Append files
-      selectedFiles.forEach((file) => {
-        formData.append("files", file);
-      });
-
-      const response = await fetch(`${API_BASE}/api/projects/${selectedProject}/messages`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        },
-        body: formData
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to send message');
-      }
-
-      const messageData = await response.json();
-
-      // Broadcast via WebSocket for real-time updates
-      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-        wsRef.current.send(JSON.stringify({
-          type: "project_message",
-          projectId: selectedProject,
-          messageData: messageData
-        }));
-      }
-
-      // Refresh messages and clear form
-      await fetchProjectMessages(selectedProject);
-      setNewMessage("");
-      setSelectedFiles([]);
-      setReplyingTo(null);
-    } catch (error) {
-      console.error("Error sending message:", error);
-      alert("Failed to send message. Please try again.");
-    }
-  };
-
-  const filteredProjects = projects.filter(
-    (project) => {
-      const searchLower = searchTerm.toLowerCase();
-
-      const matchesName = project.projectName?.toLowerCase().includes(searchLower);
-
-      // Handle project.type as array
-      const matchesType = Array.isArray(project.type)
-        ? project.type.some(t => t?.toLowerCase().includes(searchLower))
-        : project.type?.toLowerCase().includes(searchLower);
-
-      // Check if any client matches the search
-      const matchesClient = project.clients?.some(client =>
-        client?.clientName?.toLowerCase().includes(searchLower) ||
-        client?.businessName?.toLowerCase().includes(searchLower)
-      );
-
-      return matchesName || matchesType || matchesClient;
-    }
-  );
-
-  // Show loading while checking payment
   if (checkingPayment) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-[#0f1419]">
-        <div className="relative">
-          <div className="w-16 h-16 border-4 border-cyan-300/40 rounded-full"></div>
-          <div className="absolute top-0 left-0 w-16 h-16 border-4 border-cyan-600 border-t-transparent rounded-full animate-spin"></div>
-        </div>
-      </div>
-    );
+    return <PageLoader label="Checking account status..." />;
   }
 
-  // Show payment block if active payment exists
   if (activePayment) {
     return (
       <PaymentBlockOverlay
@@ -656,398 +180,8 @@ const EmployeePortal = ({ onLogout }) => {
     );
   }
 
-  // Project Detail View
-  if (selectedProject) {
-    const project = projects.find((p) => p._id === selectedProject);
-
-    if (!project) return null;
-
-    return (
-      <>
-      <div className="flex bg-gradient-to-br from-[#141a21] via-[#191f2b] to-[#101218] font-sans text-blue-100 min-h-screen">
-        <Sidebar
-          collapsed={collapsed}
-          setCollapsed={setCollapsed}
-          onLogout={onLogout}
-          userRole="employee"
-        />
-
-        <main
-          className={`flex-1 overflow-y-auto transition-all duration-300 ${
-            collapsed ? "ml-20" : "ml-72"
-          }`}
-        >
-          <div className="p-4 sm:p-6 lg:p-8">
-        {/* Header */}
-        <div className="bg-[#191f2b]/70 border-b border-[#232945] sticky top-0 z-10">
-          <div className="px-4 sm:px-6 lg:px-8 py-4">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={() => setSelectedProject(null)}
-                  className="flex items-center gap-2 text-blue-400 hover:text-blue-300 text-sm sm:text-base transition-colors"
-                >
-                  <ArrowLeft className="w-4 h-4" />
-                  Back
-                </button>
-                <div className="min-w-0">
-                  <h1 className="text-lg sm:text-2xl font-bold text-white truncate">
-                    {project.projectName}
-                  </h1>
-                  <p className="text-xs sm:text-sm text-blue-300 truncate">
-                    {project.clients && project.clients.length > 0
-                      ? project.clients.map(c => c?.businessName || c?.clientName).filter(Boolean).join(", ")
-                      : "No client"}
-                  </p>
-                </div>
-              </div>
-              <span
-                className={`px-3 py-1 rounded-full text-xs sm:text-sm font-medium whitespace-nowrap ${
-                  project.status === "Active" ? "bg-green-500/20 text-green-400 border border-green-500/30" :
-                  project.status === "Completed" ? "bg-purple-500/20 text-purple-400 border border-purple-500/30" :
-                  project.status === "Inactive" ? "bg-red-500/20 text-red-400 border border-red-500/30" :
-                  "bg-blue-500/20 text-blue-400 border border-blue-500/30"
-                }`}
-              >
-                {project.status}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* Tabs */}
-        <div className="bg-[#191f2b]/70 border-b border-[#232945]">
-          <div className="px-4 sm:px-6 lg:px-8">
-            <div className="flex gap-2 sm:gap-6 overflow-x-auto">
-              {["overview", "tasks", "messages", "report"].map((tab) => (
-                <button
-                  key={tab}
-                  onClick={() => setActiveTab(tab)}
-                  className={`py-3 sm:py-4 px-2 sm:px-4 text-sm font-medium border-b-2 whitespace-nowrap transition-colors flex items-center gap-2 ${
-                    activeTab === tab
-                      ? "border-blue-500 text-blue-400"
-                      : "border-transparent text-blue-300 hover:text-white"
-                  }`}
-                >
-                  {tab === "report" && <BarChart3 className="w-4 h-4" />}
-                  {tab.charAt(0).toUpperCase() + tab.slice(1)}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Content */}
-        <div className="px-4 sm:px-6 lg:px-8 py-6">
-          {activeTab === "overview" && (
-            <div className="space-y-6">
-              {/* Project Info Cards */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div className="bg-[#191f2b]/70 p-4 sm:p-6 rounded-lg shadow-xl border border-[#232945]">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 bg-blue-500/20 rounded-lg border border-blue-500/30">
-                      <Calendar className="w-5 h-5 sm:w-6 sm:h-6 text-blue-400" />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-xs sm:text-sm text-blue-300">
-                        Start Date
-                      </p>
-                      <p className="text-sm sm:text-base font-semibold text-white truncate">
-                        {project.startDate
-                          ? new Date(project.startDate).toLocaleDateString('en-IN', {
-                              day: '2-digit',
-                              month: 'short',
-                              year: 'numeric',
-                              timeZone: 'Asia/Kolkata'
-                            })
-                          : 'N/A'}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-                <div className="bg-[#191f2b]/70 p-4 sm:p-6 rounded-lg shadow-sm border border-[#232945]">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 bg-red-500/20 rounded-lg border border-red-500/30">
-                      <Clock className="w-5 h-5 sm:w-6 sm:h-6 text-red-400" />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-xs sm:text-sm text-blue-300">
-                        End Date
-                      </p>
-                      <p className="text-sm sm:text-base font-semibold text-white truncate">
-                        {project.endDate
-                          ? new Date(project.endDate).toLocaleDateString('en-IN', {
-                              day: '2-digit',
-                              month: 'short',
-                              year: 'numeric',
-                              timeZone: 'Asia/Kolkata'
-                            })
-                          : 'N/A'}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-                <div className="bg-[#191f2b]/70 p-4 sm:p-6 rounded-lg shadow-sm border border-[#232945]">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 bg-green-500/20 rounded-lg border border-green-500/30">
-                      <Users className="w-5 h-5 sm:w-6 sm:h-6 text-green-400" />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-xs sm:text-sm text-blue-300">
-                        Team Members
-                      </p>
-                      <p className="text-sm sm:text-base font-semibold text-white">
-                        {project.assignedTo?.length || 0}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-                <div className="bg-[#191f2b]/70 p-4 sm:p-6 rounded-lg shadow-sm border border-[#232945]">
-                  <div className="flex flex-col gap-3">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 bg-purple-500/20 rounded-lg border border-purple-500/30">
-                        <FileText className="w-5 h-5 sm:w-6 sm:h-6 text-purple-400" />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-xs sm:text-sm text-blue-300">
-                          Project Type
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      {(() => {
-                        const types = Array.isArray(project.type)
-                          ? project.type
-                          : (typeof project.type === 'string' ? project.type.split(/[,\s]+/) : []);
-                        return types.filter(Boolean).map((category, idx) => (
-                          <span
-                            key={idx}
-                            className="px-2 py-1 bg-purple-500/10 text-purple-400 text-xs font-semibold rounded-full border border-purple-500/30"
-                          >
-                            {category}
-                          </span>
-                        ));
-                      })()}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Project Description */}
-              <div className="bg-[#191f2b]/70 p-4 sm:p-6 rounded-lg shadow-sm border border-[#232945]">
-                <h3 className="text-base sm:text-lg font-semibold text-white mb-3">
-                  Project Description
-                </h3>
-                <p className="text-sm sm:text-base text-gray-200 leading-relaxed">
-                  {project.description || "No description available"}
-                </p>
-              </div>
-
-              {/* Progress */}
-              {project.progress !== undefined && (
-                <div className="bg-[#191f2b]/70 p-4 sm:p-6 rounded-lg shadow-sm border border-[#232945]">
-                  <div className="flex justify-between items-center mb-2">
-                    <h3 className="text-base sm:text-lg font-semibold text-white">
-                      Progress
-                    </h3>
-                    <span className="text-sm sm:text-base font-semibold text-blue-600">
-                      {project.progress}%
-                    </span>
-                  </div>
-                  
-                  <div className="w-full bg-gray-200 rounded-full h-2 sm:h-3">
-                    <div
-                      className="bg-blue-600 h-2 sm:h-3 rounded-full transition-all duration-300"
-                      style={{ width: `${project.progress}%` }}
-                    ></div>
-                  </div>
-                </div>
-              )}
-
-              {/* Team Members */}
-              {project.assignedTo && project.assignedTo.length > 0 && (
-                <div className="bg-[#191f2b]/70 p-4 sm:p-6 rounded-lg shadow-sm border border-[#232945]">
-                  <h3 className="text-base sm:text-lg font-semibold text-white mb-4">
-                    Team Members
-                  </h3>
-                  <div className="flex flex-wrap gap-2">
-                    {project.assignedTo.map((member, index) => (
-                      <span
-                        key={member._id || index}
-                        className="px-3 py-1 bg-blue-500/10 text-white rounded-full text-xs sm:text-sm"
-                      >
-                        {member.name || member.email || 'Unknown'}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Project Creator */}
-              {project.createdBy && (
-                <div className="bg-[#191f2b]/70 p-4 sm:p-6 rounded-lg shadow-sm border border-[#232945]">
-                  <h3 className="text-base sm:text-lg font-semibold text-white mb-4 flex items-center gap-2">
-                    <Star className="w-5 h-5 text-yellow-400" />
-                    Project Creator
-                  </h3>
-                  <div className="flex items-center gap-3 p-3 bg-[#0f1419] rounded-lg border border-[#232945]">
-                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-yellow-500 to-orange-500 flex items-center justify-center text-white font-semibold flex-shrink-0">
-                      {(project.createdBy.name || "U").charAt(0).toUpperCase()}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-white font-medium text-sm">
-                        {project.createdBy.name || "Unknown"}
-                      </p>
-                      {project.createdBy.email && (
-                        <p className="text-xs text-yellow-400">
-                          {project.createdBy.email}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {activeTab === "tasks" && (
-            <ProjectTasksSection
-              projectId={project._id}
-              API_BASE={API_BASE}
-            />
-          )}
-
-          {activeTab === "messages" && (
-            <div style={{ height: "calc(100vh - 200px)", minHeight: "600px" }}>
-              <ProjectMessagePanel
-                projectId={selectedProject}
-                currentUser={JSON.parse(localStorage.getItem("user") || "{}")}
-              />
-            </div>
-          )}
-
-          {activeTab === "report" && (
-            <ProjectReportTab
-              projectId={selectedProject}
-              userRole="employee"
-              userId={JSON.parse(localStorage.getItem("user") || "{}")?._id}
-            />
-          )}
-        </div>
-        </div>
-        </main>
-      </div>
-
-      {/* AI Summary Modal */}
-      {showSummaryModal && (
-        <div
-          className="fixed inset-0 flex items-center justify-center p-4"
-          style={{ zIndex: 9999, backgroundColor: 'rgba(0, 0, 0, 0.75)' }}
-          onClick={() => setShowSummaryModal(false)}
-        >
-          <div
-            className="bg-[#0f1419] rounded-lg shadow-2xl max-w-3xl w-full max-h-[80vh] flex flex-col border border-[#232945]"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between p-4 border-b border-[#232945]">
-              <div className="flex items-center gap-3">
-                <Sparkles className="w-5 h-5 text-purple-400" />
-                <h2 className="text-xl font-semibold text-white">AI Project Summary</h2>
-              </div>
-              <button onClick={() => setShowSummaryModal(false)} className="p-2 hover:bg-[#232945] rounded-lg transition">
-                <XCircle className="w-5 h-5 text-gray-400" />
-              </button>
-            </div>
-            <div className="px-4 py-3 border-b border-[#232945] bg-[#0a0e14]">
-              <div className="flex items-center gap-3">
-                <label className="text-sm text-gray-400">Time period:</label>
-                <select value={summaryDays} onChange={(e) => setSummaryDays(Number(e.target.value))} className="px-3 py-1.5 bg-[#0f1419] text-white rounded border border-[#232945] focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm">
-                  <option value={1}>Last 24 hours</option>
-                  <option value={3}>Last 3 days</option>
-                  <option value={7}>Last week</option>
-                  <option value={14}>Last 2 weeks</option>
-                  <option value={30}>Last month</option>
-                </select>
-                <button onClick={handleSummarize} disabled={summaryLoading} className="px-4 py-1.5 bg-purple-600 hover:bg-purple-500 text-white rounded text-sm transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2">
-                  <Sparkles className="w-4 h-4" />
-                  {summaryLoading ? "Generating..." : "Regenerate"}
-                </button>
-              </div>
-            </div>
-            <div className="flex-1 overflow-y-auto p-6">
-              {summaryLoading ? (
-                <div className="flex flex-col items-center justify-center h-full gap-4">
-                  <div className="relative">
-                    <div className="w-16 h-16 border-4 border-purple-500/30 border-t-purple-500 rounded-full animate-spin"></div>
-                    <Sparkles className="w-6 h-6 text-purple-400 absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2" />
-                  </div>
-                  <p className="text-gray-400 text-sm">Analyzing project messages with AI...</p>
-                </div>
-              ) : summary ? (
-                <div className="prose prose-invert prose-sm max-w-none">
-                  <ReactMarkdown
-                    remarkPlugins={[remarkGfm]}
-                    rehypePlugins={[rehypeRaw]}
-                    components={{
-                      p: ({ children }) => (
-                        <p className="mb-3 text-gray-200 leading-relaxed">{children}</p>
-                      ),
-                      h1: ({ children }) => (
-                        <h1 className="text-2xl font-bold mb-3 text-white">{children}</h1>
-                      ),
-                      h2: ({ children }) => (
-                        <h2 className="text-xl font-bold mb-2 text-white">{children}</h2>
-                      ),
-                      h3: ({ children }) => (
-                        <h3 className="text-lg font-bold mb-2 text-white">{children}</h3>
-                      ),
-                      ul: ({ children }) => (
-                        <ul className="list-disc list-inside mb-3 space-y-1">{children}</ul>
-                      ),
-                      ol: ({ children }) => (
-                        <ol className="list-decimal list-inside mb-3 space-y-1">{children}</ol>
-                      ),
-                      li: ({ children }) => (
-                        <li className="ml-2 text-gray-200">{children}</li>
-                      ),
-                      strong: ({ children }) => (
-                        <strong className="font-bold text-purple-300">{children}</strong>
-                      ),
-                      code: ({ inline, children }) =>
-                        inline ? (
-                          <code className="bg-[#0a0e14] px-1.5 py-0.5 rounded text-purple-300 text-xs">
-                            {children}
-                          </code>
-                        ) : (
-                          <code className="block bg-[#0a0e14] p-3 rounded text-sm overflow-x-auto text-gray-300">
-                            {children}
-                          </code>
-                        ),
-                    }}
-                  >
-                    {summary}
-                  </ReactMarkdown>
-                </div>
-              ) : (
-                <div className="flex items-center justify-center h-full text-gray-400 text-sm">Click "Regenerate" to generate a summary</div>
-              )}
-            </div>
-            <div className="p-4 border-t border-[#232945] flex justify-between items-center bg-[#0a0e14]">
-              <div className="text-xs text-gray-500">Powered by AI • Last {summaryDays} day{summaryDays !== 1 ? 's' : ''}</div>
-              <button onClick={() => { navigator.clipboard.writeText(summary); setCopiedText(summary); setTimeout(() => setCopiedText(null), 2000); }} disabled={!summary || summaryLoading} className="px-4 py-2 bg-[#0f1419] hover:bg-[#232945] text-gray-200 rounded transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 text-sm border border-[#232945]">
-                {copiedText === summary ? (<><Check className="w-4 h-4" />Copied!</>) : (<><Copy className="w-4 h-4" />Copy Summary</>)}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-      </>
-    );
-  }
-
-  // Projects List View
   return (
-    <div className="flex bg-gradient-to-br from-[#141a21] via-[#191f2b] to-[#101218] font-sans text-blue-100 min-h-screen">
+    <div className="relative flex h-[100dvh] overflow-hidden bg-slate-50 font-sans text-slate-900 dark:bg-[#0b0d12] dark:text-slate-100">
       <Sidebar
         collapsed={collapsed}
         setCollapsed={setCollapsed}
@@ -1056,403 +190,440 @@ const EmployeePortal = ({ onLogout }) => {
       />
 
       <main
-        className={`flex-1 overflow-y-auto transition-all duration-300 ${
-          collapsed ? "ml-20" : "ml-72"
+        className={`h-[100dvh] min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 transition-all duration-300 [scrollbar-gutter:stable] sm:px-5 lg:px-6 ${
+          collapsed ? "ml-16" : "ml-16 sm:ml-56"
         }`}
+        style={{ WebkitOverflowScrolling: "touch" }}
       >
-        <div className="p-4 sm:p-6 lg:p-8">
-      {/* Header */}
-      <div className="bg-[#191f2b]/70 border-b border-[#232945] rounded-xl mb-6">
-        <div className="px-4 sm:px-6 lg:px-8 py-6">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div>
-              <h1 className="text-2xl sm:text-3xl font-bold text-white">
-                My Projects
-              </h1>
-              <p className="text-sm sm:text-base text-blue-300 mt-1">
-                View and manage your assigned projects
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-6">
-          <div className="bg-[#191f2b]/70 p-4 sm:p-6 rounded-lg shadow-xl border border-[#232945]">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs sm:text-sm text-blue-300">
-                  Total Projects
-                </p>
-                <p className="text-2xl sm:text-3xl font-bold text-white mt-1">
-                  {projects.length}
-                </p>
-              </div>
-              <div className="p-3 bg-blue-600/20 rounded-lg border border-blue-500/30">
-                <FileText className="w-6 h-6 sm:w-8 sm:h-8 text-blue-400" />
-              </div>
-            </div>
-          </div>
-          <div className="bg-[#191f2b]/70 p-4 sm:p-6 rounded-lg shadow-xl border border-[#232945]">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs sm:text-sm text-blue-300">
-                  Active Projects
-                </p>
-                <p className="text-2xl sm:text-3xl font-bold text-green-400 mt-1">
-                  {
-                    projects.filter(
-                      (p) =>
-                        p.status?.toLowerCase() === "active" ||
-                        p.status?.toLowerCase() === "in progress"
-                    ).length
-                  }
-                </p>
-              </div>
-              <div className="p-3 bg-green-600/20 rounded-lg">
-                <Clock className="w-6 h-6 sm:w-8 sm:h-8 text-green-600" />
-              </div>
-            </div>
-          </div>
-          <div className="bg-[#191f2b]/70 p-4 sm:p-6 rounded-lg shadow-sm border border-[#232945]">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs sm:text-sm text-blue-300">Completed</p>
-                <p className="text-2xl sm:text-3xl font-bold text-blue-300 mt-1">
-                  {
-                    projects.filter(
-                      (p) => p.status?.toLowerCase() === "completed"
-                    ).length
-                  }
-                </p>
-              </div>
-              <div className="p-3 bg-blue-500/10 rounded-lg">
-                <AlertCircle className="w-6 h-6 sm:w-8 sm:h-8 text-blue-300" />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Search and Filter */}
-        <div className="mb-6 flex flex-col sm:flex-row gap-4">
-          <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-            <input
-              type="text"
-              placeholder="Search projects..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 bg-[#232945] border border-[#232945] text-white placeholder-gray-400 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm sm:text-base"
+        <div className="mx-auto max-w-[1500px] pb-8">
+          {selectedProject ? (
+            <ProjectWorkspace
+              project={selectedProject}
+              activeTab={activeTab}
+              setActiveTab={setActiveTab}
+              onBack={() => setSelectedProjectId(null)}
             />
+          ) : (
+            <ProjectPortfolio
+              projects={filteredProjects}
+              stats={stats}
+              searchTerm={searchTerm}
+              setSearchTerm={setSearchTerm}
+              loading={loading}
+              error={error}
+              onRetry={fetchEmployeeProjects}
+              onOpenProject={openProject}
+            />
+          )}
+        </div>
+      </main>
+    </div>
+  );
+};
+
+const PageLoader = ({ label }) => (
+  <div className="flex h-[100dvh] items-center justify-center bg-slate-50 dark:bg-[#0b0d12]">
+    <div className="text-center">
+      <div className="mx-auto h-10 w-10 animate-spin rounded-full border-2 border-blue-200 border-t-blue-600 dark:border-white/10 dark:border-t-blue-400" />
+      <p className="mt-4 text-sm font-medium text-slate-600 dark:text-slate-300">{label}</p>
+    </div>
+  </div>
+);
+
+const ProjectPortfolio = ({
+  projects,
+  stats,
+  searchTerm,
+  setSearchTerm,
+  loading,
+  error,
+  onRetry,
+  onOpenProject,
+}) => (
+  <div className="space-y-4 sm:space-y-5">
+    <header className="rounded-2xl border border-slate-200 bg-white px-5 py-5 shadow-sm dark:border-white/10 dark:bg-[#10131c] sm:px-6">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Employee workspace</div>
+          <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950 dark:text-white">My projects</h1>
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Assigned projects, tasks, communication, and reports.</p>
+        </div>
+        <label className="relative block w-full lg:max-w-sm">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <input
+            type="search"
+            value={searchTerm}
+            onChange={(event) => setSearchTerm(event.target.value)}
+            placeholder="Search projects or clients"
+            className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 dark:border-white/10 dark:bg-white/[0.04] dark:text-white dark:placeholder:text-slate-500"
+          />
+        </label>
+      </div>
+    </header>
+
+    <section className="grid grid-cols-3 gap-px overflow-hidden rounded-2xl border border-slate-200 bg-slate-200 shadow-sm dark:border-white/10 dark:bg-white/10">
+      {[
+        { label: "Assigned", value: stats.total, icon: FolderKanban },
+        { label: "Active", value: stats.active, icon: CircleDot },
+        { label: "Completed", value: stats.completed, icon: CheckCircle2 },
+      ].map(({ label, value, icon: Icon }) => (
+        <div key={label} className="flex items-center gap-3 bg-white px-4 py-3.5 dark:bg-[#10131c] sm:px-5">
+          <div className="hidden h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-500 dark:bg-white/[0.05] dark:text-slate-300 sm:flex">
+            {React.createElement(Icon, { className: "h-4 w-4" })}
+          </div>
+          <div>
+            <div className="text-xl font-semibold text-slate-950 dark:text-white">{value}</div>
+            <div className="text-xs text-slate-500 dark:text-slate-400">{label}</div>
           </div>
         </div>
+      ))}
+    </section>
 
-        {/* Projects Grid */}
-        {loading ? (
-          <div className="flex items-center justify-center py-12">
-            <div className="text-center">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-              <p className="text-sm sm:text-base text-blue-300">
-                Loading projects...
-              </p>
-            </div>
+    {loading ? (
+      <div className="rounded-2xl border border-slate-200 bg-white py-16 text-center shadow-sm dark:border-white/10 dark:bg-[#10131c]">
+        <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-blue-200 border-t-blue-600 dark:border-white/10 dark:border-t-blue-400" />
+        <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">Loading assigned projects...</p>
+      </div>
+    ) : error ? (
+      <EmptyState
+        icon={FolderKanban}
+        title="Projects could not be loaded"
+        description={error}
+        actionLabel="Try again"
+        onAction={onRetry}
+      />
+    ) : projects.length > 0 ? (
+      <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+        {projects.map((project) => (
+          <ProjectCard
+            key={project._id}
+            project={project}
+            onOpen={() => onOpenProject(project._id)}
+          />
+        ))}
+      </section>
+    ) : (
+      <EmptyState
+        icon={FolderKanban}
+        title={searchTerm ? "No matching projects" : "No projects assigned"}
+        description={
+          searchTerm
+            ? "Try a different project name, client, type, or status."
+            : "Projects assigned to you will appear here."
+        }
+      />
+    )}
+  </div>
+);
+
+const ProjectCard = ({ project, onOpen }) => {
+  const types = getProjectTypes(project);
+  const teamSize = project.assignedTo?.length || 0;
+
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="group flex min-h-64 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white text-left shadow-sm transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-white/10 dark:bg-[#10131c] dark:hover:border-white/20"
+    >
+      <div className="flex flex-1 flex-col p-5">
+        <div className="mb-4 flex items-start justify-between gap-3">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600 dark:bg-blue-400/10 dark:text-blue-300">
+            <FolderKanban className="h-4 w-4" />
           </div>
-        ) : filteredProjects.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredProjects.map((project) => (
-              <div
-                key={project._id}
-                className="bg-gradient-to-br from-[#191f2b]/90 to-[#141a21]/90 border border-[#232945] rounded-xl overflow-hidden hover:border-blue-500/50 transition-all duration-300 hover:shadow-xl hover:shadow-blue-500/10 group cursor-pointer flex flex-col"
-                onClick={() => {
-                  setSelectedProject(project._id);
-                  fetchProjectMessages(project._id);
-                }}
-              >
-                {/* Card Header */}
-                <div className="p-6 space-y-4 flex-1">
-                  {/* Type Badge and Status */}
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex items-start gap-2 flex-wrap flex-1">
-                      <div className="p-2 bg-gradient-to-br from-blue-500/20 to-purple-500/20 rounded-lg border border-blue-500/30">
-                        <FileText className="w-5 h-5 text-blue-400" />
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        {(() => {
-                          const types = Array.isArray(project.type)
-                            ? project.type
-                            : (typeof project.type === 'string' ? project.type.split(/[,\s]+/) : []);
-                          return types.filter(Boolean).map((category, idx) => (
-                            <span
-                              key={idx}
-                              className="px-3 py-1 bg-blue-500/10 text-blue-400 text-xs font-semibold rounded-full border border-blue-500/30"
-                            >
-                              {category}
-                            </span>
-                          ));
-                        })()}
-                      </div>
-                    </div>
-                    <span
-                      className={`px-3 py-1 text-xs font-semibold rounded-full whitespace-nowrap ${getStatusColor(
-                        project.status
-                      )}`}
-                    >
-                      {project.status}
-                    </span>
-                  </div>
+          <span className={`rounded-md border px-2 py-1 text-[11px] font-semibold ${getStatusStyle(project.status)}`}>
+            {project.status || "Not set"}
+          </span>
+        </div>
 
-                  {/* Project Name */}
-                  <div>
-                    <h3 className="text-lg font-bold text-white group-hover:text-blue-400 transition-colors line-clamp-2">
-                      {project.projectName}
-                    </h3>
-                  </div>
+        <h2 className="line-clamp-2 text-base font-semibold text-slate-950 transition group-hover:text-blue-700 dark:text-white dark:group-hover:text-blue-300">
+          {project.projectName || "Untitled project"}
+        </h2>
+        <p className="mt-1 truncate text-sm text-slate-500 dark:text-slate-400">{getClientNames(project)}</p>
 
-                  {/* Client Info */}
-                  <div className="flex items-center gap-2 text-sm">
-                    <div className="p-1.5 bg-purple-500/10 rounded border border-purple-500/30">
-                      <Users className="w-3.5 h-3.5 text-purple-400" />
-                    </div>
-                    <span className="text-gray-300 truncate">
-                      {project.clients && project.clients.length > 0
-                        ? project.clients.map(c => c?.businessName || c?.clientName).filter(Boolean).join(", ")
-                        : "No client"}
-                    </span>
-                  </div>
-
-                  {/* Assigned Team */}
-                  {project.assignedTo && project.assignedTo.length > 0 && (
-                    <div className="flex items-center gap-2">
-                      <div className="flex -space-x-2">
-                        {project.assignedTo.slice(0, 3).map((emp, idx) => (
-                          <div
-                            key={idx}
-                            className="w-8 h-8 rounded-full bg-gradient-to-br from-cyan-500 to-blue-500 border-2 border-[#191f2b] flex items-center justify-center text-white text-xs font-semibold"
-                            title={emp.name || "Unknown"}
-                          >
-                            {(emp.name || "U").charAt(0).toUpperCase()}
-                          </div>
-                        ))}
-                        {project.assignedTo.length > 3 && (
-                          <div className="w-8 h-8 rounded-full bg-gray-700 border-2 border-[#191f2b] flex items-center justify-center text-white text-xs font-semibold">
-                            +{project.assignedTo.length - 3}
-                          </div>
-                        )}
-                      </div>
-                      <span className="text-xs text-gray-400">
-                        {project.assignedTo.length} team {project.assignedTo.length === 1 ? 'member' : 'members'}
-                      </span>
-                    </div>
-                  )}
-
-                  {/* Start Date */}
-                  <div className="flex items-center gap-2 text-sm text-gray-400">
-                    <Calendar className="w-4 h-4" />
-                    <span>
-                      {project.startDate
-                        ? new Date(project.startDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-                        : 'No start date'}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Card Footer */}
-                <div className="px-6 py-4 bg-[#0f1419]/50 border-t border-[#232945] flex items-center justify-between flex-shrink-0 mt-auto">
-                  <div className="flex items-center gap-2 text-sm text-gray-400">
-                    <MessageSquare className="w-4 h-4" />
-                    <span>View Details</span>
-                  </div>
-                  <ChevronRight className="w-5 h-5 text-gray-400 group-hover:text-blue-400 group-hover:translate-x-1 transition-all" />
-                </div>
-              </div>
+        {types.length > 0 && (
+          <div className="mt-4 flex flex-wrap gap-1.5">
+            {types.slice(0, 3).map((type) => (
+              <span key={type} className="rounded-md bg-slate-100 px-2 py-1 text-[11px] font-medium text-slate-600 dark:bg-white/[0.05] dark:text-slate-300">
+                {type}
+              </span>
             ))}
           </div>
-        ) : (
-          <div className="bg-[#191f2b]/70 rounded-lg shadow-sm border border-[#232945] p-8 sm:p-12 text-center">
-            <FileText className="w-12 h-12 sm:w-16 sm:h-16 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg sm:text-xl font-semibold text-white mb-2">
-              No Projects Found
-            </h3>
-            <p className="text-sm sm:text-base text-blue-300">
-              {searchTerm
-                ? "No projects match your search criteria."
-                : "You have no assigned projects yet."}
-            </p>
-          </div>
         )}
-      </div>
-      </main>
 
-      {/* Media Lightbox */}
-      {lightboxMedia && (
-        <MediaLightbox
-          media={lightboxMedia}
-          allMedia={lightboxAllMedia}
-          currentIndex={lightboxIndex}
-          onClose={() => setLightboxMedia(null)}
-          onNavigate={(newIndex) => {
-            setLightboxIndex(newIndex);
-            setLightboxMedia(lightboxAllMedia[newIndex]);
-          }}
-        />
+        <div className="mt-auto grid grid-cols-2 gap-3 pt-5 text-xs text-slate-500 dark:text-slate-400">
+          <span className="inline-flex items-center gap-1.5"><CalendarDays className="h-3.5 w-3.5" />{formatDate(project.startDate)}</span>
+          <span className="inline-flex items-center justify-end gap-1.5"><Users className="h-3.5 w-3.5" />{teamSize} {teamSize === 1 ? "member" : "members"}</span>
+        </div>
+      </div>
+
+      <div className="flex items-center justify-between border-t border-slate-200 px-5 py-3 text-xs font-semibold text-slate-600 dark:border-white/10 dark:text-slate-300">
+        <span>Open project</span>
+        <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+      </div>
+    </button>
+  );
+};
+
+const ProjectWorkspace = ({ project, activeTab, setActiveTab, onBack }) => {
+  const currentUser = useMemo(
+    () => JSON.parse(localStorage.getItem("user") || "{}"),
+    []
+  );
+  const tabs = [
+    { id: "overview", label: "Overview", icon: FolderKanban },
+    { id: "tasks", label: "Tasks", icon: ClipboardList },
+    { id: "messages", label: "Messages", icon: MessageSquare },
+    { id: "report", label: "Report", icon: BarChart3 },
+  ];
+
+  return (
+    <div className="space-y-4 sm:space-y-5">
+      <header className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-white/10 dark:bg-[#10131c]">
+        <div className="flex flex-col gap-4 px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+          <div className="flex min-w-0 items-start gap-3">
+            <button
+              type="button"
+              onClick={onBack}
+              className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 text-slate-500 transition hover:bg-slate-50 hover:text-slate-900 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/[0.05] dark:hover:text-white"
+              aria-label="Back to projects"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </button>
+            <div className="min-w-0">
+              <div className="text-xs font-medium text-slate-500 dark:text-slate-400">{getClientNames(project)}</div>
+              <h1 className="mt-1 truncate text-xl font-semibold text-slate-950 dark:text-white sm:text-2xl">{project.projectName}</h1>
+            </div>
+          </div>
+          <span className={`w-fit rounded-md border px-2.5 py-1.5 text-xs font-semibold ${getStatusStyle(project.status)}`}>
+            {project.status || "Not set"}
+          </span>
+        </div>
+
+        <nav className="flex gap-1 overflow-x-auto border-t border-slate-200 px-3 py-2 dark:border-white/10 sm:px-5" aria-label="Project sections">
+          {tabs.map(({ id, label, icon: Icon }) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setActiveTab(id)}
+              className={`inline-flex h-9 items-center gap-2 whitespace-nowrap rounded-lg px-3 text-sm font-medium transition ${
+                activeTab === id
+                  ? "bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900"
+                  : "text-slate-500 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-white/[0.05] dark:hover:text-white"
+              }`}
+            >
+              {React.createElement(Icon, { className: "h-4 w-4" })} {label}
+            </button>
+          ))}
+        </nav>
+      </header>
+
+      {activeTab === "overview" && <ProjectOverview project={project} />}
+      {activeTab === "tasks" && (
+        <ProjectTasksSection projectId={project._id} />
+      )}
+      {activeTab === "messages" && (
+        <div className="min-h-[620px] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-white/10 dark:bg-[#10131c]" style={{ height: "calc(100dvh - 220px)" }}>
+          <ProjectMessagePanel projectId={project._id} currentUser={currentUser} />
+        </div>
+      )}
+      {activeTab === "report" && (
+        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-white/10 dark:bg-[#10131c]">
+          <ProjectReportTab
+            projectId={project._id}
+            userRole="employee"
+            userId={currentUser?._id}
+          />
+        </div>
       )}
     </div>
   );
 };
 
-// Project Tasks Section Component
-const ProjectTasksSection = ({ projectId, API_BASE }) => {
+const ProjectOverview = ({ project }) => {
+  const progress = Math.max(0, Math.min(Number(project.progress) || 0, 100));
+  const types = getProjectTypes(project);
+
+  return (
+    <div className="space-y-4">
+      <section className="grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-slate-200 bg-slate-200 shadow-sm dark:border-white/10 dark:bg-white/10 lg:grid-cols-4">
+        {[
+          { label: "Start date", value: formatDate(project.startDate), icon: CalendarDays },
+          { label: "End date", value: formatDate(project.endDate), icon: CalendarDays },
+          { label: "Team", value: `${project.assignedTo?.length || 0} members`, icon: Users },
+          { label: "Type", value: types.join(", ") || "Not set", icon: FileText },
+        ].map(({ label, value, icon: Icon }) => (
+          <div key={label} className="flex min-w-0 items-center gap-3 bg-white p-4 dark:bg-[#10131c]">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-500 dark:bg-white/[0.05] dark:text-slate-300">{React.createElement(Icon, { className: "h-4 w-4" })}</div>
+            <div className="min-w-0"><div className="text-xs text-slate-500 dark:text-slate-400">{label}</div><div className="mt-0.5 truncate text-sm font-semibold text-slate-900 dark:text-white">{value}</div></div>
+          </div>
+        ))}
+      </section>
+
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.5fr)_minmax(280px,0.5fr)]">
+        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-[#10131c]">
+          <h2 className="text-base font-semibold text-slate-950 dark:text-white">Project brief</h2>
+          <p className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-300">{project.description || "No project description has been added."}</p>
+
+          {project.progress !== undefined && (
+            <div className="mt-6 border-t border-slate-200 pt-5 dark:border-white/10">
+              <div className="mb-2 flex items-center justify-between text-xs"><span className="font-medium text-slate-600 dark:text-slate-300">Overall progress</span><span className="text-slate-500 dark:text-slate-400">{progress}%</span></div>
+              <div className="h-1.5 overflow-hidden rounded-full bg-slate-100 dark:bg-white/[0.07]"><div className="h-full rounded-full bg-blue-600" style={{ width: `${progress}%` }} /></div>
+            </div>
+          )}
+        </section>
+
+        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-[#10131c]">
+          <h2 className="text-base font-semibold text-slate-950 dark:text-white">Project team</h2>
+          <div className="mt-4 space-y-3">
+            {(project.assignedTo || []).length > 0 ? (
+              project.assignedTo.slice(0, 6).map((member, index) => (
+                <div key={member._id || index} className="flex items-center gap-3">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-900 text-xs font-semibold text-white dark:bg-slate-100 dark:text-slate-900">{String(member.name || member.email || "U").charAt(0).toUpperCase()}</div>
+                  <div className="min-w-0"><div className="truncate text-sm font-medium text-slate-900 dark:text-white">{member.name || "Team member"}</div>{member.email && <div className="truncate text-xs text-slate-500 dark:text-slate-400">{member.email}</div>}</div>
+                </div>
+              ))
+            ) : (
+              <p className="text-sm text-slate-500 dark:text-slate-400">No team members assigned.</p>
+            )}
+          </div>
+        </section>
+      </div>
+    </div>
+  );
+};
+
+const EmptyState = ({ icon: Icon, title, description, actionLabel, onAction }) => (
+  <section className="rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-14 text-center dark:border-white/15 dark:bg-[#10131c]">
+    <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-xl bg-slate-100 text-slate-500 dark:bg-white/[0.05] dark:text-slate-300">{React.createElement(Icon, { className: "h-5 w-5" })}</div>
+    <h2 className="mt-4 text-base font-semibold text-slate-950 dark:text-white">{title}</h2>
+    <p className="mx-auto mt-1 max-w-md text-sm text-slate-500 dark:text-slate-400">{description}</p>
+    {actionLabel && (
+      <button type="button" onClick={onAction} className="mt-4 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700">{actionLabel}</button>
+    )}
+  </section>
+);
+
+const ProjectTasksSection = ({ projectId }) => {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
   const [updatingTaskId, setUpdatingTaskId] = useState(null);
 
-  useEffect(() => {
-    fetchProjectTasks();
-  }, [projectId]);
-
-  const fetchProjectTasks = async () => {
+  const fetchProjectTasks = useCallback(async () => {
     try {
       setLoading(true);
+      setError("");
       const token = localStorage.getItem("token");
       const response = await fetch(`${API_BASE}/api/tasks`, {
-        headers: { 'Authorization': `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` },
       });
-      const allTasks = await response.json();
-      // Filter tasks for this project
-      const projectTasks = allTasks.filter(t => t.project?._id === projectId);
-      setTasks(projectTasks);
-    } catch (error) {
-      console.error("Error fetching tasks:", error);
+      if (!response.ok) throw new Error("Unable to load project tasks");
+      const payload = await response.json();
+      const allTasks = Array.isArray(payload) ? payload : payload?.tasks || [];
+      setTasks(
+        allTasks.filter((task) =>
+          String(task.project?._id || task.project || "") === String(projectId)
+        )
+      );
+    } catch (fetchError) {
+      console.error("Error fetching project tasks:", fetchError);
+      setError(fetchError.message || "Unable to load project tasks");
     } finally {
       setLoading(false);
     }
-  };
+  }, [projectId]);
+
+  useEffect(() => {
+    fetchProjectTasks();
+  }, [fetchProjectTasks]);
 
   const handleStatusChange = async (taskId, newStatus) => {
-    setUpdatingTaskId(taskId);
     try {
+      setUpdatingTaskId(taskId);
       const token = localStorage.getItem("token");
       const response = await fetch(`${API_BASE}/api/tasks/${taskId}/status`, {
-        method: 'PATCH',
+        method: "PATCH",
         headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
         },
-        body: JSON.stringify({ status: newStatus })
+        body: JSON.stringify({ status: newStatus }),
       });
-
       if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
-        throw new Error(data.message || 'Status update failed');
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload.message || "Status update failed");
       }
-
-      fetchProjectTasks();
-    } catch (error) {
-      console.error("Error updating status:", error);
-      alert(error.message || 'Status update failed. Please try again.');
+      await fetchProjectTasks();
+    } catch (updateError) {
+      console.error("Error updating task status:", updateError);
+      setError(updateError.message || "Status update failed");
     } finally {
       setUpdatingTaskId(null);
     }
   };
 
-  if (loading) {
-    return (
-      <div className="bg-[#191f2b]/70 rounded-lg shadow-sm border border-[#232945] p-8">
-        <div className="text-center py-8 text-gray-400">Loading tasks...</div>
-      </div>
-    );
+  if (loading) return <PageLoaderCard label="Loading project tasks..." />;
+  if (error && tasks.length === 0) {
+    return <EmptyState icon={ClipboardList} title="Tasks could not be loaded" description={error} actionLabel="Try again" onAction={fetchProjectTasks} />;
   }
-
-  if (!tasks.length) {
-    return (
-      <div className="bg-[#191f2b]/70 rounded-lg shadow-sm border border-[#232945] p-8">
-        <div className="text-center py-8 text-gray-400">No tasks for this project</div>
-      </div>
-    );
+  if (tasks.length === 0) {
+    return <EmptyState icon={ClipboardList} title="No project tasks" description="Tasks linked to this project will appear here." />;
   }
 
   return (
-    <div className="space-y-4">
-      {tasks.map((task) => (
-        <div key={task._id} className="bg-[#191f2b]/70 rounded-lg p-6 border border-[#232945]">
-          {/* Task Header */}
-          <div className="flex justify-between items-start mb-4">
-            <div className="flex-1">
-              <h4 className="text-lg font-semibold text-white">{task.title}</h4>
-              {task.description && (
-                <p className="text-sm text-gray-400 mt-1">{task.description}</p>
-              )}
-              <div className="flex flex-wrap gap-3 mt-2">
-                <span className="text-xs text-gray-500">
-                  Due: {task.dueDate ? new Date(task.dueDate).toLocaleDateString() : 'No due date'}
-                </span>
-                <span className={`text-xs px-2 py-1 rounded ${
-                  task.priority === 'High' ? 'bg-red-500/20 text-red-400' :
-                  task.priority === 'Medium' ? 'bg-yellow-500/20 text-yellow-400' :
-                  'bg-green-500/20 text-green-400'
-                }`}>
-                  {task.priority} Priority
-                </span>
-                <span className={`text-xs px-2 py-1 rounded ${
-                  task.status === 'completed' ? 'bg-green-500/20 text-green-400' :
-                  task.status === 'in-progress' ? 'bg-blue-500/20 text-blue-400' :
-                  task.status === 'rejected' ? 'bg-red-500/20 text-red-400' :
-                  'bg-gray-500/20 text-gray-400'
-                }`}>
-                  {task.status}
-                </span>
+    <div className="space-y-3">
+      {error && <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-400/20 dark:bg-rose-400/10 dark:text-rose-200">{error}</div>}
+      {tasks.map((task) => {
+        const status = String(task.status || "pending").toLowerCase();
+        return (
+          <article key={task._id} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-[#10131c]">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h2 className="text-sm font-semibold text-slate-950 dark:text-white">{task.title}</h2>
+                  <span className={`rounded-md border px-2 py-0.5 text-[11px] font-semibold ${getStatusStyle(task.status)}`}>{task.status || "Pending"}</span>
+                  <span className={`rounded-md border px-2 py-0.5 text-[11px] font-semibold ${task.priority === "High" ? "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-400/20 dark:bg-rose-400/10 dark:text-rose-200" : task.priority === "Medium" ? "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-200" : "border-slate-200 bg-slate-50 text-slate-600 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300"}`}>{task.priority || "Normal"}</span>
+                </div>
+                {task.description && <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">{task.description}</p>}
+                <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">Due {task.dueDate ? formatDate(task.dueDate) : "date not set"}</p>
               </div>
-            </div>
-          </div>
 
-          {/* Rejection info (admin rejected this task with a reason) */}
-          {task.status === 'rejected' && (
-            <div className="mb-4 p-3 bg-red-500/10 border border-red-500/30 rounded-lg">
-              <p className="text-red-400 font-semibold mb-1">❌ Task Rejected by Admin</p>
-              <p className="text-sm text-gray-300">
-                <strong>Reason:</strong> {task.rejectionReason || 'No reason provided'}
-              </p>
-              {task.rejectedAt && (
-                <p className="text-xs text-gray-500 mt-1">
-                  Rejected on: {new Date(task.rejectedAt).toLocaleString()}
-                </p>
+              {status !== "completed" && (
+                <label className="shrink-0 text-xs text-slate-500 dark:text-slate-400">
+                  <span className="sr-only">Update task status</span>
+                  <select
+                    value={status === "rejected" ? "" : status}
+                    onChange={(event) => event.target.value && handleStatusChange(task._id, event.target.value)}
+                    disabled={updatingTaskId === task._id}
+                    className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none focus:border-blue-500 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-200"
+                  >
+                    {status === "rejected" && <option value="" disabled>Move to...</option>}
+                    <option value="pending">Pending</option>
+                    <option value="in-progress">In progress</option>
+                    <option value="completed">Completed</option>
+                  </select>
+                </label>
               )}
-              <p className="text-xs text-yellow-300 mt-2 italic">
-                Address the feedback, then update the status below.
-              </p>
             </div>
-          )}
 
-          {/* Status control */}
-          <div className="border-t border-[#232945] pt-4 flex items-center gap-3">
-            {task.status === 'completed' ? (
-              <span className="text-sm text-green-400">
-                ✅ Completed{task.completedAt ? ` on ${new Date(task.completedAt).toLocaleDateString()}` : ''} — awaiting admin review
-              </span>
-            ) : (
-              <>
-                <label className="text-sm text-gray-400">Update status:</label>
-                <select
-                  value={task.status === 'rejected' ? '' : task.status}
-                  onChange={(e) => e.target.value && handleStatusChange(task._id, e.target.value)}
-                  disabled={updatingTaskId === task._id}
-                  className="px-3 py-2 bg-[#0f1419] border border-[#232945] rounded-lg text-white text-sm focus:outline-none focus:border-blue-500"
-                >
-                  {task.status === 'rejected' && (
-                    <option value="" disabled>Rejected — move to...</option>
-                  )}
-                  <option value="pending">Pending</option>
-                  <option value="in-progress">In Progress</option>
-                  <option value="completed">Completed</option>
-                </select>
-              </>
+            {status === "rejected" && (
+              <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-400/20 dark:bg-rose-400/10 dark:text-rose-200">
+                <span className="font-semibold">Revision requested:</span> {task.rejectionReason || "No reason provided"}
+              </div>
             )}
-          </div>
-        </div>
-      ))}
+          </article>
+        );
+      })}
     </div>
   );
 };
+
+const PageLoaderCard = ({ label }) => (
+  <div className="rounded-2xl border border-slate-200 bg-white py-16 text-center shadow-sm dark:border-white/10 dark:bg-[#10131c]">
+    <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-blue-200 border-t-blue-600 dark:border-white/10 dark:border-t-blue-400" />
+    <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">{label}</p>
+  </div>
+);
 
 export default EmployeePortal;

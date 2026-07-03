@@ -238,35 +238,25 @@ export const WebSocketProvider = ({ children }) => {
               }
             }
 
-            // Handle chat notifications
+            // Handle chat notifications —
+            // Only show browser notification here; do NOT update the unread counter
+            // because the type:"message" handler above already does that — incrementing
+            // here too causes the badge to show 2× the real unread count.
             if ((data.channel || "").toLowerCase() === "chat") {
               const fromSelf = String(data.from || "") === String(currentUserId || "");
               const convId = String(data.conversationId || "");
               const isActive = activeConversationIdRef.current && String(activeConversationIdRef.current) === convId;
 
-              if (!fromSelf && !isActive) {
+              if (!fromSelf && !isActive && notificationManager.isEnabled()) {
                 try {
-                  const rawMap = sessionStorage.getItem("chat_unread_map");
-                  const map = rawMap ? JSON.parse(rawMap) : {};
-                  map[convId] = (map[convId] || 0) + 1;
-                  sessionStorage.setItem("chat_unread_map", JSON.stringify(map));
-
-                  const total = Object.values(map).reduce((a, b) => a + Number(b || 0), 0);
-                  sessionStorage.setItem("chat_unread_total", String(total));
-
-                  window.dispatchEvent(new CustomEvent("chat-unread-total", { detail: { total } }));
-                  window.dispatchEvent(new CustomEvent("chat-unread-map", { detail: { map } }));
-
-                  if (notificationManager.isEnabled()) {
-                    const conversation = conversationsRef.current.find(c => c._id === convId);
-                    const conversationName = conversation?.name || "Group Chat";
-                    notificationManager.showNotification(data.title || `New message in ${conversationName}`, {
-                      body: data.body || data.message,
-                      tag: `chat-${convId}`,
-                      icon: "/favicon.ico",
-                      data: { conversationId: convId, type: "chat" }
-                    });
-                  }
+                  const conversation = conversationsRef.current.find(c => c._id === convId);
+                  const conversationName = conversation?.name || "Group Chat";
+                  notificationManager.showNotification(data.title || `New message in ${conversationName}`, {
+                    body: data.body || data.message,
+                    tag: `chat-${convId}`,
+                    icon: "/favicon.ico",
+                    data: { conversationId: convId, type: "chat" }
+                  });
                 } catch (err) {
                   console.error("Failed to handle chat notification:", err);
                 }

@@ -1,399 +1,383 @@
-import React, { useState, useEffect } from "react";
-import { Eye, Mail, Building2, Badge, User, Crown, ChevronDown, Loader2, X, AlertCircle, Globe, ShieldCheck } from "lucide-react";
+import React, { useEffect, useMemo, useState } from "react";
+import {
+  AlertCircle,
+  ChevronDown,
+  Crown,
+  Eye,
+  Globe,
+  Loader2,
+  Mail,
+  MapPin,
+  User,
+  X,
+} from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
-const ROLE_STYLES = {
-  "super-admin": "bg-purple-500/20 text-purple-300 border-purple-500/30",
-  admin:         "bg-blue-500/20 text-blue-300 border-blue-500/30",
-  hr:            "bg-teal-500/20 text-teal-300 border-teal-500/30",
-  employee:      "bg-slate-500/20 text-slate-300 border-slate-500/30",
+const statusStyles = {
+  active:
+    "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-200",
+  terminated:
+    "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-400/20 dark:bg-rose-400/10 dark:text-rose-200",
+  absconded:
+    "border-orange-200 bg-orange-50 text-orange-700 dark:border-orange-400/20 dark:bg-orange-400/10 dark:text-orange-200",
 };
 
-const ROLE_LABELS = {
-  "super-admin": "⚡ Super Admin",
-  admin:         "🛡️ Admin",
-  hr:            "👥 HR",
-  employee:      "👤 Employee",
-};
-
-const EmployeeTable = ({ employees = [], currentUser, onStatusUpdate, updatingStatus, regions = [], onRegionChange, onRoleChange }) => {
+const EmployeeTable = ({
+  employees = [],
+  currentUser,
+  onStatusUpdate,
+  updatingStatus,
+  regions = [],
+  onRegionChange,
+  canManage = false,
+}) => {
   const navigate = useNavigate();
-  const [hoveredRow, setHoveredRow] = useState(null);
   const [statusDropdownOpen, setStatusDropdownOpen] = useState(null);
   const [regionDropdownOpen, setRegionDropdownOpen] = useState(null);
-  const [roleDropdownOpen, setRoleDropdownOpen] = useState(null);
 
-  const isSuperAdmin = currentUser?.role === "super-admin";
+  const sortedEmployees = useMemo(() => {
+    const currentUserId = String(currentUser?._id || "");
+    return [...employees].sort((first, second) => {
+      if (first._id === currentUserId) return -1;
+      if (second._id === currentUserId) return 1;
+      return 0;
+    });
+  }, [currentUser?._id, employees]);
 
-  const handleView = (emp) => {
-    if (emp && emp._id) {
-      navigate(`/employee/${emp._id}`);
-    }
-  };
+  useEffect(() => {
+    const closeDropdowns = (event) => {
+      if (!event.target.closest(".status-dropdown")) setStatusDropdownOpen(null);
+      if (!event.target.closest(".region-dropdown")) setRegionDropdownOpen(null);
+    };
+    document.addEventListener("mousedown", closeDropdowns);
+    return () => document.removeEventListener("mousedown", closeDropdowns);
+  }, []);
 
   if (!currentUser) return null;
 
-  const sortedEmployees = [...employees].sort((a, b) => {
-    if (a._id === String(currentUser._id)) return -1;
-    if (b._id === String(currentUser._id)) return 1;
-    return 0;
-  });
-
-  const getStatusColor = (status) => {
-    switch (status?.toLowerCase()) {
-      case 'active':
-        return 'bg-green-500/20 text-green-300 border border-green-500/30';
-      case 'terminated':
-        return 'bg-red-500/20 text-red-300 border border-red-500/30';
-      case 'absconded':
-        return 'bg-orange-500/20 text-orange-300 border border-orange-500/30';
-      default:
-        return 'bg-gray-500/20 text-gray-300 border border-gray-500/30';
-    }
+  const viewEmployee = (employee) => {
+    if (canManage && employee?._id) navigate(`/employee/${employee._id}`);
   };
 
-  const getStatusIcon = (status) => {
-    switch (status?.toLowerCase()) {
-      case 'active':
-        return <Badge className="w-3 h-3" />;
-      case 'terminated':
-        return <X className="w-3 h-3" />;
-      case 'absconded':
-        return <AlertCircle className="w-3 h-3" />;
-      default:
-        return <Badge className="w-3 h-3" />;
-    }
+  const sharedControlProps = {
+    canManage,
+    regions,
+    updatingStatus,
+    statusDropdownOpen,
+    setStatusDropdownOpen,
+    regionDropdownOpen,
+    setRegionDropdownOpen,
+    onStatusUpdate,
+    onRegionChange,
   };
 
-  const handleStatusChange = (employeeId, newStatus) => {
-    if (onStatusUpdate) {
-      onStatusUpdate(employeeId, newStatus);
-    }
-    setStatusDropdownOpen(null);
-  };
-
-  const handleRegionToggle = (employeeId, region) => {
-    // Don't close dropdown, allow multiple selections
-    if (onRegionChange) {
-      onRegionChange(employeeId, region);
-    }
-  };
-
-  // Close dropdown when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (statusDropdownOpen && !event.target.closest('.status-dropdown')) {
-        setStatusDropdownOpen(null);
-      }
-      if (regionDropdownOpen && !event.target.closest('.region-dropdown')) {
-        setRegionDropdownOpen(null);
-      }
-      if (roleDropdownOpen && !event.target.closest('.role-dropdown')) {
-        setRoleDropdownOpen(null);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [statusDropdownOpen, regionDropdownOpen]);
-
-  const getDepartmentIcon = (department) => {
-    switch (department?.toLowerCase()) {
-      case 'executives':
-        return <Crown className="h-4 w-4" />;
-      case 'development':
-        return <Badge className="h-4 w-4" />;
-      case 'humanresource':
-      case 'human resource':
-        return <User className="h-4 w-4" />;
-      default:
-        return <Building2 className="h-4 w-4" />;
-    }
-  };
+  if (sortedEmployees.length === 0) {
+    return (
+      <div className="py-14 text-center">
+        <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-slate-100 text-slate-400 dark:bg-white/[0.05]">
+          <User className="h-5 w-5" />
+        </span>
+        <h3 className="mt-4 text-sm font-semibold text-slate-900 dark:text-white">
+          No employees found
+        </h3>
+        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+          Try changing the search term or filters.
+        </p>
+      </div>
+    );
+  }
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-slate-600/30">
-      {/* Table Container */}
-      <div className="overflow-x-auto overflow-y-auto max-h-[600px]">
-        <table className="w-full text-sm">
-          <thead className="bg-gradient-to-r from-slate-700/50 to-slate-800/50 sticky top-0 z-10">
-            <tr className="text-gray-300">
-              <th className="p-4 text-left font-semibold">Employee</th>
-              <th className="p-4 text-left font-semibold">Contact</th>
-              <th className="p-4 text-left font-semibold">Department</th>
-              <th className="p-4 text-left font-semibold">Position</th>
-              <th className="p-4 text-center font-semibold">Region</th>
-              <th className="p-4 text-center font-semibold">Status</th>
-              <th className="p-4 text-center font-semibold">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-700/30">
-            {sortedEmployees.length === 0 ? (
-              <tr>
-                <td colSpan={7} className="p-12 text-center">
-                  <div className="flex flex-col items-center space-y-3">
-                    <div className="w-16 h-16 bg-slate-700/30 rounded-full flex items-center justify-center">
-                      <User className="w-8 h-8 text-gray-500" />
-                    </div>
-                    <p className="text-gray-400 text-lg">No employees found</p>
-                    <p className="text-gray-500 text-sm">Try adjusting your search or filters</p>
-                  </div>
-                </td>
-              </tr>
-            ) : (
-              sortedEmployees.map((emp) => {
-                const isCurrentUser = emp._id === String(currentUser._id);
-                const isHovered = hoveredRow === emp._id;
+    <div>
+      <div className="space-y-3 md:hidden">
+        {sortedEmployees.map((employee) => {
+          const isCurrentUser = employee._id === String(currentUser._id);
+          return (
+            <article
+              key={employee._id}
+              onClick={() => viewEmployee(employee)}
+              className={`rounded-xl border p-4 transition ${
+                canManage ? "cursor-pointer" : ""
+              } ${
+                isCurrentUser
+                  ? "border-blue-200 bg-blue-50/60 dark:border-blue-400/20 dark:bg-blue-400/[0.06]"
+                  : "border-slate-200 hover:border-slate-300 dark:border-white/10 dark:hover:border-white/20"
+              }`}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <EmployeeIdentity employee={employee} isCurrentUser={isCurrentUser} />
+                <StatusControl employee={employee} {...sharedControlProps} />
+              </div>
+              <div className="mt-4 grid grid-cols-2 gap-3 border-t border-slate-200 pt-3 text-xs dark:border-white/10">
+                <Detail label="Department" value={employee.department || "N/A"} />
+                <Detail label="Position" value={employee.designation || "N/A"} />
+              </div>
+              <div className="mt-4 flex items-center justify-between gap-3">
+                <RegionControl employee={employee} {...sharedControlProps} />
+                <EmployeeAction employee={employee} canManage={canManage} onView={viewEmployee} />
+              </div>
+            </article>
+          );
+        })}
+      </div>
 
+      <div className="hidden overflow-hidden rounded-xl border border-slate-200 dark:border-white/10 md:block">
+        <div className="max-h-[650px] overflow-auto">
+          <table className="w-full min-w-[1080px] text-left">
+            <thead className="sticky top-0 z-10 bg-slate-50 dark:bg-[#151923]">
+              <tr className="border-b border-slate-200 dark:border-white/10">
+                {["Employee", "Contact", "Department", "Position", "Region", "Status", ""].map(
+                  (heading) => (
+                    <th
+                      key={heading || "actions"}
+                      className="px-4 py-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400"
+                    >
+                      {heading}
+                    </th>
+                  ),
+                )}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-200 dark:divide-white/10">
+              {sortedEmployees.map((employee) => {
+                const isCurrentUser = employee._id === String(currentUser._id);
                 return (
                   <tr
-                    key={emp._id}
-                    className={`transition-all duration-200 cursor-pointer ${
+                    key={employee._id}
+                    onClick={() => viewEmployee(employee)}
+                    className={`transition ${canManage ? "cursor-pointer" : ""} ${
                       isCurrentUser
-                        ? "bg-gradient-to-r from-cyan-500/10 to-blue-500/10 border-l-4 border-cyan-400"
-                        : isHovered
-                        ? "bg-slate-700/20 border-l-4 border-slate-500"
-                        : "hover:bg-slate-700/20 hover:border-l-4 hover:border-slate-500"
+                        ? "bg-blue-50/60 dark:bg-blue-400/[0.05]"
+                        : "hover:bg-slate-50 dark:hover:bg-white/[0.025]"
                     }`}
-                    onMouseEnter={() => setHoveredRow(emp._id)}
-                    onMouseLeave={() => setHoveredRow(null)}
-                    onClick={() => handleView(emp)}
                   >
-                    {/* Employee Info */}
-                    <td className="p-4">
-                      <div className="flex items-center space-x-3">
-                        <div className="flex-shrink-0 relative">
-                          <img
-                            src={`https://ui-avatars.com/api/?name=${encodeURIComponent(emp.name)}&background=6366f1&color=ffffff&size=40`}
-                            alt={emp.name}
-                            className="w-10 h-10 rounded-full object-cover border-2 border-slate-600"
-                          />
-                          {isCurrentUser && (
-                            <div className="absolute -top-1 -right-1 w-4 h-4 bg-cyan-400 rounded-full flex items-center justify-center">
-                              <Crown className="w-2 h-2 text-white" />
-                            </div>
-                          )}
-                        </div>
-                        <div>
-                          <p className={`font-semibold ${isCurrentUser ? 'text-cyan-300' : 'text-white'}`}>
-                            {emp.name}
-                            {isCurrentUser && (
-                              <span className="ml-2 text-xs text-cyan-400">(You)</span>
-                            )}
-                          </p>
-                          <p className="text-sm text-gray-400">
-                            ID: {emp.employeeId || '-'}
-                          </p>
-                        </div>
+                    <td className="px-4 py-3.5">
+                      <EmployeeIdentity employee={employee} isCurrentUser={isCurrentUser} />
+                    </td>
+                    <td className="px-4 py-3.5">
+                      <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
+                        <Mail className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                        <span className="max-w-52 truncate">{employee.email || "—"}</span>
                       </div>
                     </td>
-
-                    {/* Contact */}
-                    <td className="p-4">
-                      <div className="flex items-center space-x-2">
-                        <Mail className="h-4 w-4 text-gray-400" />
-                        <span className="text-gray-300">{emp.email || '-'}</span>
-                      </div>
+                    <td className="px-4 py-3.5 text-sm font-medium text-slate-700 dark:text-slate-200">
+                      {employee.department || "N/A"}
                     </td>
-
-                    {/* Department */}
-                    <td className="p-4">
-                      <div className="flex items-center space-x-2">
-                        <div className="text-purple-400">
-                          {getDepartmentIcon(emp.department)}
-                        </div>
-                        <span className="text-gray-300 font-medium">
-                          {emp.department || 'N/A'}
-                        </span>
-                      </div>
+                    <td className="px-4 py-3.5 text-sm text-slate-600 dark:text-slate-300">
+                      {employee.designation || "N/A"}
                     </td>
-
-                    {/* Position */}
-                    <td className="p-4">
-                      <span className="text-gray-300">
-                        {emp.designation || 'N/A'}
-                      </span>
+                    <td className="px-4 py-3.5">
+                      <RegionControl employee={employee} {...sharedControlProps} />
                     </td>
-
-                    {/* Region */}
-                    <td className="p-4">
-                      <div className="relative region-dropdown">
-                        <div className="flex flex-wrap gap-1 items-center justify-center">
-                          {/* Display current regions as badges */}
-                          {(emp.regions && emp.regions.length > 0 ? emp.regions : [emp.region || 'Global']).map((region, idx) => (
-                            <span
-                              key={idx}
-                              className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-500/20 text-blue-300 border border-blue-500/30"
-                            >
-                              {region === 'Global' ? '🌍' : '📍'}
-                              {region}
-                            </span>
-                          ))}
-
-                          {/* Edit button */}
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setRegionDropdownOpen(regionDropdownOpen === emp._id ? null : emp._id);
-                            }}
-                            className="inline-flex items-center px-2 py-1 rounded-md text-xs font-semibold transition-all duration-200 hover:scale-105 bg-slate-700/50 text-gray-300 hover:bg-slate-600/50 cursor-pointer"
-                            title="Edit regions"
-                          >
-                            <ChevronDown className="w-3 h-3" />
-                          </button>
-                        </div>
-
-                        {/* Multi-select Region Dropdown */}
-                        {regionDropdownOpen === emp._id && regions.length > 0 && (
-                          <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 bg-slate-800 border border-slate-600/50 rounded-xl shadow-2xl z-50 min-w-[180px] max-h-[250px] overflow-y-auto p-2">
-                            <div className="text-xs text-gray-400 px-2 py-1 mb-1 font-semibold">Select Regions</div>
-                            {regions.map((region) => {
-                              const empRegions = emp.regions || [emp.region || 'Global'];
-                              const isSelected = empRegions.includes(region);
-
-                              return (
-                                <label
-                                  key={region}
-                                  className="flex items-center gap-2 px-2 py-2 text-sm transition-colors duration-200 rounded-lg hover:bg-slate-700/50 cursor-pointer"
-                                  onClick={(e) => e.stopPropagation()}
-                                >
-                                  <input
-                                    type="checkbox"
-                                    checked={isSelected}
-                                    onChange={(e) => {
-                                      e.stopPropagation();
-                                      handleRegionToggle(emp._id, region);
-                                    }}
-                                    className="w-4 h-4 rounded border-slate-600 text-blue-500 focus:ring-blue-500 focus:ring-offset-0 bg-slate-700 cursor-pointer"
-                                  />
-                                  <span className="flex-1 text-gray-300 flex items-center gap-1">
-                                    {region === 'Global' ? (
-                                      <Globe className="w-3 h-3" />
-                                    ) : (
-                                      <span className="text-xs">📍</span>
-                                    )}
-                                    {region}
-                                  </span>
-                                </label>
-                              );
-                            })}
-                            <div className="border-t border-slate-600/50 mt-2 pt-2">
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setRegionDropdownOpen(null);
-                                }}
-                                className="w-full px-3 py-1.5 text-xs font-semibold bg-blue-500/20 text-blue-300 rounded-lg hover:bg-blue-500/30 transition-colors"
-                              >
-                                Done
-                              </button>
-                            </div>
-                          </div>
-                        )}
-                      </div>
+                    <td className="px-4 py-3.5">
+                      <StatusControl employee={employee} {...sharedControlProps} />
                     </td>
-
-                    {/* Status */}
-                    <td className="p-4 text-center">
-                      <div className="relative status-dropdown">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setStatusDropdownOpen(statusDropdownOpen === emp._id ? null : emp._id);
-                          }}
-                          disabled={updatingStatus === emp._id}
-                          className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold transition-all duration-200 hover:scale-105 ${getStatusColor(emp.status)} ${
-                            updatingStatus === emp._id ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:shadow-lg'
-                          }`}
-                        >
-                          {updatingStatus === emp._id ? (
-                            <Loader2 className="w-3 h-3 animate-spin mr-2" />
-                          ) : (
-                            <span className="mr-2">
-                              {getStatusIcon(emp.status)}
-                            </span>
-                          )}
-                          {emp.status || 'active'}
-                          {updatingStatus !== emp._id && (
-                            <ChevronDown className="w-3 h-3 ml-1" />
-                          )}
-                        </button>
-
-                        {/* Status Dropdown */}
-                        {statusDropdownOpen === emp._id && (
-                          <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 bg-slate-800 border border-slate-600/50 rounded-xl shadow-2xl z-50 min-w-[120px]">
-                            {['active', 'terminated', 'absconded'].map((status) => (
-                              <button
-                                key={status}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleStatusChange(emp._id, status);
-                                }}
-                                className={`w-full px-3 py-2 text-left text-sm transition-colors duration-200 first:rounded-t-xl last:rounded-b-xl flex items-center gap-2 ${
-                                  emp.status === status
-                                    ? 'bg-cyan-500/20 text-cyan-300'
-                                    : 'text-gray-300 hover:bg-slate-700/50'
-                                }`}
-                              >
-                                {getStatusIcon(status)}
-                                <span className="capitalize">{status}</span>
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    </td>
-
-                    {/* Actions */}
-                    <td className="p-4 text-center">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleView(emp);
-                        }}
-                        className="inline-flex items-center gap-2 px-3 py-2 bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 rounded-lg font-medium transition-all duration-200 hover:scale-105"
-                        title="View Details"
-                      >
-                        <Eye className="h-4 w-4" />
-                        <span className="hidden sm:inline">View</span>
-                      </button>
+                    <td className="px-4 py-3.5 text-right">
+                      <EmployeeAction employee={employee} canManage={canManage} onView={viewEmployee} />
                     </td>
                   </tr>
                 );
-              })
-            )}
-          </tbody>
-        </table>
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
 
-      {/* Table Footer with Summary */}
-      {sortedEmployees.length > 0 && (
-        <div className="bg-slate-800/30 border-t border-slate-600/30 px-4 py-3">
-          <div className="flex items-center justify-between text-sm text-gray-400">
-            <span>
-              Showing {sortedEmployees.length} employee{sortedEmployees.length !== 1 ? 's' : ''}
+      <div className="mt-3 flex flex-col gap-2 text-xs text-slate-500 dark:text-slate-400 sm:flex-row sm:items-center sm:justify-between">
+        <span>
+          Showing {sortedEmployees.length} employee
+          {sortedEmployees.length === 1 ? "" : "s"}
+        </span>
+        <div className="flex flex-wrap gap-3">
+          {[
+            ["Active", "active", "bg-emerald-500"],
+            ["Terminated", "terminated", "bg-rose-500"],
+            ["Absconded", "absconded", "bg-orange-500"],
+          ].map(([label, status, dot]) => (
+            <span key={status} className="inline-flex items-center gap-1.5">
+              <span className={`h-1.5 w-1.5 rounded-full ${dot}`} />
+              {sortedEmployees.filter((employee) => employee.status?.toLowerCase() === status).length} {label}
             </span>
-            <div className="flex items-center space-x-4">
-              <span className="flex items-center space-x-1">
-                <div className="w-2 h-2 bg-green-400 rounded-full"></div>
-                <span>{sortedEmployees.filter(emp => emp.status === 'active').length} Active</span>
-              </span>
-              <span className="flex items-center space-x-1">
-                <div className="w-2 h-2 bg-red-400 rounded-full"></div>
-                <span>{sortedEmployees.filter(emp => emp.status === 'terminated').length} Terminated</span>
-              </span>
-              <span className="flex items-center space-x-1">
-                <div className="w-2 h-2 bg-orange-400 rounded-full"></div>
-                <span>{sortedEmployees.filter(emp => emp.status === 'absconded').length} Absconded</span>
-              </span>
-            </div>
-          </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const EmployeeIdentity = ({ employee, isCurrentUser }) => (
+  <div className="flex min-w-0 items-center gap-3">
+    <span className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-sm font-semibold text-white">
+      {employee.name?.charAt(0)?.toUpperCase() || "?"}
+      {isCurrentUser && (
+        <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-amber-400 ring-2 ring-white dark:ring-[#10131c]">
+          <Crown className="h-2.5 w-2.5 text-white" />
+        </span>
+      )}
+    </span>
+    <div className="min-w-0">
+      <p className="truncate text-sm font-semibold text-slate-900 dark:text-white">
+        {employee.name} {isCurrentUser && <span className="text-xs font-medium text-blue-600 dark:text-blue-300">(You)</span>}
+      </p>
+      <p className="truncate text-xs text-slate-500 dark:text-slate-400">
+        ID: {employee.employeeId || "—"}
+      </p>
+    </div>
+  </div>
+);
+
+const Detail = ({ label, value }) => (
+  <div className="min-w-0">
+    <p className="text-slate-400">{label}</p>
+    <p className="mt-1 truncate font-medium text-slate-700 dark:text-slate-200">{value}</p>
+  </div>
+);
+
+const getEmployeeRegions = (employee) =>
+  employee.regions?.length ? employee.regions : [employee.region || "Global"];
+
+const RegionControl = ({
+  employee,
+  canManage,
+  regions,
+  regionDropdownOpen,
+  setRegionDropdownOpen,
+  onRegionChange,
+}) => {
+  const employeeRegions = getEmployeeRegions(employee);
+  return (
+    <div className="region-dropdown relative" onClick={(event) => event.stopPropagation()}>
+      <div className="flex flex-wrap items-center gap-1">
+        {employeeRegions.map((region) => (
+          <span
+            key={region}
+            className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-700 dark:border-blue-400/20 dark:bg-blue-400/10 dark:text-blue-200"
+          >
+            {region === "Global" ? <Globe className="h-3 w-3" /> : <MapPin className="h-3 w-3" />}
+            {region}
+          </span>
+        ))}
+        {canManage && (
+          <button
+            type="button"
+            onClick={() =>
+              setRegionDropdownOpen(
+                regionDropdownOpen === employee._id ? null : employee._id,
+              )
+            }
+            className="rounded-md border border-slate-200 p-1 text-slate-400 transition hover:bg-slate-50 hover:text-slate-700 dark:border-white/10 dark:hover:bg-white/[0.05] dark:hover:text-white"
+            aria-label={`Edit regions for ${employee.name}`}
+          >
+            <ChevronDown className="h-3 w-3" />
+          </button>
+        )}
+      </div>
+
+      {canManage && regionDropdownOpen === employee._id && (
+        <div className="absolute left-0 top-full z-40 mt-2 min-w-52 rounded-xl border border-slate-200 bg-white p-2 shadow-xl dark:border-slate-700 dark:bg-slate-900">
+          <p className="px-2 py-1 text-xs font-semibold text-slate-500 dark:text-slate-400">Assigned regions</p>
+          {regions.map((region) => (
+            <label key={region} className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800">
+              <input
+                type="checkbox"
+                checked={employeeRegions.includes(region)}
+                onChange={() => onRegionChange?.(employee._id, region)}
+                className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+              />
+              {region === "Global" ? <Globe className="h-3.5 w-3.5" /> : <MapPin className="h-3.5 w-3.5" />}
+              {region}
+            </label>
+          ))}
+          <button type="button" onClick={() => setRegionDropdownOpen(null)} className="mt-1 h-8 w-full rounded-lg bg-blue-600 text-xs font-semibold text-white hover:bg-blue-700">Done</button>
         </div>
       )}
     </div>
   );
 };
+
+const StatusControl = ({
+  employee,
+  canManage,
+  updatingStatus,
+  statusDropdownOpen,
+  setStatusDropdownOpen,
+  onStatusUpdate,
+}) => {
+  const status = employee.status?.toLowerCase() || "active";
+  return (
+    <div className="status-dropdown relative" onClick={(event) => event.stopPropagation()}>
+      <button
+        type="button"
+        disabled={!canManage || updatingStatus === employee._id}
+        onClick={() =>
+          setStatusDropdownOpen(
+            statusDropdownOpen === employee._id ? null : employee._id,
+          )
+        }
+        className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold capitalize transition disabled:cursor-default ${
+          statusStyles[status] ||
+          "border-slate-200 bg-slate-100 text-slate-600 dark:border-white/10 dark:bg-white/[0.05] dark:text-slate-300"
+        }`}
+      >
+        {updatingStatus === employee._id ? (
+          <Loader2 className="h-3 w-3 animate-spin" />
+        ) : status === "terminated" ? (
+          <X className="h-3 w-3" />
+        ) : status === "absconded" ? (
+          <AlertCircle className="h-3 w-3" />
+        ) : (
+          <span className="h-1.5 w-1.5 rounded-full bg-current" />
+        )}
+        {status}
+        {canManage && updatingStatus !== employee._id && <ChevronDown className="h-3 w-3" />}
+      </button>
+
+      {canManage && statusDropdownOpen === employee._id && (
+        <div className="absolute right-0 top-full z-40 mt-2 min-w-36 overflow-hidden rounded-xl border border-slate-200 bg-white p-1 shadow-xl dark:border-slate-700 dark:bg-slate-900">
+          {["active", "terminated", "absconded"].map((nextStatus) => (
+            <button
+              key={nextStatus}
+              type="button"
+              onClick={() => {
+                onStatusUpdate?.(employee._id, nextStatus);
+                setStatusDropdownOpen(null);
+              }}
+              className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm capitalize transition ${
+                status === nextStatus
+                  ? "bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-200"
+                  : "text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800"
+              }`}
+            >
+              <span className={`h-2 w-2 rounded-full ${nextStatus === "active" ? "bg-emerald-500" : nextStatus === "terminated" ? "bg-rose-500" : "bg-orange-500"}`} />
+              {nextStatus}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+const EmployeeAction = ({ employee, canManage, onView }) =>
+  canManage ? (
+    <button
+      type="button"
+      onClick={(event) => {
+        event.stopPropagation();
+        onView(employee);
+      }}
+      className="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-200 dark:hover:bg-white/[0.07]"
+    >
+      <Eye className="h-3.5 w-3.5" /> View
+    </button>
+  ) : (
+    <a
+      href={`mailto:${employee.email}`}
+      onClick={(event) => event.stopPropagation()}
+      className="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-200 dark:hover:bg-white/[0.07]"
+    >
+      <Mail className="h-3.5 w-3.5" /> Email
+    </a>
+  );
 
 export default EmployeeTable;

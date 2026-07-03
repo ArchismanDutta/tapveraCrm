@@ -6,7 +6,6 @@ import {
   Flag,
   Calendar,
   Clock,
-  TrendingUp,
   PhoneCall,
   BookOpen,
   Briefcase,
@@ -16,11 +15,10 @@ import {
   ChevronRight,
   DollarSign,
   FileSpreadsheet,
-  Shield,
-  Zap,
   ArrowLeftRight,
+  LogOut,
+  Mail,
 } from "lucide-react";
-import { FaChevronCircleRight } from "react-icons/fa";
 import { Users } from "@/components/animate-ui/icons/users";
 import { Brush } from "@/components/animate-ui/icons/brush";
 import { MessageSquareQuote } from "@/components/animate-ui/icons/message-square-quote";
@@ -45,6 +43,7 @@ import Modal from "../modal";
 import DailyEmailSender from "../DailyEmailSender";
 import AchievementsDashboard from "../achievements/AchievementsDashboard";
 import { useAchievements } from "../../contexts/AchievementContext";
+import ThemeToggle from "../common/ThemeToggle";
 import tapveraLogo from "../../assets/tapvera.png";
 
 // Role → Menu mapping
@@ -537,8 +536,16 @@ const normalizeRole = (role) => {
   return normalized;
 };
 
-const Sidebar = ({ collapsed, setCollapsed, onLogout, userRole }) => {
+const Sidebar = ({
+  collapsed: requestedCollapsed = false,
+  setCollapsed = () => {},
+  onLogout,
+  userRole,
+}) => {
   const location = useLocation();
+  const [isMobile, setIsMobile] = useState(() =>
+    typeof window !== "undefined" ? window.matchMedia("(max-width: 639px)").matches : false
+  );
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [role, setRole] = useState("employee");
   const [chatUnread, setChatUnread] = useState(0);
@@ -554,6 +561,21 @@ const Sidebar = ({ collapsed, setCollapsed, onLogout, userRole }) => {
     openAchievementsDashboard,
     closeAchievementsDashboard,
   } = useAchievements();
+  const collapsed = Boolean(requestedCollapsed || isMobile);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(max-width: 639px)");
+    const handleViewportChange = (event) => setIsMobile(event.matches);
+
+    setIsMobile(mediaQuery.matches);
+    if (mediaQuery.addEventListener) {
+      mediaQuery.addEventListener("change", handleViewportChange);
+      return () => mediaQuery.removeEventListener("change", handleViewportChange);
+    }
+
+    mediaQuery.addListener(handleViewportChange);
+    return () => mediaQuery.removeListener(handleViewportChange);
+  }, []);
 
   const toggleDropdown = (label) => {
     setExpandedDropdowns((prev) => ({
@@ -771,59 +793,91 @@ const Sidebar = ({ collapsed, setCollapsed, onLogout, userRole }) => {
     return icon;
   };
 
+  const sidebarWidthClass = collapsed ? "w-16" : "w-56";
+  const navItemBase =
+    "group relative flex min-h-10 items-center rounded-lg text-sm font-medium transition-all duration-200";
+  const getNavItemClass = (isActive) =>
+    `${navItemBase} ${
+      collapsed ? "justify-center px-0" : "gap-3 px-3"
+    } ${
+      isActive
+        ? "border border-white/10 bg-white/[0.07] text-white"
+        : "border border-transparent text-slate-400 hover:border-white/10 hover:bg-white/[0.04] hover:text-slate-100"
+    }`;
+  const getDropdownClass = (isActive) =>
+    `${navItemBase} w-full text-left ${
+      collapsed ? "justify-center px-0" : "justify-between gap-3 px-3"
+    } ${
+      isActive
+        ? "border border-white/10 bg-white/[0.07] text-white"
+        : "border border-transparent text-slate-400 hover:border-white/10 hover:bg-white/[0.04] hover:text-slate-100"
+    }`;
+  const iconShellClass =
+    "relative flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.035] text-current transition group-hover:bg-white/[0.06]";
+  const activeRailClass =
+    "absolute left-0 top-1/2 h-6 w-0.5 -translate-y-1/2 rounded-r-full bg-cyan-200/70";
+
   return (
     <>
       <aside
-        className={`fixed top-0 left-0 h-full z-40 flex flex-col
-          bg-gradient-to-br from-[#13161c]/90 via-[#181a25]/95 to-[#191a27]/95
-          text-blue-100 shadow-2xl border-r border-[#232945]
-          transition-all duration-300 ease-in-out overflow-hidden
-          ${collapsed ? "w-16" : "w-56"}`}
+        className={`fixed left-0 top-0 z-40 flex h-full flex-col overflow-hidden
+          border-r border-white/10 bg-[#0b0d14]/95 text-slate-100 shadow-xl shadow-black/20
+          backdrop-blur-xl transition-all duration-300 ease-in-out ${sidebarWidthClass}`}
       >
-        {/* Logo & Toggle */}
-        <div
-          className={`flex items-center p-4 ${
-            collapsed ? "justify-center" : "justify-between"
-          }`}
-        >
-          {!collapsed && (
-            <NavLink to="/dashboard" tabIndex={collapsed ? -1 : 0}>
+        <div className={`relative z-10 flex items-center gap-2 border-b border-white/10 p-3 ${collapsed ? "justify-center" : "justify-between"}`}>
+          <NavLink
+            to="/dashboard"
+            className={`flex min-w-0 items-center gap-3 ${collapsed ? "justify-center" : ""}`}
+            tabIndex={collapsed ? -1 : 0}
+          >
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-white/10 bg-white/[0.04]">
               <img
                 src={tapveraLogo}
                 alt="Tapvera"
-                className="h-10 w-auto drop-shadow-lg"
+                className={`${collapsed ? "h-6 w-6 object-contain" : "h-7 w-auto"}`}
               />
-            </NavLink>
-          )}
+            </span>
+            {!collapsed && (
+              <span className="min-w-0">
+                <span className="block truncate text-sm font-semibold tracking-wide text-white">
+                  Tapvera
+                </span>
+                <span className="block truncate text-[11px] text-slate-500">
+                  {role.replace("-", " ")}
+                </span>
+              </span>
+            )}
+          </NavLink>
+
           <button
             aria-label="Toggle Sidebar"
-            className={`p-2 rounded-full bg-[#232945] hover:bg-white/20
-              transition-transform duration-300
-              ${collapsed ? "rotate-0" : "rotate-180"}`}
+            className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.04] text-slate-300 transition hover:bg-white/[0.07] hover:text-white sm:inline-flex"
             onClick={() => setCollapsed(!collapsed)}
           >
-            <FaChevronCircleRight size={22} />
+            <ChevronRight
+              size={17}
+              className={`transition-transform duration-300 ${collapsed ? "rotate-0" : "rotate-180"}`}
+            />
           </button>
         </div>
 
-        {/* Menu Items */}
-        <nav className="flex-1 overflow-y-auto px-2 space-y-1">
+        <nav className="relative z-10 flex-1 space-y-1 overflow-y-auto px-2.5 py-3">
           {menuItems.map((item, index) => {
             if (item.type === "achievements") {
               return (
                 <button
                   key={`achievements-${index}`}
                   onClick={openAchievementsDashboard}
-                  className={`group flex items-center gap-4 rounded-lg px-4 py-3 text-sm font-semibold
-                    transition-all duration-150 w-full text-left
-                    text-blue-100 hover:text-blue-300 hover:bg-white/10 hover:font-bold
-                    ${collapsed ? "justify-center" : "justify-start"}`}
+                  className={getNavItemClass(false)}
                   tabIndex={collapsed ? -1 : 0}
+                  title={collapsed ? item.label : undefined}
+                  onMouseEnter={() => setHoveredItem(item.label)}
+                  onMouseLeave={() => setHoveredItem(null)}
                 >
-                  <span className="flex items-center justify-center">
-                    {item.icon}
+                  <span className={iconShellClass}>
+                    {renderIconWithHover(item.icon, hoveredItem === item.label)}
                   </span>
-                  {!collapsed && <span className="flex-1">{item.label}</span>}
+                  {!collapsed && <span className="min-w-0 flex-1 truncate">{item.label}</span>}
                 </button>
               );
             }
@@ -836,32 +890,27 @@ const Sidebar = ({ collapsed, setCollapsed, onLogout, userRole }) => {
               );
 
               return (
-                <div key={`dropdown-${item.label}`}>
+                <div key={`dropdown-${item.label}`} className="relative">
+                  {hasActiveChild && <span className={activeRailClass} />}
                   <button
                     onClick={() => !collapsed && toggleDropdown(item.label)}
-                    className={`group flex items-center gap-4 rounded-lg px-4 py-3 text-sm font-semibold
-                      transition-all duration-150 w-full text-left
-                      ${
-                        hasActiveChild && !isExpanded
-                          ? "bg-gradient-to-r from-blue-600/50 to-blue-400/50 text-white"
-                          : "text-blue-100 hover:text-blue-300 hover:bg-white/10 hover:font-bold"
-                      }
-                      ${collapsed ? "justify-center" : "justify-between"}`}
+                    className={getDropdownClass(hasActiveChild)}
                     tabIndex={collapsed ? -1 : 0}
                     onMouseEnter={() => setHoveredItem(item.label)}
                     onMouseLeave={() => setHoveredItem(null)}
+                    title={collapsed ? item.label : undefined}
                   >
-                    <div className="flex items-center gap-4">
-                      <span className="flex items-center justify-center">
+                    <div className={`flex min-w-0 items-center ${collapsed ? "justify-center" : "gap-3"}`}>
+                      <span className={iconShellClass}>
                         {renderIconWithHover(
                           item.icon,
                           hoveredItem === item.label
                         )}
                       </span>
-                      {!collapsed && <span>{item.label}</span>}
+                      {!collapsed && <span className="truncate">{item.label}</span>}
                     </div>
                     {!collapsed && (
-                      <span className="transition-transform duration-200">
+                      <span className="text-slate-500 transition-transform duration-200 group-hover:text-slate-200">
                         {isExpanded ? (
                           <ChevronDown size={16} />
                         ) : (
@@ -873,30 +922,31 @@ const Sidebar = ({ collapsed, setCollapsed, onLogout, userRole }) => {
 
                   {/* Dropdown Items */}
                   {!collapsed && isExpanded && (
-                    <div className="ml-4 mt-1 space-y-1 border-l-2 border-blue-500/30 pl-2">
+                    <div className="ml-4 mt-1 space-y-1 border-l border-white/10 pl-3">
                       {item.children.map((child) => {
                         const isActive = isRouteActive(child.to);
                         return (
                           <NavLink
                             key={child.to}
                             to={child.to}
-                            className={`group flex items-center gap-3 rounded-lg px-3 py-2 text-xs font-medium
-                              transition-all duration-150
-                              ${
-                                isActive
-                                  ? "bg-gradient-to-r from-blue-600 to-blue-400 text-white shadow-md"
-                                  : "text-blue-100 hover:text-blue-300 hover:bg-white/5"
-                              }`}
+                            className={`group relative flex min-h-9 items-center gap-2 rounded-lg border px-2.5 text-xs font-medium transition-all duration-200 ${
+                              isActive
+                                ? "border-white/10 bg-white/[0.06] text-white"
+                                : "border-transparent text-slate-500 hover:border-white/10 hover:bg-white/[0.04] hover:text-slate-200"
+                            }`}
                             onMouseEnter={() => setHoveredItem(child.to)}
                             onMouseLeave={() => setHoveredItem(null)}
                           >
-                            <span className="flex items-center justify-center">
+                            {isActive && (
+                              <span className="absolute -left-[13px] h-2 w-2 rounded-full bg-cyan-200/70" />
+                            )}
+                            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-current">
                               {renderIconWithHover(
                                 child.icon,
                                 hoveredItem === child.to
                               )}
                             </span>
-                            <span>{child.label}</span>
+                            <span className="truncate">{child.label}</span>
                           </NavLink>
                         );
                       })}
@@ -924,31 +974,26 @@ const Sidebar = ({ collapsed, setCollapsed, onLogout, userRole }) => {
                 <NavLink
                   to={item.to}
                   className={({ isActive }) =>
-                    `group flex items-center gap-4 rounded-lg px-4 py-3 text-sm font-semibold
-                    transition-all duration-150
-                    ${
-                      isActive
-                        ? "bg-gradient-to-r from-blue-600 to-blue-400 text-white shadow-md"
-                        : "text-blue-100 hover:text-blue-300 hover:font-bold"
-                    }
-                    ${collapsed ? "justify-center" : "justify-start"}`
+                    getNavItemClass(isActive)
                   }
                   end={item.to === "/super-admin"}
                   tabIndex={collapsed ? -1 : 0}
+                  title={collapsed ? item.label : undefined}
                 >
-                  <span className="flex items-center justify-center relative">
+                  {isRouteActive(item.to) && <span className={activeRailClass} />}
+                  <span className={iconShellClass}>
                     {renderIconWithHover(item.icon, hoveredItem === item.to)}
                     {item.to === "/messages" && chatUnread > 0 && (
-                      <span className="absolute -top-1 -right-2 bg-red-500 text-white text-[10px] px-1.5 py-[1px] rounded-full min-w-[16px] text-center">
+                      <span className="absolute -right-1.5 -top-1.5 min-w-4 rounded-full bg-rose-400 px-1 text-center text-[10px] font-semibold leading-4 text-white">
                         {chatUnread > 99 ? "99+" : chatUnread}
                       </span>
                     )}
                   </span>
                   {!collapsed && (
-                    <span className="flex-1 flex items-center justify-between">
-                      {item.label}
+                    <span className="flex min-w-0 flex-1 items-center justify-between gap-2">
+                      <span className="truncate">{item.label}</span>
                       {item.to === "/messages" && chatUnread > 0 && (
-                        <span className="ml-2 bg-red-500 text-white text-[10px] px-1.5 py-[1px] rounded-full min-w-[18px] text-center">
+                        <span className="min-w-[18px] rounded-full border border-rose-300/20 bg-rose-400/15 px-1.5 py-[1px] text-center text-[10px] font-semibold text-rose-100">
                           {chatUnread > 99 ? "99+" : chatUnread}
                         </span>
                       )}
@@ -963,9 +1008,9 @@ const Sidebar = ({ collapsed, setCollapsed, onLogout, userRole }) => {
                     <div
                       className={`absolute ${
                         collapsed ? "left-16" : "left-56"
-                      } top-0 z-50 w-64 bg-gray-800 border border-gray-600 rounded-lg shadow-xl p-3 text-sm`}
+                      } top-0 z-50 w-64 rounded-lg border border-white/10 bg-[#0b0d14]/95 p-3 text-sm shadow-xl shadow-black/20 backdrop-blur`}
                     >
-                      <div className="font-semibold text-white mb-2 border-b border-gray-600 pb-2">
+                      <div className="mb-2 border-b border-white/10 pb-2 font-semibold text-white">
                         Unread Messages ({chatUnread})
                       </div>
                       <div className="space-y-2 max-h-64 overflow-y-auto">
@@ -979,12 +1024,12 @@ const Sidebar = ({ collapsed, setCollapsed, onLogout, userRole }) => {
                             return (
                               <div
                                 key={convId}
-                                className="flex items-center justify-between py-1 px-2 bg-gray-700 rounded hover:bg-gray-600 transition-colors"
+                                className="flex items-center justify-between rounded-lg border border-white/10 bg-white/[0.04] px-2 py-1 transition-colors hover:bg-white/[0.08]"
                               >
-                                <span className="text-gray-200 truncate flex-1">
+                                <span className="flex-1 truncate text-slate-200">
                                   {name}
                                 </span>
-                                <span className="ml-2 bg-blue-500 text-white text-[10px] px-2 py-1 rounded-full min-w-[20px] text-center">
+                                <span className="ml-2 min-w-5 rounded-full border border-white/10 bg-white/[0.06] px-2 py-1 text-center text-[10px] font-semibold text-slate-100">
                                   {count > 99 ? "99+" : count}
                                 </span>
                               </div>
@@ -1000,30 +1045,37 @@ const Sidebar = ({ collapsed, setCollapsed, onLogout, userRole }) => {
 
         {/* Daily Updates Button (Employee only) */}
         {role === "employee" && !collapsed && (
-          <div className="px-4 py-2 border-t border-[#232945]">
+          <div className="relative z-10 border-t border-white/10 px-3 py-3">
             <button
               onClick={() => setShowEmailModal(true)}
-              className="w-full rounded-lg bg-gradient-to-r from-blue-600 to-blue-400
-              text-white py-2 font-semibold shadow-lg hover:brightness-110 transition"
+              className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/[0.04] px-3 text-sm font-semibold text-slate-200 transition hover:bg-white/[0.07]"
             >
+              <Mail className="h-4 w-4" />
               Send Daily Updates
             </button>
           </div>
         )}
 
+        <div className="relative z-10 border-t border-white/10 px-3 py-3">
+          <ThemeToggle compact={collapsed} className={collapsed ? "mx-auto" : "w-full"} />
+        </div>
+
         {/* Logout Button */}
-        <div className="px-4 py-3 border-t border-[#232945]">
+        <div className="relative z-10 border-t border-white/10 px-3 py-3">
           <button
             onClick={onLogout}
-            className="w-full rounded-lg bg-gradient-to-r from-red-600 to-red-400
-              text-white shadow-lg hover:brightness-110 transition flex items-center justify-center py-2"
+            className={`inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-rose-300/20 bg-rose-400/10 px-3 text-sm font-semibold text-rose-100 transition hover:bg-rose-400/15 ${
+              collapsed ? "px-0" : ""
+            }`}
+            title={collapsed ? "Logout" : undefined}
           >
+            <LogOut className="h-4 w-4" />
             {collapsed ? (
-              <span aria-label="Logout" role="img" style={{ fontSize: 20 }}>
+              <span className="hidden" aria-label="Logout" role="img" style={{ fontSize: 20 }}>
                 ⏻
               </span>
             ) : (
-              "Logout"
+              <span>Logout</span>
             )}
           </button>
         </div>

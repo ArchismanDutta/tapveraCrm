@@ -1,7 +1,8 @@
-const serpApiService        = require("./serpApiService");
-const playwrightRankService = require("./playwrightRankService");
-const SerpApiUsage          = require("../models/SerpApiUsage");
-const notificationService   = require("./notificationService");
+const serpApiService          = require("./serpApiService");
+const googleCustomSearchService = require("./googleCustomSearchService");
+const playwrightRankService   = require("./playwrightRankService");
+const SerpApiUsage            = require("../models/SerpApiUsage");
+const notificationService     = require("./notificationService");
 
 // ── In-memory result cache ─────────────────────────────────────────────────────
 // Prevents duplicate API calls when multiple projects share the same keyword+location
@@ -152,11 +153,48 @@ class HybridRankService {
         return { saved: false, rank: null, source: null, message: result.error, reason: "serp_error" };
       }
 
-      // Quota exceeded — fall through to Playwright for top keywords
-      console.warn(`[HybridRank] SerpAPI quota exceeded (${usage.used}/${usage.limit}). Trying Playwright fallback.`);
+      // Quota exceeded — fall through to Google CSE
+      console.warn(`[HybridRank] SerpAPI quota exceeded (${usage.used}/${usage.limit}). Trying Google CSE fallback.`);
     }
 
-    // ── Path B: Playwright fallback ────────────────────────────────────────
+    // ── Path B: Google Custom Search fallback (free, top-10 only) ─────────
+    if (googleCustomSearchService.isConfigured()) {
+      let cseResult;
+      try {
+        cseResult = await withRetry(
+          () => googleCustomSearchService.fetchRank(keyword.keyword, keyword.targetUrl, countryCode, country),
+          2, 2000
+        );
+      } catch (err) {
+        cseResult = { rank: null, found: false, quotaExceeded: false, error: err.message, snapshot: [] };
+      }
+
+      if (cseResult.rank !== null) {
+        // rank 11 = not in top 10 (CSE limitation)
+        const source = userId ? "fetch" : "auto";
+        const notes  = cseResult.found
+          ? `Google CSE (position ${cseResult.rank})`
+          : "Google CSE — not in top 10 (rank: 11)";
+
+        await keyword.addRank(cseResult.rank, userId, notes, source, device, cseResult.snapshot);
+        await this._postSaveChecks(keyword);
+        _toCache(key, { rank: cseResult.rank, source, snapshot: cseResult.snapshot });
+
+        return {
+          saved: true, rank: cseResult.rank, source,
+          message: cseResult.found ? `Rank: ${cseResult.rank} (Google CSE)` : "Not in top 10 (Google CSE)",
+        };
+      }
+
+      if (!cseResult.quotaExceeded) {
+        // Hard CSE failure — fall through to Playwright
+        console.warn(`[HybridRank] Google CSE failed: ${cseResult.error}. Trying Playwright.`);
+      } else {
+        console.warn("[HybridRank] Google CSE daily quota exceeded. Trying Playwright fallback.");
+      }
+    }
+
+    // ── Path C: Playwright fallback ────────────────────────────────────────
     if (!this.isTopKeyword(keyword)) {
       return {
         saved: false, rank: null, source: null,

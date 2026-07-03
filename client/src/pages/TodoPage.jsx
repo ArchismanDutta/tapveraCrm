@@ -1,21 +1,20 @@
-import React, { useState, useEffect } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import axios from "axios";
 import {
-  Plus,
-  Calendar,
+  AlertCircle,
+  CalendarDays,
+  CheckCircle,
   Clock,
+  Filter,
+  LayoutGrid,
+  List,
+  Plus,
+  RefreshCw,
+  Search,
   Target,
   TrendingUp,
-  Filter,
-  Search,
-  CheckCircle,
-  AlertCircle,
-  BarChart3,
+  X,
   Zap,
-  Star,
-  RefreshCw,
-  Download,
-  Settings
 } from "lucide-react";
 import Sidebar from "../components/dashboard/Sidebar";
 import TaskList from "../components/todo/TaskList";
@@ -24,6 +23,35 @@ import CelebrationPopup from "../components/common/CelebrationPopup";
 import useCelebrationNotifications from "../hooks/useCelebrationNotifications";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
+
+const normalizeDate = (date) => {
+  const normalized = new Date(date);
+  normalized.setHours(0, 0, 0, 0);
+  return normalized.toISOString();
+};
+
+const normalizeTasks = (tasks) => {
+  if (!Array.isArray(tasks)) return [];
+
+  return tasks.map((task) => ({
+    ...task,
+    date: task.date ? new Date(task.date).toISOString() : null,
+    completedAtStr: task.completedAt
+      ? new Date(task.completedAt).toLocaleString("en-IN")
+      : null,
+  }));
+};
+
+const isSameLocalDay = (left, right) => {
+  const first = new Date(left);
+  const second = new Date(right);
+
+  return (
+    first.getFullYear() === second.getFullYear() &&
+    first.getMonth() === second.getMonth() &&
+    first.getDate() === second.getDate()
+  );
+};
 
 const TodoPage = ({ onLogout }) => {
   const token = localStorage.getItem("token");
@@ -37,141 +65,104 @@ const TodoPage = ({ onLogout }) => {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [searchTerm, setSearchTerm] = useState("");
   const [filterPriority, setFilterPriority] = useState("all");
-  const [viewMode, setViewMode] = useState("cards"); // cards or list
-  const [loading, setLoading] = useState(false);
+  const [viewMode, setViewMode] = useState("cards");
+  const [loading, setLoading] = useState(true);
   const [analytics, setAnalytics] = useState(null);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState("");
+  const [actionError, setActionError] = useState("");
   const [lastFetchAttempt, setLastFetchAttempt] = useState(null);
 
-  // Celebration notifications
   const {
     celebrations,
     showPopup: showCelebrationPopup,
-    closePopup: closeCelebrationPopup
+    closePopup: closeCelebrationPopup,
   } = useCelebrationNotifications();
 
-  const normalizeDate = (date) => {
-    const d = new Date(date);
-    d.setHours(0, 0, 0, 0);
-    return d.toISOString();
-  };
-
-  // Fetch tasks from API
-  const fetchTasks = async () => {
+  const fetchTasks = useCallback(async () => {
     if (!token) {
-      console.error("No authentication token found");
       setError("Authentication required. Please log in again.");
+      setLoading(false);
       return;
     }
 
     setLoading(true);
-    setError(null);
+    setError("");
     setLastFetchAttempt(new Date());
+
     try {
       const todayISO = normalizeDate(new Date());
       const tomorrowISO = normalizeDate(
-        new Date(new Date().getTime() + 24 * 3600000)
+        new Date(Date.now() + 24 * 60 * 60 * 1000)
       );
-
-      console.log("Fetching tasks for user with token:", token.substring(0, 20) + "...");
-      console.log("Date parameters:", { todayISO, tomorrowISO });
-
       const headers = { Authorization: `Bearer ${token}` };
 
-      // Fetch today's tasks
-      const todayRes = await axios.get(`${API_BASE}/api/todos`, {
-        headers,
-        params: { date: todayISO },
-        timeout: 10000, // 10 second timeout
-      });
+      const [todayResponse, upcomingResponse] = await Promise.all([
+        axios.get(`${API_BASE}/api/todos`, {
+          headers,
+          params: { date: todayISO },
+          timeout: 10000,
+        }),
+        axios.get(`${API_BASE}/api/todos/upcoming`, {
+          headers,
+          params: { startDate: tomorrowISO },
+          timeout: 10000,
+        }),
+      ]);
 
-      console.log("Today's tasks response:", todayRes.data?.length || 0, "tasks");
+      const todayData = Array.isArray(todayResponse.data)
+        ? todayResponse.data
+        : [];
+      const upcomingData = Array.isArray(upcomingResponse.data)
+        ? upcomingResponse.data
+        : [];
+      const uniqueTasks = Array.from(
+        new Map(
+          [...todayData, ...upcomingData].map((task) => [task._id, task])
+        ).values()
+      );
 
-      // Fetch upcoming tasks
-      const upcomingRes = await axios.get(`${API_BASE}/api/todos/upcoming`, {
-        headers,
-        params: { startDate: tomorrowISO },
-        timeout: 10000, // 10 second timeout
-      });
+      setTodayTasks(
+        normalizeTasks(todayData.filter((task) => !task.completed))
+      );
+      setUpcomingTasks(
+        normalizeTasks(upcomingData.filter((task) => !task.completed))
+      );
+      setCompletedTasks(
+        normalizeTasks(uniqueTasks.filter((task) => task.completed))
+      );
+    } catch (requestError) {
+      let message = "Failed to load tasks. ";
 
-      console.log("Upcoming tasks response:", upcomingRes.data?.length || 0, "tasks");
-
-      const normalize = (arr) => {
-        if (!Array.isArray(arr)) {
-          console.warn("Expected array but got:", typeof arr, arr);
-          return [];
-        }
-        return arr.map((t) => ({
-          ...t,
-          date: t.date ? new Date(t.date).toISOString() : null,
-          completedAtStr: t.completedAt
-            ? new Date(t.completedAt).toLocaleString()
-            : null,
-        }));
-      };
-
-      // Separate pending and completed tasks
-      const allTasks = [...(todayRes.data || []), ...(upcomingRes.data || [])];
-      const allCompletedTasks = normalize(allTasks.filter((t) => t.completed));
-
-      // Only keep pending (non-completed) tasks in today and upcoming arrays
-      const normalizedTodayTasks = normalize((todayRes.data || []).filter((t) => !t.completed));
-      const normalizedUpcomingTasks = normalize((upcomingRes.data || []).filter((t) => !t.completed));
-
-      console.log("Processed tasks:", {
-        todayPending: normalizedTodayTasks.length,
-        upcoming: normalizedUpcomingTasks.length,
-        completed: allCompletedTasks.length,
-        total: allTasks.length
-      });
-
-      setTodayTasks(normalizedTodayTasks);
-      setUpcomingTasks(normalizedUpcomingTasks);
-      setCompletedTasks(allCompletedTasks);
-    } catch (err) {
-      console.error("Error fetching tasks:", {
-        message: err.message,
-        status: err.response?.status,
-        statusText: err.response?.statusText,
-        data: err.response?.data,
-        config: {
-          url: err.config?.url,
-          method: err.config?.method,
-          params: err.config?.params
-        }
-      });
-
-      // Handle specific error cases
-      let errorMessage = "Failed to load tasks. ";
-      if (err.response?.status === 401) {
-        console.error("Authentication failed - token may be invalid");
-        errorMessage += "Please log in again.";
-        // Could redirect to login
-      } else if (err.response?.status === 403) {
-        console.error("Access forbidden - user may not have permission");
-        errorMessage += "Access denied.";
-      } else if (err.code === 'ECONNABORTED') {
-        console.error("Request timeout - server may be slow");
-        errorMessage += "Server is taking too long to respond.";
-      } else if (err.code === 'NETWORK_ERROR') {
-        console.error("Network error - check internet connection");
-        errorMessage += "Check your internet connection.";
+      if (requestError.response?.status === 401) {
+        message += "Please log in again.";
+      } else if (requestError.response?.status === 403) {
+        message += "Access denied.";
+      } else if (requestError.code === "ECONNABORTED") {
+        message += "The server is taking too long to respond.";
       } else {
-        errorMessage += "Please try again.";
+        message += "Check your connection and try again.";
       }
 
-      setError(errorMessage);
-
-      // Set empty arrays to prevent UI errors
-      setTodayTasks([]);
-      setUpcomingTasks([]);
-      setCompletedTasks([]);
+      setError(message);
     } finally {
       setLoading(false);
     }
-  };
+  }, [token]);
 
-  // Update time every second
+  const fetchAnalytics = useCallback(async () => {
+    if (!token) return;
+
+    try {
+      const response = await axios.get(`${API_BASE}/api/todos/analytics`, {
+        headers: { Authorization: `Bearer ${token}` },
+        timeout: 10000,
+      });
+      setAnalytics(response.data);
+    } catch {
+      setAnalytics(null);
+    }
+  }, [token]);
+
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
@@ -180,180 +171,153 @@ const TodoPage = ({ onLogout }) => {
   useEffect(() => {
     fetchTasks();
     fetchAnalytics();
-  }, []);
+  }, [fetchAnalytics, fetchTasks]);
 
-  // Fetch analytics data
-  const fetchAnalytics = async () => {
-    if (!token) {
-      console.error("No authentication token found for analytics");
-      return;
-    }
-
-    try {
-      const response = await axios.get(`${API_BASE}/api/todos/analytics`, {
-        headers: { Authorization: `Bearer ${token}` },
-        timeout: 10000, // 10 second timeout
-      });
-      console.log("Analytics API response:", response.data);
-      setAnalytics(response.data);
-    } catch (err) {
-      console.error("Error fetching analytics:", {
-        message: err.message,
-        status: err.response?.status,
-        statusText: err.response?.statusText,
-        data: err.response?.data
-      });
-
-      if (err.response?.status === 401) {
-        console.error("Analytics authentication failed - token may be invalid");
-      } else if (err.response?.status === 403) {
-        console.error("Analytics access forbidden");
-      }
-
-      // Set null analytics to use frontend calculations
-      setAnalytics(null);
-    }
-  };
-
-  // Enhanced save task with loading states
   const handleSaveTask = async (task) => {
     setLoading(true);
+    setActionError("");
+
     try {
       if (task._id) {
         await axios.put(`${API_BASE}/api/todos/${task._id}`, task, {
           headers: { Authorization: `Bearer ${token}` },
         });
       } else {
-        if (!task.date) task.date = normalizeDate(new Date());
-        await axios.post(`${API_BASE}/api/todos`, task, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        await axios.post(
+          `${API_BASE}/api/todos`,
+          {
+            ...task,
+            date: task.date || normalizeDate(new Date()),
+          },
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
       }
+
       setShowForm(false);
       setEditTask(null);
-      await fetchTasks();
-      await fetchAnalytics(); // Refresh analytics
-    } catch (err) {
-      console.error("Failed to save task:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Enhanced refresh function
-  const handleRefresh = async () => {
-    setLoading(true);
-    try {
       await Promise.all([fetchTasks(), fetchAnalytics()]);
+    } catch (saveError) {
+      console.error("Failed to save task:", saveError);
+      setActionError(
+        "The task could not be saved. Check the details and try again."
+      );
+      throw saveError;
     } finally {
       setLoading(false);
     }
   };
 
-  // Filter tasks based on search and priority
-  const filterTasks = (tasks) => {
-    return tasks.filter(task => {
-      const matchesSearch = !searchTerm ||
-        task.text?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        task.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        task.description?.toLowerCase().includes(searchTerm.toLowerCase());
+  const handleRefresh = async () => {
+    setActionError("");
+    await Promise.all([fetchTasks(), fetchAnalytics()]);
+  };
 
-      const matchesPriority = filterPriority === "all" ||
-        task.label?.toLowerCase() === filterPriority.toLowerCase() ||
-        task.priority?.toLowerCase() === filterPriority.toLowerCase();
+  const filterTasks = (tasks) => {
+    const search = searchTerm.trim().toLowerCase();
+
+    return tasks.filter((task) => {
+      const matchesSearch =
+        !search ||
+        task.text?.toLowerCase().includes(search) ||
+        task.title?.toLowerCase().includes(search) ||
+        task.description?.toLowerCase().includes(search);
+      const priority = String(task.label || task.priority || "").toLowerCase();
+      const matchesPriority =
+        filterPriority === "all" || priority === filterPriority;
 
       return matchesSearch && matchesPriority;
     });
   };
 
-  // Get filtered tasks
   const filteredTodayTasks = filterTasks(todayTasks);
   const filteredUpcomingTasks = filterTasks(upcomingTasks);
   const filteredCompletedTasks = filterTasks(completedTasks);
 
-  // Toggle completed status
   const handleMarkDone = async (task) => {
+    setActionError("");
+
     try {
       const response = await axios.put(
         `${API_BASE}/api/todos/${task._id}`,
         { completed: !task.completed },
         { headers: { Authorization: `Bearer ${token}` } }
       );
-
-      const updatedTaskRaw = response.data;
-      const updatedTask = {
-        ...updatedTaskRaw,
-        date: updatedTaskRaw.date
-          ? new Date(updatedTaskRaw.date).toISOString()
-          : null,
-        completedAtStr: updatedTaskRaw.completedAt
-          ? new Date(updatedTaskRaw.completedAt).toLocaleString()
-          : null,
-      };
+      const [updatedTask] = normalizeTasks([response.data]);
 
       if (updatedTask.completed) {
-        // Remove from pending lists and add to completed
-        setTodayTasks((prev) => prev.filter((t) => t._id !== updatedTask._id));
-        setUpcomingTasks((prev) =>
-          prev.filter((t) => t._id !== updatedTask._id)
+        setTodayTasks((previous) =>
+          previous.filter((item) => item._id !== updatedTask._id)
         );
-        setCompletedTasks((prev) => [updatedTask, ...prev]);
+        setUpcomingTasks((previous) =>
+          previous.filter((item) => item._id !== updatedTask._id)
+        );
+        setCompletedTasks((previous) => [updatedTask, ...previous]);
       } else {
-        // Remove from completed list
-        setCompletedTasks((prev) =>
-          prev.filter((t) => t._id !== updatedTask._id)
+        setCompletedTasks((previous) =>
+          previous.filter((item) => item._id !== updatedTask._id)
         );
-        // Move back to correct list based on date
-        const taskDate = new Date(updatedTask.date);
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        if (taskDate.getTime() === today.getTime()) {
-          setTodayTasks((prev) => [updatedTask, ...prev]);
+
+        if (updatedTask.date && isSameLocalDay(updatedTask.date, new Date())) {
+          setTodayTasks((previous) => [updatedTask, ...previous]);
         } else {
-          setUpcomingTasks((prev) => [updatedTask, ...prev]);
+          setUpcomingTasks((previous) => [updatedTask, ...previous]);
         }
       }
-    } catch (err) {
-      console.error("Failed to toggle completed:", err);
+
+      fetchAnalytics();
+    } catch (statusError) {
+      console.error("Failed to toggle task status:", statusError);
+      setActionError("The task status could not be updated. Please try again.");
     }
   };
 
-  // Delete a task
   const handleDeleteTask = async (taskId) => {
+    setActionError("");
+
     try {
       const taskToDelete =
-        todayTasks.find((t) => t._id === taskId) ||
-        upcomingTasks.find((t) => t._id === taskId) ||
-        completedTasks.find((t) => t._id === taskId);
+        todayTasks.find((task) => task._id === taskId) ||
+        upcomingTasks.find((task) => task._id === taskId) ||
+        completedTasks.find((task) => task._id === taskId);
 
       await axios.delete(`${API_BASE}/api/todos/${taskId}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      setRecentlyDeletedTask(taskToDelete); // Save for undo
-      setTodayTasks((prev) => prev.filter((t) => t._id !== taskId));
-      setUpcomingTasks((prev) => prev.filter((t) => t._id !== taskId));
-      setCompletedTasks((prev) => prev.filter((t) => t._id !== taskId));
-    } catch (err) {
-      console.error("Failed to delete task:", err);
+      setRecentlyDeletedTask(taskToDelete || null);
+      setTodayTasks((previous) =>
+        previous.filter((task) => task._id !== taskId)
+      );
+      setUpcomingTasks((previous) =>
+        previous.filter((task) => task._id !== taskId)
+      );
+      setCompletedTasks((previous) =>
+        previous.filter((task) => task._id !== taskId)
+      );
+      fetchAnalytics();
+    } catch (deleteError) {
+      console.error("Failed to delete task:", deleteError);
+      setActionError("The task could not be deleted. Please try again.");
     }
   };
 
-  // Undo deletion
   const handleUndoDelete = async () => {
     if (!recentlyDeletedTask) return;
 
+    setActionError("");
+
     try {
       const { _id, ...taskData } = recentlyDeletedTask;
-      const response = await axios.post(`${API_BASE}/api/todos`, taskData, {
+      await axios.post(`${API_BASE}/api/todos`, taskData, {
         headers: { Authorization: `Bearer ${token}` },
       });
-
-      // Refetch tasks to update lists
-      await fetchTasks();
       setRecentlyDeletedTask(null);
-    } catch (err) {
-      console.error("Failed to undo deletion:", err);
+      await Promise.all([fetchTasks(), fetchAnalytics()]);
+    } catch (restoreError) {
+      console.error("Failed to restore task:", restoreError);
+      setActionError(
+        "The deleted task could not be restored. Please try again."
+      );
     }
   };
 
@@ -363,40 +327,21 @@ const TodoPage = ({ onLogout }) => {
   const completionPercent = totalTasks
     ? (completedCount / totalTasks) * 100
     : 0;
-
-  // Calculate today's completed tasks
-  const todayCompletedTasks = completedTasks.filter(task => {
-    if (!task.date) return false;
-    const taskDate = new Date(task.date);
-    const today = new Date();
-    taskDate.setHours(0, 0, 0, 0);
-    today.setHours(0, 0, 0, 0);
-    return taskDate.getTime() === today.getTime();
-  });
-  const todayCompletedCount = todayCompletedTasks.length;
-
-  // Debug logging
-  console.log("Frontend calculations:", {
-    todayTasksLength: todayTasks.length,
-    upcomingTasksLength: upcomingTasks.length,
-    completedTasksLength: completedTasks.length,
-    todayCompletedCount,
-    totalTasks,
-    completedCount,
-    completionPercent,
-    analytics
-  });
+  const todayCompletedCount = completedTasks.filter(
+    (task) => task.date && isSameLocalDay(task.date, new Date())
+  ).length;
+  const filteredTaskCount =
+    filteredTodayTasks.length +
+    filteredUpcomingTasks.length +
+    filteredCompletedTasks.length;
+  const hasUrgentTasks = todayTasks.some((task) =>
+    [task.priority, task.label].some(
+      (priority) => String(priority || "").toLowerCase() === "high"
+    )
+  );
 
   return (
-    <div className="flex bg-[#0f1419] min-h-screen text-white relative overflow-hidden">
-      {/* Animated Background */}
-      <div className="absolute inset-0 bg-gradient-to-br from-slate-900/20 via-blue-900/10 to-purple-900/20"></div>
-      <div className="absolute inset-0">
-        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-cyan-500/5 rounded-full blur-3xl animate-pulse"></div>
-        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-purple-500/5 rounded-full blur-3xl animate-pulse"></div>
-      </div>
-
-      {/* Sidebar */}
+    <div className="relative flex h-[100dvh] overflow-hidden bg-slate-50 text-slate-900 dark:bg-[#0b0d12] dark:text-slate-100">
       <Sidebar
         onLogout={onLogout}
         collapsed={collapsed}
@@ -404,316 +349,443 @@ const TodoPage = ({ onLogout }) => {
         userRole="employee"
       />
 
-      {/* Main Content */}
-      <main className={`relative z-10 flex-1 transition-all duration-300 ${collapsed ? "ml-24" : "ml-72"} p-8`}>
-        {/* Modern Header */}
-        <div className="mb-12">
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between mb-6">
-            <div>
-              <h1 className="text-5xl font-bold mb-2">
-                <span className="bg-gradient-to-r from-emerald-400 via-cyan-400 to-blue-400 bg-clip-text text-transparent">
-                  Task Manager
-                </span>
-              </h1>
-              <p className="text-xl text-gray-300 mb-4">
-                Boost your productivity with smart task management 🚀
-              </p>
-            </div>
-            <div className="flex items-center space-x-4">
-              <button
-                onClick={handleRefresh}
-                disabled={loading}
-                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-slate-600 to-slate-700 hover:from-slate-500 hover:to-slate-600 disabled:from-gray-400 disabled:to-gray-500 text-white rounded-xl font-medium transition-all duration-300 hover:scale-105 disabled:scale-100"
-              >
-                <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-                <span>{loading ? "Refreshing..." : "Refresh"}</span>
-              </button>
-              <button
-                onClick={() => setShowForm(true)}
-                className="flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-emerald-500 to-cyan-600 hover:from-emerald-600 hover:to-cyan-700 text-white rounded-xl font-semibold transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-emerald-500/25"
-              >
-                <Plus className="h-4 w-4" />
-                <span>Add Task</span>
-              </button>
-              <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 backdrop-blur-sm border border-slate-600/30 rounded-2xl px-6 py-4">
-                <div className="flex items-center space-x-3">
-                  <div className="w-3 h-3 bg-green-400 rounded-full animate-pulse"></div>
-                  <div>
-                    <p className="text-sm text-gray-400">Live Time</p>
-                    <p className="text-cyan-400 font-mono text-sm">
-                      {currentTime.toLocaleTimeString("en-US", {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                        second: "2-digit",
-                      })}
-                    </p>
-                  </div>
+      <main
+        className={`h-[100dvh] min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 transition-all duration-300 sm:px-5 lg:px-6 ${
+          collapsed ? "ml-16" : "ml-16 sm:ml-56"
+        }`}
+      >
+        <div className="mx-auto max-w-[1500px] space-y-4 pb-8 sm:space-y-5">
+          <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-white/10 dark:bg-[#10131c]">
+            <div className="grid gap-5 p-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center lg:p-5">
+              <div className="min-w-0">
+                <div className="mb-4 inline-flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 dark:border-blue-400/20 dark:bg-blue-400/10 dark:text-blue-200">
+                  <CalendarDays className="h-3.5 w-3.5" />
+                  {currentTime.toLocaleDateString("en-IN", {
+                    weekday: "long",
+                    day: "numeric",
+                    month: "long",
+                    year: "numeric",
+                  })}
                 </div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                  Personal planning
+                </p>
+                <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950 dark:text-white">
+                  Todo workspace
+                </h1>
+                <p className="mt-1 max-w-2xl text-sm text-slate-500 dark:text-slate-400">
+                  Plan today, schedule what is next, and keep your personal work moving.
+                </p>
               </div>
-            </div>
-          </div>
-          <div className="text-gray-400 text-lg">
-            {currentTime.toLocaleDateString("en-US", {
-              weekday: "long",
-              year: "numeric",
-              month: "long",
-              day: "numeric",
-            })}
-          </div>
-        </div>
 
-        {/* Error Display */}
-        {error && (
-          <div className="mb-8">
-            <div className="bg-gradient-to-r from-red-900/50 to-red-800/50 backdrop-blur-sm border border-red-600/30 rounded-2xl p-6">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-red-500 to-red-600 flex items-center justify-center text-white">
-                    <AlertCircle className="h-6 w-6" />
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-semibold text-red-200">Data Loading Error</h3>
-                    <p className="text-red-300">{error}</p>
-                    {lastFetchAttempt && (
-                      <p className="text-red-400 text-sm mt-1">
-                        Last attempt: {lastFetchAttempt.toLocaleTimeString()}
-                      </p>
-                    )}
-                  </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="mr-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-right dark:border-white/10 dark:bg-white/[0.03]">
+                  <p className="text-[10px] font-medium uppercase tracking-wider text-slate-400">
+                    Local time
+                  </p>
+                  <p className="font-mono text-sm font-semibold text-slate-700 dark:text-slate-200">
+                    {currentTime.toLocaleTimeString("en-IN", {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                      second: "2-digit",
+                    })}
+                  </p>
                 </div>
                 <button
-                  onClick={() => {
-                    setError(null);
-                    fetchTasks();
-                    fetchAnalytics();
-                  }}
+                  type="button"
+                  onClick={handleRefresh}
                   disabled={loading}
-                  className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-red-800 text-white rounded-xl font-medium transition-all duration-300 hover:scale-105 disabled:scale-100"
+                  className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-200 dark:hover:bg-white/[0.07]"
                 >
-                  <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-                  {loading ? "Retrying..." : "Retry"}
+                  <RefreshCw
+                    className={`h-4 w-4 ${loading ? "animate-spin" : ""}`}
+                  />
+                  Refresh
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditTask(null);
+                    setShowForm(true);
+                  }}
+                  className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 text-sm font-semibold text-white transition hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-400"
+                >
+                  <Plus className="h-4 w-4" />
+                  Add task
                 </button>
               </div>
             </div>
-          </div>
-        )}
+          </section>
 
-        {/* Enhanced Analytics Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <AnalyticsCard
-            icon={<Target className="h-6 w-6" />}
-            label="Total Tasks"
-            value={totalTasks}
-            subValue="All tasks"
-            bg="from-blue-500/20 to-cyan-500/20"
-            iconBg="from-blue-500 to-cyan-500"
-            textColor="text-cyan-400"
-          />
-          <AnalyticsCard
-            icon={<CheckCircle className="h-6 w-6" />}
-            label="Completed"
-            value={completedCount}
-            subValue={`${Math.round(completionPercent)}% done`}
-            bg="from-emerald-500/20 to-green-500/20"
-            iconBg="from-emerald-500 to-green-500"
-            textColor="text-emerald-400"
-            trend={{ value: `${Math.round(completionPercent)}%`, positive: completionPercent > 60 }}
-          />
-          <AnalyticsCard
-            icon={<Clock className="h-6 w-6" />}
-            label="Today's Tasks"
-            value={filteredTodayTasks.length + todayCompletedCount}
-            subValue={`${todayCompletedCount} completed`}
-            bg="from-amber-500/20 to-orange-500/20"
-            iconBg="from-amber-500 to-orange-500"
-            textColor="text-amber-400"
-            urgent={filteredTodayTasks.filter(t => t.priority === 'High' || t.label === 'High').length > 0}
-          />
-          <AnalyticsCard
-            icon={<Zap className="h-6 w-6" />}
-            label="Productivity Score"
-            value={analytics?.productivityScore || 0}
-            subValue={`Streak: ${analytics?.streakData?.current || 0} days`}
-            bg="from-purple-500/20 to-pink-500/20"
-            iconBg="from-purple-500 to-pink-500"
-            textColor="text-purple-400"
-            trend={{ value: `${analytics?.monthlyCompletionRate || 0}%`, positive: (analytics?.monthlyCompletionRate || 0) > 70 }}
-          />
+          {(error || actionError) && (
+            <div className="flex flex-col gap-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-400/20 dark:bg-rose-400/10 dark:text-rose-200 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-start gap-2">
+                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                <div>
+                  <p className="font-medium">{actionError || error}</p>
+                  {error && lastFetchAttempt && (
+                    <p className="mt-0.5 text-xs opacity-75">
+                      Last attempt at{" "}
+                      {lastFetchAttempt.toLocaleTimeString("en-IN")}
+                    </p>
+                  )}
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                {actionError && (
+                  <button
+                    type="button"
+                    onClick={() => setActionError("")}
+                    className="inline-flex h-9 items-center justify-center rounded-lg px-3 text-xs font-semibold transition hover:bg-rose-100 dark:hover:bg-rose-400/10"
+                  >
+                    Dismiss
+                  </button>
+                )}
+                {error && (
+                  <button
+                    type="button"
+                    onClick={handleRefresh}
+                    disabled={loading}
+                    className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-rose-200 bg-white px-3 text-xs font-semibold transition hover:bg-rose-100 disabled:opacity-60 dark:border-rose-400/20 dark:bg-transparent dark:hover:bg-rose-400/10"
+                  >
+                    <RefreshCw
+                      className={`h-3.5 w-3.5 ${
+                        loading ? "animate-spin" : ""
+                      }`}
+                    />
+                    Retry
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <AnalyticsCard
+              icon={Target}
+              label="Total tasks"
+              value={totalTasks}
+              subValue="Across your workspace"
+              tone="blue"
+            />
+            <AnalyticsCard
+              icon={CheckCircle}
+              label="Completed"
+              value={completedCount}
+              subValue={`${Math.round(completionPercent)}% overall completion`}
+              tone="emerald"
+              trend={{
+                value: `${Math.round(completionPercent)}%`,
+                positive: completionPercent >= 60,
+              }}
+            />
+            <AnalyticsCard
+              icon={Clock}
+              label="Today"
+              value={todayTasks.length + todayCompletedCount}
+              subValue={`${todayCompletedCount} completed today`}
+              tone="amber"
+              urgent={hasUrgentTasks}
+            />
+            <AnalyticsCard
+              icon={Zap}
+              label="Productivity"
+              value={
+                analytics?.productivityScore ?? Math.round(completionPercent)
+              }
+              subValue={`${analytics?.streakData?.current || 0} day streak`}
+              tone="violet"
+              trend={{
+                value: `${
+                  analytics?.monthlyCompletionRate ??
+                  Math.round(completionPercent)
+                }%`,
+                positive:
+                  (analytics?.monthlyCompletionRate ?? completionPercent) >= 70,
+              }}
+            />
+          </div>
+
+          <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-[#10131c]">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-950 dark:text-white">
+                  <Filter className="h-4 w-4 text-blue-600 dark:text-blue-300" />
+                  Find and filter
+                </h2>
+                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                  {filteredTaskCount} task
+                  {filteredTaskCount === 1 ? "" : "s"} match the current view.
+                </p>
+              </div>
+              <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-1 dark:border-white/10 dark:bg-white/[0.03]">
+                <button
+                  type="button"
+                  onClick={() => setViewMode("cards")}
+                  aria-pressed={viewMode === "cards"}
+                  className={`inline-flex h-8 items-center gap-2 rounded-md px-3 text-xs font-semibold transition ${
+                    viewMode === "cards"
+                      ? "bg-white text-slate-900 shadow-sm dark:bg-white/[0.1] dark:text-white"
+                      : "text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white"
+                  }`}
+                >
+                  <LayoutGrid className="h-3.5 w-3.5" />
+                  Cards
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode("list")}
+                  aria-pressed={viewMode === "list"}
+                  className={`inline-flex h-8 items-center gap-2 rounded-md px-3 text-xs font-semibold transition ${
+                    viewMode === "list"
+                      ? "bg-white text-slate-900 shadow-sm dark:bg-white/[0.1] dark:text-white"
+                      : "text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white"
+                  }`}
+                >
+                  <List className="h-3.5 w-3.5" />
+                  List
+                </button>
+              </div>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_220px]">
+              <label className="relative block">
+                <span className="sr-only">Search tasks</span>
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="search"
+                  placeholder="Search title or description"
+                  value={searchTerm}
+                  onChange={(event) => setSearchTerm(event.target.value)}
+                  className="h-10 w-full rounded-lg border border-slate-200 bg-white pl-10 pr-10 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-400 focus:ring-2 focus:ring-blue-100 dark:border-white/10 dark:bg-white/[0.04] dark:text-white dark:focus:border-blue-400/40 dark:focus:ring-blue-400/10"
+                />
+                {searchTerm && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchTerm("")}
+                    className="absolute right-2 top-1/2 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-white/[0.07] dark:hover:text-white"
+                    aria-label="Clear task search"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </label>
+
+              <label className="relative block">
+                <span className="sr-only">Filter by priority</span>
+                <AlertCircle className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <select
+                  value={filterPriority}
+                  onChange={(event) => setFilterPriority(event.target.value)}
+                  className="h-10 w-full appearance-none rounded-lg border border-slate-200 bg-white pl-10 pr-8 text-sm text-slate-700 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100 dark:border-white/10 dark:bg-[#151923] dark:text-slate-200 dark:focus:border-blue-400/40 dark:focus:ring-blue-400/10"
+                >
+                  <option value="all">All priorities</option>
+                  <option value="high">High priority</option>
+                  <option value="medium">Medium priority</option>
+                  <option value="low">Low priority</option>
+                </select>
+              </label>
+            </div>
+          </section>
+
+          <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
+            <div className="min-w-0">
+              {loading && totalTasks === 0 ? (
+                <div className="space-y-4">
+                  {[0, 1, 2].map((item) => (
+                    <div
+                      key={item}
+                      className="overflow-hidden rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-[#10131c]"
+                    >
+                      <div className="h-10 animate-pulse rounded-lg bg-slate-100 dark:bg-white/[0.04]" />
+                      <div className="mt-4 grid gap-3 md:grid-cols-2">
+                        <div className="h-28 animate-pulse rounded-xl bg-slate-100 dark:bg-white/[0.04]" />
+                        <div className="h-28 animate-pulse rounded-xl bg-slate-100 dark:bg-white/[0.04]" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <TaskList
+                  todayTasks={filteredTodayTasks}
+                  upcomingTasks={filteredUpcomingTasks}
+                  completedTasks={filteredCompletedTasks}
+                  viewMode={viewMode}
+                  onEdit={(task) => {
+                    setEditTask(task);
+                    setShowForm(true);
+                  }}
+                  onMarkDone={handleMarkDone}
+                  onDelete={handleDeleteTask}
+                  recentlyDeletedTask={recentlyDeletedTask}
+                  onUndoDelete={handleUndoDelete}
+                />
+              )}
+            </div>
+
+            <aside className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-[#10131c] xl:sticky xl:top-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                    Progress
+                  </p>
+                  <h2 className="mt-1 text-base font-semibold text-slate-950 dark:text-white">
+                    Overall completion
+                  </h2>
+                </div>
+                <span className="text-2xl font-semibold text-emerald-700 dark:text-emerald-200">
+                  {Math.round(completionPercent)}%
+                </span>
+              </div>
+
+              <div className="mt-5 h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-white/[0.06]">
+                <div
+                  className="h-full rounded-full bg-emerald-500 transition-[width] duration-500"
+                  style={{ width: `${Math.min(completionPercent, 100)}%` }}
+                />
+              </div>
+              <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                {completedCount} of {totalTasks} tasks completed
+              </p>
+
+              <div className="mt-5 grid grid-cols-3 gap-2">
+                <ProgressCount
+                  label="Today"
+                  value={todayTasks.length}
+                  tone="blue"
+                />
+                <ProgressCount
+                  label="Upcoming"
+                  value={upcomingTasks.length}
+                  tone="amber"
+                />
+                <ProgressCount
+                  label="Done"
+                  value={completedTasks.length}
+                  tone="emerald"
+                />
+              </div>
+
+              <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-white/10 dark:bg-white/[0.03]">
+                <div className="flex items-center gap-2">
+                  <Zap className="h-4 w-4 text-violet-600 dark:text-violet-300" />
+                  <p className="text-sm font-medium text-slate-800 dark:text-slate-200">
+                    Current streak
+                  </p>
+                </div>
+                <p className="mt-2 text-2xl font-semibold text-slate-950 dark:text-white">
+                  {analytics?.streakData?.current || 0} days
+                </p>
+                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                  Keep completing tasks to extend it.
+                </p>
+              </div>
+            </aside>
+          </div>
         </div>
-
-        {/* Filters and Search */}
-        <div className="bg-gradient-to-br from-slate-800/40 to-slate-900/40 backdrop-blur-sm border border-slate-600/30 rounded-2xl p-6 mb-8">
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between mb-6">
-            <h3 className="text-xl font-bold text-white mb-4 lg:mb-0 flex items-center gap-3">
-              <Filter className="h-6 w-6 text-cyan-400" />
-              Task Filters
-            </h3>
-            <div className="flex items-center gap-2 text-sm text-gray-400">
-              <Zap className="h-4 w-4" />
-              {filteredTodayTasks.length + filteredUpcomingTasks.length + filteredCompletedTasks.length} tasks found
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-              <input
-                type="text"
-                placeholder="Search tasks..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full bg-slate-800/50 border border-slate-600/50 rounded-xl pl-10 pr-4 py-3 text-white placeholder-gray-400 focus:ring-2 focus:ring-cyan-400 focus:border-cyan-400 outline-none transition-all duration-300"
-              />
-            </div>
-            <div className="relative">
-              <AlertCircle className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-              <select
-                value={filterPriority}
-                onChange={(e) => setFilterPriority(e.target.value)}
-                className="w-full bg-slate-800/50 border border-slate-600/50 rounded-xl pl-10 pr-4 py-3 text-white focus:ring-2 focus:ring-purple-400 focus:border-purple-400 outline-none transition-all duration-300 appearance-none"
-              >
-                <option value="all">All Priorities</option>
-                <option value="high">High Priority</option>
-                <option value="medium">Medium Priority</option>
-                <option value="low">Low Priority</option>
-              </select>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setViewMode(viewMode === "cards" ? "list" : "cards")}
-                className="flex items-center gap-2 px-4 py-3 bg-slate-700/50 hover:bg-slate-600/50 border border-slate-600/30 text-gray-300 rounded-xl font-medium transition-all duration-300"
-              >
-                <BarChart3 className="h-4 w-4" />
-                <span>{viewMode === "cards" ? "List View" : "Card View"}</span>
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Enhanced Progress Section */}
-        <div className="bg-gradient-to-br from-slate-800/40 to-slate-900/40 backdrop-blur-sm border border-slate-600/30 rounded-2xl p-6 mb-8">
-          <div className="flex items-center justify-between mb-6">
-            <h3 className="text-xl font-bold text-white flex items-center gap-3">
-              <Target className="h-6 w-6 text-emerald-400" />
-              Progress Overview
-            </h3>
-            <div className="flex items-center gap-2 text-sm text-gray-400">
-              <Star className="h-4 w-4" />
-              {Math.round(completionPercent)}% Complete
-            </div>
-          </div>
-
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <span className="text-gray-300 font-medium">Overall Completion</span>
-              <span className="text-white font-bold">{completedCount} / {totalTasks} tasks</span>
-            </div>
-            <div className="w-full bg-slate-700/50 rounded-full h-3">
-              <div
-                className="bg-gradient-to-r from-emerald-400 to-cyan-500 h-3 rounded-full transition-all duration-700 relative overflow-hidden"
-                style={{ width: `${completionPercent}%` }}
-              >
-                <div className="absolute inset-0 bg-white/20 animate-pulse"></div>
-              </div>
-            </div>
-            <div className="grid grid-cols-3 gap-4 mt-6">
-              <div className="text-center">
-                <div className="text-2xl font-bold text-cyan-400">{filteredTodayTasks.length}</div>
-                <div className="text-xs text-gray-400">Today</div>
-              </div>
-              <div className="text-center">
-                <div className="text-2xl font-bold text-amber-400">{filteredUpcomingTasks.length}</div>
-                <div className="text-xs text-gray-400">Upcoming</div>
-              </div>
-              <div className="text-center">
-                <div className="text-2xl font-bold text-emerald-400">{filteredCompletedTasks.length}</div>
-                <div className="text-xs text-gray-400">Completed</div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Enhanced Task List */}
-        <TaskList
-          todayTasks={filteredTodayTasks}
-          upcomingTasks={filteredUpcomingTasks}
-          completedTasks={filteredCompletedTasks}
-          viewMode={viewMode}
-          onEdit={(task) => {
-            setEditTask(task);
-            setShowForm(true);
-          }}
-          onMarkDone={handleMarkDone}
-          onDelete={handleDeleteTask}
-          recentlyDeletedTask={recentlyDeletedTask}
-          onUndoDelete={handleUndoDelete}
-        />
-
-        {/* Task Form Modal */}
-        {showForm && (
-          <TaskForm
-            task={editTask}
-            onClose={() => {
-              setShowForm(false);
-              setEditTask(null);
-            }}
-            onSave={handleSaveTask}
-            loading={loading}
-          />
-        )}
-
-        {/* Celebration Popup */}
-        <CelebrationPopup
-          celebrations={celebrations}
-          isOpen={showCelebrationPopup}
-          onClose={closeCelebrationPopup}
-        />
       </main>
+
+      {showForm && (
+        <TaskForm
+          task={editTask}
+          onClose={() => {
+            setShowForm(false);
+            setEditTask(null);
+          }}
+          onSave={handleSaveTask}
+          loading={loading}
+        />
+      )}
+
+      <CelebrationPopup
+        celebrations={celebrations}
+        isOpen={showCelebrationPopup}
+        onClose={closeCelebrationPopup}
+      />
     </div>
   );
 };
 
-// Enhanced Analytics Card Component
 const AnalyticsCard = ({
   icon,
   label,
   value,
   subValue,
-  bg,
-  iconBg,
-  textColor,
+  tone,
   trend,
-  urgent
-}) => (
-  <div
-    className={`bg-gradient-to-br ${bg} backdrop-blur-sm border ${urgent ? 'border-red-500/50' : 'border-slate-600/30'} rounded-2xl p-6 relative overflow-hidden group hover:scale-105 transition-all duration-300`}
-  >
-    <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-    <div className="relative z-10">
-      <div className="flex items-center justify-between mb-4">
-        <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${iconBg} flex items-center justify-center text-white shadow-lg`}>
-          {icon}
+  urgent,
+}) => {
+  const Icon = icon;
+  const tones = {
+    blue: "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-400/20 dark:bg-blue-400/10 dark:text-blue-200",
+    emerald:
+      "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-200",
+    amber:
+      "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-200",
+    violet:
+      "border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-400/20 dark:bg-violet-400/10 dark:text-violet-200",
+  };
+
+  return (
+    <div
+      className={`rounded-2xl border bg-white p-4 shadow-sm dark:bg-[#10131c] ${
+        urgent
+          ? "border-rose-300 dark:border-rose-400/30"
+          : "border-slate-200 dark:border-white/10"
+      }`}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div
+          className={`flex h-10 w-10 items-center justify-center rounded-lg border ${tones[tone]}`}
+        >
+          <Icon className="h-4 w-4" />
         </div>
-        {trend && (
-          <div className={`flex items-center gap-1 text-xs font-medium ${trend.positive ? 'text-emerald-400' : 'text-red-400'}`}>
-            <TrendingUp className={`h-3 w-3 ${trend.positive ? '' : 'rotate-180'}`} />
-            {trend.value}
-          </div>
-        )}
-        {urgent && (
-          <div className="flex items-center gap-1 text-xs font-medium text-red-400">
+        {urgent ? (
+          <span className="inline-flex items-center gap-1 rounded-md bg-rose-50 px-2 py-1 text-[10px] font-semibold text-rose-700 dark:bg-rose-400/10 dark:text-rose-200">
             <AlertCircle className="h-3 w-3" />
-            Urgent
-          </div>
-        )}
+            High priority
+          </span>
+        ) : trend ? (
+          <span
+            className={`inline-flex items-center gap-1 text-[11px] font-medium ${
+              trend.positive
+                ? "text-emerald-600 dark:text-emerald-300"
+                : "text-rose-600 dark:text-rose-300"
+            }`}
+          >
+            <TrendingUp
+              className={`h-3 w-3 ${trend.positive ? "" : "rotate-180"}`}
+            />
+            {trend.value}
+          </span>
+        ) : null}
       </div>
-      <div>
-        <p className="text-gray-400 text-sm font-medium mb-1">{label}</p>
-        <p className="text-white font-bold text-3xl mb-1">{value}</p>
-        {subValue && <p className="text-gray-400 text-xs">{subValue}</p>}
-      </div>
+      <p className="mt-4 text-xs text-slate-500 dark:text-slate-400">{label}</p>
+      <p className="mt-1 text-2xl font-semibold text-slate-950 dark:text-white">
+        {value}
+      </p>
+      <p className="mt-1 truncate text-[11px] text-slate-400 dark:text-slate-500">
+        {subValue}
+      </p>
     </div>
-  </div>
-);
+  );
+};
+
+const ProgressCount = ({ label, value, tone }) => {
+  const tones = {
+    blue: "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-400/20 dark:bg-blue-400/10 dark:text-blue-200",
+    amber:
+      "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-200",
+    emerald:
+      "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-200",
+  };
+
+  return (
+    <div className={`rounded-lg border p-3 text-center ${tones[tone]}`}>
+      <p className="text-lg font-semibold">{value}</p>
+      <p className="text-[10px] opacity-70">{label}</p>
+    </div>
+  );
+};
 
 export default TodoPage;

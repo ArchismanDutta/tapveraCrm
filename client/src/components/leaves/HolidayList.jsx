@@ -1,76 +1,30 @@
-import React, { useEffect, useState } from "react";
-import { Calendar } from "lucide-react";
-import axios from "axios";
+import React from "react";
+import { CalendarDays } from "lucide-react";
 
-const HolidayList = ({ shift = "ALL" }) => {
-  const [holidays, setHolidays] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-
-  const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
-  // Fetch holidays from backend
-  const fetchHolidays = async () => {
-    try {
-      setLoading(true);
-      const res = await axios.get(`${API_BASE}/api/holidays?shift=${shift}`);
-      const data = res.data.map((h) => ({
-        name: h.name,
-        date: new Date(h.date).toLocaleDateString("en-GB", {
-          day: "numeric",
-          month: "short",
-          year: "numeric",
-        }),
-        type: h.type,
-      }));
-      setHolidays(data);
-      setError(null);
-    } catch (err) {
-      console.error("Failed to fetch holidays:", err);
-      setError("Failed to load holidays");
-      setHolidays([]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchHolidays();
-  }, [shift]);
-
-  return (
-    <div className="bg-[rgba(22,28,48,0.68)] border border-[rgba(84,123,209,0.13)] rounded-3xl p-6 shadow-[0_8px_32px_0_rgba(10,40,100,0.14),_inset_0_1.5px_10px_0_rgba(84,123,209,0.08)] backdrop-blur-[10px]">
-      <h3 className="text-xl font-semibold mb-5 text-blue-100">
-        Holidays This Month
-      </h3>
-
-      {loading ? (
-        <p className="text-blue-100">Loading holidays...</p>
-      ) : error ? (
-        <p className="text-red-500">{error}</p>
-      ) : holidays.length > 0 ? (
-        <ul className="space-y-3">
-          {holidays.map((h, i) => (
-            <li
-              key={i}
-              className="flex items-center gap-3 p-4 border rounded-xl hover:bg-[rgba(36,44,92,0.2)] transition shadow-sm hover:shadow-md text-blue-100"
-            >
-              <div className="p-2 rounded-lg bg-[#262e4a] text-[#ff8000]">
-                <Calendar className="w-5 h-5" />
-              </div>
-              <div>
-                <p className="font-medium">{h.name}</p>
-                <p className="text-sm text-blue-300">
-                  {h.date} • {h.type}
-                </p>
-              </div>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p className="text-blue-300">No holidays available.</p>
-      )}
+const HolidayList = ({ holidays = [], loading = false, error = null }) => (
+  <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-[#10131c] sm:p-5">
+    <div className="mb-4">
+      <h3 className="text-base font-semibold text-slate-950 dark:text-white">Upcoming holidays</h3>
+      <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">Company-wide holidays and observances</p>
     </div>
-  );
-};
+
+    {loading ? (
+      <div className="space-y-2">{[0, 1, 2].map((item) => <div key={item} className="h-16 animate-pulse rounded-xl bg-slate-100 dark:bg-white/[0.05]" />)}</div>
+    ) : error ? (
+      <p className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700 dark:border-rose-400/20 dark:bg-rose-400/10 dark:text-rose-200">{error}</p>
+    ) : holidays.length > 0 ? (
+      <ul className="space-y-2">
+        {holidays.slice(0, 6).map((holiday, index) => (
+          <li key={`${holiday.name}-${holiday.date}-${index}`} className="flex items-center gap-3 rounded-xl border border-slate-200 p-3 dark:border-white/10 dark:bg-white/[0.02]">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600 dark:bg-blue-400/10 dark:text-blue-300"><CalendarDays className="h-4 w-4" /></div>
+            <div className="min-w-0"><p className="truncate text-sm font-medium text-slate-950 dark:text-white">{holiday.name}</p><p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{holiday.date} · {holiday.type}</p></div>
+          </li>
+        ))}
+      </ul>
+    ) : (
+      <p className="text-sm text-slate-500 dark:text-slate-400">No upcoming holidays available.</p>
+    )}
+  </section>
+);
 
 export default HolidayList;

@@ -18,7 +18,6 @@ const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
 const PendingPaymentsModal = ({ onClose, onPaymentUpdated }) => {
   const [payments, setPayments] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [selectedPayment, setSelectedPayment] = useState(null);
   const [actionLoading, setActionLoading] = useState(null);
   const [rejectNotes, setRejectNotes] = useState("");
   const [showRejectInput, setShowRejectInput] = useState(null);
@@ -140,14 +139,14 @@ const PendingPaymentsModal = ({ onClose, onPaymentUpdated }) => {
 
   if (loading) {
     return (
-      <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50">
-        <div className="bg-slate-800 border border-slate-600/30 rounded-xl p-8 max-w-md w-full mx-4">
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-sm">
+        <div className="mx-4 w-full max-w-md rounded-2xl border border-slate-200 bg-white p-8 shadow-2xl dark:border-white/10 dark:bg-[#10131c]">
           <div className="text-center">
             <div className="relative mx-auto w-12 h-12">
-              <div className="w-12 h-12 border-4 border-cyan-300/40 rounded-full"></div>
-              <div className="absolute top-0 left-0 w-12 h-12 border-4 border-cyan-600 border-t-transparent rounded-full animate-spin"></div>
+              <div className="h-12 w-12 rounded-full border-4 border-blue-100 dark:border-blue-400/20"></div>
+              <div className="absolute left-0 top-0 h-12 w-12 animate-spin rounded-full border-4 border-blue-600 border-t-transparent"></div>
             </div>
-            <p className="mt-4 text-gray-300">Loading pending payments...</p>
+            <p className="mt-4 text-slate-600 dark:text-slate-300">Loading pending payments...</p>
           </div>
         </div>
       </div>
@@ -155,25 +154,26 @@ const PendingPaymentsModal = ({ onClose, onPaymentUpdated }) => {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-y-auto">
-      <div className="bg-slate-800 border border-slate-600/30 rounded-xl shadow-2xl max-w-4xl w-full my-8">
+    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-slate-950/60 p-4 backdrop-blur-sm">
+      <div className="my-8 w-full max-w-4xl rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-white/10 dark:bg-[#10131c]">
         {/* Header */}
-        <div className="sticky top-0 bg-gradient-to-r from-cyan-600/20 to-blue-600/20 border-b border-slate-600/30 px-6 py-4 flex items-center justify-between rounded-t-xl backdrop-blur-sm">
-          <h2 className="text-xl font-bold text-gray-100 flex items-center gap-2">
-            <Clock className="w-6 h-6 text-cyan-400" />
-            Pending Payments ({payments.length})
+        <div className="sticky top-0 z-10 flex items-center justify-between rounded-t-2xl border-b border-slate-200 bg-white/95 px-6 py-4 backdrop-blur-sm dark:border-white/10 dark:bg-[#10131c]/95">
+          <h2 className="flex items-center gap-2 text-lg font-semibold text-slate-950 dark:text-white">
+            <Clock className="h-5 w-5 text-blue-600 dark:text-blue-300" />
+            Pending payments ({payments.length})
           </h2>
           <div className="flex items-center gap-2">
             <button
               onClick={fetchPendingPayments}
-              className="p-2 text-gray-300 hover:bg-slate-700/50 rounded-xl transition-all border border-slate-600/30"
+              className="rounded-lg border border-slate-200 p-2 text-slate-600 transition hover:bg-slate-50 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/[0.06]"
               title="Refresh"
             >
               <RefreshCw className="w-5 h-5" />
             </button>
             <button
               onClick={onClose}
-              className="text-gray-400 hover:text-gray-200 transition-colors"
+              className="rounded-lg p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-900 dark:hover:bg-white/[0.06] dark:hover:text-white"
+              aria-label="Close pending payments"
             >
               <X className="w-6 h-6" />
             </button>
@@ -184,11 +184,11 @@ const PendingPaymentsModal = ({ onClose, onPaymentUpdated }) => {
         <div className="px-6 py-4 max-h-[70vh] overflow-y-auto">
           {payments.length === 0 ? (
             <div className="text-center py-12">
-              <CheckCircle className="w-16 h-16 text-green-400 mx-auto mb-4" />
-              <h3 className="text-lg font-semibold text-gray-100 mb-2">
-                No Pending Payments
+              <CheckCircle className="mx-auto mb-4 h-12 w-12 text-emerald-500" />
+              <h3 className="mb-2 text-lg font-semibold text-slate-900 dark:text-white">
+                No pending payments
               </h3>
-              <p className="text-gray-400">
+              <p className="text-slate-500 dark:text-slate-400">
                 All payments have been processed
               </p>
             </div>
@@ -197,7 +197,7 @@ const PendingPaymentsModal = ({ onClose, onPaymentUpdated }) => {
               {payments.map((payment) => (
                 <div
                   key={payment._id}
-                  className="bg-slate-700/30 border border-slate-600/30 rounded-xl p-6 hover:shadow-lg hover:shadow-cyan-500/10 transition-all"
+                  className="rounded-2xl border border-slate-200 p-5 transition hover:shadow-md dark:border-white/10 sm:p-6"
                 >
                   <div className="grid md:grid-cols-2 gap-6">
                     {/* Left Side - Details */}
@@ -205,29 +205,29 @@ const PendingPaymentsModal = ({ onClose, onPaymentUpdated }) => {
                       {/* Employee Info */}
                       <div className="flex items-center gap-3">
                         <div className="flex-shrink-0">
-                          <div className="h-12 w-12 rounded-full bg-gradient-to-br from-cyan-500/20 to-blue-500/20 border border-cyan-500/30 flex items-center justify-center">
-                            <span className="text-cyan-400 font-semibold text-lg">
+                          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-indigo-600">
+                            <span className="text-lg font-semibold text-white">
                               {payment.employee.name.charAt(0).toUpperCase()}
                             </span>
                           </div>
                         </div>
                         <div>
-                          <h3 className="font-semibold text-gray-100">
+                          <h3 className="font-semibold text-slate-900 dark:text-white">
                             {payment.employee.name}
                           </h3>
-                          <p className="text-sm text-gray-400">
+                          <p className="text-sm text-slate-500 dark:text-slate-400">
                             {payment.employee.employeeId}
                           </p>
                         </div>
                       </div>
 
                       {/* Amount */}
-                      <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-4">
+                      <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-400/20 dark:bg-emerald-400/10">
                         <div className="flex items-center justify-between">
-                          <span className="text-sm text-green-400 font-medium">
+                          <span className="text-sm font-medium text-emerald-700 dark:text-emerald-300">
                             Amount
                           </span>
-                          <span className="text-2xl font-bold text-green-300">
+                          <span className="text-2xl font-semibold text-emerald-700 dark:text-emerald-200">
                             {formatCurrency(payment.amount)}
                           </span>
                         </div>
@@ -235,30 +235,30 @@ const PendingPaymentsModal = ({ onClose, onPaymentUpdated }) => {
 
                       {/* Reason */}
                       <div>
-                        <p className="text-xs text-gray-400 uppercase font-semibold mb-1">
+                        <p className="mb-1 text-xs font-semibold uppercase text-slate-500 dark:text-slate-400">
                           Reason
                         </p>
-                        <p className="text-sm text-gray-200">{payment.reason}</p>
+                        <p className="text-sm text-slate-700 dark:text-slate-200">{payment.reason}</p>
                       </div>
 
                       {/* Task Stats */}
                       <div className="grid grid-cols-2 gap-3">
-                        <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3">
-                          <p className="text-xs text-red-400">Due Tasks</p>
-                          <p className="text-lg font-bold text-red-300">
+                        <div className="rounded-lg border border-rose-200 bg-rose-50 p-3 dark:border-rose-400/20 dark:bg-rose-400/10">
+                          <p className="text-xs text-rose-600 dark:text-rose-300">Due tasks</p>
+                          <p className="text-lg font-semibold text-rose-700 dark:text-rose-200">
                             {payment.taskStats.dueTasks}
                           </p>
                         </div>
-                        <div className="bg-orange-500/10 border border-orange-500/30 rounded-lg p-3">
-                          <p className="text-xs text-orange-400">Rejections</p>
-                          <p className="text-lg font-bold text-orange-300">
+                        <div className="rounded-lg border border-orange-200 bg-orange-50 p-3 dark:border-orange-400/20 dark:bg-orange-400/10">
+                          <p className="text-xs text-orange-600 dark:text-orange-300">Rejections</p>
+                          <p className="text-lg font-semibold text-orange-700 dark:text-orange-200">
                             {payment.taskStats.rejectedTasks}
                           </p>
                         </div>
                       </div>
 
                       {/* Metadata */}
-                      <div className="text-xs text-gray-400 space-y-1">
+                      <div className="space-y-1 text-xs text-slate-500 dark:text-slate-400">
                         <div className="flex items-center gap-2">
                           <Calendar className="w-3 h-3" />
                           <span>Activated: {formatDate(payment.activatedAt)}</span>
@@ -274,11 +274,11 @@ const PendingPaymentsModal = ({ onClose, onPaymentUpdated }) => {
                       </div>
 
                       {payment.notes && (
-                        <div className="bg-slate-800/50 border border-slate-600/30 rounded-lg p-3">
-                          <p className="text-xs text-gray-400 font-semibold mb-1">
+                        <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-white/10 dark:bg-white/[0.025]">
+                          <p className="mb-1 text-xs font-semibold text-slate-500 dark:text-slate-400">
                             Notes:
                           </p>
-                          <p className="text-sm text-gray-300">{payment.notes}</p>
+                          <p className="text-sm text-slate-700 dark:text-slate-200">{payment.notes}</p>
                         </div>
                       )}
                     </div>
@@ -292,21 +292,21 @@ const PendingPaymentsModal = ({ onClose, onPaymentUpdated }) => {
                           className="w-48 h-48 object-contain"
                         />
                       </div>
-                      <p className="text-xs text-gray-400 text-center">
+                      <p className="text-center text-xs text-slate-500 dark:text-slate-400">
                         Paytm QR Code for Payment
                       </p>
                     </div>
                   </div>
 
                   {/* Actions */}
-                  <div className="mt-6 pt-6 border-t border-slate-600/30">
+                  <div className="mt-6 border-t border-slate-200 pt-6 dark:border-white/10">
                     {showRejectInput === payment._id ? (
                       <div className="space-y-3">
                         <textarea
                           value={rejectNotes}
                           onChange={(e) => setRejectNotes(e.target.value)}
                           placeholder="Reason for rejection (optional)..."
-                          className="w-full px-4 py-3 bg-slate-700/50 border border-slate-600/30 text-gray-200 placeholder-gray-500 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-transparent resize-none transition-all"
+                          className="w-full resize-none rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-rose-500 focus:ring-2 focus:ring-rose-500/15 dark:border-white/10 dark:bg-white/[0.035] dark:text-white"
                           rows="2"
                         />
                         <div className="flex gap-3">
@@ -315,14 +315,14 @@ const PendingPaymentsModal = ({ onClose, onPaymentUpdated }) => {
                               setShowRejectInput(null);
                               setRejectNotes("");
                             }}
-                            className="flex-1 px-4 py-3 border border-slate-600/30 text-gray-300 rounded-xl hover:bg-slate-700/50 transition-all"
+                            className="flex-1 rounded-xl border border-slate-200 px-4 py-3 text-slate-700 transition hover:bg-slate-50 dark:border-white/10 dark:text-slate-200 dark:hover:bg-white/[0.05]"
                           >
                             Cancel
                           </button>
                           <button
                             onClick={() => handleReject(payment._id)}
                             disabled={actionLoading === payment._id}
-                            className="flex-1 px-4 py-3 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 text-white rounded-xl transition-all disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-red-500/20"
+                            className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-rose-600 px-4 py-3 font-semibold text-white transition hover:bg-rose-700 disabled:opacity-50"
                           >
                             {actionLoading === payment._id ? (
                               <>
@@ -343,7 +343,7 @@ const PendingPaymentsModal = ({ onClose, onPaymentUpdated }) => {
                         <button
                           onClick={() => setShowRejectInput(payment._id)}
                           disabled={actionLoading === payment._id}
-                          className="flex-1 px-4 py-3 border border-red-500/30 text-red-400 rounded-xl hover:bg-red-500/10 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                          className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-rose-200 px-4 py-3 font-semibold text-rose-700 transition hover:bg-rose-50 disabled:opacity-50 dark:border-rose-400/20 dark:text-rose-300 dark:hover:bg-rose-400/10"
                         >
                           <XCircle className="w-5 h-5" />
                           Reject
@@ -351,7 +351,7 @@ const PendingPaymentsModal = ({ onClose, onPaymentUpdated }) => {
                         <button
                           onClick={() => handleApprove(payment._id)}
                           disabled={actionLoading === payment._id}
-                          className="flex-1 px-4 py-3 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-500 hover:to-green-600 text-white rounded-xl transition-all disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-green-500/20"
+                          className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-50"
                         >
                           {actionLoading === payment._id ? (
                             <>

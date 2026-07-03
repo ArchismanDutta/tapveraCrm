@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from "react";
-import { X, FileText, Bell } from "lucide-react";
+import { X, FileText, Bell, MessageSquare, CheckSquare, AtSign } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
 const NotificationToast = ({ notification, onClose }) => {
   const [isVisible, setIsVisible] = useState(false);
+  const navigate = useNavigate();
 
   useEffect(() => {
     setIsVisible(true);
@@ -20,19 +22,44 @@ const NotificationToast = ({ notification, onClose }) => {
     setTimeout(() => onClose(), 300); // Wait for animation
   };
 
+  const channel = (notification.channel || "").toLowerCase();
+
   const getIcon = () => {
-    if (notification.channel === "payslip") {
-      return <FileText className="w-6 h-6 text-green-400" />;
-    }
+    if (channel === "payslip") return <FileText className="w-6 h-6 text-green-400" />;
+    if (channel === "chat")    return <MessageSquare className="w-6 h-6 text-blue-400" />;
+    if (channel === "task")    return <CheckSquare className="w-6 h-6 text-purple-400" />;
+    if (channel === "mention") return <AtSign className="w-6 h-6 text-orange-400" />;
     return <Bell className="w-6 h-6 text-blue-400" />;
   };
 
   const getBgColor = () => {
-    if (notification.channel === "payslip") {
-      return "from-green-900/90 to-green-800/90 border-green-500/50";
-    }
-    return "from-blue-900/90 to-blue-800/90 border-blue-500/50";
+    if (channel === "payslip") return "from-green-900/90 to-green-800/90 border-green-500/50";
+    if (channel === "chat")    return "from-blue-900/90 to-blue-800/90 border-blue-500/50";
+    if (channel === "task")    return "from-purple-900/90 to-purple-800/90 border-purple-500/50";
+    if (channel === "mention") return "from-orange-900/90 to-orange-800/90 border-orange-500/50";
+    return "from-slate-900/90 to-slate-800/90 border-slate-500/50";
   };
+
+  // Click-to-navigate for actionable notification types
+  const handleActionClick = () => {
+    if (channel === "payslip") {
+      window.location.hash = "#payslip";
+    } else if (channel === "chat" && notification.conversationId) {
+      navigate("/chat");
+    } else if (channel === "task") {
+      navigate("/tasks");
+    }
+    handleClose();
+  };
+
+  const hasAction = ["payslip", "chat", "task"].includes(channel);
+  const actionLabel =
+    channel === "payslip" ? "View Payslip" :
+    channel === "chat"    ? "Open Chat" :
+    channel === "task"    ? "View Tasks" : null;
+
+  // Server sends `body`; fall back to `message` for older payloads
+  const bodyText = notification.body || notification.message || "";
 
   return (
     <div
@@ -61,19 +88,18 @@ const NotificationToast = ({ notification, onClose }) => {
                 <X className="w-4 h-4 text-gray-300" />
               </button>
             </div>
-            <p className="text-gray-200 text-sm mt-1 leading-snug">
-              {notification.message}
-            </p>
+            <p className="text-gray-200 text-sm mt-1 leading-snug">{bodyText}</p>
 
-            {/* Additional Info */}
+            {/* Payslip net salary detail */}
             {notification.netPayment && (
               <div className="mt-2 pt-2 border-t border-white/20">
                 <p className="text-xs text-gray-300">
-                  Net Salary: <span className="font-bold text-green-300">
-                    {new Intl.NumberFormat('en-IN', {
-                      style: 'currency',
-                      currency: 'INR',
-                      minimumFractionDigits: 0
+                  Net Salary:{" "}
+                  <span className="font-bold text-green-300">
+                    {new Intl.NumberFormat("en-IN", {
+                      style: "currency",
+                      currency: "INR",
+                      minimumFractionDigits: 0,
                     }).format(notification.netPayment)}
                   </span>
                 </p>
@@ -81,15 +107,12 @@ const NotificationToast = ({ notification, onClose }) => {
             )}
 
             {/* Action Button */}
-            {notification.action === "view_payslip" && (
+            {hasAction && actionLabel && (
               <button
-                onClick={() => {
-                  window.location.hash = "#payslip";
-                  handleClose();
-                }}
+                onClick={handleActionClick}
                 className="mt-3 w-full py-2 px-3 bg-white/20 hover:bg-white/30 text-white text-sm font-medium rounded-lg transition-colors"
               >
-                View Payslip
+                {actionLabel}
               </button>
             )}
           </div>
@@ -98,22 +121,16 @@ const NotificationToast = ({ notification, onClose }) => {
         {/* Progress bar for auto-close */}
         <div className="mt-3 h-1 bg-white/20 rounded-full overflow-hidden">
           <div
-            className="h-full bg-white/60 rounded-full animate-shrink"
-            style={{
-              animation: "shrink 10s linear forwards"
-            }}
+            className="h-full bg-white/60 rounded-full"
+            style={{ animation: "toast-shrink 10s linear forwards" }}
           />
         </div>
       </div>
 
-      <style jsx>{`
-        @keyframes shrink {
-          from {
-            width: 100%;
-          }
-          to {
-            width: 0%;
-          }
+      <style>{`
+        @keyframes toast-shrink {
+          from { width: 100%; }
+          to   { width: 0%; }
         }
       `}</style>
     </div>

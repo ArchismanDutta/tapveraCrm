@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
+import { CalendarDays, CheckCircle2, Clock, FileText, XCircle } from "lucide-react";
 import LeaveRequestDetails from "../components/adminleaves/LeaveRequestDetails";
 import Sidebar from "../components/dashboard/Sidebar";
 import DepartmentLeaveWarningModal from "../components/adminleaves/DepartmentLeaveWarningModal";
@@ -15,44 +16,47 @@ const AdminLeaveRequests = ({ onLogout }) => {
   const [pendingAction, setPendingAction] = useState(null);
   const [currentTime, setCurrentTime] = useState(new Date());
 
-  // Update time every second
   useEffect(() => {
-    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+    const timer = setInterval(() => setCurrentTime(new Date()), 60000);
     return () => clearInterval(timer);
   }, []);
 
   const updateStatus = async (id, status) => {
     try {
-      const updatedReq = await updateLeaveRequestStatus(id, status, adminRemarks);
-      console.log("Status updated", updatedReq);
-
-      // Update local state with the new data
-      setRequests(prev =>
-        prev.map(req =>
-          String(req._id) === String(id) ? updatedReq : req
-        )
+      const updatedRequest = await updateLeaveRequestStatus(
+        id,
+        status,
+        adminRemarks,
       );
-    } catch (err) {
-      console.error(err);
+      setRequests((current) =>
+        current.map((request) =>
+          String(request._id) === String(id) ? updatedRequest : request,
+        ),
+      );
+    } catch (error) {
+      console.error(error);
     }
   };
 
   const saveRemarks = async (id) => {
     try {
-      const currentRequest = requests.find(req => String(req._id) === String(id));
+      const currentRequest = requests.find(
+        (request) => String(request._id) === String(id),
+      );
       if (!currentRequest) return;
 
-      const updatedReq = await updateLeaveRequestStatus(id, currentRequest.status, adminRemarks);
-      console.log("Remarks saved", updatedReq);
-
-      // Update local state with the new data
-      setRequests(prev =>
-        prev.map(req =>
-          String(req._id) === String(id) ? updatedReq : req
-        )
+      const updatedRequest = await updateLeaveRequestStatus(
+        id,
+        currentRequest.status,
+        adminRemarks,
       );
-    } catch (err) {
-      console.error(err);
+      setRequests((current) =>
+        current.map((request) =>
+          String(request._id) === String(id) ? updatedRequest : request,
+        ),
+      );
+    } catch (error) {
+      console.error(error);
     }
   };
 
@@ -62,97 +66,55 @@ const AdminLeaveRequests = ({ onLogout }) => {
       setModalLeaves(Array.isArray(leaves) ? leaves : []);
       setPendingAction({ id, status });
       setModalOpen(true);
-    } catch (err) {
-      console.error(err);
+    } catch (error) {
+      console.error(error);
       updateStatus(id, status);
     }
   };
 
   const handleModalProceed = () => {
-    if (pendingAction) {
-      updateStatus(pendingAction.id, pendingAction.status);
-    }
+    if (pendingAction) updateStatus(pendingAction.id, pendingAction.status);
     setModalOpen(false);
     setPendingAction(null);
   };
 
-  const selectedRequest = requests.find((req) => String(req._id) === String(selectedId)) || null;
+  const selectedRequest =
+    requests.find((request) => String(request._id) === String(selectedId)) ||
+    null;
 
-  // Only reset remarks when selecting a different request, not on every data update
-  useEffect(() => {
-    setAdminRemarks(selectedRequest?.adminRemarks || "");
-  }, [selectedId]); // Changed from [selectedRequest] to [selectedId]
+  const handleSelectRequest = (id) => {
+    setSelectedId(id);
+    const nextRequest = requests.find(
+      (request) => String(request._id) === String(id),
+    );
+    setAdminRemarks(nextRequest?.adminRemarks || "");
+  };
 
-  // Calculate stats
   const totalRequests = requests.length;
-  const pendingRequests = requests.filter(req => req.status === "Pending").length;
-  const approvedRequests = requests.filter(req => req.status === "Approved").length;
-  const rejectedRequests = requests.filter(req => req.status === "Rejected").length;
+  const pendingRequests = requests.filter(
+    (request) => request.status === "Pending",
+  ).length;
+  const approvedRequests = requests.filter(
+    (request) => request.status === "Approved",
+  ).length;
+  const rejectedRequests = requests.filter(
+    (request) => request.status === "Rejected",
+  ).length;
+
+  const summaryMetrics = [
+    ["Total requests", totalRequests, FileText, "text-blue-600 dark:text-blue-300"],
+    ["Pending", pendingRequests, Clock, "text-amber-600 dark:text-amber-300"],
+    [
+      "Approved",
+      approvedRequests,
+      CheckCircle2,
+      "text-emerald-600 dark:text-emerald-300",
+    ],
+    ["Rejected", rejectedRequests, XCircle, "text-rose-600 dark:text-rose-300"],
+  ];
 
   return (
-    <div className="flex bg-[#0f1419] min-h-screen text-white relative">
-      {/* Custom Scrollbar Styles */}
-      <style jsx global>{`
-        /* Custom Scrollbar Styles */
-        ::-webkit-scrollbar {
-          width: 8px;
-          height: 8px;
-        }
-
-        ::-webkit-scrollbar-track {
-          background: rgba(15, 20, 25, 0.3);
-          border-radius: 10px;
-        }
-
-        ::-webkit-scrollbar-thumb {
-          background: linear-gradient(135deg, #06b6d4, #3b82f6);
-          border-radius: 10px;
-          border: 1px solid rgba(15, 20, 25, 0.2);
-        }
-
-        ::-webkit-scrollbar-thumb:hover {
-          background: linear-gradient(135deg, #0891b2, #2563eb);
-        }
-
-        ::-webkit-scrollbar-corner {
-          background: rgba(15, 20, 25, 0.3);
-        }
-
-        /* Firefox Scrollbar */
-        * {
-          scrollbar-width: thin;
-          scrollbar-color: #06b6d4 rgba(15, 20, 25, 0.3);
-        }
-
-        /* Hide scrollbar for specific elements when needed */
-        .hide-scrollbar::-webkit-scrollbar {
-          display: none;
-        }
-
-        .hide-scrollbar {
-          -ms-overflow-style: none;
-          scrollbar-width: none;
-        }
-
-        /* Smooth scrolling */
-        html {
-          scroll-behavior: smooth;
-        }
-
-        /* Custom focus styles */
-        .focus-ring:focus {
-          outline: none;
-          box-shadow: 0 0 0 2px rgba(6, 182, 212, 0.5);
-        }
-      `}</style>
-
-      {/* Animated Background */}
-      <div className="absolute inset-0 bg-gradient-to-br from-slate-900/20 via-blue-900/10 to-purple-900/20"></div>
-      <div className="absolute inset-0">
-        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-cyan-500/5 rounded-full blur-3xl animate-pulse"></div>
-        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-purple-500/5 rounded-full blur-3xl animate-pulse"></div>
-      </div>
-
+    <div className="relative flex h-[100dvh] overflow-hidden bg-slate-50 text-slate-900 dark:bg-[#0b0d12] dark:text-slate-100">
       <Sidebar
         collapsed={collapsed}
         setCollapsed={setCollapsed}
@@ -160,170 +122,104 @@ const AdminLeaveRequests = ({ onLogout }) => {
         onLogout={onLogout}
       />
 
-      {/* Main Content */}
       <main
-        className={`relative z-10 flex-1 transition-all duration-300 ${
-          collapsed ? "ml-24" : "ml-72"
-        } p-6 overflow-y-auto max-h-screen`}
+        className={`h-[100dvh] min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 transition-all duration-300 sm:px-5 lg:px-6 ${
+          collapsed ? "ml-16" : "ml-16 sm:ml-56"
+        }`}
       >
-        {/* Modern Header */}
-        <div className="mb-8">
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between mb-6">
-            <div>
-              <h1 className="text-4xl font-bold mb-2">
-                <span className="bg-gradient-to-r from-emerald-400 via-cyan-400 to-blue-400 bg-clip-text text-transparent">
-                  Leave Management
-                </span>
-              </h1>
-              <p className="text-lg text-gray-300 mb-4">
-                Review and manage employee leave requests 📋
-              </p>
+        <div className="mx-auto max-w-[1500px] space-y-4 pb-8 sm:space-y-5">
+          <header className="rounded-2xl border border-slate-200 bg-white px-5 py-5 shadow-sm dark:border-white/10 dark:bg-[#10131c] sm:px-6">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <div className="inline-flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 dark:border-blue-400/20 dark:bg-blue-400/10 dark:text-blue-200">
+                  <CalendarDays className="h-3.5 w-3.5" />
+                  Leave operations
+                </div>
+                <h1 className="mt-3 text-2xl font-semibold tracking-tight text-slate-950 dark:text-white">
+                  Leave requests
+                </h1>
+                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                  Review employee requests, supporting documents, and approval history.
+                </p>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-right dark:border-white/10 dark:bg-white/[0.025]">
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  {currentTime.toLocaleDateString("en-IN", {
+                    weekday: "short",
+                    day: "numeric",
+                    month: "short",
+                  })}
+                </p>
+                <p className="mt-0.5 font-mono text-sm font-semibold text-slate-700 dark:text-slate-200">
+                  {currentTime.toLocaleTimeString("en-IN", {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </p>
+              </div>
             </div>
-            <div className="flex items-center space-x-4">
-              <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 backdrop-blur-sm border border-slate-600/30 rounded-2xl px-6 py-4">
-                <div className="flex items-center space-x-3">
-                  <div className="w-3 h-3 bg-green-400 rounded-full animate-pulse"></div>
+          </header>
+
+          <section
+            className="grid grid-cols-2 gap-3 lg:grid-cols-4"
+            aria-label="Leave request summary"
+          >
+            {summaryMetrics.map(([label, value, Icon, tone]) => (
+              <article
+                key={label}
+                className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-[#10131c]"
+              >
+                <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="text-sm text-gray-400">Live Status</p>
-                    <p className="text-cyan-400 font-mono text-sm">
-                      {currentTime.toLocaleTimeString("en-US", {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                        second: "2-digit",
-                      })}
+                    <p className="text-xs font-medium text-slate-500 dark:text-slate-400">
+                      {label}
+                    </p>
+                    <p className="mt-1 text-2xl font-semibold text-slate-950 dark:text-white">
+                      {value}
                     </p>
                   </div>
+                  <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-100 dark:bg-white/[0.05]">
+                    {React.createElement(Icon, {
+                      className: `h-4 w-4 ${tone}`,
+                    })}
+                  </span>
                 </div>
-              </div>
-            </div>
-          </div>
-          <div className="text-gray-400 text-base">
-            {currentTime.toLocaleDateString("en-US", {
-              weekday: "long",
-              year: "numeric",
-              month: "long",
-              day: "numeric",
-            })}
-          </div>
-        </div>
+              </article>
+            ))}
+          </section>
 
-        {/* Stats Dashboard */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          {/* Total Requests */}
-          <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 backdrop-blur-sm border border-slate-600/30 rounded-2xl p-6 hover:border-cyan-400/40 transition-all duration-300 hover:scale-105 hover:shadow-2xl hover:shadow-cyan-500/25">
-            <div className="flex items-center justify-between mb-4">
-              <div className="p-3 bg-gradient-to-br from-cyan-500/20 to-blue-600/20 rounded-xl">
-                <svg className="w-6 h-6 text-cyan-400" fill="currentColor" viewBox="0 0 20 20">
-                  <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
+          <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1.55fr)_minmax(320px,0.65fr)]">
+            <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-white/10 dark:bg-[#10131c]">
+              <div className="border-b border-slate-200 px-4 py-4 dark:border-white/10 sm:px-5">
+                <h2 className="text-base font-semibold text-slate-950 dark:text-white">
+                  Request queue
+                </h2>
+                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                  Select a request to review its details.
+                </p>
               </div>
-              <div className="text-right">
-                <p className="text-3xl font-bold text-white">{totalRequests}</p>
-                <p className="text-sm text-gray-400 uppercase tracking-wide">Total Requests</p>
-              </div>
-            </div>
-            <div className="h-1 bg-gradient-to-r from-cyan-500 to-blue-600 rounded-full"></div>
-          </div>
-
-          {/* Pending */}
-          <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 backdrop-blur-sm border border-slate-600/30 rounded-2xl p-6 hover:border-yellow-400/40 transition-all duration-300 hover:scale-105 hover:shadow-2xl hover:shadow-yellow-500/25">
-            <div className="flex items-center justify-between mb-4">
-              <div className="p-3 bg-gradient-to-br from-yellow-500/20 to-orange-600/20 rounded-xl relative">
-                <svg className="w-6 h-6 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
-                </svg>
-                {pendingRequests > 0 && <div className="absolute -top-1 -right-1 w-3 h-3 bg-yellow-500 rounded-full animate-pulse"></div>}
-              </div>
-              <div className="text-right">
-                <p className="text-3xl font-bold text-white">{pendingRequests}</p>
-                <p className="text-sm text-gray-400 uppercase tracking-wide">Pending</p>
-              </div>
-            </div>
-            <div className="h-1 bg-gradient-to-r from-yellow-500 to-orange-600 rounded-full"></div>
-          </div>
-
-          {/* Approved */}
-          <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 backdrop-blur-sm border border-slate-600/30 rounded-2xl p-6 hover:border-green-400/40 transition-all duration-300 hover:scale-105 hover:shadow-2xl hover:shadow-green-500/25">
-            <div className="flex items-center justify-between mb-4">
-              <div className="p-3 bg-gradient-to-br from-green-500/20 to-emerald-600/20 rounded-xl">
-                <svg className="w-6 h-6 text-green-400" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                </svg>
-              </div>
-              <div className="text-right">
-                <p className="text-3xl font-bold text-white">{approvedRequests}</p>
-                <p className="text-sm text-gray-400 uppercase tracking-wide">Approved</p>
-              </div>
-            </div>
-            <div className="h-1 bg-gradient-to-r from-green-500 to-emerald-600 rounded-full"></div>
-          </div>
-
-          {/* Rejected */}
-          <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 backdrop-blur-sm border border-slate-600/30 rounded-2xl p-6 hover:border-red-400/40 transition-all duration-300 hover:scale-105 hover:shadow-2xl hover:shadow-red-500/25">
-            <div className="flex items-center justify-between mb-4">
-              <div className="p-3 bg-gradient-to-br from-red-500/20 to-pink-600/20 rounded-xl">
-                <svg className="w-6 h-6 text-red-400" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-                </svg>
-              </div>
-              <div className="text-right">
-                <p className="text-3xl font-bold text-white">{rejectedRequests}</p>
-                <p className="text-sm text-gray-400 uppercase tracking-wide">Rejected</p>
-              </div>
-            </div>
-            <div className="h-1 bg-gradient-to-r from-red-500 to-pink-600 rounded-full"></div>
-          </div>
-        </div>
-
-        {/* Content Layout */}
-        <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-          {/* Left Panel - Table */}
-          <div className="xl:col-span-2">
-            <div className="bg-gradient-to-br from-slate-800/40 to-slate-900/40 backdrop-blur-xl border border-slate-600/30 rounded-3xl p-6 shadow-2xl">
-              <div className="flex items-center space-x-3 mb-6">
-                <div className="p-3 bg-gradient-to-br from-emerald-500/20 to-teal-600/20 rounded-xl">
-                  <svg className="w-6 h-6 text-emerald-400" fill="currentColor" viewBox="0 0 20 20">
-                    <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" />
-                    <path fillRule="evenodd" d="M4 5a2 2 0 012-2v1a1 1 0 102 0V3h4v1a1 1 0 102 0V3a2 2 0 012 2v6a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm8 8a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
-                  </svg>
-                </div>
-                <div>
-                  <h2 className="text-2xl font-bold bg-gradient-to-r from-emerald-400 to-teal-400 bg-clip-text text-transparent">
-                    Leave Requests
-                  </h2>
-                  <p className="text-gray-400">Click on a request to view details</p>
-                </div>
-              </div>
-              <div className="h-[calc(100vh-400px)] min-h-[400px]">
+              <div className="h-[min(660px,calc(100dvh-330px))] min-h-[440px] p-4 sm:p-5">
                 <PollingLeaveRequestsTable
                   selectedId={selectedId}
-                  onSelect={setSelectedId}
+                  onSelect={handleSelectRequest}
                   onApprove={(id) => handleActionClick(id, "Approved")}
                   onReject={(id) => handleActionClick(id, "Rejected")}
                   requests={requests}
                   setRequests={setRequests}
                 />
               </div>
-            </div>
-          </div>
+            </section>
 
-          {/* Right Panel - Details */}
-          <div className="xl:col-span-1">
-            <div className="bg-gradient-to-br from-purple-900/20 to-blue-900/20 backdrop-blur-xl border border-purple-500/30 rounded-3xl p-6 shadow-2xl">
-              <div className="flex items-center space-x-3 mb-6">
-                <div className="p-3 bg-gradient-to-br from-purple-500/20 to-pink-600/20 rounded-xl">
-                  <svg className="w-6 h-6 text-purple-400" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 0v12h8V4H6z" clipRule="evenodd" />
-                  </svg>
-                </div>
-                <div>
-                  <h2 className="text-2xl font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
-                    Request Details
-                  </h2>
-                  <p className="text-gray-400">Review and take action</p>
-                </div>
+            <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-white/10 dark:bg-[#10131c]">
+              <div className="border-b border-slate-200 px-4 py-4 dark:border-white/10 sm:px-5">
+                <h2 className="text-base font-semibold text-slate-950 dark:text-white">
+                  Request details
+                </h2>
+                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                  Review the request and record a decision.
+                </p>
               </div>
-              <div className="h-[calc(100vh-400px)] min-h-[400px] overflow-y-auto pr-2">
+              <div className="max-h-[min(660px,calc(100dvh-330px))] min-h-[440px] overflow-y-auto p-4 sm:p-5">
                 <LeaveRequestDetails
                   request={selectedRequest}
                   adminRemarks={adminRemarks}
@@ -333,18 +229,18 @@ const AdminLeaveRequests = ({ onLogout }) => {
                   onSaveRemarks={saveRemarks}
                 />
               </div>
-            </div>
+            </section>
           </div>
-        </div>
 
-        <DepartmentLeaveWarningModal
-          isOpen={modalOpen}
-          onClose={() => setModalOpen(false)}
-          onProceed={handleModalProceed}
-          department={null}
-          currentLeaves={modalLeaves}
-          selectedEmployee={null}
-        />
+          <DepartmentLeaveWarningModal
+            isOpen={modalOpen}
+            onClose={() => setModalOpen(false)}
+            onProceed={handleModalProceed}
+            department={null}
+            currentLeaves={modalLeaves}
+            selectedEmployee={null}
+          />
+        </div>
       </main>
     </div>
   );

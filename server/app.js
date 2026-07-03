@@ -348,7 +348,7 @@ wss.on("connection", (ws) => {
                       type: "notification",
                       channel: "chat",
                       title: "New group message",
-                      body: savedMessage.message,
+                      body: savedMessage.message || "📎 Attachment",
                       from: ws.user.id,
                       conversationId: savedMessage.conversationId,
                       timestamp: savedMessage.timestamp,

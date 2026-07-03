@@ -1,11 +1,13 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { useLocation } from "react-router-dom";
 import CreateGroupModal from "../components/chat/CreateGroupModal";
 import ManageGroupModal from "../components/chat/ManageGroupModal";
 import ChatWindow from "../components/chat/chatWindow";
 import { useWebSocketContext } from "../contexts/WebSocketContext";
 import Sidebar from "../components/dashboard/Sidebar";
-import { Search, Filter, X, SortAsc, Users, Settings } from "lucide-react";
+import { ArrowLeft, Search, Filter, X, SortAsc, Users, Settings } from "lucide-react";
+
+const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
 
 // Custom hook for debouncing
 const useDebounce = (value, delay) => {
@@ -56,8 +58,29 @@ const ChatPage = ({ onLogout }) => {
     setConversations: updateWebSocketConversations,
   } = useWebSocketContext();
 
-  const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
   const currentUserId = JSON.parse(localStorage.getItem("user"))?._id;
+
+  const fetchConversations = useCallback(async (token) => {
+    try {
+      const res = await fetch(`${API_BASE}/api/chat/groups`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error("Failed to fetch conversations");
+      const data = await res.json();
+      setConversations(data);
+      updateWebSocketConversations(data);
+
+      try {
+        const raw = sessionStorage.getItem("chat_unread_map");
+        const map = raw ? JSON.parse(raw) : {};
+        window.dispatchEvent(new CustomEvent("chat-unread-map", { detail: { map } }));
+      } catch (error) {
+        console.warn("Unable to restore chat unread state", error);
+      }
+    } catch (error) {
+      console.error("Failed to load conversations", error);
+    }
+  }, [updateWebSocketConversations]);
 
   useEffect(() => {
     const storedUser = localStorage.getItem("user");
@@ -69,7 +92,7 @@ const ChatPage = ({ onLogout }) => {
       setJwtToken(storedToken);
       fetchConversations(storedToken);
     }
-  }, []);
+  }, [fetchConversations]);
 
   useEffect(() => {
     if (!selectedConversation || !jwtToken) return;
@@ -103,7 +126,9 @@ const ChatPage = ({ onLogout }) => {
     try {
       const raw = sessionStorage.getItem("chat_unread_map");
       if (raw) setUnreadMessages(JSON.parse(raw));
-    } catch {}
+    } catch (error) {
+      console.warn("Unable to restore unread messages", error);
+    }
     return () => window.removeEventListener("chat-unread-map", onMap);
   }, []);
 
@@ -128,14 +153,6 @@ const ChatPage = ({ onLogout }) => {
         }));
       }
 
-      // Persist total and map in sessionStorage for Sidebar on route changes
-      try {
-        sessionStorage.setItem("chat_unread_map", JSON.stringify(unreadMessages));
-        const total = Object.values(unreadMessages).reduce((a, b) => a + Number(b || 0), 0);
-        sessionStorage.setItem("chat_unread_total", String(total));
-        window.dispatchEvent(new CustomEvent("chat-unread-total", { detail: { total } }));
-        window.dispatchEvent(new CustomEvent("chat-unread-map", { detail: { map: unreadMessages } }));
-      } catch {}
     } else if (liveMessages && liveMessages.length > 0) {
       // Fallback: use liveMessages for basic unread tracking if allMessages isn't available
       const latestMessage = liveMessages[liveMessages.length - 1];
@@ -156,13 +173,6 @@ const ChatPage = ({ onLogout }) => {
         }));
       }
 
-      try {
-        sessionStorage.setItem("chat_unread_map", JSON.stringify(unreadMessages));
-        const total = Object.values(unreadMessages).reduce((a, b) => a + Number(b || 0), 0);
-        sessionStorage.setItem("chat_unread_total", String(total));
-        window.dispatchEvent(new CustomEvent("chat-unread-total", { detail: { total } }));
-        window.dispatchEvent(new CustomEvent("chat-unread-map", { detail: { map: unreadMessages } }));
-      } catch {}
     }
   }, [allMessages, liveMessages, selectedConversation, currentUserId]);
 
@@ -172,7 +182,9 @@ const ChatPage = ({ onLogout }) => {
     try {
       sessionStorage.setItem("chat_unread_total", String(total));
       sessionStorage.setItem("chat_unread_map", JSON.stringify(unreadMessages));
-    } catch {}
+    } catch (error) {
+      console.warn("Unable to persist unread messages", error);
+    }
     window.dispatchEvent(
       new CustomEvent("chat-unread-total", { detail: { total } })
     );
@@ -190,27 +202,6 @@ const ChatPage = ({ onLogout }) => {
     (liveMessages || []).forEach(put);
     return Array.from(map.values()).sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
   }, [initialMessages, allMessages, liveMessages]);
-
-  const fetchConversations = async (token) => {
-    try {
-      const res = await fetch(`${API_BASE}/api/chat/groups`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) throw new Error("Failed to fetch conversations");
-      const data = await res.json();
-      setConversations(data);
-      // Update WebSocket context with conversations
-      updateWebSocketConversations(data);
-      // After conversations load, broadcast a fresh unread map event so list can render badges
-      try {
-        const raw = sessionStorage.getItem("chat_unread_map");
-        const map = raw ? JSON.parse(raw) : {};
-        window.dispatchEvent(new CustomEvent("chat-unread-map", { detail: { map } }));
-      } catch {}
-    } catch (error) {
-      console.error(error);
-    }
-  };
 
   // Auto-open conversation from notification navigation
   useEffect(() => {
@@ -246,7 +237,7 @@ const ChatPage = ({ onLogout }) => {
         window.history.replaceState({}, document.title);
       }
     }
-  }, [location.state, conversations, jwtToken, currentUserId]);
+  }, [location.state, conversations, jwtToken, currentUserId, setActiveConversation]);
 
   const handleCreateGroup = async (name, memberIds) => {
     try {
@@ -334,9 +325,10 @@ const ChatPage = ({ onLogout }) => {
   };
 
   // Get unread count for a conversation
-  const getUnreadCount = (conversationId) => {
-    return unreadMessages[conversationId] || 0;
-  };
+  const getUnreadCount = useCallback(
+    (conversationId) => unreadMessages[conversationId] || 0,
+    [unreadMessages]
+  );
 
   // Filter and sort conversations
   const filteredAndSortedConversations = useMemo(() => {
@@ -382,10 +374,10 @@ const ChatPage = ({ onLogout }) => {
     });
 
     return filtered;
-  }, [conversations, debouncedSearchTerm, filterType, sortBy, unreadMessages]);
+  }, [conversations, debouncedSearchTerm, filterType, sortBy, getUnreadCount]);
 
   return (
-    <div className="flex h-screen bg-[#101525] text-gray-100">
+    <div className="app-shell h-[100dvh] overflow-hidden">
       {/* Shared Sidebar (same as AttendancePage) */}
       <Sidebar
         onLogout={onLogout}
@@ -396,22 +388,25 @@ const ChatPage = ({ onLogout }) => {
 
       {/* Main Chat Area */}
       <main
-        className={`flex-1 flex transition-all duration-300 h-screen ${
-          collapsed ? "ml-20" : "ml-72"
+        className={`app-main flex h-[100dvh] transition-all duration-300 ${
+          collapsed ? "ml-16" : "ml-16 sm:ml-56"
         }`}
       >
         {/* Conversations Panel */}
-        <div className="w-1/4 border-r border-gray-700 bg-gray-800 flex flex-col h-full ">
+        <section className={`h-full w-[320px] min-w-[280px] max-w-[36vw] flex-col border-r border-white/10 bg-[#0b0d14] ${selectedConversation ? "flex max-sm:hidden" : "flex max-sm:w-full max-sm:max-w-none"}`}>
           {/* Header with title and filter button */}
-          <div className="p-4 pb-3 border-b border-gray-700">
+          <div className="border-b border-white/10 p-4 pb-3">
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-lg font-bold text-white">Conversations</h3>
+              <div>
+                <p className="app-eyebrow">Messages</p>
+                <h1 className="mt-1 text-lg font-semibold text-white">Conversations</h1>
+              </div>
               <button
                 onClick={() => setShowFilters(!showFilters)}
                 className={`p-2 rounded-lg transition-colors ${
                   showFilters
                     ? "bg-blue-600 text-white"
-                    : "bg-gray-700 text-gray-400 hover:bg-gray-600"
+                    : "app-icon-button"
                 }`}
                 title="Toggle filters"
               >
@@ -427,7 +422,7 @@ const ChatPage = ({ onLogout }) => {
                 placeholder="Search conversations or members..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-10 py-2 bg-gray-900 border border-gray-600 rounded-lg text-white text-sm placeholder-gray-500 focus:outline-none focus:border-blue-500 transition-colors"
+                className="app-control w-full py-2 pl-10 pr-10 text-sm placeholder-gray-500 focus:outline-none"
               />
               {searchTerm && (
                 <button
@@ -441,7 +436,7 @@ const ChatPage = ({ onLogout }) => {
 
             {/* Filter and Sort Options */}
             {showFilters && (
-              <div className="mt-3 space-y-2 p-3 bg-gray-900 rounded-lg border border-gray-600">
+              <div className="app-panel mt-3 space-y-2 p-3">
                 {/* Filter Tabs */}
                 <div>
                   <label className="text-xs text-gray-400 mb-1.5 block">Filter</label>
@@ -578,23 +573,33 @@ const ChatPage = ({ onLogout }) => {
             <div className="p-4 pt-0">
               <button
                 onClick={() => setShowCreateGroup(true)}
-                className="w-full bg-indigo-600 text-white px-3 py-2 rounded-lg hover:bg-indigo-700 transition-colors shadow-sm"
+                className="app-primary-button w-full px-3 py-2 text-sm font-semibold"
               >
                 + New Group
               </button>
             </div>
           )}
-        </div>
+        </section>
 
         {/* Chat Panel */}
-        <div className="flex-1 flex flex-col h-full bg-gray-900">
+        <section className={`h-full min-w-0 flex-1 flex-col bg-[#07080d] ${selectedConversation ? "flex" : "flex max-sm:hidden"}`}>
           {selectedConversation ? (
             <>
               {/* Header */}
-              <div className="flex justify-between items-center p-4 border-b border-gray-700 bg-gray-800">
-                <h4 className="text-lg font-semibold text-white">
-                  {selectedConversation.name || "Group Chat"}
-                </h4>
+              <div className="flex items-center justify-between border-b border-white/10 bg-[#0b0d14] p-4">
+                <div className="flex min-w-0 items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedConversation(null)}
+                    className="app-icon-button inline-flex h-9 w-9 shrink-0 items-center justify-center sm:hidden"
+                    aria-label="Back to conversations"
+                  >
+                    <ArrowLeft className="h-4 w-4" />
+                  </button>
+                  <h4 className="truncate text-lg font-semibold text-white">
+                    {selectedConversation.name || "Group Chat"}
+                  </h4>
+                </div>
                 <div className="flex items-center gap-4">
                   {selectedConversation.members && (
                     <div className="text-sm text-gray-400">
@@ -610,7 +615,7 @@ const ChatPage = ({ onLogout }) => {
                       <button
                         title="Manage Group Members"
                         onClick={() => setShowManageGroup(true)}
-                        className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+                        className="app-secondary-button flex items-center gap-2 px-3 py-1.5 text-sm font-medium"
                       >
                         <Settings className="w-4 h-4" />
                         Manage
@@ -645,7 +650,7 @@ const ChatPage = ({ onLogout }) => {
               Select a conversation to start chatting
             </div>
           )}
-        </div>
+        </section>
       </main>
 
       {/* Create Group Modal */}

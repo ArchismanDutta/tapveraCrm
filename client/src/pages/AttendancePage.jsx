@@ -1,1141 +1,297 @@
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  AlertCircle,
+  ArrowLeft,
+  ArrowRight,
+  CalendarDays,
+  CheckCircle2,
+  Clock3,
+  Home,
+  Hourglass,
+  RefreshCw,
+  TimerReset,
+  TrendingUp,
+} from "lucide-react";
+import Sidebar from "../components/dashboard/Sidebar";
+import PaymentBlockOverlay from "../components/payment/PaymentBlockOverlay";
+import usePaymentCheck from "../hooks/usePaymentCheck";
+import newAttendanceService from "../services/newAttendanceService";
+import timeUtils from "../utils/timeUtils";
 
-import React, { useEffect, useState, useCallback } from 'react'; // Line 1
-import axios from 'axios';
-import timeUtils from '../utils/timeUtils';
-import AttendanceStats from '../components/attendance/AttendanceStats';
-import AttendanceCalendar from '../components/attendance/AttendanceCalendar';
-import WeeklyHoursChart from '../components/attendance/WeeklyHoursChart';
-import RecentActivityTable from '../components/attendance/RecentActivityTable';
-import Sidebar from '../components/dashboard/Sidebar';
-import { RefreshCw, AlertCircle, Clock, Users, Calendar as CalendarIcon } from 'lucide-react';
-import newAttendanceService from '../services/newAttendanceService';
-import PaymentBlockOverlay from '../components/payment/PaymentBlockOverlay';
-import usePaymentCheck from '../hooks/usePaymentCheck';
+const statusStyles = {
+  working: {
+    label: "Working",
+    dot: "bg-emerald-500",
+    text: "text-emerald-700 dark:text-emerald-200",
+    bg: "bg-emerald-50 dark:bg-emerald-400/10",
+    border: "border-emerald-200 dark:border-emerald-400/20",
+  },
+  break: {
+    label: "On Break",
+    dot: "bg-amber-500",
+    text: "text-amber-700 dark:text-amber-200",
+    bg: "bg-amber-50 dark:bg-amber-400/10",
+    border: "border-amber-200 dark:border-amber-400/20",
+  },
+  offline: {
+    label: "Offline",
+    dot: "bg-slate-500",
+    text: "text-slate-600 dark:text-slate-300",
+    bg: "bg-slate-50 dark:bg-white/[0.04]",
+    border: "border-slate-200 dark:border-white/10",
+  },
+};
+
+const dayStatusStyles = {
+  present: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-200",
+  late: "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-200",
+  "half-day": "border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-400/20 dark:bg-violet-400/10 dark:text-violet-200",
+  wfh: "border-purple-200 bg-purple-50 text-purple-700 dark:border-purple-400/20 dark:bg-purple-400/10 dark:text-purple-200",
+  absent: "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-400/20 dark:bg-rose-400/10 dark:text-rose-200",
+  default: "border-slate-200 bg-slate-50 text-slate-400 dark:border-white/10 dark:bg-white/[0.035] dark:text-slate-500",
+};
+
+const compactStatusLabel = {
+  present: "Present",
+  late: "Late",
+  "half-day": "Half Day",
+  wfh: "Work From Home",
+  absent: "Absent",
+  default: "No record",
+};
+
+const formatDuration = (seconds = 0) => {
+  const safeSeconds = Math.max(0, Number(seconds) || 0);
+  const hours = Math.floor(safeSeconds / 3600);
+  const minutes = Math.floor((safeSeconds % 3600) / 60);
+  return `${hours}h ${minutes.toString().padStart(2, "0")}m`;
+};
+
+const formatTime = (value) => {
+  if (!value) return "--";
+  try {
+    return timeUtils.formatTime(value);
+  } catch {
+    return "--";
+  }
+};
+
+const getDateKey = (value) => {
+  if (!value) return "";
+  if (typeof value === "string") return value.includes("T") ? value.split("T")[0] : value;
+  return value.toISOString().split("T")[0];
+};
+
+const getEventTime = (events = [], type) => {
+  const normalized = type.toLowerCase();
+  const matches = events
+    .filter((event) => String(event.type || "").toLowerCase().includes(normalized))
+    .sort((a, b) => new Date(a.timestamp || a.time) - new Date(b.timestamp || b.time));
+
+  if (!matches.length) return null;
+  const event = type === "PUNCH_OUT" ? matches[matches.length - 1] : matches[0];
+  return event.timestamp || event.time || null;
+};
+
+const getDayStatus = (record) => {
+  if (!record) return "default";
+  // Check for WFH first (before other checks, as WFH employees can still be late)
+  if (record.isWFH || record.leaveInfo?.isWFH) {
+    // WFH day - check if they were late
+    if (record.isLate) return "late"; // WFH but late arrival
+    return "wfh"; // WFH on time
+  }
+  if (record.isAbsent) return "absent";
+  if (record.isLate) return "late";
+  if (record.isHalfDay) return "half-day";
+  if (record.isPresent || record.workDurationSeconds > 0) return "present";
+  return "default";
+};
 
 const AttendancePage = ({ onLogout }) => {
-  console.log("🎨 AttendancePage component rendering");
-
   const [collapsed, setCollapsed] = useState(false);
-  const [stats, setStats] = useState(null);
-  const [calendarData, setCalendarData] = useState(null);
-  const [weeklyHours, setWeeklyHours] = useState([]);
-  const [recentActivity, setRecentActivity] = useState([]);
-  const [teamOnLeave, setTeamOnLeave] = useState([]);
+  const [selectedDate, setSelectedDate] = useState(() => new Date());
+  const [todayStatus, setTodayStatus] = useState(null);
+  const [monthRecords, setMonthRecords] = useState([]);
+  const [monthSummary, setMonthSummary] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [currentStatus, setCurrentStatus] = useState(null);
-  const [activityFilter, setActivityFilter] = useState('5days'); // Default to last 5 days
-  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
-  const [cachedLeaves, setCachedLeaves] = useState(null);
-  const [cachedHolidays, setCachedHolidays] = useState(null);
-  const [lastCacheTime, setLastCacheTime] = useState(null);
-
-  // Payment check hook
+  const [error, setError] = useState(null);
   const { activePayment, checkingPayment, clearPayment } = usePaymentCheck();
 
+  const selectedMonth = selectedDate.getMonth();
+  const selectedYear = selectedDate.getFullYear();
 
-  const token = localStorage.getItem("token");
-  const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
-  const MIN_PRESENT_SECONDS = 5 * 3600; // 5 hours minimum for present status
+  const fetchAttendance = useCallback(async (isRefresh = false) => {
+    const user = JSON.parse(localStorage.getItem("user") || "{}");
+    const userId = user.id || user._id;
 
-  // Enhanced axios configuration with proper error handling
-  const apiClient = axios.create({
-    baseURL: API_BASE,
-    headers: { 
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json'
-    },
-    timeout: 30000,
-  });
-
-  // Add response interceptor for better error handling
-  apiClient.interceptors.response.use(
-    (response) => response,
-    (error) => {
-      if (error.response?.status === 401) {
-        localStorage.removeItem('token');
-        window.location.href = '/login';
-      }
-      throw error;
-    }
-  );
-
-  // Utility functions
-  const calculateHoursFromSeconds = (seconds) => {
-    if (!seconds || seconds === 0 || isNaN(seconds)) return 0;
-
-    // Validate input to prevent corrupted data from affecting display
-    if (seconds < 0) {
-      console.warn(`⚠️ Negative work duration found: ${seconds}, setting to 0`);
-      return 0;
+    if (!userId) {
+      setError("Unable to load employee profile.");
+      setLoading(false);
+      return;
     }
 
-    // Cap at 24 hours (86400 seconds) to prevent unrealistic display values
-    const cappedSeconds = Math.min(seconds, 86400);
-    if (cappedSeconds !== seconds) {
-      console.warn(`⚠️ Capping work duration for display: ${seconds} -> ${cappedSeconds}`);
+    if (isRefresh) {
+      setRefreshing(true);
+    } else {
+      setLoading(true);
+      setMonthRecords([]);
+      setMonthSummary(null);
     }
 
-    // Use Math.floor for consistency with backend
-    const hours = Math.floor(cappedSeconds / 3600);
-    const minutes = Math.floor((cappedSeconds % 3600) / 60);
-    return hours + (minutes / 60);
-  };
-
-  // Use centralized time utility for consistent timezone handling
-  const formatTime = (dateString) => {
-    return timeUtils.formatTime(dateString);
-  };
-
-  const isWorkingDay = (date) => {
-    const day = date.getDay();
-    return day >= 1 && day <= 5; // Monday = 1, Friday = 5
-  };
-
-  // OPTION C: Parse timeline without timezone conversion
-  // Times in DB are stored as UTC but represent local times
-  const getPunchTimeFromTimeline = (timeline, eventType) => {
-    if (!Array.isArray(timeline) || timeline.length === 0) return null;
+    setError(null);
 
     try {
-      const events = timeline.filter(event =>
-        event.type && event.type.toLowerCase().includes(eventType.toLowerCase())
-      );
+      const [todayResponse, monthResponse] = await Promise.all([
+        newAttendanceService.getTodayStatus(),
+        newAttendanceService.getEmployeeMonthlyAttendance(
+          userId,
+          selectedYear,
+          selectedMonth + 1
+        ),
+      ]);
 
-      if (events.length === 0) return null;
-
-      // For punch in, get the first occurrence; for punch out, get the last
-      const sortedEvents = events.sort((a, b) => new Date(a.time) - new Date(b.time));
-      const targetEvent = eventType === "punch in" ? sortedEvents[0] : sortedEvents[sortedEvents.length - 1];
-
-      // Return the ISO string directly - timeUtils will extract UTC components
-      return targetEvent.time;
-    } catch (error) {
-      console.warn(`Error parsing timeline for ${eventType}:`, error);
-      return null;
-    }
-  };
-
-  // OPTION C: Return ISO string directly - let timeUtils handle display
-  const getArrivalTime = (dailyData) => {
-    // Priority 1: Direct arrivalTime field (ISO string)
-    if (dailyData.arrivalTime) {
-      return dailyData.arrivalTime;
-    }
-
-    // Priority 2: First punch in from timeline (ISO string)
-    if (dailyData.timeline && Array.isArray(dailyData.timeline)) {
-      const punchInTime = getPunchTimeFromTimeline(dailyData.timeline, "punch in");
-      if (punchInTime) return punchInTime;
-    }
-
-    // Priority 3: First worked session start time (ISO string)
-    if (dailyData.workedSessions && Array.isArray(dailyData.workedSessions) && dailyData.workedSessions.length > 0) {
-      const firstSession = dailyData.workedSessions[0];
-      if (firstSession.start) {
-        return firstSession.start;
-      }
-    }
-
-    return null;
-  };
-
-  const calculateWorkingDays = (startDate, endDate, holidays = [], leaves = []) => {
-    let workingDays = 0;
-    const current = new Date(startDate);
-    const end = new Date(endDate);
-    
-    const holidayDates = new Set(holidays.map(h => new Date(h.date).toDateString()));
-    const leaveDates = new Set();
-    
-    // Process leaves into date strings
-    leaves.forEach(leave => {
-      const leaveStart = new Date(leave.period?.start || leave.startDate);
-      const leaveEnd = new Date(leave.period?.end || leave.endDate);
-      
-      for (let d = new Date(leaveStart); d <= leaveEnd; d.setDate(d.getDate() + 1)) {
-        leaveDates.add(d.toDateString());
-      }
-    });
-
-    while (current <= end) {
-      if (isWorkingDay(current) && 
-          !holidayDates.has(current.toDateString()) && 
-          !leaveDates.has(current.toDateString())) {
-        workingDays++;
-      }
-      current.setDate(current.getDate() + 1);
-    }
-
-    return workingDays;
-  };
-
-  // Fetch current user status
-  const fetchCurrentStatus = useCallback(async () => {
-    try {
-      console.log("🆕 Fetching current attendance status");
-      const response = await newAttendanceService.getTodayStatus();
-
-      if (!response.success || !response.data) {
-        throw new Error('Invalid response from attendance system');
+      if (!todayResponse.success || !monthResponse.success) {
+        throw new Error("Attendance service returned an invalid response.");
       }
 
-      const attendanceData = response.data.attendance;
-
-      console.log("📊 Current status response:", {
-        hasAttendance: !!attendanceData,
-        currentlyWorking: attendanceData?.currentlyWorking,
-        onBreak: attendanceData?.onBreak,
-        arrivalTime: attendanceData?.arrivalTime,
-        workDuration: attendanceData?.workDuration
-      });
-
-      // Convert to format expected by existing components
-      // Format arrival time for display using centralized time utility
-      let formattedArrivalTime = null;
-      if (attendanceData?.arrivalTime) {
-        formattedArrivalTime = timeUtils.formatTime(attendanceData.arrivalTime);
-      }
-
-      const statusData = {
-        userId: attendanceData?.userId,
-        currentlyWorking: attendanceData?.currentlyWorking || false,
-        onBreak: attendanceData?.onBreak || false,
-        workDuration: attendanceData?.workDuration || '0h 0m',
-        breakDuration: attendanceData?.breakDuration || '0h 0m',
-        workDurationSeconds: attendanceData?.workDurationSeconds || 0,
-        breakDurationSeconds: attendanceData?.breakDurationSeconds || 0,
-        arrivalTime: formattedArrivalTime, // Use formatted time
-        arrivalTimeRaw: attendanceData?.arrivalTime, // Keep raw for calculations
-        isLate: attendanceData?.isLate || false,
-        isPresent: attendanceData?.isPresent || false,
-        timeline: attendanceData?.events?.map(event => {
-          const typeMap = {
-            'PUNCH_IN': 'Punch In',
-            'PUNCH_OUT': 'Punch Out',
-            'BREAK_START': 'Break Start',
-            'BREAK_END': 'Break End'
-          };
-          return {
-            type: typeMap[event.type] || event.type,
-            time: event.timestamp,
-            location: event.location
-          };
-        }) || []
-      };
-
-      setCurrentStatus(statusData);
-      return statusData;
-    } catch (error) {
-      console.error('Error fetching current status:', error);
-      return null;
-    }
-  }, []);
-
-  // Fetch team members on leave
-  const fetchTeamOnLeave = useCallback(async () => {
-    try {
-      const user = JSON.parse(localStorage.getItem('user') || '{}');
-      const response = await apiClient.get('/api/leaves/team', {
-        params: { 
-          department: user.department,
-          excludeEmail: user.email 
-        }
-      });
-      
-      const today = new Date();
-      const todayString = today.toDateString();
-      
-      // Filter leaves that are active today
-      const activeLeaves = response.data.filter(leave => {
-        const startDate = new Date(leave.period.start);
-        const endDate = new Date(leave.period.end);
-        return startDate <= today && endDate >= today;
-      }).slice(0, 5); // Limit to 5 for display
-
-      setTeamOnLeave(activeLeaves);
-    } catch (error) {
-      console.error('Error fetching team leaves:', error);
-      setTeamOnLeave([]);
-    }
-  }, []);
-
-  // Handle activity filter change
-  const handleActivityFilterChange = useCallback((filter) => {
-    setActivityFilter(filter);
-    // Note: fetchAttendanceData will automatically use the new filter value
-    // since it reads activityFilter via getActivityDateRange
-  }, []);
-
-  // Handle month change
-  const handleMonthChange = useCallback((newDate) => {
-    setSelectedMonth(newDate.getMonth());
-    setSelectedYear(newDate.getFullYear());
-  }, []);
-
-  // Get date range based on activity filter
-  const getActivityDateRange = useCallback(() => {
-    const now = new Date();
-    let startDate, endDate;
-
-    switch (activityFilter) {
-      case '5days':
-        startDate = new Date(now);
-        startDate.setDate(now.getDate() - 4); // Last 5 days including today
-        endDate = new Date(now);
-        break;
-      case 'week':
-        const day = now.getDay();
-        const diffToMonday = (day + 6) % 7;
-        startDate = new Date(now);
-        startDate.setDate(now.getDate() - diffToMonday);
-        endDate = new Date(startDate);
-        endDate.setDate(startDate.getDate() + 6);
-        break;
-      case 'month':
-      default:
-        startDate = new Date(now.getFullYear(), now.getMonth(), 1);
-        endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-        break;
-    }
-
-    startDate.setHours(0, 0, 0, 0);
-    endDate.setHours(23, 59, 59, 999);
-
-    return { startDate, endDate };
-  }, [activityFilter]);
-
-  const fetchAttendanceData = useCallback(async (isRefresh = false) => {
-    console.log("🚀 fetchAttendanceData called", { isRefresh, selectedMonth, selectedYear, activityFilter });
-    try {
-      if (isRefresh) {
-        setRefreshing(true);
-      } else {
-        setLoading(true);
-      }
-      setError(null);
-
-      const now = new Date();
-
-      // Calculate month range for calendar and summary using selected month/year
-      const monthStart = new Date(selectedYear, selectedMonth, 1);
-      monthStart.setHours(0, 0, 0, 0);
-      const monthEnd = new Date(selectedYear, selectedMonth + 1, 0);
-      monthEnd.setHours(23, 59, 59, 999);
-
-      // Get activity date range based on filter
-      const { startDate: activityStart, endDate: activityEnd } = getActivityDateRange();
-      console.log(`📅 Activity Date Range (${activityFilter}):`, {
-        start: activityStart.toISOString(),
-        end: activityEnd.toISOString(),
-        filterDays: Math.ceil((activityEnd - activityStart) / (1000 * 60 * 60 * 24))
-      });
-
-      // Fetch data using new attendance system
-      console.log("🆕 Fetching attendance data");
-      const user = JSON.parse(localStorage.getItem('user') || '{}');
-      const fetchPromises = [];
-
-      // Monthly attendance data for calendar, stats, AND recent activity
-      // We'll filter activity data on the frontend for better UX (instant filter switching)
-      fetchPromises.push(
-        newAttendanceService.getEmployeeMonthlyAttendance(user.id || user._id, selectedYear, selectedMonth + 1),
-        fetchCurrentStatus()
-      );
-
-      // OPTIMIZATION: Use cached data for leaves and holidays if recent
-      const currentTime = Date.now();
-      const cacheExpiryMs = 15 * 60 * 1000; // 15 minutes
-      const shouldUseCachedData = !isRefresh && lastCacheTime && (currentTime - lastCacheTime) < cacheExpiryMs;
-
-      // Fetch leaves and holidays only if not cached or expired
-      if (!shouldUseCachedData) {
-        fetchPromises.push(
-          apiClient.get('/api/leaves/mine'),
-          apiClient.get('/api/holidays?shift=standard')
-        );
-      }
-
-      const results = await Promise.all(fetchPromises);
-
-      // Parse responses from new attendance system
-      const monthlyAttendanceRes = results[0];
-      const statusRes = results[1];
-      let leavesRes = { data: [] };
-      let holidaysRes = { data: [] };
-
-      console.log("🔍 Backend Response - Monthly Attendance:", {
-        success: monthlyAttendanceRes?.success,
-        hasData: !!monthlyAttendanceRes?.data,
-        dataLength: monthlyAttendanceRes?.data?.data?.length || 0
-      });
-
-      // Convert monthly attendance response
-      let weeklyRes;
-      if (monthlyAttendanceRes.success && monthlyAttendanceRes.data) {
-        const monthlyData = monthlyAttendanceRes.data;
-
-        console.log("📊 Raw monthly data from backend:", monthlyData);
-        console.log("📊 Monthly summary lateDays:", monthlyData.summary?.lateDays);
-        console.log("📊 Monthly summary full:", monthlyData.summary);
-        console.log("📊 Monthly data array with isLate:", monthlyData.data?.map(d => ({
-          date: d.date,
-          isLate: d.isLate,
-          arrivalTime: d.arrivalTime,
-          shiftStart: d.shift?.startTime,
-          allFields: Object.keys(d)
-        })));
-
-        // The backend returns "data" not "attendance"
-        const attendanceArray = monthlyData.data || [];
-
-        weeklyRes = {
-          data: {
-            dailyData: attendanceArray.map(day => ({
-              date: day.date,
-              workDurationSeconds: day.workDurationSeconds || 0,
-              breakDurationSeconds: day.breakDurationSeconds || 0,
-              isAbsent: day.isAbsent || false,
-              isLate: day.isLate || false,
-              isPresent: day.isPresent || false,
-              isHalfDay: day.isHalfDay || (day.workDurationSeconds < (4 * 3600)),
-              isWFH: false, // TODO: Add WFH support in new system
-              // CRITICAL: Format times as strings to prevent React rendering Date objects
-              arrivalTime: day.arrivalTime ? (typeof day.arrivalTime === 'string' ? day.arrivalTime : new Date(day.arrivalTime).toISOString()) : null,
-              departureTime: day.departureTime ? (typeof day.departureTime === 'string' ? day.departureTime : new Date(day.departureTime).toISOString()) : null,
-              currentlyWorking: day.currentlyWorking || false,
-              onBreak: day.onBreak || false,
-              // CRITICAL: Include shift data from backend
-              shift: day.shift,
-              timeline: day.events?.map(event => ({
-                type: event.type === 'PUNCH_IN' ? 'Punch In' :
-                      event.type === 'PUNCH_OUT' ? 'Punch Out' :
-                      event.type === 'BREAK_START' ? 'Break Start' :
-                      event.type === 'BREAK_END' ? 'Break End' : event.type,
-                time: event.timestamp,
-                location: event.location
-              })) || [],
-              // Add sessions for compatibility
-              workedSessions: [], // Can be computed from events if needed
-              breakSessions: []
-            })),
-            weeklySummary: {
-              presentDays: monthlyData.summary?.presentDays || 0,
-              onTimeRate: (monthlyData.summary?.punctualityRate || 0) + '%',
-              quickStats: {
-                lateArrivals: monthlyData.summary?.lateDays || 0
-              }
-            }
-          }
-        };
-
-        console.log("✅ Converted weekly data:", {
-          dailyDataCount: weeklyRes.data.dailyData.length,
-          presentDays: weeklyRes.data.weeklySummary.presentDays,
-          onTimeRate: weeklyRes.data.weeklySummary.onTimeRate,
-          lateArrivals: weeklyRes.data.weeklySummary.quickStats?.lateArrivals
-        });
-      } else {
-        // Fallback to empty data structure
-        weeklyRes = {
-          data: {
-            dailyData: [],
-            weeklySummary: {
-              presentDays: 0,
-              onTimeRate: '0%',
-              quickStats: { lateArrivals: 0 }
-            }
-          }
-        };
-      }
-
-      // Use monthly data for activity (filter on frontend for instant response)
-      let activityRes = weeklyRes;
-      console.log("✅ Using monthly data for Recent Activity:", {
-        totalRecords: weeklyRes.data.dailyData.length
-      });
-
-      // Update result index since we removed the separate activity call
-      let resultIndex = 2;
-
-      if (!shouldUseCachedData) {
-        leavesRes = results[resultIndex] || { data: [] };
-        holidaysRes = results[resultIndex + 1] || { data: [] };
-
-        // Update cache
-        setCachedLeaves(leavesRes.data);
-        setCachedHolidays(holidaysRes.data);
-        setLastCacheTime(currentTime);
-      } else {
-        // Use cached data
-        leavesRes = { data: cachedLeaves || [] };
-        holidaysRes = { data: cachedHolidays || [] };
-      }
-
-      const { dailyData = [], weeklySummary = {} } = weeklyRes.data;
-      const { dailyData: activityData = [] } = activityRes.data;
-      const approvedLeaves = leavesRes.data.filter(l => l.status.toLowerCase() === "approved");
-      const holidays = holidaysRes.data || [];
-
-      // Calculate present days using backend calculation (already processed)
-      // Use backend calculated present days with validation
-      let presentDaysCount = weeklySummary.presentDays;
-      if (typeof presentDaysCount !== 'number' || presentDaysCount < 0) {
-        console.warn('Invalid presentDaysCount from backend, calculating from dailyData');
-        presentDaysCount = dailyData.filter(d => !d.isAbsent).length;
-      }
-
-      // Calculate working days for the month (excluding weekends, holidays, and approved leaves)
-      const weekWorkingDays = calculateWorkingDays(monthStart, monthEnd, holidays, approvedLeaves);
-
-      // Calculate total work hours with validation
-      const totalWorkHours = dailyData.reduce((sum, d) => {
-        const workHours = calculateHoursFromSeconds(d.workDurationSeconds || 0);
-        // Additional validation to prevent accumulating invalid data
-        if (isNaN(workHours) || workHours < 0) {
-          console.warn(`Invalid work hours for date ${d.date}:`, workHours);
-          return sum;
-        }
-        return sum + workHours;
-      }, 0);
-
-      // Calculate attendance rate with validation
-      let attendanceRate = 0;
-      if (weekWorkingDays > 0 && presentDaysCount >= 0) {
-        attendanceRate = Math.min(100, Math.floor((presentDaysCount / weekWorkingDays) * 100));
-      }
-
-      // Validate attendance rate calculation
-      if (attendanceRate > 100) {
-        console.warn(`⚠️ Attendance rate exceeds 100%: ${attendanceRate}%, capping to 100%`);
-        attendanceRate = 100;
-      }
-
-      // Use backend calculated on-time data with validation
-      let onTimeRate = 0;
-      if (weeklySummary.onTimeRate) {
-        const rawOnTimeRate = parseInt(weeklySummary.onTimeRate.replace('%', '') || '0');
-        onTimeRate = Math.min(100, Math.max(0, rawOnTimeRate));
-      }
-
-      // Enhanced stats with additional metrics and validation
-      const averageHoursPerDay = presentDaysCount > 0 ?
-        Math.min(24, (totalWorkHours / presentDaysCount)) : 0;
-
-      // Determine period text based on selected month
-      const isCurrentMonth = selectedMonth === new Date().getMonth() && selectedYear === new Date().getFullYear();
-      const periodText = isCurrentMonth ? "This month" :
-        `${new Date(selectedYear, selectedMonth).toLocaleString('default', { month: 'long', year: 'numeric' })}`;
-
-      // Calculate actual full days and half days from backend data
-      const fullDaysCount = dailyData.filter(d => {
-        const workHours = (d.workDurationSeconds || 0) / 3600;
-        return !d.isAbsent && workHours >= 8;
-      }).length;
-
-      const halfDaysCount = dailyData.filter(d => {
-        const workHours = (d.workDurationSeconds || 0) / 3600;
-        return d.isHalfDay || (!d.isAbsent && workHours >= 4 && workHours < 8);
-      }).length;
-
-      // Calculate absent days from backend data
-      // For now, use the basic calculation - will be updated when calendar is built
-      const absentDaysCount = dailyData.filter(d => d.isAbsent).length;
-
-      const calculatedStats = {
-        attendanceRate: Math.round(attendanceRate),
-        presentDays: Math.max(0, presentDaysCount),
-        totalDays: Math.max(0, weekWorkingDays),
-        workingHours: Math.max(0, totalWorkHours).toFixed(1),
-        onTimeRate: Math.round(onTimeRate),
-        lastUpdated: new Date().toLocaleString(),
-        period: periodText,
-        averageHoursPerDay: averageHoursPerDay.toFixed(1),
-        lateDays: Math.max(0, weeklySummary.quickStats?.lateArrivals || 0),
-        fullDays: Math.max(0, fullDaysCount),
-        halfDays: Math.max(0, halfDaysCount),
-        absentDays: Math.max(0, absentDaysCount),
-        currentStatus: isCurrentMonth && statusRes ? {
-          isWorking: Boolean(statusRes.currentlyWorking),
-          onBreak: Boolean(statusRes.onBreak),
-          todayHours: calculateHoursFromSeconds(statusRes.workDurationSeconds || 0).toFixed(1),
-          arrivalTime: statusRes.arrivalTimeFormatted || null
-        } : null
-      };
-
-      console.log("📊 Final stats being set:", calculatedStats);
-      setStats(calculatedStats);
-
-      // Process calendar data (enhanced with more status types)
-      const tempDate = new Date(selectedYear, selectedMonth, 1);
-      const month = tempDate.toLocaleString("default", { month: "long" });
-      const year = selectedYear;
-      const monthIndex = selectedMonth;
-
-      // Create leave days set for current month
-      // IMPORTANT: Exclude WFH - it's NOT a leave, it's a normal working day!
-      const leaveDaysSet = new Set();
-      const wfhDaysSet = new Set(); // Track WFH days separately
-
-      approvedLeaves.forEach(leave => {
-        const start = new Date(leave.period?.start || leave.startDate);
-        const end = new Date(leave.period?.end || leave.endDate);
-
-        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-          if (d.getFullYear() === year && d.getMonth() === monthIndex) {
-            if (leave.type === 'workFromHome') {
-              // WFH days should show as WFH status (magenta), not leave
-              wfhDaysSet.add(d.getDate());
-            } else {
-              // Regular leaves (paid, unpaid, sick, etc.)
-              leaveDaysSet.add(d.getDate());
-            }
-          }
-        }
-      });
-
-      // Create holiday days map for current month
-      const holidayDaysMap = {};
-      holidays.forEach(h => {
-        // Fix timezone issue for holidays
-        const dateString = h.date.includes('T') ? h.date.split('T')[0] : h.date;
-        const dateObj = new Date(dateString + 'T12:00:00');
-        if (dateObj.getFullYear() === year && dateObj.getMonth() === monthIndex) {
-          const dayNum = parseInt(dateString.split('-')[2], 10);
-          holidayDaysMap[dayNum] = {
-            day: dayNum,
-            status: "holiday",
-            name: h.name,
-            type: h.type,
-            workingHours: "0.0"
-          };
-        }
-      });
-
-      // Map daily attendance data
-      const attendanceDaysMap = {};
-      dailyData.forEach(d => {
-        // Fix timezone issue: ALWAYS extract date from string to avoid UTC conversion
-        let dateString;
-        if (typeof d.date === 'string') {
-          dateString = d.date.includes('T') ? d.date.split('T')[0] : d.date;
-        } else {
-          // Convert Date object to ISO string and extract date part
-          dateString = d.date.toISOString().split('T')[0];
-        }
-
-        // Extract day number from YYYY-MM-DD format (always correct, no timezone shift)
-        const dayNum = parseInt(dateString.split('-')[2], 10);
-
-        // Debug logging to track date mapping
-        console.log(`📅 Mapping attendance data: ${d.date} -> ${dateString} -> day ${dayNum}`, {
-          originalDate: d.date,
-          dateString,
-          dayNum,
-          workHours: ((d.workDurationSeconds || 0) / 3600).toFixed(1),
-          isAbsent: d.isAbsent,
-          isHalfDay: d.isHalfDay,
-          isLate: d.isLate
-        });
-        // OPTION C: Get times as ISO strings (no conversion)
-        const arrivalTime = getArrivalTime(d);
-        const punchOutTime = getPunchTimeFromTimeline(d.timeline, "punch out");
-
-        let status = "absent";
-        // Use backend calculated status with WFH support
-        // ⭐ Priority: WFH (DOMINATES ALL) > Half-Day Leave > Absent/Leave > Late > Half-day > Present
-        // WFH DOMINATES: If employee has WFH and worked, show WFH regardless of late/early/half-day
-        if ((d.isWFH || d.leaveInfo?.type === 'workFromHome') &&
-            (!d.isAbsent && (d.workDurationSeconds > 0 || d.isPresent))) {
-          // ⭐ HIGHEST PRIORITY: Work From Home - DOMINATES over late/half-day/early
-          // If employee has WFH and worked ANY amount, show as WFH (magenta)
-          status = "wfh";
-        } else if (d.leaveInfo?.isHalfDayLeave || d.leaveInfo?.type === 'halfDay') {
-          // ⭐ Half-Day Leave: Employee is expected to work 4-4.5 hours (approved reduced hours)
-          // Show half-day-leave status if they have approved half-day leave
-          status = "half-day-leave";
-        } else if (d.isAbsent) {
-          // Check if it's an approved leave (not WFH or halfDay)
-          if (d.leaveInfo && d.leaveInfo.type !== 'workFromHome' && d.leaveInfo.type !== 'halfDay') {
-            // Distinguish between paid and unpaid leaves
-            if (d.isPaidLeave || d.leaveInfo.isPaidLeave || d.leaveInfo.type === 'paid') {
-              status = "paid-leave";
-            } else if (d.leaveInfo.type === 'unpaid') {
-              status = "unpaid-leave";
-            } else if (d.leaveInfo.type === 'sick') {
-              status = "sick-leave";
-            } else if (d.leaveInfo.type === 'maternity') {
-              status = "maternity-leave";
-            } else {
-              status = "approved-leave";
-            }
-          } else {
-            status = "absent";
-          }
-        } else if (d.isLate) {
-          // Late takes priority over half-day (but NOT over WFH or half-day leave)
-          status = "late";
-          console.log(`🔴 LATE DAY DETECTED: ${d.date}`, {isLate: d.isLate, isHalfDay: d.isHalfDay, status, arrivalTime: d.arrivalTime});
-        } else if (d.isHalfDay) {
-          // Employee worked 4-4.5 hours (automatic calculation)
-          status = "half-day";
-        } else {
-          status = "present";
-        }
-
-        // OPTION C: Calculate late minutes using UTC time components
-        const shiftData = d.shift || d.assignedShift || d.effectiveShift;
-        const expectedStart = shiftData?.startTime || d.effectiveShift?.start || d.expectedStartTime || "09:00";
-        const [expH, expM] = expectedStart.split(":").map(Number);
-
-        // Calculate late minutes by comparing UTC time components directly
-        let lateMinutes = 0;
-        const isFlexible = shiftData?.isFlexible || d.effectiveShift?.isFlexible || false;
-
-        // Always calculate late minutes if we have arrival time (for display purposes)
-        if (arrivalTime && !isFlexible) {
-          // Parse arrival time in user's local timezone
-          const arrivalDate = new Date(arrivalTime);
-          const arrivalHours = arrivalDate.getHours();
-          const arrivalMinutes = arrivalDate.getMinutes();
-
-          // Calculate minutes since midnight
-          const arrivalTotalMinutes = arrivalHours * 60 + arrivalMinutes;
-          const expectedTotalMinutes = expH * 60 + expM;
-
-          // Calculate difference (positive = late, negative = early)
-          const minutesDiff = arrivalTotalMinutes - expectedTotalMinutes;
-
-          // Only show as late if backend confirms isLate AND actually late (not early)
-          if (d.isLate && minutesDiff > 0) {
-            lateMinutes = minutesDiff;
-            console.log(`✅ Calculated late minutes for ${d.date}: ${lateMinutes} min (shift: ${expectedStart}, arrival: ${arrivalHours}:${String(arrivalMinutes).padStart(2, '0')})`);
-          } else if (minutesDiff <= 0) {
-            // Arrived on-time or early
-            lateMinutes = 0;
-            console.log(`✅ On-time/Early arrival for ${d.date}: ${Math.abs(minutesDiff)} min early (shift: ${expectedStart}, arrival: ${arrivalHours}:${String(arrivalMinutes).padStart(2, '0')})`);
-          }
-        }
-
-        // For WFH, set standard working hours if no actual logged hours
-        let displayHours = calculateHoursFromSeconds(d.workDurationSeconds || 0).toFixed(1);
-        if (d.isWFH && (!d.workDurationSeconds || d.workDurationSeconds === 0)) {
-          // For WFH with no logged time, assume standard working hours
-          displayHours = d.leaveInfo?.type === 'halfDay' ? "4.0" : "7.5";
-        }
-
-        attendanceDaysMap[dayNum] = {
-          day: dayNum,
-          status,
-          workingHours: displayHours,
-          // OPTION C: Store ISO strings directly (already in correct format)
-          arrivalTime: arrivalTime,
-          departureTime: punchOutTime,
-          name: d.isWFH ? "Work From Home" :
-                d.leaveInfo ? `${d.leaveInfo.type} Leave` : null,
-          metadata: {
-            totalBreakTime: calculateHoursFromSeconds(d.breakDurationSeconds || 0).toFixed(1),
-            breakSessions: d.breakSessions?.length || 0,
-            isFlexible,
-            lateMinutes,
-            workDurationSeconds: d.workDurationSeconds || 0,
-            breakDurationSeconds: d.breakDurationSeconds || 0,
-            shiftType: d.shiftType || 'standard',
-            effectiveShift: d.effectiveShift,
-            assignedShift: shiftData, // Use the shift data we extracted
-            isLate: d.isLate || false,
-            isHalfDay: d.isHalfDay || false,
-            isAbsent: d.isAbsent || false,
-            isWFH: d.isWFH || false,
-            isFullDay: !d.isHalfDay && !d.isAbsent,
-            netHours: ((d.workDurationSeconds || 0) + (d.breakDurationSeconds || 0)) / 3600,
-            timeline: d.timeline || [],
-            leaveInfo: d.leaveInfo
-          }
-        };
-      });
-
-      // Build calendar days array
-      const maxDays = new Date(year, monthIndex + 1, 0).getDate();
-      const days = [];
-
-      for (let i = 1; i <= maxDays; i++) {
-        const dateObj = new Date(year, monthIndex, i);
-        const dayOfWeek = dateObj.getDay();
-        const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-
-        if (holidayDaysMap[i]) {
-          days.push(holidayDaysMap[i]);
-        } else if (isWeekend) {
-          days.push({
-            day: i,
-            status: "weekend",
-            workingHours: "0.0",
-            name: "Weekend"
-          });
-        } else if (attendanceDaysMap[i]) {
-          // Has attendance data - use actual status from punch in/out
-          days.push(attendanceDaysMap[i]);
-        } else if (wfhDaysSet.has(i)) {
-          // Approved WFH but no attendance data yet (employee hasn't punched in)
-          // Show as WFH status (magenta) to indicate WFH is approved
-          const isPast = dateObj < new Date() && dateObj.toDateString() !== new Date().toDateString();
-          days.push({
-            day: i,
-            status: isPast ? "absent" : "wfh", // If past and no work, mark absent; otherwise show as WFH
-            workingHours: "0.0",
-            name: isPast ? "Absent (WFH Not Utilized)" : "Work From Home",
-            metadata: {
-              isWFH: true
-            }
-          });
-        } else if (leaveDaysSet.has(i)) {
-          days.push({
-            day: i,
-            status: "leave",
-            workingHours: "0.0",
-            name: "Approved Leave"
-          });
-        } else {
-          const isToday = dateObj.toDateString() === new Date().toDateString();
-          const isPast = dateObj < new Date();
-
-          days.push({
-            day: i,
-            status: isPast && !isToday ? "absent" : "default",
-            workingHours: "0.0"
-          });
-        }
-      }
-
-      const firstDayOfMonth = new Date(year, monthIndex, 1);
-      const startDayOfWeek = firstDayOfMonth.getDay();
-
-      const monthlyStats = {
-        // Present includes: on-time, late, wfh, and half-day (all non-absent working days)
-        totalPresent: days.filter(d => ["present", "late", "wfh", "half-day"].includes(d.status)).length,
-        totalLate: days.filter(d => d.status === "late").length,
-        totalAbsent: days.filter(d => d.status === "absent").length,
-        totalLeave: days.filter(d => ["leave", "half-day-leave", "approved-leave"].includes(d.status)).length,
-        totalWFH: days.filter(d => d.status === "wfh").length,
-        totalHolidays: days.filter(d => d.status === "holiday").length,
-        totalHalfDay: days.filter(d => ["half-day", "half-day-leave"].includes(d.status)).length
-      };
-
-      setCalendarData({
-        month,
-        year,
-        days,
-        startDayOfWeek,
-        monthlyStats
-      });
-
-      // Update stats with correct absent days from calendar
-      setStats(prevStats => ({
-        ...prevStats,
-        absentDays: monthlyStats.totalAbsent
-      }));
-
-      // Weekly hours chart data
-      const weekDays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-      const weeklyHoursData = weekDays.map(label => ({ label, hours: 0, target: 8 }));
-
-      dailyData.forEach(d => {
-        // Fix timezone issue for weekly chart
-        const dateString = typeof d.date === 'string' ?
-          (d.date.includes('T') ? d.date.split('T')[0] : d.date) :
-          d.date.toISOString().split('T')[0];
-        const dateObj = new Date(dateString + 'T12:00:00'); // Use noon to avoid timezone issues
-        const dayOfWeek = dateObj.getDay();
-
-        // Calculate hours including WFH logic
-        let hours = calculateHoursFromSeconds(d.workDurationSeconds || 0);
-
-        // For WFH with no logged hours, use standard hours
-        if (d.isWFH && hours === 0) {
-          hours = d.leaveInfo?.type === 'halfDay' ? 4.0 : 7.5;
-        }
-
-        if (dayOfWeek >= 0 && dayOfWeek <= 6) {
-          weeklyHoursData[dayOfWeek].hours = hours;
-        }
-      });
-
-      setWeeklyHours(weeklyHoursData);
-
-      // Get activity date range for filtering (recalculate for consistency)
-      let activityStartDate, activityEndDate;
-      try {
-        const dateRange = getActivityDateRange();
-        activityStartDate = dateRange.startDate;
-        activityEndDate = dateRange.endDate;
-      } catch (err) {
-        console.error("Error getting activity date range:", err);
-        // Fallback to month range
-        activityStartDate = monthStart;
-        activityEndDate = monthEnd;
-      }
-
-      // Filter activity data based on selected date range (frontend filtering for instant response)
-      const filteredActivityData = activityData.filter(d => {
-        try {
-          const recordDate = new Date(typeof d.date === 'string' ?
-            (d.date.includes('T') ? d.date.split('T')[0] : d.date) :
-            d.date.toISOString().split('T')[0]);
-          recordDate.setHours(0, 0, 0, 0);
-
-          return recordDate >= activityStartDate && recordDate <= activityEndDate;
-        } catch (err) {
-          console.error("Error filtering activity record:", d, err);
-          return false;
-        }
-      });
-
-      console.log(`🔍 Filtered activity data:`, {
-        totalRecords: activityData.length,
-        filteredRecords: filteredActivityData.length,
-        dateRange: activityStartDate && activityEndDate ?
-          `${activityStartDate.toISOString().split('T')[0]} to ${activityEndDate.toISOString().split('T')[0]}` :
-          'Invalid date range',
-        filter: activityFilter
-      });
-
-      // Simplified recent activity data processing
-      const recent = filteredActivityData.map(d => {
-        const arrivalTime = getArrivalTime(d);
-        const punchOutTime = getPunchTimeFromTimeline(d.timeline, "punch out");
-
-        // Debug logging for recent activity
-        console.log(`📊 Recent Activity - Processing ${d.date}:`, {
-          arrivalTime,
-          punchOutTime,
-          workDurationSeconds: d.workDurationSeconds,
-          isLate: d.isLate,
-          isAbsent: d.isAbsent
-        });
-
-        let status = "Absent";
-        let statusColor = "red";
-
-        // Use backend calculated status with WFH support
-        // ⭐ WFH DOMINATES: If employee has WFH and worked, show WFH regardless of late/half-day
-        if ((d.isWFH || d.leaveInfo?.type === 'workFromHome') &&
-            (!d.isAbsent && (d.workDurationSeconds > 0 || d.isPresent))) {
-          status = "WFH";
-          statusColor = "fuchsia"; // Magenta color to match calendar
-        } else if (d.leaveInfo?.isHalfDayLeave || d.leaveInfo?.type === 'halfDay') {
-          // ⭐ Half-Day Leave: Employee is expected to work 4-4.5 hours
-          status = "Half Day Leave";
-          statusColor = "violet";
-        } else if (d.isAbsent) {
-          if (d.leaveInfo && d.leaveInfo.type !== 'workFromHome' && d.leaveInfo.type !== 'halfDay') {
-            // Distinguish between paid and unpaid leaves
-            if (d.isPaidLeave || d.leaveInfo.isPaidLeave || d.leaveInfo.type === 'paid') {
-              status = "Paid Leave";
-              statusColor = "emerald";
-            } else if (d.leaveInfo.type === 'unpaid') {
-              status = "Unpaid Leave";
-              statusColor = "rose";
-            } else if (d.leaveInfo.type === 'sick') {
-              status = "Sick Leave";
-              statusColor = "orange";
-            } else if (d.leaveInfo.type === 'maternity') {
-              status = "Maternity Leave";
-              statusColor = "pink";
-            } else {
-              status = `${d.leaveInfo.type.charAt(0).toUpperCase() + d.leaveInfo.type.slice(1)} Leave`;
-              statusColor = "purple";
-            }
-          } else {
-            status = "Absent";
-            statusColor = "red";
-          }
-        } else if (d.isHalfDay) {
-          // Employee worked 4-4.5 hours (automatic calculation)
-          status = "Half Day";
-          statusColor = "violet";
-        } else if (d.isLate) {
-          status = "Late";
-          statusColor = "yellow";
-        } else {
-          status = "Present";
-          statusColor = "green";
-        }
-
-        // Calculate working hours for display, including WFH logic
-        let displayWorkingHours = calculateHoursFromSeconds(d.workDurationSeconds || 0);
-        if (d.isWFH && displayWorkingHours === 0) {
-          displayWorkingHours = d.leaveInfo?.type === 'halfDay' ? 4.0 : 7.5;
-        }
-
-        // Calculate efficiency based on actual expected hours
-        let efficiency = 0;
-        if (d.isWFH) {
-          const expectedHours = d.leaveInfo?.type === 'halfDay' ? 4 : 7.5;
-          efficiency = Math.round((displayWorkingHours / expectedHours) * 100);
-        } else if (d.workDurationSeconds > 0) {
-          efficiency = Math.round(((d.workDurationSeconds || 0) / (7.5 * 3600)) * 100);
-        }
-
-        const formattedTimeIn = d.isWFH ? "WFH" : formatTime(arrivalTime);
-        const formattedTimeOut = d.isWFH ? "WFH" : formatTime(punchOutTime);
-
-        console.log(`✅ Recent Activity - Formatted times for ${d.date}: TimeIn=${formattedTimeIn}, TimeOut=${formattedTimeOut}`);
-
-        return {
-          date: typeof d.date === 'string' ?
-            (d.date.includes('T') ? d.date.split('T')[0] : d.date) :
-            d.date.toISOString().split('T')[0],
-          timeIn: formattedTimeIn,
-          timeOut: formattedTimeOut,
-          status,
-          statusColor,
-          workingHours: displayWorkingHours.toFixed(1) + "h",
-          breakTime: calculateHoursFromSeconds(d.breakDurationSeconds || 0).toFixed(1) + "h",
-          efficiency: efficiency + "%"
-        };
-      });
-
-      console.log(`🎯 Setting Recent Activity with ${recent.length} records:`, recent);
-      setRecentActivity(recent);
-
-      // Fetch team leave data
-      await fetchTeamOnLeave();
-
-    } catch (error) {
-      console.error("Error loading attendance data:", error);
-      setError(error.response?.data?.message || error.message || "Failed to load attendance data");
+      setTodayStatus(todayResponse.data?.attendance || null);
+      setMonthRecords(monthResponse.data?.data || []);
+      setMonthSummary(monthResponse.data?.summary || null);
+    } catch (err) {
+      setError(err.message || "Failed to load attendance.");
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [fetchCurrentStatus, fetchTeamOnLeave, getActivityDateRange, selectedMonth, selectedYear]);
+  }, [selectedMonth, selectedYear]);
 
   useEffect(() => {
-    console.log("📍 AttendancePage mounted, fetching initial data");
-    fetchAttendanceData();
+    fetchAttendance();
+  }, [fetchAttendance]);
 
-    // OPTIMIZATION: Smarter real-time updates based on user's actual working status
-    const intervalId = setInterval(() => {
-      if (document.visibilityState === 'visible') {
-        const now = new Date();
-        const hour = now.getHours();
-        const minute = now.getMinutes();
-        const currentMinutes = hour * 60 + minute;
-
-        // Get user's shift from localStorage (set during login)
-        const user = JSON.parse(localStorage.getItem('user') || '{}');
-        const assignedShift = user.assignedShift || user.standardShiftType;
-
-        // Determine if user is likely working based on their shift or current status
-        let isLikelyWorking = false;
-
-        // Check if user has an active shift today
-        if (assignedShift) {
-          // Parse shift times (format: "09:00" or "HH:MM")
-          const shiftStart = assignedShift.start || assignedShift.startTime || "09:00";
-          const shiftEnd = assignedShift.end || assignedShift.endTime || "18:00";
-
-          const [startHour, startMin] = shiftStart.split(':').map(Number);
-          const [endHour, endMin] = shiftEnd.split(':').map(Number);
-
-          const shiftStartMinutes = startHour * 60 + startMin;
-          let shiftEndMinutes = endHour * 60 + endMin;
-
-          // Handle night shifts (end time < start time means crosses midnight)
-          if (shiftEndMinutes < shiftStartMinutes) {
-            shiftEndMinutes += 24 * 60; // Add 24 hours
-          }
-
-          // Allow 1 hour before shift start and 2 hours after shift end
-          const earlyArrivalBuffer = 60; // minutes
-          const lateStayBuffer = 120; // minutes
-
-          const effectiveStart = shiftStartMinutes - earlyArrivalBuffer;
-          const effectiveEnd = shiftEndMinutes + lateStayBuffer;
-
-          isLikelyWorking = currentMinutes >= effectiveStart && currentMinutes <= effectiveEnd;
-        }
-
-        // If no shift info, check if user is currently working based on status
-        if (!isLikelyWorking && currentStatus) {
-          isLikelyWorking = currentStatus.currentlyWorking || currentStatus.onBreak;
-        }
-
-        // Fallback: if no shift and no current status, only poll during standard business hours
-        if (!assignedShift && !currentStatus) {
-          const isWeekday = now.getDay() >= 1 && now.getDay() <= 5;
-          isLikelyWorking = isWeekday && hour >= 7 && hour <= 20; // Broader window
-        }
-
-        if (isLikelyWorking) {
-          fetchAttendanceData(true); // Full refresh when user is working
-        } else {
-          // Minimal updates outside working hours (only fetch current status)
-          fetchCurrentStatus();
-        }
-      }
-    }, 300000); // Update every 5 minutes when page is visible
-
-    return () => clearInterval(intervalId);
-  }, [fetchAttendanceData, fetchCurrentStatus, selectedMonth, selectedYear, activityFilter]); // Added activityFilter to refetch when changed
-
-  // Listen for attendance updates
   useEffect(() => {
-    const handleAttendanceUpdate = () => {
-      console.log("🔔 Event: attendanceDataUpdate received - refreshing data");
-      fetchAttendanceData(true);
-    };
-    const handleStatusUpdate = () => {
-      console.log("🔔 Event: statusUpdate received - fetching status");
-      fetchCurrentStatus();
-    };
-    const handleManualAttendanceUpdate = () => {
-      // Refresh all data when manual attendance is updated
-      console.log("🔔 Event: attendanceDataUpdated received - full refresh");
-      fetchAttendanceData(true);
-      fetchCurrentStatus();
-    };
-
-    window.addEventListener("attendanceDataUpdate", handleAttendanceUpdate);
-    window.addEventListener("statusUpdate", handleStatusUpdate);
-    window.addEventListener("attendanceDataUpdated", handleManualAttendanceUpdate);
-
-    console.log("✅ Attendance event listeners registered");
+    const handleAttendanceUpdate = () => fetchAttendance(true);
+    window.addEventListener("attendanceDataUpdated", handleAttendanceUpdate);
+    window.addEventListener("statusUpdate", handleAttendanceUpdate);
 
     return () => {
-      window.removeEventListener("attendanceDataUpdate", handleAttendanceUpdate);
-      window.removeEventListener("statusUpdate", handleStatusUpdate);
-      window.removeEventListener("attendanceDataUpdated", handleManualAttendanceUpdate);
-      console.log("🗑️ Attendance event listeners removed");
+      window.removeEventListener("attendanceDataUpdated", handleAttendanceUpdate);
+      window.removeEventListener("statusUpdate", handleAttendanceUpdate);
     };
-  }, [fetchAttendanceData, fetchCurrentStatus]);
+  }, [fetchAttendance]);
 
-  const handleRefresh = () => {
-    fetchAttendanceData(true);
-  };
-
-  // Handle payment cleared
   const handlePaymentCleared = useCallback(() => {
     clearPayment();
-    fetchAttendanceData(true);
-  }, [clearPayment, fetchAttendanceData]);
+    fetchAttendance(true);
+  }, [clearPayment, fetchAttendance]);
 
-  // Show loading while checking payment
+  const recordsByDay = useMemo(() => {
+    const map = new Map();
+    monthRecords.forEach((record) => {
+      const dateKey = getDateKey(record.date);
+      const day = Number(dateKey.split("-")[2]);
+      if (day) map.set(day, record);
+    });
+    return map;
+  }, [monthRecords]);
+
+  const calendarDays = useMemo(() => {
+    const daysInMonth = new Date(selectedYear, selectedMonth + 1, 0).getDate();
+    const firstDay = new Date(selectedYear, selectedMonth, 1).getDay();
+    const blanks = Array.from({ length: firstDay }, (_, index) => ({
+      key: `blank-${index}`,
+      blank: true,
+    }));
+
+    const days = Array.from({ length: daysInMonth }, (_, index) => {
+      const day = index + 1;
+      const record = recordsByDay.get(day);
+      const isToday =
+        new Date(selectedYear, selectedMonth, day).toDateString() ===
+        new Date().toDateString();
+
+      return {
+        key: day,
+        day,
+        record,
+        status: getDayStatus(record),
+        isToday,
+      };
+    });
+
+    return [...blanks, ...days];
+  }, [recordsByDay, selectedMonth, selectedYear]);
+
+  const recentRecords = useMemo(() => {
+    return [...monthRecords]
+      .sort((a, b) => new Date(getDateKey(b.date)) - new Date(getDateKey(a.date)))
+      .slice(0, 7);
+  }, [monthRecords]);
+
+  const computedSummary = useMemo(() => {
+    const totalDays = monthSummary?.totalDays ?? monthRecords.length;
+    const presentDays =
+      monthSummary?.presentDays ?? monthRecords.filter((record) => record.isPresent).length;
+    const lateDays =
+      monthSummary?.lateDays ?? monthRecords.filter((record) => record.isLate).length;
+    const absentDays =
+      monthSummary?.absentDays ?? monthRecords.filter((record) => record.isAbsent).length;
+    const totalHours =
+      monthSummary?.totalHours ??
+      monthRecords.reduce((sum, record) => sum + ((record.workDurationSeconds || 0) / 3600), 0);
+    const averageHours =
+      monthSummary?.averageHours ?? (monthRecords.length ? totalHours / monthRecords.length : 0);
+    const attendanceRate = monthSummary?.attendanceRate ?? 0;
+    const punctualityRate = monthSummary?.punctualityRate ?? 0;
+
+    return {
+      totalDays,
+      presentDays,
+      lateDays,
+      absentDays,
+      totalHours: Math.round(totalHours * 10) / 10,
+      averageHours: Math.round(averageHours * 10) / 10,
+      attendanceRate,
+      punctualityRate,
+    };
+  }, [monthRecords, monthSummary]);
+
+  const activeStyle = todayStatus?.onBreak
+    ? statusStyles.break
+    : todayStatus?.currentlyWorking
+    ? statusStyles.working
+    : statusStyles.offline;
+
+  const monthTitle = selectedDate.toLocaleString("default", {
+    month: "long",
+    year: "numeric",
+  });
+
+  const changeMonth = (direction) => {
+    setSelectedDate((current) => {
+      const next = new Date(current);
+      next.setDate(1);
+      next.setMonth(current.getMonth() + direction);
+      return next;
+    });
+  };
+
   if (checkingPayment) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-[#0f1419]">
-        <div className="relative">
-          <div className="w-16 h-16 border-4 border-cyan-300/40 rounded-full"></div>
-          <div className="absolute top-0 left-0 w-16 h-16 border-4 border-cyan-600 border-t-transparent rounded-full animate-spin"></div>
+      <div className="flex h-[100dvh] items-center justify-center bg-slate-50 dark:bg-[#0b0d12]">
+        <div className="text-center">
+          <div className="relative mx-auto h-14 w-14">
+            <div className="h-14 w-14 rounded-full border-2 border-blue-200 dark:border-blue-300/20"></div>
+            <div className="absolute left-0 top-0 h-14 w-14 animate-spin rounded-full border-2 border-blue-600 border-t-transparent dark:border-blue-400"></div>
+          </div>
+          <p className="mt-4 text-sm font-medium text-slate-600 dark:text-slate-300">Preparing attendance...</p>
         </div>
       </div>
     );
   }
 
-  // Show payment block if active payment exists
   if (activePayment) {
     return (
       <PaymentBlockOverlay
@@ -1145,150 +301,349 @@ const AttendancePage = ({ onLogout }) => {
     );
   }
 
-  if (loading) {
-    return (
-      <div className="p-4 text-gray-100 bg-[#0f1419] min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
-          <p className="text-lg">Loading attendance data...</p>
-          <p className="text-sm text-gray-400 mt-2">Connecting to backend services...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="p-4 text-gray-100 bg-[#0f1419] min-h-screen flex items-center justify-center">
-        <div className="text-center max-w-md">
-          <div className="bg-red-500/20 border border-red-500 rounded-lg p-6">
-            <AlertCircle className="w-12 h-12 text-red-400 mx-auto mb-4" />
-            <h3 className="text-red-400 font-semibold mb-2 text-lg">Error Loading Data</h3>
-            <p className="text-gray-300 mb-4">{error}</p>
-            <button
-              onClick={() => fetchAttendanceData()}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg transition-colors font-medium"
-            >
-              Retry Connection
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (!stats || !calendarData) {
-    return (
-      <div className="p-4 text-gray-100 bg-[#0f1419] min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <AlertCircle className="w-12 h-12 text-yellow-400 mx-auto mb-4" />
-          <p className="text-lg">No attendance data available</p>
-          <p className="text-sm text-gray-400 mt-2">Please check back later or contact your administrator</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="flex min-h-screen bg-[#0f1419] text-gray-100">
+    <div className="relative flex h-[100dvh] overflow-hidden bg-slate-50 text-slate-900 dark:bg-[#0b0d12] dark:text-slate-100">
+
       <Sidebar
         collapsed={collapsed}
         setCollapsed={setCollapsed}
         userRole="employee"
         onLogout={onLogout}
       />
-      <main className={`flex-1 p-6 space-y-6 transition-all duration-300 ${collapsed ? "ml-20" : "ml-72"}`}>
-        {/* Header with enhanced status info */}
-        <div className="flex justify-between items-start">
-          <div className="flex-1">
-            <h1 className="text-3xl font-bold text-gray-100 mb-2">Attendance Dashboard</h1>
-            <p className="text-gray-400 mb-3">Track your daily attendance and work hours</p>
-            
-            {/* Current Status Bar */}
-            {currentStatus && (
-              <div className="flex items-center gap-4 bg-[#161c2c] rounded-lg px-4 py-2 border border-[#232945]">
-                <div className="flex items-center gap-2">
-                  <div className={`w-2 h-2 rounded-full ${
-                    currentStatus.currentlyWorking ? 'bg-green-500 animate-pulse' :
-                    currentStatus.onBreak ? 'bg-yellow-500 animate-pulse' : 'bg-gray-500'
-                  }`}></div>
-                  <span className="text-sm font-medium">
-                    {currentStatus.currentlyWorking ? 'Working' :
-                     currentStatus.onBreak ? 'On Break' : 'Offline'}
-                  </span>
-                </div>
-                {currentStatus.arrivalTime && (
-                  <div className="flex items-center gap-2 text-sm text-gray-400">
-                    <Clock className="w-3 h-3" />
-                    <span>Arrived: {currentStatus.arrivalTime}</span>
-                  </div>
-                )}
-                <div className="text-sm text-blue-400">
-                  Work: {currentStatus.workDuration || '0h 0m'}
-                </div>
-                <div className="text-sm text-orange-400">
-                  Break: {currentStatus.breakDuration || '0h 0m'}
-                </div>
-              </div>
-            )}
-          </div>
-          
-          <div className="flex items-center gap-3">
-            {/* Team on Leave indicator */}
-            {teamOnLeave.length > 0 && (
-              <div className="bg-[#161c2c] rounded-lg px-3 py-2 border border-[#232945] flex items-center gap-2">
-                <Users className="w-4 h-4 text-purple-400" />
-                <span className="text-sm text-gray-300">
-                  {teamOnLeave.length} teammate{teamOnLeave.length !== 1 ? 's' : ''} on leave
-                </span>
-              </div>
-            )}
 
-            <button
-              onClick={handleRefresh}
-              disabled={refreshing}
-              className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-4 py-2 rounded-lg transition-colors text-sm font-medium flex items-center gap-2"
-            >
-              <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
-              {refreshing ? 'Refreshing...' : 'Refresh Data'}
-            </button>
-          </div>
-        </div>
-        
-        <AttendanceStats stats={stats} />
-        
-        <div className="grid lg:grid-cols-3 grid-cols-1 gap-6">
-          <div className="lg:col-span-2 flex flex-col space-y-6">
-            <AttendanceCalendar data={calendarData} onMonthChange={handleMonthChange} />
-            <RecentActivityTable
-              activities={recentActivity}
-              onDateFilterChange={handleActivityFilterChange}
-              currentFilter={activityFilter}
-            />
-          </div>
-          <div className="space-y-6">
-            <WeeklyHoursChart weeklyHours={weeklyHours} targetHours={8} />
-            
-            {/* Team on Leave Card */}
-            {teamOnLeave.length > 0 && (
-              <div className="bg-[#161c2c] rounded-xl shadow-md p-4 border border-[#232945]">
-                <div className="flex items-center gap-2 mb-3">
-                  <Users className="w-5 h-5 text-purple-400" />
-                  <h3 className="font-semibold text-lg text-gray-100">Team on Leave</h3>
+      <main
+        className={`relative z-10 h-[100dvh] min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 transition-all duration-300 [overscroll-behavior-y:auto] [scrollbar-gutter:stable] sm:px-5 lg:px-6 ${
+          collapsed ? "ml-16" : "ml-16 sm:ml-56"
+        }`}
+        style={{ WebkitOverflowScrolling: "touch" }}
+      >
+        <div className="mx-auto max-w-[1500px] space-y-4 pb-8 sm:space-y-5">
+          <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-white/10 dark:bg-[#10131c]">
+            <div className="grid gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_360px] lg:p-5">
+              <div className="min-w-0">
+                <div className="mb-5 flex flex-wrap items-center gap-3">
+                  <span className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm font-medium ${activeStyle.border} ${activeStyle.bg} ${activeStyle.text}`}>
+                    <span className={`h-2 w-2 rounded-full ${activeStyle.dot}`} />
+                    {activeStyle.label}
+                  </span>
+                  {todayStatus?.isLate && (
+                    <span className="inline-flex items-center gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-sm text-rose-700 dark:border-rose-400/20 dark:bg-rose-400/10 dark:text-rose-200">
+                      <AlertCircle className="h-4 w-4" />
+                      Late today
+                    </span>
+                  )}
                 </div>
-                <div className="space-y-2">
-                  {teamOnLeave.slice(0, 5).map((leave, idx) => (
-                    <div key={idx} className="flex items-center justify-between text-sm">
-                      <span className="text-gray-300">{leave.employee.name}</span>
-                      <span className="text-purple-400">{leave.type}</span>
-                    </div>
-                  ))}
+
+                <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">My attendance</p>
+                <h1 className="mt-1 max-w-3xl text-2xl font-semibold tracking-tight text-slate-950 dark:text-white">
+                  Attendance overview
+                </h1>
+                <p className="mt-1 max-w-2xl text-sm text-slate-500 dark:text-slate-400">
+                  Current status, monthly attendance, and recent punch history.
+                </p>
+
+                <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-white/10 dark:bg-white/[0.03]">
+                    <p className="text-xs text-slate-500 dark:text-slate-400">Arrived</p>
+                    <p className="mt-1 text-lg font-semibold text-slate-950 dark:text-white">
+                      {formatTime(todayStatus?.arrivalTime)}
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-white/10 dark:bg-white/[0.03]">
+                    <p className="text-xs text-slate-500 dark:text-slate-400">Work</p>
+                    <p className="mt-1 text-lg font-semibold text-emerald-700 dark:text-emerald-200">
+                      {formatDuration(todayStatus?.workDurationSeconds)}
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-white/10 dark:bg-white/[0.03]">
+                    <p className="text-xs text-slate-500 dark:text-slate-400">Break</p>
+                    <p className="mt-1 text-lg font-semibold text-amber-700 dark:text-amber-200">
+                      {formatDuration(todayStatus?.breakDurationSeconds)}
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-white/10 dark:bg-white/[0.03]">
+                    <p className="text-xs text-slate-500 dark:text-slate-400">Punched out</p>
+                    <p className="mt-1 text-lg font-semibold text-violet-700 dark:text-violet-200">
+                      {formatTime(todayStatus?.departureTime)}
+                    </p>
+                  </div>
                 </div>
               </div>
-            )}
-          </div>
+
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-white/10 dark:bg-white/[0.03]">
+                <div className="mb-4 flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">This month</p>
+                    <h2 className="text-xl font-semibold text-slate-950 dark:text-white">{monthTitle}</h2>
+                  </div>
+                  <CalendarDays className="h-5 w-5 text-blue-600 dark:text-blue-300" />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 dark:border-emerald-400/15 dark:bg-emerald-400/10">
+                    <p className="text-xs text-emerald-700/70 dark:text-emerald-200/70">Attendance</p>
+                    <p className="mt-1 text-2xl font-semibold text-emerald-700 dark:text-emerald-200">
+                      {computedSummary.attendanceRate}%
+                    </p>
+                  </div>
+                  <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 dark:border-blue-400/15 dark:bg-blue-400/10">
+                    <p className="text-xs text-blue-700/70 dark:text-blue-200/70">On time</p>
+                    <p className="mt-1 text-2xl font-semibold text-blue-700 dark:text-blue-200">
+                      {computedSummary.punctualityRate}%
+                    </p>
+                  </div>
+                  <div className="rounded-lg border border-violet-200 bg-violet-50 p-3 dark:border-violet-400/15 dark:bg-violet-400/10">
+                    <p className="text-xs text-violet-700/70 dark:text-violet-200/70">Total hours</p>
+                    <p className="mt-1 text-2xl font-semibold text-violet-700 dark:text-violet-200">
+                      {computedSummary.totalHours}h
+                    </p>
+                  </div>
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 dark:border-amber-400/15 dark:bg-amber-400/10">
+                    <p className="text-xs text-amber-700/70 dark:text-amber-200/70">Average / day</p>
+                    <p className="mt-1 text-2xl font-semibold text-amber-700 dark:text-amber-200">
+                      {computedSummary.averageHours}h
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {error && (
+            <div className="flex flex-col gap-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-400/20 dark:bg-rose-400/10 dark:text-rose-200 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="h-4 w-4" />
+                {error}
+              </div>
+              <button
+                type="button"
+                onClick={() => fetchAttendance(true)}
+                className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-rose-200 bg-white px-3 text-xs font-semibold transition hover:bg-rose-100 dark:border-rose-400/20 dark:bg-transparent dark:hover:bg-rose-400/10"
+              >
+                <RefreshCw className="h-3.5 w-3.5" />
+                Retry
+              </button>
+            </div>
+          )}
+
+          <section className="space-y-4">
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+              <MetricCard
+                icon={CheckCircle2}
+                label="Present"
+                value={computedSummary.presentDays}
+                tone="emerald"
+              />
+              <MetricCard
+                icon={Hourglass}
+                label="Late"
+                value={computedSummary.lateDays}
+                tone="amber"
+              />
+              <MetricCard
+                icon={TimerReset}
+                label="Absent"
+                value={computedSummary.absentDays}
+                tone="rose"
+              />
+              <MetricCard
+                icon={TrendingUp}
+                label="Records"
+                value={computedSummary.totalDays}
+                tone="violet"
+              />
+            </div>
+
+            <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_400px]">
+              <div
+                className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-white/10 dark:bg-[#10131c]"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 py-3 dark:border-white/10">
+                  <div>
+                    <h2 className="text-base font-semibold text-slate-950 dark:text-white">Month view</h2>
+                    <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{monthTitle}</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => changeMonth(-1)}
+                      className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50 hover:text-slate-800 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300 dark:hover:bg-white/[0.07] dark:hover:text-white"
+                      aria-label="Previous month"
+                    >
+                      <ArrowLeft className="h-4 w-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedDate(new Date())}
+                      className="inline-flex h-9 items-center rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 transition hover:bg-slate-50 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300 dark:hover:bg-white/[0.07]"
+                    >
+                      Today
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => changeMonth(1)}
+                      className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50 hover:text-slate-800 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300 dark:hover:bg-white/[0.07] dark:hover:text-white"
+                      aria-label="Next month"
+                    >
+                      <ArrowRight className="h-4 w-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => fetchAttendance(true)}
+                      disabled={refreshing || loading}
+                      className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-blue-200 bg-blue-50 text-blue-700 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-blue-400/20 dark:bg-blue-400/10 dark:text-blue-200 dark:hover:bg-blue-400/15"
+                      aria-label="Refresh attendance"
+                    >
+                      <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="p-4">
+                  {loading ? (
+                    <div className="flex h-72 items-center justify-center">
+                      <div className="h-8 w-8 animate-spin rounded-full border-2 border-blue-200 border-t-blue-600 dark:border-white/10 dark:border-t-blue-400" />
+                    </div>
+                  ) : (
+                  <>
+                  <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-medium text-slate-500 dark:text-slate-400 sm:gap-2 sm:text-xs">
+                    {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
+                      <div key={day}>{day}</div>
+                    ))}
+                  </div>
+                  <div className="mt-2 grid grid-cols-7 gap-1 sm:gap-2">
+                    {calendarDays.map((day) =>
+                      day.blank ? (
+                        <div key={day.key} />
+                      ) : (
+                        <div
+                          key={day.key}
+                          className={`min-h-14 rounded-lg border p-1.5 sm:min-h-20 sm:p-2 ${dayStatusStyles[day.status]} ${
+                            day.isToday ? "ring-2 ring-blue-500/70" : ""
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-1">
+                            <span className="font-mono text-sm font-semibold">{day.day}</span>
+                            {day.record?.workDurationSeconds > 0 && (
+                              <span className="hidden text-[10px] opacity-60 sm:inline">
+                                {Math.round((day.record.workDurationSeconds / 3600) * 10) / 10}h
+                              </span>
+                            )}
+                          </div>
+                          <div className="mt-2 flex items-center gap-1 sm:mt-4">
+                            {(day.record?.isWFH || day.record?.leaveInfo?.isWFH) && (
+                              <Home className="h-3 w-3 flex-shrink-0 text-purple-600 dark:text-purple-300" />
+                            )}
+                            <p className="hidden truncate text-[11px] opacity-70 sm:block">
+                              {compactStatusLabel[day.status]}
+                            </p>
+                          </div>
+                        </div>
+                      )
+                    )}
+                  </div>
+                  </>
+                  )}
+                </div>
+              </div>
+
+              <div
+                className="flex max-h-[580px] min-h-0 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-white/10 dark:bg-[#10131c]"
+              >
+                <div className="border-b border-slate-200 px-4 py-3 dark:border-white/10">
+                  <div className="flex items-center gap-3">
+                    <div className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-400/20 dark:bg-violet-400/10 dark:text-violet-200">
+                      <Clock3 className="h-4 w-4" />
+                    </div>
+                    <div>
+                      <h2 className="text-base font-semibold text-slate-950 dark:text-white">Recent days</h2>
+                      <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Latest monthly records</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="min-h-0 flex-1 divide-y divide-slate-100 overflow-y-auto dark:divide-white/[0.07]">
+                  {loading ? (
+                    <div className="flex h-80 items-center justify-center">
+                      <div className="h-8 w-8 animate-spin rounded-full border-2 border-blue-200 border-t-blue-600 dark:border-white/10 dark:border-t-blue-400" />
+                    </div>
+                  ) : recentRecords.length === 0 ? (
+                    <div className="px-4 py-12 text-center">
+                      <p className="text-sm text-slate-500 dark:text-slate-400">No records for this month.</p>
+                    </div>
+                  ) : (
+                    recentRecords.map((record) => {
+                      const status = getDayStatus(record);
+                      const inTime = record.arrivalTime || getEventTime(record.events, "PUNCH_IN");
+                      const outTime = record.departureTime || getEventTime(record.events, "PUNCH_OUT");
+
+                      return (
+                        <div key={getDateKey(record.date)} className="px-4 py-3">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2">
+                                <p className="font-medium text-slate-950 dark:text-white">
+                                  {new Date(`${getDateKey(record.date)}T12:00:00`).toLocaleDateString("en-US", {
+                                    weekday: "short",
+                                    month: "short",
+                                    day: "numeric",
+                                  })}
+                                </p>
+                                {(record.isWFH || record.leaveInfo?.isWFH) && (
+                                  <Home className="h-3.5 w-3.5 text-purple-600 dark:text-purple-300" />
+                                )}
+                              </div>
+                              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                                {formatTime(inTime)} - {formatTime(outTime)}
+                              </p>
+                            </div>
+                            <span className={`shrink-0 rounded-lg border px-2 py-1 text-xs font-medium ${dayStatusStyles[status]}`}>
+                              {compactStatusLabel[status]}
+                            </span>
+                          </div>
+                          <div className="mt-3 grid grid-cols-2 gap-2">
+                            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 dark:border-white/10 dark:bg-white/[0.03]">
+                              <p className="text-[11px] text-slate-500 dark:text-slate-400">Work</p>
+                              <p className="text-sm font-medium text-emerald-700 dark:text-emerald-200">
+                                {formatDuration(record.workDurationSeconds)}
+                              </p>
+                            </div>
+                            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 dark:border-white/10 dark:bg-white/[0.03]">
+                              <p className="text-[11px] text-slate-500 dark:text-slate-400">Break</p>
+                              <p className="text-sm font-medium text-amber-700 dark:text-amber-200">
+                                {formatDuration(record.breakDurationSeconds)}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            </div>
+          </section>
         </div>
       </main>
+    </div>
+  );
+};
+
+const MetricCard = ({ icon, label, value, tone }) => {
+  const toneClass = {
+    emerald: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-200",
+    amber: "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-200",
+    rose: "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-400/20 dark:bg-rose-400/10 dark:text-rose-200",
+    violet: "border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-400/20 dark:bg-violet-400/10 dark:text-violet-200",
+  }[tone];
+
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-[#10131c]">
+      <div className={`mb-4 inline-flex h-9 w-9 items-center justify-center rounded-lg border ${toneClass}`}>
+        {React.createElement(icon, { className: "h-4 w-4" })}
+      </div>
+      <p className="text-xs text-slate-500 dark:text-slate-400">{label}</p>
+      <p className="mt-1 text-2xl font-semibold text-slate-950 dark:text-white">{value}</p>
     </div>
   );
 };

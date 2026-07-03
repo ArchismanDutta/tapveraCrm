@@ -16,4 +16,11 @@ const clientSchema = new mongoose.Schema({
   },
 }, { timestamps: true });
 
+clientSchema.set("toJSON", {
+  transform: (_document, result) => {
+    delete result.password;
+    return result;
+  },
+});
+
 module.exports = mongoose.model("Client", clientSchema);

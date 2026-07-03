@@ -1,40 +1,25 @@
+import { X } from "lucide-react";
+
 const InfoModal = ({ show, onClose, title, message, cancelButton, onCancel }) => {
   if (!show) return null;
 
   return (
-    <div className="fixed inset-0 flex items-center justify-center bg-black/40 backdrop-blur-sm z-50">
-      <div className="bg-white rounded-2xl shadow-xl w-96 max-w-full p-6">
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-lg font-semibold text-gray-900">{title}</h3>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-700 transition text-xl font-bold"
-          >
-            ×
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="info-modal-title">
+      <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl dark:border-white/10 dark:bg-[#10131c]">
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <h3 id="info-modal-title" className="text-lg font-semibold text-slate-950 dark:text-white">{title}</h3>
+          <button type="button" onClick={onCancel || onClose} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-white/[0.06] dark:hover:text-white" aria-label="Close dialog">
+            <X className="h-4 w-4" />
           </button>
         </div>
 
-        <div className="space-y-2 text-gray-700 text-sm">
-          {message.split("\n").map((line, idx) => (
-            <p key={idx}>{line}</p>
-          ))}
+        <div className="space-y-2 text-sm leading-6 text-slate-600 dark:text-slate-300">
+          {message.split("\n").map((line, index) => <p key={index}>{line}</p>)}
         </div>
 
         <div className="mt-6 flex justify-end gap-3">
-          {cancelButton && (
-            <button
-              onClick={onCancel}
-              className="px-4 py-2 border border-gray-300 text-gray-700 font-medium rounded-lg shadow hover:bg-gray-100 transition"
-            >
-              Cancel
-            </button>
-          )}
-          <button
-            onClick={onClose}
-            className="px-4 py-2 bg-yellow-400 border-2 border-orange-500 text-black font-medium rounded-lg shadow hover:bg-orange-500 hover:text-white transition"
-          >
-            Okay
-          </button>
+          {cancelButton && <button type="button" onClick={onCancel} className="h-10 rounded-xl border border-slate-200 px-4 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/[0.06]">Cancel</button>}
+          <button type="button" onClick={onClose} className="h-10 rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white transition hover:bg-blue-700">Confirm</button>
         </div>
       </div>
     </div>

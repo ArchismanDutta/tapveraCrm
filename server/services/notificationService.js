@@ -1,3 +1,4 @@
+const mongoose = require("mongoose");
 const Notification = require("../models/Notification");
 const { sendNotificationToUser } = require("../utils/websocket");
 
@@ -235,5 +236,4 @@ class NotificationService {
   }
 }
 
-const mongoose = require("mongoose");
 module.exports = new NotificationService();

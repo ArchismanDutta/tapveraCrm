@@ -4,6 +4,7 @@ const User = require("../models/User");
 const Task = require("../models/Task");
 const LeaveRequest = require("../models/LeaveRequest");
 const Shift = require("../models/Shift");
+const bcrypt = require("bcryptjs");
 
 
 // =========================
@@ -103,7 +104,7 @@ exports.createEmployee = async (req, res) => {
       ref: ref?.trim() || "",
       status: status?.toLowerCase() || "inactive",
       totalPl: Number(totalPl) || 0,
-      password: password || "Welcome123",
+      password: await bcrypt.hash(String(password || "Welcome123").trim(), 12),
       department: department || "",
       designation: designation?.trim() || "",
       role: "employee",

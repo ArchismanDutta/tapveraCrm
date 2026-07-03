@@ -4,14 +4,13 @@
  * Enables smooth momentum scrolling on iOS devices
  */
 
-/* Apply to all scrollable containers */
+/* Apply smooth momentum scrolling without trapping desktop mouse wheels */
 .scrollable,
 .overflow-auto,
 .overflow-y-auto,
 .overflow-x-auto,
 [class*="overflow-"] {
   -webkit-overflow-scrolling: touch;
-  overscroll-behavior: contain;
 }
 
 /* Specific components that need smooth scrolling */
@@ -22,16 +21,32 @@
 .message-list,
 .employee-list {
   -webkit-overflow-scrolling: touch;
-  overscroll-behavior-y: contain;
-}
-
-/* Prevent iOS bounce on body */
-body {
-  overscroll-behavior-y: none;
 }
 
 /* Remove tap highlight on iOS */
 @supports (-webkit-touch-callout: none) {
+  /* iOS-only: contain bounce behavior where Safari needs it. */
+  .scrollable,
+  .overflow-auto,
+  .overflow-y-auto,
+  .overflow-x-auto,
+  [class*="overflow-"] {
+    overscroll-behavior: contain;
+  }
+
+  .tap-messages,
+  .chat-messages,
+  .task-list,
+  .project-list,
+  .message-list,
+  .employee-list {
+    overscroll-behavior-y: contain;
+  }
+
+  body {
+    overscroll-behavior-y: none;
+  }
+
   * {
     -webkit-tap-highlight-color: transparent;
   }

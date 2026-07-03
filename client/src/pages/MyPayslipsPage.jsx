@@ -1,6 +1,20 @@
-import React, { useState, useEffect } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import tapveraLogo from "../assets/tapvera.png";
-import { FileText, Download, Calendar, DollarSign, X, ChevronLeft, ChevronRight } from "lucide-react";
+import {
+  AlertCircle,
+  CalendarDays,
+  CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
+  Download,
+  Eye,
+  FileText,
+  IndianRupee,
+  RefreshCw,
+  ReceiptText,
+  WalletCards,
+  X,
+} from "lucide-react";
 import Sidebar from "../components/dashboard/Sidebar";
 import { formatDepartment } from "../utils/formatters";
 import { parseDate, formatDateForDisplay } from "../utils/safeDateParser";
@@ -11,6 +25,13 @@ function authHeaders() {
   return { Authorization: "Bearer " + localStorage.getItem("token") };
 }
 const fmt = (n) => (n ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const formatCurrency = (value) =>
+  new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(Number(value) || 0);
 function monthLabel(ym) {
   if (!ym) return "";
   const date = parseDate(ym + "-01");
@@ -288,134 +309,388 @@ function printPayslip(payslip) {
 </body></html>`;
 
   const w = window.open("", "_blank");
+  if (!w) {
+    console.error("Unable to open the payslip print window. Pop-ups may be blocked.");
+    return false;
+  }
   w.document.write(html);
   w.document.close();
   w.focus();
   setTimeout(function() { w.print(); w.close(); }, 500);
+  return true;
 }
 
 const MyPayslipsPage = ({ onLogout }) => {
   const [collapsed, setCollapsed] = useState(false);
   const [payslips,  setPayslips]  = useState([]);
   const [loading,   setLoading]   = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error,     setError]     = useState("");
   const [selected,  setSelected]  = useState(null);
 
-  useEffect(() => {
-    setLoading(true);
-    fetch(API_BASE + "/api/payslips/my/history", { headers: authHeaders() })
-      .then(function(r) { return r.json(); })
-      .then(function(data) { setPayslips(data.data || []); })
-      .catch(function() {})
-      .finally(function() { setLoading(false); });
+  const fetchPayslips = useCallback(async ({ refresh = false } = {}) => {
+    if (refresh) {
+      setRefreshing(true);
+    } else {
+      setLoading(true);
+    }
+    setError("");
+    try {
+      const response = await fetch(API_BASE + "/api/payslips/my/history", { headers: authHeaders() });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.message || `Payslip request failed (${response.status})`);
+      }
+      const history = Array.isArray(data.data) ? [...data.data] : [];
+      history.sort((a, b) => String(b.payPeriod || "").localeCompare(String(a.payPeriod || "")));
+      setPayslips(history);
+    } catch (err) {
+      console.error("Failed to load employee payslips:", err);
+      setError("We could not load your payslips. Check your connection and try again.");
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
   }, []);
+
+  useEffect(() => {
+    fetchPayslips();
+  }, [fetchPayslips]);
+
+  useEffect(() => {
+    if (!selected) return undefined;
+
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") setSelected(null);
+    };
+
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = originalOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [selected]);
 
   const currentIdx = selected ? payslips.findIndex(function(p) { return p._id === selected._id; }) : -1;
   const hasPrev    = currentIdx > 0;
   const hasNext    = currentIdx >= 0 && currentIdx < payslips.length - 1;
+  const latestPayslip = payslips[0] || null;
+  const metrics = [
+    {
+      label: "Published slips",
+      value: payslips.length,
+      helper: payslips.length === 1 ? "Payslip available" : "Payslips available",
+      icon: FileText,
+      tone: "blue",
+    },
+    {
+      label: "Latest net pay",
+      value: latestPayslip ? formatCurrency(latestPayslip.netSalary) : "—",
+      helper: latestPayslip ? monthLabel(latestPayslip.payPeriod) : "No published period",
+      icon: IndianRupee,
+      tone: "emerald",
+    },
+    {
+      label: "Latest deductions",
+      value: latestPayslip ? formatCurrency(latestPayslip.totalDeductions) : "—",
+      helper: latestPayslip ? `${latestPayslip.lwp ?? 0} LWP day${latestPayslip.lwp === 1 ? "" : "s"}` : "No deduction data",
+      icon: ReceiptText,
+      tone: "amber",
+    },
+  ];
+
+  const metricTone = {
+    blue: "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-400/20 dark:bg-blue-400/10 dark:text-blue-200",
+    emerald: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-200",
+    amber: "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-200",
+  };
 
   return (
-    <div className="flex bg-gradient-to-br from-[#141a21] via-[#191f2b] to-[#101218] min-h-screen text-blue-100 font-sans">
-      <Sidebar collapsed={collapsed} setCollapsed={setCollapsed} onLogout={onLogout} userRole="employee" />
-      <main className={"flex-1 transition-all duration-300 " + (collapsed ? "ml-16" : "ml-60") + " flex flex-col h-screen overflow-hidden"}>
+    <div className="relative flex h-[100dvh] overflow-hidden bg-slate-50 text-slate-900 dark:bg-[#0b0d12] dark:text-slate-100">
+      <Sidebar
+        collapsed={collapsed}
+        setCollapsed={setCollapsed}
+        onLogout={onLogout}
+        userRole="employee"
+      />
 
-        <div className="px-6 py-4 border-b border-[#1e2a35] bg-[#0a0e14]/60 backdrop-blur sticky top-0 z-30">
-          <h1 className="text-xl font-bold text-white">My Payslips</h1>
-          <p className="text-xs text-gray-500 mt-0.5">View and download your published salary slips</p>
-        </div>
-
-        <div className="flex flex-1 overflow-hidden">
-
-          <div className={"overflow-y-auto p-4 " + (selected ? "w-72 border-r border-[#1e2a35]" : "flex-1 max-w-2xl mx-auto")}>
-            {loading ? (
-              <div className="flex justify-center py-20">
-                <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
+      <main
+        className={`h-[100dvh] min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 transition-all duration-300 sm:px-5 lg:px-6 ${
+          collapsed ? "ml-16" : "ml-16 sm:ml-56"
+        }`}
+      >
+        <div className="mx-auto max-w-[1500px] space-y-4 pb-8 sm:space-y-5">
+          <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-white/10 dark:bg-[#10131c]">
+            <div className="flex flex-col gap-5 p-4 sm:p-5 lg:flex-row lg:items-center lg:justify-between">
+              <div className="min-w-0">
+                <div className="mb-4 inline-flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-200">
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                  Secure payroll history
+                </div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                  Compensation
+                </p>
+                <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950 dark:text-white">
+                  My payslips
+                </h1>
+                <p className="mt-1 max-w-2xl text-sm text-slate-500 dark:text-slate-400">
+                  Review your published salary details and save a printable copy for your records.
+                </p>
               </div>
-            ) : payslips.length === 0 ? (
-              <div className="text-center py-20 text-gray-500">
-                <FileText className="w-12 h-12 mx-auto mb-3 opacity-30" />
-                <p>No payslips available yet.</p>
-                <p className="text-xs mt-1">Your payslips will appear here once HR publishes them.</p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {!selected && (
-                  <div className="grid grid-cols-3 gap-4 mb-6">
-                    {[
-                      { label:"Payslips",    value: payslips.length,                                  icon: FileText   },
-                      { label:"Latest Net",  value: "₹" + fmt(payslips[0] && payslips[0].netSalary), icon: DollarSign },
-                      { label:"Last Period", value: monthLabel(payslips[0] && payslips[0].payPeriod) || "—", icon: Calendar },
-                    ].map(function(item) { return (
-                      <div key={item.label} className="bg-[#0f1419] border border-[#1e2a35] rounded-xl p-4 text-center">
-                        <item.icon className="w-5 h-5 text-blue-400 mx-auto mb-2" />
-                        <p className="font-bold text-white text-sm">{item.value}</p>
-                        <p className="text-xs text-gray-500">{item.label}</p>
-                      </div>
-                    ); })}
-                  </div>
-                )}
 
-                {payslips.map(function(p) { return (
-                  <div key={p._id} onClick={function() { setSelected(p); }}
-                    className={"rounded-xl border p-4 cursor-pointer transition " + (selected && selected._id === p._id ? "border-blue-500/50 bg-blue-500/10" : "border-[#1e2a35] bg-[#0f1419] hover:border-[#2a3a4a] hover:bg-[#141a21]")}>
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="font-semibold text-white text-sm">{monthLabel(p.payPeriod)}</p>
-                        <p className="text-xs text-gray-500 mt-0.5">Paid {p.paidDays} / {p.workingDays} days{p.lwp ? " | LWP " + p.lwp : ""}</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-green-400 font-bold font-mono">{"₹"}{fmt(p.netSalary)}</p>
-                        <p className="text-xs text-gray-500">Net Salary</p>
-                      </div>
+              <div className="flex items-center gap-3">
+                <div className="hidden h-12 w-12 items-center justify-center rounded-xl border border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-400/20 dark:bg-blue-400/10 dark:text-blue-200 sm:flex">
+                  <WalletCards className="h-5 w-5" />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => fetchPayslips({ refresh: true })}
+                  disabled={loading || refreshing}
+                  className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-200 dark:hover:bg-white/[0.07]"
+                >
+                  <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
+                  Refresh
+                </button>
+              </div>
+            </div>
+
+            <div className="grid border-t border-slate-200 sm:grid-cols-3 dark:border-white/10">
+              {metrics.map((metric) => {
+                const MetricIcon = metric.icon;
+                return (
+                  <div
+                    key={metric.label}
+                    className="flex items-center gap-3 border-b border-slate-200 p-4 last:border-b-0 sm:border-b-0 sm:border-r sm:last:border-r-0 dark:border-white/10"
+                  >
+                    <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border ${metricTone[metric.tone]}`}>
+                      <MetricIcon className="h-4 w-4" />
                     </div>
-                    {!selected && (
-                      <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
-                        <div className="bg-[#141a21] rounded-lg px-2 py-1.5 text-center"><p className="text-gray-500">CTC</p><p className="text-blue-400 font-mono">{"₹"}{fmt(p.ctc)}</p></div>
-                        <div className="bg-[#141a21] rounded-lg px-2 py-1.5 text-center"><p className="text-gray-500">Deductions</p><p className="text-red-400 font-mono">{"₹"}{fmt(p.totalDeductions)}</p></div>
-                        <div className="bg-[#141a21] rounded-lg px-2 py-1.5 text-center"><p className="text-gray-500">LWP</p><p className="text-yellow-400 font-mono">{p.lwp != null ? p.lwp : 0}</p></div>
-                      </div>
-                    )}
+                    <div className="min-w-0">
+                      <p className="text-xs text-slate-500 dark:text-slate-400">{metric.label}</p>
+                      <p className="truncate text-base font-semibold text-slate-950 dark:text-white">{metric.value}</p>
+                      <p className="truncate text-[11px] text-slate-400 dark:text-slate-500">{metric.helper}</p>
+                    </div>
                   </div>
-                ); })}
-              </div>
-            )}
-          </div>
+                );
+              })}
+            </div>
+          </section>
 
-          {selected && (
-            <div className="flex-1 overflow-y-auto bg-[#0a0e14] flex flex-col">
-              <div className="flex items-center justify-between px-4 py-3 border-b border-[#1e2a35] bg-[#0f1419] sticky top-0 z-10">
-                <div className="flex items-center gap-2">
-                  <button onClick={function() { if (hasPrev) setSelected(payslips[currentIdx - 1]); }} disabled={!hasPrev}
-                    className="p-1.5 rounded hover:bg-[#1e2a35] text-gray-400 hover:text-white transition disabled:opacity-30">
-                    <ChevronLeft className="w-4 h-4" />
-                  </button>
-                  <span className="text-sm text-white font-semibold">{monthLabel(selected.payPeriod)}</span>
-                  <button onClick={function() { if (hasNext) setSelected(payslips[currentIdx + 1]); }} disabled={!hasNext}
-                    className="p-1.5 rounded hover:bg-[#1e2a35] text-gray-400 hover:text-white transition disabled:opacity-30">
-                    <ChevronRight className="w-4 h-4" />
-                  </button>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button onClick={function() { printPayslip(selected); }}
-                    className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-medium transition">
-                    <Download className="w-3.5 h-3.5" /> Download PDF
-                  </button>
-                  <button onClick={function() { setSelected(null); }}
-                    className="p-1.5 rounded hover:bg-[#1e2a35] text-gray-400 hover:text-white transition">
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
+          {error && !loading && (
+            <div className="flex flex-col gap-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-400/20 dark:bg-rose-400/10 dark:text-rose-200 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                <span>{error}</span>
               </div>
-
-              <div className="flex-1 overflow-y-auto p-6 flex justify-center bg-gray-100">
-                <div className="shadow-2xl">
-                  <PayslipDocument payslip={selected} />
-                </div>
-              </div>
+              <button
+                type="button"
+                onClick={() => fetchPayslips({ refresh: true })}
+                className="inline-flex h-9 items-center justify-center rounded-lg border border-rose-200 bg-white px-3 text-xs font-semibold transition hover:bg-rose-100 dark:border-rose-400/20 dark:bg-transparent dark:hover:bg-rose-400/10"
+              >
+                Try again
+              </button>
             </div>
           )}
 
+          <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-white/10 dark:bg-[#10131c]">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 py-4 dark:border-white/10 sm:px-5">
+              <div>
+                <h2 className="text-base font-semibold text-slate-950 dark:text-white">Payslip history</h2>
+                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                  Published periods are shown newest first.
+                </p>
+              </div>
+              {!loading && payslips.length > 0 && (
+                <span className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-500 dark:border-white/10 dark:bg-white/[0.03] dark:text-slate-400">
+                  {payslips.length} record{payslips.length === 1 ? "" : "s"}
+                </span>
+              )}
+            </div>
+
+            {loading ? (
+              <div className="space-y-3 p-4 sm:p-5">
+                {[0, 1, 2].map((item) => (
+                  <div key={item} className="h-20 animate-pulse rounded-xl bg-slate-100 dark:bg-white/[0.04]" />
+                ))}
+              </div>
+            ) : payslips.length === 0 ? (
+              <div className="px-4 py-16 text-center sm:px-6">
+                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-slate-400 dark:border-white/10 dark:bg-white/[0.03]">
+                  <FileText className="h-5 w-5" />
+                </div>
+                <h3 className="mt-4 text-sm font-semibold text-slate-900 dark:text-white">No payslips published yet</h3>
+                <p className="mx-auto mt-1 max-w-md text-sm text-slate-500 dark:text-slate-400">
+                  Your salary slips will appear here as soon as HR publishes a payroll period.
+                </p>
+              </div>
+            ) : (
+              <>
+                <div className="space-y-3 p-4 md:hidden">
+                  {payslips.map((payslip) => (
+                    <article key={payslip._id} className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-white/10 dark:bg-white/[0.03]">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="font-semibold text-slate-950 dark:text-white">{monthLabel(payslip.payPeriod)}</p>
+                          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                            Paid {payslip.paidDays ?? 0} of {payslip.workingDays ?? 0} working days
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-200">{formatCurrency(payslip.netSalary)}</p>
+                          <p className="text-[11px] text-slate-400">Net pay</p>
+                        </div>
+                      </div>
+                      <div className="mt-4 grid grid-cols-3 gap-2">
+                        <div className="rounded-lg border border-slate-200 bg-white px-2 py-2 dark:border-white/10 dark:bg-white/[0.03]">
+                          <p className="text-[10px] text-slate-400">CTC</p>
+                          <p className="mt-0.5 truncate text-xs font-medium text-slate-700 dark:text-slate-200">{formatCurrency(payslip.ctc)}</p>
+                        </div>
+                        <div className="rounded-lg border border-slate-200 bg-white px-2 py-2 dark:border-white/10 dark:bg-white/[0.03]">
+                          <p className="text-[10px] text-slate-400">Deductions</p>
+                          <p className="mt-0.5 truncate text-xs font-medium text-rose-700 dark:text-rose-200">{formatCurrency(payslip.totalDeductions)}</p>
+                        </div>
+                        <div className="rounded-lg border border-slate-200 bg-white px-2 py-2 dark:border-white/10 dark:bg-white/[0.03]">
+                          <p className="text-[10px] text-slate-400">LWP</p>
+                          <p className="mt-0.5 text-xs font-medium text-amber-700 dark:text-amber-200">{payslip.lwp ?? 0} days</p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setSelected(payslip)}
+                        className="mt-4 inline-flex h-9 w-full items-center justify-center gap-2 rounded-lg border border-blue-200 bg-blue-50 text-xs font-semibold text-blue-700 transition hover:bg-blue-100 dark:border-blue-400/20 dark:bg-blue-400/10 dark:text-blue-200 dark:hover:bg-blue-400/15"
+                      >
+                        <Eye className="h-3.5 w-3.5" />
+                        View payslip
+                      </button>
+                    </article>
+                  ))}
+                </div>
+
+                <div className="hidden overflow-x-auto md:block">
+                  <table className="w-full min-w-[860px] text-left">
+                    <thead className="bg-slate-50 text-xs text-slate-500 dark:bg-white/[0.025] dark:text-slate-400">
+                      <tr>
+                        <th className="px-5 py-3 font-medium">Pay period</th>
+                        <th className="px-4 py-3 font-medium">Attendance</th>
+                        <th className="px-4 py-3 text-right font-medium">CTC</th>
+                        <th className="px-4 py-3 text-right font-medium">Deductions</th>
+                        <th className="px-4 py-3 text-right font-medium">Net pay</th>
+                        <th className="px-5 py-3 text-right font-medium">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200 dark:divide-white/10">
+                      {payslips.map((payslip) => (
+                        <tr key={payslip._id} className="transition hover:bg-slate-50 dark:hover:bg-white/[0.025]">
+                          <td className="px-5 py-4">
+                            <div className="flex items-center gap-3">
+                              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-400/20 dark:bg-blue-400/10 dark:text-blue-200">
+                                <CalendarDays className="h-4 w-4" />
+                              </div>
+                              <div>
+                                <p className="text-sm font-semibold text-slate-950 dark:text-white">{monthLabel(payslip.payPeriod)}</p>
+                                <p className="mt-0.5 text-[11px] text-slate-400">Published payslip</p>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-4 py-4 text-sm text-slate-600 dark:text-slate-300">
+                            <p>{payslip.paidDays ?? 0} / {payslip.workingDays ?? 0} paid days</p>
+                            <p className="mt-0.5 text-[11px] text-slate-400">{payslip.lwp ?? 0} LWP days</p>
+                          </td>
+                          <td className="px-4 py-4 text-right text-sm font-medium text-slate-700 dark:text-slate-200">{formatCurrency(payslip.ctc)}</td>
+                          <td className="px-4 py-4 text-right text-sm font-medium text-rose-700 dark:text-rose-200">{formatCurrency(payslip.totalDeductions)}</td>
+                          <td className="px-4 py-4 text-right text-sm font-semibold text-emerald-700 dark:text-emerald-200">{formatCurrency(payslip.netSalary)}</td>
+                          <td className="px-5 py-4 text-right">
+                            <button
+                              type="button"
+                              onClick={() => setSelected(payslip)}
+                              className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300 dark:hover:border-blue-400/20 dark:hover:bg-blue-400/10 dark:hover:text-blue-200"
+                            >
+                              <Eye className="h-3.5 w-3.5" />
+                              View
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+          </section>
         </div>
       </main>
+
+      {selected && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/65 p-0 backdrop-blur-sm sm:p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="payslip-preview-title"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setSelected(null);
+          }}
+        >
+          <div className="flex h-full w-full max-w-6xl flex-col overflow-hidden bg-slate-100 shadow-2xl dark:bg-[#0b0d12] sm:h-[calc(100dvh-2rem)] sm:rounded-2xl sm:border sm:border-white/10">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-white px-3 py-3 dark:border-white/10 dark:bg-[#10131c] sm:px-4">
+              <div className="flex min-w-0 items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => hasPrev && setSelected(payslips[currentIdx - 1])}
+                  disabled={!hasPrev}
+                  className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50 hover:text-slate-800 disabled:cursor-not-allowed disabled:opacity-35 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300 dark:hover:bg-white/[0.07] dark:hover:text-white"
+                  aria-label="Previous payslip"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </button>
+                <div className="min-w-0 px-1 text-center sm:px-2">
+                  <h2 id="payslip-preview-title" className="truncate text-sm font-semibold text-slate-950 dark:text-white">
+                    {monthLabel(selected.payPeriod)}
+                  </h2>
+                  <p className="hidden text-[11px] text-slate-400 sm:block">Payslip preview</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => hasNext && setSelected(payslips[currentIdx + 1])}
+                  disabled={!hasNext}
+                  className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50 hover:text-slate-800 disabled:cursor-not-allowed disabled:opacity-35 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300 dark:hover:bg-white/[0.07] dark:hover:text-white"
+                  aria-label="Next payslip"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => printPayslip(selected)}
+                  className="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-blue-600 px-3 text-xs font-semibold text-white transition hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-400"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">Print or save PDF</span>
+                  <span className="sm:hidden">Save PDF</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelected(null)}
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50 hover:text-slate-800 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300 dark:hover:bg-white/[0.07] dark:hover:text-white"
+                  aria-label="Close payslip preview"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+
+            <div className="flex min-h-0 flex-1 justify-start overflow-auto p-3 sm:justify-center sm:p-6">
+              <div className="h-fit shrink-0 overflow-hidden rounded-sm bg-white shadow-xl ring-1 ring-black/5">
+                <PayslipDocument payslip={selected} />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

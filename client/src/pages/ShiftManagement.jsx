@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { CalendarClock, CalendarSearch, Clock3, Repeat2, UserRoundCog } from "lucide-react";
 import {
   ShiftsManager,
   EmployeeShiftAssignment,
@@ -7,69 +8,92 @@ import {
 } from "../components/Shift";
 import Sidebar from "../components/dashboard/Sidebar";
 
+const tabs = [
+  { id: "shifts", label: "Manage shifts", icon: Clock3, component: ShiftsManager },
+  {
+    id: "assignment",
+    label: "Assign shifts",
+    icon: UserRoundCog,
+    component: EmployeeShiftAssignment,
+  },
+  {
+    id: "request",
+    label: "Request change",
+    icon: Repeat2,
+    component: ShiftChangeRequest,
+  },
+  {
+    id: "view",
+    label: "Effective shift",
+    icon: CalendarSearch,
+    component: EffectiveShiftViewer,
+  },
+];
+
 const ShiftManagement = ({ onLogout }) => {
   const [activeTab, setActiveTab] = useState("shifts");
-
-  const tabs = [
-    { id: "shifts", label: "Manage Shifts", component: ShiftsManager },
-    {
-      id: "assignment",
-      label: "Assign Shifts",
-      component: EmployeeShiftAssignment,
-    },
-    { id: "request", label: "Request Change", component: ShiftChangeRequest },
-    {
-      id: "view",
-      label: "View Effective Shift",
-      component: EffectiveShiftViewer,
-    },
-  ];
-
   const [collapsed, setCollapsed] = useState(false);
-
-  const ActiveComponent =
-    tabs.find((tab) => tab.id === activeTab)?.component || ShiftsManager;
+  const activeTabConfig = tabs.find((tab) => tab.id === activeTab) || tabs[0];
+  const ActiveComponent = activeTabConfig.component;
 
   return (
-    <div className="min-h-screen bg-gray-600 text-gray-100 p-4">
-
+    <div className="relative flex h-[100dvh] overflow-hidden bg-slate-50 text-slate-900 dark:bg-[#0b0d12] dark:text-slate-100">
       <Sidebar
         collapsed={collapsed}
         setCollapsed={setCollapsed}
         userRole="admin"
         onLogout={onLogout}
       />
-      <div className="max-w-7xl mx-auto">
-        <h1 className="text-3xl font-bold text-white mb-6">
-          Shift Management System
-        </h1>
 
-        {/* Tab Navigation */}
-        <div className="bg-white rounded-lg shadow-sm mb-6">
-          <div className="border-b border-gray-200">
-            <nav className="-mb-px flex space-x-8 px-6">
-              {tabs.map((tab) => (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
-                    activeTab === tab.id
-                      ? "border-blue-500 text-blue-600"
-                      : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-                  }`}
-                >
-                  {tab.label}
-                </button>
-              ))}
+      <main
+        className={`h-[100dvh] min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 transition-all duration-300 sm:px-5 lg:px-6 ${
+          collapsed ? "ml-16" : "ml-16 sm:ml-56"
+        }`}
+      >
+        <div className="mx-auto max-w-[1500px] space-y-4 pb-8 sm:space-y-5">
+          <header className="rounded-2xl border border-slate-200 bg-white px-5 py-5 shadow-sm dark:border-white/10 dark:bg-[#10131c] sm:px-6">
+            <div className="inline-flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 dark:border-blue-400/20 dark:bg-blue-400/10 dark:text-blue-200">
+              <CalendarClock className="h-3.5 w-3.5" />
+              Workforce scheduling
+            </div>
+            <h1 className="mt-3 text-2xl font-semibold tracking-tight text-slate-950 dark:text-white">
+              Shift management
+            </h1>
+            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+              Create schedules, assign employees, and review effective shifts.
+            </p>
+          </header>
+
+          <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-white/10 dark:bg-[#10131c]">
+            <nav
+              className="flex gap-1 overflow-x-auto border-b border-slate-200 p-2 dark:border-white/10 sm:px-4"
+              aria-label="Shift management sections"
+            >
+              {tabs.map((tab) => {
+                const isActive = activeTab === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setActiveTab(tab.id)}
+                    className={`inline-flex h-10 items-center gap-2 whitespace-nowrap rounded-lg px-3 text-sm font-medium transition ${
+                      isActive
+                        ? "bg-blue-50 text-blue-700 dark:bg-blue-400/10 dark:text-blue-200"
+                        : "text-slate-500 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-white/[0.05] dark:hover:text-white"
+                    }`}
+                  >
+                    {React.createElement(tab.icon, { className: "h-4 w-4" })}
+                    {tab.label}
+                  </button>
+                );
+              })}
             </nav>
-          </div>
+            <div className="p-4 sm:p-5 lg:p-6">
+              <ActiveComponent />
+            </div>
+          </section>
         </div>
-
-        {/* Active Component */}
-        <div>
-          <ActiveComponent />
-        </div>
-      </div>
+      </main>
     </div>
   );
 };

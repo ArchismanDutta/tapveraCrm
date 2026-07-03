@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import API from "../api";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import {
   ToggleLeft,
   ToggleRight,
@@ -28,6 +28,9 @@ import {
 } from "lucide-react";
 import Sidebar from "../components/dashboard/Sidebar";
 
+// Keep the animation namespace visible to ESLint's JSX usage analysis.
+void motion;
+
 // Animation Variants
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -52,51 +55,6 @@ const cardVariants = {
       damping: 20,
     },
   },
-};
-
-const tableRowVariants = {
-  hidden: { opacity: 0, x: -20 },
-  visible: (i) => ({
-    opacity: 1,
-    x: 0,
-    transition: {
-      delay: i * 0.03,
-      type: "spring",
-      stiffness: 300,
-      damping: 24,
-    },
-  }),
-  exit: {
-    opacity: 0,
-    x: 20,
-    transition: { duration: 0.2 },
-  },
-};
-
-const modalVariants = {
-  hidden: { opacity: 0, scale: 0.9, y: 20 },
-  visible: {
-    opacity: 1,
-    scale: 1,
-    y: 0,
-    transition: {
-      type: "spring",
-      stiffness: 300,
-      damping: 25,
-    },
-  },
-  exit: {
-    opacity: 0,
-    scale: 0.9,
-    y: 20,
-    transition: { duration: 0.2 },
-  },
-};
-
-const overlayVariants = {
-  hidden: { opacity: 0 },
-  visible: { opacity: 1, transition: { duration: 0.2 } },
-  exit: { opacity: 0, transition: { duration: 0.2 } },
 };
 
 const statCounterVariants = {
@@ -194,6 +152,8 @@ const ClientsPage = ({ onLogout }) => {
     }
 
     fetchClients();
+    // Fetch only once when the management page mounts.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const fetchClients = async () => {
@@ -454,7 +414,7 @@ const ClientsPage = ({ onLogout }) => {
   }, [clients]);
 
   return (
-    <div className="flex bg-gradient-to-br from-[#141a21] via-[#191f2b] to-[#101218] font-sans text-blue-100 min-h-screen">
+    <div className="clients-theme relative flex h-[100dvh] overflow-hidden bg-slate-50 font-sans text-slate-900 dark:bg-[#0b0d12] dark:text-slate-100">
       {/* Sidebar */}
       <Sidebar
         collapsed={sidebarCollapsed}
@@ -465,8 +425,8 @@ const ClientsPage = ({ onLogout }) => {
 
       {/* Main Content */}
       <main
-        className={`flex-1 p-8 overflow-y-auto transition-all duration-300 ${
-          sidebarCollapsed ? "ml-20" : "ml-72"
+        className={`h-[100dvh] min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 transition-all duration-300 sm:px-5 lg:px-6 ${
+          sidebarCollapsed ? "ml-16" : "ml-16 sm:ml-56"
         }`}
       >
         {/* Notification Toast */}
@@ -486,12 +446,15 @@ const ClientsPage = ({ onLogout }) => {
         )}
 
         {/* Header */}
-        <div className="flex flex-col lg:flex-row lg:justify-between lg:items-start gap-6 mb-8">
+        <div className="mb-5 flex flex-col gap-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-[#10131c] lg:flex-row lg:items-start lg:justify-between sm:p-6">
           <div>
-            <h1 className="text-3xl font-bold text-white tracking-tight mb-2">
-              Client Management
+            <div className="mb-3 inline-flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 dark:border-blue-400/20 dark:bg-blue-400/10 dark:text-blue-200">
+              <Building2 className="h-3.5 w-3.5" /> Business operations
+            </div>
+            <h1 className="text-2xl font-semibold tracking-tight text-slate-950 dark:text-white">
+              Client management
             </h1>
-            <p className="text-blue-300">
+            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
               Manage your clients and their account status
             </p>
           </div>

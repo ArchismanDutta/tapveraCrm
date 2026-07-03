@@ -4,7 +4,6 @@ import axios from "axios";
 import { attendanceUtils } from "../api.js";
 import timeUtils from "../utils/timeUtils";
 import newAttendanceService from "../services/newAttendanceService";
-import AttendanceStats from "../components/attendance/AttendanceStats";
 import AttendanceCalendar from "../components/attendance/AttendanceCalendar";
 import WeeklyHoursChart from "../components/attendance/WeeklyHoursChart";
 import RecentActivityTable from "../components/attendance/RecentActivityTable";
@@ -12,7 +11,20 @@ import AttendanceInsights from "../components/attendance/AttendanceInsights";
 import Sidebar from "../components/dashboard/Sidebar";
 import attendanceAnalytics from "../services/attendanceAnalytics";
 import aiAnalyticsService from "../services/aiAnalyticsService";
-import { RefreshCw, AlertCircle, Clock, Users, Calendar as CalendarIcon, User, Search, UserCheck, Activity, Building2, ChevronDown } from "lucide-react";
+import {
+  Activity,
+  AlertCircle,
+  Building2,
+  Calendar as CalendarIcon,
+  CheckCircle2,
+  ChevronDown,
+  Clock,
+  RefreshCw,
+  Search,
+  Timer,
+  UserCheck,
+  Users,
+} from "lucide-react";
 
 const SuperAdminAttendancePortal = ({ onLogout }) => {
   // CRITICAL: Always use new attendance system for accurate data
@@ -68,7 +80,11 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
   // Dropdown positioning (Portal)
   const selectorRef = useRef(null);
   const dropdownRef = useRef(null);
-  const [dropdownCoords, setDropdownCoords] = useState({ top: 0, left: 0, width: 0 });
+  const [dropdownCoords, setDropdownCoords] = useState({
+    top: 0,
+    left: 0,
+    width: 0,
+  });
 
   const token = localStorage.getItem("token");
   const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
@@ -99,7 +115,6 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
   );
 
   // Use standardized utility functions
-  const calculateHoursFromSeconds = attendanceUtils.calculateWorkHours;
   const formatTime = attendanceUtils.formatTime;
 
   const isWorkingDay = (date) => {
@@ -137,20 +152,16 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
     return workingDays;
   };
 
-  // Use standardized utility functions for time extraction
-  const getArrivalTime = attendanceUtils.getArrivalTime;
-  const getDepartureTime = attendanceUtils.getDepartureTime;
-
-  // Position dropdown right under the selector using a Portal
   const updateDropdownPosition = useCallback(() => {
     if (!selectorRef.current) return;
     const rect = selectorRef.current.getBoundingClientRect();
     setDropdownCoords({
       top: rect.bottom + window.scrollY + 8,
       left: rect.left + window.scrollX,
-      width: rect.width
+      width: rect.width,
     });
   }, []);
+
 
   // Fetch active employees stats (currently working count)
   const fetchActiveEmployeesStats = useCallback(async () => {
@@ -303,8 +314,6 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
         setRefreshing(true);
       }
       setError(null);
-
-      const now = new Date();
 
       // For SuperAdmin portal, use the selected month/year for calendar navigation
       let dataStart, dataEnd;
@@ -474,19 +483,6 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
 
             return enhancedWithRest;
           });
-
-          // Create a weekly-like response structure for legacy compatibility
-          const weeklyResponse = {
-            success: true,
-            data: {
-              dailyData: enhancedDailyData,
-              weeklyTotals: response.data.summary || {
-                totalWorkDays: 0,
-                totalWorkHours: 0,
-                averagePunctualityRate: 0
-              }
-            }
-          };
 
           // Use enhanced data directly instead of lossy conversion
           weeklyRes = {
@@ -782,7 +778,7 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
             try {
               const dDate = new Date(d.date);
               return dDate.getDate() === dayNum && dDate.getMonth() === monthIndex && dDate.getFullYear() === year;
-            } catch (err) {
+            } catch {
               return false;
             }
           });
@@ -894,8 +890,6 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
             // PRIORITY 7: Present (>= 4.5 hours worked)
             // Regular office attendance
             status = "present";
-          } else if (attendanceData.isEarly && attendanceData.isPresent) {
-            status = "early";
           } else {
             status = "absent";
           }
@@ -1296,7 +1290,6 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
         }
 
         // Accumulate hours for the day (in case there are multiple records for the same day)
-        const previousHours = weeklyHoursData[dayOfWeek].hours;
         weeklyHoursData[dayOfWeek].hours += workHours;
 
         // Enhanced logging for debugging
@@ -1504,7 +1497,7 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
         console.log('🎉 ALL EMPLOYEE DETAIL COMPONENTS PASS VALIDATION');
       } else {
         console.warn('⚠️ Some validation checks failed:',
-          Object.entries(qualityChecks).filter(([key, value]) => !value)
+          Object.entries(qualityChecks).filter(([, value]) => !value)
         );
       }
 
@@ -1668,69 +1661,6 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
     }
   }, [selectedEmployee, clearEmployeeCache]);
 
-  console.log('🔍 SuperAdminAttendancePortal Debug Info:', {
-    selectedEmployee: selectedEmployee?.name,
-    hasStats: !!stats,
-    hasCalendarData: !!calendarData,
-    hasWeeklyHours: weeklyHours?.length > 0,
-    hasRecentActivity: recentActivity?.length > 0,
-    loadingEmployeeData,
-    error: error,
-    useNewSystem: USE_NEW_ATTENDANCE_SYSTEM,
-    systemIntegration: {
-      newAttendanceService: !!newAttendanceService
-    },
-    syncStatus: {
-      cacheSize: employeeCache.size,
-      lastRefresh: stats?.lastUpdated || 'Never',
-      syncListenersActive: true
-    }
-  });
-
-  // Sync testing utility (exposed to window for debugging)
-  useEffect(() => {
-    window.testSuperAdminSync = {
-      triggerRefresh: () => {
-        if (selectedEmployee) {
-          console.log('🧪 Test: Triggering manual refresh for', selectedEmployee.name);
-          refreshEmployeeData(selectedEmployee._id, true);
-        } else {
-          console.log('🧪 Test: No employee selected');
-        }
-      },
-      clearCache: () => {
-        console.log('🧪 Test: Clearing all cache');
-        clearEmployeeCache();
-      },
-      getStatus: () => ({
-        selectedEmployee: selectedEmployee?.name || 'None',
-        cacheSize: employeeCache.size,
-        hasData: {
-          stats: !!stats,
-          calendar: !!calendarData,
-          weeklyHours: weeklyHours?.length > 0,
-          recentActivity: recentActivity?.length > 0
-        },
-        lastUpdate: stats?.lastUpdated || 'Never'
-      }),
-      simulateUpdate: (employeeId) => {
-        console.log('🧪 Test: Simulating attendance update for employee:', employeeId);
-        window.dispatchEvent(new CustomEvent('attendanceDataUpdated', {
-          detail: {
-            employeeId: employeeId || selectedEmployee?._id,
-            timestamp: Date.now(),
-            action: 'test-update',
-            message: 'Test sync triggered'
-          }
-        }));
-      }
-    };
-
-    return () => {
-      delete window.testSuperAdminSync;
-    };
-  }, [selectedEmployee, employeeCache, stats, calendarData, weeklyHours, recentActivity, refreshEmployeeData, clearEmployeeCache]);
-
   // Load employees on component mount
   useEffect(() => {
     fetchEmployees();
@@ -1876,6 +1806,7 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
     // Only reset if selecting a different employee
     if (selectedEmployee?._id !== employee._id) {
       setSelectedEmployee(employee);
+      setSearchTerm(employee.name || "");
       setShowDropdown(false);
       setHasFullMonthData(false); // Reset to start with fast load for new employee
       // Don't reset stats immediately - let the loading state handle the UI
@@ -1914,12 +1845,11 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
     }).slice(0, 8); // Limit results for better UX
   }, [employees, debouncedSearchTerm]);
 
-  // Handle click outside dropdown (works with Portal)
+  // Close employee results when clicking outside the selector.
   useEffect(() => {
     const handleClickOutside = (event) => {
       const inSelector = selectorRef.current?.contains(event.target);
-      const inDropdown = dropdownRef.current?.contains(event.target);
-      if (!inSelector && !inDropdown) {
+      if (!inSelector) {
         setShowDropdown(false);
       }
     };
@@ -1928,41 +1858,494 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Reposition dropdown on open/resize/scroll
-  useEffect(() => {
-    if (!showDropdown) return;
-    updateDropdownPosition();
-    const handler = () => updateDropdownPosition();
-    window.addEventListener('resize', handler);
-    window.addEventListener('scroll', handler, true); // capture to catch scrolls in nested containers
-    return () => {
-      window.removeEventListener('resize', handler);
-      window.removeEventListener('scroll', handler, true);
-    };
-  }, [showDropdown, updateDropdownPosition]);
-
-  // Calculate aggregate stats
+  const currentStatusKey = currentStatus?.onBreak
+    ? "break"
+    : currentStatus?.isWorking || currentStatus?.currentlyWorking
+      ? "working"
+      : "offline";
+  const currentStatusLabel =
+    currentStatusKey === "working"
+      ? "Working"
+      : currentStatusKey === "break"
+        ? "On break"
+        : "Offline";
+  const monthLabel = new Date(selectedYear, selectedMonth, 1).toLocaleDateString(
+    "en-IN",
+    { month: "long", year: "numeric" },
+  );
   const totalEmployees = employees.length;
   const currentlyWorking = activeEmployeesStats.currentlyWorking;
+  const useFocusedLayout =
+    import.meta.env.VITE_LEGACY_ATTENDANCE_PORTAL !== "true";
 
-  console.log('📊 Display values:', {
-    totalEmployees,
-    currentlyWorking,
-    activeEmployeesStats
-  });
-  
-  // Only show loading screen if we're loading employees AND have no employees yet
-  if (loading && employees.length === 0) {
+  if (useFocusedLayout) {
+    const overviewMetrics = [
+      {
+        label: "Employees",
+        value: loading ? "—" : totalEmployees,
+        helper: "Available for review",
+        icon: Users,
+        tone:
+          "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-400/20 dark:bg-blue-400/10 dark:text-blue-200",
+      },
+      {
+        label: "Working now",
+        value: loading ? "—" : currentlyWorking,
+        helper: "Currently clocked in",
+        icon: UserCheck,
+        tone:
+          "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-200",
+      },
+      {
+        label: "On break",
+        value: loading ? "—" : activeEmployeesStats.onBreak,
+        helper: "Temporarily unavailable",
+        icon: Clock,
+        tone:
+          "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-200",
+      },
+      {
+        label: "Active today",
+        value: loading ? "—" : activeEmployeesStats.totalActive,
+        helper: "Attendance activity",
+        icon: Activity,
+        tone:
+          "border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-400/20 dark:bg-violet-400/10 dark:text-violet-200",
+      },
+    ];
+
+    const employeeMetrics = stats
+      ? [
+          {
+            label: "Attendance rate",
+            value: `${stats.attendanceRate || 0}%`,
+            helper: monthLabel,
+            icon: CheckCircle2,
+            tone: "text-blue-600 dark:text-blue-300",
+          },
+          {
+            label: "Present days",
+            value: `${stats.presentDays || 0}/${stats.totalDays || 0}`,
+            helper: "Expected working days",
+            icon: CalendarIcon,
+            tone: "text-emerald-600 dark:text-emerald-300",
+          },
+          {
+            label: "Working hours",
+            value: `${stats.workingHours || 0}h`,
+            helper: `${stats.averageHoursPerDay || 0}h average/day`,
+            icon: Timer,
+            tone: "text-violet-600 dark:text-violet-300",
+          },
+          {
+            label: "Late arrivals",
+            value: stats.lateDays || 0,
+            helper: `${stats.onTimeRate || 0}% on time`,
+            icon: Clock,
+            tone: "text-amber-600 dark:text-amber-300",
+          },
+          {
+            label: "Half days",
+            value: stats.halfDays || 0,
+            helper: "Reduced work days",
+            icon: Activity,
+            tone: "text-orange-600 dark:text-orange-300",
+          },
+          {
+            label: "Absent days",
+            value: stats.absentDays || 0,
+            helper: monthLabel,
+            icon: AlertCircle,
+            tone: "text-rose-600 dark:text-rose-300",
+          },
+        ]
+      : [];
+
     return (
-      <div className="bg-[#101525] min-h-screen flex items-center justify-center">
+      <div className="relative flex h-[100dvh] overflow-hidden bg-slate-50 text-slate-900 dark:bg-[#0b0d12] dark:text-slate-100">
+        <Sidebar
+          collapsed={collapsed}
+          setCollapsed={setCollapsed}
+          userRole="super-admin"
+          onLogout={onLogout}
+        />
 
-        <div className="flex flex-col items-center space-y-4">
-          <div className="relative">
-            <div className="w-16 h-16 border-4 border-purple-200 border-t-purple-600 rounded-full animate-spin"></div>
-            <Users className="w-6 h-6 text-purple-400 absolute inset-0 m-auto" />
+        <main
+          className={`h-[100dvh] min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 transition-all duration-300 sm:px-5 lg:px-6 ${
+            collapsed ? "ml-16" : "ml-16 sm:ml-56"
+          }`}
+        >
+          <div className="mx-auto max-w-[1500px] space-y-4 pb-8 sm:space-y-5">
+            <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-white/10 dark:bg-[#10131c]">
+              <div className="flex flex-col gap-5 p-4 lg:flex-row lg:items-center lg:justify-between lg:p-5">
+                <div className="min-w-0">
+                  <div className="mb-3 inline-flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 dark:border-blue-400/20 dark:bg-blue-400/10 dark:text-blue-200">
+                    <CalendarIcon className="h-3.5 w-3.5" />
+                    Attendance management
+                  </div>
+                  <h1 className="text-2xl font-semibold tracking-tight text-slate-950 dark:text-white">
+                    Employee attendance portal
+                  </h1>
+                  <p className="mt-1 max-w-2xl text-sm text-slate-500 dark:text-slate-400">
+                    Select an employee to review monthly attendance, work hours, exceptions, and activity.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => fetchEmployees()}
+                  disabled={loading}
+                  className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-200 dark:hover:bg-white/[0.07]"
+                >
+                  <RefreshCw
+                    className={`h-4 w-4 ${loading ? "animate-spin" : ""}`}
+                  />
+                  Refresh employees
+                </button>
+              </div>
+            </section>
+
+            {error && !selectedEmployee && (
+              <div className="flex flex-col gap-3 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 dark:border-rose-400/20 dark:bg-rose-400/10 dark:text-rose-200 sm:flex-row sm:items-center sm:justify-between">
+                <span className="flex items-start gap-2">
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                  {error}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => fetchEmployees()}
+                  className="rounded-lg border border-rose-200 bg-white px-3 py-2 text-xs font-semibold dark:border-rose-400/20 dark:bg-transparent"
+                >
+                  Try again
+                </button>
+              </div>
+            )}
+
+            <section
+              className="grid grid-cols-2 gap-3 lg:grid-cols-4"
+              aria-label="Attendance workforce summary"
+            >
+              {overviewMetrics.map((metric) => (
+                <article
+                  key={metric.label}
+                  className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-[#10131c]"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-medium text-slate-500 dark:text-slate-400">
+                        {metric.label}
+                      </p>
+                      <p className="mt-1 text-2xl font-semibold text-slate-950 dark:text-white">
+                        {metric.value}
+                      </p>
+                      <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                        {metric.helper}
+                      </p>
+                    </div>
+                    <span
+                      className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border ${metric.tone}`}
+                    >
+                      {React.createElement(metric.icon, { className: "h-4 w-4" })}
+                    </span>
+                  </div>
+                </article>
+              ))}
+            </section>
+
+            <section className="relative rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-[#10131c] sm:p-5">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                <div className="w-full min-w-0 lg:max-w-2xl" ref={selectorRef}>
+                  <label className="block">
+                    <span className="text-sm font-semibold text-slate-900 dark:text-white">
+                      Choose an employee
+                    </span>
+                    <span className="mt-1 block text-xs text-slate-500 dark:text-slate-400">
+                      Search by name, employee ID, or department.
+                    </span>
+                    <span className="relative mt-3 block">
+                      <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                      <input
+                        type="search"
+                        value={searchTerm}
+                        onChange={(event) => {
+                          setSearchTerm(event.target.value);
+                          setShowDropdown(true);
+                        }}
+                        onFocus={() => setShowDropdown(true)}
+                        placeholder="Search employees…"
+                        className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 pl-10 pr-10 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-500/15 dark:border-white/10 dark:bg-white/[0.035] dark:text-white dark:focus:bg-white/[0.05]"
+                      />
+                      <ChevronDown
+                        className={`pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400 transition ${
+                          showDropdown ? "rotate-180" : ""
+                        }`}
+                      />
+                    </span>
+                  </label>
+
+                  {showDropdown && (
+                    <div className="absolute left-4 right-4 z-30 mt-2 max-h-72 overflow-y-auto rounded-xl border border-slate-200 bg-white p-2 shadow-2xl dark:border-slate-700 dark:bg-slate-900 sm:left-5 sm:right-auto sm:w-[min(42rem,calc(100%-2.5rem))]">
+                      {loading ? (
+                        <div className="flex items-center justify-center gap-2 px-4 py-8 text-sm text-slate-500 dark:text-slate-400">
+                          <RefreshCw className="h-4 w-4 animate-spin" />
+                          Loading employees…
+                        </div>
+                      ) : filteredEmployees.length === 0 ? (
+                        <div className="px-4 py-8 text-center">
+                          <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+                            No employees found
+                          </p>
+                          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                            Try a different name, ID, or department.
+                          </p>
+                        </div>
+                      ) : (
+                        filteredEmployees.map((employee) => {
+                          const isSelected =
+                            selectedEmployee?._id === employee._id;
+                          return (
+                            <button
+                              key={employee._id}
+                              type="button"
+                              onClick={() => handleEmployeeSelect(employee)}
+                              className={`flex w-full items-center gap-3 rounded-lg p-3 text-left transition ${
+                                isSelected
+                                  ? "bg-blue-50 dark:bg-blue-950/40"
+                                  : "hover:bg-slate-50 dark:hover:bg-slate-800"
+                              }`}
+                            >
+                              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-sm font-semibold text-white">
+                                {employee.name?.charAt(0)?.toUpperCase() || "?"}
+                              </span>
+                              <span className="min-w-0 flex-1">
+                                <span className="block truncate text-sm font-semibold text-slate-900 dark:text-white">
+                                  {employee.name || "Unknown employee"}
+                                </span>
+                                <span className="mt-0.5 block truncate text-xs text-slate-500 dark:text-slate-400">
+                                  {employee.employeeId || "No ID"} · {employee.department || "No department"}
+                                </span>
+                              </span>
+                              {isSelected && (
+                                <CheckCircle2 className="h-4 w-4 shrink-0 text-blue-600 dark:text-blue-300" />
+                              )}
+                            </button>
+                          );
+                        })
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {selectedEmployee && (
+                  <div className="flex w-full items-center gap-3 rounded-xl border border-slate-200 p-3 dark:border-white/10 lg:max-w-md">
+                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 font-semibold text-white">
+                      {selectedEmployee.name?.charAt(0)?.toUpperCase() || "?"}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold text-slate-900 dark:text-white">
+                        {selectedEmployee.name}
+                      </p>
+                      <p className="mt-0.5 truncate text-xs text-slate-500 dark:text-slate-400">
+                        {selectedEmployee.employeeId || "No ID"} · {selectedEmployee.department || "No department"}
+                      </p>
+                    </div>
+                    <span
+                      className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold ${
+                        currentStatusKey === "working"
+                          ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-200"
+                          : currentStatusKey === "break"
+                            ? "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-200"
+                            : "border-slate-200 bg-slate-100 text-slate-600 dark:border-white/10 dark:bg-white/[0.05] dark:text-slate-300"
+                      }`}
+                    >
+                      <span
+                        className={`h-1.5 w-1.5 rounded-full ${
+                          currentStatusKey === "working"
+                            ? "bg-emerald-500"
+                            : currentStatusKey === "break"
+                              ? "bg-amber-500"
+                              : "bg-slate-400"
+                        }`}
+                      />
+                      {currentStatusLabel}
+                    </span>
+                  </div>
+                )}
+              </div>
+            </section>
+
+            {!selectedEmployee && !loading && (
+              <section className="rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-16 text-center dark:border-white/10 dark:bg-[#10131c]">
+                <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-400/10 dark:text-blue-200">
+                  <UserCheck className="h-5 w-5" />
+                </span>
+                <h2 className="mt-4 text-base font-semibold text-slate-900 dark:text-white">
+                  Select an employee to begin
+                </h2>
+                <p className="mx-auto mt-1 max-w-md text-sm text-slate-500 dark:text-slate-400">
+                  Search above to open an employee’s monthly attendance record and exception details.
+                </p>
+              </section>
+            )}
+
+            {selectedEmployee && (
+              <>
+                <section className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-[#10131c] sm:flex-row sm:items-center sm:justify-between sm:p-5">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wider text-blue-600 dark:text-blue-300">
+                      Monthly attendance
+                    </p>
+                    <h2 className="mt-1 text-lg font-semibold text-slate-950 dark:text-white">
+                      {selectedEmployee.name} · {monthLabel}
+                    </h2>
+                    <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                      {currentStatus?.arrivalTime
+                        ? `Today’s arrival: ${formatTime(currentStatus.arrivalTime)}`
+                        : "No arrival recorded today"}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleRefresh}
+                    disabled={loadingEmployeeData || refreshing}
+                    className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-blue-500 dark:hover:bg-blue-400"
+                  >
+                    <RefreshCw
+                      className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`}
+                    />
+                    {refreshing ? "Refreshing" : "Refresh record"}
+                  </button>
+                </section>
+
+                {loadingEmployeeData && (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-6">
+                      {[0, 1, 2, 3, 4, 5].map((item) => (
+                        <div
+                          key={item}
+                          className="h-28 animate-pulse rounded-2xl border border-slate-200 bg-white dark:border-white/10 dark:bg-[#10131c]"
+                        />
+                      ))}
+                    </div>
+                    <div className="h-96 animate-pulse rounded-2xl border border-slate-200 bg-white dark:border-white/10 dark:bg-[#10131c]" />
+                  </div>
+                )}
+
+                {error && !loadingEmployeeData && (
+                  <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 dark:border-rose-400/20 dark:bg-rose-400/10 dark:text-rose-200">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <span className="flex items-start gap-2">
+                        <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                        {error}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => fetchAttendanceData(selectedEmployee._id, true)}
+                        className="rounded-lg border border-rose-200 bg-white px-3 py-2 text-xs font-semibold dark:border-rose-400/20 dark:bg-transparent"
+                      >
+                        Try again
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {!loadingEmployeeData && !error && stats && (
+                  <>
+                    <section
+                      className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-6"
+                      aria-label="Employee attendance summary"
+                    >
+                      {employeeMetrics.map((metric) => (
+                        <article
+                          key={metric.label}
+                          className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-[#10131c]"
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            {React.createElement(metric.icon, {
+                              className: `h-4 w-4 ${metric.tone}`,
+                            })}
+                            <span className={`text-xl font-semibold ${metric.tone}`}>
+                              {metric.value}
+                            </span>
+                          </div>
+                          <p className="mt-3 text-xs font-semibold text-slate-700 dark:text-slate-200">
+                            {metric.label}
+                          </p>
+                          <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+                            {metric.helper}
+                          </p>
+                        </article>
+                      ))}
+                    </section>
+
+                    <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1.55fr)_minmax(300px,0.65fr)]">
+                      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-white/10 dark:bg-[#10131c]">
+                        {calendarData ? (
+                          <AttendanceCalendar
+                            data={calendarData}
+                            onMonthChange={handleMonthChange}
+                          />
+                        ) : (
+                          <div className="p-6 text-center text-sm text-slate-500 dark:text-slate-400">
+                            Calendar data is not available for this month.
+                          </div>
+                        )}
+                      </section>
+
+                      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-white/10 dark:bg-[#10131c]">
+                        {weeklyHours.length > 0 ? (
+                          <WeeklyHoursChart
+                            weeklyHours={weeklyHours}
+                            targetHours={7.5}
+                          />
+                        ) : (
+                          <div className="p-8 text-center">
+                            <Clock className="mx-auto h-6 w-6 text-slate-400" />
+                            <p className="mt-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
+                              No weekly hours yet
+                            </p>
+                            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                              Work-hour trends will appear after attendance is recorded.
+                            </p>
+                          </div>
+                        )}
+                      </section>
+                    </div>
+
+                    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-white/10 dark:bg-[#10131c]">
+                      {recentActivity.length > 0 ? (
+                        <RecentActivityTable activities={recentActivity} />
+                      ) : (
+                        <div className="p-8 text-center">
+                          <Activity className="mx-auto h-6 w-6 text-slate-400" />
+                          <p className="mt-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
+                            No activity recorded
+                          </p>
+                          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                            Punch, break, and attendance events will appear here.
+                          </p>
+                        </div>
+                      )}
+                    </section>
+
+                    {attendanceAnalysis && (
+                      <details className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-white/10 dark:bg-[#10131c]">
+                        <summary className="cursor-pointer list-none px-5 py-4 text-sm font-semibold text-slate-900 marker:hidden dark:text-white">
+                          Attendance insights and exception analysis
+                        </summary>
+                        <div className="border-t border-slate-200 p-4 dark:border-white/10">
+                          <AttendanceInsights
+                            analysis={attendanceAnalysis}
+                            employeeName={selectedEmployee.name}
+                          />
+                        </div>
+                      </details>
+                    )}
+                  </>
+                )}
+              </>
+            )}
           </div>
-          <p className="text-purple-200 text-lg font-medium">Loading Employee Portal...</p>
-        </div>
+        </main>
       </div>
     );
   }

@@ -9,20 +9,19 @@ import axios from "axios";
 import { Link, useNavigate } from "react-router-dom";
 import dayjs from "dayjs";
 import {
-  Clock,
   Target,
   Calendar,
   CheckSquare,
   AlertTriangle,
   Coffee,
   Play,
-  RefreshCw,
-  BarChart3,
-  Zap,
 } from "lucide-react";
 import TodayTasks from "../components/dashboard/TodayTasks";
 import Sidebar from "../components/dashboard/Sidebar";
-import NotificationBell from "../components/dashboard/NotificationBell";
+import DashboardHeader from "../components/dashboard/DashboardHeader";
+import WorkStatusCard from "../components/dashboard/WorkStatusCard";
+import QuickActionsCard from "../components/dashboard/QuickActionsCard";
+import TaskOverviewCard from "../components/dashboard/TaskOverviewCard";
 import WishPopup from "../components/dashboard/WishPopup";
 import NoticeOverlay from "../components/dashboard/NoticeOverlay";
 import DynamicNotificationOverlay from "../components/notifications/DynamicNotificationOverlay";
@@ -281,6 +280,13 @@ const EmployeeDashboard = ({ onLogout }) => {
           arrivalTime: attendanceData.arrivalTime,
           arrivalTimeFormatted: attendanceData.arrivalTimeFormatted,
           isLate: attendanceData.isLate || false,
+          // Extract leave/WFH information
+          leaveInfo: attendanceData.leaveInfo || null,
+          isWFH: attendanceData.leaveInfo?.isWFH || attendanceData.isWFH || false,
+          isOnLeave: attendanceData.leaveInfo?.isOnLeave || false,
+          leaveType: attendanceData.leaveInfo?.leaveType || null,
+          isHoliday: attendanceData.leaveInfo?.isHoliday || false,
+          holidayName: attendanceData.leaveInfo?.holidayName || null,
           timeline: attendanceData.events
             ? attendanceData.events.map((e) => ({
                 type: e.type,
@@ -629,13 +635,13 @@ const EmployeeDashboard = ({ onLogout }) => {
 
   if (checkingPayment) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-[#0f1419]">
+      <div className="flex h-[100dvh] items-center justify-center bg-slate-50 dark:bg-[#0b0d12]">
         <div className="text-center">
-          <div className="relative">
-            <div className="w-16 h-16 border-4 border-cyan-300/40 rounded-full"></div>
-            <div className="absolute top-0 left-0 w-16 h-16 border-4 border-cyan-600 border-t-transparent rounded-full animate-spin"></div>
+          <div className="relative mx-auto">
+            <div className="h-14 w-14 rounded-full border-2 border-blue-200 dark:border-blue-300/20"></div>
+            <div className="absolute left-0 top-0 h-14 w-14 animate-spin rounded-full border-2 border-blue-600 border-t-transparent dark:border-blue-400 dark:border-t-transparent"></div>
           </div>
-          <p className="mt-4 text-gray-300">Loading...</p>
+          <p className="mt-4 text-sm font-semibold text-slate-600 dark:text-slate-300">Preparing your workday...</p>
         </div>
       </div>
     );
@@ -652,7 +658,7 @@ const EmployeeDashboard = ({ onLogout }) => {
 
   return (
     <>
-      <div className="flex min-h-screen bg-[#0f1419] font-sans text-gray-100">
+      <div className="relative flex h-[100dvh] overflow-hidden bg-slate-50 font-sans text-slate-900 dark:bg-[#0b0d12] dark:text-slate-100">
         <Sidebar
           collapsed={collapsed}
           setCollapsed={setCollapsed}
@@ -661,263 +667,51 @@ const EmployeeDashboard = ({ onLogout }) => {
         />
 
         <main
-          className={`flex-1 p-2 transition-all duration-300 h-screen overflow-hidden flex flex-col ${
-            collapsed ? "ml-20" : "ml-72"
+          className={`relative z-10 h-[100dvh] min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 transition-all duration-300 [overscroll-behavior-y:auto] [scrollbar-gutter:stable] sm:px-5 lg:px-6 ${
+            collapsed ? "ml-16" : "ml-16 sm:ml-56"
           }`}
+          style={{ WebkitOverflowScrolling: "touch" }}
         >
-          {/* Compact Header */}
-          <div className="flex justify-between items-center mb-2 gap-2 flex-wrap">
-            <div className="flex items-center gap-3 flex-wrap">
-              <h1 className="text-lg font-bold text-gray-100">
-                Dashboard
-                {userName && <span className="text-cyan-400"> - {userName}</span>}
-              </h1>
+          <div className="mx-auto max-w-[1500px] space-y-4 pb-8 sm:space-y-5">
+          {/* Dashboard Header */}
+          <DashboardHeader
+            userName={userName}
+            currentTime={currentTime}
+            workStatus={workStatus}
+            notifications={notifications}
+            onRefresh={handleRefreshAll}
+            onDismissNotification={handleDismissNotification}
+            onClearAllNotifications={handleClearAllNotifications}
+          />
 
-              {/* Inline Status Badge */}
-              <div className="flex items-center gap-2 bg-[#161c2c] rounded px-2 py-1 border border-[#232945]">
-                <div className={`w-1.5 h-1.5 rounded-full ${
-                  workStatus?.currentlyWorking
-                    ? workStatus?.onBreak ? "bg-yellow-400 animate-pulse" : "bg-green-400 animate-pulse"
-                    : "bg-gray-500"
-                }`}></div>
-                <span className="text-xs">
-                  {workStatus?.currentlyWorking
-                    ? workStatus?.onBreak ? "On Break" : "Working"
-                    : "Offline"}
-                </span>
-                {workStatus?.arrivalTimeFormatted && (
-                  <span className="text-xs text-gray-400">• {workStatus.arrivalTimeFormatted}</span>
-                )}
-                {workStatus && (
-                  <span className="text-xs text-green-400">
-                    {(() => {
-                      const s = workStatus.workDurationSeconds || 0;
-                      return `${Math.floor(s / 3600)}h ${String(Math.floor((s % 3600) / 60)).padStart(2, "0")}m`;
-                    })()}
-                  </span>
-                )}
+          <div className="space-y-4 sm:space-y-5">
+            <TaskOverviewCard summaryData={summaryData} />
+
+            <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1.55fr)_minmax(320px,0.65fr)]">
+              <section className="flex min-h-[480px] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-[#10131c]">
+                <div className="mb-4 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div>
+                      <h2 className="text-base font-semibold text-slate-950 dark:text-white">Today’s tasks</h2>
+                      <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">Assigned work, newest first</p>
+                    </div>
+                    {loading && <div className="h-4 w-4 animate-spin rounded-full border-2 border-blue-200 border-t-blue-600 dark:border-white/10 dark:border-t-blue-400" />}
+                  </div>
+                  <Link to="/tasks" className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:bg-slate-50 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/[0.05]">
+                    View all
+                  </Link>
+                </div>
+                <div className="min-h-0 flex-1 overflow-auto pr-1">
+                  <TodayTasks data={tasks} />
+                </div>
+              </section>
+
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-1">
+                <WorkStatusCard workStatus={workStatus} isLoading={dataLoading.status} />
+                <QuickActionsCard quickActions={quickActions} isLoading={dataLoading.status} />
               </div>
-
-              {/* Date/time pill */}
-              <span className="hidden sm:block text-xs text-gray-400">
-                {currentTime.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
-                {" · "}
-                {currentTime.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
-              </span>
-            </div>
-
-            {/* Right Side Actions */}
-            <div className="flex items-center gap-2">
-              <button
-                onClick={handleRefreshAll}
-                className="p-1.5 rounded bg-blue-600/20 hover:bg-blue-600/40 text-blue-400 border border-blue-500/30 transition-colors"
-                title="Refresh all data"
-              >
-                <RefreshCw className="w-3.5 h-3.5" />
-              </button>
-              <NotificationBell
-                notifications={notifications}
-                onDismiss={handleDismissNotification}
-                onClearAll={handleClearAllNotifications}
-              />
-              <Link to="/profile">
-                <img
-                  src="https://i.pravatar.cc/40?img=3"
-                  alt="Profile Avatar"
-                  className="w-8 h-8 rounded-full cursor-pointer border-2 border-orange-500 hover:border-orange-400 transition-colors"
-                />
-              </Link>
             </div>
           </div>
-
-          {/* Main scrollable content */}
-          <div className="flex-1 flex flex-col gap-2 overflow-auto">
-
-            {/* Top Row: Work Status + Quick Actions */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-
-              {/* Work Status Card */}
-              <div className="bg-[#161c2c] rounded-lg border border-[#232945] p-3 relative">
-                {dataLoading.status && (
-                  <div className="absolute inset-0 bg-black/40 z-10 flex items-center justify-center rounded-lg">
-                    <div className="flex items-center gap-1.5 bg-[#161c2c] px-2 py-1 rounded border border-[#232945]">
-                      <div className="w-3 h-3 border-2 border-cyan-500/20 border-t-cyan-500 rounded-full animate-spin"></div>
-                      <span className="text-xs text-gray-200">Updating...</span>
-                    </div>
-                  </div>
-                )}
-                <div className="flex items-center gap-2 mb-3">
-                  <Clock className="w-4 h-4 text-cyan-400" />
-                  <h3 className="text-sm font-semibold text-white">Work Status</h3>
-                </div>
-                <div className="grid grid-cols-3 gap-2">
-                  <div className="bg-[#0f1419] rounded p-2 border border-[#232945]">
-                    <div className="text-xs text-gray-400 mb-1">Work Time</div>
-                    <div className="text-sm font-bold text-green-400">
-                      {workStatus
-                        ? (() => {
-                            const s = workStatus.workDurationSeconds || 0;
-                            return `${Math.floor(s / 3600)}h ${String(Math.floor((s % 3600) / 60)).padStart(2, "0")}m`;
-                          })()
-                        : "--"}
-                    </div>
-                  </div>
-                  <div className="bg-[#0f1419] rounded p-2 border border-[#232945]">
-                    <div className="text-xs text-gray-400 mb-1">Break</div>
-                    <div className="text-sm font-bold text-orange-400">
-                      {workStatus
-                        ? (() => {
-                            const s = workStatus.breakDurationSeconds || 0;
-                            return `${Math.floor(s / 3600)}h ${String(Math.floor((s % 3600) / 60)).padStart(2, "0")}m`;
-                          })()
-                        : "--"}
-                    </div>
-                  </div>
-                  <div className="bg-[#0f1419] rounded p-2 border border-[#232945]">
-                    <div className="text-xs text-gray-400 mb-1">Arrived</div>
-                    <div className="text-sm font-bold text-blue-400">
-                      {workStatus?.arrivalTimeFormatted || "--"}
-                    </div>
-                  </div>
-                </div>
-                {workStatus?.isLate && (
-                  <div className="mt-2 flex items-center gap-1 text-xs text-red-400">
-                    <AlertTriangle className="w-3 h-3" />
-                    <span>Late arrival</span>
-                  </div>
-                )}
-              </div>
-
-              {/* Quick Actions */}
-              <div className="bg-[#161c2c] rounded-lg border border-[#232945] p-3">
-                <div className="flex items-center gap-2 mb-3">
-                  <Zap className="w-4 h-4 text-yellow-400" />
-                  <h3 className="text-sm font-semibold text-white">Quick Actions</h3>
-                  {dataLoading.status && (
-                    <div className="w-3 h-3 border-2 border-yellow-500/20 border-t-yellow-500 rounded-full animate-spin ml-auto"></div>
-                  )}
-                </div>
-                <div className="grid grid-cols-3 gap-2">
-                  {quickActions.map((action, idx) => {
-                    const Icon = action.icon;
-                    return (
-                      <button
-                        key={`${action.label}-${idx}`}
-                        onClick={action.action}
-                        disabled={action.disabled || dataLoading.status}
-                        className={`flex flex-col items-center gap-1.5 p-2.5 rounded border transition-all duration-200 hover:scale-105 ${
-                          action.disabled || dataLoading.status
-                            ? "bg-gray-700/50 border-gray-600 text-gray-500 cursor-not-allowed"
-                            : action.color === "green"
-                            ? "bg-green-600/20 border-green-500/50 text-green-400 hover:bg-green-600/30"
-                            : action.color === "orange"
-                            ? "bg-orange-600/20 border-orange-500/50 text-orange-400 hover:bg-orange-600/30"
-                            : action.color === "blue"
-                            ? "bg-blue-600/20 border-blue-500/50 text-blue-400 hover:bg-blue-600/30"
-                            : "bg-purple-600/20 border-purple-500/50 text-purple-400 hover:bg-purple-600/30"
-                        }`}
-                      >
-                        {dataLoading.status &&
-                        (action.label.includes("Punch") ||
-                          action.label.includes("Break") ||
-                          action.label.includes("Resume")) ? (
-                          <div className="w-4 h-4 border-2 border-gray-500/20 border-t-gray-500 rounded-full animate-spin"></div>
-                        ) : (
-                          <Icon className="w-4 h-4" />
-                        )}
-                        <span className="text-xs font-medium leading-tight text-center">
-                          {action.label}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-
-            {/* Task Overview — compact stat grid */}
-            <div className="bg-[#161c2c] rounded-lg border border-[#232945] p-3">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <BarChart3 className="w-4 h-4 text-blue-400" />
-                  <h3 className="text-sm font-semibold text-white">Task Overview</h3>
-                </div>
-                <Link
-                  to="/tasks"
-                  className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
-                >
-                  View All →
-                </Link>
-              </div>
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
-                {summaryData.map((item, idx) => {
-                  const Icon = item.icon;
-                  return (
-                    <div
-                      key={idx}
-                      className={`bg-[#0f1419] rounded p-2.5 border ${
-                        item.urgent ? "border-red-500/40" : "border-[#232945]"
-                      } relative overflow-hidden`}
-                    >
-                      {item.urgent && (
-                        <div className="absolute top-1 right-1 w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse"></div>
-                      )}
-                      <div className="flex items-center gap-1.5 mb-1.5">
-                        {Icon && (
-                          <Icon
-                            className={`w-3.5 h-3.5 ${
-                              item.color === "red"
-                                ? "text-red-400"
-                                : item.color === "orange"
-                                ? "text-orange-400"
-                                : item.color === "green"
-                                ? "text-green-400"
-                                : item.color === "rose"
-                                ? "text-rose-400"
-                                : "text-blue-400"
-                            }`}
-                          />
-                        )}
-                        <span className="text-xs text-gray-400 truncate">{item.label}</span>
-                      </div>
-                      <div
-                        className={`text-2xl font-bold ${
-                          item.urgent ? "text-red-400" : "text-white"
-                        }`}
-                      >
-                        {item.count}
-                      </div>
-                      {item.trend && (
-                        <div className="text-xs text-gray-500 mt-0.5">{item.trend}</div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Today's Tasks */}
-            <div className="bg-[#161c2c] rounded-lg border border-[#232945] p-3 flex-1 min-h-0 flex flex-col">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <CheckSquare className="w-4 h-4 text-blue-400" />
-                  <h3 className="text-sm font-semibold text-white">Today's Tasks</h3>
-                  {loading && (
-                    <div className="w-3 h-3 border-2 border-blue-500/20 border-t-blue-500 rounded-full animate-spin"></div>
-                  )}
-                </div>
-                <Link
-                  to="/tasks"
-                  className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
-                >
-                  View All →
-                </Link>
-              </div>
-              <div className="overflow-auto flex-1">
-                <TodayTasks data={tasks} loading={loading} />
-              </div>
-            </div>
-
           </div>
         </main>
 
@@ -927,7 +721,7 @@ const EmployeeDashboard = ({ onLogout }) => {
             error && (
               <div
                 key={key}
-                className="fixed top-4 right-4 z-50 bg-red-500/20 border border-red-500 rounded-lg p-3 text-red-400 text-sm max-w-sm"
+                className="fixed right-4 top-4 z-50 max-w-sm rounded-xl border border-rose-200 bg-white p-3 text-sm text-rose-700 shadow-lg dark:border-rose-400/20 dark:bg-[#10131c] dark:text-rose-200"
               >
                 <div className="flex items-center gap-2">
                   <AlertTriangle className="w-4 h-4" />

@@ -69,18 +69,19 @@ const ShiftChangeRequest = () => {
   };
 
   return (
-    <div className="bg-white p-6 rounded-lg shadow-md">
-      <h2 className="text-2xl font-bold mb-4">Request Shift Change</h2>
+    <div>
+      <h2 className="text-lg font-semibold text-slate-950 dark:text-white">Request a shift change</h2>
+      <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Submit a temporary, permanent, or weekday-specific change.</p>
 
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit} className="mt-6 space-y-4">
         {/* Request Type */}
         <div>
-          <label className="block text-sm font-medium mb-2">Request Type</label>
+          <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200">Request type</label>
           <select
             name="type"
             value={request.type}
             onChange={handleInputChange}
-            className="border rounded-md px-3 py-2 w-full md:w-64"
+            className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 dark:border-white/10 dark:bg-[#151923] dark:text-white md:w-72"
             required
           >
             <option value="temporary">Temporary (Single Day/Period)</option>
@@ -93,14 +94,14 @@ const ShiftChangeRequest = () => {
 
         {/* Requested Shift */}
         <div>
-          <label className="block text-sm font-medium mb-2">
+          <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200">
             Requested Shift
           </label>
           <select
             name="requestedShiftId"
             value={request.requestedShiftId}
             onChange={handleInputChange}
-            className="border rounded-md px-3 py-2 w-full md:w-64"
+            className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 dark:border-white/10 dark:bg-[#151923] dark:text-white md:w-72"
             required
           >
             <option value="">Select Shift</option>
@@ -115,25 +116,25 @@ const ShiftChangeRequest = () => {
         {/* Date Range */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium mb-2">Start Date</label>
+            <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200">Start date</label>
             <input
               type="date"
               name="startDate"
               value={request.startDate}
               onChange={handleInputChange}
-              className="border rounded-md px-3 py-2 w-full"
+              className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 dark:border-white/10 dark:bg-white/[0.035] dark:text-white"
               required
             />
           </div>
           {request.type === "temporary" && (
             <div>
-              <label className="block text-sm font-medium mb-2">End Date</label>
+              <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200">End date</label>
               <input
                 type="date"
                 name="endDate"
                 value={request.endDate}
                 onChange={handleInputChange}
-                className="border rounded-md px-3 py-2 w-full"
+                className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 dark:border-white/10 dark:bg-white/[0.035] dark:text-white"
                 required
               />
             </div>
@@ -143,12 +144,12 @@ const ShiftChangeRequest = () => {
         {/* Days Selection for Partial Weekly */}
         {request.type === "partialWeekly" && (
           <div>
-            <label className="block text-sm font-medium mb-2">
+            <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200">
               Select Days
             </label>
             <div className="flex flex-wrap gap-3">
               {dayNames.map((day) => (
-                <label key={day} className="flex items-center">
+                <label key={day} className="flex items-center rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-600 dark:border-white/10 dark:text-slate-300">
                   <input
                     type="checkbox"
                     checked={request.days.includes(day)}
@@ -165,9 +166,9 @@ const ShiftChangeRequest = () => {
         <button
           type="submit"
           disabled={loading}
-          className="bg-orange-600 text-white px-6 py-2 rounded-md hover:bg-orange-700 disabled:opacity-50"
+          className="h-10 rounded-lg bg-blue-600 px-4 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:opacity-50"
         >
-          {loading ? "Submitting..." : "Submit Request"}
+          {loading ? "Submitting..." : "Submit request"}
         </button>
       </form>
     </div>

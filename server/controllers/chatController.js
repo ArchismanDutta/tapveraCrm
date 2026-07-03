@@ -75,26 +75,29 @@ exports.saveMessage = async (conversationId, senderId, message, attachments = []
       }
     }
 
+    // Safe preview — message is null for file-only sends
+    const msgPreview = message
+      ? (message.length > 100 ? message.slice(0, 100) + '...' : message)
+      : '📎 Attachment';
+
     // Notify all members except the sender
     for (const memberId of conversation.members) {
       if (String(memberId) !== String(senderId)) {
         // Check if user was mentioned for priority
         const wasMentioned = mentionedUserIds.some(uid => String(uid) === String(memberId));
         const priority = wasMentioned ? 'high' : 'normal';
-        const channel = wasMentioned ? 'mention' : 'message';
 
         try {
           await notificationService.createAndSend({
             userId: memberId,
             type: 'chat',
-            channel: channel,
+            channel: 'chat',   // must match client channel check in WebSocketContext
             title: wasMentioned
               ? `${sender?.name || 'Someone'} mentioned you in ${conversationTitle}`
-              : `New message from ${sender?.name || 'Someone'}`,
-            body: message.slice(0, 100) + (message.length > 100 ? '...' : ''),
+              : `New message from ${sender?.name || 'Someone'} in ${conversationTitle}`,
+            body: msgPreview,
             relatedData: {
               conversationId: conversationId,
-              messageId: savedMessage._id
             },
             priority: priority
           });

@@ -6,18 +6,40 @@ const { encrypt } = require("../utils/crypto"); // for optional Outlook password
 const Token = require("../models/Token");
 const sendEmail = require("../utils/sendEmail");
 const crypto = require("crypto");
+const bcrypt = require("bcryptjs");
+
+const isPasswordHash = (value) => /^\$2[aby]\$\d{2}\$/.test(String(value || ""));
+
+const passwordMatches = async (candidate, storedPassword) => {
+  const normalizedCandidate = String(candidate || "").trim();
+  const normalizedStored = String(storedPassword || "");
+
+  if (!normalizedCandidate || !normalizedStored) return false;
+  if (isPasswordHash(normalizedStored)) {
+    return bcrypt.compare(normalizedCandidate, normalizedStored);
+  }
+
+  // Backward compatibility for records created before passwords were hashed.
+  return normalizedCandidate === normalizedStored;
+};
 
 // ======================
 // JWT Token generation
 // ======================
 const generateToken = (user, userType = "User") => {
+  const regions = Array.isArray(user.regions) && user.regions.length
+    ? user.regions
+    : user.region
+      ? [user.region]
+      : ["Global"];
+
   return jwt.sign(
     {
       id: user._id,
       role: user.role || "client",
       userType: userType,
-      regions: user.regions || [user.region] || ['Global'], // Include regions array for filtering
-      region: user.region || 'Global' // Keep old field for backwards compatibility
+      regions,
+      region: user.region || regions[0] || "Global",
     },
     process.env.JWT_SECRET,
     { expiresIn: "1d" }
@@ -102,7 +124,7 @@ exports.signup = async (req, res) => {
       contact: String(contact).trim(),
       dob,
       gender,
-      password: String(password).trim(), // PLAIN-TEXT password
+      password: await bcrypt.hash(String(password).trim(), 12),
       role: "employee",
       department: department || "",
       designation: designation ? String(designation).trim() : "",
@@ -138,7 +160,7 @@ exports.signup = async (req, res) => {
 };
 
 // ======================
-// Login (plain-text password check)
+// Login
 // Supports both User (employees/admin) and Client login
 // ======================
 exports.login = async (req, res) => {
@@ -167,20 +189,17 @@ exports.login = async (req, res) => {
       }
     }
 
-    // Plain-text password check
-    if (String(password).trim() !== user.password) {
+    if (!(await passwordMatches(password, user.password))) {
       return res.status(401).json({ message: "Invalid credentials." });
     }
 
-    // For clients, set role as 'client'
-    if (userType === "Client") {
-      user = user.toObject();
-      user.role = "client";
-    }
-
     const token = generateToken(user, userType);
+    const safeUser = typeof user.toObject === "function" ? user.toObject() : { ...user };
+    delete safeUser.password;
+    delete safeUser.outlookAppPassword;
+    if (userType === "Client") safeUser.role = "client";
 
-    res.json({ token, user, userType });
+    res.json({ token, user: safeUser, userType });
   } catch (err) {
     console.error("Login Error:", err);
     res.status(500).json({ message: "Server error" });
@@ -240,7 +259,7 @@ exports.forgotPassword = async (req, res) => {
 };
 
 // ======================
-// Reset Password (plain-text update)
+// Reset Password
 // ======================
 exports.resetPassword = async (req, res) => {
   try {
@@ -259,8 +278,7 @@ exports.resetPassword = async (req, res) => {
     const user = await User.findById(passwordResetToken.userId);
     if (!user) return res.status(400).json({ message: "User not found" });
 
-    // Update plain-text password
-    user.password = String(password).trim();
+    user.password = await bcrypt.hash(String(password).trim(), 12);
     await user.save();
 
     await passwordResetToken.deleteOne();

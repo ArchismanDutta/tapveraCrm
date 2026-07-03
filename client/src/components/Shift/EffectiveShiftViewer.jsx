@@ -41,43 +41,44 @@ const EffectiveShiftViewer = () => {
   };
 
   return (
-    <div className="bg-white p-6 rounded-lg shadow-md">
-      <h2 className="text-2xl font-bold mb-4">View Effective Shift</h2>
+    <div>
+      <h2 className="text-lg font-semibold text-slate-950 dark:text-white">View effective shift</h2>
+      <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Check the schedule that applies on a specific date.</p>
 
-      <div className="space-y-4">
-        <div className="flex gap-4 items-end">
+      <div className="mt-6 space-y-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
           <div>
-            <label className="block text-sm font-medium mb-2">
+            <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200">
               Select Date
             </label>
             <input
               type="date"
               value={selectedDate}
               onChange={handleDateChange}
-              className="border rounded-md px-3 py-2"
+              className="h-10 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 dark:border-white/10 dark:bg-white/[0.035] dark:text-white"
             />
           </div>
           <button
             onClick={fetchEffectiveShift}
             disabled={loading || !selectedDate}
-            className="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 disabled:opacity-50"
+            className="h-10 rounded-lg bg-blue-600 px-4 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:opacity-50"
           >
             {loading ? "Loading..." : "Get Shift"}
           </button>
         </div>
 
         {error && (
-          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+          <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-400/20 dark:bg-rose-400/10 dark:text-rose-200">
             {error}
           </div>
         )}
 
         {effectiveShift && (
-          <div className="bg-green-50 border border-green-200 p-4 rounded-md">
-            <h3 className="text-lg font-semibold mb-2">
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-400/20 dark:bg-emerald-400/10">
+            <h3 className="mb-3 text-sm font-semibold text-emerald-800 dark:text-emerald-200">
               Effective Shift for {selectedDate}
             </h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 gap-4 text-sm text-slate-700 dark:text-slate-200 md:grid-cols-3">
               <div>
                 <span className="font-medium">Name:</span>
                 <p>{effectiveShift.name}</p>
@@ -95,14 +96,14 @@ const EffectiveShiftViewer = () => {
             </div>
             {effectiveShift.isFlexible && (
               <div className="mt-2">
-                <span className="inline-block bg-blue-100 text-blue-800 px-2 py-1 rounded text-sm">
+                <span className="inline-block rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs text-blue-700 dark:border-blue-400/20 dark:bg-blue-400/10 dark:text-blue-200">
                   Flexible Shift
                 </span>
               </div>
             )}
             {effectiveShift.isNightShift && (
               <div className="mt-2">
-                <span className="inline-block bg-purple-100 text-purple-800 px-2 py-1 rounded text-sm">
+                <span className="inline-block rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1 text-xs text-violet-700 dark:border-violet-400/20 dark:bg-violet-400/10 dark:text-violet-200">
                   Night Shift
                 </span>
               </div>

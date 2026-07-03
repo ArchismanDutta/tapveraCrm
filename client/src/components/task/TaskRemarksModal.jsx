@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import axios from "axios";
 import dayjs from "dayjs";
 import { FaCommentDots, FaTimes, FaLink, FaPaperPlane } from "react-icons/fa";
@@ -13,8 +13,9 @@ function RichText({ text }) {
   const parts = text.split(URL_REGEX);
   return (
     <>
-      {parts.map((part, i) =>
-        URL_REGEX.test(part) ? (
+      {parts.map((part, i) => {
+        URL_REGEX.lastIndex = 0;
+        return URL_REGEX.test(part) ? (
           <a
             key={i}
             href={part}
@@ -28,8 +29,8 @@ function RichText({ text }) {
           </a>
         ) : (
           <span key={i}>{part}</span>
-        )
-      )}
+        );
+      })}
     </>
   );
 }
@@ -43,7 +44,7 @@ function Avatar({ name }) {
     .slice(0, 2)
     .toUpperCase();
   return (
-    <div className="w-7 h-7 rounded-full bg-gradient-to-br from-indigo-500 to-blue-700 flex items-center justify-center flex-shrink-0 text-xs font-bold text-white">
+    <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-blue-600 text-xs font-semibold text-white">
       {initials}
     </div>
   );
@@ -67,7 +68,7 @@ export default function TaskRemarksModal({ task, onClose, onAddRemark }) {
   }, [onClose]);
 
   // Fetch remarks
-  const fetchRemarks = async () => {
+  const fetchRemarks = useCallback(async () => {
     try {
       const token = localStorage.getItem("token");
       if (!token) return;
@@ -78,13 +79,13 @@ export default function TaskRemarksModal({ task, onClose, onAddRemark }) {
     } catch (err) {
       console.error("Failed to fetch remarks:", err);
     }
-  };
+  }, [task._id]);
 
-  useEffect(() => { fetchRemarks(); }, [task._id]);
+  useEffect(() => { fetchRemarks(); }, [fetchRemarks]);
   useEffect(() => {
     const id = setInterval(fetchRemarks, 5000);
     return () => clearInterval(id);
-  }, [task._id]);
+  }, [fetchRemarks]);
 
   // Scroll to bottom when remarks change
   useEffect(() => {
@@ -121,42 +122,40 @@ export default function TaskRemarksModal({ task, onClose, onAddRemark }) {
     }
   };
 
-  const hasUrl = (text) => URL_REGEX.test(text);
-  // reset lastIndex since URL_REGEX is global
   const testUrl = (text) => { URL_REGEX.lastIndex = 0; return URL_REGEX.test(text); };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-[rgba(5,8,18,0.8)] backdrop-blur-md">
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/55 backdrop-blur-sm sm:items-center">
       <div
         ref={modalRef}
-        className="w-full sm:max-w-lg bg-[#0f1525] rounded-t-2xl sm:rounded-2xl border border-[rgba(84,123,209,0.2)] shadow-2xl flex flex-col overflow-hidden"
+        className="flex w-full flex-col overflow-hidden rounded-t-2xl border border-slate-200 bg-white shadow-2xl dark:border-white/10 dark:bg-[#12151c] sm:max-w-lg sm:rounded-2xl"
         style={{ maxHeight: "90vh" }}
       >
         {/* ── Header ── */}
-        <div className="flex items-center gap-3 px-5 py-4 border-b border-[rgba(84,123,209,0.12)] bg-[#0d1220]">
-          <FaCommentDots className="text-orange-400 flex-shrink-0" size={16} />
+        <div className="flex items-center gap-3 border-b border-slate-100 px-5 py-4 dark:border-white/[0.07]">
+          <FaCommentDots className="flex-shrink-0 text-blue-600 dark:text-blue-400" size={16} />
           <div className="flex-1 min-w-0">
-            <p className="text-xs text-gray-500 font-medium uppercase tracking-wider">Remarks</p>
-            <h2 className="text-sm font-semibold text-white truncate">{task.title || "Task"}</h2>
+            <p className="text-xs font-medium uppercase tracking-wider text-slate-400">Comments</p>
+            <h2 className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">{task.title || "Task"}</h2>
           </div>
-          <span className="px-2 py-0.5 text-xs rounded-full bg-orange-500/20 text-orange-300 border border-orange-500/30 font-medium">
+          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 dark:bg-white/[0.07] dark:text-slate-300">
             {remarks.length}
           </span>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg hover:bg-white/10 text-gray-400 hover:text-white transition"
+            className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-800 dark:hover:bg-white/[0.07] dark:hover:text-white"
           >
             <FaTimes size={14} />
           </button>
         </div>
 
         {/* ── Remarks list ── */}
-        <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3 scrollbar-thin scrollbar-thumb-[rgba(84,123,209,0.3)] scrollbar-track-transparent">
+        <div className="flex-1 space-y-3 overflow-y-auto px-4 py-3">
           {remarks.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-10 text-center">
-              <FaCommentDots size={28} className="text-gray-600 mb-2" />
-              <p className="text-gray-500 text-sm">No remarks yet.</p>
-              <p className="text-gray-600 text-xs mt-1">Be the first to add one.</p>
+              <FaCommentDots size={26} className="mb-2 text-slate-300 dark:text-slate-600" />
+              <p className="text-sm text-slate-500 dark:text-slate-400">No comments yet.</p>
+              <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">Start the conversation here.</p>
             </div>
           ) : (
             remarks.map((r, idx) => {
@@ -172,11 +171,11 @@ export default function TaskRemarksModal({ task, onClose, onAddRemark }) {
                   <div className={`max-w-[80%] ${isYou ? "items-end" : "items-start"} flex flex-col gap-0.5`}>
                     {/* name + time */}
                     <div className={`flex items-center gap-1.5 text-xs ${isYou ? "flex-row-reverse" : ""}`}>
-                      <span className="text-gray-400 font-medium">
+                      <span className="font-medium text-slate-500 dark:text-slate-400">
                         {isYou ? "You" : (r.user?.name || r.user?.email || "Unknown")}
                       </span>
                       {r.createdAt && (
-                        <span className="text-gray-600">
+                        <span className="text-slate-400 dark:text-slate-500">
                           {dayjs(r.createdAt).format("DD MMM, hh:mm A")}
                         </span>
                       )}
@@ -185,8 +184,8 @@ export default function TaskRemarksModal({ task, onClose, onAddRemark }) {
                     {/* bubble */}
                     <div className={`relative rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed break-words ${
                       isYou
-                        ? "bg-[rgba(84,123,209,0.2)] border border-[rgba(84,123,209,0.3)] text-white rounded-tr-sm"
-                        : "bg-[#161e33] border border-[rgba(84,123,209,0.1)] text-gray-200 rounded-tl-sm"
+                        ? "rounded-tr-sm border border-blue-200 bg-blue-50 text-slate-800 dark:border-blue-500/20 dark:bg-blue-500/10 dark:text-slate-100"
+                        : "rounded-tl-sm border border-slate-200 bg-slate-50 text-slate-700 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-200"
                     }`}>
                       <RichText text={r.comment || ""} />
 
@@ -206,27 +205,27 @@ export default function TaskRemarksModal({ task, onClose, onAddRemark }) {
         </div>
 
         {/* ── Input ── */}
-        <div className="px-4 py-3 border-t border-[rgba(84,123,209,0.12)] bg-[#0d1220]">
+        <div className="border-t border-slate-100 px-4 py-3 dark:border-white/[0.07]">
           <div className="flex items-end gap-2">
             <textarea
               ref={textareaRef}
-              className="flex-1 resize-none rounded-xl px-3.5 py-2.5 bg-[#161e33] border border-[rgba(84,123,209,0.2)] text-white text-sm placeholder-gray-600 focus:outline-none focus:border-[rgba(84,123,209,0.5)] focus:ring-1 focus:ring-[rgba(84,123,209,0.25)] transition scrollbar-thin scrollbar-thumb-[rgba(84,123,209,0.3)] scrollbar-track-transparent"
+              className="flex-1 resize-none rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-500/15 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-100 dark:placeholder:text-slate-500"
               value={comment}
               onChange={(e) => setComment(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Add a remark… (Enter to send, Shift+Enter for newline)"
+              placeholder="Add a comment..."
               rows={2}
               disabled={loading}
             />
             <button
               onClick={handleSubmit}
               disabled={loading || !comment.trim()}
-              className="flex-shrink-0 p-3 rounded-xl bg-orange-600 hover:bg-orange-500 disabled:opacity-40 disabled:cursor-not-allowed text-white transition shadow-lg shadow-orange-900/30"
+              className="flex-shrink-0 rounded-xl bg-blue-600 p-3 text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-40"
             >
               <FaPaperPlane size={14} />
             </button>
           </div>
-          <p className="text-gray-600 text-xs mt-1.5 pl-1">Enter to send · Shift+Enter for new line</p>
+          <p className="mt-1.5 pl-1 text-xs text-slate-400 dark:text-slate-500">Enter to send · Shift+Enter for a new line</p>
         </div>
       </div>
     </div>

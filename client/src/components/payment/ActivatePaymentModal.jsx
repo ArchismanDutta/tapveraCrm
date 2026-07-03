@@ -127,49 +127,50 @@ const ActivatePaymentModal = ({ employee, onClose, onSuccess }) => {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-slate-800 border border-slate-600/30 rounded-xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
+      <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-white/10 dark:bg-[#10131c]">
         {/* Header */}
-        <div className="sticky top-0 bg-gradient-to-r from-cyan-600/20 to-blue-600/20 border-b border-slate-600/30 px-6 py-4 flex items-center justify-between backdrop-blur-sm">
-          <h2 className="text-xl font-bold text-gray-100 flex items-center gap-2">
-            <IndianRupee className="w-6 h-6 text-cyan-400" />
-            Activate Payment QR Code
+        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white/95 px-6 py-4 backdrop-blur-sm dark:border-white/10 dark:bg-[#10131c]/95">
+          <h2 className="flex items-center gap-2 text-lg font-semibold text-slate-950 dark:text-white">
+            <IndianRupee className="h-5 w-5 text-blue-600 dark:text-blue-300" />
+            Activate payment QR code
           </h2>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-200 transition-colors"
+            className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-900 dark:hover:bg-white/[0.06] dark:hover:text-white"
+            aria-label="Close payment form"
           >
             <X className="w-6 h-6" />
           </button>
         </div>
 
         {/* Employee Info */}
-        <div className="px-6 py-4 bg-slate-700/30 border-b border-slate-600/30">
+        <div className="border-b border-slate-200 bg-slate-50 px-6 py-4 dark:border-white/10 dark:bg-white/[0.025]">
           <div className="flex items-center gap-3">
             <div className="flex-shrink-0">
-              <div className="h-12 w-12 rounded-full bg-gradient-to-br from-cyan-500/20 to-blue-500/20 border border-cyan-500/30 flex items-center justify-center">
-                <span className="text-cyan-400 font-semibold text-lg">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-indigo-600">
+                <span className="text-lg font-semibold text-white">
                   {employee.name.charAt(0).toUpperCase()}
                 </span>
               </div>
             </div>
             <div className="flex-1">
-              <h3 className="font-semibold text-gray-100">{employee.name}</h3>
-              <p className="text-sm text-gray-400">{employee.employeeId}</p>
+              <h3 className="font-semibold text-slate-900 dark:text-white">{employee.name}</h3>
+              <p className="text-sm text-slate-500 dark:text-slate-400">{employee.employeeId}</p>
             </div>
           </div>
 
           {/* Task Stats */}
           <div className="mt-3 grid grid-cols-2 gap-3">
-            <div className="bg-slate-800/50 rounded-lg px-3 py-2 border border-slate-600/30">
-              <p className="text-xs text-gray-400">Due Tasks</p>
-              <p className="text-lg font-bold text-red-400">
+            <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 dark:border-white/10 dark:bg-white/[0.035]">
+              <p className="text-xs text-slate-500 dark:text-slate-400">Due tasks</p>
+              <p className="text-lg font-semibold text-rose-600 dark:text-rose-300">
                 {employee.taskStats.dueTasks}
               </p>
             </div>
-            <div className="bg-slate-800/50 rounded-lg px-3 py-2 border border-slate-600/30">
-              <p className="text-xs text-gray-400">Rejections</p>
-              <p className="text-lg font-bold text-orange-400">
+            <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 dark:border-white/10 dark:bg-white/[0.035]">
+              <p className="text-xs text-slate-500 dark:text-slate-400">Rejections</p>
+              <p className="text-lg font-semibold text-orange-600 dark:text-orange-300">
                 {employee.taskStats.rejectedTasks}
               </p>
             </div>
@@ -180,12 +181,12 @@ const ActivatePaymentModal = ({ employee, onClose, onSuccess }) => {
         <form onSubmit={handleSubmit} className="px-6 py-4 space-y-4">
           {/* Amount */}
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">
+            <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-200">
               Amount <span className="text-red-400">*</span>
             </label>
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <span className="text-cyan-400 sm:text-sm font-semibold">₹</span>
+                <span className="font-semibold text-blue-600 dark:text-blue-300 sm:text-sm">₹</span>
               </div>
               <input
                 type="number"
@@ -195,9 +196,9 @@ const ActivatePaymentModal = ({ employee, onClose, onSuccess }) => {
                 min="0"
                 step="0.01"
                 placeholder="0.00"
-                className={`block w-full pl-7 pr-4 py-3 bg-slate-700/50 border ${
-                  errors.amount ? "border-red-400" : "border-slate-600/30"
-                } text-gray-200 placeholder-gray-500 rounded-xl focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition-all`}
+                className={`block w-full rounded-xl border bg-slate-50 py-3 pl-7 pr-4 text-slate-900 outline-none transition placeholder:text-slate-400 focus:ring-2 focus:ring-blue-500/15 dark:bg-white/[0.035] dark:text-white ${
+                  errors.amount ? "border-rose-400" : "border-slate-200 focus:border-blue-500 dark:border-white/10"
+                }`}
               />
             </div>
             {errors.amount && (
@@ -210,7 +211,7 @@ const ActivatePaymentModal = ({ employee, onClose, onSuccess }) => {
 
           {/* Reason */}
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">
+            <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-200">
               Reason <span className="text-red-400">*</span>
             </label>
             <textarea
@@ -219,9 +220,9 @@ const ActivatePaymentModal = ({ employee, onClose, onSuccess }) => {
               onChange={handleChange}
               rows="3"
               placeholder="e.g., Performance bonus, Overtime payment, Advance payment"
-              className={`block w-full px-4 py-3 bg-slate-700/50 border ${
-                errors.reason ? "border-red-400" : "border-slate-600/30"
-              } text-gray-200 placeholder-gray-500 rounded-xl focus:ring-2 focus:ring-cyan-500 focus:border-transparent resize-none transition-all`}
+              className={`block w-full resize-none rounded-xl border bg-slate-50 px-4 py-3 text-slate-900 outline-none transition placeholder:text-slate-400 focus:ring-2 focus:ring-blue-500/15 dark:bg-white/[0.035] dark:text-white ${
+                errors.reason ? "border-rose-400" : "border-slate-200 focus:border-blue-500 dark:border-white/10"
+              }`}
             />
             {errors.reason && (
               <p className="mt-1 text-sm text-red-400 flex items-center gap-1">
@@ -233,7 +234,7 @@ const ActivatePaymentModal = ({ employee, onClose, onSuccess }) => {
 
           {/* Notes (Optional) */}
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1 flex items-center gap-1">
+            <label className="mb-1 flex items-center gap-1 text-sm font-medium text-slate-700 dark:text-slate-200">
               <FileText className="w-4 h-4" />
               Additional Notes (Optional)
             </label>
@@ -243,21 +244,21 @@ const ActivatePaymentModal = ({ employee, onClose, onSuccess }) => {
               onChange={handleChange}
               rows="2"
               placeholder="Any additional information..."
-              className="block w-full px-4 py-3 bg-slate-700/50 border border-slate-600/30 text-gray-200 placeholder-gray-500 rounded-xl focus:ring-2 focus:ring-cyan-500 focus:border-transparent resize-none transition-all"
+              className="block w-full resize-none rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 dark:border-white/10 dark:bg-white/[0.035] dark:text-white"
             />
           </div>
 
           {/* QR Code Upload */}
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1 flex items-center gap-1">
+            <label className="mb-1 flex items-center gap-1 text-sm font-medium text-slate-700 dark:text-slate-200">
               <Image className="w-4 h-4" />
               Payment QR Code <span className="text-red-400">*</span>
             </label>
             <div className="space-y-3">
               {/* Upload Button */}
-              <div className={`relative border-2 border-dashed ${
-                errors.qrCode ? "border-red-400" : "border-slate-600/30"
-              } rounded-xl p-6 text-center hover:border-cyan-500/50 transition-colors cursor-pointer bg-slate-700/20`}>
+              <div className={`relative cursor-pointer rounded-xl border-2 border-dashed bg-slate-50 p-6 text-center transition-colors hover:border-blue-400 dark:bg-white/[0.025] ${
+                errors.qrCode ? "border-rose-400" : "border-slate-300 dark:border-white/15"
+              }`}>
                 <input
                   type="file"
                   accept="image/*"
@@ -266,11 +267,11 @@ const ActivatePaymentModal = ({ employee, onClose, onSuccess }) => {
                 />
                 {!qrCodePreview ? (
                   <div className="flex flex-col items-center gap-2">
-                    <Upload className="w-8 h-8 text-gray-400" />
-                    <p className="text-sm text-gray-400">
+                    <Upload className="h-8 w-8 text-slate-400" />
+                    <p className="text-sm text-slate-600 dark:text-slate-300">
                       Click to upload QR code image
                     </p>
-                    <p className="text-xs text-gray-500">
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
                       PNG, JPG up to 5MB
                     </p>
                   </div>
@@ -279,9 +280,9 @@ const ActivatePaymentModal = ({ employee, onClose, onSuccess }) => {
                     <img
                       src={qrCodePreview}
                       alt="QR Code Preview"
-                      className="w-48 h-48 object-contain border border-slate-600/30 rounded-lg bg-white p-2"
+                      className="h-48 w-48 rounded-lg border border-slate-200 bg-white object-contain p-2"
                     />
-                    <p className="text-sm text-green-400 flex items-center gap-1">
+                    <p className="flex items-center gap-1 text-sm text-emerald-600 dark:text-emerald-300">
                       <AlertCircle className="w-4 h-4" />
                       QR Code uploaded - Click to change
                     </p>
@@ -298,10 +299,10 @@ const ActivatePaymentModal = ({ employee, onClose, onSuccess }) => {
           </div>
 
           {/* Warning */}
-          <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-4">
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-400/20 dark:bg-amber-400/10">
             <div className="flex gap-2">
-              <AlertCircle className="w-5 h-5 text-yellow-400 flex-shrink-0 mt-0.5" />
-              <div className="text-sm text-yellow-300">
+              <AlertCircle className="mt-0.5 h-5 w-5 flex-shrink-0 text-amber-600 dark:text-amber-300" />
+              <div className="text-sm text-amber-800 dark:text-amber-200">
                 <p className="font-semibold mb-1">Important:</p>
                 <p>
                   Once activated, the employee will be unable to punch in/out or
@@ -317,14 +318,14 @@ const ActivatePaymentModal = ({ employee, onClose, onSuccess }) => {
               type="button"
               onClick={onClose}
               disabled={loading}
-              className="flex-1 px-4 py-3 border border-slate-600/30 text-gray-300 rounded-xl hover:bg-slate-700/50 transition-all disabled:opacity-50"
+              className="flex-1 rounded-xl border border-slate-200 px-4 py-3 text-slate-700 transition hover:bg-slate-50 disabled:opacity-50 dark:border-white/10 dark:text-slate-200 dark:hover:bg-white/[0.05]"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={loading}
-              className="flex-1 px-4 py-3 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg shadow-cyan-500/20"
+              className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {loading ? (
                 <>

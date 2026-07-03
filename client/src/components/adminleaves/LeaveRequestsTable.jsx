@@ -1,267 +1,221 @@
-import React, { useState, useMemo } from "react";
-import { Check, X } from "lucide-react";
+import React, { useMemo, useState } from "react";
+import { Check, Search, X } from "lucide-react";
 import { formatLeaveType } from "../../api/leaveApi";
 
 const statusColor = {
-  Pending: "bg-yellow-500/20 text-yellow-300 border border-yellow-500/30",
-  Approved: "bg-green-500/20 text-green-300 border border-green-500/30",
-  Rejected: "bg-red-500/20 text-red-300 border border-red-500/30",
+  Pending:
+    "border border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-200",
+  Approved:
+    "border border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-200",
+  Rejected:
+    "border border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-400/20 dark:bg-rose-400/10 dark:text-rose-200",
 };
 
-const LeaveRequestsTable = ({ requests, selectedId, onSelect, onApprove, onReject }) => {
+const formatDate = (date) =>
+  date.toLocaleDateString("en-IN", {
+    day: "numeric",
+    month: "short",
+    year: date.getFullYear() !== new Date().getFullYear() ? "numeric" : undefined,
+  });
+
+const LeaveRequestsTable = ({
+  requests,
+  selectedId,
+  onSelect,
+  onApprove,
+  onReject,
+}) => {
   const [searchTerm, setSearchTerm] = useState("");
 
-  // Filter requests based on search term
   const filteredRequests = useMemo(() => {
-    if (!searchTerm.trim()) {
-      return requests;
-    }
-
-    const searchLower = searchTerm.toLowerCase();
-    return requests.filter(req => {
-      const employeeName = req.employee?.name?.toLowerCase() || "";
-      const employeeEmail = req.employee?.email?.toLowerCase() || "";
-      const department = req.employee?.department?.toLowerCase() || "";
-      const designation = req.employee?.designation?.toLowerCase() || "";
-
-      return employeeName.includes(searchLower) ||
-             employeeEmail.includes(searchLower) ||
-             department.includes(searchLower) ||
-             designation.includes(searchLower);
-    });
+    const query = searchTerm.trim().toLowerCase();
+    if (!query) return requests;
+    return requests.filter((request) =>
+      [
+        request.employee?.name,
+        request.employee?.email,
+        request.employee?.department,
+        request.employee?.designation,
+      ].some((value) => value?.toLowerCase().includes(query)),
+    );
   }, [requests, searchTerm]);
 
-  const handleSearchChange = (e) => {
-    setSearchTerm(e.target.value);
-  };
-
-  const handleClearSearch = () => {
-    setSearchTerm("");
-  };
-
-  const handleKeyDown = (e) => {
-    if (e.key === 'Escape') {
-      setSearchTerm("");
-    }
-  };
-
   return (
-    <div className="h-full flex flex-col">
-      {/* Search and Filter */}
+    <div className="flex h-full flex-col">
       <div className="mb-4">
-        <div className="relative">
+        <label className="relative block">
+          <span className="sr-only">Search leave requests</span>
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
           <input
-            type="text"
+            type="search"
             value={searchTerm}
-            onChange={handleSearchChange}
-            onKeyDown={handleKeyDown}
-            placeholder="🔍 Search by employee name, email, department..."
-            className="w-full bg-slate-800/50 border border-slate-600/50 rounded-xl px-4 py-3 pr-12 text-white placeholder-gray-400 focus:ring-2 focus:ring-cyan-400 focus:border-cyan-400 outline-none transition-all duration-300"
+            onChange={(event) => setSearchTerm(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") setSearchTerm("");
+            }}
+            placeholder="Search name, email, or department"
+            className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 pl-10 pr-10 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-500/15 dark:border-white/10 dark:bg-white/[0.035] dark:text-white"
           />
-
-          {/* Clear button */}
           {searchTerm && (
             <button
-              onClick={handleClearSearch}
-              className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-red-400 transition-colors p-1"
-              title="Clear search"
+              type="button"
+              onClick={() => setSearchTerm("")}
+              className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md p-1 text-slate-400 transition hover:bg-slate-100 hover:text-rose-600 dark:hover:bg-white/[0.05]"
+              aria-label="Clear search"
             >
-              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-              </svg>
+              <X className="h-4 w-4" />
             </button>
           )}
-        </div>
-
-        {/* Search results indicator */}
+        </label>
         {searchTerm && (
-          <div className="mt-2 text-sm text-gray-400">
-            {filteredRequests.length === 0 ? (
-              <span className="text-red-400">No results found for "{searchTerm}"</span>
-            ) : (
-              <span>
-                Showing {filteredRequests.length} of {requests.length} request{requests.length !== 1 ? 's' : ''}
-                {filteredRequests.length !== requests.length && ` matching "${searchTerm}"`}
-              </span>
-            )}
-          </div>
+          <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+            {filteredRequests.length} of {requests.length} requests shown
+          </p>
         )}
       </div>
 
-      {/* Table Container */}
-      <div className="flex-1 overflow-hidden rounded-2xl border border-slate-600/30">
-        <div className="overflow-x-auto overflow-y-auto h-full">
-          <table className="w-full text-sm">
-            <thead className="bg-gradient-to-r from-slate-700/50 to-slate-800/50 sticky top-0 z-10">
-              <tr className="text-gray-300">
-                <th className="p-4 text-left font-semibold">Employee</th>
-                <th className="p-4 text-left font-semibold">Department</th>
-                <th className="p-4 text-left font-semibold">Leave Period</th>
-                <th className="p-4 text-left font-semibold">Leave Type</th>
-                <th className="p-4 text-center font-semibold">Status</th>
-                <th className="p-4 text-center font-semibold">Actions</th>
+      <div className="flex-1 overflow-hidden rounded-xl border border-slate-200 dark:border-white/10">
+        <div className="h-full overflow-auto">
+          <table className="w-full min-w-[850px] text-sm">
+            <thead className="sticky top-0 z-10 bg-slate-50 dark:bg-[#151923]">
+              <tr className="border-b border-slate-200 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:border-white/10 dark:text-slate-400">
+                {[
+                  "Employee",
+                  "Department",
+                  "Leave period",
+                  "Leave type",
+                  "Status",
+                  "Actions",
+                ].map((heading) => (
+                  <th key={heading} className="px-4 py-3">
+                    {heading}
+                  </th>
+                ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-700/30">
+            <tbody className="divide-y divide-slate-200 dark:divide-white/10">
               {filteredRequests.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="p-12 text-center">
-                    <div className="flex flex-col items-center space-y-3">
-                      <div className="w-16 h-16 bg-slate-700/30 rounded-full flex items-center justify-center">
-                        <svg className="w-8 h-8 text-gray-500" fill="currentColor" viewBox="0 0 20 20">
-                          <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" />
-                          <path fillRule="evenodd" d="M4 5a2 2 0 012-2v1a1 1 0 102 0V3h4v1a1 1 0 102 0V3a2 2 0 012 2v6a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm8 8a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
-                        </svg>
-                      </div>
-                      <p className="text-gray-400 text-lg">
-                        {searchTerm ? `No results found for "${searchTerm}"` : "No leave requests found"}
-                      </p>
-                      <p className="text-gray-500 text-sm">
-                        {searchTerm ? "Try adjusting your search terms" : "Leave requests will appear here when submitted"}
-                      </p>
-                    </div>
+                    <Search className="mx-auto h-6 w-6 text-slate-400" />
+                    <p className="mt-3 text-sm font-semibold text-slate-700 dark:text-slate-200">
+                      No leave requests found
+                    </p>
+                    <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                      {searchTerm
+                        ? "Try a different search term."
+                        : "New requests will appear here."}
+                    </p>
                   </td>
                 </tr>
               ) : (
-                filteredRequests.map((req) => {
-                  const id = req._id || req.id;
-                  const start = req.period?.start ? new Date(req.period.start) : null;
-                  const end = req.period?.end ? new Date(req.period.end) : null;
-                  const validPeriod = start && end && !isNaN(start.getTime()) && !isNaN(end.getTime());
+                filteredRequests.map((request) => {
+                  const id = request._id || request.id;
+                  const start = request.period?.start
+                    ? new Date(request.period.start)
+                    : null;
+                  const end = request.period?.end
+                    ? new Date(request.period.end)
+                    : null;
+                  const validPeriod =
+                    start &&
+                    end &&
+                    !Number.isNaN(start.getTime()) &&
+                    !Number.isNaN(end.getTime());
                   const isSelected = String(selectedId) === String(id);
 
                   return (
                     <tr
                       key={id}
-                      className={`transition-all duration-200 cursor-pointer hover:bg-slate-700/20 ${
-                        isSelected
-                          ? "bg-gradient-to-r from-cyan-500/10 to-blue-500/10 border-l-4 border-cyan-400"
-                          : "hover:border-l-4 hover:border-slate-500"
-                      }`}
                       onClick={() => onSelect(id)}
+                      className={`cursor-pointer transition ${
+                        isSelected
+                          ? "bg-blue-50 dark:bg-blue-950/30"
+                          : "hover:bg-slate-50 dark:hover:bg-white/[0.025]"
+                      }`}
                     >
-                      {/* Employee Info */}
-                      <td className="p-4">
-                        <div className="flex items-center space-x-3">
-                          <div className="flex-shrink-0">
-                            <img
-                              src={req.employee?.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(req.employee?.name || 'Unknown')}&background=6366f1&color=ffffff`}
-                              alt={req.employee?.name || "Employee"}
-                              className="w-10 h-10 rounded-full object-cover border-2 border-slate-600"
-                            />
-                          </div>
-                          <div>
-                            <p className="font-semibold text-white">
-                              {req.employee?.name || "Unknown Employee"}
+                      <td className="px-4 py-3.5">
+                        <div className="flex items-center gap-3">
+                          <img
+                            src={
+                              request.employee?.avatar ||
+                              `https://ui-avatars.com/api/?name=${encodeURIComponent(
+                                request.employee?.name || "Unknown",
+                              )}&background=6366f1&color=ffffff`
+                            }
+                            alt={request.employee?.name || "Employee"}
+                            className="h-9 w-9 rounded-full border border-slate-200 object-cover dark:border-white/10"
+                          />
+                          <div className="min-w-0">
+                            <p className="truncate font-semibold text-slate-900 dark:text-white">
+                              {request.employee?.name || "Unknown employee"}
                             </p>
-                            <p className="text-sm text-gray-400">
-                              {req.employee?.email || "-"}
+                            <p className="truncate text-xs text-slate-500 dark:text-slate-400">
+                              {request.employee?.email || "—"}
                             </p>
                           </div>
                         </div>
                       </td>
-
-                      {/* Department */}
-                      <td className="p-4">
-                        <div className="flex flex-col">
-                          <span className="text-gray-300 font-medium">
-                            {req.employee?.department || "-"}
-                          </span>
-                          <span className="text-sm text-gray-500">
-                            {req.employee?.designation || "-"}
-                          </span>
-                        </div>
+                      <td className="px-4 py-3.5">
+                        <p className="font-medium text-slate-700 dark:text-slate-200">
+                          {request.employee?.department || "—"}
+                        </p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                          {request.employee?.designation || "—"}
+                        </p>
                       </td>
-
-                      {/* Leave Period */}
-                      <td className="p-4">
-                        <div className="text-gray-300">
-                          {validPeriod ? (
-                            <div className="flex flex-col">
-                              <span className="font-medium">
-                                {start.toLocaleDateString('en-US', {
-                                  month: 'short',
-                                  day: 'numeric',
-                                  year: start.getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined
-                                })}
-                              </span>
-                              <span className="text-sm text-gray-400">
-                                to {end.toLocaleDateString('en-US', {
-                                  month: 'short',
-                                  day: 'numeric',
-                                  year: end.getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined
-                                })}
-                              </span>
-                            </div>
-                          ) : (
-                            <span className="text-gray-500">Invalid period</span>
-                          )}
-                        </div>
+                      <td className="px-4 py-3.5 text-slate-700 dark:text-slate-200">
+                        {validPeriod ? (
+                          <>
+                            <p className="font-medium">{formatDate(start)}</p>
+                            <p className="text-xs text-slate-500 dark:text-slate-400">
+                              to {formatDate(end)}
+                            </p>
+                          </>
+                        ) : (
+                          <span className="text-slate-400">Invalid period</span>
+                        )}
                       </td>
-
-                      {/* Leave Type */}
-                      <td className="p-4">
-                        <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-500/20 text-blue-300 border border-blue-500/30">
-                          {formatLeaveType(req.type)}
+                      <td className="px-4 py-3.5">
+                        <span className="inline-flex rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700 dark:border-blue-400/20 dark:bg-blue-400/10 dark:text-blue-200">
+                          {formatLeaveType(request.type)}
                         </span>
                       </td>
-
-                      {/* Status */}
-                      <td className="p-4 text-center">
-                        <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${statusColor[req.status] || "bg-gray-500/20 text-gray-300 border border-gray-500/30"}`}>
-                          {req.status === "Pending" && (
-                            <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
-                            </svg>
-                          )}
-                          {req.status === "Approved" && (
-                            <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                            </svg>
-                          )}
-                          {req.status === "Rejected" && (
-                            <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                              <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-                            </svg>
-                          )}
-                          {req.status}
+                      <td className="px-4 py-3.5">
+                        <span
+                          className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${
+                            statusColor[request.status] ||
+                            "border border-slate-200 bg-slate-100 text-slate-600 dark:border-white/10 dark:bg-white/[0.05] dark:text-slate-300"
+                          }`}
+                        >
+                          {request.status}
                         </span>
                       </td>
-
-                      {/* Actions */}
-                      <td className="p-4 text-center">
-                        <div className="flex gap-2 justify-center items-center">
+                      <td className="px-4 py-3.5">
+                        <div className="flex items-center gap-2">
                           <button
                             type="button"
                             title="Approve"
-                            className={`p-2 rounded-lg transition-all duration-200 ${
-                              req.status === "Approved"
-                                ? "bg-green-500/20 text-green-400/50 cursor-not-allowed"
-                                : "bg-green-500/20 text-green-400 hover:bg-green-500/30 hover:scale-110"
-                            }`}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (req.status !== "Approved") onApprove(id);
+                            disabled={request.status === "Approved"}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              onApprove(id);
                             }}
-                            disabled={req.status === "Approved"}
+                            className="rounded-lg bg-emerald-50 p-2 text-emerald-700 transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-300 dark:bg-emerald-400/10 dark:text-emerald-300 dark:disabled:bg-white/[0.04] dark:disabled:text-slate-600"
                           >
-                            <Check size={16} />
+                            <Check className="h-4 w-4" />
                           </button>
                           <button
                             type="button"
                             title="Reject"
-                            className={`p-2 rounded-lg transition-all duration-200 ${
-                              req.status === "Rejected"
-                                ? "bg-red-500/20 text-red-400/50 cursor-not-allowed"
-                                : "bg-red-500/20 text-red-400 hover:bg-red-500/30 hover:scale-110"
-                            }`}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (req.status !== "Rejected") onReject(id);
+                            disabled={request.status === "Rejected"}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              onReject(id);
                             }}
-                            disabled={req.status === "Rejected"}
+                            className="rounded-lg bg-rose-50 p-2 text-rose-700 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-300 dark:bg-rose-400/10 dark:text-rose-300 dark:disabled:bg-white/[0.04] dark:disabled:text-slate-600"
                           >
-                            <X size={16} />
+                            <X className="h-4 w-4" />
                           </button>
                         </div>
                       </td>

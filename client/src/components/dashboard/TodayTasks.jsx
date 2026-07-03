@@ -1,78 +1,52 @@
 import React from "react";
+import { CalendarClock, CheckCircle2, UserRound } from "lucide-react";
 
-const colorMap = {
-  red: "bg-red-300 text-black border-red-700",
-  yellow: "bg-yellow-300 text-black border-yellow-700",
-  green: "bg-green-400 text-black border-green-700",
-
-  lightRed: "bg-red-300 text-black border-red-700",
-  lightYellow: "bg-yellow-300 text-black border-yellow-700",
-  lightGreen: "bg-green-400 text-black border-green-700",
+const priorityStyles = {
+  red: "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-400/20 dark:bg-rose-400/10 dark:text-rose-200",
+  yellow: "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-200",
+  green: "border-slate-200 bg-slate-50 text-slate-600 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300",
 };
 
-const getColorClass = (color) => {
-  // Use brighter pastel backgrounds similar to traffic light colors with strong borders
-  switch (color) {
-    case "red":
-      return colorMap.lightRed;
-    case "yellow":
-      return colorMap.lightYellow;
-    case "green":
-      return colorMap.lightGreen;
-    default:
-      return colorMap.lightGreen; // default to bright green pastel
-  }
-};
-
-const TodayTasks = ({ data = [], className }) => {
-  // Newest tasks on top
+const TodayTasks = ({ data = [], className = "" }) => {
   const tasksToRender = [...data].reverse();
 
   return (
-    <div className={`space-y-4 ${className || ""}`}>
+    <div className={`overflow-hidden rounded-xl border border-slate-200 dark:border-white/10 ${className}`}>
       {tasksToRender.length > 0 ? (
-        tasksToRender.map((task, index) => (
-          <div
-            key={task.id || index}
-            className="flex flex-col sm:flex-row justify-between items-start sm:items-center px-6 py-4 rounded-2xl shadow-xl bg-gradient-to-r from-[#13161c] via-[#181c22] to-[#181d2a]/95 border border-[#232943] hover:shadow-2xl hover:border-[#3f4660] hover:bg-[#232945]/90 transition-all duration-200 ease-out group"
-          >
-            {/* Left Task Details */}
-            <div className="space-y-1">
-              <p className="font-semibold text-base text-gray-100 tracking-tight">{task.label}</p>
-              <div className="flex flex-wrap gap-4 text-xs text-gray-400 mt-1">
-                <span>
-                  Due:{" "}
-                  <span className="font-semibold text-green-400">
-                    {task.dueDateTime || "No due date"}
-                  </span>
-                </span>
-                <span>
-                  Assigned By:{" "}
-                  <span className="font-semibold text-gray-300">
-                    {task.assignedBy || "Unknown"}
-                  </span>
-                </span>
-                <span>
-                  Assigned To:{" "}
-                  <span className="font-semibold text-gray-400">
-                    {Array.isArray(task.assignedTo) ? task.assignedTo.join(", ") : task.assignedTo || "Unknown"}
-                  </span>
+        <div className="divide-y divide-slate-200 dark:divide-white/10">
+          {tasksToRender.map((task, index) => (
+            <article
+              key={task.id || index}
+              className="bg-white px-4 py-4 transition-colors hover:bg-slate-50/80 dark:bg-transparent dark:hover:bg-white/[0.025] sm:px-5"
+            >
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
+                  <h3 className="truncate text-sm font-semibold text-slate-900 dark:text-white">{task.label}</h3>
+                  <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-slate-500 dark:text-slate-400">
+                    <span className="inline-flex items-center gap-1.5">
+                      <CalendarClock className="h-3.5 w-3.5" />
+                      {task.dueDateTime || "No due date"}
+                    </span>
+                    <span className="inline-flex items-center gap-1.5">
+                      <UserRound className="h-3.5 w-3.5" />
+                      {task.assignedBy || "Unknown"}
+                    </span>
+                  </div>
+                </div>
+                <span className={`inline-flex w-fit shrink-0 items-center rounded-md border px-2 py-1 text-[11px] font-semibold ${priorityStyles[task.color] || priorityStyles.green}`}>
+                  {task.level || "Normal"}
                 </span>
               </div>
-            </div>
-            {/* Priority Badge */}
-            <span
-              className={`mt-3 sm:mt-0 ml-0 sm:ml-6 text-xs min-w-[72px] px-4 py-1 rounded-full font-bold border-2 text-center
-                ${getColorClass(task.color)}
-                group-hover:scale-105 transition-all duration-200`}
-            >
-              {task.level || "Normal"}
-            </span>
-          </div>
-        ))
+            </article>
+          ))}
+        </div>
       ) : (
-        <div className="bg-gradient-to-r from-[#202335] to-[#171b2b] p-6 rounded-2xl shadow-xl border border-[#232945] text-center text-gray-400 font-semibold">
-          No Tasks Assigned
+        <div className="flex min-h-56 flex-col items-center justify-center bg-slate-50 px-6 text-center dark:bg-white/[0.02]">
+          <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-emerald-600 dark:border-white/10 dark:bg-white/[0.04] dark:text-emerald-300">
+            <CheckCircle2 className="h-5 w-5" />
+          </div>
+          <h3 className="text-sm font-semibold text-slate-900 dark:text-white">No active tasks</h3>
+          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">New assignments will appear here.</p>
         </div>
       )}
     </div>

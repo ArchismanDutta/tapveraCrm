@@ -14,6 +14,8 @@ import "./styles/toastify-custom.css";
 import { Toaster } from "react-hot-toast";
 import "./styles/custom-scrollbar.css";
 import LoadingSpinner from "./components/LoadingSpinner";
+import ThemeToggle from "./components/common/ThemeToggle";
+import { ThemeProvider, useTheme } from "./contexts/ThemeContext";
 
 // Achievement System
 import { AchievementProvider } from "./contexts/AchievementContext";
@@ -118,6 +120,7 @@ const AppWrapper = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const dispatch = useDispatch();
+  const { theme } = useTheme();
 
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [role, setRole] = useState(null);
@@ -296,7 +299,9 @@ const AppWrapper = () => {
         // Keep only last 1000 IDs to prevent memory issues
         const arr = Array.from(shown).slice(-1000);
         sessionStorage.setItem("shown_notifications", JSON.stringify(arr));
-      } catch {}
+      } catch (error) {
+        console.warn("Unable to persist shown notifications", error);
+      }
     };
 
     const isNotificationOld = (timestamp) => {
@@ -392,7 +397,9 @@ const AppWrapper = () => {
           .toString(36)
           .slice(2)}`;
         toast.info(`${title}${channel}: ${body}`, { toastId: tid });
-      } catch {}
+      } catch (error) {
+        console.error("Failed to process WebSocket notification", error);
+      }
     };
 
     window.addEventListener("ws-notification", onWsNotification);
@@ -413,6 +420,8 @@ const AppWrapper = () => {
   const isSuperAdmin = roleNorm === "super-admin";
   const isAdmin = roleNorm === "admin" || isSuperAdmin;
   const isHR = roleNorm === "hr";
+  const showStandaloneThemeToggle =
+    !isAuthenticated || roleNorm === "client" || location.pathname === "/signup";
 
   // Lead/Callback access
   const canAccessLeadManagement = () => {
@@ -1089,7 +1098,9 @@ const AppWrapper = () => {
       </Routes>
       </Suspense>
 
-      <ToastContainer position="top-right" autoClose={3000} />
+      {showStandaloneThemeToggle && <ThemeToggle floating />}
+
+      <ToastContainer position="top-right" autoClose={3000} theme={theme} />
       <Toaster position="top-right" />
 
       {/* Payslip Notifications */}
@@ -1107,14 +1118,16 @@ const AppWrapper = () => {
 // ------------------- Main App -------------------
 const App = () => (
   <ErrorBoundary>
-    <Router>
-      <WebSocketProvider>
-        <AchievementProvider>
-          <AppWrapper />
-          <AchievementNotificationContainer />
-        </AchievementProvider>
-      </WebSocketProvider>
-    </Router>
+    <ThemeProvider>
+      <Router>
+        <WebSocketProvider>
+          <AchievementProvider>
+            <AppWrapper />
+            <AchievementNotificationContainer />
+          </AchievementProvider>
+        </WebSocketProvider>
+      </Router>
+    </ThemeProvider>
   </ErrorBoundary>
 );
 

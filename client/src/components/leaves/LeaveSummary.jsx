@@ -1,23 +1,23 @@
 import React, { useState } from "react";
-import { Calendar, Clock, Hourglass } from "lucide-react";
+import { Bell, Calendar, Clock, Hourglass } from "lucide-react";
 import ImportantNoticeModal from "./ImportantNoticeModal";
 
 // Map color names to Tailwind classes tailored for your theme
 const colorMap = {
-  green: { bg: "bg-[rgba(46,170,102,0.15)]", text: "text-green-500" },
-  blue: { bg: "bg-[rgba(91,122,201,0.15)]", text: "text-blue-500" },
-  yellow: { bg: "bg-[rgba(255,128,0,0.15)]", text: "text-[#ff8000]" },
+  green: { bg: "border-emerald-200 bg-emerald-50 dark:border-emerald-400/20 dark:bg-emerald-400/10", text: "text-emerald-700 dark:text-emerald-200" },
+  blue: { bg: "border-blue-200 bg-blue-50 dark:border-blue-400/20 dark:bg-blue-400/10", text: "text-blue-700 dark:text-blue-200" },
+  yellow: { bg: "border-amber-200 bg-amber-50 dark:border-amber-400/20 dark:bg-amber-400/10", text: "text-amber-700 dark:text-amber-200" },
 };
 
 const StatCard = ({ icon: Icon, value, label, color }) => (
   <div
-    className={`flex flex-col items-center justify-center p-6 rounded-3xl bg-[rgba(22,28,48,0.68)] border border-[rgba(84,123,209,0.13)] shadow-[0_8px_32px_0_rgba(10,40,100,0.14),_inset_0_1.5px_10px_0_rgba(84,123,209,0.08)] backdrop-blur-[10px] cursor-default select-none transition hover:-translate-y-1`}
+    className="min-w-0 bg-white p-4 dark:bg-[#10131c] sm:p-5"
   >
-    <div className={`p-3 rounded-full mb-3 ${colorMap[color].bg} ${colorMap[color].text} shadow-md`}>
-      <Icon className="h-6 w-6" />
+    <div className={`mb-3 inline-flex h-9 w-9 items-center justify-center rounded-lg border ${colorMap[color].bg} ${colorMap[color].text}`}>
+      {React.createElement(Icon, { className: "h-4 w-4" })}
     </div>
-    <p className="text-4xl font-extrabold text-blue-100">{value}</p>
-    <p className="text-lg text-blue-300">{label}</p>
+    <p className="text-2xl font-semibold text-slate-950 dark:text-white">{value}</p>
+    <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{label}</p>
   </div>
 );
 
@@ -25,19 +25,21 @@ const LeaveSummary = ({ available, taken, pending, importantNotices = [] }) => {
   const [showPopover, setShowPopover] = useState(false);
 
   return (
-    <div
-      className="bg-[rgba(22,28,48,0.68)] border border-[rgba(84,123,209,0.13)] rounded-3xl p-6 shadow-[0_8px_32px_0_rgba(10,40,100,0.14),_inset_0_1.5px_10px_0_rgba(84,123,209,0.08)] backdrop-blur-[10px] relative z-10"
-    >
+    <div className="relative rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-[#10131c] sm:p-5">
       {/* Header with button */}
-      <div className="flex justify-between items-center mb-5 relative">
-        <h2 className="text-xl font-semibold text-blue-100">Leave Overview</h2>
+      <div className="relative mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h3 className="text-base font-semibold text-slate-950 dark:text-white">Leave overview</h3>
+          <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">Current annual allowance and request status</p>
+        </div>
 
         <div className="relative">
           <button
+            type="button"
             onClick={() => setShowPopover(true)}
-            className="bg-[#ffb347]/80 border-2 border-[#ff8000] text-black text-sm font-bold px-3 py-1 rounded-xl shadow hover:bg-[#ff8000] hover:text-white transition cursor-pointer"
+            className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 text-xs font-semibold text-amber-700 transition hover:bg-amber-100 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-200"
           >
-            Important Leave Update
+            <Bell className="h-3.5 w-3.5" /> Leave policy
           </button>
 
           {showPopover && (
@@ -47,10 +49,10 @@ const LeaveSummary = ({ available, taken, pending, importantNotices = [] }) => {
       </div>
 
       {/* Stats cards */}
-      <div className="grid grid-cols-3 gap-6">
-        <StatCard icon={Calendar} value={available} label="Available" color="green" />
-        <StatCard icon={Clock} value={taken} label="Taken" color="blue" />
-        <StatCard icon={Hourglass} value={pending} label="Pending" color="yellow" />
+      <div className="grid grid-cols-3 gap-px overflow-hidden rounded-xl border border-slate-200 bg-slate-200 dark:border-white/10 dark:bg-white/10">
+        <StatCard icon={Calendar} value={available} label="Available days" color="green" />
+        <StatCard icon={Clock} value={taken} label="Taken days" color="blue" />
+        <StatCard icon={Hourglass} value={pending} label="Pending days" color="yellow" />
       </div>
     </div>
   );

@@ -67,10 +67,13 @@ const NotificationBell = () => {
     const handleWsNotification = (e) => {
       const data = e.detail;
       if (data && data.type === "notification") {
-        // Increment unread count
-        setUnreadCount((prev) => prev + 1);
+        // Don't double-count chat — chat unread badge is tracked separately
+        // via the chat-unread-total event / sessionStorage in WebSocketContext
+        if ((data.channel || "").toLowerCase() !== "chat") {
+          setUnreadCount((prev) => prev + 1);
+        }
 
-        // Ring the bell
+        // Ring bell and play sound for all notification types
         setIsRinging(true);
         if (soundEnabled && audioUnlocked && audioRef.current) {
           audioRef.current.currentTime = 0;

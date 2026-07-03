@@ -480,7 +480,7 @@ const ViewCallbacks = ({ onLogout }) => {
   };
 
   return (
-    <div className="flex min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 overflow-x-hidden">
+    <div className="app-shell h-[100dvh] overflow-hidden">
       <Sidebar
         collapsed={sidebarCollapsed}
         setCollapsed={setSidebarCollapsed}
@@ -488,20 +488,20 @@ const ViewCallbacks = ({ onLogout }) => {
         userRole={userRole}
       />
 
-      <main className={`flex-1 transition-all duration-300 ${sidebarCollapsed ? "ml-16" : "ml-56"} p-8 max-w-full overflow-x-hidden`}>
+      <main className={`app-main h-[100dvh] overflow-y-auto px-3 py-4 transition-all duration-300 sm:px-5 lg:px-6 ${sidebarCollapsed ? "ml-16" : "ml-16 sm:ml-56"}`}>
         {/* Header */}
-        <div className="mb-8">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
+        <div className="app-page pb-8">
+        <div className="app-header mb-5">
+          <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
             <div>
-              <h1 className="text-4xl font-bold bg-gradient-to-r from-green-400 to-emerald-400 bg-clip-text text-transparent mb-2">
-                Callback Management
-              </h1>
-              <p className="text-gray-400">Track and manage lead follow-up callbacks</p>
+              <p className="app-eyebrow">Sales follow-up</p>
+              <h1 className="app-title">Callback management</h1>
+              <p className="app-description">Track and manage lead follow-up callbacks.</p>
             </div>
             {(userRole === "super-admin" || userDepartment === "marketingAndSales") && (
               <button
                 onClick={() => navigate("/callbacks/add")}
-                className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white rounded-lg font-medium transition-all duration-300 shadow-lg hover:shadow-green-500/50"
+                className="app-primary-button flex h-10 items-center gap-2 px-4 text-sm font-semibold"
               >
                 <Plus className="h-5 w-5" />
                 Add New Callback
@@ -511,7 +511,7 @@ const ViewCallbacks = ({ onLogout }) => {
 
           {/* Stats Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3 md:gap-4 mb-6">
-            <div className="bg-gradient-to-br from-blue-500/20 to-cyan-500/20 backdrop-blur-sm border border-blue-500/30 rounded-xl p-4">
+            <div className="app-panel p-4">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-gray-400 text-xs mb-1">Total</p>
@@ -521,7 +521,7 @@ const ViewCallbacks = ({ onLogout }) => {
               </div>
             </div>
 
-            <div className="bg-gradient-to-br from-yellow-500/20 to-orange-500/20 backdrop-blur-sm border border-yellow-500/30 rounded-xl p-4">
+            <div className="app-panel p-4">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-gray-400 text-xs mb-1">Pending</p>
@@ -531,7 +531,7 @@ const ViewCallbacks = ({ onLogout }) => {
               </div>
             </div>
 
-            <div className="bg-gradient-to-br from-green-500/20 to-emerald-500/20 backdrop-blur-sm border border-green-500/30 rounded-xl p-4">
+            <div className="app-panel p-4">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-gray-400 text-xs mb-1">Completed</p>
@@ -541,7 +541,7 @@ const ViewCallbacks = ({ onLogout }) => {
               </div>
             </div>
 
-            <div className="bg-gradient-to-br from-red-500/20 to-rose-500/20 backdrop-blur-sm border border-red-500/30 rounded-xl p-4">
+            <div className="app-panel p-4">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-gray-400 text-xs mb-1">Overdue</p>
@@ -1247,6 +1247,7 @@ const ViewCallbacks = ({ onLogout }) => {
             </div>
           </div>
         )}
+        </div>
       </main>
     </div>
   );

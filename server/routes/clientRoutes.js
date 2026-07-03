@@ -3,6 +3,7 @@ const Client = require("../models/Client");
 const { protect, authorize } = require("../middlewares/authMiddleware");
 const emailNotificationService = require("../services/emailNotificationService");
 const emailService = require("../services/email/emailService");
+const bcrypt = require("bcryptjs");
 
 const router = express.Router();
 
@@ -30,18 +31,28 @@ router.post(
   async (req, res) => {
     try {
       const { clientName, businessName, email, password, region } = req.body;
+      if (!clientName || !businessName || !email || !password?.trim()) {
+        return res.status(400).json({
+          error: "Client name, business name, email, and password are required",
+        });
+      }
+
+      const rawPassword = String(password).trim();
       const newClient = new Client({
         clientName,
         businessName,
         email: String(email).trim().toLowerCase(), // Normalize email for consistency with login
-        password: String(password).trim(), // Trim password for consistency with login
+        password: await bcrypt.hash(rawPassword, 12),
         region: region || "Global",
       });
       await newClient.save();
 
       // Send welcome email with login credentials
       try {
-        await emailNotificationService.sendClientWelcomeEmail(newClient);
+        await emailNotificationService.sendClientWelcomeEmail({
+          ...newClient.toObject(),
+          password: rawPassword,
+        });
       } catch (emailError) {
         console.error("❌ Failed to send welcome email:", emailError);
         // Don't fail the request if email fails, just log it
@@ -152,8 +163,7 @@ router.put(
       if (password && password.trim()) {
         const userRole = req.user.role.toLowerCase();
         if (userRole === "super-admin" || userRole === "superadmin") {
-          // Trim the password before saving (matches login logic)
-          client.password = String(password).trim();
+          client.password = await bcrypt.hash(String(password).trim(), 12);
         } else {
           return res
             .status(403)

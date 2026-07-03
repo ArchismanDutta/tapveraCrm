@@ -6,11 +6,14 @@ import "./styles/ios-fixed.css";
 import App from "./App.jsx";
 import { Provider } from "react-redux";
 import store from "./store/index.js";
+import { initializeTheme } from "./contexts/ThemeContext.jsx";
 import { initializeViewportHeight } from './utils/viewportHeight';
 import { initializeKeyboardDetection } from "./utils/keyboardDetection";
 import { initializeAudioOnUserInteraction } from './utils/audioManager';
 import { addIOSMetadata, logIOSInfo } from './utils/iosCompatibility';
 import { initPerformanceMonitoring } from './utils/performanceMonitor';
+
+initializeTheme();
 
 // Initialize viewport height for iOS
 initializeViewportHeight();

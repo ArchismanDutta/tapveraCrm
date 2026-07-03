@@ -1,30 +1,24 @@
-// File: src/pages/HRDashboard.jsx
-
-import React, { useState, useEffect } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import axios from "axios";
-import {
-  Users,
-  Calendar,
-  AlertTriangle,
-  Clock,
-  TrendingUp,
-  RefreshCw,
-  Activity,
-  BarChart3,
-  UserCheck,
-  Building2,
-  Gift,
-  Heart,
-  Zap,
-  Star,
-  Award,
-} from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import {
+  Activity,
+  AlertCircle,
+  ArrowRight,
+  Award,
+  Calendar,
+  Cake,
+  Clock,
+  FileText,
+  RefreshCw,
+  Send,
+  UserCheck,
+  Users,
+} from "lucide-react";
 import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 
 import Sidebar from "../components/dashboard/Sidebar";
-import StatCard from "../components/humanResource/StatCard";
 import UpcomingBirthdays from "../components/humanResource/UpcomingBirthdays";
 import UpcomingAnniversaries from "../components/humanResource/UpcomingAnniversaries";
 import RecentActivities from "../components/humanResource/RecentActivities";
@@ -33,496 +27,641 @@ import WishingModal from "../components/humanResource/WishingModal";
 import FlexibleRequestsModal from "../components/humanResource/FlexibleRequestsModal";
 import CelebrationPopup from "../components/common/CelebrationPopup";
 import useCelebrationNotifications from "../hooks/useCelebrationNotifications";
+import { useTheme } from "../contexts/ThemeContext";
 
-const SIDEBAR_WIDTH_EXPANDED = 288;
-const SIDEBAR_WIDTH_COLLAPSED = 80;
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
 
+const getNextOccurrence = (value) => {
+  if (!value) return null;
+  const source = new Date(value);
+  if (Number.isNaN(source.getTime())) return null;
+
+  const today = new Date();
+  const startOfToday = new Date(
+    today.getFullYear(),
+    today.getMonth(),
+    today.getDate(),
+  );
+  const next = new Date(
+    startOfToday.getFullYear(),
+    source.getMonth(),
+    source.getDate(),
+  );
+
+  if (next < startOfToday) next.setFullYear(next.getFullYear() + 1);
+  return next;
+};
+
+const getLeaveStart = (leave) =>
+  leave.period?.start || leave.startDate || leave.fromDate;
+const getLeaveEnd = (leave) =>
+  leave.period?.end || leave.endDate || leave.toDate || getLeaveStart(leave);
+
+const isLeaveActiveToday = (leave) => {
+  if (String(leave.status || "").toLowerCase() !== "approved") return false;
+
+  const start = new Date(getLeaveStart(leave));
+  const end = new Date(getLeaveEnd(leave));
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return false;
+
+  const now = new Date();
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+  return start <= todayEnd && end >= todayStart;
+};
+
+const TONE_STYLES = {
+  blue: "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-400/20 dark:bg-blue-400/10 dark:text-blue-200",
+  amber:
+    "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-200",
+  rose: "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-400/20 dark:bg-rose-400/10 dark:text-rose-200",
+  violet:
+    "border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-400/20 dark:bg-violet-400/10 dark:text-violet-200",
+};
+
+const MetricCard = ({ icon, label, value, helper, tone, onClick }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    className="group rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:border-slate-300 hover:shadow-md dark:border-white/10 dark:bg-[#10131c] dark:hover:border-white/20"
+  >
+    <div className="flex items-start justify-between gap-3">
+      <div>
+        <p className="text-xs font-medium text-slate-500 dark:text-slate-400">
+          {label}
+        </p>
+        <p className="mt-1 text-2xl font-semibold tracking-tight text-slate-950 dark:text-white">
+          {value}
+        </p>
+        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+          {helper}
+        </p>
+      </div>
+      <span
+        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border ${TONE_STYLES[tone]}`}
+      >
+        {React.createElement(icon, { className: "h-4 w-4" })}
+      </span>
+    </div>
+  </button>
+);
+
+const QueueItem = ({ icon, title, description, count, tone, actionLabel, onClick }) => (
+  <div className="flex flex-col gap-4 rounded-xl border border-slate-200 p-4 dark:border-white/10 sm:flex-row sm:items-center">
+    <span
+      className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border ${TONE_STYLES[tone]}`}
+    >
+      {React.createElement(icon, { className: "h-4 w-4" })}
+    </span>
+    <div className="min-w-0 flex-1">
+      <div className="flex items-center gap-2">
+        <h3 className="text-sm font-semibold text-slate-900 dark:text-white">
+          {title}
+        </h3>
+        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-700 dark:bg-white/[0.06] dark:text-slate-200">
+          {count}
+        </span>
+      </div>
+      <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">
+        {description}
+      </p>
+    </div>
+    <button
+      type="button"
+      onClick={onClick}
+      className="inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-200 dark:hover:border-blue-400/20 dark:hover:bg-blue-400/10 dark:hover:text-blue-200"
+    >
+      {actionLabel}
+      <ArrowRight className="h-3.5 w-3.5" />
+    </button>
+  </div>
+);
+
 const HRDashboard = ({ onLogout }) => {
+  const { theme } = useTheme();
+  const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState(false);
-  const [stats, setStats] = useState([]);
   const [users, setUsers] = useState([]);
-  const [birthdays, setBirthdays] = useState([]);
-  const [anniversaries, setAnniversaries] = useState([]);
-  const [activities, setActivities] = useState([]);
-  const [activeLeaves, setActiveLeaves] = useState([]);
+  const [leaves, setLeaves] = useState([]);
   const [flexibleRequests, setFlexibleRequests] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [currentTime, setCurrentTime] = useState(new Date());
   const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState("");
+  const [lastUpdated, setLastUpdated] = useState(null);
+  const [currentTime, setCurrentTime] = useState(new Date());
 
-  // Celebration notifications
+  const [showLeavesModal, setShowLeavesModal] = useState(false);
+  const [showWishingModal, setShowWishingModal] = useState(false);
+  const [wishingType, setWishingType] = useState("birthday");
+  const [showFlexModal, setShowFlexModal] = useState(false);
+
   const {
     celebrations,
     showPopup: showCelebrationPopup,
-    loading: celebrationLoading,
-    error: celebrationError,
     closePopup: closeCelebrationPopup,
   } = useCelebrationNotifications();
 
-  // modals
-  const [showLeavesModal, setShowLeavesModal] = useState(false);
-  const [showWishingModal, setShowWishingModal] = useState(false);
-  const [wishingType, setWishingType] = useState(null);
-  const [showFlexModal, setShowFlexModal] = useState(false);
+  const fetchDashboardData = useCallback(
+    async ({ background = false } = {}) => {
+      if (background) setRefreshing(true);
+      else setLoading(true);
+      setError("");
 
-  const token = localStorage.getItem("token");
-  const navigate = useNavigate();
+      try {
+        const token = localStorage.getItem("token");
+        if (!token) {
+          navigate("/login", { replace: true });
+          return false;
+        }
 
-  // Redirect if no token
-  useEffect(() => {
-    if (!token) navigate("/login");
-  }, [token, navigate]);
+        const config = { headers: { Authorization: `Bearer ${token}` } };
+        const [usersResponse, leavesResponse, flexibleResponse] =
+          await Promise.all([
+            axios.get(`${API_BASE}/api/users`, config),
+            axios.get(`${API_BASE}/api/leaves`, config),
+            axios.get(`${API_BASE}/api/flexible-shifts`, config),
+          ]);
 
-  // Update time every second
-  useEffect(() => {
-    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
-    return () => clearInterval(timer);
-  }, []);
+        const usersData = Array.isArray(usersResponse.data)
+          ? usersResponse.data
+          : usersResponse.data?.data;
+        const leavesData = Array.isArray(leavesResponse.data)
+          ? leavesResponse.data
+          : leavesResponse.data?.data;
+        const flexibleData = Array.isArray(flexibleResponse.data)
+          ? flexibleResponse.data
+          : flexibleResponse.data?.data;
 
-  // Helper: get next occurrence of a date (ignoring year)
-  const getNextDate = (dateString) => {
-    if (!dateString) return null;
-    const parsed = new Date(dateString);
-    if (isNaN(parsed)) return null;
+        setUsers(Array.isArray(usersData) ? usersData : []);
+        setLeaves(Array.isArray(leavesData) ? leavesData : []);
+        setFlexibleRequests(Array.isArray(flexibleData) ? flexibleData : []);
+        setLastUpdated(new Date());
+        return true;
+      } catch (requestError) {
+        console.error("Unable to load HR dashboard:", requestError);
+        setError(
+          requestError.response?.data?.message ||
+            "HR dashboard data could not be loaded. Please try again.",
+        );
+        return false;
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    },
+    [navigate],
+  );
 
-    const today = new Date();
-    const todayMid = new Date(
-      today.getFullYear(),
-      today.getMonth(),
-      today.getDate()
-    );
-    let nextDate = new Date(
-      todayMid.getFullYear(),
-      parsed.getMonth(),
-      parsed.getDate()
-    );
-    if (nextDate.getTime() < todayMid.getTime())
-      nextDate.setFullYear(nextDate.getFullYear() + 1);
-
-    return nextDate;
-  };
-
-  // Enhanced manual refresh
-  const handleManualRefresh = async () => {
-    setRefreshing(true);
-    try {
-      await fetchDashboardData();
-      toast.success("Dashboard refreshed successfully!");
-    } catch (error) {
-      toast.error("Failed to refresh dashboard");
-    } finally {
-      setRefreshing(false);
-    }
-  };
-
-  // Fetch dashboard data
-  const fetchDashboardData = async () => {
-    try {
-      if (!refreshing) setLoading(true);
-      const [usersRes, leavesRes, flexRes] = await Promise.all([
-        axios.get(`${API_BASE}/api/users`, {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
-        axios.get(`${API_BASE}/api/leaves`, {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
-        axios.get(`${API_BASE}/api/flexible-shifts`, {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
-      ]);
-
-      const usersData = usersRes.data || [];
-      setUsers(usersData);
-
-      const leaves = leavesRes.data || [];
-      const approvedLeaves = leaves.filter(
-        (l) => (l.status || "").toLowerCase() === "approved"
-      );
-      setActiveLeaves(approvedLeaves);
-
-      const flexRequests = flexRes.data || [];
-      setFlexibleRequests(flexRequests);
-
-      setStats([
-        {
-          title: "Total Employees",
-          value: usersData.length,
-          icon: <Users />,
-          color: "from-blue-500 to-cyan-500",
-          bgColor: "from-blue-500/20 to-cyan-500/20",
-          textColor: "text-cyan-400",
-          onClick: () => navigate("/directory"),
-          trend: { value: "+2.1%", positive: true },
-        },
-        {
-          title: "Active Leaves",
-          value: approvedLeaves.length,
-          icon: <Calendar />,
-          color: "from-amber-500 to-orange-500",
-          bgColor: "from-amber-500/20 to-orange-500/20",
-          textColor: "text-amber-400",
-          onClick: () => setShowLeavesModal(true),
-          subtitle: "Currently away",
-        },
-        {
-          title: "Pending Approvals",
-          value: leaves.filter(
-            (l) => (l.status || "").toLowerCase() === "pending"
-          ).length,
-          subtitle: "Leave requests",
-          icon: <AlertTriangle />,
-          color: "from-red-500 to-pink-500",
-          bgColor: "from-red-500/20 to-pink-500/20",
-          textColor: "text-red-400",
-          onClick: () => navigate("/admin/leaves"),
-          urgent: true,
-        },
-        {
-          title: "Flexible Requests",
-          value: flexRequests.filter(
-            (r) => (r.status || "").toLowerCase() === "pending"
-          ).length,
-          subtitle: "Shift changes",
-          icon: <Clock />,
-          color: "from-purple-500 to-violet-500",
-          bgColor: "from-purple-500/20 to-violet-500/20",
-          textColor: "text-purple-400",
-          onClick: () => setShowFlexModal(true),
-        },
-      ]);
-
-      setActivities(
-        leaves
-          .slice()
-          .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-          .slice(0, 5)
-          .map((l) => ({
-            title: `${
-              l.employee?.name || l.employeeName || "Employee"
-            } requested ${l.type} leave`,
-            time: new Date(l.createdAt).toLocaleString(),
-            icon: <Calendar size={16} />,
-            bg:
-              (l.status || "").toLowerCase() === "approved"
-                ? "bg-green-500"
-                : (l.status || "").toLowerCase() === "pending"
-                ? "bg-yellow-500"
-                : "bg-red-500",
-          }))
-      );
-    } catch (err) {
-      console.error("Dashboard fetch error:", err);
-      toast.error("Failed to load dashboard data");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Fetch data on mount & refresh every 15s
   useEffect(() => {
     fetchDashboardData();
-    const intervalId = setInterval(fetchDashboardData, 15000);
-    return () => clearInterval(intervalId);
+    const refreshTimer = window.setInterval(
+      () => fetchDashboardData({ background: true }),
+      60000,
+    );
+    return () => window.clearInterval(refreshTimer);
+  }, [fetchDashboardData]);
+
+  useEffect(() => {
+    const clockTimer = window.setInterval(() => setCurrentTime(new Date()), 60000);
+    return () => window.clearInterval(clockTimer);
   }, []);
 
-  // Process birthdays & anniversaries
-  useEffect(() => {
-    if (!users.length) {
-      setBirthdays([]);
-      setAnniversaries([]);
-      return;
-    }
+  const workforceUsers = useMemo(
+    () =>
+      users.filter((user) =>
+        ["employee", "admin", "hr"].includes(
+          String(user.role || "").toLowerCase(),
+        ),
+      ),
+    [users],
+  );
 
-    const mappedBirthdays = users
-      .map((u) => ({
-        _id: u._id,
-        name: u.name,
-        role: u.designation || u.role,
-        originalDob: u.dob || null,
-        nextDate: getNextDate(u.dob),
-        avatar:
-          u.avatar ||
-          `https://ui-avatars.com/api/?name=${encodeURIComponent(u.name)}`,
-      }))
-      .filter((u) => u.nextDate)
-      .sort((a, b) => a.nextDate - b.nextDate)
-      .slice(0, 3);
+  const pendingLeaves = useMemo(
+    () =>
+      leaves.filter(
+        (leave) => String(leave.status || "").toLowerCase() === "pending",
+      ),
+    [leaves],
+  );
 
-    const mappedAnniversaries = users
-      .map((u) => ({
-        _id: u._id,
-        name: u.name,
-        designation: u.designation || u.role,
-        originalDoj: u.doj || null,
-        nextDate: getNextDate(u.doj),
-        avatar:
-          u.avatar ||
-          `https://ui-avatars.com/api/?name=${encodeURIComponent(u.name)}`,
-      }))
-      .filter((u) => u.nextDate)
-      .sort((a, b) => a.nextDate - b.nextDate)
-      .slice(0, 3);
+  const activeLeaves = useMemo(
+    () => leaves.filter(isLeaveActiveToday),
+    [leaves],
+  );
 
-    setBirthdays(mappedBirthdays);
-    setAnniversaries(mappedAnniversaries);
-  }, [users]);
+  const pendingFlexibleRequests = useMemo(
+    () =>
+      flexibleRequests.filter(
+        (request) =>
+          String(request.status || "").toLowerCase() === "pending",
+      ),
+    [flexibleRequests],
+  );
 
-  // Send wishes
-  const handleSendWishes = async (selectedUsers, message, type) => {
-    if (!selectedUsers.length || !message)
-      return toast.warning("Select users and write a message");
+  const birthdays = useMemo(
+    () =>
+      workforceUsers
+        .map((user) => ({
+          _id: user._id,
+          name: user.name || "Unknown employee",
+          role: user.designation || user.role || "Employee",
+          originalDob: user.dob,
+          nextDate: getNextOccurrence(user.dob),
+          avatar: user.avatar,
+        }))
+        .filter((user) => user.nextDate)
+        .sort((left, right) => left.nextDate - right.nextDate)
+        .slice(0, 4),
+    [workforceUsers],
+  );
 
-    try {
-      await Promise.all(
-        selectedUsers.map((user) =>
-          axios.post(
-            `${API_BASE}/api/wishes`,
-            { recipientId: user._id, type, message },
-            { headers: { Authorization: `Bearer ${token}` } }
-          )
-        )
-      );
-      toast.success(
-        `Wishes sent to ${selectedUsers.map((u) => u.name).join(", ")}`
-      );
-    } catch (err) {
-      console.error("Error sending wishes:", err.response?.data || err.message);
-      toast.error("Failed to send wishes");
-    }
+  const anniversaries = useMemo(
+    () =>
+      workforceUsers
+        .map((user) => ({
+          _id: user._id,
+          name: user.name || "Unknown employee",
+          designation: user.designation || user.role || "Employee",
+          originalDoj: user.doj,
+          nextDate: getNextOccurrence(user.doj),
+          avatar: user.avatar,
+        }))
+        .filter((user) => user.nextDate)
+        .sort((left, right) => left.nextDate - right.nextDate)
+        .slice(0, 4),
+    [workforceUsers],
+  );
+
+  const recentActivities = useMemo(
+    () =>
+      [...leaves]
+        .filter((leave) => leave.createdAt)
+        .sort((left, right) => new Date(right.createdAt) - new Date(left.createdAt))
+        .slice(0, 6)
+        .map((leave) => ({
+          id: leave._id,
+          title: `${
+            leave.employee?.name || leave.employeeName || "An employee"
+          } requested ${leave.type || "time off"}`,
+          time: new Date(leave.createdAt).toLocaleString("en-IN", {
+            day: "numeric",
+            month: "short",
+            hour: "2-digit",
+            minute: "2-digit",
+          }),
+          status: String(leave.status || "pending").toLowerCase(),
+        })),
+    [leaves],
+  );
+
+  const handleRefresh = async () => {
+    const refreshed = await fetchDashboardData({ background: true });
+    if (refreshed) toast.success("HR dashboard refreshed");
   };
 
+  const handleSendWishes = async (selectedUsers, message, type) => {
+    const token = localStorage.getItem("token");
+    await Promise.all(
+      selectedUsers.map((user) =>
+        axios.post(
+          `${API_BASE}/api/wishes`,
+          {
+            recipientId: user._id,
+            type,
+            message: message.replaceAll("[name]", user.name),
+          },
+          { headers: { Authorization: `Bearer ${token}` } },
+        ),
+      ),
+    );
+    toast.success(
+      `Wish${selectedUsers.length === 1 ? "" : "es"} sent successfully`,
+    );
+  };
+
+  const quickLinks = [
+    {
+      label: "Employee directory",
+      description: "Profiles, roles and employee details",
+      icon: Users,
+      path: "/directory",
+    },
+    {
+      label: "Shift management",
+      description: "Schedules, shifts and assignments",
+      icon: Clock,
+      path: "/admin/shifts",
+    },
+    {
+      label: "Attendance status",
+      description: "See who is working right now",
+      icon: UserCheck,
+      path: "/super-admin",
+    },
+    {
+      label: "Notice board",
+      description: "Publish and manage team notices",
+      icon: FileText,
+      path: "/admin/notices",
+    },
+  ];
+
   return (
-    <>
-      <div className="flex bg-[#0f1419] min-h-screen text-white relative overflow-hidden">
-        {/* Animated Background */}
-        <div className="absolute inset-0 bg-gradient-to-br from-slate-900/20 via-blue-900/10 to-purple-900/20"></div>
-        <div className="absolute inset-0">
-          <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-cyan-500/5 rounded-full blur-3xl animate-pulse"></div>
-          <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-purple-500/5 rounded-full blur-3xl animate-pulse"></div>
-        </div>
+    <div className="relative flex h-[100dvh] overflow-hidden bg-slate-50 text-slate-900 dark:bg-[#0b0d12] dark:text-slate-100">
+      <Sidebar
+        collapsed={collapsed}
+        setCollapsed={setCollapsed}
+        userRole="hr"
+        onLogout={onLogout}
+      />
 
-        {/* Sidebar */}
-        <Sidebar
-          collapsed={collapsed}
-          setCollapsed={setCollapsed}
-          userRole="hr"
-          onLogout={onLogout}
-        />
-
-        {/* Main Content */}
-        <main
-          className={`relative z-10 flex-1 transition-all duration-300 ${
-            collapsed ? "ml-24" : "ml-72"
-          } p-8`}
-        >
-          {/* Modern Header */}
-          <div className="mb-12">
-            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between mb-6">
-              <div>
-                <h1 className="text-5xl font-bold mb-2">
-                  <span className="bg-gradient-to-r from-emerald-400 via-cyan-400 to-blue-400 bg-clip-text text-transparent">
-                    Dashboard
-                  </span>
+      <main
+        className={`h-[100dvh] min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 transition-all duration-300 sm:px-5 lg:px-6 ${
+          collapsed ? "ml-16" : "ml-16 sm:ml-56"
+        }`}
+      >
+        <div className="mx-auto max-w-[1500px] space-y-4 pb-8 sm:space-y-5">
+          <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-white/10 dark:bg-[#10131c]">
+            <div className="flex flex-col gap-5 p-4 lg:flex-row lg:items-center lg:justify-between lg:p-5">
+              <div className="min-w-0">
+                <div className="mb-3 inline-flex items-center gap-2 rounded-lg border border-violet-200 bg-violet-50 px-3 py-1.5 text-xs font-semibold text-violet-700 dark:border-violet-400/20 dark:bg-violet-400/10 dark:text-violet-200">
+                  <Users className="h-3.5 w-3.5" />
+                  People operations
+                </div>
+                <h1 className="text-2xl font-semibold tracking-tight text-slate-950 dark:text-white">
+                  HR workspace
                 </h1>
-                <p className="text-xl text-gray-300 mb-4">
-                  Manage your workforce with intelligent insights 🚀
+                <p className="mt-1 max-w-2xl text-sm text-slate-500 dark:text-slate-400">
+                  Review employee requests, see who is away, and keep important people moments visible.
                 </p>
               </div>
-              <div className="flex items-center space-x-4">
-                <button
-                  onClick={handleManualRefresh}
-                  disabled={refreshing}
-                  className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-500 to-cyan-600 hover:from-emerald-600 hover:to-cyan-700 disabled:from-gray-400 disabled:to-gray-500 text-white rounded-xl font-medium transition-all duration-300 hover:scale-105 disabled:scale-100"
-                >
-                  <RefreshCw
-                    className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`}
-                  />
-                  <span>{refreshing ? "Refreshing..." : "Refresh"}</span>
-                </button>
-                <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 backdrop-blur-sm border border-slate-600/30 rounded-2xl px-6 py-4">
-                  <div className="flex items-center space-x-3">
-                    <div className="w-3 h-3 bg-green-400 rounded-full animate-pulse"></div>
-                    <div>
-                      <p className="text-sm text-gray-400">Live Time</p>
-                      <p className="text-cyan-400 font-mono text-sm">
-                        {currentTime.toLocaleTimeString("en-US", {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                          second: "2-digit",
-                        })}
-                      </p>
-                    </div>
-                  </div>
-                </div>
+
+              <button
+                type="button"
+                onClick={handleRefresh}
+                disabled={loading || refreshing}
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-blue-500 dark:hover:bg-blue-400"
+              >
+                <RefreshCw
+                  className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`}
+                />
+                {refreshing ? "Refreshing" : "Refresh"}
+              </button>
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-500 dark:border-white/10 dark:bg-white/[0.02] dark:text-slate-400 lg:px-5">
+              <span>
+                {currentTime.toLocaleDateString("en-IN", {
+                  weekday: "long",
+                  day: "numeric",
+                  month: "long",
+                  year: "numeric",
+                })}
+              </span>
+              <span>
+                {lastUpdated
+                  ? `Updated ${lastUpdated.toLocaleTimeString("en-IN", {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}`
+                  : "Preparing today’s overview"}
+              </span>
+            </div>
+          </section>
+
+          {error && (
+            <div className="flex flex-col gap-3 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 dark:border-rose-400/20 dark:bg-rose-400/10 dark:text-rose-200 sm:flex-row sm:items-center sm:justify-between">
+              <span className="flex items-start gap-2">
+                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                {error}
+              </span>
+              <button
+                type="button"
+                onClick={() => fetchDashboardData()}
+                className="rounded-lg border border-rose-200 bg-white px-3 py-2 text-xs font-semibold dark:border-rose-400/20 dark:bg-transparent"
+              >
+                Try again
+              </button>
+            </div>
+          )}
+
+          <section
+            className="grid grid-cols-2 gap-3 lg:grid-cols-4"
+            aria-label="HR summary"
+          >
+            <MetricCard
+              icon={Users}
+              label="Team members"
+              value={loading ? "—" : workforceUsers.length}
+              helper="Active workforce"
+              tone="blue"
+              onClick={() => navigate("/directory")}
+            />
+            <MetricCard
+              icon={AlertCircle}
+              label="Pending leave"
+              value={loading ? "—" : pendingLeaves.length}
+              helper="Awaiting review"
+              tone="rose"
+              onClick={() => navigate("/admin/leaves")}
+            />
+            <MetricCard
+              icon={Calendar}
+              label="Away today"
+              value={loading ? "—" : activeLeaves.length}
+              helper="Approved active leave"
+              tone="amber"
+              onClick={() => setShowLeavesModal(true)}
+            />
+            <MetricCard
+              icon={Clock}
+              label="Flexible shifts"
+              value={loading ? "—" : pendingFlexibleRequests.length}
+              helper="Pending requests"
+              tone="violet"
+              onClick={() => setShowFlexModal(true)}
+            />
+          </section>
+
+          <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(300px,0.65fr)]">
+            <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-[#10131c] sm:p-5">
+              <div>
+                <h2 className="text-base font-semibold text-slate-950 dark:text-white">
+                  Action queue
+                </h2>
+                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                  The HR items most likely to need attention today.
+                </p>
               </div>
-            </div>
-            <div className="text-gray-400 text-lg">
-              {currentTime.toLocaleDateString("en-US", {
-                weekday: "long",
-                year: "numeric",
-                month: "long",
-                day: "numeric",
-              })}
-            </div>
+              <div className="mt-4 space-y-3">
+                <QueueItem
+                  icon={AlertCircle}
+                  title="Leave approvals"
+                  description="Review pending time-off requests and employee notes."
+                  count={pendingLeaves.length}
+                  tone="rose"
+                  actionLabel="Review"
+                  onClick={() => navigate("/admin/leaves")}
+                />
+                <QueueItem
+                  icon={Clock}
+                  title="Flexible-shift requests"
+                  description="Approve or reject requested schedule adjustments."
+                  count={pendingFlexibleRequests.length}
+                  tone="violet"
+                  actionLabel="Open"
+                  onClick={() => setShowFlexModal(true)}
+                />
+                <QueueItem
+                  icon={Calendar}
+                  title="Employees away today"
+                  description="Check the approved leave affecting today’s availability."
+                  count={activeLeaves.length}
+                  tone="amber"
+                  actionLabel="View"
+                  onClick={() => setShowLeavesModal(true)}
+                />
+              </div>
+            </section>
+
+            <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-[#10131c] sm:p-5">
+              <h2 className="text-base font-semibold text-slate-950 dark:text-white">
+                HR shortcuts
+              </h2>
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                Open the most-used people tools.
+              </p>
+              <div className="mt-4 space-y-2">
+                {quickLinks.map((link) => (
+                  <button
+                    key={link.path}
+                    type="button"
+                    onClick={() => navigate(link.path)}
+                    className="group flex w-full items-center gap-3 rounded-xl border border-slate-200 p-3 text-left transition hover:border-blue-200 hover:bg-blue-50 dark:border-white/10 dark:hover:border-blue-400/20 dark:hover:bg-blue-400/10"
+                  >
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-600 transition group-hover:bg-blue-600 group-hover:text-white dark:bg-white/[0.05] dark:text-slate-300">
+                      {React.createElement(link.icon, { className: "h-4 w-4" })}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-sm font-semibold text-slate-800 dark:text-slate-100">
+                        {link.label}
+                      </span>
+                      <span className="mt-0.5 block text-xs leading-4 text-slate-500 dark:text-slate-400">
+                        {link.description}
+                      </span>
+                    </span>
+                    <ArrowRight className="h-4 w-4 shrink-0 text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-blue-600 dark:text-slate-600 dark:group-hover:text-blue-300" />
+                  </button>
+                ))}
+              </div>
+            </section>
           </div>
 
-          {/* Enhanced Stats Dashboard */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            {stats.map((stat, idx) => (
-              <EnhancedStatCard key={idx} {...stat} />
-            ))}
-          </div>
-
-          {/* Celebration Section */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-            <div className="bg-gradient-to-br from-slate-800/40 to-slate-900/40 backdrop-blur-sm border border-slate-600/30 rounded-2xl p-6">
-              <div className="flex items-center justify-between mb-6">
-                <h3 className="text-xl font-bold text-white flex items-center gap-3">
-                  <Gift className="h-6 w-6 text-pink-400" />
-                  Upcoming Birthdays
-                </h3>
+          <section className="grid gap-4 lg:grid-cols-2">
+            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-[#10131c] sm:p-5">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h2 className="flex items-center gap-2 text-base font-semibold text-slate-950 dark:text-white">
+                    <Cake className="h-4 w-4 text-pink-500" />
+                    Upcoming birthdays
+                  </h2>
+                  <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                    The next team birthdays on the calendar.
+                  </p>
+                </div>
                 <button
-                  className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-pink-500 to-rose-600 hover:from-pink-600 hover:to-rose-700 text-white rounded-xl font-medium transition-all duration-300 hover:scale-105"
+                  type="button"
                   onClick={() => {
                     setWishingType("birthday");
                     setShowWishingModal(true);
                   }}
+                  disabled={birthdays.length === 0}
+                  className="inline-flex h-9 items-center gap-2 rounded-lg border border-pink-200 bg-pink-50 px-3 text-xs font-semibold text-pink-700 transition hover:bg-pink-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-pink-400/20 dark:bg-pink-400/10 dark:text-pink-200 dark:hover:bg-pink-400/15"
                 >
-                  <Heart className="h-4 w-4" />
-                  Send Wishes
+                  <Send className="h-3.5 w-3.5" />
+                  Send wish
                 </button>
               </div>
-              <UpcomingBirthdays birthdays={birthdays} loading={loading} />
+              <div className="mt-4">
+                <UpcomingBirthdays birthdays={birthdays} loading={loading} />
+              </div>
             </div>
 
-            <div className="bg-gradient-to-br from-slate-800/40 to-slate-900/40 backdrop-blur-sm border border-slate-600/30 rounded-2xl p-6">
-              <div className="flex items-center justify-between mb-6">
-                <h3 className="text-xl font-bold text-white flex items-center gap-3">
-                  <Award className="h-6 w-6 text-amber-400" />
-                  Work Anniversaries
-                </h3>
+            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-[#10131c] sm:p-5">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h2 className="flex items-center gap-2 text-base font-semibold text-slate-950 dark:text-white">
+                    <Award className="h-4 w-4 text-amber-500" />
+                    Work anniversaries
+                  </h2>
+                  <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                    Recognise upcoming employee milestones.
+                  </p>
+                </div>
                 <button
-                  className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white rounded-xl font-medium transition-all duration-300 hover:scale-105"
+                  type="button"
                   onClick={() => {
                     setWishingType("anniversary");
                     setShowWishingModal(true);
                   }}
+                  disabled={anniversaries.length === 0}
+                  className="inline-flex h-9 items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 text-xs font-semibold text-amber-700 transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-200 dark:hover:bg-amber-400/15"
                 >
-                  <Star className="h-4 w-4" />
-                  Celebrate
+                  <Send className="h-3.5 w-3.5" />
+                  Send wish
                 </button>
               </div>
-              <UpcomingAnniversaries
-                anniversaries={anniversaries}
-                loading={loading}
-              />
-            </div>
-          </div>
-
-          {/* Enhanced Recent Activities */}
-          <div className="bg-gradient-to-br from-slate-800/40 to-slate-900/40 backdrop-blur-sm border border-slate-600/30 rounded-2xl p-6">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-xl font-bold text-white flex items-center gap-3">
-                <Activity className="h-6 w-6 text-cyan-400" />
-                Recent Activities
-              </h3>
-              <div className="flex items-center gap-2 text-sm text-gray-400">
-                <Zap className="h-4 w-4" />
-                Real-time updates
+              <div className="mt-4">
+                <UpcomingAnniversaries
+                  anniversaries={anniversaries}
+                  loading={loading}
+                />
               </div>
             </div>
-            <RecentActivities activities={activities} loading={loading} />
-          </div>
-        </main>
+          </section>
 
-        {/* Modals */}
-        <ActiveLeavesModal
-          isOpen={showLeavesModal}
-          onClose={() => setShowLeavesModal(false)}
-          leaves={activeLeaves}
-        />
-        <WishingModal
-          isOpen={showWishingModal}
-          onClose={() => setShowWishingModal(false)}
-          type={wishingType}
-          birthdays={birthdays}
-          anniversaries={anniversaries}
-          onSend={handleSendWishes}
-        />
-        <FlexibleRequestsModal
-          isOpen={showFlexModal}
-          onClose={() => setShowFlexModal(false)}
-          requests={flexibleRequests}
-          refresh={fetchDashboardData}
-        />
+          <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-[#10131c] sm:p-5">
+            <h2 className="flex items-center gap-2 text-base font-semibold text-slate-950 dark:text-white">
+              <Activity className="h-4 w-4 text-blue-600 dark:text-blue-300" />
+              Recent leave activity
+            </h2>
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+              The latest time-off requests received by HR.
+            </p>
+            <div className="mt-4">
+              <RecentActivities activities={recentActivities} loading={loading} />
+            </div>
+          </section>
+        </div>
+      </main>
 
-        <ToastContainer position="top-right" autoClose={3000} theme="dark" />
+      <ActiveLeavesModal
+        isOpen={showLeavesModal}
+        onClose={() => setShowLeavesModal(false)}
+        leaves={activeLeaves}
+      />
+      <WishingModal
+        isOpen={showWishingModal}
+        onClose={() => setShowWishingModal(false)}
+        defaultType={wishingType}
+        birthdays={birthdays}
+        anniversaries={anniversaries}
+        onSend={handleSendWishes}
+      />
+      <FlexibleRequestsModal
+        isOpen={showFlexModal}
+        onClose={() => setShowFlexModal(false)}
+        requests={flexibleRequests}
+        refresh={() => fetchDashboardData({ background: true })}
+      />
 
-        {/* Global Celebration Popup */}
-        <CelebrationPopup
-          celebrations={celebrations}
-          isOpen={showCelebrationPopup}
-          onClose={closeCelebrationPopup}
-        />
-      </div>
-    </>
+      <ToastContainer position="top-right" autoClose={3000} theme={theme} />
+      <CelebrationPopup
+        celebrations={celebrations}
+        isOpen={showCelebrationPopup}
+        onClose={closeCelebrationPopup}
+      />
+    </div>
   );
 };
-
-// Enhanced Stat Card Component
-const EnhancedStatCard = ({
-  icon,
-  title,
-  value,
-  subtitle,
-  color,
-  bgColor,
-  textColor,
-  onClick,
-  trend,
-  urgent,
-}) => (
-  <div
-    onClick={onClick}
-    className={`bg-gradient-to-br ${bgColor} backdrop-blur-sm border border-slate-600/30 rounded-2xl p-6 relative overflow-hidden group hover:scale-105 transition-all duration-300 cursor-pointer ${
-      urgent ? "ring-2 ring-red-500/30 animate-pulse-slow" : ""
-    }`}
-  >
-    <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-    <div className="relative z-10">
-      <div className="flex items-center justify-between mb-4">
-        <div
-          className={`w-12 h-12 rounded-xl bg-gradient-to-br ${color} flex items-center justify-center text-white shadow-lg`}
-        >
-          {icon}
-        </div>
-        {trend && (
-          <div
-            className={`flex items-center gap-1 text-xs font-medium ${
-              trend.positive ? "text-emerald-400" : "text-red-400"
-            }`}
-          >
-            <TrendingUp
-              className={`h-3 w-3 ${trend.positive ? "" : "rotate-180"}`}
-            />
-            {trend.value}
-          </div>
-        )}
-        {urgent && (
-          <div className="flex items-center gap-1 text-xs font-medium text-red-400">
-            <AlertTriangle className="h-3 w-3" />
-            Urgent
-          </div>
-        )}
-      </div>
-      <div>
-        <p className="text-gray-400 text-sm font-medium mb-1">{title}</p>
-        <p className="text-white font-bold text-3xl mb-1">{value}</p>
-        {subtitle && <p className="text-gray-400 text-xs">{subtitle}</p>}
-      </div>
-    </div>
-  </div>
-);
 
 export default HRDashboard;

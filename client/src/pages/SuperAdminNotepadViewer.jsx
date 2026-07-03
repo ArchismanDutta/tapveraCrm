@@ -1,15 +1,49 @@
-// src/pages/SuperAdminNotepadViewer.jsx
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
+import { BookOpen, FileText, Search, Users, X } from "lucide-react";
 import { toast } from "react-toastify";
 import Sidebar from "../components/dashboard/Sidebar";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
 
+const roleBadgeStyles = {
+  employee:
+    "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-400/20 dark:bg-blue-400/10 dark:text-blue-200",
+  admin:
+    "border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-400/20 dark:bg-violet-400/10 dark:text-violet-200",
+  hr: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-200",
+};
+
+const formatRole = (role = "user") =>
+  role.charAt(0).toUpperCase() + role.slice(1);
+
+const formatDate = (date) =>
+  date
+    ? new Date(date).toLocaleDateString("en-IN", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      })
+    : "Never";
+
+const UserAvatar = ({ user, size = "h-10 w-10" }) =>
+  user.profileImage ? (
+    <img
+      className={`${size} shrink-0 rounded-full object-cover`}
+      src={`${API_BASE}${user.profileImage}`}
+      alt={user.name}
+    />
+  ) : (
+    <span
+      className={`${size} flex shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-sm font-semibold text-white`}
+    >
+      {user.name?.charAt(0)?.toUpperCase() || "?"}
+    </span>
+  );
+
 const SuperAdminNotepadViewer = ({ onLogout }) => {
   const [collapsed, setCollapsed] = useState(false);
   const [users, setUsers] = useState([]);
-  const [filteredUsers, setFilteredUsers] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
@@ -17,65 +51,59 @@ const SuperAdminNotepadViewer = ({ onLogout }) => {
   const [notepadContent, setNotepadContent] = useState("");
   const [showNotepadModal, setShowNotepadModal] = useState(false);
 
-  const token = localStorage.getItem("token");
-
-  const getAxiosConfig = () => ({
-    headers: { Authorization: `Bearer ${token}` }
-  });
-
-  // Fetch all users with notepads
-  const fetchUsersWithNotepads = async () => {
-    try {
-      setIsLoading(true);
-      const response = await axios.get(
-        `${API_BASE}/api/notepad/all-users`,
-        getAxiosConfig()
-      );
-
-      if (response.data.success) {
-        setUsers(response.data.data);
-        setFilteredUsers(response.data.data);
-      }
-    } catch (error) {
-      console.error("Error fetching users:", error);
-      toast.error("Failed to load users");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   useEffect(() => {
+    const fetchUsersWithNotepads = async () => {
+      try {
+        setIsLoading(true);
+        const response = await axios.get(
+          `${API_BASE}/api/notepad/all-users`,
+          {
+            headers: {
+              Authorization: `Bearer ${localStorage.getItem("token")}`,
+            },
+          },
+        );
+
+        if (response.data.success) setUsers(response.data.data);
+      } catch (error) {
+        console.error("Error fetching users:", error);
+        toast.error("Failed to load users");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
     fetchUsersWithNotepads();
   }, []);
 
-  // Filter users based on search and role
-  useEffect(() => {
-    let filtered = users;
+  const filteredUsers = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    return users.filter((user) => {
+      const matchesRole = roleFilter === "all" || user.role === roleFilter;
+      const matchesSearch =
+        !query ||
+        user.name?.toLowerCase().includes(query) ||
+        user.email?.toLowerCase().includes(query) ||
+        user.department?.toLowerCase().includes(query);
+      return matchesRole && matchesSearch;
+    });
+  }, [roleFilter, searchQuery, users]);
 
-    // Filter by role
-    if (roleFilter !== "all") {
-      filtered = filtered.filter(user => user.role === roleFilter);
-    }
+  const usersWithNotes = users.filter((user) => user.notepad?.hasContent).length;
+  const totalWords = users.reduce(
+    (sum, user) => sum + (user.notepad?.wordCount || 0),
+    0,
+  );
 
-    // Filter by search query
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(user =>
-        user.name.toLowerCase().includes(query) ||
-        user.email.toLowerCase().includes(query) ||
-        user.department?.toLowerCase().includes(query)
-      );
-    }
-
-    setFilteredUsers(filtered);
-  }, [searchQuery, roleFilter, users]);
-
-  // View user's notepad
   const viewNotepad = async (user) => {
     try {
       const response = await axios.get(
         `${API_BASE}/api/notepad/user/${user._id}`,
-        getAxiosConfig()
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+          },
+        },
       );
 
       if (response.data.success) {
@@ -89,338 +117,302 @@ const SuperAdminNotepadViewer = ({ onLogout }) => {
     }
   };
 
-  // Close modal
   const closeModal = () => {
     setShowNotepadModal(false);
     setSelectedUser(null);
     setNotepadContent("");
   };
 
-  // Get role badge color
-  const getRoleBadge = (role) => {
-    const badges = {
-      employee: "bg-blue-600 text-white",
-      admin: "bg-purple-600 text-white",
-      hr: "bg-green-600 text-white"
-    };
-    return badges[role] || "bg-gray-600 text-white";
-  };
-
   return (
-    <div className="flex min-h-screen bg-[#0f1419] text-gray-100">
+    <div className="relative flex h-[100dvh] overflow-hidden bg-slate-50 text-slate-900 dark:bg-[#0b0d12] dark:text-slate-100">
       <Sidebar
         collapsed={collapsed}
         setCollapsed={setCollapsed}
-        userRole="superadmin"
+        userRole="super-admin"
         onLogout={onLogout}
       />
 
       <main
-        className={`flex-1 p-6 transition-all duration-300 ${
-          collapsed ? "ml-20" : "ml-72"
+        className={`h-[100dvh] min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 transition-all duration-300 sm:px-5 lg:px-6 ${
+          collapsed ? "ml-16" : "ml-16 sm:ml-56"
         }`}
       >
-        {/* Header */}
-        <div className="mb-6">
-          <h1 className="text-3xl font-bold text-white mb-2">User Notepads</h1>
-          <p className="text-gray-400">View all employee, admin, and HR notepads</p>
-        </div>
+        <div className="mx-auto max-w-[1500px] space-y-4 pb-8 sm:space-y-5">
+          <header className="rounded-2xl border border-slate-200 bg-white px-5 py-5 shadow-sm dark:border-white/10 dark:bg-[#10131c] sm:px-6">
+            <div className="inline-flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 dark:border-blue-400/20 dark:bg-blue-400/10 dark:text-blue-200">
+              <BookOpen className="h-3.5 w-3.5" />
+              Employee workspace
+            </div>
+            <h1 className="mt-3 text-2xl font-semibold tracking-tight text-slate-950 dark:text-white">
+              Employee notepads
+            </h1>
+            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+              Review notes saved by employees, administrators, and HR team members.
+            </p>
+          </header>
 
-        {/* Filters */}
-        <div className="bg-[#161c2c] rounded-xl shadow-lg border border-[#232945] p-6 mb-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Search */}
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Search Users
-              </label>
-              <div className="relative">
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search by name, email, or department..."
-                  className="w-full bg-[#0f1419] text-white rounded-lg pl-10 pr-4 py-2 border border-[#232945] focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-                <svg
-                  className="w-5 h-5 text-gray-400 absolute left-3 top-2.5"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+          <section className="grid grid-cols-3 gap-px overflow-hidden rounded-2xl border border-slate-200 bg-slate-200 shadow-sm dark:border-white/10 dark:bg-white/10">
+            {[
+              ["Team members", users.length, Users],
+              ["With notes", usersWithNotes, FileText],
+              ["Total words", totalWords.toLocaleString("en-IN"), BookOpen],
+            ].map(([label, value, Icon]) => (
+              <div
+                key={label}
+                className="flex min-w-0 items-center gap-3 bg-white px-3 py-4 dark:bg-[#10131c] sm:px-5"
+              >
+                <span className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-500 dark:bg-white/[0.05] dark:text-slate-300 sm:flex">
+                  {React.createElement(Icon, { className: "h-4 w-4" })}
+                </span>
+                <div className="min-w-0">
+                  <div className="text-xl font-semibold text-slate-950 dark:text-white">
+                    {isLoading ? "—" : value}
+                  </div>
+                  <div className="truncate text-xs text-slate-500 dark:text-slate-400">
+                    {label}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </section>
+
+          <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-white/10 dark:bg-[#10131c]">
+            <div className="border-b border-slate-200 p-4 dark:border-white/10 sm:p-5">
+              <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_190px]">
+                <label className="relative block">
+                  <span className="sr-only">Search users</span>
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="search"
+                    value={searchQuery}
+                    onChange={(event) => setSearchQuery(event.target.value)}
+                    placeholder="Search name, email, or department"
+                    className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 pl-10 pr-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-500/15 dark:border-white/10 dark:bg-white/[0.035] dark:text-white dark:focus:bg-white/[0.05]"
                   />
-                </svg>
+                </label>
+                <select
+                  value={roleFilter}
+                  onChange={(event) => setRoleFilter(event.target.value)}
+                  aria-label="Filter users by role"
+                  className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 dark:border-white/10 dark:bg-[#151923] dark:text-slate-200"
+                >
+                  <option value="all">All roles</option>
+                  <option value="employee">Employees</option>
+                  <option value="admin">Administrators</option>
+                  <option value="hr">HR</option>
+                </select>
               </div>
+              <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">
+                Showing {filteredUsers.length} of {users.length} team members
+              </p>
             </div>
 
-            {/* Role Filter */}
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Filter by Role
-              </label>
-              <select
-                value={roleFilter}
-                onChange={(e) => setRoleFilter(e.target.value)}
-                className="w-full bg-[#0f1419] text-white rounded-lg px-4 py-2 border border-[#232945] focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="all">All Roles</option>
-                <option value="employee">Employee</option>
-                <option value="admin">Admin</option>
-                <option value="hr">HR</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="mt-4 text-sm text-gray-400">
-            Showing {filteredUsers.length} of {users.length} users
-          </div>
-        </div>
-
-        {/* Users Table */}
-        <div className="bg-[#161c2c] rounded-xl shadow-lg border border-[#232945] overflow-hidden">
-          {isLoading ? (
-            <div className="flex items-center justify-center p-12">
-              <div className="text-center">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
-                <p className="text-gray-400">Loading users...</p>
+            {isLoading ? (
+              <div className="space-y-3 p-4 sm:p-5">
+                {[0, 1, 2, 3, 4].map((item) => (
+                  <div
+                    key={item}
+                    className="h-16 animate-pulse rounded-xl bg-slate-100 dark:bg-white/[0.04]"
+                  />
+                ))}
               </div>
-            </div>
-          ) : filteredUsers.length === 0 ? (
-            <div className="text-center p-12">
-              <svg
-                className="w-16 h-16 text-gray-600 mx-auto mb-4"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"
-                />
-              </svg>
-              <h3 className="text-xl font-semibold text-gray-400 mb-2">No users found</h3>
-              <p className="text-gray-500">Try adjusting your search or filter criteria</p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-[#232945]">
-                  <tr>
-                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                      User
-                    </th>
-                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                      Role
-                    </th>
-                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                      Department
-                    </th>
-                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                      Notepad Status
-                    </th>
-                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                      Last Modified
-                    </th>
-                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[#232945]">
+            ) : filteredUsers.length === 0 ? (
+              <div className="px-6 py-16 text-center">
+                <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-slate-100 text-slate-400 dark:bg-white/[0.05]">
+                  <Search className="h-5 w-5" />
+                </span>
+                <h2 className="mt-4 text-sm font-semibold text-slate-900 dark:text-white">
+                  No matching users
+                </h2>
+                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                  Try changing the search term or role filter.
+                </p>
+              </div>
+            ) : (
+              <>
+                <div className="space-y-3 p-4 md:hidden">
                   {filteredUsers.map((user) => (
-                    <tr
+                    <article
                       key={user._id}
-                      className="hover:bg-[#232945]/50 transition-colors"
+                      className="rounded-xl border border-slate-200 p-4 dark:border-white/10"
                     >
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center">
-                          <div className="flex-shrink-0 h-10 w-10">
-                            {user.profileImage ? (
-                              <img
-                                className="h-10 w-10 rounded-full object-cover"
-                                src={`${API_BASE}${user.profileImage}`}
-                                alt={user.name}
-                              />
-                            ) : (
-                              <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white font-bold">
-                                {user.name.charAt(0).toUpperCase()}
-                              </div>
-                            )}
-                          </div>
-                          <div className="ml-4">
-                            <div className="text-sm font-medium text-white">
-                              {user.name}
-                            </div>
-                            <div className="text-sm text-gray-400">
-                              {user.email}
-                            </div>
-                          </div>
+                      <div className="flex items-start gap-3">
+                        <UserAvatar user={user} />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-semibold text-slate-900 dark:text-white">
+                            {user.name}
+                          </p>
+                          <p className="truncate text-xs text-slate-500 dark:text-slate-400">
+                            {user.email}
+                          </p>
                         </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
                         <span
-                          className={`px-3 py-1 rounded-full text-xs font-medium ${getRoleBadge(
-                            user.role
-                          )}`}
+                          className={`rounded-full border px-2 py-1 text-[11px] font-semibold ${
+                            roleBadgeStyles[user.role] || roleBadgeStyles.employee
+                          }`}
                         >
-                          {user.role.charAt(0).toUpperCase() + user.role.slice(1)}
+                          {formatRole(user.role)}
                         </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
-                        {user.department || "N/A"}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm">
-                          {user.notepad.hasContent ? (
-                            <div>
-                              <div className="text-green-400 font-medium">
-                                ● Has Content
-                              </div>
-                              <div className="text-gray-500 text-xs">
-                                {user.notepad.wordCount} words, {user.notepad.characterCount} chars
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="text-gray-500">
-                              ○ Empty
-                            </div>
-                          )}
+                      </div>
+                      <div className="mt-4 flex items-center justify-between gap-3 border-t border-slate-200 pt-3 dark:border-white/10">
+                        <div className="min-w-0 text-xs text-slate-500 dark:text-slate-400">
+                          <p className="truncate">{user.department || "No department"}</p>
+                          <p className="mt-0.5">Updated {formatDate(user.notepad?.lastModified)}</p>
                         </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">
-                        {user.notepad.lastModified
-                          ? new Date(user.notepad.lastModified).toLocaleDateString()
-                          : "Never"}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm">
                         <button
+                          type="button"
                           onClick={() => viewNotepad(user)}
-                          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2"
+                          className="shrink-0 rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-blue-700"
                         >
-                          <svg
-                            className="w-4 h-4"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                            />
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
-                            />
-                          </svg>
-                          View Notepad
+                          View note
                         </button>
-                      </td>
-                    </tr>
+                      </div>
+                    </article>
                   ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+                </div>
+
+                <div className="hidden overflow-x-auto md:block">
+                  <table className="w-full min-w-[850px] text-left">
+                    <thead className="bg-slate-50 dark:bg-white/[0.02]">
+                      <tr className="border-b border-slate-200 dark:border-white/10">
+                        {["User", "Role", "Department", "Notepad", "Updated", ""].map(
+                          (heading) => (
+                            <th
+                              key={heading || "actions"}
+                              className="px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400"
+                            >
+                              {heading}
+                            </th>
+                          ),
+                        )}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200 dark:divide-white/10">
+                      {filteredUsers.map((user) => (
+                        <tr
+                          key={user._id}
+                          className="transition hover:bg-slate-50 dark:hover:bg-white/[0.025]"
+                        >
+                          <td className="px-5 py-3.5">
+                            <div className="flex items-center gap-3">
+                              <UserAvatar user={user} />
+                              <div className="min-w-0">
+                                <p className="truncate text-sm font-semibold text-slate-900 dark:text-white">
+                                  {user.name}
+                                </p>
+                                <p className="truncate text-xs text-slate-500 dark:text-slate-400">
+                                  {user.email}
+                                </p>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-5 py-3.5">
+                            <span
+                              className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${
+                                roleBadgeStyles[user.role] || roleBadgeStyles.employee
+                              }`}
+                            >
+                              {formatRole(user.role)}
+                            </span>
+                          </td>
+                          <td className="px-5 py-3.5 text-sm text-slate-600 dark:text-slate-300">
+                            {user.department || "—"}
+                          </td>
+                          <td className="px-5 py-3.5">
+                            {user.notepad?.hasContent ? (
+                              <div>
+                                <p className="text-sm font-medium text-emerald-700 dark:text-emerald-300">
+                                  Has content
+                                </p>
+                                <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+                                  {user.notepad.wordCount} words
+                                </p>
+                              </div>
+                            ) : (
+                              <span className="text-sm text-slate-400">Empty</span>
+                            )}
+                          </td>
+                          <td className="px-5 py-3.5 text-sm text-slate-500 dark:text-slate-400">
+                            {formatDate(user.notepad?.lastModified)}
+                          </td>
+                          <td className="px-5 py-3.5 text-right">
+                            <button
+                              type="button"
+                              onClick={() => viewNotepad(user)}
+                              className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-blue-700"
+                            >
+                              View note
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+          </section>
         </div>
       </main>
 
-      {/* Notepad Modal */}
       {showNotepadModal && selectedUser && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm"
           onClick={closeModal}
+          role="presentation"
         >
-          <div
-            className="bg-[#161c2c] rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden border border-[#232945]"
-            onClick={(e) => e.stopPropagation()}
+          <section
+            className="flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-white/10 dark:bg-[#10131c]"
+            onClick={(event) => event.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="notepad-title"
           >
-            {/* Modal Header */}
-            <div className="bg-[#232945] px-6 py-4 flex items-center justify-between border-b border-[#232945]">
-              <div className="flex items-center gap-4">
-                {selectedUser.profileImage ? (
-                  <img
-                    className="h-12 w-12 rounded-full object-cover"
-                    src={`${API_BASE}${selectedUser.profileImage}`}
-                    alt={selectedUser.name}
-                  />
-                ) : (
-                  <div className="h-12 w-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white font-bold text-lg">
-                    {selectedUser.name.charAt(0).toUpperCase()}
-                  </div>
-                )}
-                <div>
-                  <h3 className="text-xl font-bold text-white">
-                    {selectedUser.name}'s Notepad
-                  </h3>
-                  <p className="text-sm text-gray-400">
-                    {selectedUser.email} • {selectedUser.role}
+            <header className="flex items-center justify-between gap-4 border-b border-slate-200 px-5 py-4 dark:border-white/10 sm:px-6">
+              <div className="flex min-w-0 items-center gap-3">
+                <UserAvatar user={selectedUser} size="h-11 w-11" />
+                <div className="min-w-0">
+                  <h2
+                    id="notepad-title"
+                    className="truncate text-base font-semibold text-slate-950 dark:text-white"
+                  >
+                    {selectedUser.name}&apos;s notepad
+                  </h2>
+                  <p className="truncate text-xs text-slate-500 dark:text-slate-400">
+                    {selectedUser.email} · {formatRole(selectedUser.role)}
                   </p>
                 </div>
               </div>
               <button
+                type="button"
                 onClick={closeModal}
-                className="p-2 hover:bg-[#161c2c] rounded-lg transition-colors"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 dark:hover:bg-white/[0.06] dark:hover:text-white"
+                aria-label="Close notepad"
               >
-                <svg
-                  className="w-6 h-6 text-gray-400 hover:text-white"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M6 18L18 6M6 6l12 12"
-                  />
-                </svg>
+                <X className="h-5 w-5" />
               </button>
-            </div>
+            </header>
 
-            {/* Modal Content */}
-            <div className="p-6 overflow-y-auto" style={{ maxHeight: "calc(90vh - 120px)" }}>
+            <div className="overflow-y-auto p-5 sm:p-6">
               {notepadContent ? (
-                <div className="bg-[#0f1419] rounded-lg p-6 border border-[#232945]">
-                  <pre className="whitespace-pre-wrap font-mono text-sm text-gray-300 leading-relaxed">
-                    {notepadContent}
-                  </pre>
-                </div>
+                <pre className="whitespace-pre-wrap rounded-xl border border-slate-200 bg-slate-50 p-5 font-sans text-sm leading-7 text-slate-700 dark:border-white/10 dark:bg-white/[0.025] dark:text-slate-200">
+                  {notepadContent}
+                </pre>
               ) : (
-                <div className="text-center py-12">
-                  <svg
-                    className="w-16 h-16 text-gray-600 mx-auto mb-4"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                    />
-                  </svg>
-                  <h3 className="text-xl font-semibold text-gray-400 mb-2">
-                    Empty Notepad
+                <div className="py-14 text-center">
+                  <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-slate-100 text-slate-400 dark:bg-white/[0.05]">
+                    <FileText className="h-5 w-5" />
+                  </span>
+                  <h3 className="mt-4 text-sm font-semibold text-slate-900 dark:text-white">
+                    Empty notepad
                   </h3>
-                  <p className="text-gray-500">
-                    This user hasn't written anything in their notepad yet.
+                  <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                    This user has not saved any notes yet.
                   </p>
                 </div>
               )}
             </div>
-          </div>
+          </section>
         </div>
       )}
     </div>

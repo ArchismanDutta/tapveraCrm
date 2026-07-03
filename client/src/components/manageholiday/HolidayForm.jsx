@@ -1,179 +1,225 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
+import { CalendarPlus, X } from "lucide-react";
+
+const emptyForm = {
+  name: "",
+  startDate: "",
+  endDate: "",
+  type: "NATIONAL",
+  shifts: ["ALL"],
+};
+
+const fieldClass =
+  "h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-500/15 dark:border-white/10 dark:bg-white/[0.035] dark:text-white dark:focus:bg-white/[0.05]";
 
 const HolidayForm = ({ onAdd, onUpdate, editingHoliday, onCancelEdit }) => {
-  const [form, setForm] = useState({
-    name: "",
-    startDate: "",
-    endDate: "",
-    type: "NATIONAL",
-    shifts: ["ALL"],
-  });
+  const [form, setForm] = useState(emptyForm);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
 
   useEffect(() => {
     if (editingHoliday) {
+      const holidayDate = String(editingHoliday.date || "").slice(0, 10);
       setForm({
-        name: editingHoliday.name,
-        startDate: new Date(editingHoliday.date).toISOString().split('T')[0],
-        endDate: new Date(editingHoliday.date).toISOString().split('T')[0],
-        type: editingHoliday.type,
-        shifts: editingHoliday.shifts,
+        name: editingHoliday.name || "",
+        startDate: holidayDate,
+        endDate: holidayDate,
+        type: editingHoliday.type || "NATIONAL",
+        shifts: editingHoliday.shifts?.length
+          ? editingHoliday.shifts
+          : ["ALL"],
       });
     } else {
-      setForm({
-        name: "",
-        startDate: "",
-        endDate: "",
-        type: "NATIONAL",
-        shifts: ["ALL"],
-      });
+      setForm(emptyForm);
     }
+    setError("");
   }, [editingHoliday]);
 
-  const handleChange = (e) => {
-    const { name, value, type, checked } = e.target;
-    setForm({ ...form, [name]: type === "checkbox" ? checked : value });
+  const handleChange = (event) => {
+    const { name, value } = event.target;
+    setForm((current) => ({ ...current, [name]: value }));
+    if (error) setError("");
   };
 
-  const handleShiftsChange = (e) => {
-    const { value } = e.target;
-    setForm((prev) => ({
-      ...prev,
-      shifts: value === "ALL" ? ["ALL"] : [value],
+  const handleShiftsChange = (event) => {
+    setForm((current) => ({
+      ...current,
+      shifts: [event.target.value],
     }));
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!form.name || !form.startDate) return alert("Name and start date required");
+  const handleSubmit = async (event) => {
+    event.preventDefault();
 
-    if (editingHoliday) {
-      // For editing, just update the single holiday
-      onUpdate(editingHoliday._id, {
-        name: form.name,
-        date: form.startDate,
-        type: form.type,
-        shifts: form.shifts
-      });
-    } else {
-      // For adding, check if we have a date range
-      const start = new Date(form.startDate);
-      const end = form.endDate ? new Date(form.endDate) : new Date(form.startDate);
+    if (!form.name.trim() || !form.startDate) {
+      setError("Holiday name and start date are required.");
+      return;
+    }
 
-      // Validate that end date is not before start date
-      if (end < start) {
-        return alert("End date cannot be before start date");
-      }
+    const start = new Date(`${form.startDate}T00:00:00`);
+    const end = new Date(`${form.endDate || form.startDate}T00:00:00`);
+    if (end < start) {
+      setError("End date cannot be before the start date.");
+      return;
+    }
 
-      // If it's a single date or a range, create holidays for each day
-      const dates = [];
-      const currentDate = new Date(start);
+    try {
+      setSaving(true);
+      setError("");
 
-      while (currentDate <= end) {
-        dates.push(new Date(currentDate).toISOString().split('T')[0]);
-        currentDate.setDate(currentDate.getDate() + 1);
-      }
-
-      // Create a holiday for each date in the range
-      for (const date of dates) {
-        await onAdd({
-          name: form.name,
-          date: date,
+      if (editingHoliday) {
+        await onUpdate(editingHoliday._id, {
+          name: form.name.trim(),
+          date: form.startDate,
           type: form.type,
           shifts: form.shifts,
         });
+      } else {
+        const currentDate = new Date(start);
+        while (currentDate <= end) {
+          const date = [
+            currentDate.getFullYear(),
+            String(currentDate.getMonth() + 1).padStart(2, "0"),
+            String(currentDate.getDate()).padStart(2, "0"),
+          ].join("-");
+          await onAdd({
+            name: form.name.trim(),
+            date,
+            type: form.type,
+            shifts: form.shifts,
+          });
+          currentDate.setDate(currentDate.getDate() + 1);
+        }
       }
-    }
 
-    setForm({
-      name: "",
-      startDate: "",
-      endDate: "",
-      type: "NATIONAL",
-      shifts: ["ALL"],
-    });
+      setForm(emptyForm);
+    } catch (submitError) {
+      console.error("Error saving holiday:", submitError);
+      setError("The holiday could not be saved. Please try again.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
-    <form
-      onSubmit={handleSubmit}
-      className="flex flex-col gap-4"
-    >
-      {/* Row 1: Inputs */}
-      <div className="flex flex-wrap gap-4 items-center">
-        <input
-          type="text"
-          name="name"
-          value={form.name}
-          onChange={handleChange}
-          placeholder="Holiday Name"
-          className="border border-[#232945] bg-[#141a21] text-white placeholder-blue-300 rounded-lg p-3 w-52 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
-          required
-        />
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-[minmax(220px,1.2fr)_170px_170px_180px_190px]">
+        <label className="block">
+          <span className="mb-1.5 block text-xs font-medium text-slate-600 dark:text-slate-300">
+            Holiday name
+          </span>
+          <input
+            type="text"
+            name="name"
+            value={form.name}
+            onChange={handleChange}
+            placeholder="e.g. Independence Day"
+            className={fieldClass}
+            required
+          />
+        </label>
 
-        <div className="flex gap-2 items-center">
+        <label className="block">
+          <span className="mb-1.5 block text-xs font-medium text-slate-600 dark:text-slate-300">
+            Start date
+          </span>
           <input
             type="date"
             name="startDate"
             value={form.startDate}
             onChange={handleChange}
-            placeholder="Start Date"
-            className="border border-[#232945] bg-[#141a21] text-white rounded-lg p-3 w-44 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+            className={fieldClass}
             required
           />
-          <span className="text-blue-300">to</span>
+        </label>
+
+        <label className="block">
+          <span className="mb-1.5 block text-xs font-medium text-slate-600 dark:text-slate-300">
+            End date
+          </span>
           <input
             type="date"
             name="endDate"
             value={form.endDate}
+            min={form.startDate || undefined}
             onChange={handleChange}
-            placeholder="End Date (Optional)"
-            className="border border-[#232945] bg-[#141a21] text-white rounded-lg p-3 w-44 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+            disabled={Boolean(editingHoliday)}
+            className={`${fieldClass} disabled:cursor-not-allowed disabled:opacity-50`}
           />
-        </div>
+        </label>
 
-        <select
-          name="type"
-          value={form.type}
-          onChange={handleChange}
-          className="border border-[#232945] bg-[#141a21] text-white rounded-lg p-3 w-48 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
-        >
-          <option value="NATIONAL">National</option>
-          <option value="COMPANY">Company</option>
-          <option value="RELIGIOUS">Religious</option>
-          <option value="FESTIVAL">Festival</option>
-        </select>
+        <label className="block">
+          <span className="mb-1.5 block text-xs font-medium text-slate-600 dark:text-slate-300">
+            Holiday type
+          </span>
+          <select
+            name="type"
+            value={form.type}
+            onChange={handleChange}
+            className={`${fieldClass} dark:bg-[#151923]`}
+          >
+            <option value="NATIONAL">National</option>
+            <option value="COMPANY">Company</option>
+            <option value="RELIGIOUS">Religious</option>
+            <option value="FESTIVAL">Festival</option>
+          </select>
+        </label>
 
-        <select
-          name="shifts"
-          value={form.shifts}
-          onChange={handleShiftsChange}
-          className="border border-[#232945] bg-[#141a21] text-white rounded-lg p-3 w-40 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
-        >
-          <option value="ALL">All</option>
-          <option value="standard">Standard</option>
-          <option value="flexiblePermanent">Flexible Permanent</option>
-        </select>
+        <label className="block">
+          <span className="mb-1.5 block text-xs font-medium text-slate-600 dark:text-slate-300">
+            Applies to
+          </span>
+          <select
+            name="shifts"
+            value={form.shifts[0] || "ALL"}
+            onChange={handleShiftsChange}
+            className={`${fieldClass} dark:bg-[#151923]`}
+          >
+            <option value="ALL">All shifts</option>
+            <option value="standard">Standard</option>
+            <option value="flexiblePermanent">Flexible permanent</option>
+          </select>
+        </label>
       </div>
 
-      {/* Row 2: Button */}
-      <div className="flex flex-wrap gap-4 items-center justify-end mt-2">
+      <div className="flex flex-col gap-3 border-t border-slate-200 pt-4 dark:border-white/10 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          {error && (
+            <p className="text-sm text-rose-600 dark:text-rose-300">{error}</p>
+          )}
+          {!error && !editingHoliday && (
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              A date range creates one holiday entry for each day.
+            </p>
+          )}
+        </div>
         <div className="flex gap-3">
-          <button
-            type="submit"
-            className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-8 py-3 rounded-lg shadow-lg transition-colors duration-200"
-            style={{ minWidth: "150px" }}
-          >
-            {editingHoliday ? "Update Holiday" : "Add Holiday"}
-          </button>
           {editingHoliday && (
             <button
               type="button"
               onClick={onCancelEdit}
-              className="bg-gray-600 hover:bg-gray-700 text-white font-semibold px-6 py-3 rounded-lg shadow-lg transition-colors duration-200"
+              disabled={saving}
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-slate-200 px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50 dark:border-white/10 dark:text-slate-200 dark:hover:bg-white/[0.05]"
             >
-              Cancel
+              <X className="h-4 w-4" /> Cancel
             </button>
           )}
+          <button
+            type="submit"
+            disabled={saving}
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {saving ? (
+              <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+            ) : (
+              <CalendarPlus className="h-4 w-4" />
+            )}
+            {saving
+              ? "Saving..."
+              : editingHoliday
+                ? "Update holiday"
+                : "Add holiday"}
+          </button>
         </div>
       </div>
     </form>

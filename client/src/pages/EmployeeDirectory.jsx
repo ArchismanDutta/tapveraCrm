@@ -1,13 +1,12 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { Users, UserPlus, Search, Filter, Eye, Mail, Building2, Badge, MapPin, X, AlertCircle } from "lucide-react";
+import { Users, Search, Building2, Badge, X, AlertCircle } from "lucide-react";
 import Sidebar from "../components/dashboard/Sidebar";
 import EmployeeFilters from "../components/employeedetails/EmployeeFilters";
 import EmployeeTable from "../components/employeedetails/EmployeeTable";
-import CelebrationPopup from "../components/common/CelebrationPopup";
-import useCelebrationNotifications from "../hooks/useCelebrationNotifications";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
+const REGIONS = ["Global", "USA", "AUS", "CANADA", "IND"];
 
 const EmployeeDirectory = ({ onLogout }) => {
   const navigate = useNavigate();
@@ -22,31 +21,12 @@ const EmployeeDirectory = ({ onLogout }) => {
   });
   const [updatingStatus, setUpdatingStatus] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
-  const [currentTime, setCurrentTime] = useState(new Date());
-  const [regions, setRegions] = useState(['Global']);
-
-  // Celebration notifications
-  const {
-    celebrations,
-    showPopup: showCelebrationPopup,
-    closePopup: closeCelebrationPopup
-  } = useCelebrationNotifications();
-
-  // Update time every second
-  useEffect(() => {
-    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
-    return () => clearInterval(timer);
-  }, []);
-
-  // Function to fetch regions (using hardcoded enum)
-  const fetchRegions = async () => {
-    // Use standardized region enum values
-    setRegions(['Global', 'USA', 'AUS', 'CANADA', 'IND']);
-  };
+  const [loadError, setLoadError] = useState("");
+  const [actionError, setActionError] = useState("");
 
   // Function to update employee status
   const updateEmployeeStatus = async (employeeId, newStatus) => {
-    console.log(`Updating employee ${employeeId} status to ${newStatus}`);
+    setActionError("");
     setUpdatingStatus(employeeId);
     try {
       const token = localStorage.getItem("token");
@@ -65,9 +45,6 @@ const EmployeeDirectory = ({ onLogout }) => {
         throw new Error(errorData.message || "Failed to update employee status");
       }
 
-      const result = await response.json();
-      console.log("Status update successful:", result);
-
       // Update local state
       setEmployees(prevEmployees =>
         prevEmployees.map(emp =>
@@ -75,10 +52,9 @@ const EmployeeDirectory = ({ onLogout }) => {
         )
       );
 
-      console.log(`Employee status successfully updated to ${newStatus}`);
     } catch (error) {
       console.error("Error updating employee status:", error);
-      alert("Failed to update employee status. Please try again.");
+      setActionError("The employee status could not be updated. Please try again.");
     } finally {
       setUpdatingStatus(null);
     }
@@ -87,6 +63,7 @@ const EmployeeDirectory = ({ onLogout }) => {
   // Function to change employee role (super-admin only)
   const updateEmployeeRole = async (employeeId, newRole) => {
     try {
+      setActionError("");
       const token = localStorage.getItem("token");
       const response = await fetch(`${API_BASE}/api/users/${employeeId}`, {
         method: "PUT",
@@ -102,20 +79,22 @@ const EmployeeDirectory = ({ onLogout }) => {
       );
     } catch (error) {
       console.error("Error updating role:", error);
-      alert("Failed to update employee role. Please try again.");
+      setActionError("The employee role could not be updated. Please try again.");
     }
   };
 
   // Function to toggle employee region (add/remove from array)
   const updateEmployeeRegion = async (employeeId, toggleRegion) => {
-    console.log(`Toggling region "${toggleRegion}" for employee ${employeeId}`);
+    setActionError("");
 
     // Find the employee
     const employee = employees.find(emp => emp._id === employeeId);
     if (!employee) return;
 
     // Get current regions array (or convert old single region to array)
-    let currentRegions = employee.regions || [employee.region || 'Global'];
+    const currentRegions = Array.isArray(employee.regions) && employee.regions.length
+      ? employee.regions
+      : [employee.region || "Global"];
 
     // Toggle the region
     let newRegions;
@@ -123,15 +102,13 @@ const EmployeeDirectory = ({ onLogout }) => {
       // Remove the region (but ensure at least one region remains)
       newRegions = currentRegions.filter(r => r !== toggleRegion);
       if (newRegions.length === 0) {
-        alert("Employee must have at least one region assigned.");
+        setActionError("Each employee must have at least one assigned region.");
         return;
       }
     } else {
       // Add the region
       newRegions = [...currentRegions, toggleRegion];
     }
-
-    console.log(`Updating regions from [${currentRegions.join(', ')}] to [${newRegions.join(', ')}]`);
 
     try {
       const token = localStorage.getItem("token");
@@ -150,9 +127,6 @@ const EmployeeDirectory = ({ onLogout }) => {
         throw new Error(errorData.message || "Failed to update employee regions");
       }
 
-      const result = await response.json();
-      console.log("Regions update successful:", result);
-
       // Update local state
       setEmployees(prevEmployees =>
         prevEmployees.map(emp =>
@@ -160,25 +134,15 @@ const EmployeeDirectory = ({ onLogout }) => {
         )
       );
 
-      console.log(`Employee regions successfully updated to [${newRegions.join(', ')}]`);
     } catch (error) {
       console.error("Error updating employee regions:", error);
-      alert("Failed to update employee regions. Please try again.");
+      setActionError("The employee regions could not be updated. Please try again.");
     }
   };
 
-  const sidebarWidth = collapsed ? 80 : 288;
-
-  const buildQueryParams = () => {
-    const params = new URLSearchParams();
-    if (filters.search.trim() !== "") params.append("search", filters.search.trim());
-    if (filters.department !== "all") params.append("department", filters.department);
-    if (filters.status !== "all") params.append("status", filters.status.toLowerCase());
-    return params.toString();
-  };
-
-  const fetchEmployees = async () => {
+  const fetchEmployees = useCallback(async () => {
     setLoading(true);
+    setLoadError("");
     try {
       const token = localStorage.getItem("token");
       const userData = localStorage.getItem("user");
@@ -205,12 +169,8 @@ const EmployeeDirectory = ({ onLogout }) => {
       }
 
       const data = await res.json();
-      console.log("Raw employee data from server:", data);
-
       let mappedEmployees = Array.isArray(data)
         ? data.map((emp) => {
-            console.log(`Employee ${emp.name} status from DB:`, emp.status);
-            console.log(`Employee ${emp.name} regions from DB:`, emp.regions);
             return {
               _id: String(emp._id),
               name: emp.fullName || emp.name || emp.email || `Employee ${emp._id}`,
@@ -219,13 +179,13 @@ const EmployeeDirectory = ({ onLogout }) => {
               designation: emp.designation || "N/A",
               email: emp.email || "N/A",
               employeeId: emp.employeeId || "-",
-              regions: emp.regions || [emp.region] || ["Global"], // Use regions array
+              regions: Array.isArray(emp.regions) && emp.regions.length
+                ? emp.regions
+                : [emp.region || "Global"],
               region: emp.region || "Global", // Keep for backwards compatibility
             };
           })
         : [];
-
-      console.log("Mapped employees:", mappedEmployees);
 
       if (!mappedEmployees.find((e) => e._id === String(user._id))) {
         mappedEmployees = [
@@ -237,7 +197,9 @@ const EmployeeDirectory = ({ onLogout }) => {
             designation: user.designation || "N/A",
             email: user.email || "N/A",
             employeeId: user.employeeId || "-",
-            regions: user.regions || [user.region] || ["Global"], // Use regions array
+            regions: Array.isArray(user.regions) && user.regions.length
+              ? user.regions
+              : [user.region || "Global"],
             region: user.region || "Global", // Keep for backwards compatibility
           },
           ...mappedEmployees,
@@ -248,25 +210,25 @@ const EmployeeDirectory = ({ onLogout }) => {
     } catch (err) {
       console.error("Error fetching employees:", err.message);
       setEmployees([]);
+      setLoadError("We could not load the employee directory. Check your connection and try again.");
     } finally {
       setLoading(false);
     }
-  };
+  }, [navigate]);
 
   useEffect(() => {
     fetchEmployees();
-    fetchRegions();
-  }, []); // Only fetch once on mount, filtering is now client-side
+  }, [fetchEmployees]);
 
   useEffect(() => {
     if (location.state?.refresh) {
       fetchEmployees();
       window.history.replaceState({}, document.title);
     }
-  }, [location.state]);
+  }, [fetchEmployees, location.state]);
 
   // Client-side filtering for enhanced search
-  const filteredEmployees = React.useMemo(() => {
+  const filteredEmployees = useMemo(() => {
     let filtered = [...employees];
 
     // Apply search filter
@@ -294,7 +256,7 @@ const EmployeeDirectory = ({ onLogout }) => {
 
     // Apply status filter
     if (filters.status !== "all") {
-      filtered = filtered.filter(emp => emp.status === filters.status);
+      filtered = filtered.filter(emp => emp.status?.toLowerCase() === filters.status.toLowerCase());
     }
 
     // Sort employees: active first, then terminated/absconded last
@@ -324,57 +286,51 @@ const EmployeeDirectory = ({ onLogout }) => {
 
   // Calculate stats based on filtered data
   const totalEmployees = filteredEmployees.length;
-  const activeEmployees = filteredEmployees.filter(emp => emp.status === "active").length;
-  const terminatedEmployees = filteredEmployees.filter(emp => emp.status === "terminated").length;
-  const abscondedEmployees = filteredEmployees.filter(emp => emp.status === "absconded").length;
+  const activeEmployees = filteredEmployees.filter(emp => emp.status?.toLowerCase() === "active").length;
+  const terminatedEmployees = filteredEmployees.filter(emp => emp.status?.toLowerCase() === "terminated").length;
+  const abscondedEmployees = filteredEmployees.filter(emp => emp.status?.toLowerCase() === "absconded").length;
   const departments = [...new Set(filteredEmployees.map(emp => emp.department).filter(dep => dep !== "N/A"))];
-  const avgDepartmentSize = departments.length > 0 ? Math.round(totalEmployees / departments.length) : 0;
+  const normalizedRole = currentUser?.role?.toLowerCase() || "employee";
+  const canManageEmployees = ["admin", "hr", "super-admin"].includes(normalizedRole);
 
   return (
-    <div className="flex bg-[#0f1419] min-h-screen text-white relative overflow-hidden">
-      {/* Animated Background */}
-      <div className="absolute inset-0 bg-gradient-to-br from-slate-900/20 via-blue-900/10 to-purple-900/20"></div>
-      <div className="absolute inset-0">
-        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-cyan-500/5 rounded-full blur-3xl animate-pulse"></div>
-        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-purple-500/5 rounded-full blur-3xl animate-pulse"></div>
-      </div>
-
+    <div className="relative flex h-[100dvh] overflow-hidden bg-slate-50 text-slate-900 dark:bg-[#0b0d12] dark:text-slate-100">
       <Sidebar
         onLogout={onLogout}
         collapsed={collapsed}
         setCollapsed={setCollapsed}
-        userRole="admin"
+        userRole={currentUser?.role || "employee"}
       />
 
       <main
-        className={`relative z-10 flex-1 transition-all duration-300 ${
-          collapsed ? "ml-24" : "ml-72"
-        } p-8`}
+        className={`h-[100dvh] min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 transition-all duration-300 sm:px-5 lg:px-6 ${
+          collapsed ? "ml-16" : "ml-16 sm:ml-56"
+        }`}
       >
-        {/* Modern Header */}
-        <div className="mb-12">
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between mb-6">
+        <div className="mx-auto max-w-[1500px] pb-8">
+        <header className="mb-5 rounded-2xl border border-slate-200 bg-white px-5 py-5 shadow-sm dark:border-white/10 dark:bg-[#10131c] sm:px-6">
+          <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
             <div>
-              <h1 className="text-5xl font-bold mb-2">
-                <span className="bg-gradient-to-r from-emerald-400 via-cyan-400 to-blue-400 bg-clip-text text-transparent">
-                  Employee Directory
-                </span>
+              <div className="inline-flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 dark:border-blue-400/20 dark:bg-blue-400/10 dark:text-blue-200">
+                <Users className="h-3.5 w-3.5" /> People operations
+              </div>
+              <h1 className="mt-3 text-2xl font-semibold tracking-tight text-slate-950 dark:text-white">
+                Employee directory
               </h1>
-              <p className="text-xl text-gray-300 mb-4">
-                Manage your team and discover talent 👥
+              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                Find employees, manage access status, and review team assignments.
               </p>
             </div>
-            <div className="flex items-center space-x-4">
-              <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 backdrop-blur-sm border border-slate-600/30 rounded-2xl px-6 py-4">
+            <div className="flex items-center">
+              <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 dark:border-white/10 dark:bg-white/[0.025]">
                 <div className="flex items-center space-x-3">
-                  <div className="w-3 h-3 bg-green-400 rounded-full animate-pulse"></div>
+                  <div className="h-2 w-2 rounded-full bg-green-400"></div>
                   <div>
-                    <p className="text-sm text-gray-400">Live Time</p>
-                    <p className="text-cyan-400 font-mono text-sm">
-                      {currentTime.toLocaleTimeString("en-US", {
+                    <p className="text-[10px] uppercase tracking-wide text-slate-400">Local time</p>
+                    <p className="font-mono text-xs text-slate-700 dark:text-slate-200">
+                      {new Date().toLocaleTimeString("en-US", {
                         hour: "2-digit",
                         minute: "2-digit",
-                        second: "2-digit",
                       })}
                     </p>
                   </div>
@@ -382,116 +338,112 @@ const EmployeeDirectory = ({ onLogout }) => {
               </div>
             </div>
           </div>
-          <div className="text-gray-400 text-lg">
-            {currentTime.toLocaleDateString("en-US", {
-              weekday: "long",
-              year: "numeric",
-              month: "long",
-              day: "numeric",
-            })}
+        </header>
+
+        {actionError && (
+          <div className="mb-4 flex items-start justify-between gap-3 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700 dark:border-rose-400/20 dark:bg-rose-400/10 dark:text-rose-200">
+            <span>{actionError}</span>
+            <button type="button" onClick={() => setActionError("")} aria-label="Dismiss error">
+              <X className="h-4 w-4" />
+            </button>
           </div>
-        </div>
+        )}
 
         {/* Stats Dashboard */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-12">
+        <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-5">
           {/* Total Employees */}
-          <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 backdrop-blur-sm border border-slate-600/30 rounded-2xl p-6 hover:border-cyan-400/40 transition-all duration-300 hover:scale-105 hover:shadow-2xl hover:shadow-cyan-500/25">
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-[#10131c]">
             <div className="flex items-center justify-between mb-4">
-              <div className="p-3 bg-gradient-to-br from-cyan-500/20 to-blue-600/20 rounded-xl">
-                <Users className="w-6 h-6 text-cyan-400" />
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50 dark:bg-blue-400/10">
+                <Users className="h-4 w-4 text-blue-600 dark:text-blue-300" />
               </div>
               <div className="text-right">
-                <p className="text-3xl font-bold text-white">{totalEmployees}</p>
-                <p className="text-sm text-gray-400 uppercase tracking-wide">Total</p>
+                <p className="text-2xl font-semibold text-slate-950 dark:text-white">{totalEmployees}</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">Total</p>
               </div>
             </div>
-            <div className="h-1 bg-gradient-to-r from-cyan-500 to-blue-600 rounded-full"></div>
           </div>
 
           {/* Active Employees */}
-          <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 backdrop-blur-sm border border-slate-600/30 rounded-2xl p-6 hover:border-green-400/40 transition-all duration-300 hover:scale-105 hover:shadow-2xl hover:shadow-green-500/25">
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-[#10131c]">
             <div className="flex items-center justify-between mb-4">
-              <div className="p-3 bg-gradient-to-br from-green-500/20 to-emerald-600/20 rounded-xl">
-                <Badge className="w-6 h-6 text-green-400" />
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-50 dark:bg-emerald-400/10">
+                <Badge className="h-4 w-4 text-emerald-600 dark:text-emerald-300" />
               </div>
               <div className="text-right">
-                <p className="text-3xl font-bold text-white">{activeEmployees}</p>
-                <p className="text-sm text-gray-400 uppercase tracking-wide">Active</p>
+                <p className="text-2xl font-semibold text-slate-950 dark:text-white">{activeEmployees}</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">Active</p>
               </div>
             </div>
-            <div className="h-1 bg-gradient-to-r from-green-500 to-emerald-600 rounded-full"></div>
           </div>
 
           {/* Terminated Employees */}
-          <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 backdrop-blur-sm border border-slate-600/30 rounded-2xl p-6 hover:border-red-400/40 transition-all duration-300 hover:scale-105 hover:shadow-2xl hover:shadow-red-500/25">
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-[#10131c]">
             <div className="flex items-center justify-between mb-4">
-              <div className="p-3 bg-gradient-to-br from-red-500/20 to-pink-600/20 rounded-xl">
-                <X className="w-6 h-6 text-red-400" />
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-rose-50 dark:bg-rose-400/10">
+                <X className="h-4 w-4 text-rose-600 dark:text-rose-300" />
               </div>
               <div className="text-right">
-                <p className="text-3xl font-bold text-white">{terminatedEmployees}</p>
-                <p className="text-sm text-gray-400 uppercase tracking-wide">Terminated</p>
+                <p className="text-2xl font-semibold text-slate-950 dark:text-white">{terminatedEmployees}</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">Terminated</p>
               </div>
             </div>
-            <div className="h-1 bg-gradient-to-r from-red-500 to-pink-600 rounded-full"></div>
           </div>
 
           {/* Absconded Employees */}
-          <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 backdrop-blur-sm border border-slate-600/30 rounded-2xl p-6 hover:border-orange-400/40 transition-all duration-300 hover:scale-105 hover:shadow-2xl hover:shadow-orange-500/25">
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-[#10131c]">
             <div className="flex items-center justify-between mb-4">
-              <div className="p-3 bg-gradient-to-br from-orange-500/20 to-red-600/20 rounded-xl">
-                <AlertCircle className="w-6 h-6 text-orange-400" />
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-orange-50 dark:bg-orange-400/10">
+                <AlertCircle className="h-4 w-4 text-orange-600 dark:text-orange-300" />
               </div>
               <div className="text-right">
-                <p className="text-3xl font-bold text-white">{abscondedEmployees}</p>
-                <p className="text-sm text-gray-400 uppercase tracking-wide">Absconded</p>
+                <p className="text-2xl font-semibold text-slate-950 dark:text-white">{abscondedEmployees}</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">Absconded</p>
               </div>
             </div>
-            <div className="h-1 bg-gradient-to-r from-orange-500 to-red-600 rounded-full"></div>
           </div>
 
           {/* Departments */}
-          <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 backdrop-blur-sm border border-slate-600/30 rounded-2xl p-6 hover:border-purple-400/40 transition-all duration-300 hover:scale-105 hover:shadow-2xl hover:shadow-purple-500/25">
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-[#10131c]">
             <div className="flex items-center justify-between mb-4">
-              <div className="p-3 bg-gradient-to-br from-purple-500/20 to-indigo-600/20 rounded-xl">
-                <Building2 className="w-6 h-6 text-purple-400" />
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-violet-50 dark:bg-violet-400/10">
+                <Building2 className="h-4 w-4 text-violet-600 dark:text-violet-300" />
               </div>
               <div className="text-right">
-                <p className="text-3xl font-bold text-white">{departments.length}</p>
-                <p className="text-sm text-gray-400 uppercase tracking-wide">Departments</p>
+                <p className="text-2xl font-semibold text-slate-950 dark:text-white">{departments.length}</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">Departments</p>
               </div>
             </div>
-            <div className="h-1 bg-gradient-to-r from-purple-500 to-indigo-600 rounded-full"></div>
           </div>
         </div>
 
         {/* Filters Section */}
-        <div className="bg-gradient-to-br from-slate-800/40 to-slate-900/40 backdrop-blur-xl border border-slate-600/30 rounded-3xl p-8 mb-8 hover:border-cyan-400/40 transition-all duration-300 shadow-2xl">
-          <div className="flex items-center space-x-3 mb-6">
-            <div className="p-3 bg-gradient-to-br from-cyan-500/20 to-blue-600/20 rounded-xl">
-              <Search className="w-6 h-6 text-cyan-400" />
+        <div className="mb-5 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-[#10131c] sm:p-5">
+          <div className="mb-4 flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-cyan-400/10">
+              <Search className="h-4 w-4 text-cyan-400" />
             </div>
             <div>
-              <h2 className="text-2xl font-bold bg-gradient-to-r from-cyan-400 to-blue-400 bg-clip-text text-transparent">
-                Search & Filter
-              </h2>
-              <p className="text-gray-400">Find the right people for your team</p>
+              <h2 className="text-base font-semibold text-slate-950 dark:text-white">Search and filter</h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400">Find people by name, team, role, or status.</p>
             </div>
           </div>
-          <EmployeeFilters filters={filters} setFilters={setFilters} />
+          <EmployeeFilters
+            filters={filters}
+            setFilters={setFilters}
+            canAddEmployees={canManageEmployees}
+          />
         </div>
 
         {/* Employee Table Section */}
-        <div className="bg-gradient-to-br from-emerald-900/20 to-teal-900/20 backdrop-blur-xl border border-emerald-500/30 rounded-3xl p-8 shadow-2xl hover:border-emerald-400/40 transition-all duration-300">
-          <div className="flex items-center space-x-3 mb-6">
-            <div className="p-3 bg-gradient-to-br from-emerald-500/20 to-teal-600/20 rounded-xl">
-              <Users className="w-6 h-6 text-emerald-400" />
+        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-[#10131c] sm:p-5">
+          <div className="mb-4 flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-400/10">
+              <Users className="h-4 w-4 text-emerald-400" />
             </div>
             <div>
-              <h2 className="text-2xl font-bold bg-gradient-to-r from-emerald-400 to-teal-400 bg-clip-text text-transparent">
-                Team Directory
-              </h2>
-              <p className="text-gray-400">Browse and manage your team members ({totalEmployees} total)</p>
+              <h2 className="text-base font-semibold text-slate-950 dark:text-white">Team directory</h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400">{totalEmployees} matching employee{totalEmployees === 1 ? "" : "s"}</p>
             </div>
           </div>
 
@@ -502,17 +454,32 @@ const EmployeeDirectory = ({ onLogout }) => {
                 <span className="text-emerald-400">Loading employees...</span>
               </div>
             </div>
+          ) : loadError ? (
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <AlertCircle className="mb-3 h-10 w-10 text-red-400" />
+              <p className="font-semibold text-slate-900 dark:text-white">Directory unavailable</p>
+              <p className="mt-1 max-w-md text-sm text-slate-500 dark:text-slate-400">{loadError}</p>
+              <button
+                type="button"
+                onClick={fetchEmployees}
+                className="mt-5 h-10 rounded-lg bg-blue-600 px-5 text-sm font-semibold text-white transition hover:bg-blue-700"
+              >
+                Try again
+              </button>
+            </div>
           ) : (
             <EmployeeTable
               employees={filteredEmployees}
               currentUser={currentUser}
               onStatusUpdate={updateEmployeeStatus}
               updatingStatus={updatingStatus}
-              regions={regions}
+              regions={REGIONS}
               onRegionChange={updateEmployeeRegion}
               onRoleChange={updateEmployeeRole}
+              canManage={canManageEmployees}
             />
           )}
+        </div>
         </div>
       </main>
     </div>
