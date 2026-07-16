@@ -18,6 +18,7 @@ import {
   ArrowLeftRight,
   LogOut,
   Mail,
+  Shield,
 } from "lucide-react";
 import { Users } from "@/components/animate-ui/icons/users";
 import { Brush } from "@/components/animate-ui/icons/brush";
@@ -206,11 +207,6 @@ const menuConfig = {
       icon: <Users size={18} animateOnHover />,
       label: "Employee Details",
     },
-    // {
-    //   to: "/roles",
-    //   icon: <Shield size={18} />,
-    //   label: "Role Management",
-    // },
     {
       to: "/admin/shifts",
       icon: <Clock size={18} />,
@@ -303,11 +299,6 @@ const menuConfig = {
       ],
     },
 
-    // {
-    //   to: "/roles",
-    //   icon: <Shield size={18} />,
-    //   label: "Role Management",
-    // },
     {
       to: "/sheets",
       icon: <FileSpreadsheet size={18} />,
@@ -419,9 +410,9 @@ const menuConfig = {
           label: "Salary Management",
         },
         {
-          to: "/admin/position-management",
-          icon: <Briefcase size={16} />,
-          label: "Position Management",
+          to: "/admin/access-management",
+          icon: <Shield size={16} />,
+          label: "Access Management",
         },
 
 
@@ -431,11 +422,6 @@ const menuConfig = {
           icon: <Users size={16} animateOnHover />,
           label: "Employee Details",
         },
-        // {
-        //   to: "/roles",
-        //   icon: <Shield size={16} />,
-        //   label: "Role Management",
-        // },
         {
           to: "/super-admin/notepad",
           icon: <BookOpen size={16} animateOnHover />,
@@ -554,6 +540,12 @@ const Sidebar = ({
   const [showUnreadTooltip, setShowUnreadTooltip] = useState(false);
   const [userDepartment, setUserDepartment] = useState("");
   const [userPosition, setUserPosition] = useState("");
+  // Access-management rework (2026-07-03, Phase 5) - resolved permissions
+  // from GET /api/users/me/permissions, the server-computed single source of
+  // truth. null until the fetch resolves; every consumer below falls back to
+  // the old localStorage-derived role/department/position logic until then
+  // (or if the fetch fails), so nothing regresses.
+  const [permissions, setPermissions] = useState(null);
   const [hoveredItem, setHoveredItem] = useState(null);
   const [expandedDropdowns, setExpandedDropdowns] = useState({});
   const {
@@ -643,6 +635,31 @@ const Sidebar = ({
     setUserPosition(position);
   }, [userRole]);
 
+  // Access-management rework (2026-07-03, Phase 5.1/5.2): fetch resolved
+  // permissions from the server instead of re-deriving access from the
+  // department/position strings cached in localStorage. See
+  // docs/superpowers/plans/2026-07-03-access-management-rework.md
+  useEffect(() => {
+    const fetchPermissions = async () => {
+      try {
+        const token = localStorage.getItem("token");
+        if (!token) return;
+        const API_BASE =
+          import.meta.env.VITE_API_BASE || "http://localhost:5000";
+        const res = await fetch(`${API_BASE}/api/users/me/permissions`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setPermissions(data);
+        }
+      } catch (error) {
+        console.error("Failed to fetch permissions:", error);
+      }
+    };
+    fetchPermissions();
+  }, [userRole]);
+
   // Listen for chat unread total to show badge on Messages item
   useEffect(() => {
     const updateFromStorage = () => {
@@ -717,10 +734,23 @@ const Sidebar = ({
   }, []);
 
   // Check if user has supervisor/team lead position
-  const isSupervisor = userPosition &&
-    (userPosition.toLowerCase().includes("supervisor") ||
-     userPosition.toLowerCase().includes("team lead") ||
-     userPosition.toLowerCase().includes("manager"));
+  // Access-management rework (2026-07-03, Phase 5.3): prefer the
+  // server-resolved permission flags over fragile position-string substring
+  // matching. Falls back to the old substring check until permissions load
+  // (or if the fetch fails), so nothing regresses.
+  const isSupervisor = permissions
+    ? Boolean(
+        permissions.permissions?.canViewSubordinateLeads ||
+        permissions.permissions?.canViewDepartmentLeads ||
+        permissions.permissions?.canViewSubordinateCallbacks ||
+        permissions.permissions?.canViewDepartmentCallbacks
+      )
+    : Boolean(
+        userPosition &&
+        (userPosition.toLowerCase().includes("supervisor") ||
+         userPosition.toLowerCase().includes("team lead") ||
+         userPosition.toLowerCase().includes("manager"))
+      );
 
   // Filter menu items based on role, department, and position
   const rawMenuItems = menuConfig[role] || menuConfig["employee"];
@@ -747,12 +777,18 @@ const Sidebar = ({
         return child;
       }).filter((child) => {
         if (child.to === "/leads" || child.to === "/callbacks") {
-          return (
-            role === "super-admin" ||
-            role === "admin" ||
-            userDepartment === "marketingAndSales" ||
-            (userPosition && userPosition.trim() !== "")
-          );
+          // Access-management rework (2026-07-03, Phase 5.4): prefer the
+          // server-resolved canAccessLeadManagement flag. Falls back to the
+          // old role/department/position-string logic until permissions
+          // load (or if the fetch fails), so nothing regresses.
+          return permissions
+            ? permissions.canAccessLeadManagement
+            : (
+                role === "super-admin" ||
+                role === "admin" ||
+                userDepartment === "marketingAndSales" ||
+                (userPosition && userPosition.trim() !== "")
+              );
         }
         return true;
       });
@@ -762,12 +798,18 @@ const Sidebar = ({
 
     // Allow access to leads/callbacks for super-admin, admin, marketingAndSales employees, or users with positions
     if (item.to === "/leads" || item.to === "/callbacks") {
-      return (
-        role === "super-admin" ||
-        role === "admin" ||
-        userDepartment === "marketingAndSales" ||
-        (userPosition && userPosition.trim() !== "")
-      );
+      // Access-management rework (2026-07-03, Phase 5.4): prefer the
+      // server-resolved canAccessLeadManagement flag. Falls back to the old
+      // role/department/position-string logic until permissions load (or if
+      // the fetch fails), so nothing regresses.
+      return permissions
+        ? permissions.canAccessLeadManagement
+        : (
+            role === "super-admin" ||
+            role === "admin" ||
+            userDepartment === "marketingAndSales" ||
+            (userPosition && userPosition.trim() !== "")
+          );
     }
     return true;
   });
@@ -937,9 +979,6 @@ const Sidebar = ({
                             onMouseEnter={() => setHoveredItem(child.to)}
                             onMouseLeave={() => setHoveredItem(null)}
                           >
-                            {isActive && (
-                              <span className="absolute -left-[13px] h-2 w-2 rounded-full bg-cyan-200/70" />
-                            )}
                             <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-current">
                               {renderIconWithHover(
                                 child.icon,

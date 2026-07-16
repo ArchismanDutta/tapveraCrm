@@ -2,7 +2,29 @@ const express = require("express");
 const router = express.Router();
 const Backlink = require("../models/Backlink");
 const Project = require("../models/Project");
-const { protect, authorize } = require("../middlewares/authMiddleware");
+const { protect } = require("../middlewares/authMiddleware");
+// Access-management rework (2026-07-03) - Phase 4.7.
+// See docs/superpowers/plans/2026-07-03-access-management-rework.md
+// Mirrors the equivalent helpers in projectRoutes.js (this file is a project
+// sub-resource, mounted at the same /api/projects namespace).
+const { can } = require("../utils/accessControl");
+const hierarchyUtils = require("../utils/hierarchyUtils");
+
+async function hasProjectManageAuthority(user) {
+  return ["admin", "super-admin", "superadmin"].includes(user.role) || (await can(user, "projects:manage"));
+}
+
+async function hasProjectViewAuthority(user, project) {
+  if (await hasProjectManageAuthority(user)) return true;
+  if (await can(user, "projects:view")) {
+    const accessibleIds = await hierarchyUtils.getAccessibleUserIds(user);
+    const accessibleSet = new Set(accessibleIds.map(String));
+    return (project.assignedTo || []).some((id) =>
+      accessibleSet.has(String(id?._id || id))
+    );
+  }
+  return false;
+}
 
 // Helper function to detect social media platform from URL
 const detectPlatform = (url) => {
@@ -36,12 +58,14 @@ router.get("/:projectId/backlinks", protect, async (req, res) => {
       return res.status(404).json({ message: "Project not found" });
     }
 
-    // Check access
+    // Check access - additively widened (Phase 4.7) to also allow a
+    // PM/Supervisor/TL with hierarchical projects:view reach over this
+    // project's assignees, not just direct assignees.
     if (req.user.role === "employee") {
       const isAssigned = project.assignedTo.some(
         (emp) => emp.toString() === req.user._id.toString()
       );
-      if (!isAssigned) {
+      if (!isAssigned && !(await hasProjectViewAuthority(req.user, project))) {
         return res.status(403).json({ message: "Access denied" });
       }
     }
@@ -85,12 +109,14 @@ router.post("/:projectId/backlinks", protect, async (req, res) => {
       return res.status(404).json({ message: "Project not found" });
     }
 
-    // Check access
+    // Check access - additively widened (Phase 4.7) to also allow a
+    // PM/Supervisor/TL with hierarchical projects:view reach over this
+    // project's assignees, not just direct assignees.
     if (req.user.role === "employee") {
       const isAssigned = project.assignedTo.some(
         (emp) => emp.toString() === req.user._id.toString()
       );
-      if (!isAssigned) {
+      if (!isAssigned && !(await hasProjectViewAuthority(req.user, project))) {
         return res.status(403).json({ message: "Access denied" });
       }
     }
@@ -155,12 +181,14 @@ router.post("/:projectId/backlinks/bulk", protect, async (req, res) => {
       return res.status(404).json({ message: "Project not found" });
     }
 
-    // Check access
+    // Check access - additively widened (Phase 4.7) to also allow a
+    // PM/Supervisor/TL with hierarchical projects:view reach over this
+    // project's assignees, not just direct assignees.
     if (req.user.role === "employee") {
       const isAssigned = project.assignedTo.some(
         (emp) => emp.toString() === req.user._id.toString()
       );
-      if (!isAssigned) {
+      if (!isAssigned && !(await hasProjectViewAuthority(req.user, project))) {
         return res.status(403).json({ message: "Access denied" });
       }
     }
@@ -244,12 +272,14 @@ router.put("/:projectId/backlinks/:backlinkId", protect, async (req, res) => {
       return res.status(404).json({ message: "Project not found" });
     }
 
-    // Check access
+    // Check access - additively widened (Phase 4.7) to also allow a
+    // PM/Supervisor/TL with hierarchical projects:view reach over this
+    // project's assignees, not just direct assignees.
     if (req.user.role === "employee") {
       const isAssigned = project.assignedTo.some(
         (emp) => emp.toString() === req.user._id.toString()
       );
-      if (!isAssigned) {
+      if (!isAssigned && !(await hasProjectViewAuthority(req.user, project))) {
         return res.status(403).json({ message: "Access denied" });
       }
     }
@@ -308,11 +338,14 @@ router.put("/:projectId/backlinks/:backlinkId", protect, async (req, res) => {
 router.delete(
   "/:projectId/backlinks/:backlinkId",
   protect,
-  authorize("admin", "super-admin"),
   async (req, res) => {
     try {
       const { projectId, backlinkId } = req.params;
       const { permanent = false } = req.query;
+
+      if (!(await hasProjectManageAuthority(req.user))) {
+        return res.status(403).json({ message: "Not authorized" });
+      }
 
       const backlink = await Backlink.findById(backlinkId);
       if (!backlink) {
@@ -360,12 +393,14 @@ router.get("/:projectId/backlinks/stats", protect, async (req, res) => {
       return res.status(404).json({ message: "Project not found" });
     }
 
-    // Check access
+    // Check access - additively widened (Phase 4.7) to also allow a
+    // PM/Supervisor/TL with hierarchical projects:view reach over this
+    // project's assignees, not just direct assignees.
     if (req.user.role === "employee") {
       const isAssigned = project.assignedTo.some(
         (emp) => emp.toString() === req.user._id.toString()
       );
-      if (!isAssigned) {
+      if (!isAssigned && !(await hasProjectViewAuthority(req.user, project))) {
         return res.status(403).json({ message: "Access denied" });
       }
     }

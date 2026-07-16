@@ -18,6 +18,7 @@ import PaymentBlockOverlay from "../components/payment/PaymentBlockOverlay";
 import usePaymentCheck from "../hooks/usePaymentCheck";
 import ProjectReportTab from "../components/project/ProjectReportTab";
 import ProjectMessagePanel from "../components/message/ProjectMessagePanel";
+import { getTaskProgress } from "../utils/projectProgress";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
 
@@ -441,7 +442,7 @@ const ProjectWorkspace = ({ project, activeTab, setActiveTab, onBack }) => {
 };
 
 const ProjectOverview = ({ project }) => {
-  const progress = Math.max(0, Math.min(Number(project.progress) || 0, 100));
+  const progress = getTaskProgress(project.tasks);
   const types = getProjectTypes(project);
 
   return (
@@ -465,12 +466,15 @@ const ProjectOverview = ({ project }) => {
           <h2 className="text-base font-semibold text-slate-950 dark:text-white">Project brief</h2>
           <p className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-300">{project.description || "No project description has been added."}</p>
 
-          {project.progress !== undefined && (
-            <div className="mt-6 border-t border-slate-200 pt-5 dark:border-white/10">
-              <div className="mb-2 flex items-center justify-between text-xs"><span className="font-medium text-slate-600 dark:text-slate-300">Overall progress</span><span className="text-slate-500 dark:text-slate-400">{progress}%</span></div>
-              <div className="h-1.5 overflow-hidden rounded-full bg-slate-100 dark:bg-white/[0.07]"><div className="h-full rounded-full bg-blue-600" style={{ width: `${progress}%` }} /></div>
+          <div className="mt-6 border-t border-slate-200 pt-5 dark:border-white/10">
+            <div className="mb-2 flex items-center justify-between text-xs">
+              <span className="font-medium text-slate-600 dark:text-slate-300">Task progress</span>
+              <span className="text-slate-500 dark:text-slate-400">
+                {progress.total === 0 ? "No tasks yet" : `${progress.completed}/${progress.total} tasks (${progress.percent}%)`}
+              </span>
             </div>
-          )}
+            <div className="h-1.5 overflow-hidden rounded-full bg-slate-100 dark:bg-white/[0.07]"><div className="h-full rounded-full bg-blue-600 transition-all" style={{ width: `${progress.percent}%` }} /></div>
+          </div>
         </section>
 
         <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-[#10131c]">

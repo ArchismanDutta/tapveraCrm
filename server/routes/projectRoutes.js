@@ -4,9 +4,37 @@ const router = express.Router();
 const fetch = require("node-fetch"); // Polyfill for Node.js < 18
 const mongoose = require("mongoose");
 const Project = require("../models/Project");
-const { protect, authorize } = require("../middlewares/authMiddleware");
+const { protect } = require("../middlewares/authMiddleware");
 const { uploadToS3, getFileType, convertToCloudFrontUrl, isS3Configured } = require("../config/s3Config");
 const emailNotificationService = require("../services/emailNotificationService");
+// Access-management rework (2026-07-03) - Phase 4.2.
+// See docs/superpowers/plans/2026-07-03-access-management-rework.md
+const { can, scopeQuery } = require("../utils/accessControl");
+const hierarchyUtils = require("../utils/hierarchyUtils");
+
+// Additive expansion only: admin/super-admin keep exactly what they had
+// today (still checked first, below). A user whose Position grants
+// project-management authority (e.g. Project Manager - see
+// seedCanonicalHierarchy.js) now ALSO qualifies for the routes that used to
+// be admin/super-admin-only.
+async function hasProjectManageAuthority(user) {
+  return ["admin", "super-admin", "superadmin"].includes(user.role) || (await can(user, "projects:manage"));
+}
+
+// Broader "can at least see this project" check: manage authority, or
+// projects:view authority scoped to projects that include at least one of
+// this user's hierarchically-accessible people in assignedTo.
+async function hasProjectViewAuthority(user, project) {
+  if (await hasProjectManageAuthority(user)) return true;
+  if (await can(user, "projects:view")) {
+    const accessibleIds = await hierarchyUtils.getAccessibleUserIds(user);
+    const accessibleSet = new Set(accessibleIds.map(String));
+    return (project.assignedTo || []).some((id) =>
+      accessibleSet.has(String(id?._id || id))
+    );
+  }
+  return false;
+}
 
 // @route   GET /api/projects
 // @desc    Get projects (paginated, filtered, with aggregate stats)
@@ -75,7 +103,14 @@ router.get("/", protect, async (req, res) => {
 
     // Role-based filtering
     if (req.user.role === "employee") {
-      filter.assignedTo = req.user._id;
+      // Access-management rework (2026-07-03): additive replacement for the
+      // old blunt "employees only see their own projects" rule. scopeQuery()
+      // widens this for anyone whose Position grants projects:view (e.g.
+      // PM/Supervisor/TL - see seedCanonicalHierarchy.js) to include their
+      // team's projects too; for anyone with no such Position it still
+      // resolves to exactly {assignedTo:{$in:[self]}}, identical to before.
+      const scope = await scopeQuery(req.user, "assignedTo");
+      Object.assign(filter, scope);
     } else if (req.user.role === "client") {
       addAndFilter({
         $or: [
@@ -126,7 +161,9 @@ router.get("/", protect, async (req, res) => {
     const sortObj = sortMap[sort] || { createdAt: -1 };
 
     const isExport = req.query.export === "true";
-    const isPrivileged = ["admin", "super-admin", "hr"].includes(req.user.role);
+    const isPrivileged =
+      ["admin", "super-admin", "hr"].includes(req.user.role) ||
+      (await can(req.user, "projects:view"));
     const pageNum = Math.max(1, parseInt(page) || 1);
     const limitNum = isExport
       ? Math.min(parseInt(limit) || 10000, 10000)
@@ -203,9 +240,13 @@ router.get("/", protect, async (req, res) => {
 
 // @route   GET /api/projects/:id/analytics
 // @desc    Get detailed communication analytics for a project (Hybrid: Statistical + AI)
-// @access  Private (Admin/SuperAdmin)
-router.get("/:id/analytics", protect, authorize("admin", "superadmin"), async (req, res) => {
+// @access  Private (Admin/SuperAdmin, or projects:manage authority — enforced in handler)
+router.get("/:id/analytics", protect, async (req, res) => {
   try {
+    if (!(await hasProjectManageAuthority(req.user))) {
+      return res.status(403).json({ message: "Not authorized" });
+    }
+
     const { useAI } = req.query;
     const Message = require("../models/Message");
     const {
@@ -427,9 +468,13 @@ router.get("/communication-status", protect, async (req, res) => {
 
 // @route   GET /api/projects/stats
 // @desc    Get project statistics
-// @access  Private (Admin/SuperAdmin)
-router.get("/stats", protect, authorize("admin", "superadmin"), async (req, res) => {
+// @access  Private (Admin/SuperAdmin, or projects:manage/projects:view authority — enforced in handler)
+router.get("/stats", protect, async (req, res) => {
   try {
+    if (!(await hasProjectManageAuthority(req.user)) && !(await can(req.user, "projects:view"))) {
+      return res.status(403).json({ message: "Not authorized" });
+    }
+
     const today = new Date();
 
     // Overall stats
@@ -527,7 +572,10 @@ router.get("/:id", protect, async (req, res) => {
       const isAssigned = project.assignedTo.some(
         (emp) => emp._id.toString() === req.user._id.toString()
       );
-      if (!isAssigned) {
+      // Access-management rework (2026-07-03): additive fallback — a
+      // PM/Supervisor/TL with projects:view authority over this project's
+      // assignees can also view it, not just direct assignees.
+      if (!isAssigned && !(await hasProjectViewAuthority(req.user, project))) {
         return res.status(403).json({ message: "Access denied" });
       }
     } else if (req.user.role === "client") {
@@ -551,9 +599,13 @@ router.get("/:id", protect, async (req, res) => {
 
 // @route   POST /api/projects
 // @desc    Create new project
-// @access  Private (Admin/SuperAdmin)
-router.post("/", protect, authorize("admin", "superadmin"), async (req, res) => {
+// @access  Private (Admin/SuperAdmin, or projects:manage authority — enforced in handler)
+router.post("/", protect, async (req, res) => {
   try {
+    if (!(await hasProjectManageAuthority(req.user))) {
+      return res.status(403).json({ message: "Not authorized" });
+    }
+
     const {
       projectName,
       type,
@@ -635,9 +687,13 @@ router.post("/", protect, authorize("admin", "superadmin"), async (req, res) => 
 
 // @route   PUT /api/projects/:id
 // @desc    Update project
-// @access  Private (Admin/SuperAdmin)
-router.put("/:id", protect, authorize("admin", "superadmin"), async (req, res) => {
+// @access  Private (Admin/SuperAdmin, or projects:manage authority — enforced in handler)
+router.put("/:id", protect, async (req, res) => {
   try {
+    if (!(await hasProjectManageAuthority(req.user))) {
+      return res.status(403).json({ message: "Not authorized" });
+    }
+
     const {
       projectName,
       type,
@@ -731,9 +787,13 @@ router.put("/:id", protect, authorize("admin", "superadmin"), async (req, res) =
 
 // @route   PATCH /api/projects/:id/status
 // @desc    Update project status
-// @access  Private (Admin/SuperAdmin)
-router.patch("/:id/status", protect, authorize("admin", "superadmin"), async (req, res) => {
+// @access  Private (Admin/SuperAdmin, or projects:manage authority — enforced in handler)
+router.patch("/:id/status", protect, async (req, res) => {
   try {
+    if (!(await hasProjectManageAuthority(req.user))) {
+      return res.status(403).json({ message: "Not authorized" });
+    }
+
     const { status } = req.body;
     const project = await Project.findById(req.params.id);
 
@@ -771,9 +831,13 @@ router.patch("/:id/status", protect, authorize("admin", "superadmin"), async (re
 
 // @route   DELETE /api/projects/:id
 // @desc    Delete project
-// @access  Private (Admin/SuperAdmin)
-router.delete("/:id", protect, authorize("admin", "superadmin"), async (req, res) => {
+// @access  Private (Admin/SuperAdmin, or projects:manage authority — enforced in handler)
+router.delete("/:id", protect, async (req, res) => {
   try {
+    if (!(await hasProjectManageAuthority(req.user))) {
+      return res.status(403).json({ message: "Not authorized" });
+    }
+
     const project = await Project.findById(req.params.id);
 
     if (!project) {
@@ -835,9 +899,13 @@ router.post("/:id/notes", protect, async (req, res) => {
 
 // @route   POST /api/projects/:id/milestones
 // @desc    Add milestone to project
-// @access  Private (Admin/SuperAdmin)
-router.post("/:id/milestones", protect, authorize("admin", "superadmin"), async (req, res) => {
+// @access  Private (Admin/SuperAdmin, or projects:manage authority — enforced in handler)
+router.post("/:id/milestones", protect, async (req, res) => {
   try {
+    if (!(await hasProjectManageAuthority(req.user))) {
+      return res.status(403).json({ message: "Not authorized" });
+    }
+
     const { title, description, dueDate } = req.body;
 
     if (!title || !dueDate) {
@@ -1730,21 +1798,31 @@ router.put(
 
 // @route   POST /api/projects/:projectId/messages/:messageId/pin
 // @desc    Pin a message (admin only)
-// @access  Private (Admin/SuperAdmin)
+// @access  Private (Admin/SuperAdmin, or projects:manage authority — enforced in handler)
 router.post(
   '/:projectId/messages/:messageId/pin',
   protect,
-  authorize('admin', 'super-admin', 'superadmin'),
+  async (req, res, next) => {
+    if (!(await hasProjectManageAuthority(req.user))) {
+      return res.status(403).json({ message: "Not authorized" });
+    }
+    next();
+  },
   messageController.pinMessage
 );
 
 // @route   DELETE /api/projects/:projectId/messages/:messageId/pin
 // @desc    Unpin a message (admin only)
-// @access  Private (Admin/SuperAdmin)
+// @access  Private (Admin/SuperAdmin, or projects:manage authority — enforced in handler)
 router.delete(
   '/:projectId/messages/:messageId/pin',
   protect,
-  authorize('admin', 'super-admin', 'superadmin'),
+  async (req, res, next) => {
+    if (!(await hasProjectManageAuthority(req.user))) {
+      return res.status(403).json({ message: "Not authorized" });
+    }
+    next();
+  },
   messageController.unpinMessage
 );
 

@@ -45,7 +45,7 @@ const EffectiveShiftViewer = () => {
       <h2 className="text-lg font-semibold text-slate-950 dark:text-white">View effective shift</h2>
       <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Check the schedule that applies on a specific date.</p>
 
-      <div className="mt-6 space-y-4">
+      <div className="mt-6 max-w-4xl space-y-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
           <div>
             <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200">
@@ -74,8 +74,8 @@ const EffectiveShiftViewer = () => {
         )}
 
         {effectiveShift && (
-          <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-400/20 dark:bg-emerald-400/10">
-            <h3 className="mb-3 text-sm font-semibold text-emerald-800 dark:text-emerald-200">
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5 dark:border-white/10 dark:bg-white/[0.025]">
+            <h3 className="mb-4 text-sm font-semibold text-slate-900 dark:text-white">
               Effective Shift for {selectedDate}
             </h3>
             <div className="grid grid-cols-1 gap-4 text-sm text-slate-700 dark:text-slate-200 md:grid-cols-3">

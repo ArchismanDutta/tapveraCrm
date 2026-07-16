@@ -5,6 +5,9 @@ const Task = require("../models/Task");
 const LeaveRequest = require("../models/LeaveRequest");
 const Shift = require("../models/Shift");
 const bcrypt = require("bcryptjs");
+// Access-management rework (2026-07-03) - Phase 5.1.
+// See docs/superpowers/plans/2026-07-03-access-management-rework.md
+const { resolvePosition } = require("../utils/accessControl");
 
 
 // =========================
@@ -389,6 +392,82 @@ exports.getMe = async (req, res) => {
   }
 };
 
+// =========================
+// Get my resolved permissions (Access-management rework, Phase 5.1)
+// GET /api/users/me/permissions
+//
+// Single source of truth for what the logged-in user can do, computed
+// server-side via accessControl.js. The frontend should read from this
+// instead of re-deriving access from role strings, department strings, or
+// position-name substring matching (see docs/superpowers/specs/2026-07-03-
+// access-management-design.md for why that pattern caused real incidents).
+// =========================
+const PERMISSION_KEYS = [
+  "canManageUsers", "canManageClients", "canManageProjects", "canAssignTasks",
+  "canApproveLeaves", "canApproveShifts", "canViewReports", "canManageAttendance",
+  "canViewSubordinateLeads", "canViewSubordinateCallbacks", "canViewSubordinateTasks", "canViewSubordinateProjects",
+  "canEditSubordinateLeads", "canEditSubordinateCallbacks", "canAssignToSubordinates",
+  "canViewDepartmentLeads", "canViewDepartmentCallbacks", "canViewDepartmentTasks",
+  "canManageDepartments", "canManagePositions",
+];
+
+exports.getMyPermissions = async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id).populate("departmentRef", "name code status");
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    const isSuperAdmin = user.role === "super-admin" || user.role === "superadmin";
+    const isAdmin = user.role === "admin";
+    const isHR = user.role === "hr";
+
+    const position = await resolvePosition(user);
+
+    // bypass = true means access is via a role-level bypass rather than a
+    // real configured Position: super-admin always, or admin ONLY until an
+    // Admin Position is assigned (see accessControl.js's `can()` - this
+    // mirrors that exact fallback so the UI and the API never disagree).
+    const bypass = isSuperAdmin || (isAdmin && !position);
+
+    const permissions = {};
+    PERMISSION_KEYS.forEach((key) => {
+      permissions[key] = bypass ? true : position?.permissions?.[key] === true;
+    });
+
+    // Mirrors leadController.js's local canAccessLeadManagement() helper so
+    // the sidebar/menu never has to re-derive this logic independently.
+    const canAccessLeadManagement =
+      isSuperAdmin ||
+      isAdmin ||
+      user.department === "marketingAndSales" ||
+      permissions.canViewSubordinateLeads ||
+      permissions.canEditSubordinateLeads ||
+      permissions.canViewDepartmentLeads;
+
+    res.json({
+      role: user.role,
+      isSuperAdmin,
+      isAdmin,
+      isHR,
+      bypass,
+      department: user.departmentRef
+        ? { id: user.departmentRef._id, name: user.departmentRef.name, code: user.departmentRef.code }
+        : (user.department ? { id: null, name: user.department, code: user.department } : null),
+      position: position
+        ? {
+            id: position._id,
+            name: position.name,
+            level: position.level,
+            dataScope: position.hierarchicalAccess?.dataScope || "own",
+          }
+        : null,
+      permissions,
+      canAccessLeadManagement,
+    });
+  } catch (err) {
+    console.error("GetMyPermissions Error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
 
 // =========================
 // Get employee by ID

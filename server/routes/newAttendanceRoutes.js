@@ -4,9 +4,21 @@ const express = require('express');
 const router = express.Router();
 const AttendanceController = require('../controllers/AttendanceController');
 const { protect, authorize } = require('../middlewares/authMiddleware');
+// Access-management rework (2026-07-03) - Phase 4.3.
+// See docs/superpowers/plans/2026-07-03-access-management-rework.md
+const { can } = require('../utils/accessControl');
 
 // Create an instance of the AttendanceController
 const attendanceController = new AttendanceController();
+
+// Additive: admin/hr/super-admin keep exactly what they had (authorize(...)
+// below is left in place). This middleware adds an alternative path for
+// anyone whose Position is explicitly granted "canManageAttendance" (Admin +
+// HR by default - see seedCanonicalHierarchy.js).
+const requireAttendanceManage = async (req, res, next) => {
+  if (await can(req.user, 'attendance:manage')) return next();
+  return authorize('admin', 'super-admin', 'hr')(req, res, next);
+};
 
 // ======================
 // Employee Routes - Authenticated users can access their own data
@@ -64,21 +76,21 @@ router.put('/recalculate/:userId/:date', protect, attendanceController.recalcula
  * @route GET /api/attendance-new/daily/:date
  * @access Admin, HR, Super-Admin
  */
-router.get('/daily/:date', protect, authorize('admin', 'super-admin', 'hr'), attendanceController.getDailyReport.bind(attendanceController));
+router.get('/daily/:date', protect, requireAttendanceManage, attendanceController.getDailyReport.bind(attendanceController));
 
 /**
  * Get weekly attendance summary
  * @route GET /api/attendance-new/weekly?startDate=2024-01-01&endDate=2024-01-07
  * @access Admin, HR, Super-Admin
  */
-router.get('/weekly', protect, authorize('admin', 'super-admin', 'hr'), attendanceController.getWeeklySummary.bind(attendanceController));
+router.get('/weekly', protect, requireAttendanceManage, attendanceController.getWeeklySummary.bind(attendanceController));
 
 /**
  * Get current active employees (real-time)
  * @route GET /api/attendance-new/active
  * @access Admin, HR, Super-Admin
  */
-router.get('/active', protect, authorize('admin', 'super-admin', 'hr'), attendanceController.getActiveEmployees.bind(attendanceController));
+router.get('/active', protect, requireAttendanceManage, attendanceController.getActiveEmployees.bind(attendanceController));
 
 /**
  * Manual punch action for employees
@@ -86,14 +98,14 @@ router.get('/active', protect, authorize('admin', 'super-admin', 'hr'), attendan
  * @access Admin, HR, Super-Admin
  * @body { userId, action, timestamp, location?, notes? }
  */
-router.post('/manual-punch', protect, authorize('admin', 'super-admin', 'hr'), attendanceController.manualPunchAction.bind(attendanceController));
+router.post('/manual-punch', protect, requireAttendanceManage, attendanceController.manualPunchAction.bind(attendanceController));
 
 /**
  * Get attendance statistics
  * @route GET /api/attendance-new/stats?period=week|month&startDate=2024-01-01&endDate=2024-01-31
  * @access Admin, HR, Super-Admin
  */
-router.get('/stats', protect, authorize('admin', 'super-admin', 'hr'), attendanceController.getAttendanceStats.bind(attendanceController));
+router.get('/stats', protect, requireAttendanceManage, attendanceController.getAttendanceStats.bind(attendanceController));
 
 // ======================
 // System Routes - Health check and utilities

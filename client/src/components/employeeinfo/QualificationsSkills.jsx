@@ -1,52 +1,55 @@
 import React from "react";
 
-const COLORS = [
-  "bg-cyan-700",
-  "bg-indigo-700",
-  "bg-pink-600",
-  "bg-orange-600",
-  "bg-green-700",
-  "bg-purple-700",
-  "bg-teal-700",
-  "bg-blue-800",
-  "bg-yellow-700"
+const skillClasses = [
+  "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-200",
+  "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-200",
+  "border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-500/30 dark:bg-violet-500/10 dark:text-violet-200",
+  "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200",
 ];
 
 const QualificationsSkills = ({ info }) => (
-  <div className="p-6 rounded-2xl shadow-md border border-[#283255] bg-[#181f34] text-blue-100">
-    <h3 className="text-xl font-bold text-cyan-300 mb-6 flex items-center gap-2">
-      <span role="img" aria-label="Qual">🎓</span> Qualifications & Skills
-    </h3>
-    <div className="mb-7">
-      <span className="block text-md font-bold mb-1">Education:</span>
+  <div className="app-panel rounded-2xl p-5">
+    <p className="app-eyebrow">Growth</p>
+    <h3 className="mt-1 text-lg font-semibold text-slate-950 dark:text-white">Qualifications & Skills</h3>
+
+    <div className="mt-5">
+      <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Education</h4>
       {info.education && info.education.length > 0 ? (
-        <ul className="list-disc pl-6 text-cyan-200 space-y-1">
-          {info.education.map((q, idx) => (
-            <li key={idx}>
-              {q.degree || "N/A"} - {q.school || "N/A"} ({q.year || "N/A"})
-              {q.marks ? ` | Marks: ${q.marks}` : ""}
-            </li>
+        <div className="mt-3 grid gap-3">
+          {info.education.map((qualification, index) => (
+            <div key={`${qualification.degree || "degree"}-${index}`} className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-white/10 dark:bg-white/[0.04]">
+              <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{qualification.degree || "N/A"}</p>
+              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                {qualification.school || "N/A"} ({qualification.year || "N/A"})
+                {qualification.marks ? ` · Marks: ${qualification.marks}` : ""}
+              </p>
+            </div>
           ))}
-        </ul>
+        </div>
       ) : (
-        <div className="pl-2 py-1 text-blue-400">No qualifications available</div>
+        <div className="mt-3 rounded-xl border border-dashed border-slate-300 px-4 py-5 text-sm text-slate-500 dark:border-white/10 dark:text-slate-400">
+          No qualifications available
+        </div>
       )}
     </div>
-    <div>
-      <span className="block text-md font-bold mb-1">Skills:</span>
+
+    <div className="mt-6">
+      <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Skills</h4>
       {info.skills && info.skills.length > 0 ? (
-        <div className="flex flex-wrap gap-2 mt-2">
-          {info.skills.map((s, idx) => (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {info.skills.map((skill, index) => (
             <span
-              key={idx}
-              className={`px-3 py-1 rounded-lg text-white text-sm font-semibold border border-[#334065] ${COLORS[idx % COLORS.length]}`}
+              key={`${skill}-${index}`}
+              className={`rounded-lg border px-3 py-1 text-sm font-semibold ${skillClasses[index % skillClasses.length]}`}
             >
-              {s}
+              {skill}
             </span>
           ))}
         </div>
       ) : (
-        <span className="pl-2 py-1 text-blue-400">No skills listed</span>
+        <div className="mt-3 rounded-xl border border-dashed border-slate-300 px-4 py-5 text-sm text-slate-500 dark:border-white/10 dark:text-slate-400">
+          No skills listed
+        </div>
       )}
     </div>
   </div>

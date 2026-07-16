@@ -1,11 +1,24 @@
 const express = require("express");
 const Client = require("../models/Client");
-const { protect, authorize } = require("../middlewares/authMiddleware");
+const { protect } = require("../middlewares/authMiddleware");
 const emailNotificationService = require("../services/emailNotificationService");
 const emailService = require("../services/email/emailService");
 const bcrypt = require("bcryptjs");
+// Access-management rework (2026-07-03) - Phase 4.2.
+// See docs/superpowers/plans/2026-07-03-access-management-rework.md
+const { can } = require("../utils/accessControl");
 
 const router = express.Router();
+
+// Additive expansion only: admin/super-admin keep exactly what they had
+// today. A user whose Position is explicitly granted "canManageClients"
+// (off by default for every canonical position except Admin — see
+// seedCanonicalHierarchy.js) now ALSO qualifies. Today this is a no-op for
+// everyone except Admin/super-admin, until a super-admin deliberately grants
+// that permission to another position via the Access Management page.
+async function hasClientManageAuthority(user) {
+  return ["admin", "super-admin", "superadmin"].includes(user.role) || (await can(user, "clients:manage"));
+}
 
 // Get unique regions from all clients (for dropdown population)
 router.get("/regions", protect, async (req, res) => {
@@ -27,9 +40,12 @@ router.get("/regions", protect, async (req, res) => {
 router.post(
   "/",
   protect,
-  authorize("admin", "super-admin"),
   async (req, res) => {
     try {
+      if (!(await hasClientManageAuthority(req.user))) {
+        return res.status(403).json({ error: "Not authorized" });
+      }
+
       const { clientName, businessName, email, password, region } = req.body;
       if (!clientName || !businessName || !email || !password?.trim()) {
         return res.status(400).json({
@@ -70,10 +86,17 @@ router.post(
 router.get(
   "/",
   protect,
-  authorize("admin", "super-admin", "hr"),
   async (req, res) => {
     try {
       const user = req.user;
+
+      if (
+        !["admin", "super-admin", "superadmin", "hr"].includes(user.role) &&
+        !(await can(user, "clients:manage"))
+      ) {
+        return res.status(403).json({ error: "Not authorized" });
+      }
+
       let query = {};
 
       console.log(
@@ -146,9 +169,12 @@ router.get(
 router.put(
   "/:id",
   protect,
-  authorize("admin", "super-admin"),
   async (req, res) => {
     try {
+      if (!(await hasClientManageAuthority(req.user))) {
+        return res.status(403).json({ error: "Not authorized" });
+      }
+
       const { clientName, businessName, email, region, password } = req.body;
       const client = await Client.findById(req.params.id);
 
@@ -185,9 +211,12 @@ router.put(
 router.delete(
   "/:id",
   protect,
-  authorize("admin", "super-admin"),
   async (req, res) => {
     try {
+      if (!(await hasClientManageAuthority(req.user))) {
+        return res.status(403).json({ error: "Not authorized" });
+      }
+
       const client = await Client.findByIdAndDelete(req.params.id);
       if (!client) return res.status(404).json({ error: "Client not found" });
 
@@ -203,9 +232,12 @@ router.delete(
 router.patch(
   "/:id/status",
   protect,
-  authorize("admin", "super-admin"),
   async (req, res) => {
     try {
+      if (!(await hasClientManageAuthority(req.user))) {
+        return res.status(403).json({ error: "Not authorized" });
+      }
+
       const client = await Client.findById(req.params.id);
       if (!client) return res.status(404).json({ error: "Client not found" });
 
@@ -222,9 +254,12 @@ router.patch(
 router.post(
   "/send-email/:clientId",
   protect,
-  authorize("admin", "super-admin"),
   async (req, res) => {
     try {
+      if (!(await hasClientManageAuthority(req.user))) {
+        return res.status(403).json({ error: "Not authorized" });
+      }
+
       const { clientId } = req.params;
       const { subject, body } = req.body;
 
@@ -287,9 +322,12 @@ router.post(
 router.post(
   "/bulk-email",
   protect,
-  authorize("admin", "super-admin"),
   async (req, res) => {
     try {
+      if (!(await hasClientManageAuthority(req.user))) {
+        return res.status(403).json({ error: "Not authorized" });
+      }
+
       const { clientIds, subject, body } = req.body;
 
       // Validation

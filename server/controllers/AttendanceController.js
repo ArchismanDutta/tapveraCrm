@@ -2,6 +2,10 @@
 // controllers/AttendanceController.js
 // Complete API controller for the new date-centric attendance system
 const AttendanceService = require('../services/AttendanceService');
+// Access-management rework (2026-07-03) - Phase 4.3.
+// See docs/superpowers/plans/2026-07-03-access-management-rework.md
+const { can } = require('../utils/accessControl');
+const { canAccessUserData } = require('../utils/hierarchyUtils');
 
 class AttendanceController {
   constructor() {
@@ -224,8 +228,14 @@ class AttendanceController {
       const { userId } = req.params;
       const { startDate, endDate } = req.query;
 
-      // Check permissions - only allow access to own data unless admin/hr
-      if (userId !== req.user._id.toString() && !['admin', 'super-admin', 'hr'].includes(req.user.role)) {
+      // Check permissions - self, admin/hr (unchanged), or a Position with
+      // hierarchical reach over this specific employee (additive - see
+      // docs/superpowers/plans/2026-07-03-access-management-rework.md Phase 4.3)
+      if (
+        userId !== req.user._id.toString() &&
+        !['admin', 'super-admin', 'hr'].includes(req.user.role) &&
+        !(await canAccessUserData(req.user, userId))
+      ) {
         return res.status(403).json({
           success: false,
           error: 'Access denied'
@@ -267,8 +277,13 @@ class AttendanceController {
     try {
       const { userId, year, month } = req.params;
 
-      // Check permissions
-      if (userId !== req.user._id.toString() && !['admin', 'super-admin', 'hr'].includes(req.user.role)) {
+      // Check permissions - self, admin/hr (unchanged), or a Position with
+      // hierarchical reach over this specific employee (additive - Phase 4.3)
+      if (
+        userId !== req.user._id.toString() &&
+        !['admin', 'super-admin', 'hr'].includes(req.user.role) &&
+        !(await canAccessUserData(req.user, userId))
+      ) {
         return res.status(403).json({
           success: false,
           error: 'Access denied'
@@ -555,8 +570,15 @@ class AttendanceController {
     try {
       const { userId, date } = req.params;
 
-      // Allow employees to recalculate only their own attendance
-      if (userId !== req.user._id.toString() && !['admin', 'super-admin', 'hr'].includes(req.user.role)) {
+      // Allow employees to recalculate only their own attendance, admin/hr
+      // (unchanged), or anyone with "attendance:manage" authority (additive -
+      // Phase 4.3). Recalculation mutates historical records, so this stays
+      // tied to the manage-level permission rather than mere view access.
+      if (
+        userId !== req.user._id.toString() &&
+        !['admin', 'super-admin', 'hr'].includes(req.user.role) &&
+        !(await can(req.user, 'attendance:manage'))
+      ) {
         return res.status(403).json({
           success: false,
           error: 'Access denied. You can only recalculate your own attendance.'

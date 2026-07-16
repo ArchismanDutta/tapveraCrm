@@ -55,6 +55,8 @@ const ManualAttendanceManagement = ({ onLogout }) => {
   useEffect(() => {
     fetchUsers();
     fetchRecords();
+    // Refetch when the server-backed pagination or date filters change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pagination.currentPage, filters.userId, filters.startDate, filters.endDate]);
 
   // Listen for manual attendance updates
@@ -72,6 +74,8 @@ const ManualAttendanceManagement = ({ onLogout }) => {
       window.removeEventListener('manualAttendanceUpdated', handleAttendanceUpdate);
       window.removeEventListener('attendanceDataUpdated', handleAttendanceUpdate);
     };
+    // The event listeners intentionally retain the page-level refresh function.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const fetchUsers = async () => {
@@ -285,7 +289,7 @@ const ManualAttendanceManagement = ({ onLogout }) => {
     // Check leave info
     if (record.leave?.isOnLeave || record.metadata?.isOnLeave) {
       return (
-        <span className="inline-flex items-center gap-1 px-2 py-1 bg-purple-900/30 text-purple-400 border border-purple-500/30 rounded-lg text-xs font-medium">
+        <span className="inline-flex items-center gap-1 rounded-lg border border-violet-200 bg-violet-50 px-2 py-1 text-xs font-medium text-violet-700 dark:border-violet-400/25 dark:bg-violet-400/10 dark:text-violet-300">
           <User className="w-3 h-3" />
           On Leave
         </span>
@@ -295,7 +299,7 @@ const ManualAttendanceManagement = ({ onLogout }) => {
     // Check holiday
     if (record.metadata?.isHoliday) {
       return (
-        <span className="inline-flex items-center gap-1 px-2 py-1 bg-blue-900/30 text-blue-400 border border-blue-500/30 rounded-lg text-xs font-medium">
+        <span className="inline-flex items-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 dark:border-blue-400/25 dark:bg-blue-400/10 dark:text-blue-300">
           <Calendar className="w-3 h-3" />
           Holiday
         </span>
@@ -307,7 +311,7 @@ const ManualAttendanceManagement = ({ onLogout }) => {
 
     if (status === 'absent' || record.calculated?.isAbsent) {
       return (
-        <span className="inline-flex items-center gap-1 px-2 py-1 bg-red-900/30 text-red-400 border border-red-500/30 rounded-lg text-xs font-medium">
+        <span className="inline-flex items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-2 py-1 text-xs font-medium text-rose-700 dark:border-rose-400/25 dark:bg-rose-400/10 dark:text-rose-300">
           <XCircle className="w-3 h-3" />
           Absent
         </span>
@@ -316,7 +320,7 @@ const ManualAttendanceManagement = ({ onLogout }) => {
 
     if (status === 'halfDay' || record.calculated?.isHalfDay) {
       return (
-        <span className="inline-flex items-center gap-1 px-2 py-1 bg-yellow-900/30 text-yellow-400 border border-yellow-500/30 rounded-lg text-xs font-medium">
+        <span className="inline-flex items-center gap-1 rounded-lg border border-amber-200 bg-amber-50 px-2 py-1 text-xs font-medium text-amber-700 dark:border-amber-400/25 dark:bg-amber-400/10 dark:text-amber-300">
           <AlertCircle className="w-3 h-3" />
           Half Day
         </span>
@@ -325,7 +329,7 @@ const ManualAttendanceManagement = ({ onLogout }) => {
 
     if (record.metadata?.isWFH) {
       return (
-        <span className="inline-flex items-center gap-1 px-2 py-1 bg-cyan-900/30 text-cyan-400 border border-cyan-500/30 rounded-lg text-xs font-medium">
+        <span className="inline-flex items-center gap-1 rounded-lg border border-cyan-200 bg-cyan-50 px-2 py-1 text-xs font-medium text-cyan-700 dark:border-cyan-400/25 dark:bg-cyan-400/10 dark:text-cyan-300">
           <CheckCircle className="w-3 h-3" />
           WFH
         </span>
@@ -334,7 +338,7 @@ const ManualAttendanceManagement = ({ onLogout }) => {
 
     // Default to present
     return (
-      <span className="inline-flex items-center gap-1 px-2 py-1 bg-green-900/30 text-green-400 border border-green-500/30 rounded-lg text-xs font-medium">
+      <span className="inline-flex items-center gap-1 rounded-lg border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700 dark:border-emerald-400/25 dark:bg-emerald-400/10 dark:text-emerald-300">
         <CheckCircle className="w-3 h-3" />
         Present
       </span>
@@ -366,7 +370,7 @@ const ManualAttendanceManagement = ({ onLogout }) => {
   const userRole = userStr ? JSON.parse(userStr).role : "admin";
 
   return (
-    <div className="flex bg-gradient-to-br from-gray-900 via-slate-900 to-gray-900 min-h-screen text-white">
+    <div className="manual-attendance-theme relative flex h-[100dvh] overflow-hidden bg-slate-50 text-slate-900 dark:bg-[#0b0d12] dark:text-slate-100">
       <Sidebar
         collapsed={collapsed}
         setCollapsed={setCollapsed}
@@ -374,43 +378,49 @@ const ManualAttendanceManagement = ({ onLogout }) => {
         onLogout={onLogout}
       />
       <main
-        className={`flex-1 transition-all duration-300 ${
-          collapsed ? "ml-24" : "ml-72"
-        } p-6`}
+        className={`h-[100dvh] min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 transition-all duration-300 sm:px-5 lg:px-6 ${
+          collapsed ? "ml-16" : "ml-16 sm:ml-56"
+        }`}
       >
+      <div className="mx-auto max-w-[1500px] space-y-4 pb-8 sm:space-y-5">
       {/* Header */}
-      <div className="mb-8">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-bold text-white flex items-center gap-3">
-              <CalendarDays className="w-8 h-8 text-cyan-400" />
-              Manual Attendance Management
-            </h1>
-            <p className="text-gray-400 mt-2">
-              Add, edit, or manage employee attendance records manually
-            </p>
+      <header className="rounded-2xl border border-slate-200 bg-white px-5 py-5 shadow-sm dark:border-white/10 dark:bg-[#10131c] sm:px-6">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex items-start gap-3">
+            <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-400/10 dark:text-blue-300">
+              <CalendarDays className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Attendance operations</p>
+              <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950 dark:text-white">Manual attendance</h1>
+              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Add, correct, and review employee attendance records.</p>
+            </div>
           </div>
 
           <button
             onClick={handleAddNew}
-            className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-cyan-600 to-cyan-700 hover:from-cyan-700 hover:to-cyan-800 text-white rounded-lg transition-all duration-200 shadow-lg hover:shadow-cyan-500/25"
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 text-sm font-semibold text-white transition hover:bg-blue-700"
           >
             <Plus className="w-5 h-5" />
-            Add Manual Attendance
+            Add attendance
           </button>
         </div>
-      </div>
+      </header>
 
       {/* Filters */}
-      <div className="mb-6 p-6 bg-gradient-to-br from-slate-800/50 to-slate-900/50 backdrop-blur-sm border border-slate-600/30 rounded-2xl">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-[#10131c]">
+        <div className="mb-4 flex items-center gap-2">
+          <Filter className="h-4 w-4 text-blue-600 dark:text-blue-300" />
+          <h2 className="text-sm font-semibold text-slate-900 dark:text-white">Filter attendance records</h2>
+        </div>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {/* User Filter */}
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">Employee</label>
+            <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200">Employee</label>
             <select
               value={filters.userId}
               onChange={(e) => setFilters(prev => ({ ...prev, userId: e.target.value }))}
-              className="w-full px-4 py-2 bg-slate-700/50 border border-slate-600/50 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
+              className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 dark:border-white/10 dark:bg-[#151923] dark:text-white"
             >
               <option value="">All Employees</option>
               {users.map(user => (
@@ -423,13 +433,13 @@ const ManualAttendanceManagement = ({ onLogout }) => {
 
           {/* Start Date */}
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">Start Date</label>
+            <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200">Start date</label>
             <div className="flex gap-2">
               <input
                 type="date"
                 value={filters.startDate}
                 onChange={(e) => setFilters(prev => ({ ...prev, startDate: e.target.value }))}
-                className="flex-1 px-4 py-2 bg-slate-700/50 border border-slate-600/50 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                className="h-10 min-w-0 flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 dark:border-white/10 dark:bg-[#151923] dark:text-white"
               />
               <button
                 type="button"
@@ -437,7 +447,7 @@ const ManualAttendanceManagement = ({ onLogout }) => {
                   const today = new Date().toISOString().split('T')[0];
                   setFilters(prev => ({ ...prev, startDate: today }));
                 }}
-                className="px-3 py-2 bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-400 text-xs rounded-lg transition-colors"
+                className="h-10 rounded-lg border border-slate-200 px-3 text-xs font-semibold text-slate-500 transition hover:bg-slate-50 dark:border-white/10 dark:text-slate-400 dark:hover:bg-white/[0.05]"
                 title="Set to today"
               >
                 Today
@@ -447,13 +457,13 @@ const ManualAttendanceManagement = ({ onLogout }) => {
 
           {/* End Date */}
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">End Date</label>
+            <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200">End date</label>
             <div className="flex gap-2">
               <input
                 type="date"
                 value={filters.endDate}
                 onChange={(e) => setFilters(prev => ({ ...prev, endDate: e.target.value }))}
-                className="flex-1 px-4 py-2 bg-slate-700/50 border border-slate-600/50 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                className="h-10 min-w-0 flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 dark:border-white/10 dark:bg-[#151923] dark:text-white"
               />
               <button
                 type="button"
@@ -461,7 +471,7 @@ const ManualAttendanceManagement = ({ onLogout }) => {
                   const today = new Date().toISOString().split('T')[0];
                   setFilters(prev => ({ ...prev, endDate: today }));
                 }}
-                className="px-3 py-2 bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-400 text-xs rounded-lg transition-colors"
+                className="h-10 rounded-lg border border-slate-200 px-3 text-xs font-semibold text-slate-500 transition hover:bg-slate-50 dark:border-white/10 dark:text-slate-400 dark:hover:bg-white/[0.05]"
                 title="Set to today"
               >
                 Today
@@ -471,7 +481,7 @@ const ManualAttendanceManagement = ({ onLogout }) => {
 
           {/* Search */}
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">Search</label>
+            <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200">Search</label>
             <div className="relative">
               <Search className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
               <input
@@ -479,23 +489,23 @@ const ManualAttendanceManagement = ({ onLogout }) => {
                 value={filters.search}
                 onChange={(e) => setFilters(prev => ({ ...prev, search: e.target.value }))}
                 placeholder="Search by name, ID..."
-                className="w-full pl-10 pr-4 py-2 bg-slate-700/50 border border-slate-600/50 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 pl-10 pr-3 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 dark:border-white/10 dark:bg-[#151923] dark:text-white"
               />
             </div>
           </div>
 
           {/* Actions */}
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-wrap items-center gap-2 sm:col-span-2 xl:col-span-4">
             <button
               onClick={fetchRecords}
-              className="flex items-center gap-2 px-4 py-2 bg-slate-600/50 hover:bg-slate-600 text-gray-300 rounded-lg transition-colors"
+              className="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-200 px-3 text-xs font-semibold text-slate-600 transition hover:bg-slate-50 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/[0.05]"
             >
               <RefreshCw className="w-4 h-4" />
               Refresh
             </button>
 
             {/* Quick Date Presets */}
-            <div className="grid grid-cols-2 gap-1">
+            <div className="flex flex-wrap gap-2">
               <button
                 type="button"
                 onClick={() => {
@@ -507,7 +517,7 @@ const ManualAttendanceManagement = ({ onLogout }) => {
                     endDate: today.toISOString().split('T')[0]
                   }));
                 }}
-                className="px-2 py-1 bg-purple-600/20 hover:bg-purple-600/30 text-purple-400 text-xs rounded transition-colors"
+                className="h-9 rounded-lg border border-slate-200 px-3 text-xs font-semibold text-slate-500 transition hover:bg-slate-50 dark:border-white/10 dark:text-slate-400 dark:hover:bg-white/[0.05]"
                 title="Last 7 days"
               >
                 Last 7d
@@ -523,7 +533,7 @@ const ManualAttendanceManagement = ({ onLogout }) => {
                     endDate: today.toISOString().split('T')[0]
                   }));
                 }}
-                className="px-2 py-1 bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 text-xs rounded transition-colors"
+                className="h-9 rounded-lg border border-slate-200 px-3 text-xs font-semibold text-slate-500 transition hover:bg-slate-50 dark:border-white/10 dark:text-slate-400 dark:hover:bg-white/[0.05]"
                 title="Last 30 days"
               >
                 Last 30d
@@ -539,7 +549,7 @@ const ManualAttendanceManagement = ({ onLogout }) => {
                     search: ""
                   }));
                 }}
-                className="px-2 py-1 bg-red-600/20 hover:bg-red-600/30 text-red-400 text-xs rounded transition-colors col-span-2"
+                className="h-9 rounded-lg border border-rose-200 bg-rose-50 px-3 text-xs font-semibold text-rose-700 transition hover:bg-rose-100 dark:border-rose-400/20 dark:bg-rose-400/10 dark:text-rose-300"
                 title="Clear all filters"
               >
                 Clear All
@@ -547,18 +557,18 @@ const ManualAttendanceManagement = ({ onLogout }) => {
             </div>
           </div>
         </div>
-      </div>
+      </section>
 
       {/* Table */}
-      <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 backdrop-blur-sm border border-slate-600/30 rounded-2xl overflow-hidden">
+      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-white/10 dark:bg-[#10131c]">
         {/* Table Header */}
-        <div className="p-6 border-b border-slate-600/30">
-          <div className="flex items-center justify-between">
-            <h3 className="text-lg font-semibold text-white flex items-center gap-2">
-              <Users className="w-5 h-5 text-cyan-400" />
-              Attendance Records ({pagination.totalRecords})
+        <div className="border-b border-slate-200 p-5 dark:border-white/10">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <h3 className="flex items-center gap-2 text-base font-semibold text-slate-950 dark:text-white">
+              <Users className="h-5 w-5 text-blue-600 dark:text-blue-300" />
+              Attendance records <span className="text-sm font-normal text-slate-400">({pagination.totalRecords})</span>
               {selectedRecords.size > 0 && (
-                <span className="text-sm text-cyan-400 ml-2">
+                <span className="ml-2 text-sm text-blue-600 dark:text-blue-300">
                   ({selectedRecords.size} selected)
                 </span>
               )}
@@ -572,14 +582,14 @@ const ManualAttendanceManagement = ({ onLogout }) => {
                       setSelectedRecords(new Set());
                     }
                   }}
-                  className="flex items-center gap-2 px-3 py-2 bg-red-600/20 hover:bg-red-600/30 text-red-400 rounded-lg transition-colors text-sm"
+                  className="inline-flex h-9 items-center gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 text-xs font-semibold text-rose-700 transition hover:bg-rose-100 dark:border-rose-400/20 dark:bg-rose-400/10 dark:text-rose-300"
                 >
                   <Trash2 className="w-4 h-4" />
                   Delete Selected
                 </button>
                 <button
                   onClick={() => setSelectedRecords(new Set())}
-                  className="flex items-center gap-2 px-3 py-2 bg-slate-600/50 hover:bg-slate-600 text-gray-300 rounded-lg transition-colors text-sm"
+                  className="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-200 px-3 text-xs font-semibold text-slate-600 transition hover:bg-slate-50 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/[0.05]"
                 >
                   <X className="w-4 h-4" />
                   Clear Selection
@@ -593,8 +603,8 @@ const ManualAttendanceManagement = ({ onLogout }) => {
         <div className="overflow-x-auto">
           {loading ? (
             <div className="p-12 text-center">
-              <RefreshCw className="w-8 h-8 animate-spin text-cyan-400 mx-auto mb-4" />
-              <p className="text-gray-400">Loading attendance records...</p>
+              <RefreshCw className="mx-auto mb-4 h-8 w-8 animate-spin text-blue-600 dark:text-blue-300" />
+              <p className="text-slate-500 dark:text-slate-400">Loading attendance records...</p>
             </div>
           ) : filteredRecords.length === 0 ? (
             <div className="p-12 text-center">
@@ -605,10 +615,10 @@ const ManualAttendanceManagement = ({ onLogout }) => {
               </p>
             </div>
           ) : (
-            <table className="w-full">
-              <thead className="bg-slate-800/50">
+            <table className="w-full min-w-[1180px]">
+              <thead className="bg-slate-50 dark:bg-white/[0.025]">
                 <tr>
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 w-12">
+                  <th className="w-12 px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                     <input
                       type="checkbox"
                       checked={filteredRecords.length > 0 && filteredRecords.every(record => selectedRecords.has(record._id))}
@@ -622,19 +632,14 @@ const ManualAttendanceManagement = ({ onLogout }) => {
                       className="w-4 h-4 text-cyan-600 bg-slate-700 border-slate-600 rounded focus:ring-cyan-500"
                     />
                   </th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Employee</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Date</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Punch In</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Punch Out</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Work Hours</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Status</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Created By</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Actions</th>
+                  {['Employee', 'Date', 'Punch in', 'Punch out', 'Work hours', 'Status', 'Created by', 'Actions'].map((heading) => (
+                    <th key={heading} className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{heading}</th>
+                  ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-600/20">
+              <tbody className="divide-y divide-slate-100 dark:divide-white/[0.07]">
                 {filteredRecords.map((record) => (
-                  <tr key={record._id} className="hover:bg-slate-700/30 transition-colors">
+                  <tr key={record._id} className="transition-colors hover:bg-slate-50 dark:hover:bg-white/[0.025]">
                     <td className="px-6 py-4">
                       <input
                         type="checkbox"
@@ -653,27 +658,27 @@ const ManualAttendanceManagement = ({ onLogout }) => {
                     </td>
                     <td className="px-6 py-4">
                       <div>
-                        <div className="font-medium text-white">{record.user?.name || 'Unknown'}</div>
-                        <div className="text-sm text-gray-400">
+                        <div className="font-medium text-slate-900 dark:text-white">{record.user?.name || 'Unknown'}</div>
+                        <div className="text-sm text-slate-500 dark:text-slate-400">
                           {record.user?.employeeId || record.user?.email || `ID: ${record.userId}`}
                         </div>
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      <div className="text-white font-medium">{formatDate(record.date)}</div>
+                      <div className="font-medium text-slate-900 dark:text-white">{formatDate(record.date)}</div>
                     </td>
                     <td className="px-6 py-4">
-                      <div className="text-gray-300">
+                      <div className="text-slate-600 dark:text-slate-300">
                         {record.calculated?.arrivalTime ? formatDateTime(record.calculated.arrivalTime) : '—'}
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      <div className="text-gray-300">
+                      <div className="text-slate-600 dark:text-slate-300">
                         {record.calculated?.departureTime ? formatDateTime(record.calculated.departureTime) : '—'}
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      <div className="text-white font-medium">
+                      <div className="font-medium text-slate-900 dark:text-white">
                         {record.calculated?.workDurationSeconds ? calculateWorkHours(record.calculated.workDurationSeconds) : '0h 0m'}
                       </div>
                       {record.calculated?.breakDurationSeconds > 0 && (
@@ -688,8 +693,8 @@ const ManualAttendanceManagement = ({ onLogout }) => {
                     <td className="px-6 py-4">
                       {record.approvedBy ? (
                         <div>
-                          <div className="font-medium text-white">{record.approvedBy.name}</div>
-                          <div className="text-sm text-gray-400 capitalize">{record.approvedBy.role}</div>
+                          <div className="font-medium text-slate-900 dark:text-white">{record.approvedBy.name}</div>
+                          <div className="text-sm capitalize text-slate-500 dark:text-slate-400">{record.approvedBy.role}</div>
                         </div>
                       ) : (
                         <span className="text-gray-500 italic">—</span>
@@ -729,26 +734,26 @@ const ManualAttendanceManagement = ({ onLogout }) => {
 
         {/* Pagination */}
         {pagination.totalPages > 1 && (
-          <div className="p-6 border-t border-slate-600/30">
-            <div className="flex items-center justify-between">
-              <div className="text-sm text-gray-400">
+          <div className="border-t border-slate-200 p-5 dark:border-white/10">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="text-sm text-slate-500 dark:text-slate-400">
                 Showing {((pagination.currentPage - 1) * pagination.recordsPerPage) + 1} to {Math.min(pagination.currentPage * pagination.recordsPerPage, pagination.totalRecords)} of {pagination.totalRecords} records
               </div>
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => setPagination(prev => ({ ...prev, currentPage: Math.max(1, prev.currentPage - 1) }))}
                   disabled={pagination.currentPage === 1}
-                  className="p-2 bg-slate-600/50 hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed text-gray-300 rounded-lg transition-colors"
+                  className="rounded-lg border border-slate-200 p-2 text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/[0.05]"
                 >
                   <ChevronLeft className="w-4 h-4" />
                 </button>
-                <span className="px-4 py-2 bg-slate-700/50 text-white rounded-lg">
+                <span className="rounded-lg bg-slate-100 px-4 py-2 text-sm text-slate-700 dark:bg-white/[0.05] dark:text-slate-300">
                   {pagination.currentPage} of {pagination.totalPages}
                 </span>
                 <button
                   onClick={() => setPagination(prev => ({ ...prev, currentPage: Math.min(prev.totalPages, prev.currentPage + 1) }))}
                   disabled={pagination.currentPage === pagination.totalPages}
-                  className="p-2 bg-slate-600/50 hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed text-gray-300 rounded-lg transition-colors"
+                  className="rounded-lg border border-slate-200 p-2 text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/[0.05]"
                 >
                   <ChevronRight className="w-4 h-4" />
                 </button>
@@ -756,7 +761,7 @@ const ManualAttendanceManagement = ({ onLogout }) => {
             </div>
           </div>
         )}
-      </div>
+      </section>
 
       {/* Manual Attendance Form Modal */}
       <ManualAttendanceForm
@@ -768,6 +773,7 @@ const ManualAttendanceManagement = ({ onLogout }) => {
         onSuccess={handleFormSuccess}
         editData={editData}
       />
+      </div>
       </main>
     </div>
   );

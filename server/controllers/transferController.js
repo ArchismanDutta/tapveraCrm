@@ -1,5 +1,12 @@
 const Callback = require("../models/Callback");
 const User = require("../models/User");
+// Access-management rework (2026-07-03) - Phase 4.7.
+// See docs/superpowers/plans/2026-07-03-access-management-rework.md
+const { resolvePosition } = require("../utils/accessControl");
+
+// Team Lead's canonical level (see seedCanonicalHierarchy.js) - the minimum
+// seniority to be a valid callback-escalation target.
+const MIN_TRANSFER_TARGET_LEVEL = 40;
 
 /**
  * Transfer a callback to supervisor or team lead
@@ -31,12 +38,22 @@ exports.transferCallback = async (req, res) => {
       return res.status(404).json({ success: false, message: "Target user not found" });
     }
 
-    // Check if target user is supervisor or team lead
+    // Check if target user is supervisor or team lead.
+    // Access-management rework (2026-07-03, Phase 4.7): prefer the target's
+    // real Position level (>= Team Lead's canonical level - see
+    // seedCanonicalHierarchy.js) over the old fragile substring match on the
+    // free-text position string, which wouldn't reliably recognize newly
+    // configured position names (e.g. department-scoped ones created from
+    // the Access Management page). Falls back to the substring match for
+    // anyone not yet migrated to a real Position, so nothing regresses.
+    const targetPosition = await resolvePosition(targetUser);
+    const hasValidLevel = targetPosition && targetPosition.level >= MIN_TRANSFER_TARGET_LEVEL;
+
     const validPositions = ["supervisor", "team lead", "manager"];
-    const hasValidPosition = targetUser.position &&
+    const hasValidPositionString = targetUser.position &&
       validPositions.some(pos => targetUser.position.toLowerCase().includes(pos));
 
-    if (!hasValidPosition) {
+    if (!hasValidLevel && !hasValidPositionString) {
       return res.status(400).json({
         success: false,
         message: "Can only transfer to Supervisor or Team Lead"

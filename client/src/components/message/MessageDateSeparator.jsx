@@ -26,8 +26,8 @@ const MessageDateSeparator = ({ date }) => {
   }
 
   return (
-    <div className="flex justify-center my-4 sticky top-0 z-10">
-      <span className="bg-[#374151] text-[#9CA3AF] rounded-full px-3 py-1 text-xs font-medium shadow-sm">
+    <div className="sticky top-0 z-10 my-4 flex justify-center">
+      <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-500 shadow-sm dark:border-white/10 dark:bg-[#374151] dark:text-[#9CA3AF]">
         {label}
       </span>
     </div>

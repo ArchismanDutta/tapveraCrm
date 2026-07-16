@@ -2,12 +2,34 @@ const express        = require("express");
 const router         = express.Router();
 const KeywordRank    = require("../models/KeywordRank");
 const Project        = require("../models/Project");
-const { protect, authorize } = require("../middlewares/authMiddleware");
+const { protect } = require("../middlewares/authMiddleware");
 const hybridRankService = require("../services/hybridRankService");
+// Access-management rework (2026-07-03) - Phase 4.7.
+// See docs/superpowers/plans/2026-07-03-access-management-rework.md
+const { can } = require("../utils/accessControl");
+const hierarchyUtils = require("../utils/hierarchyUtils");
 
 // ─── Helper: check employee is assigned to a project ─────────────────────────
 function isEmployeeAssigned(project, userId) {
   return project.assignedTo.some((e) => e.toString() === userId.toString());
+}
+
+async function hasProjectManageAuthority(user) {
+  return ["admin", "super-admin", "superadmin"].includes(user.role) || (await can(user, "projects:manage"));
+}
+
+// Additive (Phase 4.7): a PM/Supervisor/TL with hierarchical projects:view
+// reach over this project's assignees can also access its keywords, not
+// just direct assignees.
+async function hasProjectAccess(project, user) {
+  if (isEmployeeAssigned(project, user._id)) return true;
+  if (await hasProjectManageAuthority(user)) return true;
+  if (await can(user, "projects:view")) {
+    const accessibleIds = await hierarchyUtils.getAccessibleUserIds(user);
+    const accessibleSet = new Set(accessibleIds.map(String));
+    return (project.assignedTo || []).some((id) => accessibleSet.has(String(id?._id || id)));
+  }
+  return false;
 }
 
 // ─── GET /api/projects/:projectId/keywords ────────────────────────────────────
@@ -20,7 +42,7 @@ router.get("/:projectId/keywords", protect, async (req, res) => {
     const project = await Project.findById(projectId);
     if (!project) return res.status(404).json({ message: "Project not found" });
 
-    if (req.user.role === "employee" && !isEmployeeAssigned(project, req.user._id)) {
+    if (req.user.role === "employee" && !(await hasProjectAccess(project, req.user))) {
       return res.status(403).json({ message: "Access denied" });
     }
 
@@ -93,7 +115,7 @@ router.post("/:projectId/keywords", protect, async (req, res) => {
     const project = await Project.findById(projectId);
     if (!project) return res.status(404).json({ message: "Project not found" });
 
-    if (req.user.role === "employee" && !isEmployeeAssigned(project, req.user._id)) {
+    if (req.user.role === "employee" && !(await hasProjectAccess(project, req.user))) {
       return res.status(403).json({ message: "Access denied" });
     }
 
@@ -161,7 +183,7 @@ router.post("/:projectId/keywords/:keywordId/rank", protect, async (req, res) =>
     const project = await Project.findById(projectId);
     if (!project) return res.status(404).json({ message: "Project not found" });
 
-    if (req.user.role === "employee" && !isEmployeeAssigned(project, req.user._id)) {
+    if (req.user.role === "employee" && !(await hasProjectAccess(project, req.user))) {
       return res.status(403).json({ message: "Access denied" });
     }
 
@@ -193,7 +215,7 @@ router.post("/:projectId/keywords/:keywordId/fetch-rank", protect, async (req, r
     const project = await Project.findById(projectId);
     if (!project) return res.status(404).json({ message: "Project not found" });
 
-    if (req.user.role === "employee" && !isEmployeeAssigned(project, req.user._id)) {
+    if (req.user.role === "employee" && !(await hasProjectAccess(project, req.user))) {
       return res.status(403).json({ message: "Access denied" });
     }
 
@@ -254,7 +276,7 @@ router.put("/:projectId/keywords/:keywordId", protect, async (req, res) => {
     const project = await Project.findById(projectId);
     if (!project) return res.status(404).json({ message: "Project not found" });
 
-    if (req.user.role === "employee" && !isEmployeeAssigned(project, req.user._id)) {
+    if (req.user.role === "employee" && !(await hasProjectAccess(project, req.user))) {
       return res.status(403).json({ message: "Access denied" });
     }
 
@@ -319,11 +341,14 @@ router.put("/:projectId/keywords/:keywordId", protect, async (req, res) => {
 router.delete(
   "/:projectId/keywords/:keywordId",
   protect,
-  authorize("admin", "super-admin"),
   async (req, res) => {
     try {
       const { projectId, keywordId } = req.params;
       const { permanent = false } = req.query;
+
+      if (!(await hasProjectManageAuthority(req.user))) {
+        return res.status(403).json({ message: "Not authorized" });
+      }
 
       const keyword = await KeywordRank.findById(keywordId);
       if (!keyword) return res.status(404).json({ message: "Keyword not found" });
@@ -354,7 +379,7 @@ router.get("/:projectId/keywords/stats", protect, async (req, res) => {
     const project = await Project.findById(projectId);
     if (!project) return res.status(404).json({ message: "Project not found" });
 
-    if (req.user.role === "employee" && !isEmployeeAssigned(project, req.user._id)) {
+    if (req.user.role === "employee" && !(await hasProjectAccess(project, req.user))) {
       return res.status(403).json({ message: "Access denied" });
     }
 
@@ -393,7 +418,7 @@ router.get("/:projectId/keywords/velocity", protect, async (req, res) => {
     const project = await Project.findById(projectId);
     if (!project) return res.status(404).json({ message: "Project not found" });
 
-    if (req.user.role === "employee" && !isEmployeeAssigned(project, req.user._id)) {
+    if (req.user.role === "employee" && !(await hasProjectAccess(project, req.user))) {
       return res.status(403).json({ message: "Access denied" });
     }
 

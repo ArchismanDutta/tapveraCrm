@@ -248,7 +248,7 @@ const ProjectCommunicationPage = ({ onLogout }) => {
   );
 
   return (
-    <div className="relative flex h-[100dvh] overflow-hidden bg-slate-50 text-slate-900 dark:bg-[#0b0d12] dark:text-slate-100">
+    <div className="app-shell communication-theme h-[100dvh] overflow-hidden">
       {/* Sidebar */}
       <Sidebar
         collapsed={sidebarCollapsed}
@@ -260,22 +260,22 @@ const ProjectCommunicationPage = ({ onLogout }) => {
       {/* Main Content */}
       <main
         ref={mainRef}
-        className={`relative z-10 h-[100dvh] min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 transition-all duration-300 [overscroll-behavior-y:auto] [scrollbar-gutter:stable] sm:px-5 lg:px-6 ${
+        className={`app-main h-[100dvh] overflow-y-auto overflow-x-hidden px-3 py-4 transition-all duration-300 [overscroll-behavior-y:auto] [scrollbar-gutter:stable] sm:px-5 lg:px-6 ${
           sidebarCollapsed ? "ml-16" : "ml-16 sm:ml-56"
         }`}
         style={{ WebkitOverflowScrolling: "touch" }}
       >
-        <div className="mx-auto max-w-[1500px] space-y-4 pb-8 sm:space-y-5">
-        {/* Header */}
-        <div className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm dark:border-white/10 dark:bg-[#10131c] sm:px-6 sm:py-5 lg:flex-row lg:items-center lg:justify-between">
+        <div className="app-page space-y-4 pb-8 sm:space-y-5">
+          {/* Header */}
+          <section className="app-header flex flex-col gap-4 overflow-hidden rounded-2xl px-5 py-4 sm:px-6 sm:py-5 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-start gap-3">
-            <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-400/10 dark:text-blue-300">
+            <div className="mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-blue-50 text-blue-600 ring-1 ring-blue-100 dark:bg-blue-400/10 dark:text-blue-300 dark:ring-blue-400/20">
               <MessageSquare className="h-5 w-5" />
             </div>
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Project operations</p>
-              <h1 className="text-2xl font-semibold tracking-tight text-slate-950 dark:text-white">Communication tracking</h1>
-              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+              <p className="app-eyebrow">Project operations</p>
+              <h1 className="app-title">Communication tracking</h1>
+              <p className="app-description">
                 Monitor project communication and identify projects needing attention
               </p>
             </div>
@@ -284,34 +284,34 @@ const ProjectCommunicationPage = ({ onLogout }) => {
           <button
             type="button"
             onClick={fetchProjects}
-            className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300 dark:hover:bg-white/[0.07]"
+            className="app-secondary-button inline-flex h-10 items-center justify-center gap-2 rounded-xl px-4 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60"
             disabled={loading}
           >
             <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
             <span className="hidden sm:inline">Refresh</span>
           </button>
-        </div>
+          </section>
 
-        {/* Enhanced Summary Dashboard */}
-        <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-[#10131c] sm:p-5">
+          {/* Enhanced Summary Dashboard */}
+          <section className="app-panel rounded-2xl p-4 sm:p-5">
           <div className="mb-4 flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-violet-50 text-violet-600 dark:bg-violet-400/10 dark:text-violet-300"><TrendingUp className="h-4 w-4" /></div>
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-400/10 dark:text-blue-300"><TrendingUp className="h-4 w-4" /></div>
             <div>
               <h2 className="text-base font-semibold text-slate-950 dark:text-white">Attention overview</h2>
               <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">Select a category to filter the project list</p>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
             <button
               type="button"
-              className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-left transition hover:bg-rose-100 dark:border-rose-400/20 dark:bg-rose-400/[0.07] dark:hover:bg-rose-400/10"
+              className="communication-stat-card border-rose-200 bg-rose-50 text-left hover:bg-rose-100 dark:border-rose-400/20 dark:bg-rose-400/[0.07] dark:hover:bg-rose-400/10"
               onClick={() => {
                 setFilterStatus('needsResponse');
                 setFilterCommunicationStatus('all');
               }}
             >
-              <div className="flex items-center justify-between mb-2">
+              <div className="mb-2 flex items-center justify-between gap-3">
                 <p className="text-sm font-medium text-rose-900 dark:text-rose-100">Urgent action required</p>
                 <AlertCircle className="h-4 w-4 text-rose-600 dark:text-rose-300" />
               </div>
@@ -321,13 +321,13 @@ const ProjectCommunicationPage = ({ onLogout }) => {
 
             <button
               type="button"
-              className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-left transition hover:bg-amber-100 dark:border-amber-400/20 dark:bg-amber-400/[0.07] dark:hover:bg-amber-400/10"
+              className="communication-stat-card border-amber-200 bg-amber-50 text-left hover:bg-amber-100 dark:border-amber-400/20 dark:bg-amber-400/[0.07] dark:hover:bg-amber-400/10"
               onClick={() => {
                 setFilterStatus('all');
                 setFilterCommunicationStatus('criticallyOverdue');
               }}
             >
-              <div className="flex items-center justify-between mb-2">
+              <div className="mb-2 flex items-center justify-between gap-3">
                 <p className="text-sm font-medium text-amber-900 dark:text-amber-100">Critically overdue</p>
                 <Clock className="h-4 w-4 text-amber-600 dark:text-amber-300" />
               </div>
@@ -337,13 +337,13 @@ const ProjectCommunicationPage = ({ onLogout }) => {
 
             <button
               type="button"
-              className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-left transition hover:bg-emerald-100 dark:border-emerald-400/20 dark:bg-emerald-400/[0.07] dark:hover:bg-emerald-400/10 md:col-span-2 xl:col-span-1"
+              className="communication-stat-card border-emerald-200 bg-emerald-50 text-left hover:bg-emerald-100 dark:border-emerald-400/20 dark:bg-emerald-400/[0.07] dark:hover:bg-emerald-400/10"
               onClick={() => {
                 setFilterStatus('all');
                 setFilterCommunicationStatus('active');
               }}
             >
-              <div className="flex items-center justify-between mb-2">
+              <div className="mb-2 flex items-center justify-between gap-3">
                 <p className="text-sm font-medium text-emerald-900 dark:text-emerald-100">Active communication</p>
                 <CheckCircle className="h-4 w-4 text-emerald-600 dark:text-emerald-300" />
               </div>
@@ -351,23 +351,34 @@ const ProjectCommunicationPage = ({ onLogout }) => {
               <p className="mt-1 text-xs text-emerald-700/70 dark:text-emerald-200/60">Communicated in last 7 days</p>
             </button>
           </div>
-        </section>
+          </section>
 
-        {/* Filters and Table */}
-        <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-[#10131c] sm:p-5">
+          {/* Filters and Table */}
+          <section className="app-panel rounded-2xl p-4 sm:p-5">
           <div className="mb-5 flex flex-col gap-5">
-            <div className="flex items-center gap-2">
-              <MessageSquare className="h-5 w-5 text-blue-600 dark:text-blue-300" />
-              <div>
-                <h3 className="text-base font-semibold text-slate-950 dark:text-white">Projects</h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400">{filteredProjects.length} of {projects.length} projects</p>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-center gap-2">
+                <MessageSquare className="h-5 w-5 text-blue-600 dark:text-blue-300" />
+                <div>
+                  <h3 className="text-base font-semibold text-slate-950 dark:text-white">Projects</h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">{filteredProjects.length} of {projects.length} projects</p>
+                </div>
+                {loading && (
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-blue-500/20 border-t-blue-600"></div>
+                )}
               </div>
-              {loading && (
-                <div className="h-4 w-4 animate-spin rounded-full border-2 border-blue-500/20 border-t-blue-600"></div>
+              {hasActiveFilters && (
+                <button
+                  type="button"
+                  onClick={clearFilters}
+                  className="app-secondary-button inline-flex h-9 items-center justify-center rounded-lg px-3 text-xs font-semibold"
+                >
+                  Clear filters
+                </button>
               )}
             </div>
 
-            <div className="grid w-full gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            <div className="grid w-full gap-3 sm:grid-cols-2 xl:grid-cols-5">
               {/* Search Bar */}
               <div className="relative min-w-0 sm:col-span-2 xl:col-span-1">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
@@ -377,7 +388,7 @@ const ProjectCommunicationPage = ({ onLogout }) => {
                   placeholder="Search projects"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-500/15 dark:border-white/10 dark:bg-white/[0.04] dark:text-white dark:focus:border-blue-400"
+                  className="app-control h-10 w-full rounded-xl pl-9 pr-3 text-sm outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15"
                 />
               </div>
 
@@ -386,7 +397,7 @@ const ProjectCommunicationPage = ({ onLogout }) => {
                 value={filterStatus}
                 onChange={(e) => setFilterStatus(e.target.value)}
                 aria-label="Filter by response status"
-                className="h-10 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-700 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 dark:border-white/10 dark:bg-[#151923] dark:text-slate-200 dark:focus:border-blue-400"
+                className="app-control h-10 rounded-xl px-3 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15"
               >
                 <option value="all">All Communication</option>
                 <option value="needsResponse">Needs Response</option>
@@ -398,7 +409,7 @@ const ProjectCommunicationPage = ({ onLogout }) => {
                 value={filterClient}
                 onChange={(e) => setFilterClient(e.target.value)}
                 aria-label="Filter by client"
-                className="h-10 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-700 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 dark:border-white/10 dark:bg-[#151923] dark:text-slate-200 dark:focus:border-blue-400"
+                className="app-control h-10 rounded-xl px-3 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15"
               >
                 <option value="all">All Clients</option>
                 {uniqueClients.map((client) => (
@@ -413,7 +424,7 @@ const ProjectCommunicationPage = ({ onLogout }) => {
                 value={filterProjectStatus}
                 onChange={(e) => setFilterProjectStatus(e.target.value)}
                 aria-label="Filter by project status"
-                className="h-10 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-700 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 dark:border-white/10 dark:bg-[#151923] dark:text-slate-200 dark:focus:border-blue-400"
+                className="app-control h-10 rounded-xl px-3 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15"
               >
                 <option value="all">All Status</option>
                 <option value="new">New</option>
@@ -425,7 +436,7 @@ const ProjectCommunicationPage = ({ onLogout }) => {
                 value={filterCommunicationStatus}
                 onChange={(e) => setFilterCommunicationStatus(e.target.value)}
                 aria-label="Filter by communication recency"
-                className="h-10 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-700 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 dark:border-white/10 dark:bg-[#151923] dark:text-slate-200 dark:focus:border-blue-400"
+                className="app-control h-10 rounded-xl px-3 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15"
               >
                 <option value="all">Any activity</option>
                 <option value="recent">Today</option>
@@ -454,7 +465,7 @@ const ProjectCommunicationPage = ({ onLogout }) => {
               const SenderIcon = senderInfo?.icon;
 
               return (
-                <article key={project._id} className="rounded-xl border border-slate-200 p-4 dark:border-white/10 dark:bg-white/[0.02]">
+                <article key={project._id} className="communication-project-card rounded-2xl p-4">
                   <button type="button" onClick={() => navigate(`/project/${project._id}`)} className="w-full text-left">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
@@ -489,10 +500,10 @@ const ProjectCommunicationPage = ({ onLogout }) => {
                   </button>
 
                   <div className="mt-3 flex gap-2">
-                    <button type="button" onClick={() => navigate(`/project/${project._id}`, { state: { scrollToMessages: true } })} className="inline-flex h-9 flex-1 items-center justify-center gap-2 rounded-lg border border-blue-200 bg-blue-50 text-xs font-semibold text-blue-700 transition hover:bg-blue-100 dark:border-blue-400/20 dark:bg-blue-400/10 dark:text-blue-200 dark:hover:bg-blue-400/15">
+                    <button type="button" onClick={() => navigate(`/project/${project._id}`, { state: { scrollToMessages: true } })} className="communication-chat-button inline-flex h-9 flex-1 items-center justify-center gap-2 rounded-lg text-xs font-semibold">
                       <MessageSquare className="h-3.5 w-3.5" /> Open chat
                     </button>
-                    <button type="button" onClick={() => setSelectedProjectForAnalytics({ id: project._id, name: project.projectName })} className="inline-flex h-9 flex-1 items-center justify-center gap-2 rounded-lg border border-slate-200 text-xs font-semibold text-slate-600 transition hover:bg-slate-50 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/[0.06]">
+                    <button type="button" onClick={() => setSelectedProjectForAnalytics({ id: project._id, name: project.projectName })} className="app-secondary-button inline-flex h-9 flex-1 items-center justify-center gap-2 rounded-lg text-xs font-semibold">
                       <BarChart3 className="h-3.5 w-3.5" /> Analytics
                     </button>
                   </div>
@@ -510,7 +521,8 @@ const ProjectCommunicationPage = ({ onLogout }) => {
           </div>
 
           {/* Desktop table */}
-          <div className="hidden overflow-x-auto 2xl:block">
+          <div className="hidden overflow-hidden rounded-2xl border border-slate-200 dark:border-white/10 2xl:block">
+            <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
                 <tr className="border-b border-slate-200 dark:border-white/10">
@@ -646,7 +658,7 @@ const ProjectCommunicationPage = ({ onLogout }) => {
                                 e.stopPropagation();
                                 navigate(`/project/${project._id}`, { state: { scrollToMessages: true } });
                               }}
-                              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 text-xs font-semibold text-blue-700 transition hover:bg-blue-100 dark:border-blue-400/20 dark:bg-blue-400/10 dark:text-blue-200 dark:hover:bg-blue-400/15"
+                              className="communication-chat-button inline-flex h-8 items-center gap-1.5 rounded-lg px-3 text-xs font-semibold"
                               title="View project and messages"
                             >
                               <MessageSquare className="w-3 h-3" />
@@ -660,7 +672,7 @@ const ProjectCommunicationPage = ({ onLogout }) => {
                                   name: project.projectName
                                 });
                               }}
-                              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-200 px-3 text-xs font-semibold text-slate-600 transition hover:bg-slate-50 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/[0.06]"
+                              className="app-secondary-button inline-flex h-8 items-center gap-1.5 rounded-lg px-3 text-xs font-semibold"
                               title="View detailed analytics"
                             >
                               <BarChart3 className="w-3 h-3" />
@@ -682,6 +694,7 @@ const ProjectCommunicationPage = ({ onLogout }) => {
                 )}
               </tbody>
             </table>
+            </div>
           </div>
 
           {/* Pagination Controls */}
@@ -695,7 +708,7 @@ const ProjectCommunicationPage = ({ onLogout }) => {
                   <select
                     value={itemsPerPage}
                     onChange={(e) => handleItemsPerPageChange(Number(e.target.value))}
-                    className="h-9 rounded-lg border border-slate-200 bg-slate-50 px-3 text-sm text-slate-700 outline-none focus:border-blue-500 dark:border-white/10 dark:bg-[#151923] dark:text-slate-200"
+                    className="app-control h-9 rounded-lg px-3 text-sm outline-none focus:border-blue-500"
                   >
                     <option value={5}>5</option>
                     <option value={10}>10</option>
@@ -714,16 +727,7 @@ const ProjectCommunicationPage = ({ onLogout }) => {
                 </div>
               </div>
 
-              {/* Clear filters */}
-              {hasActiveFilters && (
-                <button
-                  type="button"
-                  onClick={clearFilters}
-                  className="whitespace-nowrap text-sm font-semibold text-blue-600 transition-colors hover:text-blue-700 dark:text-blue-300 dark:hover:text-blue-200"
-                >
-                  Clear all filters
-                </button>
-              )}
+              <div className="hidden sm:block" />
             </div>
 
             {/* Bottom Row: Page navigation centered */}

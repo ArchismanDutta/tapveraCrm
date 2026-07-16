@@ -1,4 +1,6 @@
 nul
+# Access-management migration reports contain employee names/IDs - keep local only
+server/scripts/migration-reports/
 AWS_DEPLOYMENT_GUIDE.md
 EMAIL_VALIDATION_REPORT.md
 GMAIL_OAUTH_FIX_GUIDE.md

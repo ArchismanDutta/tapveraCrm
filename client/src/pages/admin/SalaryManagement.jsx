@@ -32,7 +32,7 @@ function calcPTax(ms) {
 }
 function calcBreakdown(monthlySalary, totalDays, workingDays, paidDays, co = {}, dd = {}) {
   if (!monthlySalary || !totalDays || !workingDays || paidDays === "") return null;
-  const ms = Number(monthlySalary), td = Number(totalDays), wd = Number(workingDays), pd = Number(paidDays);
+  const ms = Number(monthlySalary), wd = Number(workingDays), pd = Number(paidDays);
   const sc = {
     basic:            co.basic            !== undefined ? Number(co.basic)            : Math.round(ms * 0.50),
     hra:              co.hra              !== undefined ? Number(co.hra)              : Math.round(ms * 0.35),
@@ -77,11 +77,11 @@ function calcBreakdown(monthlySalary, totalDays, workingDays, paidDays, co = {},
 function Field({ label, value, onChange, type = "text", readOnly = false, suffix, className = "", error = false }) {
   return (
     <div className={`flex flex-col gap-1 ${className}`}>
-      <label className={`text-xs font-medium ${error ? "text-red-400" : "text-gray-400"}`}>{label}{error && <span className="ml-1">*</span>}</label>
+      <label className={`text-xs font-medium ${error ? "text-rose-600 dark:text-rose-300" : "text-slate-600 dark:text-slate-300"}`}>{label}{error && <span className="ml-1">*</span>}</label>
       <div className="relative">
         <input type={type} value={value ?? ""} onChange={onChange ? (e) => onChange(e.target.value) : undefined}
           readOnly={readOnly}
-          className={`w-full px-3 py-2 rounded-lg text-sm border text-white bg-[#141a21] focus:outline-none focus:ring-1 ${error ? "border-red-500 focus:ring-red-500" : "border-[#2a3340] focus:ring-blue-500"} ${readOnly ? "opacity-60 cursor-default" : ""} ${suffix ? "pr-7" : ""}`} />
+          className={`h-10 w-full rounded-xl border bg-slate-50 px-3 text-sm text-slate-900 outline-none focus:ring-2 dark:bg-[#151923] dark:text-white ${error ? "border-rose-500 focus:ring-rose-500/20" : "border-slate-200 focus:border-blue-500 focus:ring-blue-500/15 dark:border-white/10"} ${readOnly ? "cursor-default opacity-60" : ""} ${suffix ? "pr-7" : ""}`} />
         {suffix && <span className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 text-xs">{suffix}</span>}
       </div>
       {error && <span className="text-xs text-red-400">This field is required</span>}
@@ -92,25 +92,25 @@ function Field({ label, value, onChange, type = "text", readOnly = false, suffix
 function Section({ title, icon: Icon, children, collapsible = false, defaultOpen = true, overflow = false }) {
   const [open, setOpen] = useState(defaultOpen);
   return (
-    <div className={`bg-[#0f1419] border border-[#1e2a35] rounded-xl ${overflow ? "overflow-visible" : "overflow-hidden"}`}>
+    <section className={`rounded-xl border border-slate-200 bg-slate-50 dark:border-white/10 dark:bg-white/[0.025] ${overflow ? "overflow-visible" : "overflow-hidden"}`}>
       <button type="button" onClick={() => collapsible && setOpen((o) => !o)}
-        className={`w-full flex items-center justify-between px-4 py-3 ${collapsible ? "cursor-pointer hover:bg-[#141a21]" : "cursor-default"}`}>
+        className={`flex w-full items-center justify-between px-4 py-3 ${collapsible ? "cursor-pointer hover:bg-slate-100 dark:hover:bg-white/[0.04]" : "cursor-default"}`}>
         <div className="flex items-center gap-2">
-          {Icon && <Icon className="w-4 h-4 text-blue-400" />}
-          <span className="text-sm font-semibold text-white">{title}</span>
+          {Icon && <Icon className="h-4 w-4 text-blue-600 dark:text-blue-300" />}
+          <span className="text-sm font-semibold text-slate-900 dark:text-white">{title}</span>
         </div>
         {collapsible && (open ? <ChevronUp className="w-4 h-4 text-gray-500" /> : <ChevronDown className="w-4 h-4 text-gray-500" />)}
       </button>
       {(!collapsible || open) && <div className="px-4 pb-4 pt-1">{children}</div>}
-    </div>
+    </section>
   );
 }
 
 function CalcRow({ label, value, highlight = false, dim = false }) {
   return (
-    <div className={`flex items-center justify-between py-1.5 border-b border-[#1e2a35] last:border-0`}>
-      <span className={`text-sm ${dim ? "text-gray-500" : highlight ? "text-white font-semibold" : "text-gray-300"}`}>{label}</span>
-      <span className={`text-sm font-mono ${highlight ? "text-green-400 text-base font-bold" : dim ? "text-gray-500" : "text-gray-200"}`}>
+    <div className="flex items-center justify-between border-b border-slate-200 py-1.5 last:border-0 dark:border-white/10">
+      <span className={`text-sm ${dim ? "text-slate-400" : highlight ? "font-semibold text-slate-900 dark:text-white" : "text-slate-600 dark:text-slate-300"}`}>{label}</span>
+      <span className={`font-mono text-sm ${highlight ? "text-base font-bold text-emerald-600 dark:text-emerald-300" : dim ? "text-slate-400" : "text-slate-700 dark:text-slate-200"}`}>
         {"₹"}{fmt(value)}
       </span>
     </div>
@@ -151,7 +151,7 @@ function PayslipForm({ employees, onSaved, onClose, editPayslip = null }) {
     const sn = editPayslip.employeeSnapshot || {};
     setSnap({ pan: sn.pan||"", uan: sn.uan||"", pfNumber: sn.pfNumber||"", esiNumber: sn.esiNumber||"", bankAccountNumber: sn.bankAccountNumber||"", bankName: sn.bankName||"", ifscCode: sn.ifscCode||"" });
     if (editPayslip.employee) setSelectedEmp(editPayslip.employee);
-  }, [editPayslip]);
+  }, [editPayslip, currentPeriod]);
 
   useEffect(() => {
     if (!selectedEmp || isEdit) return;
@@ -466,24 +466,27 @@ const SalaryManagement = ({ onLogout }) => {
   const stats = useMemo(() => ({ total: payslips.length, published: payslips.filter((p) => p.isPublished).length, draft: payslips.filter((p) => !p.isPublished).length }), [payslips]);
 
   return (
-    <div className="flex bg-gradient-to-br from-[#141a21] via-[#191f2b] to-[#101218] min-h-screen text-blue-100 font-sans">
+    <div className="salary-theme relative flex h-[100dvh] overflow-hidden bg-slate-50 text-slate-900 dark:bg-[#0b0d12] dark:text-slate-100">
       <Sidebar collapsed={collapsed} setCollapsed={setCollapsed} onLogout={onLogout} userRole="admin" />
-      <main className={`flex-1 transition-all duration-300 ${collapsed ? "ml-16" : "ml-60"} flex flex-col h-screen overflow-hidden`}>
-        <div className="flex items-center justify-between px-6 py-4 border-b border-[#1e2a35] bg-[#0a0e14]/60 backdrop-blur sticky top-0 z-30">
-          <div><h1 className="text-xl font-bold text-white">Salary Management</h1><p className="text-xs text-gray-500 mt-0.5">Create, review and publish employee payslips</p></div>
-          <button onClick={() => { setPanel("create"); setActivePayslip(null); }} className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-medium transition"><Plus className="w-4 h-4" /> New Payslip</button>
-        </div>
-        <div className="flex flex-1 overflow-hidden">
-          <div className="flex-1 overflow-y-auto p-6">
-            <div className="grid grid-cols-3 gap-4 mb-6">
-              {[{label:"Total",value:stats.total,icon:FileText,color:"blue"},{label:"Published",value:stats.published,icon:BadgeCheck,color:"green"},{label:"Drafts",value:stats.draft,icon:Clock,color:"yellow"}].map(({label,value,icon:Icon,color})=>(
-                <div key={label} className="bg-[#0f1419] border border-[#1e2a35] rounded-xl p-4 flex items-center gap-4">
-                  <div className={`p-3 rounded-lg bg-${color}-500/10`}><Icon className={`w-5 h-5 text-${color}-400`} /></div>
-                  <div><p className="text-2xl font-bold text-white">{value}</p><p className="text-xs text-gray-500">{label}</p></div>
-                </div>
+      <main className={`h-[100dvh] min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 transition-all duration-300 sm:px-5 lg:px-6 ${collapsed ? "ml-16" : "ml-16 sm:ml-56"}`}>
+        <header className="mx-auto mb-4 flex w-full max-w-[1500px] flex-col gap-4 rounded-2xl border border-slate-200 bg-white px-5 py-5 shadow-sm dark:border-white/10 dark:bg-[#10131c] sm:px-6 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex items-start gap-3">
+            <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-400/10 dark:text-blue-300"><DollarSign className="h-5 w-5" /></div>
+            <div><p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Payroll operations</p><h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950 dark:text-white">Salary management</h1><p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Create, review, and publish employee payslips.</p></div>
+          </div>
+          <button onClick={() => { setPanel("create"); setActivePayslip(null); }} className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 text-sm font-semibold text-white transition hover:bg-blue-700"><Plus className="h-4 w-4" /> New payslip</button>
+        </header>
+        <div className="mx-auto w-full max-w-[1500px] space-y-4 pb-8">
+          <div className="space-y-4">
+            <section className="grid grid-cols-1 gap-4 sm:grid-cols-3" aria-label="Payslip summary">
+              {[{label:"Total",value:stats.total,icon:FileText},{label:"Published",value:stats.published,icon:BadgeCheck},{label:"Drafts",value:stats.draft,icon:Clock}].map(({label,value,icon:Icon})=>(
+                <article key={label} className="flex items-center gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-[#10131c]">
+                  <div className="rounded-xl bg-blue-50 p-3 text-blue-600 dark:bg-blue-400/10 dark:text-blue-300">{React.createElement(Icon, { className: "h-5 w-5" })}</div>
+                  <div><p className="text-2xl font-semibold text-slate-950 dark:text-white">{value}</p><p className="text-xs text-slate-500 dark:text-slate-400">{label}</p></div>
+                </article>
               ))}
-            </div>
-            <div className="flex gap-3 mb-4 flex-wrap">
+            </section>
+            <section className="flex flex-wrap gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-[#10131c]">
               <div className="relative flex-1 min-w-40">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
                 <input placeholder="Search employee…" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pl-9 pr-3 py-2 rounded-lg bg-[#0f1419] border border-[#1e2a35] text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
@@ -492,28 +495,28 @@ const SalaryManagement = ({ onLogout }) => {
               <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="px-3 py-2 rounded-lg bg-[#0f1419] border border-[#1e2a35] text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500">
                 <option value="all">All Status</option><option value="published">Published</option><option value="draft">Draft</option>
               </select>
-            </div>
+            </section>
             {loading ? (
               <div className="flex justify-center py-20"><div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" /></div>
             ) : filtered.length === 0 ? (
               <div className="text-center py-20 text-gray-500"><DollarSign className="w-12 h-12 mx-auto mb-3 opacity-30" /><p>No payslips found. Click "New Payslip" to get started.</p></div>
             ) : (
-              <div className="bg-[#0f1419] border border-[#1e2a35] rounded-xl overflow-hidden">
-                <table className="w-full text-sm">
-                  <thead className="bg-[#141a21] text-xs text-gray-400 uppercase">
+              <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-white/10 dark:bg-[#10131c]">
+                <div className="overflow-x-auto"><table className="w-full min-w-[850px] text-sm">
+                  <thead className="bg-slate-50 text-xs uppercase text-slate-500 dark:bg-white/[0.025] dark:text-slate-400">
                     <tr><th className="px-4 py-3 text-left">Employee</th><th className="px-4 py-3 text-left">Period</th><th className="px-4 py-3 text-right">Net Salary</th><th className="px-4 py-3 text-right">CTC</th><th className="px-4 py-3 text-center">Status</th><th className="px-4 py-3 text-center">Actions</th></tr>
                   </thead>
-                  <tbody className="divide-y divide-[#1e2a35]">
+                  <tbody className="divide-y divide-slate-100 dark:divide-white/[0.07]">
                     {filtered.map((p) => {
                       const sn = p.employeeSnapshot||{}, em = p.employee||{};
                       return (
-                        <tr key={p._id} className={`hover:bg-[#141a21] transition cursor-pointer ${activePayslip?._id===p._id?"bg-[#141a21]":""}`}>
+                        <tr key={p._id} className={`cursor-pointer transition hover:bg-slate-50 dark:hover:bg-white/[0.025] ${activePayslip?._id===p._id?"bg-blue-50/60 dark:bg-blue-400/[0.05]":""}`}>
                           <td className="px-4 py-3" onClick={() => { setActivePayslip(p); setPanel("view"); }}><p className="text-white font-medium">{sn.name||em.name||"—"}</p><p className="text-xs text-gray-500">{sn.employeeId||em.employeeId}</p></td>
                           <td className="px-4 py-3 text-gray-300" onClick={() => { setActivePayslip(p); setPanel("view"); }}>{monthLabel(p.payPeriod)}</td>
                           <td className="px-4 py-3 text-right font-mono text-green-400">&#8377;{fmt(p.netSalary)}</td>
                           <td className="px-4 py-3 text-right font-mono text-blue-400">&#8377;{fmt(p.ctc)}</td>
                           <td className="px-4 py-3 text-center">
-                            <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium ${p.isPublished?"bg-green-500/15 text-green-400 border border-green-500/30":"bg-yellow-500/15 text-yellow-400 border border-yellow-500/30"}`}>
+                            <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium ${p.isPublished?"border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-400/25 dark:bg-emerald-400/10 dark:text-emerald-300":"border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-400/25 dark:bg-amber-400/10 dark:text-amber-300"}`}>
                               {p.isPublished?<BadgeCheck className="w-3 h-3"/>:<Clock className="w-3 h-3"/>}{p.isPublished?"Published":"Draft"}
                             </span>
                           </td>
@@ -531,29 +534,32 @@ const SalaryManagement = ({ onLogout }) => {
                       );
                     })}
                   </tbody>
-                </table>
+                </table></div>
               </div>
             )}
           </div>
           {panel && (
-            <div className="w-[480px] border-l border-[#1e2a35] bg-[#0a0e14] flex flex-col overflow-hidden">
-              <div className="flex items-center justify-between px-4 py-3 border-b border-[#1e2a35] bg-[#0a0e14]">
-                <h2 className="text-sm font-semibold text-white">{panel==="create"?"New Payslip":panel==="edit"?"Edit Payslip":"Payslip Detail"}</h2>
+            <>
+            <button type="button" className="fixed inset-0 z-40 bg-slate-950/55 backdrop-blur-sm" onClick={() => setPanel(null)} aria-label="Close payslip panel" />
+            <aside className="fixed inset-y-0 right-0 z-50 flex w-full max-w-xl flex-col overflow-hidden border-l border-slate-200 bg-slate-50 shadow-2xl dark:border-white/10 dark:bg-[#0b0d12]">
+              <div className="flex items-center justify-between border-b border-slate-200 bg-white px-5 py-4 dark:border-white/10 dark:bg-[#10131c]">
+                <h2 className="text-base font-semibold text-slate-950 dark:text-white">{panel==="create"?"New payslip":panel==="edit"?"Edit payslip":"Payslip detail"}</h2>
                 <div className="flex items-center gap-2">
                   {panel==="view"&&activePayslip&&(
-                    <button onClick={() => handleTogglePublish(activePayslip)} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition ${activePayslip.isPublished?"bg-red-500/15 text-red-400 hover:bg-red-500/25 border border-red-500/30":"bg-green-500/15 text-green-400 hover:bg-green-500/25 border border-green-500/30"}`}>
+                    <button onClick={() => handleTogglePublish(activePayslip)} className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition ${activePayslip.isPublished?"border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 dark:border-rose-400/25 dark:bg-rose-400/10 dark:text-rose-300":"border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:border-emerald-400/25 dark:bg-emerald-400/10 dark:text-emerald-300"}`}>
                       {activePayslip.isPublished?<><RotateCcw className="w-3 h-3"/>Unpublish</>:<><Send className="w-3 h-3"/>Publish</>}
                     </button>
                   )}
-                  <button onClick={() => setPanel(null)} className="p-1.5 rounded hover:bg-[#1e2a35] text-gray-400 hover:text-white transition"><X className="w-4 h-4" /></button>
+                  <button onClick={() => setPanel(null)} className="rounded-lg p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-900 dark:hover:bg-white/[0.05] dark:hover:text-white"><X className="h-4 w-4" /></button>
                 </div>
               </div>
-              <div className="flex-1 overflow-y-auto p-4">
+              <div className="flex-1 overflow-y-auto p-4 sm:p-5">
                 {panel==="view"&&activePayslip&&<PayslipViewer payslip={activePayslip}/>}
                 {panel==="create"&&<PayslipForm employees={employees} editPayslip={null} onSaved={handleSaved} onClose={() => setPanel(null)}/>}
                 {panel==="edit"&&activePayslip&&<PayslipForm employees={employees} editPayslip={activePayslip} onSaved={handleSaved} onClose={() => setPanel(null)}/>}
               </div>
-            </div>
+            </aside>
+            </>
           )}
         </div>
       </main>

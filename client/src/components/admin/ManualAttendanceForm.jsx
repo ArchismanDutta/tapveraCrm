@@ -16,7 +16,6 @@ import {
   CalendarDays
 } from "lucide-react";
 import { toast } from "react-toastify";
-import timeUtils from "../../utils/timeUtils";
 
 const ManualAttendanceForm = ({
   isOpen,
@@ -318,7 +317,7 @@ const ManualAttendanceForm = ({
               });
               errors.push(`${date}: ${result.error || 'Failed to save'}`);
             }
-          } catch (err) {
+          } catch {
             errorCount++;
             errors.push(`${date}: Network error`);
           }
@@ -590,29 +589,29 @@ const ManualAttendanceForm = ({
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto">
       {/* Backdrop */}
-      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={handleClose} />
+      <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm" onClick={handleClose} />
 
       {/* Modal */}
       <div className="flex min-h-full items-center justify-center p-4">
-        <div className="relative w-full max-w-4xl bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl shadow-2xl border border-slate-600/30">
+        <div className="relative max-h-[92vh] w-full max-w-4xl overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-white/10 dark:bg-[#10131c]">
           {/* Header */}
-          <div className="flex items-center justify-between p-6 border-b border-slate-600/30">
+          <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white/95 p-5 backdrop-blur dark:border-white/10 dark:bg-[#10131c]/95 sm:px-6">
             <div className="flex items-center gap-3">
-              <CalendarDays className="w-6 h-6 text-cyan-400" />
-              <h2 className="text-2xl font-semibold text-white">
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-400/10 dark:text-blue-300"><CalendarDays className="h-4 w-4" /></div>
+              <h2 className="text-lg font-semibold text-slate-950 dark:text-white">
                 {editData && editData._id ? "Edit" : editData ? "Duplicate" : "Add"} Manual Attendance
               </h2>
             </div>
             <button
               onClick={handleClose}
-              className="p-2 hover:bg-slate-700/50 rounded-lg transition-colors"
+              className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-900 dark:hover:bg-white/[0.05] dark:hover:text-white"
             >
-              <X className="w-5 h-5 text-gray-400" />
+              <X className="h-5 w-5" />
             </button>
           </div>
 
           {/* Form */}
-          <form onSubmit={handleSubmit} className="p-6 space-y-6">
+          <form onSubmit={handleSubmit} className="space-y-6 p-5 sm:p-6">
             {/* Edit/Duplicate Warning */}
             {editData && editData._id && (
               <div className="p-4 bg-amber-900/20 border border-amber-600/30 rounded-lg">
@@ -1277,18 +1276,18 @@ const ManualAttendanceForm = ({
             )}
 
             {/* Form Actions */}
-            <div className="flex items-center justify-end gap-4 pt-4 border-t border-slate-600/30">
+            <div className="flex items-center justify-end gap-2 border-t border-slate-200 pt-4 dark:border-white/10">
               <button
                 type="button"
                 onClick={handleClose}
-                className="px-6 py-3 bg-slate-600/50 hover:bg-slate-600 text-gray-300 rounded-lg transition-colors"
+                className="h-10 rounded-lg border border-slate-200 px-4 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/[0.05]"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={loading}
-                className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-cyan-600 to-cyan-700 hover:from-cyan-700 hover:to-cyan-800 text-white rounded-lg transition-all duration-200 shadow-lg hover:shadow-cyan-500/25 disabled:opacity-50"
+                className="inline-flex h-10 items-center gap-2 rounded-lg bg-blue-600 px-4 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:opacity-50"
               >
                 {loading ? (
                   <Loader2 className="w-4 h-4 animate-spin" />

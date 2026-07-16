@@ -36,38 +36,38 @@ const PinnedMessagesModal = ({ projectId, onClose, onJumpToMessage }) => {
 
   return (
     <div
-      className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm"
       onClick={onClose}
     >
       <div
-        className="bg-[#111b21] rounded-xl shadow-2xl max-w-3xl w-full max-h-[80vh] flex flex-col border border-[#2a3942]"
+        className="flex max-h-[80vh] w-full max-w-3xl flex-col rounded-2xl border border-slate-200 bg-white shadow-2xl shadow-slate-900/20 dark:border-[#2a3942] dark:bg-[#111b21] dark:shadow-black/40"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-[#2a3942]">
+        <div className="flex items-center justify-between border-b border-slate-200 p-6 dark:border-[#2a3942]">
           <div className="flex items-center gap-3">
-            <Pin className="w-5 h-5 text-[#00a884]" />
-            <h2 className="text-xl font-semibold text-white">
+            <Pin className="h-5 w-5 text-teal-500 dark:text-[#00a884]" />
+            <h2 className="text-xl font-semibold text-slate-950 dark:text-white">
               Pinned Messages ({pinnedMessages.length}/5)
             </h2>
           </div>
           <button
             onClick={onClose}
-            className="p-2 hover:bg-[#2a3942] rounded-lg transition"
+            className="rounded-lg p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 dark:hover:bg-[#2a3942]"
           >
-            <X className="w-5 h-5 text-gray-400" />
+            <X className="h-5 w-5" />
           </button>
         </div>
 
         {/* Body */}
-        <div className="flex-1 overflow-y-auto p-6 bg-[#0b141a]">
+        <div className="flex-1 overflow-y-auto bg-slate-50 p-6 dark:bg-[#0b141a]">
           {loading ? (
             <div className="flex justify-center items-center h-full">
-              <div className="w-8 h-8 border-4 border-[#25D366] border-t-transparent rounded-full animate-spin"></div>
+              <div className="h-8 w-8 animate-spin rounded-full border-4 border-teal-500/30 border-t-teal-500"></div>
             </div>
           ) : pinnedMessages.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full text-gray-400">
-              <Pin className="w-12 h-12 mb-3 opacity-50" />
+            <div className="flex h-full flex-col items-center justify-center text-slate-500 dark:text-gray-400">
+              <Pin className="mb-3 h-12 w-12 opacity-50" />
               <p className="text-sm">No pinned messages yet</p>
               <p className="text-xs mt-1">Admins can pin important messages (max 5)</p>
             </div>
@@ -76,14 +76,14 @@ const PinnedMessagesModal = ({ projectId, onClose, onJumpToMessage }) => {
               {pinnedMessages.map((msg) => (
                 <div
                   key={msg._id}
-                  className="bg-[#202c33] border border-[#2a3942] rounded-lg p-4 hover:border-[#00a884] transition shadow-sm"
+                  className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-teal-300 dark:border-[#2a3942] dark:bg-[#202c33] dark:hover:border-[#00a884]"
                 >
                   <div className="flex items-start justify-between mb-2">
                     <div>
-                      <p className="text-sm font-medium text-white">
+                      <p className="text-sm font-medium text-slate-950 dark:text-white">
                         {msg.sentBy?.name || 'Unknown'}
                       </p>
-                      <p className="text-xs text-gray-400">
+                      <p className="text-xs text-slate-500 dark:text-gray-400">
                         {new Date(msg.createdAt).toLocaleString()}
                       </p>
                     </div>
@@ -93,26 +93,26 @@ const PinnedMessagesModal = ({ projectId, onClose, onJumpToMessage }) => {
                           onJumpToMessage(msg._id);
                           onClose();
                         }}
-                        className="p-2 hover:bg-[#2a3942] rounded transition"
+                        className="rounded p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 dark:hover:bg-[#2a3942]"
                         title="Jump to message"
                       >
-                        <ExternalLink className="w-4 h-4 text-gray-400" />
+                        <ExternalLink className="h-4 w-4" />
                       </button>
                       <button
                         onClick={() => handleUnpin(msg._id)}
-                        className="p-2 hover:bg-red-900/30 rounded transition"
+                        className="rounded p-2 transition hover:bg-red-50 dark:hover:bg-red-900/30"
                         title="Unpin message"
                       >
-                        <Pin className="w-4 h-4 text-red-400" />
+                        <Pin className="h-4 w-4 text-red-500 dark:text-red-400" />
                       </button>
                     </div>
                   </div>
-                  <div className="prose prose-sm max-w-none text-gray-200 prose-invert">
+                  <div className="prose prose-slate prose-sm max-w-none text-slate-700 dark:prose-invert dark:text-gray-200">
                     <ReactMarkdown remarkPlugins={[remarkGfm]}>
                       {msg.message}
                     </ReactMarkdown>
                   </div>
-                  <p className="text-xs text-gray-500 mt-3">
+                  <p className="mt-3 text-xs text-slate-500 dark:text-gray-500">
                     Pinned by {msg.pinnedBy?.name} on{' '}
                     {new Date(msg.pinnedAt).toLocaleDateString()}
                   </p>

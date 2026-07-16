@@ -1962,7 +1962,7 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
       : [];
 
     return (
-      <div className="relative flex h-[100dvh] overflow-hidden bg-slate-50 text-slate-900 dark:bg-[#0b0d12] dark:text-slate-100">
+      <div className="app-shell attendance-portal-theme h-[100dvh] overflow-hidden">
         <Sidebar
           collapsed={collapsed}
           setCollapsed={setCollapsed}
@@ -1971,30 +1971,30 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
         />
 
         <main
-          className={`h-[100dvh] min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 transition-all duration-300 sm:px-5 lg:px-6 ${
+          className={`app-main h-[100dvh] min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 transition-all duration-300 sm:px-5 lg:px-6 ${
             collapsed ? "ml-16" : "ml-16 sm:ml-56"
           }`}
         >
-          <div className="mx-auto max-w-[1500px] space-y-4 pb-8 sm:space-y-5">
-            <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-white/10 dark:bg-[#10131c]">
+          <div className="mx-auto max-w-[1600px] space-y-4 pb-8 sm:space-y-5">
+            <section className="app-header overflow-hidden rounded-2xl">
               <div className="flex flex-col gap-5 p-4 lg:flex-row lg:items-center lg:justify-between lg:p-5">
-                <div className="min-w-0">
-                  <div className="mb-3 inline-flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 dark:border-blue-400/20 dark:bg-blue-400/10 dark:text-blue-200">
-                    <CalendarIcon className="h-3.5 w-3.5" />
-                    Attendance management
+                <div className="flex min-w-0 items-start gap-3">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white shadow-sm shadow-blue-600/20">
+                    <CalendarIcon className="h-5 w-5" />
                   </div>
-                  <h1 className="text-2xl font-semibold tracking-tight text-slate-950 dark:text-white">
-                    Employee attendance portal
-                  </h1>
-                  <p className="mt-1 max-w-2xl text-sm text-slate-500 dark:text-slate-400">
-                    Select an employee to review monthly attendance, work hours, exceptions, and activity.
-                  </p>
+                  <div>
+                    <p className="app-eyebrow">Attendance management</p>
+                    <h1 className="app-title">Employee attendance portal</h1>
+                    <p className="app-description max-w-2xl">
+                      Review monthly attendance, working hours, exceptions, and employee activity.
+                    </p>
+                  </div>
                 </div>
                 <button
                   type="button"
                   onClick={() => fetchEmployees()}
                   disabled={loading}
-                  className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-200 dark:hover:bg-white/[0.07]"
+                  className="app-secondary-button inline-flex h-10 items-center justify-center gap-2 rounded-lg px-4 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   <RefreshCw
                     className={`h-4 w-4 ${loading ? "animate-spin" : ""}`}
@@ -2027,7 +2027,7 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
               {overviewMetrics.map((metric) => (
                 <article
                   key={metric.label}
-                  className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-[#10131c]"
+                  className="app-panel rounded-2xl p-4"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div>
@@ -2051,7 +2051,7 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
               ))}
             </section>
 
-            <section className="relative rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-[#10131c] sm:p-5">
+            <section className="app-panel relative rounded-2xl p-4 sm:p-5">
               <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                 <div className="w-full min-w-0 lg:max-w-2xl" ref={selectorRef}>
                   <label className="block">
@@ -2072,7 +2072,7 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
                         }}
                         onFocus={() => setShowDropdown(true)}
                         placeholder="Search employees…"
-                        className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 pl-10 pr-10 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-500/15 dark:border-white/10 dark:bg-white/[0.035] dark:text-white dark:focus:bg-white/[0.05]"
+                        className="app-control h-11 w-full rounded-xl pl-10 pr-10 text-sm"
                       />
                       <ChevronDown
                         className={`pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400 transition ${
@@ -2174,7 +2174,7 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
             </section>
 
             {!selectedEmployee && !loading && (
-              <section className="rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-16 text-center dark:border-white/10 dark:bg-[#10131c]">
+              <section className="app-panel rounded-2xl border-dashed px-6 py-16 text-center">
                 <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-400/10 dark:text-blue-200">
                   <UserCheck className="h-5 w-5" />
                 </span>
@@ -2189,7 +2189,7 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
 
             {selectedEmployee && (
               <>
-                <section className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-[#10131c] sm:flex-row sm:items-center sm:justify-between sm:p-5">
+                <section className="app-panel flex flex-col gap-4 rounded-2xl p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-wider text-blue-600 dark:text-blue-300">
                       Monthly attendance
@@ -2218,15 +2218,15 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
 
                 {loadingEmployeeData && (
                   <div className="space-y-4">
-                    <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-6">
+                    <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 2xl:grid-cols-6">
                       {[0, 1, 2, 3, 4, 5].map((item) => (
                         <div
                           key={item}
-                          className="h-28 animate-pulse rounded-2xl border border-slate-200 bg-white dark:border-white/10 dark:bg-[#10131c]"
+                          className="app-panel h-28 animate-pulse rounded-2xl"
                         />
                       ))}
                     </div>
-                    <div className="h-96 animate-pulse rounded-2xl border border-slate-200 bg-white dark:border-white/10 dark:bg-[#10131c]" />
+                    <div className="app-panel h-96 animate-pulse rounded-2xl" />
                   </div>
                 )}
 
@@ -2251,13 +2251,13 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
                 {!loadingEmployeeData && !error && stats && (
                   <>
                     <section
-                      className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-6"
+                      className="grid grid-cols-2 gap-3 lg:grid-cols-3 2xl:grid-cols-6"
                       aria-label="Employee attendance summary"
                     >
                       {employeeMetrics.map((metric) => (
                         <article
                           key={metric.label}
-                          className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-[#10131c]"
+                          className="app-panel rounded-2xl p-4"
                         >
                           <div className="flex items-center justify-between gap-2">
                             {React.createElement(metric.icon, {
@@ -2278,7 +2278,7 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
                     </section>
 
                     <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1.55fr)_minmax(300px,0.65fr)]">
-                      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-white/10 dark:bg-[#10131c]">
+                      <section className="app-panel overflow-hidden rounded-2xl">
                         {calendarData ? (
                           <AttendanceCalendar
                             data={calendarData}
@@ -2291,7 +2291,7 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
                         )}
                       </section>
 
-                      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-white/10 dark:bg-[#10131c]">
+                      <section className="app-panel overflow-hidden rounded-2xl">
                         {weeklyHours.length > 0 ? (
                           <WeeklyHoursChart
                             weeklyHours={weeklyHours}
@@ -2311,7 +2311,7 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
                       </section>
                     </div>
 
-                    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-white/10 dark:bg-[#10131c]">
+                    <section className="app-panel overflow-hidden rounded-2xl">
                       {recentActivity.length > 0 ? (
                         <RecentActivityTable activities={recentActivity} />
                       ) : (
@@ -2328,7 +2328,7 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
                     </section>
 
                     {attendanceAnalysis && (
-                      <details className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-white/10 dark:bg-[#10131c]">
+                      <details className="app-panel overflow-hidden rounded-2xl">
                         <summary className="cursor-pointer list-none px-5 py-4 text-sm font-semibold text-slate-900 marker:hidden dark:text-white">
                           Attendance insights and exception analysis
                         </summary>

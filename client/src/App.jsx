@@ -66,7 +66,8 @@ import SuperAdminAttendancePortal from "./pages/SuperAdminAttendancePortal";
 import ShiftManagement from "./components/humanResource/ShiftManagement";
 import ManualAttendanceManagement from "./pages/admin/ManualAttendanceManagement";
 import SalaryManagement from "./pages/admin/SalaryManagement";
-import PositionManagement from "./pages/admin/PositionManagement";
+import PositionManagement from "./pages/admin/PositionManagement"; // Superseded by AccessManagementPage below - kept live for rollback safety until the access-management rework's Phase 6 (see docs/superpowers/plans/2026-07-03-access-management-rework.md)
+import AccessManagementPage from "./pages/admin/AccessManagementPage";
 import PayslipManagement from "./pages/admin/PayslipManagement";
 import ClientsPage from "./pages/ClientsPage";
 import ProjectCommunicationPage from "./pages/ProjectCommunicationPage";
@@ -127,6 +128,12 @@ const AppWrapper = () => {
   const [currentUser, setCurrentUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [notifications, setNotifications] = useState([]);
+  // Access-management rework (2026-07-03, Phase 5.5) - resolved permissions
+  // from GET /api/users/me/permissions, the server-computed single source of
+  // truth. null until the fetch resolves; canAccessLeadManagement() below
+  // falls back to the old role/department logic until then (or if the fetch
+  // fails), so nothing regresses.
+  const [permissions, setPermissions] = useState(null);
 
   // Load user from localStorage
   useEffect(() => {
@@ -150,6 +157,32 @@ const AppWrapper = () => {
     }
     setLoading(false);
   }, []);
+
+  // Fetch resolved permissions once authenticated (Phase 5.5)
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setPermissions(null);
+      return;
+    }
+    const fetchPermissions = async () => {
+      try {
+        const token = localStorage.getItem("token");
+        if (!token) return;
+        const API_BASE =
+          import.meta.env.VITE_API_BASE || "http://localhost:5000";
+        const res = await fetch(`${API_BASE}/api/users/me/permissions`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setPermissions(data);
+        }
+      } catch (error) {
+        console.error("Failed to fetch permissions:", error);
+      }
+    };
+    fetchPermissions();
+  }, [isAuthenticated]);
 
   // Request browser notification permission when authenticated
   useEffect(() => {
@@ -424,7 +457,14 @@ const AppWrapper = () => {
     !isAuthenticated || roleNorm === "client" || location.pathname === "/signup";
 
   // Lead/Callback access
+  // Access-management rework (2026-07-03, Phase 5.5): prefer the
+  // server-resolved canAccessLeadManagement flag (which also correctly
+  // includes Admin and hierarchy-based subordinate/department access - see
+  // userController.getMyPermissions) over re-deriving this here. Falls back
+  // to the old role/department logic until permissions load (or if the
+  // fetch fails), so nothing regresses.
   const canAccessLeadManagement = () => {
+    if (permissions) return permissions.canAccessLeadManagement;
     if (isSuperAdmin) return true;
     if (currentUser?.department === "marketingAndSales") return true;
     return false;
@@ -709,12 +749,27 @@ const AppWrapper = () => {
           }
         />
 
-        {/* Position Management */}
+        {/* Position Management - superseded by Access Management below, route kept for rollback safety */}
         <Route
           path="/admin/position-management"
           element={
             isAuthenticated && isSuperAdmin ? (
               <PositionManagement onLogout={handleLogout} />
+            ) : (
+              <Navigate
+                to={isAuthenticated ? "/dashboard" : "/login"}
+                replace
+              />
+            )
+          }
+        />
+
+        {/* Access Management (2026-07-03 rework) - departments, positions, hierarchy, permissions */}
+        <Route
+          path="/admin/access-management"
+          element={
+            isAuthenticated && isSuperAdmin ? (
+              <AccessManagementPage onLogout={handleLogout} />
             ) : (
               <Navigate
                 to={isAuthenticated ? "/dashboard" : "/login"}

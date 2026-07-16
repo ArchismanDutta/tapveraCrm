@@ -4,8 +4,30 @@ const path = require("path");
 const fs = require("fs");
 const Screenshot = require("../models/Screenshot");
 const Project = require("../models/Project");
-const { protect, authorize } = require("../middlewares/authMiddleware");
+const { protect } = require("../middlewares/authMiddleware");
 const { uploadToS3, convertToCloudFrontUrl } = require("../config/s3Config");
+// Access-management rework (2026-07-03) - Phase 4.7.
+// See docs/superpowers/plans/2026-07-03-access-management-rework.md
+// Mirrors the equivalent helpers in projectRoutes.js (this file is a project
+// sub-resource, mounted at the same /api/projects namespace).
+const { can } = require("../utils/accessControl");
+const hierarchyUtils = require("../utils/hierarchyUtils");
+
+async function hasProjectManageAuthority(user) {
+  return ["admin", "super-admin", "superadmin"].includes(user.role) || (await can(user, "projects:manage"));
+}
+
+async function hasProjectViewAuthority(user, project) {
+  if (await hasProjectManageAuthority(user)) return true;
+  if (await can(user, "projects:view")) {
+    const accessibleIds = await hierarchyUtils.getAccessibleUserIds(user);
+    const accessibleSet = new Set(accessibleIds.map(String));
+    return (project.assignedTo || []).some((id) =>
+      accessibleSet.has(String(id?._id || id))
+    );
+  }
+  return false;
+}
 
 // @route   GET /api/projects/:projectId/screenshots
 // @desc    Get all screenshots for a project
@@ -21,12 +43,14 @@ router.get("/:projectId/screenshots", protect, async (req, res) => {
       return res.status(404).json({ message: "Project not found" });
     }
 
-    // Check access
+    // Check access - additively widened (Phase 4.7) to also allow a
+    // PM/Supervisor/TL with hierarchical projects:view reach over this
+    // project's assignees, not just direct assignees.
     if (req.user.role === "employee") {
       const isAssigned = project.assignedTo.some(
         (emp) => emp.toString() === req.user._id.toString()
       );
-      if (!isAssigned) {
+      if (!isAssigned && !(await hasProjectViewAuthority(req.user, project))) {
         return res.status(403).json({ message: "Access denied" });
       }
     }
@@ -87,12 +111,12 @@ router.post(
         return res.status(404).json({ message: "Project not found" });
       }
 
-      // Check access
+      // Check access - additively widened (Phase 4.7)
       if (req.user.role === "employee") {
         const isAssigned = project.assignedTo.some(
           (emp) => emp.toString() === req.user._id.toString()
         );
-        if (!isAssigned) {
+        if (!isAssigned && !(await hasProjectViewAuthority(req.user, project))) {
           return res.status(403).json({ message: "Access denied" });
         }
       }
@@ -178,12 +202,12 @@ router.put(
         return res.status(404).json({ message: "Project not found" });
       }
 
-      // Check access
+      // Check access - additively widened (Phase 4.7)
       if (req.user.role === "employee") {
         const isAssigned = project.assignedTo.some(
           (emp) => emp.toString() === req.user._id.toString()
         );
-        if (!isAssigned) {
+        if (!isAssigned && !(await hasProjectViewAuthority(req.user, project))) {
           return res.status(403).json({ message: "Access denied" });
         }
       }
@@ -238,11 +262,14 @@ router.put(
 router.delete(
   "/:projectId/screenshots/:screenshotId",
   protect,
-  authorize("admin", "super-admin"),
   async (req, res) => {
     try {
       const { projectId, screenshotId } = req.params;
       const { permanent = false } = req.query;
+
+      if (!(await hasProjectManageAuthority(req.user))) {
+        return res.status(403).json({ message: "Not authorized" });
+      }
 
       const screenshot = await Screenshot.findById(screenshotId);
       if (!screenshot) {
@@ -296,12 +323,14 @@ router.get("/:projectId/screenshots/stats", protect, async (req, res) => {
       return res.status(404).json({ message: "Project not found" });
     }
 
-    // Check access
+    // Check access - additively widened (Phase 4.7) to also allow a
+    // PM/Supervisor/TL with hierarchical projects:view reach over this
+    // project's assignees, not just direct assignees.
     if (req.user.role === "employee") {
       const isAssigned = project.assignedTo.some(
         (emp) => emp.toString() === req.user._id.toString()
       );
-      if (!isAssigned) {
+      if (!isAssigned && !(await hasProjectViewAuthority(req.user, project))) {
         return res.status(403).json({ message: "Access denied" });
       }
     }

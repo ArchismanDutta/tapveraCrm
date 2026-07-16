@@ -1264,17 +1264,17 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
   const isClientUser = userRole === "client";
   const lastMessageFromClient = lastMessage?.senderType === "client";
   const responseState = !lastMessage
-    ? { label: "Start the conversation", classes: "border-slate-500/20 bg-slate-500/10 text-slate-300" }
+    ? { label: "Start the conversation", classes: "border-slate-200 bg-slate-100 text-slate-700 dark:border-slate-500/20 dark:bg-slate-500/10 dark:text-slate-300" }
     : isClientUser
       ? lastMessageFromClient
-        ? { label: "Waiting on project team", classes: "border-sky-400/20 bg-sky-500/10 text-sky-300" }
-        : { label: "Your response requested", classes: "border-amber-400/25 bg-amber-500/10 text-amber-300" }
+        ? { label: "Waiting on project team", classes: "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-400/20 dark:bg-sky-500/10 dark:text-sky-300" }
+        : { label: "Your response requested", classes: "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-400/25 dark:bg-amber-500/10 dark:text-amber-300" }
       : lastMessageFromClient
-        ? { label: "Team response required", classes: "border-amber-400/25 bg-amber-500/10 text-amber-300" }
-        : { label: "Waiting on client", classes: "border-sky-400/20 bg-sky-500/10 text-sky-300" };
+        ? { label: "Team response required", classes: "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-400/25 dark:bg-amber-500/10 dark:text-amber-300" }
+        : { label: "Waiting on client", classes: "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-400/20 dark:bg-sky-500/10 dark:text-sky-300" };
 
   return (
-    <div className="h-screen bg-gradient-to-br from-[#141a21] via-[#191f2b] to-[#101218] text-blue-100 flex flex-col overflow-hidden">
+    <div className="flex h-screen flex-col overflow-hidden bg-slate-50 text-slate-900 dark:bg-[#090f14] dark:text-blue-100">
       {/* Notification Toast */}
       {notification && (
         <div
@@ -1294,12 +1294,12 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
       )}
 
       {/* Compact project header */}
-      <header className="relative z-30 border-b border-white/10 bg-[#0c1319]/95 backdrop-blur-xl">
+      <header className="relative z-30 border-b border-slate-200 bg-white/95 backdrop-blur-xl dark:border-white/10 dark:bg-[#0c1319]/95">
         <div className="flex min-h-16 flex-wrap items-center gap-3 px-3 py-2 sm:px-5">
           <button
             type="button"
             onClick={onBack}
-            className="rounded-lg p-2 text-slate-400 transition hover:bg-white/5 hover:text-white"
+            className="rounded-lg p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-white/5 dark:hover:text-white"
             aria-label="Go back"
           >
             <ArrowLeft className="h-5 w-5" />
@@ -1311,10 +1311,10 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
 
           <div className="min-w-[12rem] flex-1">
             <div className="flex flex-wrap items-center gap-2">
-              <h1 className="max-w-xl truncate text-lg font-semibold tracking-tight text-white sm:text-xl">
+              <h1 className="max-w-xl truncate text-lg font-semibold tracking-tight text-slate-950 dark:text-white sm:text-xl">
                 {project.projectName}
               </h1>
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-teal-400/20 bg-teal-500/10 px-2.5 py-1 text-[11px] font-medium capitalize text-teal-300">
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-teal-200 bg-teal-50 px-2.5 py-1 text-[11px] font-medium capitalize text-teal-700 dark:border-teal-400/20 dark:bg-teal-500/10 dark:text-teal-300">
                 <span className="h-1.5 w-1.5 rounded-full bg-teal-400" />
                 {project.status || status}
               </span>
@@ -1323,7 +1323,7 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                 {responseState.label}
               </span>
             </div>
-            <p className="mt-1 truncate text-xs text-slate-400">{projectClientName}</p>
+            <p className="mt-1 truncate text-xs text-slate-500 dark:text-slate-400">{projectClientName}</p>
           </div>
 
           <button
@@ -1331,8 +1331,8 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
             onClick={() => setShowSidebar((visible) => !visible)}
             className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition ${
               showSidebar
-                ? "border-teal-400/25 bg-teal-500/10 text-teal-300"
-                : "border-white/10 bg-white/[0.035] text-slate-300 hover:bg-white/[0.06] hover:text-white"
+                ? "border-teal-300 bg-teal-50 text-teal-700 dark:border-teal-400/25 dark:bg-teal-500/10 dark:text-teal-300"
+                : "border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100 hover:text-slate-950 dark:border-white/10 dark:bg-white/[0.035] dark:text-slate-300 dark:hover:bg-white/[0.06] dark:hover:text-white"
             }`}
             aria-label={showSidebar ? "Hide project details" : "Show project details"}
           >
@@ -1366,17 +1366,17 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
 
         {/* Main project workspace */}
         <div className={`min-w-0 flex-1 transition-[margin] duration-300 ${showSidebar ? 'md:mr-[22rem]' : 'mr-0'}`}>
-          <div className="flex h-full flex-col bg-[#090f14]">
+          <div className="flex h-full flex-col bg-slate-50 dark:bg-[#090f14]">
             {/* Project sections */}
-            <div className="border-b border-white/10 bg-[#0d151c]">
+            <div className="border-b border-slate-200 bg-white dark:border-white/10 dark:bg-[#0d151c]">
               <div className="flex items-center gap-6 overflow-x-auto px-4 sm:px-5">
                 <button
                   type="button"
                   onClick={() => setActiveTab("chat")}
                   className={`flex shrink-0 items-center gap-2 border-b-2 px-1 py-2.5 text-sm font-medium transition-all ${
                     activeTab === "chat"
-                      ? "border-teal-400 text-teal-300"
-                      : "border-transparent text-slate-400 hover:text-white"
+                      ? "border-teal-500 text-teal-700 dark:border-teal-400 dark:text-teal-300"
+                      : "border-transparent text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
                   }`}
                 >
                   <Mail className="h-4 w-4" />
@@ -1388,14 +1388,14 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                   onClick={() => setActiveTab("tasks")}
                   className={`flex shrink-0 items-center gap-2 border-b-2 px-1 py-2.5 text-sm font-medium transition-all ${
                     activeTab === "tasks"
-                      ? "border-teal-400 text-teal-300"
-                      : "border-transparent text-slate-400 hover:text-white"
+                      ? "border-teal-500 text-teal-700 dark:border-teal-400 dark:text-teal-300"
+                      : "border-transparent text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
                   }`}
                 >
                   <ListTodo className="h-4 w-4" />
                   <span>Tasks</span>
                   {tasks.length > 0 && (
-                    <span className="rounded-full bg-teal-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-teal-300">
+                    <span className="rounded-full bg-teal-50 px-1.5 py-0.5 text-[10px] font-semibold text-teal-700 dark:bg-teal-500/15 dark:text-teal-300">
                       {tasks.length}
                     </span>
                   )}
@@ -1405,8 +1405,8 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                   onClick={() => setActiveTab("report")}
                   className={`flex shrink-0 items-center gap-2 border-b-2 px-1 py-2.5 text-sm font-medium transition-all ${
                     activeTab === "report"
-                      ? "border-teal-400 text-teal-300"
-                      : "border-transparent text-slate-400 hover:text-white"
+                      ? "border-teal-500 text-teal-700 dark:border-teal-400 dark:text-teal-300"
+                      : "border-transparent text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
                   }`}
                 >
                   <BarChart3 className="h-4 w-4" />
@@ -1419,14 +1419,14 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
             {activeTab === "chat" && (
               <>
                 {/* Chat Header */}
-                <div className="relative flex items-center justify-between gap-3 border-b border-white/10 bg-[#0d151c] px-3 py-2 sm:px-4">
+                <div className="relative flex items-center justify-between gap-3 border-b border-slate-200 bg-white px-3 py-2 dark:border-white/10 dark:bg-[#0d151c] sm:px-4">
                   <div className="flex min-w-0 items-center gap-2">
-                    <h2 className="truncate text-sm font-medium text-slate-200">Project conversation</h2>
-                    <span className="text-[11px] text-slate-600">
+                    <h2 className="truncate text-sm font-medium text-slate-900 dark:text-slate-200">Project conversation</h2>
+                    <span className="text-[11px] text-slate-500 dark:text-slate-500">
                       {messages.length} message{messages.length !== 1 ? "s" : ""}
                     </span>
                       {!wsConnected && (
-                        <span className="inline-flex items-center gap-1.5 rounded-full bg-rose-500/10 px-2 py-1 text-[10px] text-rose-300">
+                        <span className="inline-flex items-center gap-1.5 rounded-full bg-rose-50 px-2 py-1 text-[10px] text-rose-700 dark:bg-rose-500/10 dark:text-rose-300">
                           <span className="h-1.5 w-1.5 rounded-full bg-rose-400" />
                           Reconnecting
                         </span>
@@ -1439,8 +1439,8 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                       onClick={() => setShowFilters((visible) => !visible)}
                       className={`rounded-lg border p-2 transition ${
                         showFilters
-                          ? "border-teal-400/25 bg-teal-500/10 text-teal-300"
-                          : "border-white/10 bg-white/[0.03] text-slate-400 hover:bg-white/[0.06] hover:text-white"
+                          ? "border-teal-300 bg-teal-50 text-teal-700 dark:border-teal-400/25 dark:bg-teal-500/10 dark:text-teal-300"
+                          : "border-slate-200 bg-slate-50 text-slate-500 hover:bg-slate-100 hover:text-slate-950 dark:border-white/10 dark:bg-white/[0.03] dark:text-slate-400 dark:hover:bg-white/[0.06] dark:hover:text-white"
                       }`}
                       aria-label="Search conversation"
                     >
@@ -1449,7 +1449,7 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                     <button
                       type="button"
                       onClick={() => setShowActions((visible) => !visible)}
-                      className="rounded-lg border border-white/10 bg-white/[0.03] p-2 text-slate-400 transition hover:bg-white/[0.06] hover:text-white"
+                      className="rounded-lg border border-slate-200 bg-slate-50 p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-950 dark:border-white/10 dark:bg-white/[0.03] dark:text-slate-400 dark:hover:bg-white/[0.06] dark:hover:text-white"
                       aria-label="More conversation actions"
                     >
                       <MoreHorizontal className="h-4 w-4" />
@@ -1457,11 +1457,11 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                   </div>
 
                   {showActions && (
-                    <div className="absolute right-3 top-[calc(100%+0.5rem)] z-50 w-52 rounded-xl border border-white/10 bg-[#131c24] p-1.5 shadow-2xl shadow-black/40">
+                    <div className="absolute right-3 top-[calc(100%+0.5rem)] z-50 w-52 rounded-xl border border-slate-200 bg-white p-1.5 shadow-2xl shadow-slate-900/15 dark:border-white/10 dark:bg-[#131c24] dark:shadow-black/40">
                       <button
                         type="button"
                         onClick={() => { setShowPinnedModal(true); setShowActions(false); }}
-                        className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-slate-300 transition hover:bg-white/5 hover:text-white"
+                        className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-slate-600 transition hover:bg-slate-100 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-white/5 dark:hover:text-white"
                       >
                         <Pin className="h-4 w-4 text-amber-400" />
                         Pinned messages
@@ -1469,7 +1469,7 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                       <button
                         type="button"
                         onClick={() => { setShowStarredOnly((visible) => !visible); setShowActions(false); }}
-                        className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-slate-300 transition hover:bg-white/5 hover:text-white"
+                        className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-slate-600 transition hover:bg-slate-100 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-white/5 dark:hover:text-white"
                       >
                         <Star className={`h-4 w-4 text-amber-400 ${showStarredOnly ? "fill-amber-400" : ""}`} />
                         {showStarredOnly ? "Show all messages" : "Starred messages"}
@@ -1477,7 +1477,7 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                       <button
                         type="button"
                         onClick={() => { handleSummarize(); setShowActions(false); }}
-                        className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-slate-300 transition hover:bg-white/5 hover:text-white"
+                        className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-slate-600 transition hover:bg-slate-100 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-white/5 dark:hover:text-white"
                       >
                         <Sparkles className="h-4 w-4 text-teal-400" />
                         Summarize
@@ -1485,7 +1485,7 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                       <button
                         type="button"
                         onClick={() => { exportChat(); setShowActions(false); }}
-                        className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-slate-300 transition hover:bg-white/5 hover:text-white"
+                        className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-slate-600 transition hover:bg-slate-100 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-white/5 dark:hover:text-white"
                       >
                         <Download className="h-4 w-4 text-sky-400" />
                         Export conversation
@@ -1496,15 +1496,15 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
 
               {/* Search and Filters */}
               {showFilters && (
-                <div className="grid grid-cols-1 gap-3 border-b border-white/10 bg-[#0b1218] p-3 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="grid grid-cols-1 gap-3 border-b border-slate-200 bg-slate-50 p-3 dark:border-white/10 dark:bg-[#0b1218] sm:grid-cols-2 lg:grid-cols-4">
                   <div className="relative">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                     <input
                       type="text"
                       placeholder="Search messages..."
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
-                      className="w-full pl-10 pr-4 py-2 bg-[#0f1419] border border-[#232945] rounded-lg text-white text-sm placeholder-gray-500 focus:outline-none focus:border-[#00a884]"
+                      className="app-control w-full py-2 pl-10 pr-4 text-sm"
                     />
                   </div>
 
@@ -1513,7 +1513,7 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                     placeholder="Filter by sender..."
                     value={searchSender}
                     onChange={(e) => setSearchSender(e.target.value)}
-                    className="px-4 py-2 bg-[#0f1419] border border-[#232945] rounded-lg text-white text-sm placeholder-gray-500 focus:outline-none focus:border-[#00a884]"
+                    className="app-control px-4 py-2 text-sm"
                   />
 
                   <input
@@ -1521,7 +1521,7 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                     placeholder="Start date"
                     value={dateFilter.start}
                     onChange={(e) => setDateFilter({ ...dateFilter, start: e.target.value })}
-                    className="px-4 py-2 bg-[#0f1419] border border-[#232945] rounded-lg text-white text-sm focus:outline-none focus:border-[#00a884]"
+                    className="app-control px-4 py-2 text-sm"
                   />
 
                   <div className="flex gap-2">
@@ -1530,12 +1530,12 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                       placeholder="End date"
                       value={dateFilter.end}
                       onChange={(e) => setDateFilter({ ...dateFilter, end: e.target.value })}
-                      className="flex-1 px-4 py-2 bg-[#0f1419] border border-[#232945] rounded-lg text-white text-sm focus:outline-none focus:border-[#00a884]"
+                      className="app-control flex-1 px-4 py-2 text-sm"
                     />
                     {(searchTerm || searchSender || dateFilter.start || dateFilter.end) && (
                       <button
                         onClick={clearFilters}
-                        className="px-3 py-2 bg-red-600/20 hover:bg-red-600/40 text-red-400 rounded-lg border border-red-500/30 transition-colors"
+                        className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-red-700 transition-colors hover:bg-red-100 dark:border-red-500/30 dark:bg-red-600/20 dark:text-red-400 dark:hover:bg-red-600/40"
                         title="Clear filters"
                       >
                         <XCircle className="w-4 h-4" />
@@ -1548,15 +1548,15 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
             {/* Messages Container */}
             <div
               ref={chatContainerRef}
-              className="flex-1 overflow-y-auto bg-[#090f14]"
+              className="flex-1 overflow-y-auto bg-slate-50 dark:bg-[#090f14]"
             >
               {messages.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-full text-center">
-                  <Mail className="w-12 h-12 sm:w-16 sm:h-16 text-gray-400 mb-4" />
-                  <p className="text-gray-300 text-sm sm:text-base">
+                <div className="flex h-full flex-col items-center justify-center text-center">
+                  <Mail className="mb-4 h-12 w-12 text-slate-400 sm:h-16 sm:w-16" />
+                  <p className="text-sm text-slate-700 dark:text-slate-300 sm:text-base">
                     No messages yet
                   </p>
-                  <p className="text-gray-400 text-xs sm:text-sm mt-2">
+                  <p className="mt-2 text-xs text-slate-500 dark:text-slate-400 sm:text-sm">
                     Start the conversation by sending a message
                   </p>
                 </div>
@@ -1568,7 +1568,7 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                       <button
                         onClick={loadMoreMessages}
                         disabled={loadingMoreMessages}
-                        className="flex items-center gap-2 px-4 py-2 bg-blue-600/20 hover:bg-blue-600/40 text-blue-400 border border-blue-500/30 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-blue-700 transition-colors hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-blue-500/30 dark:bg-blue-600/20 dark:text-blue-400 dark:hover:bg-blue-600/40"
                       >
                         {loadingMoreMessages ? (
                           <>
@@ -1602,7 +1602,7 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                     ? "You"
                     : isClientUser && senderType !== "client"
                       ? senderRole
-                      : `${senderName} · ${senderRole}`;
+                      : `${senderName} - ${senderRole}`;
 
                   // Check if we need to show date separator
                   const showDateSeparator = idx === 0 ||
@@ -1626,11 +1626,11 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                       >
                         <div className="flex items-center gap-2 mb-1 px-1 max-w-full">
                           {!isOwnMessage && (
-                            <div className="w-6 h-6 rounded-full bg-[#2a3942] flex items-center justify-center text-gray-300 text-xs font-semibold flex-shrink-0">
+                            <div className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-slate-200 text-xs font-semibold text-slate-700 dark:bg-[#2a3942] dark:text-gray-300">
                               {senderDisplay.charAt(0).toUpperCase()}
                             </div>
                           )}
-                          <span className="text-xs text-gray-400 truncate">
+                          <span className="truncate text-xs text-slate-500 dark:text-gray-400">
                             {senderDisplay}
                           </span>
                         </div>
@@ -1638,22 +1638,22 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                         <div
                           className={`relative group w-fit max-w-full ${
                             isOwnMessage
-                              ? "border-teal-400/15 bg-[#075d55]"
-                              : "border-white/10 bg-[#1a242d]"
-                          } overflow-hidden rounded-xl border p-3 text-white shadow-sm shadow-black/10 transition-colors duration-200 break-words`}
+                              ? "border-teal-600/20 bg-teal-600 text-white dark:border-teal-400/15 dark:bg-[#075d55]"
+                              : "border-slate-200 bg-white text-slate-900 dark:border-white/10 dark:bg-[#1a242d] dark:text-white"
+                          } overflow-hidden rounded-xl border p-3 shadow-sm shadow-slate-900/5 transition-colors duration-200 break-words dark:shadow-black/10`}
                         >
                           {/* Reply Preview */}
                           {msg.replyTo && (
-                            <div className="mb-2 p-2 bg-black/20 rounded border-l-4 border-[#00a884] overflow-hidden" style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
+                            <div className="mb-2 overflow-hidden rounded border-l-4 border-teal-500 bg-black/10 p-2 dark:bg-black/20" style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
                               <div className="flex items-center gap-1 mb-1">
-                                <Reply className="w-3 h-3 text-[#00a884] flex-shrink-0" />
-                                <span className="text-xs text-gray-200 font-semibold truncate">
+                                <Reply className="h-3 w-3 flex-shrink-0 text-teal-200 dark:text-[#00a884]" />
+                                <span className={`truncate text-xs font-semibold ${isOwnMessage ? "text-teal-50" : "text-slate-700 dark:text-gray-200"}`}>
                                   {msg.replyTo.sentBy ?
                                     (msg.replyTo.senderType === "client" ? "Client" : (msg.replyTo.sentBy.designation || "Team Member")) :
                                     "Unknown User"}
                                 </span>
                               </div>
-                              <div className="text-xs text-gray-400 overflow-hidden whitespace-pre-wrap" style={{
+                              <div className={`overflow-hidden whitespace-pre-wrap text-xs ${isOwnMessage ? "text-teal-50/80" : "text-slate-500 dark:text-gray-400"}`} style={{
                                 display: '-webkit-box',
                                 WebkitLineClamp: 2,
                                 WebkitBoxOrient: 'vertical',
@@ -1668,7 +1668,7 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                           {/* Message with Markdown rendering */}
                           {msg.message && (
                             <>
-                              <div className="text-white text-sm leading-relaxed break-words overflow-wrap-anywhere prose prose-sm max-w-none prose-invert">
+                              <div className={`prose prose-sm max-w-none break-words text-sm leading-relaxed overflow-wrap-anywhere ${isOwnMessage ? "prose-invert text-white" : "prose-slate dark:prose-invert dark:text-white"}`}>
                                 <ReactMarkdown
                                   remarkPlugins={[remarkGfm]}
                                   rehypePlugins={[rehypeRaw]}
@@ -1682,14 +1682,14 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                                     li: ({ children }) => <li className="ml-0 break-words">{children}</li>,
                                     code: ({ inline, children }) =>
                                       inline ? (
-                                        <code className="bg-black/30 px-1 rounded text-xs">{children}</code>
+                                        <code className="rounded bg-black/10 px-1 text-xs dark:bg-black/30">{children}</code>
                                       ) : (
-                                        <code className="block bg-black/30 p-2 rounded text-xs overflow-x-auto whitespace-pre-wrap">{children}</code>
+                                        <code className="block overflow-x-auto whitespace-pre-wrap rounded bg-black/10 p-2 text-xs dark:bg-black/30">{children}</code>
                                       ),
                                     strong: ({ children }) => <strong className="font-bold">{children}</strong>,
                                     em: ({ children }) => <em className="italic">{children}</em>,
                                     a: ({ href, children }) => (
-                                      <a href={href} target="_blank" rel="noopener noreferrer" className="text-blue-300 underline hover:text-blue-200">{children}</a>
+                                      <a href={href} target="_blank" rel="noopener noreferrer" className={`${isOwnMessage ? "text-blue-100 hover:text-white" : "text-blue-600 hover:text-blue-700 dark:text-blue-300 dark:hover:text-blue-200"} underline`}>{children}</a>
                                     ),
                                     br: () => <br />,
                                   }}
@@ -1745,11 +1745,11 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                                   key={attIdx}
                                   className="flex flex-col gap-2"
                                 >
-                                  <div className="flex items-center gap-2 p-2 bg-black/20 rounded">
+                                  <div className="flex items-center gap-2 rounded bg-black/10 p-2 dark:bg-black/20">
                                     {getFileIcon(att.fileType)}
                                     <div className="flex-1 min-w-0">
                                       <div className="flex items-center gap-2">
-                                        <div className="text-xs text-white truncate">
+                                        <div className={`truncate text-xs ${isOwnMessage ? "text-white" : "text-slate-900 dark:text-white"}`}>
                                           {att.filename}
                                         </div>
                                         {att.isImportant && (
@@ -1759,7 +1759,7 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                                           </span>
                                         )}
                                       </div>
-                                      <div className="text-xs text-gray-400">
+                                      <div className={`text-xs ${isOwnMessage ? "text-teal-50/75" : "text-slate-500 dark:text-gray-400"}`}>
                                         {(att.size / 1024).toFixed(1)} KB
                                       </div>
                                     </div>
@@ -1768,7 +1768,7 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                                       className={`p-1.5 rounded transition-colors ${
                                         att.isImportant
                                           ? "text-yellow-400 hover:bg-yellow-400/20"
-                                          : "text-gray-400 hover:text-yellow-400 hover:bg-white/10"
+                                          : "text-slate-400 hover:bg-slate-100 hover:text-yellow-500 dark:text-gray-400 dark:hover:bg-white/10 dark:hover:text-yellow-400"
                                       }`}
                                       title={att.isImportant ? "Remove from important" : "Mark as important (won't be auto-deleted)"}
                                     >
@@ -1776,7 +1776,7 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                                     </button>
                                     <a
                                       href={`${API_BASE}/api/projects/${projectId}/messages/${msg._id}/attachments/${att._id}/download`}
-                                      className="p-1 hover:bg-white/10 rounded"
+                                      className="rounded p-1 hover:bg-slate-100 dark:hover:bg-white/10"
                                       onClick={(e) => {
                                         e.preventDefault();
                                         const token = localStorage.getItem("token");
@@ -1805,7 +1805,7 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                                         });
                                       }}
                                     >
-                                      <Download className="w-4 h-4 text-gray-300" />
+                                      <Download className={`h-4 w-4 ${isOwnMessage ? "text-teal-50/80" : "text-slate-500 dark:text-gray-300"}`} />
                                     </a>
                                   </div>
                                   {att.fileType === "image" && (
@@ -1833,13 +1833,13 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                                     onClick={() => handleReaction(msg._id, reaction.emoji)}
                                     className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs transition-all ${
                                       userReacted
-                                        ? "bg-blue-500/30 border border-blue-400"
-                                        : "bg-black/20 hover:bg-black/30"
+                                        ? "border border-blue-300 bg-blue-100 text-blue-700 dark:border-blue-400 dark:bg-blue-500/30 dark:text-white"
+                                        : "bg-black/10 hover:bg-black/15 dark:bg-black/20 dark:hover:bg-black/30"
                                     }`}
                                     title={userReacted ? "Remove reaction" : "Add reaction"}
                                   >
                                     <span>{reaction.emoji}</span>
-                                    <span className="text-gray-300 text-[10px]">
+                                    <span className={`text-[10px] ${isOwnMessage ? "text-teal-50/80" : "text-slate-500 dark:text-gray-300"}`}>
                                       {reaction.users?.length || 0}
                                     </span>
                                   </button>
@@ -1850,7 +1850,7 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
 
                           <div className="mt-2 flex items-center justify-between gap-3">
                             <div className="flex items-center gap-2">
-                              <span className="text-xs text-gray-400">
+                              <span className={`text-xs ${isOwnMessage ? "text-teal-50/80" : "text-slate-500 dark:text-gray-400"}`}>
                                 {new Date(msg.createdAt).toLocaleTimeString([], {
                                   hour: "2-digit",
                                   minute: "2-digit",
@@ -1865,10 +1865,10 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                             <div className="relative flex gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
                               <button
                                 onClick={() => handleReply(msg)}
-                                className="p-1.5 rounded-md hover:bg-white/10 transition-colors"
+                                className="rounded-md p-1.5 transition-colors hover:bg-black/10 dark:hover:bg-white/10"
                                 title="Reply to message"
                               >
-                                <Reply className="w-3.5 h-3.5 text-gray-400 hover:text-[#00a884]" />
+                                <Reply className={`h-3.5 w-3.5 ${isOwnMessage ? "text-teal-50/80 hover:text-white" : "text-slate-400 hover:text-teal-600 dark:text-gray-400 dark:hover:text-[#00a884]"}`} />
                               </button>
                               <button
                                 onClick={() =>
@@ -1876,33 +1876,33 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                                     showEmojiPicker === msg._id ? null : msg._id
                                   )
                                 }
-                                className="p-1.5 rounded-md hover:bg-white/10 transition-colors"
+                                className="rounded-md p-1.5 transition-colors hover:bg-black/10 dark:hover:bg-white/10"
                                 title="Add reaction"
                               >
-                                <Smile className="w-3.5 h-3.5 text-gray-400 hover:text-yellow-400" />
+                                <Smile className={`h-3.5 w-3.5 ${isOwnMessage ? "text-teal-50/80 hover:text-white" : "text-slate-400 hover:text-yellow-500 dark:text-gray-400 dark:hover:text-yellow-400"}`} />
                               </button>
                               <button
                                 onClick={() => copyToClipboard(msg.message)}
-                                className="p-1.5 rounded-md hover:bg-white/10 transition-colors"
+                                className="rounded-md p-1.5 transition-colors hover:bg-black/10 dark:hover:bg-white/10"
                                 title="Copy message"
                               >
                                 {copiedText === msg.message ? (
                                   <Check className="w-3.5 h-3.5 text-green-400" />
                                 ) : (
-                                  <Copy className="w-3.5 h-3.5 text-gray-400 hover:text-blue-400" />
+                                  <Copy className={`h-3.5 w-3.5 ${isOwnMessage ? "text-teal-50/80 hover:text-white" : "text-slate-400 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400"}`} />
                                 )}
                               </button>
                               <button
                                 onClick={() => toggleStarMessage(msg._id)}
-                                className="p-1.5 rounded-md hover:bg-white/10 transition-colors"
+                                className="rounded-md p-1.5 transition-colors hover:bg-black/10 dark:hover:bg-white/10"
                                 title={starredMessageIds.has(msg._id) ? "Remove from starred" : "Add to starred"}
                               >
-                                <Star className={`w-3.5 h-3.5 ${starredMessageIds.has(msg._id) ? "text-yellow-400 fill-yellow-400" : "text-gray-400 hover:text-yellow-400"}`} />
+                                <Star className={`h-3.5 w-3.5 ${starredMessageIds.has(msg._id) ? "fill-yellow-400 text-yellow-400" : isOwnMessage ? "text-teal-50/80 hover:text-white" : "text-slate-400 hover:text-yellow-500 dark:text-gray-400 dark:hover:text-yellow-400"}`} />
                               </button>
 
                               {/* Emoji Picker Popup */}
                               {showEmojiPicker === msg._id && (
-                                <div className={`emoji-picker-container absolute ${isOwnMessage ? 'right-0' : 'left-0'} bottom-full mb-2 p-2 bg-[#1a2332] border border-[#232945] rounded-lg shadow-2xl z-50 flex gap-1`}>
+                                <div className={`emoji-picker-container absolute ${isOwnMessage ? 'right-0' : 'left-0'} bottom-full z-50 mb-2 flex gap-1 rounded-lg border border-slate-200 bg-white p-2 shadow-2xl shadow-slate-900/15 dark:border-[#232945] dark:bg-[#1a2332]`}>
                                   {commonEmojis.map((emoji, emojiIdx) => (
                                     <button
                                       key={emojiIdx}
@@ -1910,7 +1910,7 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                                         e.stopPropagation();
                                         handleReaction(msg._id, emoji);
                                       }}
-                                      className="hover:bg-white/10 hover:scale-110 p-1.5 rounded transition-all text-lg"
+                                      className="rounded p-1.5 text-lg transition-all hover:scale-110 hover:bg-slate-100 dark:hover:bg-white/10"
                                       title={`React with ${emoji}`}
                                     >
                                       {emoji}
@@ -1944,12 +1944,12 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
             )}
 
             {/* Message Input */}
-            <div className="border-t border-white/10 bg-[#0d151c] p-2 sm:px-3">
+            <div className="border-t border-slate-200 bg-white p-2 dark:border-white/10 dark:bg-[#0d151c] sm:px-3">
               {/* Reply Preview */}
               {replyingTo && (
-                <div className="mb-2 flex items-start justify-between gap-2 overflow-hidden rounded-lg border border-teal-400/20 bg-teal-500/10 p-2.5" style={{ maxWidth: '100%' }}>
+                <div className="mb-2 flex items-start justify-between gap-2 overflow-hidden rounded-lg border border-teal-200 bg-teal-50 p-2.5 dark:border-teal-400/20 dark:bg-teal-500/10" style={{ maxWidth: '100%' }}>
                   <div className="flex-1 min-w-0 overflow-hidden">
-                    <div className="flex items-center gap-2 text-sm text-gray-300 mb-1">
+                    <div className="mb-1 flex items-center gap-2 text-sm text-teal-800 dark:text-gray-300">
                       <Reply className="w-4 h-4 flex-shrink-0" />
                       <span className="font-medium truncate">
                         Replying to {replyingTo.sentBy ?
@@ -1957,7 +1957,7 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                           "Unknown User"}
                       </span>
                     </div>
-                    <div className="text-xs text-gray-300 overflow-hidden" style={{
+                    <div className="overflow-hidden text-xs text-slate-600 dark:text-gray-300" style={{
                       display: '-webkit-box',
                       WebkitLineClamp: 3,
                       WebkitBoxOrient: 'vertical',
@@ -1969,10 +1969,10 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                   </div>
                   <button
                     onClick={() => setReplyingTo(null)}
-                    className="p-1 hover:bg-white/10 rounded flex-shrink-0"
+                    className="flex-shrink-0 rounded p-1 hover:bg-slate-100 dark:hover:bg-white/10"
                     title="Cancel reply"
                   >
-                    <XCircle className="w-4 h-4 text-gray-400 hover:text-red-400" />
+                    <XCircle className="h-4 w-4 text-slate-400 hover:text-red-500 dark:hover:text-red-400" />
                   </button>
                 </div>
               )}
@@ -1983,17 +1983,17 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                   {selectedFiles.map((file, idx) => (
                     <div
                       key={idx}
-                      className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2"
+                      className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 dark:border-white/10 dark:bg-white/[0.04]"
                     >
-                      <File className="w-4 h-4 text-gray-300" />
-                      <span className="text-xs text-white truncate max-w-[150px]">
+                      <File className="h-4 w-4 text-slate-500 dark:text-gray-300" />
+                      <span className="max-w-[150px] truncate text-xs text-slate-700 dark:text-white">
                         {file.name}
                       </span>
                       <button
                         onClick={() => removeFile(idx)}
-                        className="p-1 hover:bg-white/10 rounded"
+                        className="rounded p-1 hover:bg-slate-100 dark:hover:bg-white/10"
                       >
-                        <XCircle className="w-3 h-3 text-gray-400" />
+                        <XCircle className="h-3 w-3 text-slate-400" />
                       </button>
                     </div>
                   ))}
@@ -2002,27 +2002,27 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
 
               {/* Formatting Toolbar */}
               {showFormatting && (
-                <div className="mb-3 rounded-lg border border-white/10 bg-[#101820] p-3">
+                <div className="mb-3 rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-white/10 dark:bg-[#101820]">
                   <div className="flex flex-wrap gap-2">
-                    <button type="button" onClick={formatBold} className="px-3 py-1.5 bg-[#232945] hover:bg-[#2a3142] rounded text-xs font-bold text-white transition-colors" title="Bold (Ctrl+B)">
+                    <button type="button" onClick={formatBold} className="rounded border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 transition-colors hover:bg-slate-100 dark:border-white/10 dark:bg-[#232945] dark:text-white dark:hover:bg-[#2a3142]" title="Bold (Ctrl+B)">
                       <span className="font-bold">B</span>
                     </button>
-                    <button type="button" onClick={formatItalic} className="px-3 py-1.5 bg-[#232945] hover:bg-[#2a3142] rounded text-xs italic text-white transition-colors" title="Italic (Ctrl+I)">
+                    <button type="button" onClick={formatItalic} className="rounded border border-slate-200 bg-white px-3 py-1.5 text-xs italic text-slate-700 transition-colors hover:bg-slate-100 dark:border-white/10 dark:bg-[#232945] dark:text-white dark:hover:bg-[#2a3142]" title="Italic (Ctrl+I)">
                       <span className="italic">I</span>
                     </button>
-                    <button type="button" onClick={formatStrikethrough} className="px-3 py-1.5 bg-[#232945] hover:bg-[#2a3142] rounded text-xs text-white transition-colors" title="Strikethrough (Ctrl+U)">
+                    <button type="button" onClick={formatStrikethrough} className="rounded border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-700 transition-colors hover:bg-slate-100 dark:border-white/10 dark:bg-[#232945] dark:text-white dark:hover:bg-[#2a3142]" title="Strikethrough (Ctrl+U)">
                       <span className="line-through">S</span>
                     </button>
-                    <button type="button" onClick={formatCode} className="px-3 py-1.5 bg-[#232945] hover:bg-[#2a3142] rounded text-xs font-mono text-white transition-colors" title="Code (Ctrl+E)">
+                    <button type="button" onClick={formatCode} className="rounded border border-slate-200 bg-white px-3 py-1.5 text-xs font-mono text-slate-700 transition-colors hover:bg-slate-100 dark:border-white/10 dark:bg-[#232945] dark:text-white dark:hover:bg-[#2a3142]" title="Code (Ctrl+E)">
                       &lt;/&gt;
                     </button>
-                    <button type="button" onClick={formatHeading} className="px-3 py-1.5 bg-[#232945] hover:bg-[#2a3142] rounded text-xs font-bold text-white transition-colors" title="Heading (Ctrl+D)">
+                    <button type="button" onClick={formatHeading} className="rounded border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 transition-colors hover:bg-slate-100 dark:border-white/10 dark:bg-[#232945] dark:text-white dark:hover:bg-[#2a3142]" title="Heading (Ctrl+D)">
                       H1
                     </button>
-                    <button type="button" onClick={formatBullet} className="px-3 py-1.5 bg-[#232945] hover:bg-[#2a3142] rounded text-xs text-white transition-colors" title="Bullet List (Ctrl+L)">
+                    <button type="button" onClick={formatBullet} className="rounded border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-700 transition-colors hover:bg-slate-100 dark:border-white/10 dark:bg-[#232945] dark:text-white dark:hover:bg-[#2a3142]" title="Bullet List (Ctrl+L)">
                       • List
                     </button>
-                    <button type="button" onClick={formatNumbered} className="px-3 py-1.5 bg-[#232945] hover:bg-[#2a3142] rounded text-xs text-white transition-colors" title="Numbered List (Ctrl+Shift+L)">
+                    <button type="button" onClick={formatNumbered} className="rounded border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-700 transition-colors hover:bg-slate-100 dark:border-white/10 dark:bg-[#232945] dark:text-white dark:hover:bg-[#2a3142]" title="Numbered List (Ctrl+Shift+L)">
                       1. List
                     </button>
                   </div>
@@ -2055,8 +2055,8 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                     onClick={() => setShowComposerTools((visible) => !visible)}
                     className={`flex h-11 w-11 items-center justify-center rounded-lg border transition ${
                       showComposerTools
-                        ? "border-teal-400/30 bg-teal-500/10 text-teal-300"
-                        : "border-white/10 bg-white/[0.035] text-slate-400 hover:bg-white/[0.065] hover:text-white"
+                        ? "border-teal-300 bg-teal-50 text-teal-700 dark:border-teal-400/30 dark:bg-teal-500/10 dark:text-teal-300"
+                        : "border-slate-200 bg-slate-50 text-slate-500 hover:bg-slate-100 hover:text-slate-950 dark:border-white/10 dark:bg-white/[0.035] dark:text-slate-400 dark:hover:bg-white/[0.065] dark:hover:text-white"
                     }`}
                     aria-label="Add attachment or formatting"
                   >
@@ -2064,11 +2064,11 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                   </button>
 
                   {showComposerTools && (
-                    <div className="absolute bottom-[calc(100%+0.5rem)] left-0 z-50 w-44 rounded-xl border border-white/10 bg-[#131c24] p-1.5 shadow-2xl shadow-black/40">
+                    <div className="absolute bottom-[calc(100%+0.5rem)] left-0 z-50 w-44 rounded-xl border border-slate-200 bg-white p-1.5 shadow-2xl shadow-slate-900/15 dark:border-white/10 dark:bg-[#131c24] dark:shadow-black/40">
                       <button
                         type="button"
                         onClick={() => { fileInputRef.current?.click(); setShowComposerTools(false); }}
-                        className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-slate-300 transition hover:bg-white/5 hover:text-white"
+                        className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-slate-600 transition hover:bg-slate-100 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-white/5 dark:hover:text-white"
                       >
                         <Paperclip className="h-4 w-4 text-sky-400" />
                         Attach files
@@ -2076,7 +2076,7 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                       <button
                         type="button"
                         onClick={() => { setShowFormatting((visible) => !visible); setShowComposerTools(false); }}
-                        className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-slate-300 transition hover:bg-white/5 hover:text-white"
+                        className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-slate-600 transition hover:bg-slate-100 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-white/5 dark:hover:text-white"
                       >
                         <Type className="h-4 w-4 text-teal-400" />
                         Formatting
@@ -2084,7 +2084,7 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                       <button
                         type="button"
                         onClick={() => { setShowEnhancedEmojiPicker(true); setShowComposerTools(false); }}
-                        className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-slate-300 transition hover:bg-white/5 hover:text-white"
+                        className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-slate-600 transition hover:bg-slate-100 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-white/5 dark:hover:text-white"
                       >
                         <Smile className="h-4 w-4 text-amber-400" />
                         Emoji
@@ -2111,12 +2111,12 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                   {showSuggestions && suggestions.length > 0 && (
                     <div
                       ref={suggestionsRef}
-                      className="absolute bottom-full left-0 right-0 mb-2 bg-gray-900 border border-[#232945] rounded-lg shadow-2xl max-h-64 overflow-y-auto z-50"
+                      className="absolute bottom-full left-0 right-0 z-50 mb-2 max-h-64 overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-2xl shadow-slate-900/15 dark:border-[#232945] dark:bg-gray-900"
                     >
-                      <div className="p-2 border-b border-[#232945] flex items-center gap-2 sticky top-0 bg-gray-900">
+                      <div className="sticky top-0 flex items-center gap-2 border-b border-slate-200 bg-white p-2 dark:border-[#232945] dark:bg-gray-900">
                         <Sparkles className="w-4 h-4 text-blue-400" />
-                        <span className="text-xs text-gray-400">
-                          Suggestions ({suggestions.length}) • <kbd className="px-1 py-0.5 bg-gray-700 rounded text-[10px]">↑↓</kbd> to navigate • <kbd className="px-1 py-0.5 bg-gray-700 rounded text-[10px]">Tab</kbd> or <kbd className="px-1 py-0.5 bg-gray-700 rounded text-[10px]">Enter</kbd> to select
+                        <span className="text-xs text-slate-500 dark:text-gray-400">
+                          Suggestions ({suggestions.length}) - <kbd className="rounded bg-slate-100 px-1 py-0.5 text-[10px] dark:bg-gray-700">Up/Down</kbd> to navigate - <kbd className="rounded bg-slate-100 px-1 py-0.5 text-[10px] dark:bg-gray-700">Tab</kbd> or <kbd className="rounded bg-slate-100 px-1 py-0.5 text-[10px] dark:bg-gray-700">Enter</kbd> to select
                         </span>
                       </div>
                       {suggestions.map((suggestion, idx) => (
@@ -2124,9 +2124,9 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                           key={idx}
                           type="button"
                           onClick={() => acceptSuggestion(suggestion)}
-                          className={`w-full text-left px-4 py-2 hover:bg-gray-800 transition-colors border-l-2 ${
+                          className={`w-full border-l-2 px-4 py-2 text-left transition-colors hover:bg-slate-100 dark:hover:bg-gray-800 ${
                             idx === selectedSuggestionIndex
-                              ? "bg-gray-800 border-blue-500"
+                              ? "border-blue-500 bg-blue-50 dark:bg-gray-800"
                               : "border-transparent"
                           }`}
                         >
@@ -2149,10 +2149,10 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                               )}
                             </div>
                             <div className="flex-1 min-w-0">
-                              <p className="text-sm text-gray-200 truncate">
+                              <p className="truncate text-sm text-slate-800 dark:text-gray-200">
                                 {suggestion.text}
                               </p>
-                              <p className="text-xs text-gray-500 capitalize">
+                              <p className="text-xs capitalize text-slate-500 dark:text-gray-500">
                                 {suggestion.type === "history" && "From your history"}
                                 {suggestion.type === "quick" && "Quick reply"}
                                 {suggestion.type === "task" && "Task suggestion"}
@@ -2178,9 +2178,9 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                       }
                     }}
                     users={project?.assignedTo || []}
-                    placeholder="Write a message…"
+                    placeholder="Write a message..."
                     rows={1}
-                    className="h-11 w-full rounded-xl border-white/10 bg-[#101820] py-2.5 text-white placeholder-slate-500 focus:border-teal-400/50"
+                    className="h-11 w-full rounded-xl border-slate-200 bg-white py-2.5 text-slate-900 placeholder-slate-400 focus:border-teal-400/50 dark:border-white/10 dark:bg-[#101820] dark:text-white dark:placeholder-slate-500"
                     onKeyDown={(e) => {
                       // Handle suggestion navigation
                       if (showSuggestions && suggestions.length > 0) {
@@ -2585,38 +2585,38 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
       {/* AI Summary Modal */}
       {showSummaryModal && (
         <div
-          className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4"
+          className="fixed inset-0 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm"
           style={{ zIndex: 9999 }}
           onClick={() => setShowSummaryModal(false)}
         >
           <div
-            className="bg-[#0f1419] rounded-lg shadow-2xl max-w-3xl w-full max-h-[80vh] flex flex-col border border-[#232945]"
+            className="flex max-h-[80vh] w-full max-w-3xl flex-col rounded-2xl border border-slate-200 bg-white shadow-2xl shadow-slate-900/20 dark:border-[#232945] dark:bg-[#0f1419] dark:shadow-black/40"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Modal Header */}
-            <div className="flex items-center justify-between p-4 border-b border-[#232945]">
+            <div className="flex items-center justify-between border-b border-slate-200 p-4 dark:border-[#232945]">
               <div className="flex items-center gap-3">
-                <Sparkles className="w-5 h-5 text-[#00a884]" />
-                <h2 className="text-xl font-semibold text-white">
+                <Sparkles className="h-5 w-5 text-teal-500 dark:text-[#00a884]" />
+                <h2 className="text-xl font-semibold text-slate-950 dark:text-white">
                   AI Project Summary
                 </h2>
               </div>
               <button
                 onClick={() => setShowSummaryModal(false)}
-                className="p-2 hover:bg-[#232945] rounded-lg transition"
+                className="rounded-lg p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 dark:hover:bg-[#232945]"
               >
-                <XCircle className="w-5 h-5 text-gray-400" />
+                <XCircle className="h-5 w-5" />
               </button>
             </div>
 
             {/* Days Selector */}
-            <div className="px-4 py-3 border-b border-[#232945] bg-[#0a0e14]">
+            <div className="border-b border-slate-200 bg-slate-50 px-4 py-3 dark:border-[#232945] dark:bg-[#0a0e14]">
               <div className="flex items-center gap-3">
-                <label className="text-sm text-gray-400">Time period:</label>
+                <label className="text-sm text-slate-500 dark:text-gray-400">Time period:</label>
                 <select
                   value={summaryDays}
                   onChange={(e) => setSummaryDays(Number(e.target.value))}
-                  className="px-3 py-1.5 bg-[#0f1419] text-white rounded border border-[#232945] focus:outline-none focus:ring-2 focus:ring-[#00a884] text-sm"
+                  className="app-control px-3 py-1.5 text-sm"
                 >
                   <option value={1}>Last 24 hours</option>
                   <option value={3}>Last 3 days</option>
@@ -2627,7 +2627,7 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                 <button
                   onClick={handleSummarize}
                   disabled={summaryLoading}
-                  className="px-4 py-1.5 bg-[#00a884] hover:bg-[#128C7E] text-white rounded text-sm transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  className="flex items-center gap-2 rounded bg-teal-600 px-4 py-1.5 text-sm text-white transition hover:bg-teal-500 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <Sparkles className="w-4 h-4" />
                   {summaryLoading ? "Generating..." : "Regenerate"}
@@ -2640,28 +2640,28 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
               {summaryLoading ? (
                 <div className="flex flex-col items-center justify-center h-full gap-4">
                   <div className="relative">
-                    <div className="w-16 h-16 border-4 border-[#00a884]/30 border-t-[#00a884] rounded-full animate-spin"></div>
-                    <Sparkles className="w-6 h-6 text-[#00a884] absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2" />
+                    <div className="h-16 w-16 animate-spin rounded-full border-4 border-teal-500/30 border-t-teal-500"></div>
+                    <Sparkles className="absolute left-1/2 top-1/2 h-6 w-6 -translate-x-1/2 -translate-y-1/2 text-teal-500" />
                   </div>
-                  <p className="text-gray-400 text-sm">Analyzing project messages with AI...</p>
+                  <p className="text-sm text-slate-500 dark:text-gray-400">Analyzing project messages with AI...</p>
                 </div>
               ) : (
-                <div className="prose prose-invert prose-sm max-w-none">
+                <div className="prose prose-slate prose-sm max-w-none dark:prose-invert">
                   <ReactMarkdown
                     remarkPlugins={[remarkGfm]}
                     rehypePlugins={[rehypeRaw]}
                     components={{
                       p: ({ children }) => (
-                        <p className="mb-3 text-gray-200 leading-relaxed">{children}</p>
+                        <p className="mb-3 leading-relaxed text-slate-700 dark:text-gray-200">{children}</p>
                       ),
                       h1: ({ children }) => (
-                        <h1 className="text-2xl font-bold mb-3 text-white">{children}</h1>
+                        <h1 className="mb-3 text-2xl font-bold text-slate-950 dark:text-white">{children}</h1>
                       ),
                       h2: ({ children }) => (
-                        <h2 className="text-xl font-bold mb-2 text-white">{children}</h2>
+                        <h2 className="mb-2 text-xl font-bold text-slate-950 dark:text-white">{children}</h2>
                       ),
                       h3: ({ children }) => (
-                        <h3 className="text-lg font-bold mb-2 text-white">{children}</h3>
+                        <h3 className="mb-2 text-lg font-bold text-slate-950 dark:text-white">{children}</h3>
                       ),
                       ul: ({ children }) => (
                         <ul className="list-disc list-inside mb-3 space-y-1">{children}</ul>
@@ -2670,18 +2670,18 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                         <ol className="list-decimal list-inside mb-3 space-y-1">{children}</ol>
                       ),
                       li: ({ children }) => (
-                        <li className="ml-2 text-gray-200">{children}</li>
+                        <li className="ml-2 text-slate-700 dark:text-gray-200">{children}</li>
                       ),
                       strong: ({ children }) => (
-                        <strong className="font-bold text-[#00a884]">{children}</strong>
+                        <strong className="font-bold text-teal-600 dark:text-[#00a884]">{children}</strong>
                       ),
                       code: ({ inline, children }) =>
                         inline ? (
-                          <code className="bg-[#0a0e14] px-1.5 py-0.5 rounded text-[#00a884] text-xs">
+                          <code className="rounded bg-slate-100 px-1.5 py-0.5 text-xs text-teal-700 dark:bg-[#0a0e14] dark:text-[#00a884]">
                             {children}
                           </code>
                         ) : (
-                          <code className="block bg-[#0a0e14] p-3 rounded text-sm overflow-x-auto text-gray-300">
+                          <code className="block overflow-x-auto rounded bg-slate-100 p-3 text-sm text-slate-700 dark:bg-[#0a0e14] dark:text-gray-300">
                             {children}
                           </code>
                         ),
@@ -2694,9 +2694,9 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
             </div>
 
             {/* Modal Footer */}
-            <div className="p-4 border-t border-[#232945] flex justify-between items-center bg-[#0a0e14]">
-              <div className="text-xs text-gray-500">
-                Powered by AI • Last {summaryDays} day{summaryDays !== 1 ? 's' : ''}
+            <div className="flex items-center justify-between border-t border-slate-200 bg-slate-50 p-4 dark:border-[#232945] dark:bg-[#0a0e14]">
+              <div className="text-xs text-slate-500 dark:text-gray-500">
+                Powered by AI - Last {summaryDays} day{summaryDays !== 1 ? 's' : ''}
               </div>
               <button
                 onClick={() => {
@@ -2705,7 +2705,7 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                   setTimeout(() => setCopiedText(null), 2000);
                 }}
                 disabled={!summary || summaryLoading}
-                className="px-4 py-2 bg-[#0f1419] hover:bg-[#232945] text-gray-200 rounded transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 text-sm border border-[#232945]"
+                className="flex items-center gap-2 rounded border border-slate-200 bg-white px-4 py-2 text-sm text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-[#232945] dark:bg-[#0f1419] dark:text-gray-200 dark:hover:bg-[#232945]"
               >
                 {copiedText === summary ? (
                   <>

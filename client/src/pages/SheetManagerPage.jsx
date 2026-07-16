@@ -84,7 +84,7 @@ const MetricCard = ({ icon, label, value, tone }) => {
   };
 
   return (
-    <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-[#10131c]">
+    <div className="app-panel flex items-center gap-3 rounded-2xl p-4">
       <span
         className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border ${tones[tone]}`}
       >
@@ -114,7 +114,7 @@ const SheetCard = ({
   const type = getTypeMeta(sheet.type);
 
   return (
-    <article className="flex min-h-[300px] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:border-slate-300 hover:shadow-md dark:border-white/10 dark:bg-[#10131c] dark:hover:border-white/20">
+    <article className="app-panel flex min-h-[300px] flex-col overflow-hidden rounded-2xl transition hover:-translate-y-0.5 hover:shadow-md">
       <div className="flex items-start gap-3 border-b border-slate-200 p-4 dark:border-white/10">
         <span
           className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border ${type.className}`}
@@ -404,7 +404,7 @@ const SheetManagerPage = ({ onLogout }) => {
   };
 
   return (
-    <div className="relative flex h-[100dvh] overflow-hidden bg-slate-50 text-slate-900 dark:bg-[#0b0d12] dark:text-slate-100">
+    <div className="app-shell sheet-manager-theme h-[100dvh] overflow-hidden">
       <Sidebar
         collapsed={sidebarCollapsed}
         setCollapsed={setSidebarCollapsed}
@@ -413,27 +413,24 @@ const SheetManagerPage = ({ onLogout }) => {
       />
 
       <main
-        className={`h-[100dvh] min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 transition-all duration-300 sm:px-5 lg:px-6 ${
+        className={`app-main h-[100dvh] min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 transition-all duration-300 sm:px-5 lg:px-6 ${
           sidebarCollapsed ? "ml-16" : "ml-16 sm:ml-56"
         }`}
       >
         <div className="mx-auto max-w-[1500px] space-y-4 pb-8 sm:space-y-5">
-          <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-white/10 dark:bg-[#10131c]">
+          <section className="app-header overflow-hidden rounded-2xl">
             <div className="flex flex-col gap-5 p-4 lg:flex-row lg:items-center lg:justify-between lg:p-5">
-              <div className="min-w-0">
-                <div className="mb-4 inline-flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-200">
-                  <FileSpreadsheet className="h-3.5 w-3.5" />
-                  Shared workspace
+              <div className="flex min-w-0 items-start gap-3">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white shadow-sm shadow-blue-600/20">
+                  <FileSpreadsheet className="h-5 w-5" />
                 </div>
-                <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                  Collaboration
-                </p>
-                <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950 dark:text-white">
-                  Shared sheets
-                </h1>
-                <p className="mt-1 max-w-2xl text-sm text-slate-500 dark:text-slate-400">
-                  Find team spreadsheets, open them securely, and manage access from one place.
-                </p>
+                <div>
+                  <p className="app-eyebrow">Collaboration</p>
+                  <h1 className="app-title">Sheet manager</h1>
+                  <p className="app-description max-w-2xl">
+                    Find team spreadsheets, open them securely, and manage access from one place.
+                  </p>
+                </div>
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
@@ -505,7 +502,7 @@ const SheetManagerPage = ({ onLogout }) => {
             </div>
           )}
 
-          <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-[#10131c]">
+          <section className="app-panel rounded-2xl p-4">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-950 dark:text-white">

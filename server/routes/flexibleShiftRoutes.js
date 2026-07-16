@@ -11,6 +11,18 @@ const {
 } = require("../controllers/flexibleShiftController");
 
 const { protect, authorize } = require("../middlewares/authMiddleware");
+// Access-management rework (2026-07-03) - Phase 4.4.
+// See docs/superpowers/plans/2026-07-03-access-management-rework.md
+const { can } = require("../utils/accessControl");
+
+// Additive: hr/admin/super-admin keep exactly what they had (authorize(...)
+// below is left in place). Adds an alternative path for anyone whose
+// Position is explicitly granted "canApproveShifts" (HR by default - see
+// seedCanonicalHierarchy.js).
+const requireShiftApprove = async (req, res, next) => {
+  if (await can(req.user, "shifts:approve")) return next();
+  return authorize("hr", "admin", "super-admin")(req, res, next);
+};
 
 // ======================
 // Flexible Shift Routes
@@ -21,7 +33,7 @@ const { protect, authorize } = require("../middlewares/authMiddleware");
 router.get(
   "/",
   protect,
-  authorize("hr", "admin", "super-admin"),
+  requireShiftApprove,
   getFlexibleShiftRequests
 );
 
@@ -38,7 +50,7 @@ router.post("/request", protect, createFlexibleShiftRequest);
 router.put(
   "/:requestId/status",
   protect,
-  authorize("hr", "admin", "super-admin"),
+  requireShiftApprove,
   updateFlexibleShiftStatus
 );
 

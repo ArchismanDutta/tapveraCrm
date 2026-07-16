@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
@@ -60,11 +60,11 @@ const ShiftManagement = ({ onLogout }) => {
     results: null
   });
 
-  const SIDEBAR_WIDTH_EXPANDED = 288;
-  const SIDEBAR_WIDTH_COLLAPSED = 80;
-
   const token = localStorage.getItem("token");
-  const axiosConfig = { headers: { Authorization: `Bearer ${token}` } };
+  const axiosConfig = useMemo(
+    () => ({ headers: { Authorization: `Bearer ${token}` } }),
+    [token]
+  );
 
   // Calculate statistics
   const totalEmployees = employees.length;
@@ -118,7 +118,7 @@ const ShiftManagement = ({ onLogout }) => {
     };
 
     fetchData();
-  }, [token]);
+  }, [token, axiosConfig]);
 
   const fetchShifts = async () => {
     try {
@@ -435,79 +435,47 @@ const ShiftManagement = ({ onLogout }) => {
 
   if (loading) {
     return (
-      <div className="bg-gray-800 min-h-screen flex items-center justify-center">
+      <div className="flex min-h-screen items-center justify-center bg-slate-50 dark:bg-[#0b0d12]">
         <div className="flex flex-col items-center space-y-4">
           <div className="relative">
-            <div className="w-16 h-16 border-4 border-purple-200 border-t-purple-600 rounded-full animate-spin"></div>
-            <Clock className="w-6 h-6 text-purple-400 absolute inset-0 m-auto" />
+            <div className="h-14 w-14 animate-spin rounded-full border-4 border-blue-100 border-t-blue-600 dark:border-blue-400/15 dark:border-t-blue-400"></div>
+            <Clock className="absolute inset-0 m-auto h-5 w-5 text-blue-600 dark:text-blue-300" />
           </div>
-          <p className="text-purple-200 text-lg font-medium">Loading shift data...</p>
+          <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Loading shift data...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="bg-gray-800 text-gray-100 min-h-screen flex">
+    <div className="super-shift-theme relative flex h-[100dvh] overflow-hidden bg-slate-50 text-slate-900 dark:bg-[#0b0d12] dark:text-slate-100">
       <Sidebar collapsed={collapsed} setCollapsed={setCollapsed} userRole="hr" onLogout={onLogout} />
 
       <main
-        className="flex-1 p-8 space-y-8 overflow-auto transition-all duration-300"
-        style={{ marginLeft: collapsed ? SIDEBAR_WIDTH_COLLAPSED : SIDEBAR_WIDTH_EXPANDED }}
+        className={`h-[100dvh] min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 transition-all duration-300 sm:px-5 lg:px-6 ${
+          collapsed ? "ml-16" : "ml-16 sm:ml-56"
+        }`}
       >
+        <div className="mx-auto max-w-[1500px] space-y-4 pb-8 sm:space-y-5">
         {/* Header Section */}
-        <div className="flex justify-between items-center">
-          <div className="space-y-2">
-            <h1 className="text-4xl font-bold bg-gradient-to-r from-purple-400 to-cyan-400 bg-clip-text text-transparent">
-              Shift Management
-            </h1>
-            <p className="text-gray-400 text-lg">Manage employee shifts and schedules efficiently</p>
+        <header className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white px-5 py-5 shadow-sm dark:border-white/10 dark:bg-[#10131c] sm:px-6 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex items-start gap-3">
+            <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-400/10 dark:text-blue-300">
+              <Clock className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Workforce scheduling</p>
+              <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950 dark:text-white">Shift management</h1>
+              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Manage employee shifts, attendance alignment, and assignments.</p>
+            </div>
           </div>
-          
-          <div className="flex gap-3 flex-wrap">
-            {/* Attendance System Integration */}
-            {USE_NEW_ATTENDANCE_SYSTEM && (
-              <>
-                <button
-                  onClick={syncWithAttendanceSystem}
-                  disabled={attendanceSync.syncing}
-                  className="px-6 py-3 bg-gradient-to-r from-cyan-600 to-teal-600 hover:from-cyan-500 hover:to-teal-500 disabled:opacity-50 rounded-xl transition-all duration-300 flex items-center gap-2 shadow-lg hover:shadow-cyan-500/25 transform hover:scale-105"
-                >
-                  <Activity className={`w-4 h-4 ${attendanceSync.syncing ? 'animate-spin' : ''}`} />
-                  {attendanceSync.syncing ? 'Syncing...' : 'Sync Attendance'}
-                </button>
-                <button
-                  onClick={validateShiftsAlignment}
-                  disabled={shiftValidation.validating}
-                  className="px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 disabled:opacity-50 rounded-xl transition-all duration-300 flex items-center gap-2 shadow-lg hover:shadow-indigo-500/25 transform hover:scale-105"
-                >
-                  <CheckCircle className={`w-4 h-4 ${shiftValidation.validating ? 'animate-spin' : ''}`} />
-                  {shiftValidation.validating ? 'Validating...' : 'Validate Alignment'}
-                </button>
-              </>
-            )}
-
-            {/* Standard Shift Management */}
-            <button
-              onClick={fixExistingShifts}
-              className="px-6 py-3 bg-gradient-to-r from-yellow-600 to-orange-600 hover:from-yellow-500 hover:to-orange-500 rounded-xl transition-all duration-300 flex items-center gap-2 shadow-lg hover:shadow-yellow-500/25 transform hover:scale-105"
-            >
-              <RefreshCw className="w-4 h-4" />
-              Fix Existing Shifts
-            </button>
-            <button
-              onClick={initializeDefaultShifts}
-              className="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 rounded-xl transition-all duration-300 flex items-center gap-2 shadow-lg hover:shadow-blue-500/25 transform hover:scale-105"
-            >
-              <Database className="w-4 h-4" />
-              Initialize Default Shifts
-            </button>
+          <div className="flex flex-wrap gap-2">
             <button
               onClick={() => setShowCreateModal(true)}
-              className="px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 rounded-xl transition-all duration-300 flex items-center gap-2 shadow-lg hover:shadow-green-500/25 transform hover:scale-105"
+              className="inline-flex h-10 items-center gap-2 rounded-lg bg-blue-600 px-4 text-sm font-semibold text-white transition hover:bg-blue-700"
             >
               <Plus className="w-4 h-4" />
-              Create New Shift
+              Create shift
             </button>
             <button
               onClick={() => {
@@ -516,49 +484,36 @@ const ShiftManagement = ({ onLogout }) => {
                 setSelectedShift(null);
                 setSelectedShiftType("standard");
               }}
-              className="px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 rounded-xl transition-all duration-300 flex items-center gap-2 shadow-lg hover:shadow-purple-500/25 transform hover:scale-105"
+              className="inline-flex h-10 items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-200 dark:hover:bg-white/[0.07]"
             >
               <UserPlus className="w-4 h-4" />
-              Assign Shift
+              Assign shift
             </button>
-            {shifts.length > 0 && (
-              <button
-                onClick={() => {
-                  if (window.confirm("This will delete ALL existing shifts. Are you sure?")) {
-                    clearAllShifts();
-                  }
-                }}
-                className="px-6 py-3 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 rounded-xl transition-all duration-300 flex items-center gap-2 shadow-lg hover:shadow-red-500/25 transform hover:scale-105"
-              >
-                <Trash2 className="w-4 h-4" />
-                Clear All Shifts
-              </button>
-            )}
           </div>
-        </div>
+        </header>
 
         {/* Attendance System Status */}
         {USE_NEW_ATTENDANCE_SYSTEM && (
-          <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 backdrop-blur-sm border border-slate-600/30 rounded-2xl p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-white flex items-center gap-2">
-                <Activity className="w-5 h-5 text-cyan-400" />
-                Attendance System Integration
+          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-[#10131c]">
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="flex items-center gap-2 text-base font-semibold text-slate-950 dark:text-white">
+                <Activity className="h-5 w-5 text-blue-600 dark:text-blue-300" />
+                Attendance system integration
               </h3>
-              <div className={`w-3 h-3 rounded-full ${USE_NEW_ATTENDANCE_SYSTEM ? 'bg-green-400 animate-pulse' : 'bg-gray-500'}`}></div>
+              <div className={`h-2.5 w-2.5 rounded-full ${USE_NEW_ATTENDANCE_SYSTEM ? 'bg-emerald-500' : 'bg-slate-400'}`}></div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+            <div className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-3">
               <div className="space-y-1">
-                <p className="text-gray-400">System Status:</p>
-                <p className="text-white font-medium">
+                <p className="text-xs text-slate-500 dark:text-slate-400">System status</p>
+                <p className="font-semibold text-slate-900 dark:text-white">
                   {USE_NEW_ATTENDANCE_SYSTEM ? 'Active' : 'Disabled'}
                 </p>
               </div>
 
               <div className="space-y-1">
-                <p className="text-gray-400">Last Sync:</p>
-                <p className="text-white font-medium">
+                <p className="text-xs text-slate-500 dark:text-slate-400">Last sync</p>
+                <p className="font-semibold text-slate-900 dark:text-white">
                   {attendanceSync.lastSync ?
                     attendanceSync.lastSync.toLocaleString() :
                     'Never'
@@ -567,14 +522,36 @@ const ShiftManagement = ({ onLogout }) => {
               </div>
 
               <div className="space-y-1">
-                <p className="text-gray-400">Validation Status:</p>
-                <p className="text-white font-medium">
+                <p className="text-xs text-slate-500 dark:text-slate-400">Validation status</p>
+                <p className="font-semibold text-slate-900 dark:text-white">
                   {shiftValidation.results ?
                     `${shiftValidation.results.alignedEmployees}/${shiftValidation.results.totalEmployees} Aligned` :
                     'Not Validated'
                   }
                 </p>
               </div>
+            </div>
+
+            <div className="mt-5 flex flex-wrap gap-2 border-t border-slate-200 pt-4 dark:border-white/10">
+              <button onClick={syncWithAttendanceSystem} disabled={attendanceSync.syncing} className="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 transition hover:bg-slate-50 disabled:opacity-50 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300 dark:hover:bg-white/[0.07]">
+                <Activity className={`h-4 w-4 ${attendanceSync.syncing ? 'animate-spin' : ''}`} />
+                {attendanceSync.syncing ? 'Syncing...' : 'Sync attendance'}
+              </button>
+              <button onClick={validateShiftsAlignment} disabled={shiftValidation.validating} className="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 transition hover:bg-slate-50 disabled:opacity-50 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300 dark:hover:bg-white/[0.07]">
+                <CheckCircle className={`h-4 w-4 ${shiftValidation.validating ? 'animate-spin' : ''}`} />
+                {shiftValidation.validating ? 'Validating...' : 'Validate alignment'}
+              </button>
+              <button onClick={fixExistingShifts} className="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 transition hover:bg-slate-50 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300 dark:hover:bg-white/[0.07]">
+                <RefreshCw className="h-4 w-4" /> Fix existing
+              </button>
+              <button onClick={initializeDefaultShifts} className="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 transition hover:bg-slate-50 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300 dark:hover:bg-white/[0.07]">
+                <Database className="h-4 w-4" /> Initialize defaults
+              </button>
+              {shifts.length > 0 && (
+                <button onClick={() => { if (window.confirm("This will delete ALL existing shifts. Are you sure?")) clearAllShifts(); }} className="ml-auto inline-flex h-9 items-center gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 text-xs font-semibold text-rose-700 transition hover:bg-rose-100 dark:border-rose-400/20 dark:bg-rose-400/10 dark:text-rose-300">
+                  <Trash2 className="h-4 w-4" /> Clear all
+                </button>
+              )}
             </div>
 
             {shiftValidation.results?.issues?.length > 0 && (
@@ -607,70 +584,71 @@ const ShiftManagement = ({ onLogout }) => {
                 </div>
               </div>
             )}
-          </div>
+          </section>
         )}
 
         {/* Statistics Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <div className="bg-gradient-to-br from-blue-600/20 to-blue-800/20 backdrop-blur-sm border border-blue-500/20 rounded-2xl p-6 hover:border-blue-400/40 transition-all duration-300">
+        <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4" aria-label="Shift summary">
+          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-[#10131c]">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-blue-200 text-sm font-medium">Total Shifts</p>
-                <p className="text-3xl font-bold text-white mt-1">{shifts.length}</p>
+                <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Total shifts</p>
+                <p className="mt-1 text-3xl font-semibold text-slate-950 dark:text-white">{shifts.length}</p>
               </div>
-              <div className="p-3 bg-blue-500/20 rounded-xl">
-                <Clock className="w-6 h-6 text-blue-400" />
+              <div className="rounded-xl bg-blue-50 p-3 dark:bg-blue-400/10">
+                <Clock className="h-5 w-5 text-blue-600 dark:text-blue-300" />
               </div>
             </div>
           </div>
 
-          <div className="bg-gradient-to-br from-green-600/20 to-green-800/20 backdrop-blur-sm border border-green-500/20 rounded-2xl p-6 hover:border-green-400/40 transition-all duration-300">
+          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-[#10131c]">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-green-200 text-sm font-medium">Assigned Employees</p>
-                <p className="text-3xl font-bold text-white mt-1">{assignedEmployees}</p>
+                <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Assigned employees</p>
+                <p className="mt-1 text-3xl font-semibold text-slate-950 dark:text-white">{assignedEmployees}</p>
               </div>
-              <div className="p-3 bg-green-500/20 rounded-xl">
-                <CheckCircle className="w-6 h-6 text-green-400" />
+              <div className="rounded-xl bg-emerald-50 p-3 dark:bg-emerald-400/10">
+                <CheckCircle className="h-5 w-5 text-emerald-600 dark:text-emerald-300" />
               </div>
             </div>
           </div>
 
-          <div className="bg-gradient-to-br from-orange-600/20 to-orange-800/20 backdrop-blur-sm border border-orange-500/20 rounded-2xl p-6 hover:border-orange-400/40 transition-all duration-300">
+          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-[#10131c]">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-orange-200 text-sm font-medium">Unassigned</p>
-                <p className="text-3xl font-bold text-white mt-1">{unassignedEmployees}</p>
+                <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Unassigned</p>
+                <p className="mt-1 text-3xl font-semibold text-slate-950 dark:text-white">{unassignedEmployees}</p>
               </div>
-              <div className="p-3 bg-orange-500/20 rounded-xl">
-                <AlertCircle className="w-6 h-6 text-orange-400" />
+              <div className="rounded-xl bg-amber-50 p-3 dark:bg-amber-400/10">
+                <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-300" />
               </div>
             </div>
           </div>
 
-          <div className="bg-gradient-to-br from-purple-600/20 to-purple-800/20 backdrop-blur-sm border border-purple-500/20 rounded-2xl p-6 hover:border-purple-400/40 transition-all duration-300">
+          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-[#10131c]">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-purple-200 text-sm font-medium">Flexible Hours</p>
-                <p className="text-3xl font-bold text-white mt-1">{flexibleEmployees}</p>
+                <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Flexible hours</p>
+                <p className="mt-1 text-3xl font-semibold text-slate-950 dark:text-white">{flexibleEmployees}</p>
               </div>
-              <div className="p-3 bg-purple-500/20 rounded-xl">
-                <Zap className="w-6 h-6 text-purple-400" />
+              <div className="rounded-xl bg-violet-50 p-3 dark:bg-violet-400/10">
+                <Zap className="h-5 w-5 text-violet-600 dark:text-violet-300" />
               </div>
             </div>
           </div>
-        </div>
+        </section>
 
         {/* Shifts Section */}
-        <div className="space-y-6">
-          <div className="flex justify-between items-center">
-            <h2 className="text-2xl font-semibold text-white flex items-center gap-3">
-              <Calendar className="w-6 h-6 text-cyan-400" />
-              Shift Schedules
+        <section className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="flex items-center gap-2 text-lg font-semibold text-slate-950 dark:text-white">
+              <Calendar className="h-5 w-5 text-blue-600 dark:text-blue-300" />
+              Shift schedules
             </h2>
+            <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-500 dark:bg-white/[0.05] dark:text-slate-400">{shifts.length} schedules</span>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 2xl:grid-cols-3">
             {shifts.length === 0 ? (
               <div className="col-span-full bg-gradient-to-br from-slate-800/50 to-slate-900/50 backdrop-blur-sm border border-slate-600/30 rounded-2xl p-12 text-center">
                 <div className="flex flex-col items-center space-y-6">
@@ -716,8 +694,8 @@ const ShiftManagement = ({ onLogout }) => {
               </div>
             ) : (
               shifts.map((shift) => (
-                <div key={shift._id} className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 backdrop-blur-sm border border-slate-600/30 rounded-2xl p-6 hover:border-cyan-400/40 transition-all duration-300 group">
-                  <div className="flex justify-between items-start mb-6">
+                <article key={shift._id} className="group rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-blue-200 hover:shadow-md dark:border-white/10 dark:bg-[#10131c] dark:hover:border-blue-400/25">
+                  <div className="mb-4 flex items-start justify-between">
                     <div className="flex items-center gap-3">
                       <div className={`p-2 rounded-xl ${shift.isFlexible ? 'bg-green-500/20' : 'bg-blue-500/20'}`}>
                         {shift.isFlexible ? 
@@ -725,44 +703,44 @@ const ShiftManagement = ({ onLogout }) => {
                           <Clock className="w-5 h-5 text-blue-400" />
                         }
                       </div>
-                      <h3 className="text-xl font-bold text-white group-hover:text-cyan-400 transition-colors">
+                      <h3 className="text-base font-semibold text-slate-950 transition-colors group-hover:text-blue-700 dark:text-white dark:group-hover:text-blue-300">
                         {shift.name}
                       </h3>
                     </div>
                     <button
                       onClick={() => handleDeleteShift(shift._id)}
-                      className="p-2 text-gray-400 hover:text-red-400 hover:bg-red-500/20 rounded-xl transition-all duration-300"
+                      className="rounded-lg p-2 text-slate-400 transition hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-400/10 dark:hover:text-rose-300"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
 
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between p-3 bg-slate-700/30 rounded-xl">
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between rounded-xl bg-slate-50 p-3 dark:bg-white/[0.035]">
                       <div className="flex items-center gap-2">
                         <Timer className="w-4 h-4 text-cyan-400" />
-                        <span className="text-gray-300 font-medium">Time</span>
+                        <span className="text-sm font-medium text-slate-500 dark:text-slate-400">Time</span>
                       </div>
-                      <span className="text-white font-bold">{shift.start} - {shift.end}</span>
+                      <span className="text-sm font-semibold text-slate-900 dark:text-white">{shift.start} - {shift.end}</span>
                     </div>
 
-                    <div className="flex items-center justify-between p-3 bg-slate-700/30 rounded-xl">
+                    <div className="flex items-center justify-between rounded-xl bg-slate-50 p-3 dark:bg-white/[0.035]">
                       <div className="flex items-center gap-2">
                         <Activity className="w-4 h-4 text-purple-400" />
-                        <span className="text-gray-300 font-medium">Duration</span>
+                        <span className="text-sm font-medium text-slate-500 dark:text-slate-400">Duration</span>
                       </div>
-                      <span className="text-white font-bold">{shift.durationHours}h</span>
+                      <span className="text-sm font-semibold text-slate-900 dark:text-white">{shift.durationHours}h</span>
                     </div>
 
                     {shift.description && (
-                      <div className="p-3 bg-slate-700/30 rounded-xl">
-                        <p className="text-gray-300 text-sm font-medium">Description:</p>
-                        <p className="text-gray-300 text-sm mt-1">{shift.description}</p>
+                      <div className="rounded-xl bg-slate-50 p-3 dark:bg-white/[0.035]">
+                        <p className="text-xs font-medium text-slate-400">Description</p>
+                        <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{shift.description}</p>
                       </div>
                     )}
 
-                    <div className="flex justify-between items-center pt-2">
-                      <span className="text-gray-300 font-medium">Type:</span>
+                    <div className="flex items-center justify-between pt-2">
+                      <span className="text-sm font-medium text-slate-500 dark:text-slate-400">Type</span>
                       <span className={`px-3 py-1 rounded-full text-xs font-medium ${
                         shift.isFlexible 
                           ? 'bg-green-500/20 text-green-400 border border-green-500/30' 
@@ -772,34 +750,34 @@ const ShiftManagement = ({ onLogout }) => {
                       </span>
                     </div>
                   </div>
-                </div>
+                </article>
               ))
             )}
           </div>
-        </div>
+        </section>
 
         {/* Employee Management Section */}
-        <div className="space-y-6">
-          <div className="flex justify-between items-center">
-            <h2 className="text-2xl font-semibold text-white flex items-center gap-3">
-              <Users className="w-6 h-6 text-cyan-400" />
-              Employee Shift Assignments
+        <section className="space-y-4">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <h2 className="flex items-center gap-2 text-lg font-semibold text-slate-950 dark:text-white">
+              <Users className="h-5 w-5 text-blue-600 dark:text-blue-300" />
+              Employee shift assignments
             </h2>
-            <div className="flex gap-4">
+            <div className="flex flex-col gap-2 sm:flex-row">
               <div className="relative">
-                <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 transform -translate-y-1/2" />
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                 <input
                   type="text"
                   placeholder="Search employees..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10 pr-4 py-2 bg-slate-800/50 border border-slate-600/30 rounded-xl text-white placeholder-gray-400 focus:border-cyan-400/50 focus:outline-none transition-all duration-300"
+                  className="h-10 w-full rounded-xl border border-slate-200 bg-white pl-10 pr-4 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 sm:w-64 dark:border-white/10 dark:bg-white/[0.035] dark:text-white"
                 />
               </div>
               <select
                 value={filterType}
                 onChange={(e) => setFilterType(e.target.value)}
-                className="px-4 py-2 bg-slate-800/50 border border-slate-600/30 rounded-xl text-white focus:border-cyan-400/50 focus:outline-none transition-all duration-300"
+                className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 dark:border-white/10 dark:bg-[#151923] dark:text-white"
               >
                 <option value="all">All Employees</option>
                 <option value="assigned">Assigned</option>
@@ -809,15 +787,15 @@ const ShiftManagement = ({ onLogout }) => {
             </div>
           </div>
 
-          <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 backdrop-blur-sm border border-slate-600/30 rounded-2xl overflow-hidden">
+          <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-white/10 dark:bg-[#10131c]">
             <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-slate-700/30">
+              <table className="w-full min-w-[760px]">
+                <thead className="bg-slate-50 dark:bg-white/[0.025]">
                   <tr>
-                    <th className="px-6 py-4 text-left text-gray-300 font-semibold">Employee</th>
-                    <th className="px-6 py-4 text-left text-gray-300 font-semibold">Shift Type</th>
-                    <th className="px-6 py-4 text-left text-gray-300 font-semibold">Shift Details</th>
-                    <th className="px-6 py-4 text-left text-gray-300 font-semibold">Department</th>
+                    <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Employee</th>
+                    <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Shift type</th>
+                    <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Shift details</th>
+                    <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Department</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -834,13 +812,13 @@ const ShiftManagement = ({ onLogout }) => {
                     </tr>
                   ) : (
                     filteredEmployees.map((employee, index) => (
-                      <tr key={employee._id} className={`border-t border-slate-700/30 hover:bg-slate-700/20 transition-colors ${index % 2 === 0 ? 'bg-slate-800/20' : ''}`}>
+                      <tr key={employee._id} className={`border-t border-slate-100 transition-colors hover:bg-slate-50 dark:border-white/[0.07] dark:hover:bg-white/[0.025] ${index % 2 === 0 ? 'bg-slate-50/40 dark:bg-white/[0.01]' : ''}`}>
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-3">
                             <div className="w-10 h-10 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-full flex items-center justify-center text-white font-bold">
                               {employee.name.charAt(0)}
                             </div>
-                            <span className="text-white font-semibold">{employee.name}</span>
+                            <span className="font-semibold text-slate-900 dark:text-white">{employee.name}</span>
                           </div>
                         </td>
                         <td className="px-6 py-4">
@@ -855,8 +833,8 @@ const ShiftManagement = ({ onLogout }) => {
                         <td className="px-6 py-4">
                           {employee.shift ? (
                             <div className="space-y-1">
-                              <p className="text-white font-medium">{employee.shift.name}</p>
-                              <p className="text-gray-400 text-sm">
+                              <p className="font-medium text-slate-900 dark:text-white">{employee.shift.name}</p>
+                              <p className="text-sm text-slate-500 dark:text-slate-400">
                                 {employee.shift.start} - {employee.shift.end} ({employee.shift.durationHours}h)
                               </p>
                             </div>
@@ -867,7 +845,7 @@ const ShiftManagement = ({ onLogout }) => {
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-2">
                             <Building2 className="w-4 h-4 text-gray-400" />
-                            <span className="text-gray-300">{employee.department || 'N/A'}</span>
+                            <span className="text-slate-600 dark:text-slate-300">{employee.department || 'N/A'}</span>
                           </div>
                         </td>
                       </tr>
@@ -877,28 +855,29 @@ const ShiftManagement = ({ onLogout }) => {
               </table>
             </div>
           </div>
+        </section>
         </div>
       </main>
 
       {/* Create Shift Modal */}
       {showCreateModal && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-600/30 rounded-2xl p-8 w-full max-w-md shadow-2xl">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="p-2 bg-green-500/20 rounded-xl">
-                <Plus className="w-5 h-5 text-green-400" />
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-white/10 dark:bg-[#10131c]">
+            <div className="flex items-center gap-3 border-b border-slate-200 px-6 py-5 dark:border-white/10">
+              <div className="rounded-xl bg-blue-50 p-2 dark:bg-blue-400/10">
+                <Plus className="h-5 w-5 text-blue-600 dark:text-blue-300" />
               </div>
-              <h2 className="text-2xl font-bold text-white">Create New Shift</h2>
+              <h2 className="text-lg font-semibold text-slate-950 dark:text-white">Create new shift</h2>
             </div>
             
-            <form onSubmit={handleCreateShift} className="space-y-6">
+            <form onSubmit={handleCreateShift} className="space-y-4 p-6">
               <div>
-                <label className="block text-gray-300 font-medium mb-2">Shift Name</label>
+                <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200">Shift name</label>
                 <input
                   type="text"
                   value={newShift.name}
                   onChange={(e) => setNewShift({ ...newShift, name: e.target.value })}
-                  className="w-full px-4 py-3 rounded-xl bg-slate-700/50 border border-slate-600/30 text-white placeholder-gray-400 focus:border-cyan-400/50 focus:outline-none transition-all duration-300"
+                  className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 dark:border-white/10 dark:bg-[#151923] dark:text-white"
                   placeholder="Enter shift name"
                   required
                 />
@@ -906,49 +885,49 @@ const ShiftManagement = ({ onLogout }) => {
               
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-gray-300 font-medium mb-2">Start Time</label>
+                  <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200">Start time</label>
                   <input
                     type="time"
                     value={newShift.start}
                     onChange={(e) => setNewShift({ ...newShift, start: e.target.value })}
-                    className="w-full px-4 py-3 rounded-xl bg-slate-700/50 border border-slate-600/30 text-white focus:border-cyan-400/50 focus:outline-none transition-all duration-300"
+                    className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 dark:border-white/10 dark:bg-[#151923] dark:text-white"
                     required
                   />
                 </div>
                 <div>
-                  <label className="block text-gray-300 font-medium mb-2">End Time</label>
+                  <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200">End time</label>
                   <input
                     type="time"
                     value={newShift.end}
                     onChange={(e) => setNewShift({ ...newShift, end: e.target.value })}
-                    className="w-full px-4 py-3 rounded-xl bg-slate-700/50 border border-slate-600/30 text-white focus:border-cyan-400/50 focus:outline-none transition-all duration-300"
+                    className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 dark:border-white/10 dark:bg-[#151923] dark:text-white"
                     required
                   />
                 </div>
               </div>
               
               <div>
-                <label className="block text-gray-300 font-medium mb-2">Description</label>
+                <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200">Description</label>
                 <textarea
                   value={newShift.description}
                   onChange={(e) => setNewShift({ ...newShift, description: e.target.value })}
-                  className="w-full px-4 py-3 rounded-xl bg-slate-700/50 border border-slate-600/30 text-white placeholder-gray-400 focus:border-cyan-400/50 focus:outline-none transition-all duration-300 resize-none"
+                  className="w-full resize-none rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 dark:border-white/10 dark:bg-[#151923] dark:text-white"
                   rows={3}
                   placeholder="Brief description of the shift"
                 />
               </div>
               
-              <div className="flex justify-end gap-4 pt-4">
+              <div className="flex justify-end gap-2 border-t border-slate-200 pt-4 dark:border-white/10">
                 <button
                   type="button"
                   onClick={() => setShowCreateModal(false)}
-                  className="px-6 py-3 bg-slate-700 hover:bg-slate-600 text-gray-300 rounded-xl transition-all duration-300"
+                  className="h-10 rounded-lg border border-slate-200 px-4 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/[0.05]"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white rounded-xl transition-all duration-300 flex items-center gap-2 shadow-lg hover:shadow-green-500/25"
+                  className="inline-flex h-10 items-center gap-2 rounded-lg bg-blue-600 px-4 text-sm font-semibold text-white transition hover:bg-blue-700"
                 >
                   <Plus className="w-4 h-4" />
                   Create Shift
@@ -961,25 +940,25 @@ const ShiftManagement = ({ onLogout }) => {
 
       {/* Assign Shift Modal */}
       {showAssignModal && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-600/30 rounded-2xl p-8 w-full max-w-md shadow-2xl">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="p-2 bg-purple-500/20 rounded-xl">
-                <UserPlus className="w-5 h-5 text-purple-400" />
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-white/10 dark:bg-[#10131c]">
+            <div className="flex items-center gap-3 border-b border-slate-200 px-6 py-5 dark:border-white/10">
+              <div className="rounded-xl bg-blue-50 p-2 dark:bg-blue-400/10">
+                <UserPlus className="h-5 w-5 text-blue-600 dark:text-blue-300" />
               </div>
-              <h2 className="text-2xl font-bold text-white">Assign Shift to Employee</h2>
+              <h2 className="text-lg font-semibold text-slate-950 dark:text-white">Assign shift to employee</h2>
             </div>
             
-            <div className="space-y-6">
+            <div className="space-y-4 p-6">
               <div>
-                <label className="block text-gray-300 font-medium mb-2">Select Employee</label>
+                <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200">Employee</label>
                 <select
                   value={selectedEmployee?._id || ""}
                   onChange={(e) => {
                     const emp = employees.find(emp => emp._id === e.target.value);
                     setSelectedEmployee(emp);
                   }}
-                  className="w-full px-4 py-3 rounded-xl bg-slate-700/50 border border-slate-600/30 text-white focus:border-cyan-400/50 focus:outline-none transition-all duration-300"
+                  className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 dark:border-white/10 dark:bg-[#151923] dark:text-white"
                 >
                   <option value="">Choose an employee</option>
                   {employees.map((emp) => (
@@ -991,11 +970,11 @@ const ShiftManagement = ({ onLogout }) => {
               </div>
 
               <div>
-                <label className="block text-gray-300 font-medium mb-2">Select Shift Type</label>
+                <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200">Shift type</label>
                 <select
                   value={selectedShiftType}
                   onChange={(e) => setSelectedShiftType(e.target.value)}
-                  className="w-full px-4 py-3 rounded-xl bg-slate-700/50 border border-slate-600/30 text-white focus:border-cyan-400/50 focus:outline-none transition-all duration-300"
+                  className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 dark:border-white/10 dark:bg-[#151923] dark:text-white"
                 >
                   <option value="standard">Standard</option>
                   <option value="flexiblePermanent">Flexible Permanent</option>
@@ -1003,14 +982,14 @@ const ShiftManagement = ({ onLogout }) => {
               </div>
 
               <div>
-                <label className="block text-gray-300 font-medium mb-2">Select Shift</label>
+                <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200">Shift</label>
                 <select
                   value={selectedShift?._id || ""}
                   onChange={(e) => {
                     const shift = shifts.find(shift => shift._id === e.target.value);
                     setSelectedShift(shift);
                   }}
-                  className="w-full px-4 py-3 rounded-xl bg-slate-700/50 border border-slate-600/30 text-white focus:border-cyan-400/50 focus:outline-none transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/10 dark:bg-[#151923] dark:text-white"
                   disabled={selectedShiftType === "flexiblePermanent" || shifts.length === 0}
                 >
                   <option value="">
@@ -1027,12 +1006,12 @@ const ShiftManagement = ({ onLogout }) => {
               </div>
 
               {selectedShiftType === "flexiblePermanent" && (
-                <div className="p-4 bg-green-500/10 border border-green-500/20 rounded-xl">
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-400/20 dark:bg-emerald-400/10">
                   <div className="flex items-start gap-3">
                     <Zap className="w-5 h-5 text-green-400 mt-0.5 flex-shrink-0" />
                     <div>
-                      <p className="text-green-400 font-medium">Flexible Permanent Schedule</p>
-                      <p className="text-green-300/80 text-sm mt-1">
+                      <p className="font-medium text-emerald-700 dark:text-emerald-300">Flexible permanent schedule</p>
+                      <p className="mt-1 text-sm text-emerald-700/75 dark:text-emerald-300/75">
                         Employee will have flexible working hours without fixed shift constraints.
                       </p>
                     </div>
@@ -1040,16 +1019,16 @@ const ShiftManagement = ({ onLogout }) => {
                 </div>
               )}
 
-              <div className="flex justify-end gap-4 pt-4">
+              <div className="flex justify-end gap-2 border-t border-slate-200 pt-4 dark:border-white/10">
                 <button
                   onClick={() => setShowAssignModal(false)}
-                  className="px-6 py-3 bg-slate-700 hover:bg-slate-600 text-gray-300 rounded-xl transition-all duration-300"
+                  className="h-10 rounded-lg border border-slate-200 px-4 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/[0.05]"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleAssignShift}
-                  className="px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white rounded-xl transition-all duration-300 flex items-center gap-2 shadow-lg hover:shadow-purple-500/25"
+                  className="inline-flex h-10 items-center gap-2 rounded-lg bg-blue-600 px-4 text-sm font-semibold text-white transition hover:bg-blue-700"
                 >
                   <UserPlus className="w-4 h-4" />
                   Assign Shift

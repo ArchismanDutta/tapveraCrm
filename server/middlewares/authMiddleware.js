@@ -68,6 +68,12 @@ exports.protect = async (req, res, next) => {
         department: user.department || "Unknown",
         position: user.position || "",
         positionLevel: user.positionLevel || 0,
+        // Access-management rework (2026-07-03): additive reference fields.
+        // May be null until server/scripts/migrateToPositionRefs.js has run
+        // for this user — see server/utils/accessControl.js, which falls
+        // back to the legacy `department`/`position` strings above when so.
+        departmentRef: user.departmentRef || null,
+        positionRef: user.positionRef || null,
         avatar: user.avatar || "",
         userType: "User",
         regions: user.regions || [user.region] || ['Global'], // CRITICAL: Include regions for filtering

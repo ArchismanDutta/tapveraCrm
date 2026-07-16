@@ -88,6 +88,8 @@ const ViewLeads = ({ onLogout }) => {
 
   useEffect(() => {
     filterLeads();
+    // Filter whenever the source list or any visible filter changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [leads, searchTerm, statusFilter, priorityFilter, sourceFilter, assignedToFilter, viewMode]);
 
   const fetchLeads = async () => {
@@ -375,30 +377,30 @@ const ViewLeads = ({ onLogout }) => {
 
   const getStatusColor = (status) => {
     const colors = {
-      New: "bg-blue-500/20 text-blue-400 border-blue-500/50",
-      Contacted: "bg-cyan-500/20 text-cyan-400 border-cyan-500/50",
-      Qualified: "bg-purple-500/20 text-purple-400 border-purple-500/50",
-      "Proposal Sent": "bg-indigo-500/20 text-indigo-400 border-indigo-500/50",
-      Negotiation: "bg-yellow-500/20 text-yellow-400 border-yellow-500/50",
-      Won: "bg-green-500/20 text-green-400 border-green-500/50",
-      Lost: "bg-red-500/20 text-red-400 border-red-500/50",
-      "On Hold": "bg-gray-500/20 text-gray-400 border-gray-500/50",
+      New: "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-400/25 dark:bg-blue-400/10 dark:text-blue-300",
+      Contacted: "border-cyan-200 bg-cyan-50 text-cyan-700 dark:border-cyan-400/25 dark:bg-cyan-400/10 dark:text-cyan-300",
+      Qualified: "border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-400/25 dark:bg-violet-400/10 dark:text-violet-300",
+      "Proposal Sent": "border-indigo-200 bg-indigo-50 text-indigo-700 dark:border-indigo-400/25 dark:bg-indigo-400/10 dark:text-indigo-300",
+      Negotiation: "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-400/25 dark:bg-amber-400/10 dark:text-amber-300",
+      Won: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-400/25 dark:bg-emerald-400/10 dark:text-emerald-300",
+      Lost: "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-400/25 dark:bg-rose-400/10 dark:text-rose-300",
+      "On Hold": "border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-600 dark:bg-slate-700/40 dark:text-slate-300",
     };
-    return colors[status] || "bg-gray-500/20 text-gray-400 border-gray-500/50";
+    return colors[status] || "border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-600 dark:bg-slate-700/40 dark:text-slate-300";
   };
 
   const getPriorityColor = (priority) => {
     const colors = {
-      Low: "bg-green-500/20 text-green-400",
-      Medium: "bg-yellow-500/20 text-yellow-400",
-      High: "bg-orange-500/20 text-orange-400",
-      Urgent: "bg-red-500/20 text-red-400",
+      Low: "bg-emerald-50 text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-300",
+      Medium: "bg-amber-50 text-amber-700 dark:bg-amber-400/10 dark:text-amber-300",
+      High: "bg-orange-50 text-orange-700 dark:bg-orange-400/10 dark:text-orange-300",
+      Urgent: "bg-rose-50 text-rose-700 dark:bg-rose-400/10 dark:text-rose-300",
     };
-    return colors[priority] || "bg-gray-500/20 text-gray-400";
+    return colors[priority] || "bg-slate-50 text-slate-600 dark:bg-slate-700/40 dark:text-slate-300";
   };
 
   return (
-    <div className="app-shell h-[100dvh] overflow-hidden">
+    <div className="app-shell leads-theme h-[100dvh] overflow-hidden">
       <Sidebar
         collapsed={sidebarCollapsed}
         setCollapsed={setSidebarCollapsed}
@@ -411,7 +413,11 @@ const ViewLeads = ({ onLogout }) => {
         <div className="app-page pb-8">
         <div className="app-header mb-5">
           <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
-            <div>
+            <div className="flex items-start gap-3">
+              <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-400/10 dark:text-blue-300">
+                <TrendingUp className="h-5 w-5" />
+              </div>
+              <div>
               <p className="app-eyebrow">Sales workspace</p>
               <h1 className="app-title">
                 {userPosition && (userPosition.toLowerCase().includes("supervisor") ||
@@ -429,6 +435,7 @@ const ViewLeads = ({ onLogout }) => {
                   ? "Track and manage your team's sales leads"
                   : "Track and manage your sales leads"}
               </p>
+              </div>
             </div>
             {(userRole === "super-admin" || userDepartment === "marketingAndSales") && (
               <button
@@ -442,15 +449,15 @@ const ViewLeads = ({ onLogout }) => {
           </div>
 
           {/* Stats Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 mb-6">
+          <div className="mb-1 mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
             <div className="app-panel p-5">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-gray-400 text-sm mb-1">Total Leads</p>
-                  <p className="text-3xl font-bold text-white">{stats.totalLeads}</p>
+                  <p className="mb-1 text-sm text-slate-500 dark:text-slate-400">Total leads</p>
+                  <p className="text-3xl font-semibold text-slate-950 dark:text-white">{stats.totalLeads}</p>
                 </div>
-                <div className="w-12 h-12 bg-blue-500/30 rounded-lg flex items-center justify-center">
-                  <TrendingUp className="h-6 w-6 text-blue-400" />
+                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-50 dark:bg-blue-400/10">
+                  <TrendingUp className="h-5 w-5 text-blue-600 dark:text-blue-300" />
                 </div>
               </div>
             </div>
@@ -458,11 +465,11 @@ const ViewLeads = ({ onLogout }) => {
             <div className="app-panel p-5">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-gray-400 text-sm mb-1">Converted</p>
-                  <p className="text-3xl font-bold text-white">{stats.convertedLeads}</p>
+                  <p className="mb-1 text-sm text-slate-500 dark:text-slate-400">Converted</p>
+                  <p className="text-3xl font-semibold text-slate-950 dark:text-white">{stats.convertedLeads}</p>
                 </div>
-                <div className="w-12 h-12 bg-green-500/30 rounded-lg flex items-center justify-center">
-                  <TrendingUp className="h-6 w-6 text-green-400" />
+                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-50 dark:bg-emerald-400/10">
+                  <TrendingUp className="h-5 w-5 text-emerald-600 dark:text-emerald-300" />
                 </div>
               </div>
             </div>
@@ -470,11 +477,11 @@ const ViewLeads = ({ onLogout }) => {
             <div className="app-panel p-5">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-gray-400 text-sm mb-1">Conversion Rate</p>
-                  <p className="text-3xl font-bold text-white">{stats.conversionRate}%</p>
+                  <p className="mb-1 text-sm text-slate-500 dark:text-slate-400">Conversion rate</p>
+                  <p className="text-3xl font-semibold text-slate-950 dark:text-white">{stats.conversionRate}%</p>
                 </div>
-                <div className="w-12 h-12 bg-purple-500/30 rounded-lg flex items-center justify-center">
-                  <TrendingUp className="h-6 w-6 text-purple-400" />
+                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-violet-50 dark:bg-violet-400/10">
+                  <TrendingUp className="h-5 w-5 text-violet-600 dark:text-violet-300" />
                 </div>
               </div>
             </div>
@@ -486,17 +493,17 @@ const ViewLeads = ({ onLogout }) => {
           userPosition.toLowerCase().includes("team lead") ||
           userPosition.toLowerCase().includes("manager")) && (
           <div className="app-panel mb-5 p-5">
-            <h3 className="text-lg font-semibold text-cyan-400 mb-4 flex items-center gap-2">
+            <h3 className="mb-4 flex items-center gap-2 text-base font-semibold text-slate-950 dark:text-white">
               <Filter className="h-5 w-5" />
               View Mode
             </h3>
             <div className="flex flex-wrap gap-4">
               <button
                 onClick={() => setViewMode("my")}
-                className={`flex items-center gap-3 px-6 py-4 rounded-xl font-semibold transition-all ${
+                className={`flex items-center gap-3 rounded-xl border px-5 py-3 font-semibold transition ${
                   viewMode === "my"
-                    ? "bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow-lg shadow-cyan-500/30 scale-105"
-                    : "bg-slate-700/50 text-gray-300 hover:bg-slate-700 border border-slate-600"
+                    ? "border-blue-600 bg-blue-600 text-white"
+                    : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300"
                 }`}
               >
                 <User className="h-5 w-5" />
@@ -508,10 +515,10 @@ const ViewLeads = ({ onLogout }) => {
 
               <button
                 onClick={() => setViewMode("team")}
-                className={`flex items-center gap-3 px-6 py-4 rounded-xl font-semibold transition-all ${
+                className={`flex items-center gap-3 rounded-xl border px-5 py-3 font-semibold transition ${
                   viewMode === "team"
-                    ? "bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow-lg shadow-cyan-500/30 scale-105"
-                    : "bg-slate-700/50 text-gray-300 hover:bg-slate-700 border border-slate-600"
+                    ? "border-blue-600 bg-blue-600 text-white"
+                    : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300"
                 }`}
               >
                 <Users className="h-5 w-5" />
@@ -528,15 +535,15 @@ const ViewLeads = ({ onLogout }) => {
         {userRole === "super-admin" && (
           <div className="app-panel mb-5 p-5">
             <div className="mb-3">
-              <h2 className="text-xl font-semibold text-indigo-400 flex items-center gap-2">
+              <h2 className="flex items-center gap-2 text-base font-semibold text-slate-950 dark:text-white">
                 <Search className="h-5 w-5" />
                 Advanced Lead Lookup
               </h2>
-              <p className="text-gray-400 text-sm mt-1">
+              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
                 Search by Lead ID, Client Name, Business Name, or Email to view complete lead details with all callbacks
               </p>
             </div>
-            <div className="flex gap-3">
+            <div className="flex flex-col gap-3 sm:flex-row">
               <div className="flex-1 relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
                 <input
@@ -551,7 +558,7 @@ const ViewLeads = ({ onLogout }) => {
               <button
                 onClick={handleLookup}
                 disabled={lookupLoading}
-                className="px-6 py-3 bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 text-white rounded-lg font-medium transition-all duration-300 shadow-lg hover:shadow-indigo-500/50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-blue-600 px-5 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {lookupLoading ? (
                   <>
@@ -571,8 +578,8 @@ const ViewLeads = ({ onLogout }) => {
 
         {/* Filters and Search */}
         <div className="app-panel mb-5 overflow-hidden p-5">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 mb-4">
-            <div className="relative">
+          <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            <div className="relative sm:col-span-2 xl:col-span-1">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
               <input
                 type="text"
@@ -629,7 +636,7 @@ const ViewLeads = ({ onLogout }) => {
               <select
                 value={sourceFilter}
                 onChange={(e) => setSourceFilter(e.target.value)}
-                className="w-full px-4 py-2 bg-slate-700/50 border border-slate-600 rounded-lg text-white focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition-all appearance-none cursor-pointer hover:bg-slate-700"
+                className="app-control w-full cursor-pointer appearance-none px-4 py-2 text-sm focus:outline-none"
               >
                 <option value="">🌐 All Sources</option>
                 <option value="Website">💻 Website</option>
@@ -654,7 +661,7 @@ const ViewLeads = ({ onLogout }) => {
                 <select
                   value={assignedToFilter}
                   onChange={(e) => setAssignedToFilter(e.target.value)}
-                  className="w-full px-4 py-2 bg-slate-700/50 border border-slate-600 rounded-lg text-white focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition-all appearance-none cursor-pointer hover:bg-slate-700"
+                  className="app-control w-full cursor-pointer appearance-none px-4 py-2 text-sm focus:outline-none"
                 >
                   <option value="">👥 All Team Members</option>
                   {employees.map((emp) => (
@@ -673,38 +680,38 @@ const ViewLeads = ({ onLogout }) => {
           </div>
 
           {/* Export Buttons */}
-          <div className="flex flex-wrap gap-3 mt-4">
+          <div className="mt-4 flex flex-wrap gap-2 border-t border-slate-200 pt-4 dark:border-white/10">
             <button
               onClick={copyToClipboard}
-              className="flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-all"
+              className="app-secondary-button flex h-9 items-center gap-2 px-3 text-xs font-semibold"
             >
               <Download className="h-4 w-4" />
               Copy
             </button>
             <button
               onClick={exportToCSV}
-              className="flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-all"
+              className="app-secondary-button flex h-9 items-center gap-2 px-3 text-xs font-semibold"
             >
               <Download className="h-4 w-4" />
               CSV
             </button>
             <button
               onClick={exportToExcel}
-              className="flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-all"
+              className="app-secondary-button flex h-9 items-center gap-2 px-3 text-xs font-semibold"
             >
               <Download className="h-4 w-4" />
               Excel
             </button>
             <button
               onClick={exportToPDF}
-              className="flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-all"
+              className="app-secondary-button flex h-9 items-center gap-2 px-3 text-xs font-semibold"
             >
               <Download className="h-4 w-4" />
               PDF
             </button>
             <button
               onClick={handlePrint}
-              className="flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-all"
+              className="app-secondary-button flex h-9 items-center gap-2 px-3 text-xs font-semibold"
             >
               <Download className="h-4 w-4" />
               Print
@@ -712,7 +719,7 @@ const ViewLeads = ({ onLogout }) => {
             {(searchTerm || statusFilter || priorityFilter || sourceFilter || assignedToFilter) && (
               <button
                 onClick={clearFilters}
-                className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-all ml-auto"
+                className="ml-auto flex h-9 items-center gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 text-xs font-semibold text-rose-700 transition hover:bg-rose-100 dark:border-rose-400/20 dark:bg-rose-400/10 dark:text-rose-300"
               >
                 <Filter className="h-4 w-4" />
                 Clear Filters
@@ -722,7 +729,7 @@ const ViewLeads = ({ onLogout }) => {
         </div>
 
         {/* Table */}
-        <div className="bg-slate-800/50 backdrop-blur-sm rounded-xl border border-slate-700/50 overflow-hidden">
+        <div className="app-panel overflow-hidden">
           {loading ? (
             <div className="flex justify-center items-center py-20">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cyan-500"></div>
@@ -733,9 +740,9 @@ const ViewLeads = ({ onLogout }) => {
             </div>
           ) : (
             <>
-              <div className="w-full">
-                <table className="w-full table-fixed">
-                  <thead className="bg-slate-900/50">
+              <div className="w-full overflow-x-auto">
+                <table className="w-full min-w-[760px] table-fixed">
+                  <thead className="bg-slate-50 dark:bg-white/[0.025]">
                     <tr>
                       <th className="w-12 px-2 py-3 text-left text-xs font-medium text-gray-400 uppercase">
                         #
@@ -757,10 +764,10 @@ const ViewLeads = ({ onLogout }) => {
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-700/50">
+                  <tbody className="divide-y divide-slate-200 dark:divide-white/10">
                     {currentLeads.map((lead, index) => (
-                      <tr key={lead._id} className="hover:bg-slate-700/30 transition-colors">
-                        <td className="px-2 py-3 text-sm text-gray-300">
+                      <tr key={lead._id} className="transition-colors hover:bg-slate-50 dark:hover:bg-white/[0.025]">
+                        <td className="px-2 py-3 text-sm text-slate-600 dark:text-slate-300">
                           {indexOfFirstItem + index + 1}
                         </td>
                         <td className="px-2 py-3">
@@ -769,7 +776,7 @@ const ViewLeads = ({ onLogout }) => {
                         <td className="px-3 py-3">
                           <div className="space-y-1">
                             <div className="flex items-center gap-2 flex-wrap">
-                              <p className="text-white font-medium text-sm truncate">{lead.clientName}</p>
+                              <p className="truncate text-sm font-medium text-slate-950 dark:text-white">{lead.clientName}</p>
                               {userPosition && (userPosition.toLowerCase().includes("supervisor") ||
                                 userPosition.toLowerCase().includes("team lead") ||
                                 userPosition.toLowerCase().includes("manager")) && (
@@ -784,8 +791,8 @@ const ViewLeads = ({ onLogout }) => {
                                 </span>
                               )}
                             </div>
-                            <p className="text-gray-400 text-xs truncate">{lead.businessName}</p>
-                            <p className="text-gray-500 text-xs truncate">{lead.phone}</p>
+                            <p className="truncate text-xs text-slate-500 dark:text-slate-400">{lead.businessName}</p>
+                            <p className="truncate text-xs text-slate-400 dark:text-slate-500">{lead.phone}</p>
                           </div>
                         </td>
                         <td className="px-2 py-3 text-center">
@@ -853,7 +860,7 @@ const ViewLeads = ({ onLogout }) => {
               </div>
 
               {/* Pagination */}
-              <div className="bg-slate-900/50 px-3 md:px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-slate-700/50">
+              <div className="flex flex-col items-center justify-between gap-3 border-t border-slate-200 bg-slate-50 px-3 py-4 sm:flex-row md:px-6 dark:border-white/10 dark:bg-white/[0.025]">
                 <div className="text-sm text-gray-400">
                   Showing {indexOfFirstItem + 1} to {Math.min(indexOfLastItem, filteredLeads.length)} of{" "}
                   {filteredLeads.length} leads
@@ -862,7 +869,7 @@ const ViewLeads = ({ onLogout }) => {
                   <button
                     onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
                     disabled={currentPage === 1}
-                    className="px-3 py-2 text-sm bg-slate-700 hover:bg-slate-600 disabled:bg-slate-800 disabled:text-gray-600 text-white rounded-lg transition-all"
+                    className="app-secondary-button px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     Prev
                   </button>
@@ -884,8 +891,8 @@ const ViewLeads = ({ onLogout }) => {
                           onClick={() => setCurrentPage(pageNum)}
                           className={`px-3 py-2 text-sm rounded-lg transition-all ${
                             currentPage === pageNum
-                              ? "bg-cyan-500 text-white"
-                              : "bg-slate-700 hover:bg-slate-600 text-white"
+                              ? "bg-blue-600 text-white"
+                              : "app-secondary-button"
                           }`}
                         >
                           {pageNum}
@@ -893,13 +900,13 @@ const ViewLeads = ({ onLogout }) => {
                       );
                     })}
                   </div>
-                  <div className="sm:hidden text-white text-sm px-2 py-2">
+                  <div className="px-2 py-2 text-sm text-slate-600 sm:hidden dark:text-slate-300">
                     {currentPage} / {totalPages}
                   </div>
                   <button
                     onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
                     disabled={currentPage === totalPages}
-                    className="px-3 py-2 text-sm bg-slate-700 hover:bg-slate-600 disabled:bg-slate-800 disabled:text-gray-600 text-white rounded-lg transition-all"
+                    className="app-secondary-button px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     Next
                   </button>

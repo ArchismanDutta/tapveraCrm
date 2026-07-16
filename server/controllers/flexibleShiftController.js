@@ -1,5 +1,8 @@
 const FlexibleShiftRequest = require("../models/FlexibleShiftRequest");
 const User = require("../models/User");
+// Access-management rework (2026-07-03) - Phase 4.4.
+// See docs/superpowers/plans/2026-07-03-access-management-rework.md
+const { can } = require("../utils/accessControl");
 
 // ======================
 // Create Flexible Shift Request (Employee)
@@ -273,10 +276,13 @@ exports.deleteFlexibleShiftRequest = async (req, res) => {
       return res.status(404).json({ message: "Request not found" });
     }
     
-    // Only allow deletion by the employee who created it or HR/Admin
+    // Only allow deletion by the employee who created it or HR/Admin, or
+    // anyone with "shifts:approve" authority (additive - Phase 4.4)
     const isOwner = request.employee.toString() === userId.toString();
-    const isAuthorized = ["hr", "admin", "super-admin"].includes(req.user.role);
-    
+    const isAuthorized =
+      ["hr", "admin", "super-admin"].includes(req.user.role) ||
+      (await can(req.user, "shifts:approve"));
+
     if (!isOwner && !isAuthorized) {
       return res.status(403).json({ message: "Not authorized to delete this request" });
     }

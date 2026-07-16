@@ -528,7 +528,7 @@ const NotificationCenterPage = ({ onLogout }) => {
   const groupedNotifications = groupNotificationsByDate(filteredNotifications);
 
   return (
-    <div className="relative flex h-[100dvh] overflow-hidden bg-slate-50 text-slate-900 dark:bg-[#0b0d12] dark:text-slate-100">
+    <div className="app-shell notifications-theme h-[100dvh] overflow-hidden">
       <Sidebar
         collapsed={collapsed}
         setCollapsed={setCollapsed}
@@ -538,22 +538,22 @@ const NotificationCenterPage = ({ onLogout }) => {
 
       <main
         ref={scrollContainerRef}
-        className={`relative z-10 h-[100dvh] min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 transition-all duration-300 [overscroll-behavior-y:auto] [scrollbar-gutter:stable] sm:px-5 lg:px-6 ${
+        className={`app-main relative z-10 h-[100dvh] min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 transition-all duration-300 [overscroll-behavior-y:auto] [scrollbar-gutter:stable] sm:px-5 lg:px-6 ${
           collapsed ? "ml-16" : "ml-16 sm:ml-56"
         }`}
         style={{ WebkitOverflowScrolling: "touch" }}
       >
         <div className="mx-auto max-w-[1500px] space-y-4 pb-8 sm:space-y-5">
         {/* Header */}
-        <div className="rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm dark:border-white/10 dark:bg-[#10131c] sm:px-6 sm:py-5">
+        <div className="app-header rounded-2xl px-5 py-4 sm:px-6 sm:py-5">
           <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
             <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-400/10 dark:text-blue-300">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white shadow-sm shadow-blue-600/20">
                 <Bell className="h-5 w-5" />
               </div>
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Inbox</p>
-                <h1 className="text-2xl font-semibold tracking-tight text-slate-950 dark:text-white">Notification center</h1>
+                <p className="app-eyebrow">Inbox</p>
+                <h1 className="app-title">Notification center</h1>
                 <p className="mt-1 flex flex-wrap items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
                   {unreadCount > 0 ? (
                     <>
@@ -574,7 +574,7 @@ const NotificationCenterPage = ({ onLogout }) => {
               <button
                 type="button"
                 onClick={handleRefresh}
-                className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50 hover:text-slate-800 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300 dark:hover:bg-white/[0.07] dark:hover:text-white"
+                className="app-secondary-button inline-flex h-10 w-10 items-center justify-center rounded-xl"
                 title="Refresh (Ctrl+R)"
                 aria-label="Refresh notifications"
               >
@@ -624,7 +624,7 @@ const NotificationCenterPage = ({ onLogout }) => {
               <button
                 type="button"
                 onClick={handleDeleteAllRead}
-                className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300 dark:hover:bg-white/[0.07]"
+                className="app-secondary-button inline-flex h-10 items-center gap-2 rounded-xl px-3 text-sm font-semibold"
               >
                 <Trash2 className="h-4 w-4" />
                 <span className="hidden lg:inline">Delete read</span>
@@ -934,7 +934,7 @@ const NotificationCenterPage = ({ onLogout }) => {
         {/* Notifications List with Date Grouping */}
         <div className="space-y-5">
           {loading && notifications.length === 0 ? (
-            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-white/10 dark:bg-[#10131c]" aria-label="Loading notifications">
+            <div className="app-panel overflow-hidden rounded-2xl" aria-label="Loading notifications">
               {[0, 1, 2, 3].map((item) => (
                 <div key={item} className="flex animate-pulse gap-4 border-b border-slate-100 p-4 last:border-b-0 dark:border-white/[0.07]">
                   <div className="h-10 w-10 shrink-0 rounded-xl bg-slate-200 dark:bg-white/10" />
@@ -946,7 +946,7 @@ const NotificationCenterPage = ({ onLogout }) => {
               ))}
             </div>
           ) : loadError && notifications.length === 0 ? (
-            <div className="flex flex-col items-center justify-center rounded-2xl border border-slate-200 bg-white px-5 py-16 text-center shadow-sm dark:border-white/10 dark:bg-[#10131c]">
+            <div className="app-panel flex flex-col items-center justify-center rounded-2xl px-5 py-16 text-center">
               <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-rose-50 text-rose-600 dark:bg-rose-400/10 dark:text-rose-300"><AlertCircle className="h-6 w-6" /></div>
               <h3 className="text-lg font-semibold text-slate-950 dark:text-white">Notifications unavailable</h3>
               <p className="mt-2 max-w-md text-sm text-slate-500 dark:text-slate-400">{loadError}</p>
@@ -984,7 +984,7 @@ const NotificationCenterPage = ({ onLogout }) => {
                       Today
                     </motion.h2>
                     <motion.div
-                      className="divide-y divide-slate-100 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:divide-white/[0.07] dark:border-white/10 dark:bg-[#10131c]"
+                      className="app-panel divide-y divide-slate-100 overflow-hidden rounded-2xl dark:divide-white/[0.07]"
                       variants={containerVariants}
                       initial="hidden"
                       animate="visible"
@@ -1036,7 +1036,7 @@ const NotificationCenterPage = ({ onLogout }) => {
                       Yesterday
                     </motion.h2>
                     <motion.div
-                      className="divide-y divide-slate-100 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:divide-white/[0.07] dark:border-white/10 dark:bg-[#10131c]"
+                      className="app-panel divide-y divide-slate-100 overflow-hidden rounded-2xl dark:divide-white/[0.07]"
                       variants={containerVariants}
                       initial="hidden"
                       animate="visible"
@@ -1088,7 +1088,7 @@ const NotificationCenterPage = ({ onLogout }) => {
                       This Week
                     </motion.h2>
                     <motion.div
-                      className="divide-y divide-slate-100 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:divide-white/[0.07] dark:border-white/10 dark:bg-[#10131c]"
+                      className="app-panel divide-y divide-slate-100 overflow-hidden rounded-2xl dark:divide-white/[0.07]"
                       variants={containerVariants}
                       initial="hidden"
                       animate="visible"
@@ -1140,7 +1140,7 @@ const NotificationCenterPage = ({ onLogout }) => {
                       Earlier
                     </motion.h2>
                     <motion.div
-                      className="divide-y divide-slate-100 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:divide-white/[0.07] dark:border-white/10 dark:bg-[#10131c]"
+                      className="app-panel divide-y divide-slate-100 overflow-hidden rounded-2xl dark:divide-white/[0.07]"
                       variants={containerVariants}
                       initial="hidden"
                       animate="visible"
@@ -1182,7 +1182,7 @@ const NotificationCenterPage = ({ onLogout }) => {
               </div>
             </>
           ) : (
-            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-white/10 dark:bg-[#10131c]">
+            <div className="app-panel overflow-hidden rounded-2xl">
               <div className="flex flex-col items-center justify-center py-20 text-center">
                 <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-slate-100 text-slate-500 dark:bg-white/[0.06] dark:text-slate-400"><Bell className="h-6 w-6" /></div>
                 <h3 className="mb-2 text-lg font-semibold text-slate-950 dark:text-white">

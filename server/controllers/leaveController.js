@@ -1,5 +1,8 @@
 const LeaveRequest = require("../models/LeaveRequest");
 const holidayService = require("../services/holidayService");
+// Access-management rework (2026-07-03) - Phase 4.4.
+// See docs/superpowers/plans/2026-07-03-access-management-rework.md
+const { can } = require("../utils/accessControl");
 
 // Create a leave request with sandwich policy
 exports.createLeave = async (req, res) => {
@@ -245,7 +248,15 @@ exports.deleteLeave = async (req, res) => {
     const leave = await LeaveRequest.findById(req.params.id);
     if (!leave) return res.status(404).json({ message: "Leave request not found" });
 
-    if (req.user.role !== "admin" && leave.employee.email !== req.user.email)
+    // Pre-existing check only recognized role === "admin" (super-admin/hr
+    // could not delete others' requests even though they can approve/reject
+    // them). Additively widened to match the rest of this module's
+    // admin/super-admin/hr + canApproveLeaves boundary (Phase 4.4).
+    const isOwner = leave.employee.email === req.user.email;
+    const isPrivileged =
+      ["admin", "super-admin", "hr"].includes(req.user.role) ||
+      (await can(req.user, "leaves:approve"));
+    if (!isOwner && !isPrivileged)
       return res.status(403).json({ message: "Not authorized to delete this leave request" });
 
     await LeaveRequest.findByIdAndDelete(req.params.id);

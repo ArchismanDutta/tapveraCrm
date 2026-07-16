@@ -22,6 +22,26 @@ const positionSchema = new mongoose.Schema(
       enum: ["executives", "development", "marketingAndSales", "humanResource", "all", ""],
       default: "all"
     },
+    // ====== ACCESS-MANAGEMENT REWORK (2026-07-03) ======
+    // Additive reference fields — see docs/superpowers/specs/2026-07-03-access-management-design.md
+    // `department` (string enum, above) is left untouched for backward compatibility.
+    // New code should prefer `departmentRef`; `department` is populated from it via
+    // migrateToPositionRefs.js and kept in sync going forward.
+    departmentRef: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Department",
+      default: null,
+      index: true
+    },
+    // Explicit hierarchy chain, e.g. Agent.parentPosition -> Team Lead -> Supervisor -> ...
+    // Lets two department-scoped positions share a level/name pattern (e.g. "Team Lead — Tech"
+    // and "Team Lead — Marketing & Sales") without inferring the chain purely from numeric
+    // level + department match.
+    parentPosition: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Position",
+      default: null
+    },
     description: {
       type: String,
       trim: true,
@@ -54,7 +74,14 @@ const positionSchema = new mongoose.Schema(
       // Department-wide Access
       canViewDepartmentLeads: { type: Boolean, default: false },
       canViewDepartmentCallbacks: { type: Boolean, default: false },
-      canViewDepartmentTasks: { type: Boolean, default: false }
+      canViewDepartmentTasks: { type: Boolean, default: false },
+
+      // Access-management rework (2026-07-03): permissions for the Access
+      // Management page itself. Super-admin bypasses these as it bypasses
+      // everything; these exist so "Admin" (or any other position) can be
+      // granted them explicitly instead of relying on a hardcoded bypass.
+      canManageDepartments: { type: Boolean, default: false },
+      canManagePositions: { type: Boolean, default: false }
     },
 
     // Hierarchical access configuration
@@ -94,5 +121,7 @@ const positionSchema = new mongoose.Schema(
 positionSchema.index({ level: -1 });
 positionSchema.index({ status: 1 });
 positionSchema.index({ department: 1 });
+positionSchema.index({ departmentRef: 1 });
+positionSchema.index({ parentPosition: 1 });
 
 module.exports = mongoose.model("Position", positionSchema);

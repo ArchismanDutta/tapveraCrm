@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const { protect, authorize } = require("../middlewares/authMiddleware");
+const { protect } = require("../middlewares/authMiddleware");
 const {
   createManualAttendance,
   updateManualAttendance,
@@ -8,10 +8,26 @@ const {
   getManualAttendanceRecords,
   getAttendanceByUserAndDate
 } = require("../controllers/manualAttendanceController");
+// Access-management rework (2026-07-03) - Phase 4.3.
+// See docs/superpowers/plans/2026-07-03-access-management-rework.md
+const { can } = require("../utils/accessControl");
 
-// Protect all routes and allow only admin, hr, super-admin
+// Protect all routes and allow admin, hr, super-admin, or anyone whose
+// Position is explicitly granted "canManageAttendance" (Admin + HR by
+// default - see seedCanonicalHierarchy.js). Additive: the original
+// role-string check is kept as-is, this only adds an alternative path.
 router.use(protect);
-router.use(authorize("admin", "hr", "super-admin"));
+router.use(async (req, res, next) => {
+  if (
+    ["admin", "hr", "super-admin", "superadmin"].includes(req.user.role) ||
+    (await can(req.user, "attendance:manage"))
+  ) {
+    return next();
+  }
+  return res.status(403).json({
+    message: `Access denied. User role '${req.user.role}' is not authorized.`,
+  });
+});
 
 // ======================
 // Manual Attendance Routes

@@ -6,6 +6,10 @@ const { notifyAdmins } = require("../services/whatsappService");
 const { sendNotificationToUser, sendNotificationToMultipleUsers } = require("../utils/websocket");
 const { updateWorkloadOnTaskChange } = require("../services/workloadService");
 const notificationService = require("../services/notificationService");
+// Access-management rework (2026-07-03) - Phase 4.1.
+// See docs/superpowers/plans/2026-07-03-access-management-rework.md
+const { can, scopeQuery } = require("../utils/accessControl");
+const { canAccessUserData } = require("../utils/hierarchyUtils");
 
 // ------------------- Constants -------------------
 const STATUSES = ["pending", "in-progress", "completed", "rejected"];
@@ -21,12 +25,24 @@ const isCreator = (task, user) =>
 const isAssignee = (task, user) =>
   task.assignedTo.some((id) => (id._id || id).toString() === user._id.toString());
 
+// Access-management rework (2026-07-03): additive expansion, never a
+// narrowing - admin/super-admin keep exactly the access they had before.
+// A user whose Position grants task-assign authority (Project
+// Manager/Supervisor/Team Lead by default - see seedCanonicalHierarchy.js)
+// now ALSO qualifies, so "TL" etc. stop being purely cosmetic labels here.
+// Until real hierarchy data is assigned to real users this is a no-op:
+// `can()` returns false for anyone with no resolved Position, exactly
+// matching today's behavior.
+const hasTaskAssignAuthority = async (user) => isAdminRole(user) || (await can(user, "tasks:assign"));
+const hasTaskViewAuthority = async (user) => isAdminRole(user) || (await can(user, "tasks:view"));
+
 // Can this user see / comment on this task?
-const canAccessTask = (task, user) =>
-  isAdminRole(user) || isCreator(task, user) || isAssignee(task, user);
+const canAccessTask = async (task, user) =>
+  isAdminRole(user) || isCreator(task, user) || isAssignee(task, user) || (await hasTaskViewAuthority(user));
 
 // Can this user edit / delete this task?
-const canManageTask = (task, user) => isAdminRole(user) || isCreator(task, user);
+const canManageTask = async (task, user) =>
+  isAdminRole(user) || isCreator(task, user) || (await hasTaskAssignAuthority(user));
 
 const mapTaskPriorityToNotification = (taskPriority) => {
   const priorityMap = { High: "high", Medium: "normal", Low: "low" };
@@ -72,11 +88,11 @@ const pushStatusHistory = (task, status, userId, note) => {
 };
 
 // Apply a status transition with consistent rules. Returns error message or null.
-const applyStatusChange = (task, newStatus, user, note) => {
+const applyStatusChange = async (task, newStatus, user, note) => {
   if (!STATUSES.includes(newStatus)) return "Invalid status";
   if (task.status === newStatus) return null; // no-op
 
-  const admin = isAdminRole(user);
+  const admin = isAdminRole(user) || (await can(user, "tasks:assign"));
 
   // "rejected" must always go through the reject endpoint (requires a reason)
   if (newStatus === "rejected") {
@@ -202,7 +218,7 @@ exports.editTask = async (req, res) => {
     const task = await Task.findById(taskId);
     if (!task) return res.status(404).json({ message: "Task not found." });
 
-    if (!canManageTask(task, req.user)) {
+    if (!(await canManageTask(task, req.user))) {
       return res.status(403).json({ message: "Not authorized" });
     }
 
@@ -241,7 +257,7 @@ exports.editTask = async (req, res) => {
     }
 
     if (status !== undefined) {
-      const statusError = applyStatusChange(
+      const statusError = await applyStatusChange(
         task,
         status,
         req.user,
@@ -323,11 +339,11 @@ exports.updateTaskStatus = async (req, res) => {
     const task = await Task.findById(taskId);
     if (!task) return res.status(404).json({ message: "Task not found." });
 
-    if (!canAccessTask(task, req.user)) {
+    if (!(await canAccessTask(task, req.user))) {
       return res.status(403).json({ message: "Unauthorized" });
     }
 
-    const statusError = applyStatusChange(
+    const statusError = await applyStatusChange(
       task,
       status,
       req.user,
@@ -374,7 +390,11 @@ exports.updateTaskStatus = async (req, res) => {
 };
 
 // ------------------- REJECT TASK -------------------
-// Admin / Super-admin only (enforced in routes). Requires a reason.
+// Admin / Super-admin, or a user with task-assign authority (e.g. PM/Supervisor/TL
+// with the "tasks:assign" permission - see accessControl.js). Requires a reason.
+// Route-level authorize("admin","super-admin") was moved here (2026-07-03) so this
+// module's authorization is enforced consistently in the controller, matching the
+// rest of this file.
 exports.rejectTask = async (req, res) => {
   try {
     const { taskId } = req.params;
@@ -386,6 +406,10 @@ exports.rejectTask = async (req, res) => {
 
     const task = await Task.findById(taskId);
     if (!task) return res.status(404).json({ message: "Task not found." });
+
+    if (!(await hasTaskAssignAuthority(req.user))) {
+      return res.status(403).json({ message: "Not authorized" });
+    }
 
     if (task.status !== "completed") {
       return res.status(400).json({ message: "Only completed tasks can be rejected" });
@@ -437,7 +461,8 @@ exports.getTaskById = async (req, res) => {
     const isAuthorized =
       task.assignedBy._id.toString() === userId ||
       task.assignedTo.some((u) => u._id.toString() === userId) ||
-      isAdminRole(req.user);
+      isAdminRole(req.user) ||
+      (await hasTaskViewAuthority(req.user));
 
     if (!isAuthorized) return res.status(403).json({ message: "Not authorized" });
 
@@ -491,9 +516,20 @@ exports.getTasks = async (req, res) => {
     } else if (req.query.scope === "assigned-by-me") {
       // Tasks this user created — regardless of role
       query = { assignedBy: req.user._id };
-    } else if (req.query.scope === "mine" || !isAdminRole(req.user)) {
+    } else if (req.query.scope === "mine") {
       // "My Tasks" = only tasks directly assigned TO this user
       query = { assignedTo: req.user._id };
+    } else if (!isAdminRole(req.user)) {
+      // Access-management rework (2026-07-03): additive replacement for the old
+      // blunt "non-admins only ever see tasks assigned to them" rule. scopeQuery()
+      // reuses the same hierarchyUtils scoping already trusted in production for
+      // leads/callbacks: it returns {assignedTo:{$in:[self]}} (identical to the
+      // line above) for anyone with no hierarchical Position configured, and
+      // widens to include a supervisor/TL/PM's team when their Position's
+      // dataScope says so. This is how "TL"/"Supervisor" become meaningful for
+      // task visibility instead of just a label.
+      const scope = await scopeQuery(req.user, "assignedTo");
+      query = { ...query, ...scope };
     }
 
     if (req.query.status && STATUSES.includes(req.query.status)) {
@@ -506,9 +542,12 @@ exports.getTasks = async (req, res) => {
       query.title = { $regex: req.query.search, $options: "i" };
     }
 
-    // Pagination — project-scoped fetches (or admin fetches) allow a higher limit
+    // Pagination — project-scoped fetches (or admin/elevated-view fetches) allow a
+    // higher limit. Expanded alongside the scope change above so a Supervisor/TL
+    // who can now see their team's tasks isn't silently capped at the low limit
+    // meant for single-user scopes.
     const isProjectScoped = !!req.query.project;
-    const isPrivileged = isAdminRole(req.user);
+    const isPrivileged = isAdminRole(req.user) || (await hasTaskViewAuthority(req.user));
     const page = Math.max(1, parseInt(req.query.page) || 1);
     const limit = (isProjectScoped || isPrivileged)
       ? Math.min(10000, Math.max(1, parseInt(req.query.limit) || 10))
@@ -534,7 +573,7 @@ exports.deleteTask = async (req, res) => {
     const task = await Task.findById(req.params.taskId);
     if (!task) return res.status(404).json({ message: "Task not found." });
 
-    if (!canManageTask(task, req.user)) {
+    if (!(await canManageTask(task, req.user))) {
       return res.status(403).json({ message: "Unauthorized" });
     }
 
@@ -569,7 +608,7 @@ exports.addRemark = async (req, res) => {
     const task = await Task.findById(taskId);
     if (!task) return res.status(404).json({ message: "Task not found." });
 
-    if (!canAccessTask(task, req.user)) {
+    if (!(await canAccessTask(task, req.user))) {
       return res.status(403).json({ message: "Not authorized" });
     }
 
@@ -591,7 +630,7 @@ exports.getRemarks = async (req, res) => {
     const task = await Task.findById(taskId).populate("remarks.user", "name email");
     if (!task) return res.status(404).json({ message: "Task not found." });
 
-    if (!canAccessTask(task, req.user)) {
+    if (!(await canAccessTask(task, req.user))) {
       return res.status(403).json({ message: "Not authorized" });
     }
 
@@ -603,6 +642,10 @@ exports.getRemarks = async (req, res) => {
 };
 
 // ------------------- GET EMPLOYEE TASK ANALYTICS -------------------
+// Admin / Super-admin, or a user with "reports:view" permission who also has
+// hierarchical oversight of this specific employee. Route-level
+// authorize("admin","super-admin") was moved here (2026-07-03) so this
+// module's authorization is enforced consistently in the controller.
 exports.getEmployeeTaskAnalytics = async (req, res) => {
   try {
     const { employeeId } = req.params;
@@ -610,6 +653,14 @@ exports.getEmployeeTaskAnalytics = async (req, res) => {
     const employee = await User.findById(employeeId).select("name email role");
     if (!employee) {
       return res.status(404).json({ message: "Employee not found" });
+    }
+
+    const isAuthorized =
+      isAdminRole(req.user) ||
+      ((await can(req.user, "reports:view")) &&
+        (await canAccessUserData(req.user, employeeId)));
+    if (!isAuthorized) {
+      return res.status(403).json({ message: "Not authorized" });
     }
 
     const tasks = await Task.find({ assignedTo: { $in: [employeeId] } })

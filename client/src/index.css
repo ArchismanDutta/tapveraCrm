@@ -432,6 +432,408 @@ html.light #root {
   color: var(--app-text);
 }
 
+/* Scoped compatibility layer for salary tables, calculations, and the drawer. */
+.salary-theme [class*="bg-[#0a0e14]"],
+.salary-theme [class*="bg-[#0f1419]"] {
+  background-color: var(--app-surface) !important;
+  background-image: none !important;
+}
+
+.salary-theme [class*="bg-[#141a21]"],
+.salary-theme [class*="bg-[#1e2a35]"],
+.salary-theme [class*="bg-[#2a3340]"] {
+  background-color: var(--app-surface-elevated) !important;
+}
+
+.salary-theme [class*="border-[#1e2a35]"],
+.salary-theme [class*="border-[#2a3340]"] {
+  border-color: var(--app-border) !important;
+}
+
+.salary-theme :where(h1, h2, h3, h4, p, td, span).text-white {
+  color: var(--app-text) !important;
+}
+
+.salary-theme .text-gray-200,
+.salary-theme .text-gray-300,
+.salary-theme .text-gray-400,
+.salary-theme .text-gray-500 {
+  color: var(--app-muted) !important;
+}
+
+.salary-theme input,
+.salary-theme select,
+.salary-theme textarea {
+  border-color: var(--app-border) !important;
+  background-color: var(--app-input-bg) !important;
+  color: var(--app-text) !important;
+}
+
+/* Scoped compatibility layer for manual-attendance records and its large form. */
+.manual-attendance-theme [class*="from-slate-800"][class*="to-slate-900"],
+.manual-attendance-theme [class*="bg-slate-900"],
+.manual-attendance-theme [class*="bg-slate-800"] {
+  background-color: var(--app-surface) !important;
+  background-image: none !important;
+}
+
+.manual-attendance-theme [class*="bg-slate-700"],
+.manual-attendance-theme [class*="bg-slate-600"] {
+  background-color: var(--app-surface-elevated) !important;
+}
+
+.manual-attendance-theme [class*="border-slate-700"],
+.manual-attendance-theme [class*="border-slate-600"],
+.manual-attendance-theme [class*="border-slate-500"] {
+  border-color: var(--app-border) !important;
+}
+
+.manual-attendance-theme :where(h1, h2, h3, h4, h5, p, td, span).text-white {
+  color: var(--app-text) !important;
+}
+
+.manual-attendance-theme .text-gray-300,
+.manual-attendance-theme .text-gray-400,
+.manual-attendance-theme .text-gray-500,
+.manual-attendance-theme .text-gray-600 {
+  color: var(--app-muted) !important;
+}
+
+.manual-attendance-theme input,
+.manual-attendance-theme select,
+.manual-attendance-theme textarea {
+  border-color: var(--app-border) !important;
+  background-color: var(--app-input-bg) !important;
+  color: var(--app-text) !important;
+}
+
+/* Scoped compatibility layer for the super-admin shift dashboard and modals. */
+.super-shift-theme [class*="from-slate-800"][class*="to-slate-900"],
+.super-shift-theme [class*="bg-slate-900"],
+.super-shift-theme [class*="bg-slate-800"] {
+  background-color: var(--app-surface) !important;
+  background-image: none !important;
+}
+
+.super-shift-theme [class*="bg-slate-700"] {
+  background-color: var(--app-surface-elevated) !important;
+}
+
+.super-shift-theme [class*="border-slate-700"],
+.super-shift-theme [class*="border-slate-600"] {
+  border-color: var(--app-border) !important;
+}
+
+.super-shift-theme :where(h1, h2, h3, h4, p, td).text-white {
+  color: var(--app-text) !important;
+}
+
+.super-shift-theme .text-gray-300,
+.super-shift-theme .text-gray-400,
+.super-shift-theme .text-gray-500 {
+  color: var(--app-muted) !important;
+}
+
+.super-shift-theme input,
+.super-shift-theme select,
+.super-shift-theme textarea {
+  border-color: var(--app-border) !important;
+  background-color: var(--app-input-bg) !important;
+  color: var(--app-text) !important;
+}
+
+/* Scoped compatibility layer for the legacy lead detail and lookup workflows. */
+.leads-theme .app-header,
+.leads-theme .app-panel {
+  border-radius: 1rem;
+  box-shadow: 0 1px 2px var(--app-shadow);
+}
+
+.leads-theme [class*="bg-slate-900"],
+.leads-theme [class*="bg-slate-800"] {
+  background-color: var(--app-surface) !important;
+  background-image: none !important;
+}
+
+.leads-theme [class*="bg-slate-700"] {
+  background-color: var(--app-surface-elevated) !important;
+}
+
+.leads-theme [class*="border-slate-700"],
+.leads-theme [class*="border-slate-600"] {
+  border-color: var(--app-border) !important;
+}
+
+.leads-theme :where(h1, h2, h3, h4, p, td).text-white {
+  color: var(--app-text) !important;
+}
+
+.leads-theme .text-gray-300,
+.leads-theme .text-gray-400,
+.leads-theme .text-gray-500 {
+  color: var(--app-muted) !important;
+}
+
+.leads-theme button[class*="bg-slate-700"][class*="text-white"] {
+  color: var(--app-text) !important;
+}
+
+/* Scoped bridge for callback management and its legacy detail workflow. */
+.callbacks-theme .app-header,
+.callbacks-theme .app-panel {
+  border-radius: 1rem;
+  box-shadow: 0 1px 2px var(--app-shadow);
+}
+
+.callbacks-theme [class*="bg-slate-900"],
+.callbacks-theme [class*="bg-slate-800"] {
+  background-color: var(--app-surface) !important;
+  background-image: none !important;
+}
+
+.callbacks-theme [class*="bg-slate-700"] {
+  background-color: var(--app-surface-elevated) !important;
+}
+
+.callbacks-theme [class*="border-slate-700"],
+.callbacks-theme [class*="border-slate-600"] {
+  border-color: var(--app-border) !important;
+}
+
+.callbacks-theme :where(h1, h2, h3, h4, p, td).text-white,
+.callbacks-theme .text-gray-300 {
+  color: var(--app-text) !important;
+}
+
+.callbacks-theme .text-gray-400,
+.callbacks-theme .text-gray-500 {
+  color: var(--app-muted) !important;
+}
+
+.callbacks-theme table tbody tr:hover {
+  background: var(--app-soft-fill) !important;
+}
+
+.communication-theme .app-header,
+.communication-theme .app-panel {
+  border-radius: 1rem;
+  box-shadow: 0 1px 2px var(--app-shadow);
+}
+
+.communication-stat-card {
+  border-width: 1px;
+  border-radius: 0.875rem;
+  padding: 1rem;
+  transition: background-color 160ms ease, border-color 160ms ease, transform 160ms ease;
+}
+
+.communication-stat-card:hover {
+  transform: translateY(-1px);
+}
+
+.communication-project-card {
+  border: 1px solid var(--app-border);
+  background: var(--app-soft-fill);
+}
+
+.communication-chat-button {
+  border: 1px solid rgba(37, 99, 235, 0.22);
+  background: rgba(37, 99, 235, 0.1);
+  color: #1d4ed8;
+  box-shadow: none;
+  transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease;
+}
+
+.communication-chat-button:hover {
+  border-color: rgba(37, 99, 235, 0.34);
+  background: rgba(37, 99, 235, 0.16);
+  color: #1e40af;
+}
+
+.dark .communication-chat-button {
+  border-color: rgba(96, 165, 250, 0.28);
+  background: rgba(59, 130, 246, 0.13);
+  color: #bfdbfe;
+}
+
+.dark .communication-chat-button:hover {
+  border-color: rgba(147, 197, 253, 0.4);
+  background: rgba(59, 130, 246, 0.2);
+  color: #dbeafe;
+}
+
+.communication-theme table tbody tr:hover {
+  background: var(--app-soft-fill) !important;
+}
+
+.transfer-management-theme .app-header,
+.transfer-management-theme .app-panel {
+  border-radius: 1rem;
+  box-shadow: 0 1px 2px var(--app-shadow);
+}
+
+.transfer-export-button {
+  border: 1px solid rgba(37, 99, 235, 0.22);
+  background: rgba(37, 99, 235, 0.1);
+  color: #1d4ed8;
+  box-shadow: none;
+  transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease;
+}
+
+.transfer-export-button:hover {
+  border-color: rgba(37, 99, 235, 0.34);
+  background: rgba(37, 99, 235, 0.16);
+  color: #1e40af;
+}
+
+.dark .transfer-export-button {
+  border-color: rgba(96, 165, 250, 0.28);
+  background: rgba(59, 130, 246, 0.13);
+  color: #bfdbfe;
+}
+
+.dark .transfer-export-button:hover {
+  border-color: rgba(147, 197, 253, 0.4);
+  background: rgba(59, 130, 246, 0.2);
+  color: #dbeafe;
+}
+
+.transfer-rank-row,
+.transfer-detail-card {
+  border: 1px solid var(--app-border);
+  border-radius: 0.875rem;
+  background: var(--app-soft-fill);
+}
+
+.transfer-rank-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.75rem;
+}
+
+.transfer-detail-card {
+  padding: 1rem;
+}
+
+.transfer-modal {
+  background: var(--app-surface);
+  color: var(--app-text);
+}
+
+.transfer-management-theme table tbody tr:hover {
+  background: var(--app-soft-fill) !important;
+}
+
+.callback-modal,
+.callback-modal-header,
+.callback-modal-footer {
+  border-color: var(--app-border);
+  background: var(--app-surface);
+  color: var(--app-text);
+}
+
+.callback-modal-header,
+.callback-modal-footer {
+  background: color-mix(in srgb, var(--app-surface) 96%, var(--app-page-bg));
+}
+
+.callback-detail-section {
+  border: 1px solid var(--app-border);
+  border-radius: 0.875rem;
+  background: var(--app-soft-fill);
+  padding: 1.25rem;
+}
+
+/* Chat has several feature-rich legacy controls; keep them inside the shared theme. */
+.messages-theme [class*="bg-gray-900"] {
+  background-color: var(--app-page-bg) !important;
+}
+
+.messages-theme [class*="bg-gray-800"] {
+  background-color: var(--app-surface) !important;
+}
+
+.messages-theme [class*="bg-gray-700"] {
+  background-color: var(--app-surface-elevated) !important;
+}
+
+.messages-theme [class*="border-gray-700"],
+.messages-theme [class*="border-gray-600"] {
+  border-color: var(--app-border) !important;
+}
+
+.messages-theme .text-gray-100,
+.messages-theme .text-gray-200 {
+  color: var(--app-text) !important;
+}
+
+.messages-theme .text-gray-300,
+.messages-theme .text-gray-400,
+.messages-theme .text-gray-500 {
+  color: var(--app-muted) !important;
+}
+
+.messages-theme :where(input, select, textarea) {
+  border-color: var(--app-border) !important;
+  background-color: var(--app-input-bg) !important;
+  color: var(--app-text) !important;
+}
+
+.messages-theme .callback-scrollbar,
+.messages-theme .hide-scrollbar {
+  scrollbar-color: var(--app-border) transparent;
+}
+
+/* Normalize the analytics widgets embedded in the super-admin attendance portal. */
+.attendance-portal-theme [class*="bg-slate-900"],
+.attendance-portal-theme [class*="bg-slate-800"] {
+  background-color: var(--app-surface) !important;
+  background-image: none !important;
+}
+
+.attendance-portal-theme [class*="bg-slate-700"],
+.attendance-portal-theme [class*="bg-slate-600"] {
+  background-color: var(--app-surface-elevated) !important;
+  background-image: none !important;
+}
+
+.attendance-portal-theme [class*="border-slate-700"],
+.attendance-portal-theme [class*="border-slate-600"] {
+  border-color: var(--app-border) !important;
+}
+
+.attendance-portal-theme :where(h1, h2, h3, h4, h5, p, td).text-white,
+.attendance-portal-theme .text-gray-100,
+.attendance-portal-theme .text-gray-200 {
+  color: var(--app-text) !important;
+}
+
+.attendance-portal-theme .text-gray-300,
+.attendance-portal-theme .text-gray-400,
+.attendance-portal-theme .text-gray-500 {
+  color: var(--app-muted) !important;
+}
+
+.attendance-portal-theme .text-cyan-300,
+.attendance-portal-theme .text-cyan-400,
+.attendance-portal-theme .text-cyan-500 {
+  color: #2563eb !important;
+}
+
+.dark .attendance-portal-theme .text-cyan-300,
+.dark .attendance-portal-theme .text-cyan-400,
+.dark .attendance-portal-theme .text-cyan-500 {
+  color: #93c5fd !important;
+}
+
+.attendance-portal-theme :where(input, select, textarea) {
+  border-color: var(--app-border) !important;
+  background-color: var(--app-input-bg) !important;
+  color: var(--app-text) !important;
+}
+
 /* Scoped bridge for the legacy all-in-one client management workflows. */
 .clients-theme {
   --client-surface: #ffffff;
@@ -449,6 +851,38 @@ html.light #root {
   --client-muted: #94a3b8;
 }
 
+.clients-theme .app-header,
+.clients-theme .app-panel {
+  border-radius: 1rem;
+  box-shadow: 0 1px 2px var(--app-shadow);
+}
+
+.client-blue-button {
+  border: 1px solid rgba(37, 99, 235, 0.22);
+  background: rgba(37, 99, 235, 0.1);
+  color: #1d4ed8;
+  box-shadow: none;
+  transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease;
+}
+
+.client-blue-button:hover {
+  border-color: rgba(37, 99, 235, 0.34);
+  background: rgba(37, 99, 235, 0.16);
+  color: #1e40af;
+}
+
+.dark .client-blue-button {
+  border-color: rgba(96, 165, 250, 0.28);
+  background: rgba(59, 130, 246, 0.13);
+  color: #bfdbfe;
+}
+
+.dark .client-blue-button:hover {
+  border-color: rgba(147, 197, 253, 0.4);
+  background: rgba(59, 130, 246, 0.2);
+  color: #dbeafe;
+}
+
 .clients-theme [class*="bg-[#191f2b]"],
 .clients-theme [class*="bg-[#0f1419]"],
 .clients-theme [class*="bg-[#141a21]"] {
@@ -457,6 +891,11 @@ html.light #root {
 
 .clients-theme [class*="border-[#232945]"] {
   border-color: var(--client-border) !important;
+}
+
+.clients-theme [class*="border-purple-500"],
+.clients-theme [class*="border-cyan-500"] {
+  border-color: rgba(37, 99, 235, 0.28) !important;
 }
 
 .clients-theme input,
@@ -484,7 +923,27 @@ html.light #root {
   color: var(--client-muted) !important;
 }
 
-.clients-theme [class*="from-purple-600"][class*="to-pink-600"] {
+.clients-theme .text-purple-300,
+.clients-theme .text-purple-400,
+.clients-theme .text-cyan-300,
+.clients-theme .text-cyan-400 {
+  color: #2563eb !important;
+}
+
+.dark .clients-theme .text-purple-300,
+.dark .clients-theme .text-purple-400,
+.dark .clients-theme .text-cyan-300,
+.dark .clients-theme .text-cyan-400 {
+  color: #93c5fd !important;
+}
+
+.clients-theme [class*="bg-purple-500"],
+.clients-theme [class*="bg-cyan-500"] {
+  background-color: rgba(37, 99, 235, 0.1) !important;
+}
+
+.clients-theme [class*="from-purple-600"][class*="to-pink-600"],
+.clients-theme [class*="from-purple-500"][class*="to-pink-500"] {
   background-color: #2563eb !important;
   background-image: none !important;
 }

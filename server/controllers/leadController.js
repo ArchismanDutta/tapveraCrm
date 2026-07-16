@@ -7,6 +7,10 @@ const {
   hasPermission,
   buildHierarchicalQuery
 } = require("../utils/hierarchyUtils");
+// Access-management rework (2026-07-03) — Phase 1 shadow-mode dry run.
+// Not used for any real decision yet; see server/utils/accessControl.js.
+const { can } = require("../utils/accessControl");
+const { shadowCompare } = require("../middlewares/accessShadowLog");
 
 // Helper function to check if user has access to Lead Management
 const canAccessLeadManagement = async (user) => {
@@ -315,6 +319,9 @@ exports.updateLead = async (req, res) => {
     // Check if user can edit subordinate leads
     const isOwnLead = lead.assignedTo.toString() === req.user._id.toString();
     const canEditSubordinate = await hasPermission(req.user, "canEditSubordinateLeads");
+    // Shadow-mode dry run (Phase 1) — observes only, does not affect the
+    // decision below. Logs if the new engine would have disagreed.
+    shadowCompare("leads:edit", req.user, canEditSubordinate, () => can(req.user, "leads:edit"));
     const isSuperAdmin = req.user.role === "super-admin" || req.user.role === "admin";
 
     if (!isOwnLead && !canEditSubordinate && !isSuperAdmin) {
@@ -392,8 +399,15 @@ exports.deleteLead = async (req, res) => {
       return res.status(404).json({ message: "Lead not found" });
     }
 
-    // Only super-admin can delete
-    if (req.user.role !== "super-admin" && req.user.role !== "admin") {
+    // Only super-admin/admin can delete, or anyone with leads:edit authority
+    // (e.g. PM/Supervisor/TL over their own subordinates' leads - additive,
+    // 2026-07-03, Phase 4.7. Pairs delete with the same authority already
+    // granted for editing subordinate leads, see seedCanonicalHierarchy.js).
+    if (
+      req.user.role !== "super-admin" &&
+      req.user.role !== "admin" &&
+      !(await can(req.user, "leads:edit"))
+    ) {
       return res.status(403).json({ message: "Access denied. Only Super Admin can delete leads." });
     }
 

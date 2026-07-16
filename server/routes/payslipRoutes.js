@@ -20,16 +20,21 @@ router.get("/my/history",     protect, getMyPayslipHistory);
 router.get("/my/:month",      protect, getMyPayslip);
 
 // ── Admin routes ──────────────────────────────────────────────────────────────────
-router.get("/",               protect, authorize("admin", "hr", "super-admin"), getAllPayslips);
-router.get("/stats",          protect, authorize("admin", "hr", "super-admin"), getPayslipStats);
-router.get("/:id",            protect, authorize("admin", "hr", "super-admin"), getPayslipById);
-router.get("/employee/:employeeId", protect, authorize("admin", "hr", "super-admin"), getEmployeePayslipHistory);
+// Access-management rework (2026-07-03) - Phase 4.5. Standardized to
+// hr+super-admin across the whole Payroll & Payments surface (payslips,
+// auto-payroll, payments) per explicit decision - this deliberately removes
+// plain "admin" access, unlike every other Phase 4 module which was
+// additive-only. See docs/superpowers/plans/2026-07-03-access-management-rework.md
+router.get("/",               protect, authorize("hr", "super-admin"), getAllPayslips);
+router.get("/stats",          protect, authorize("hr", "super-admin"), getPayslipStats);
+router.get("/:id",            protect, authorize("hr", "super-admin"), getPayslipById);
+router.get("/employee/:employeeId", protect, authorize("hr", "super-admin"), getEmployeePayslipHistory);
 
 // ── Mutation routes ───────────────────────────────────────────────────────────────
-router.post("/",              protect, authorize("admin", "hr", "super-admin"), createPayslip);
-router.post("/preview",       protect, authorize("admin", "hr", "super-admin"), calculatePreview);
-router.put("/:id",            protect, authorize("admin", "hr", "super-admin"), updatePayslip);
-router.patch("/:id/publish",  protect, authorize("admin", "hr", "super-admin"), togglePublish);
-router.delete("/:id",         protect, authorize("admin", "hr", "super-admin"), deletePayslip);
+router.post("/",              protect, authorize("hr", "super-admin"), createPayslip);
+router.post("/preview",       protect, authorize("hr", "super-admin"), calculatePreview);
+router.put("/:id",            protect, authorize("hr", "super-admin"), updatePayslip);
+router.patch("/:id/publish",  protect, authorize("hr", "super-admin"), togglePublish);
+router.delete("/:id",         protect, authorize("hr", "super-admin"), deletePayslip);
 
 module.exports = router;

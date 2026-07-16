@@ -7,11 +7,32 @@ const { protect } = require("../middlewares/authMiddleware");
 const { authorize } = require("../middlewares/roleMiddleware");
 const User = require("../models/User");
 const { getAllEmployeesWithWorkload } = require("../services/workloadService");
+// Access-management rework (2026-07-03) - Phase 4.7.
+// See docs/superpowers/plans/2026-07-03-access-management-rework.md
+const { can } = require("../utils/accessControl");
+
+// Additive: admin/hr/super-admin keep exactly what they had (authorize(...)
+// below is left in place). Adds an alternative path for anyone whose
+// Position is explicitly granted "canManageUsers" (Admin + HR by default -
+// see seedCanonicalHierarchy.js).
+const requireUserManage = (roles) => async (req, res, next) => {
+  if (await can(req.user, "users:manage")) return next();
+  return authorize(...roles)(req, res, next);
+};
+
+// Additive: admin/super-admin keep exactly what they had. Adds an
+// alternative path for anyone with "tasks:assign" authority (e.g.
+// PM/Supervisor/TL) - workload visibility is what they need it for.
+const requireWorkloadView = async (req, res, next) => {
+  if (await can(req.user, "tasks:assign")) return next();
+  return authorize("admin", "super-admin")(req, res, next);
+};
 
 const {
   createEmployee,
   getAllUsers,
   getMe,
+  getMyPermissions,
   getEmployeeDirectory,
   getEmployeeById,
   updateEmployeeStatus,
@@ -27,7 +48,7 @@ const {
 router.get("/directory", protect, getEmployeeDirectory);
 
 // Get all employees with workload information - for task assignment
-router.get("/workload", protect, authorize("admin", "super-admin"), async (req, res) => {
+router.get("/workload", protect, requireWorkloadView, async (req, res) => {
   try {
     const employeesWithWorkload = await getAllEmployeesWithWorkload();
     res.json(employeesWithWorkload);
@@ -40,11 +61,15 @@ router.get("/workload", protect, authorize("admin", "super-admin"), async (req, 
 // Current logged-in user info
 router.get("/me", protect, getMe);
 
+// Resolved permissions for the logged-in user (Access-management rework,
+// Phase 5.1) - the frontend's single source of truth for what to show/hide.
+router.get("/me/permissions", protect, getMyPermissions);
+
 // Get all users - full info, restricted to admin, hr, super-admin
-router.get("/", protect, authorize("admin", "hr", "super-admin"), getAllUsers);
+router.get("/", protect, requireUserManage(["admin", "hr", "super-admin"]), getAllUsers);
 
 // Get all users - minimal info (id, name, email, role, shift), restricted to admin/hr/super-admin
-router.get("/all", protect, authorize("admin", "hr", "super-admin"), async (req, res) => {
+router.get("/all", protect, requireUserManage(["admin", "hr", "super-admin"]), async (req, res) => {
   try {
     // Exclude terminated and absconded employees by default
     const includeInactive = req.query.includeInactive === 'true';
@@ -76,20 +101,27 @@ router.get("/assignable", protect, async (req, res) => {
 });
 
 // Get next auto-generated employee ID - restricted to admin, hr, super-admin
-router.get("/next-id", protect, authorize("admin", "hr", "super-admin"), getNextEmployeeId);
+router.get("/next-id", protect, requireUserManage(["admin", "hr", "super-admin"]), getNextEmployeeId);
 
 // Create new employee - restricted to admin, hr, super-admin
-router.post("/create", protect, authorize("admin", "hr", "super-admin"), createEmployee);
+router.post("/create", protect, requireUserManage(["admin", "hr", "super-admin"]), createEmployee);
 
 // Get single employee by ID - restricted to admin, hr, super-admin
-router.get("/:id", protect, authorize("admin", "hr", "super-admin"), getEmployeeById);
+router.get("/:id", protect, requireUserManage(["admin", "hr", "super-admin"]), getEmployeeById);
 
 // Update employee details - restricted to super-admin & hr (no restrictions on fields)
+// NOTE (2026-07-03, Phase 4.7): deliberately NOT additively expanded like its
+// siblings above - this one excludes plain "admin" already (unlike every
+// other route in this file), and both Admin and HR get canManageUsers by
+// default (seedCanonicalHierarchy.js), so reusing users:manage here would
+// silently hand Admin-position holders edit rights this route currently
+// withholds from them. Left untouched pending a deliberate decision, same
+// category as the Phase 4.5 payroll question.
 router.put("/:id", protect, authorize("super-admin", "hr"), updateEmployee);
 
 // Update employee status (active/terminated/absconded) - accessible to admin, hr, super-admin
-router.patch("/:id/status", protect, authorize("admin", "hr", "super-admin"), updateEmployeeStatus);
-router.put("/:id/status", protect, authorize("admin", "hr", "super-admin"), updateEmployeeStatus);
+router.patch("/:id/status", protect, requireUserManage(["admin", "hr", "super-admin"]), updateEmployeeStatus);
+router.put("/:id/status", protect, requireUserManage(["admin", "hr", "super-admin"]), updateEmployeeStatus);
 
 // Cleanup corrupted attendance data - for emergency data fixes
 router.post("/cleanup-attendance", protect, authorize("super-admin"), async (req, res) => {

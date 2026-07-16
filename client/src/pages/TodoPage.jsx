@@ -341,7 +341,7 @@ const TodoPage = ({ onLogout }) => {
   );
 
   return (
-    <div className="relative flex h-[100dvh] overflow-hidden bg-slate-50 text-slate-900 dark:bg-[#0b0d12] dark:text-slate-100">
+    <div className="app-shell todo-theme h-[100dvh] overflow-hidden">
       <Sidebar
         onLogout={onLogout}
         collapsed={collapsed}
@@ -350,32 +350,32 @@ const TodoPage = ({ onLogout }) => {
       />
 
       <main
-        className={`h-[100dvh] min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 transition-all duration-300 sm:px-5 lg:px-6 ${
+        className={`app-main h-[100dvh] min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 transition-all duration-300 sm:px-5 lg:px-6 ${
           collapsed ? "ml-16" : "ml-16 sm:ml-56"
         }`}
       >
         <div className="mx-auto max-w-[1500px] space-y-4 pb-8 sm:space-y-5">
-          <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-white/10 dark:bg-[#10131c]">
+          <section className="app-header overflow-hidden rounded-2xl">
             <div className="grid gap-5 p-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center lg:p-5">
-              <div className="min-w-0">
-                <div className="mb-4 inline-flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 dark:border-blue-400/20 dark:bg-blue-400/10 dark:text-blue-200">
-                  <CalendarDays className="h-3.5 w-3.5" />
-                  {currentTime.toLocaleDateString("en-IN", {
-                    weekday: "long",
-                    day: "numeric",
-                    month: "long",
-                    year: "numeric",
-                  })}
+              <div className="flex min-w-0 items-start gap-3">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white shadow-sm shadow-blue-600/20">
+                  <CalendarDays className="h-5 w-5" />
                 </div>
-                <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                  Personal planning
-                </p>
-                <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950 dark:text-white">
-                  Todo workspace
-                </h1>
-                <p className="mt-1 max-w-2xl text-sm text-slate-500 dark:text-slate-400">
-                  Plan today, schedule what is next, and keep your personal work moving.
-                </p>
+                <div>
+                  <p className="app-eyebrow">Personal planning</p>
+                  <h1 className="app-title">Todo workspace</h1>
+                  <p className="app-description max-w-2xl">
+                    Plan today, schedule what is next, and keep your personal work moving.
+                  </p>
+                  <p className="mt-2 text-xs font-medium text-blue-600 dark:text-blue-300">
+                    {currentTime.toLocaleDateString("en-IN", {
+                      weekday: "long",
+                      day: "numeric",
+                      month: "long",
+                      year: "numeric",
+                    })}
+                  </p>
+                </div>
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
@@ -506,7 +506,7 @@ const TodoPage = ({ onLogout }) => {
             />
           </div>
 
-          <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-[#10131c]">
+          <section className="app-panel rounded-2xl p-4">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-950 dark:text-white">
@@ -728,7 +728,7 @@ const AnalyticsCard = ({
 
   return (
     <div
-      className={`rounded-2xl border bg-white p-4 shadow-sm dark:bg-[#10131c] ${
+      className={`app-panel rounded-2xl p-4 ${
         urgent
           ? "border-rose-300 dark:border-rose-400/30"
           : "border-slate-200 dark:border-white/10"

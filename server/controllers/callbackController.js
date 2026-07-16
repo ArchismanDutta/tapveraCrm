@@ -7,6 +7,10 @@ const {
   canAccessUserData,
   hasPermission
 } = require("../utils/hierarchyUtils");
+// Access-management rework (2026-07-03) — Phase 1 shadow-mode dry run.
+// Not used for any real decision yet; see server/utils/accessControl.js.
+const { can } = require("../utils/accessControl");
+const { shadowCompare } = require("../middlewares/accessShadowLog");
 
 // Helper function to check if user has access to Callback Management
 const canAccessCallbackManagement = async (user) => {
@@ -343,6 +347,9 @@ exports.updateCallback = async (req, res) => {
     // Check if user can edit subordinate callbacks
     const isOwnCallback = callback.assignedTo.toString() === req.user._id.toString();
     const canEditSubordinate = await hasPermission(req.user, "canEditSubordinateCallbacks");
+    // Shadow-mode dry run (Phase 1) — observes only, does not affect the
+    // decision below. Logs if the new engine would have disagreed.
+    shadowCompare("callbacks:edit", req.user, canEditSubordinate, () => can(req.user, "callbacks:edit"));
     const isSuperAdmin = req.user.role === "super-admin" || req.user.role === "admin";
 
     if (!isOwnCallback && !canEditSubordinate && !isSuperAdmin) {
@@ -431,8 +438,15 @@ exports.deleteCallback = async (req, res) => {
       return res.status(404).json({ message: "Callback not found" });
     }
 
-    // Only super-admin can delete
-    if (req.user.role !== "super-admin" && req.user.role !== "admin") {
+    // Only super-admin/admin can delete, or anyone with callbacks:edit
+    // authority (e.g. PM/Supervisor/TL over their own subordinates'
+    // callbacks - additive, 2026-07-03, Phase 4.7. Mirrors the equivalent
+    // leadController.js change).
+    if (
+      req.user.role !== "super-admin" &&
+      req.user.role !== "admin" &&
+      !(await can(req.user, "callbacks:edit"))
+    ) {
       return res.status(403).json({ message: "Access denied. Only Super Admin can delete callbacks." });
     }
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import {
@@ -16,9 +16,6 @@ import {
   Eye,
   User,
   Building2,
-  Mail,
-  Phone,
-  MapPin,
   ChevronDown,
   X,
 } from "lucide-react";
@@ -37,7 +34,6 @@ const ViewCallbacks = ({ onLogout }) => {
   const navigate = useNavigate();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [callbacks, setCallbacks] = useState([]);
-  const [filteredCallbacks, setFilteredCallbacks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [userRole, setUserRole] = useState("employee");
   const [userDepartment, setUserDepartment] = useState("");
@@ -90,7 +86,7 @@ const ViewCallbacks = ({ onLogout }) => {
   }, []);
 
   useEffect(() => {
-    filterCallbacks();
+    setCurrentPage(1);
   }, [callbacks, searchTerm, statusFilter, callbackTypeFilter, assignedToFilter, dateFilter]);
 
   const fetchCallbacks = async () => {
@@ -182,7 +178,7 @@ const ViewCallbacks = ({ onLogout }) => {
     }
   };
 
-  const filterCallbacks = () => {
+  const filteredCallbacks = useMemo(() => {
     let filtered = [...callbacks];
 
     // Search filter
@@ -219,9 +215,8 @@ const ViewCallbacks = ({ onLogout }) => {
       });
     }
 
-    setFilteredCallbacks(filtered);
-    setCurrentPage(1);
-  };
+    return filtered;
+  }, [callbacks, searchTerm, statusFilter, callbackTypeFilter, assignedToFilter, dateFilter]);
 
   const handleDelete = async (callbackId) => {
     if (!window.confirm("Are you sure you want to delete this callback?")) {
@@ -480,7 +475,7 @@ const ViewCallbacks = ({ onLogout }) => {
   };
 
   return (
-    <div className="app-shell h-[100dvh] overflow-hidden">
+    <div className="app-shell callbacks-theme h-[100dvh] overflow-hidden">
       <Sidebar
         collapsed={sidebarCollapsed}
         setCollapsed={setSidebarCollapsed}
@@ -490,13 +485,18 @@ const ViewCallbacks = ({ onLogout }) => {
 
       <main className={`app-main h-[100dvh] overflow-y-auto px-3 py-4 transition-all duration-300 sm:px-5 lg:px-6 ${sidebarCollapsed ? "ml-16" : "ml-16 sm:ml-56"}`}>
         {/* Header */}
-        <div className="app-page pb-8">
+        <div className="app-page mx-auto max-w-[1600px] pb-8">
         <div className="app-header mb-5">
           <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
-            <div>
-              <p className="app-eyebrow">Sales follow-up</p>
-              <h1 className="app-title">Callback management</h1>
-              <p className="app-description">Track and manage lead follow-up callbacks.</p>
+            <div className="flex items-start gap-3">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white shadow-sm shadow-blue-600/20">
+                <PhoneCall className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="app-eyebrow">Sales follow-up</p>
+                <h1 className="app-title">Callback management</h1>
+                <p className="app-description">Track schedules, ownership, and follow-up outcomes in one place.</p>
+              </div>
             </div>
             {(userRole === "super-admin" || userDepartment === "marketingAndSales") && (
               <button
@@ -504,76 +504,82 @@ const ViewCallbacks = ({ onLogout }) => {
                 className="app-primary-button flex h-10 items-center gap-2 px-4 text-sm font-semibold"
               >
                 <Plus className="h-5 w-5" />
-                Add New Callback
+                Add callback
               </button>
             )}
           </div>
+        </div>
 
           {/* Stats Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3 md:gap-4 mb-6">
-            <div className="app-panel p-4">
+          <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-3 2xl:grid-cols-5">
+            <div className="app-panel p-4 sm:p-5">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-gray-400 text-xs mb-1">Total</p>
+                  <p className="text-gray-400 text-xs mb-1">Total callbacks</p>
                   <p className="text-2xl font-bold text-white">{stats.totalCallbacks}</p>
                 </div>
-                <PhoneCall className="h-8 w-8 text-blue-400" />
+                <div className="rounded-xl bg-blue-500/10 p-2.5"><PhoneCall className="h-5 w-5 text-blue-400" /></div>
               </div>
             </div>
 
-            <div className="app-panel p-4">
+            <div className="app-panel p-4 sm:p-5">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-gray-400 text-xs mb-1">Pending</p>
                   <p className="text-2xl font-bold text-white">{stats.pendingCallbacks}</p>
                 </div>
-                <Clock className="h-8 w-8 text-yellow-400" />
+                <div className="rounded-xl bg-amber-500/10 p-2.5"><Clock className="h-5 w-5 text-yellow-400" /></div>
               </div>
             </div>
 
-            <div className="app-panel p-4">
+            <div className="app-panel p-4 sm:p-5">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-gray-400 text-xs mb-1">Completed</p>
                   <p className="text-2xl font-bold text-white">{stats.completedCallbacks}</p>
                 </div>
-                <CheckCircle className="h-8 w-8 text-green-400" />
+                <div className="rounded-xl bg-emerald-500/10 p-2.5"><CheckCircle className="h-5 w-5 text-green-400" /></div>
               </div>
             </div>
 
-            <div className="app-panel p-4">
+            <div className="app-panel p-4 sm:p-5">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-gray-400 text-xs mb-1">Overdue</p>
                   <p className="text-2xl font-bold text-white">{stats.overdueCallbacks}</p>
                 </div>
-                <AlertCircle className="h-8 w-8 text-red-400" />
+                <div className="rounded-xl bg-rose-500/10 p-2.5"><AlertCircle className="h-5 w-5 text-red-400" /></div>
               </div>
             </div>
 
-            <div className="bg-gradient-to-br from-purple-500/20 to-pink-500/20 backdrop-blur-sm border border-purple-500/30 rounded-xl p-4">
+            <div className="app-panel col-span-2 p-4 sm:col-span-1 sm:p-5">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-gray-400 text-xs mb-1">Today</p>
                   <p className="text-2xl font-bold text-white">{stats.todayCallbacks}</p>
                 </div>
-                <Calendar className="h-8 w-8 text-purple-400" />
+                <div className="rounded-xl bg-violet-500/10 p-2.5"><Calendar className="h-5 w-5 text-purple-400" /></div>
               </div>
             </div>
           </div>
-        </div>
-
         {/* Filters and Search */}
-        <div className="bg-slate-800/50 backdrop-blur-sm rounded-xl p-6 border border-slate-700/50 mb-6 overflow-hidden">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 mb-4">
-            <div className="relative">
+        <div className="app-panel mb-5 overflow-hidden p-4 sm:p-5">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-semibold text-white">Find callbacks</h2>
+              <p className="mt-0.5 text-xs text-gray-400">Narrow the list by status, type, date, or owner.</p>
+            </div>
+            <Filter className="h-4 w-4 text-gray-400" />
+          </div>
+          <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+            <div className="relative md:col-span-2 xl:col-span-1">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
               <input
                 type="text"
                 placeholder="Search callbacks..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 bg-slate-700/50 border border-slate-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all"
+                className="app-control w-full pl-10 pr-4"
               />
             </div>
 
@@ -581,7 +587,7 @@ const ViewCallbacks = ({ onLogout }) => {
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                className="w-full px-4 py-2 bg-slate-700/50 border border-slate-600 rounded-lg text-white focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all appearance-none cursor-pointer hover:bg-slate-700"
+                className="app-control w-full cursor-pointer appearance-none px-4"
               >
                 <option value="">📊 All Status</option>
                 <option value="Pending">⏳ Pending</option>
@@ -601,7 +607,7 @@ const ViewCallbacks = ({ onLogout }) => {
               <select
                 value={callbackTypeFilter}
                 onChange={(e) => setCallbackTypeFilter(e.target.value)}
-                className="w-full px-4 py-2 bg-slate-700/50 border border-slate-600 rounded-lg text-white focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all appearance-none cursor-pointer hover:bg-slate-700"
+                className="app-control w-full cursor-pointer appearance-none px-4"
               >
                 <option value="">📞 All Types</option>
                 <option value="Call">📞 Call</option>
@@ -622,7 +628,7 @@ const ViewCallbacks = ({ onLogout }) => {
                 type="date"
                 value={dateFilter}
                 onChange={(e) => setDateFilter(e.target.value)}
-                className="w-full px-4 py-2 bg-slate-700/50 border border-slate-600 rounded-lg text-white focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all cursor-pointer hover:bg-slate-700"
+                className="app-control w-full cursor-pointer px-4"
               />
             </div>
 
@@ -631,7 +637,7 @@ const ViewCallbacks = ({ onLogout }) => {
                 <select
                   value={assignedToFilter}
                   onChange={(e) => setAssignedToFilter(e.target.value)}
-                  className="w-full px-4 py-2 bg-slate-700/50 border border-slate-600 rounded-lg text-white focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all appearance-none cursor-pointer hover:bg-slate-700"
+                  className="app-control w-full cursor-pointer appearance-none px-4"
                 >
                   <option value="">👥 All Marketing & Sales</option>
                   {employees.map((emp) => (
@@ -650,38 +656,38 @@ const ViewCallbacks = ({ onLogout }) => {
           </div>
 
           {/* Export Buttons */}
-          <div className="flex flex-wrap gap-3">
+          <div className="flex flex-wrap gap-2 border-t border-slate-700/50 pt-4">
             <button
               onClick={copyToClipboard}
-              className="flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-all"
+              className="app-secondary-button flex h-9 items-center gap-2 px-3 text-xs font-medium"
             >
               <Download className="h-4 w-4" />
               Copy
             </button>
             <button
               onClick={exportToCSV}
-              className="flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-all"
+              className="app-secondary-button flex h-9 items-center gap-2 px-3 text-xs font-medium"
             >
               <Download className="h-4 w-4" />
               CSV
             </button>
             <button
               onClick={exportToExcel}
-              className="flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-all"
+              className="app-secondary-button flex h-9 items-center gap-2 px-3 text-xs font-medium"
             >
               <Download className="h-4 w-4" />
               Excel
             </button>
             <button
               onClick={exportToPDF}
-              className="flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-all"
+              className="app-secondary-button flex h-9 items-center gap-2 px-3 text-xs font-medium"
             >
               <Download className="h-4 w-4" />
               PDF
             </button>
             <button
               onClick={handlePrint}
-              className="flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-all"
+              className="app-secondary-button flex h-9 items-center gap-2 px-3 text-xs font-medium"
             >
               <Download className="h-4 w-4" />
               Print
@@ -693,7 +699,7 @@ const ViewCallbacks = ({ onLogout }) => {
               dateFilter) && (
               <button
                 onClick={clearFilters}
-                className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-all ml-auto"
+                className="ml-auto flex h-9 items-center gap-2 rounded-lg border border-red-500/25 bg-red-500/10 px-3 text-xs font-medium text-red-400 transition-all hover:bg-red-500/15"
               >
                 <Filter className="h-4 w-4" />
                 Clear Filters
@@ -703,7 +709,7 @@ const ViewCallbacks = ({ onLogout }) => {
         </div>
 
         {/* Table */}
-        <div className="bg-slate-800/50 backdrop-blur-sm rounded-xl border border-slate-700/50" style={{ overflow: 'visible' }}>
+        <div className="app-panel" style={{ overflow: "visible" }}>
           {loading ? (
             <div className="flex justify-center items-center py-20">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-500"></div>
@@ -714,9 +720,9 @@ const ViewCallbacks = ({ onLogout }) => {
             </div>
           ) : (
             <>
-              <div className="w-full">
-                <table className="w-full table-fixed">
-                  <thead className="bg-slate-900/50">
+              <div className="w-full overflow-x-auto rounded-t-2xl">
+                <table className="w-full min-w-[720px] table-fixed">
+                  <thead className="bg-slate-900/40">
                     <tr>
                       <th className="w-12 px-2 py-3 text-left text-xs font-medium text-gray-400 uppercase">
                         #
@@ -744,7 +750,7 @@ const ViewCallbacks = ({ onLogout }) => {
                     {currentCallbacks.map((callback, index) => (
                       <tr
                         key={callback._id}
-                        className={`hover:bg-slate-700/30 transition-colors ${
+                        className={`transition-colors hover:bg-slate-700/30 ${
                           isOverdue(callback) ? "bg-red-500/5" : ""
                         }`}
                       >
@@ -752,7 +758,7 @@ const ViewCallbacks = ({ onLogout }) => {
                           {indexOfFirstItem + index + 1}
                         </td>
                         <td className="px-2 py-3">
-                          <span className="text-green-400 font-medium text-xs">{callback.callbackId}</span>
+                          <span className="font-medium text-blue-400 text-xs">{callback.callbackId}</span>
                         </td>
                         <td className="px-3 py-3">
                           <div className="space-y-1">
@@ -980,7 +986,7 @@ const ViewCallbacks = ({ onLogout }) => {
               </div>
 
               {/* Pagination */}
-              <div className="bg-slate-900/50 px-3 md:px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-slate-700/50">
+              <div className="flex flex-col items-center justify-between gap-3 border-t border-slate-700/50 bg-slate-900/30 px-3 py-4 sm:flex-row md:px-6">
                 <div className="text-sm text-gray-400">
                   Showing {indexOfFirstItem + 1} to{" "}
                   {Math.min(indexOfLastItem, filteredCallbacks.length)} of{" "}
@@ -990,7 +996,7 @@ const ViewCallbacks = ({ onLogout }) => {
                   <button
                     onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
                     disabled={currentPage === 1}
-                    className="px-3 py-2 text-sm bg-slate-700 hover:bg-slate-600 disabled:bg-slate-800 disabled:text-gray-600 text-white rounded-lg transition-all"
+                    className="app-secondary-button px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     Prev
                   </button>
@@ -1012,8 +1018,8 @@ const ViewCallbacks = ({ onLogout }) => {
                           onClick={() => setCurrentPage(pageNum)}
                           className={`px-3 py-2 text-sm rounded-lg transition-all ${
                             currentPage === pageNum
-                              ? "bg-green-500 text-white"
-                              : "bg-slate-700 hover:bg-slate-600 text-white"
+                              ? "bg-blue-600 text-white"
+                              : "app-secondary-button"
                           }`}
                         >
                           {pageNum}
@@ -1027,7 +1033,7 @@ const ViewCallbacks = ({ onLogout }) => {
                   <button
                     onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
                     disabled={currentPage === totalPages}
-                    className="px-3 py-2 text-sm bg-slate-700 hover:bg-slate-600 disabled:bg-slate-800 disabled:text-gray-600 text-white rounded-lg transition-all"
+                    className="app-secondary-button px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     Next
                   </button>
@@ -1039,18 +1045,23 @@ const ViewCallbacks = ({ onLogout }) => {
 
         {/* View Callback Modal */}
         {viewModalOpen && selectedCallback && (
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div className="bg-slate-800 rounded-2xl border border-slate-700 shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-3 backdrop-blur-sm sm:p-4">
+            <div className="callback-modal flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border shadow-2xl">
               {/* Modal Header */}
-              <div className="sticky top-0 bg-gradient-to-r from-green-500/10 to-emerald-500/10 border-b border-slate-700 p-6">
+              <div className="callback-modal-header sticky top-0 border-b p-4 sm:p-6">
                 <div className="flex items-center justify-between">
-                  <div>
-                    <h2 className="text-2xl font-bold text-white mb-1">Callback Details</h2>
-                    <p className="text-green-400 font-medium">{selectedCallback.callbackId}</p>
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-600 text-white">
+                      <PhoneCall className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <h2 className="text-xl font-bold text-white sm:text-2xl">Callback details</h2>
+                      <p className="font-medium text-blue-400">{selectedCallback.callbackId}</p>
+                    </div>
                   </div>
                   <button
                     onClick={() => setViewModalOpen(false)}
-                    className="p-2 hover:bg-slate-700 rounded-lg transition-all"
+                    className="app-secondary-button p-2"
                   >
                     <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -1061,7 +1072,7 @@ const ViewCallbacks = ({ onLogout }) => {
 
               {/* Modal Content */}
               <SimpleBar style={{ maxHeight: 'calc(90vh - 180px)' }} className="flex-1 callback-scrollbar">
-                <div className="p-6 space-y-6">
+                <div className="space-y-4 p-4 sm:p-6">
                 {/* Status & Priority Badges */}
                 <div className="flex flex-wrap gap-3">
                   <span className={`px-4 py-2 rounded-full text-sm font-medium border ${getStatusColor(selectedCallback.status)}`}>
@@ -1079,8 +1090,8 @@ const ViewCallbacks = ({ onLogout }) => {
 
                 {/* Lead Information */}
                 {selectedCallback.leadId && (
-                  <div className="bg-slate-700/30 rounded-xl p-5 border border-slate-600/50">
-                    <h3 className="text-lg font-semibold text-green-400 mb-4 flex items-center gap-2">
+                  <div className="callback-detail-section">
+                    <h3 className="mb-4 flex items-center gap-2 text-base font-semibold text-blue-400">
                       <Building2 className="h-5 w-5" />
                       Associated Lead
                     </h3>
@@ -1098,8 +1109,8 @@ const ViewCallbacks = ({ onLogout }) => {
                 )}
 
                 {/* Client Information */}
-                <div className="bg-slate-700/30 rounded-xl p-5 border border-slate-600/50">
-                  <h3 className="text-lg font-semibold text-green-400 mb-4 flex items-center gap-2">
+                <div className="callback-detail-section">
+                  <h3 className="mb-4 flex items-center gap-2 text-base font-semibold text-blue-400">
                     <User className="h-5 w-5" />
                     Client Information
                   </h3>
@@ -1116,8 +1127,8 @@ const ViewCallbacks = ({ onLogout }) => {
                 </div>
 
                 {/* Callback Schedule */}
-                <div className="bg-slate-700/30 rounded-xl p-5 border border-slate-600/50">
-                  <h3 className="text-lg font-semibold text-green-400 mb-4 flex items-center gap-2">
+                <div className="callback-detail-section">
+                  <h3 className="mb-4 flex items-center gap-2 text-base font-semibold text-blue-400">
                     <Calendar className="h-5 w-5" />
                     Callback Schedule
                   </h3>
@@ -1150,8 +1161,8 @@ const ViewCallbacks = ({ onLogout }) => {
                 </div>
 
                 {/* Assignment Details */}
-                <div className="bg-slate-700/30 rounded-xl p-5 border border-slate-600/50">
-                  <h3 className="text-lg font-semibold text-green-400 mb-4">Assignment Details</h3>
+                <div className="callback-detail-section">
+                  <h3 className="mb-4 text-base font-semibold text-blue-400">Assignment details</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <p className="text-gray-400 text-sm mb-1">Assigned To</p>
@@ -1203,15 +1214,15 @@ const ViewCallbacks = ({ onLogout }) => {
 
                 {/* Remarks */}
                 {selectedCallback.remarks && (
-                  <div className="bg-slate-700/30 rounded-xl p-5 border border-slate-600/50">
-                    <h3 className="text-lg font-semibold text-green-400 mb-3">Remarks/Notes</h3>
+                  <div className="callback-detail-section">
+                    <h3 className="mb-3 text-base font-semibold text-blue-400">Remarks and notes</h3>
                     <p className="text-gray-300 whitespace-pre-wrap">{selectedCallback.remarks}</p>
                   </div>
                 )}
 
                 {/* Call Intelligence */}
-                <div className="bg-slate-700/30 rounded-xl p-5 border border-slate-600/50">
-                  <h3 className="text-lg font-semibold text-green-400 mb-3 flex items-center gap-2">
+                <div className="callback-detail-section">
+                  <h3 className="mb-3 flex items-center gap-2 text-base font-semibold text-blue-400">
                     <PhoneCall className="h-5 w-5" />
                     Recent Call Intelligence
                   </h3>
@@ -1224,10 +1235,10 @@ const ViewCallbacks = ({ onLogout }) => {
               </SimpleBar>
 
               {/* Modal Footer */}
-              <div className="sticky bottom-0 bg-slate-800 border-t border-slate-700 p-6 flex justify-end gap-3">
+              <div className="callback-modal-footer sticky bottom-0 flex justify-end gap-3 border-t p-4 sm:p-6">
                 <button
                   onClick={() => setViewModalOpen(false)}
-                  className="px-6 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-all"
+                  className="app-secondary-button px-5 py-2 text-sm font-medium"
                 >
                   Close
                 </button>
@@ -1238,7 +1249,7 @@ const ViewCallbacks = ({ onLogout }) => {
                       setViewModalOpen(false);
                       navigate(`/callbacks/edit/${selectedCallback._id}`);
                     }}
-                    className="px-6 py-2 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white rounded-lg transition-all"
+                    className="app-primary-button px-5 py-2 text-sm font-medium"
                   >
                     Edit Callback
                   </button>

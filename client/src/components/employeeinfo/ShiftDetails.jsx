@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "react-toastify";
 
@@ -17,7 +17,7 @@ const ShiftDetails = ({ shift, shiftType, employeeId }) => {
     try {
       const token = localStorage.getItem("token");
       const response = await axios.get(`${API_BASE}/api/shifts`, {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` },
       });
       setShifts(response.data);
     } catch (err) {
@@ -40,115 +40,127 @@ const ShiftDetails = ({ shift, shiftType, employeeId }) => {
       );
       toast.success("Shift assigned successfully");
       setShowAssignModal(false);
-      window.location.reload(); // Refresh to show updated data
+      window.location.reload();
     } catch (err) {
       console.error("Failed to assign shift:", err);
       toast.error(err.response?.data?.message || "Failed to assign shift");
     }
   };
-  if (!shift) {
-    return (
-      <div className="p-6 rounded-2xl shadow-md border border-[#283255] bg-[#181f34] text-blue-400 text-center font-semibold">
-        <div className="mb-4">No shift assigned</div>
-        <button
-          onClick={() => setShowAssignModal(true)}
-          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition"
-        >
-          Assign Shift
-        </button>
+
+  const typeLabel =
+    shiftType === "flexiblePermanent"
+      ? "Flexible Permanent"
+      : shift?.isFlexible
+      ? "Flexible"
+      : "Standard";
+
+  const renderAssignModal = () =>
+    showAssignModal && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
+        <div className="app-panel w-full max-w-md rounded-2xl p-5 shadow-2xl">
+          <div className="mb-5">
+            <p className="app-eyebrow">Schedule</p>
+            <h2 className="mt-1 text-xl font-semibold text-slate-950 dark:text-white">Assign Shift</h2>
+            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Choose the shift this employee should follow.</p>
+          </div>
+
+          <div className="space-y-4">
+            <label className="block">
+              <span className="mb-2 block text-sm font-medium text-slate-600 dark:text-slate-300">Select Shift</span>
+              <select
+                value={selectedShift}
+                onChange={(e) => setSelectedShift(e.target.value)}
+                className="app-control w-full px-3 py-2"
+              >
+                <option value="">Choose a shift</option>
+                {shifts.map((item) => (
+                  <option key={item._id} value={item._id}>
+                    {item.name} ({item.start} - {item.end})
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <div className="flex justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowAssignModal(false)}
+                className="app-secondary-button px-4 py-2 text-sm font-semibold"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleAssignShift}
+                className="app-primary-button px-4 py-2 text-sm font-semibold"
+              >
+                Assign Shift
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
     );
+
+  if (!shift) {
+    return (
+      <>
+        <div className="app-panel rounded-2xl p-5 text-center">
+          <p className="app-eyebrow">Schedule</p>
+          <h3 className="mt-1 text-lg font-semibold text-slate-950 dark:text-white">No shift assigned</h3>
+          <p className="mx-auto mt-2 max-w-md text-sm text-slate-500 dark:text-slate-400">
+            Assign a shift to keep attendance and working-hour reports aligned.
+          </p>
+          <button
+            type="button"
+            onClick={() => setShowAssignModal(true)}
+            className="app-primary-button mt-4 px-4 py-2 text-sm font-semibold"
+          >
+            Assign Shift
+          </button>
+        </div>
+        {renderAssignModal()}
+      </>
+    );
   }
-  
+
   return (
     <>
-      <div
-        className={`p-6 rounded-2xl shadow-md border 
-        ${shift.isFlexible
-          ? "bg-gradient-to-r from-[#25c289]/10 via-[#181f34] to-[#181f34] border-green-300"
-          : "bg-blue-900/25 border-blue-400"}
-        text-blue-100`}
-      >
-        <div className="flex justify-between items-start mb-4">
-          <h3 className="text-xl font-bold text-cyan-300 flex items-center gap-2">
-            <span role="img" aria-label="Shift">⏰</span> Shift Details
-          </h3>
+      <div className="app-panel rounded-2xl p-5">
+        <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="app-eyebrow">Schedule</p>
+            <h3 className="mt-1 text-lg font-semibold text-slate-950 dark:text-white">Shift Details</h3>
+          </div>
           <button
+            type="button"
             onClick={() => setShowAssignModal(true)}
-            className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm transition"
+            className="app-secondary-button px-3 py-2 text-sm font-semibold"
           >
             Change Shift
           </button>
         </div>
-        <div className="space-y-2">
-          <p>
-            <span className="font-semibold">Shift Name:</span>{" "}
-            <span className="text-cyan-200">{shift.name || "N/A"}</span>
-          </p>
-          <p>
-            <span className="font-semibold">Start Time:</span>{" "}
-            <span className="text-cyan-200">{shift.start || "N/A"}</span>
-          </p>
-          <p>
-            <span className="font-semibold">End Time:</span>{" "}
-            <span className="text-cyan-200">{shift.end || "N/A"}</span>
-          </p>
-          <p>
-            <span className="font-semibold">Duration:</span>{" "}
-            <span className="text-cyan-200">{shift.durationHours ?? "N/A"} hours</span>
-          </p>
-          <p>
-            <span className="font-semibold">Type:</span>{" "}
-            {shiftType === "flexiblePermanent" ? (
-              <span className="text-green-400 font-medium">Flexible Permanent</span>
-            ) : shift.isFlexible ? (
-              <span className="text-green-400 font-medium">Flexible</span>
-            ) : (
-              <span className="text-pink-400 font-medium">Standard</span>
-            )}
-          </p>
+
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {[
+            ["Shift Name", shift.name || "N/A"],
+            ["Start Time", shift.start || "N/A"],
+            ["End Time", shift.end || "N/A"],
+            ["Duration", `${shift.durationHours ?? "N/A"} hours`],
+          ].map(([label, value]) => (
+            <div key={label} className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-white/10 dark:bg-white/[0.04]">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{label}</p>
+              <p className="mt-1 text-sm font-medium text-slate-900 dark:text-slate-100">{value}</p>
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-3 inline-flex rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-sm font-semibold text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-200">
+          {typeLabel}
         </div>
       </div>
 
-      {/* Assign Shift Modal */}
-      {showAssignModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-[#1e253b] rounded-lg p-6 w-full max-w-md">
-            <h2 className="text-xl font-semibold text-white mb-4">Assign Shift</h2>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-gray-300 mb-1">Select Shift</label>
-                <select
-                  value={selectedShift}
-                  onChange={(e) => setSelectedShift(e.target.value)}
-                  className="w-full px-3 py-2 rounded bg-[#0f1724] border border-[#334065] text-white"
-                >
-                  <option value="">Choose a shift</option>
-                  {shifts.map((s) => (
-                    <option key={s._id} value={s._id}>
-                      {s.name} ({s.start} - {s.end})
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="flex justify-end gap-4">
-                <button
-                  onClick={() => setShowAssignModal(false)}
-                  className="px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded transition"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleAssignShift}
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded transition"
-                >
-                  Assign Shift
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {renderAssignModal()}
     </>
   );
 };

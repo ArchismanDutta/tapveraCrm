@@ -438,8 +438,9 @@ exports.getPaymentHistory = async (req, res) => {
     const limit = parseInt(req.query.limit) || 10;
     const userId = req.user._id;
 
-    // Check if user is accessing their own history or is admin
-    if (req.user.role !== "super-admin" && employeeId !== userId.toString()) {
+    // Check if user is accessing their own history, or is hr/super-admin.
+    // Standardized 2026-07-03 (Phase 4.5) - was super-admin only before.
+    if (!["hr", "super-admin"].includes(req.user.role) && employeeId !== userId.toString()) {
       return res.status(403).json({
         success: false,
         message: "You can only view your own payment history",
@@ -485,9 +486,10 @@ exports.getPaymentById = async (req, res) => {
       });
     }
 
-    // Check if user has access to this payment
+    // Check if user has access to this payment (hr/super-admin, or own
+    // payment). Standardized 2026-07-03 (Phase 4.5) - was super-admin only before.
     if (
-      req.user.role !== "super-admin" &&
+      !["hr", "super-admin"].includes(req.user.role) &&
       payment.employee._id.toString() !== userId.toString()
     ) {
       return res.status(403).json({

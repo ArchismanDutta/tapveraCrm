@@ -75,12 +75,13 @@ const EmployeeShiftAssignment = () => {
       <h2 className="text-lg font-semibold text-slate-950 dark:text-white">Employee shift assignment</h2>
       <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Set a default shift and optional weekday overrides.</p>
 
-      <form onSubmit={handleSubmit} className="mt-6 space-y-6">
+      <form onSubmit={handleSubmit} className="mt-6 max-w-5xl space-y-6">
         {/* Default Shift */}
-        <div>
+        <section className="rounded-2xl border border-slate-200 bg-slate-50 p-5 dark:border-white/10 dark:bg-white/[0.025]">
           <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200">
-            Default Shift
+            Default shift
           </label>
+          <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">Applied whenever a weekday-specific override is not selected.</p>
           <select
             value={assignment.defaultShiftId}
             onChange={handleDefaultShiftChange}
@@ -94,23 +95,24 @@ const EmployeeShiftAssignment = () => {
               </option>
             ))}
           </select>
-        </div>
+        </section>
 
         {/* Weekly Shifts */}
-        <div>
+        <section>
           <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200">
-            Weekly Shift Overrides (Optional)
+            Weekly shift overrides
           </label>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <p className="mb-4 text-xs text-slate-500 dark:text-slate-400">Only change the days that differ from the default schedule.</p>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
             {dayNames.map((day) => (
-              <div key={day}>
-                <label className="mb-1 block text-xs font-medium text-slate-500 dark:text-slate-400">{day}</label>
+              <div key={day} className="rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-white/10 dark:bg-white/[0.025]">
+                <label className="mb-2 block text-xs font-semibold text-slate-600 dark:text-slate-300">{day}</label>
                 <select
                   value={assignment.weeklyShifts[day]}
                   onChange={(e) => handleWeeklyShiftChange(day, e.target.value)}
                   className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 dark:border-white/10 dark:bg-[#151923] dark:text-white"
                 >
-                  <option value="">Use Default</option>
+                  <option value="">Use default</option>
                   {shifts.map((shift) => (
                     <option key={shift._id} value={shift._id}>
                       {shift.name}
@@ -120,12 +122,12 @@ const EmployeeShiftAssignment = () => {
               </div>
             ))}
           </div>
-        </div>
+        </section>
 
         <button
           type="submit"
           disabled={loading}
-          className="h-10 rounded-lg bg-blue-600 px-4 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:opacity-50"
+          className="h-10 rounded-lg bg-blue-600 px-5 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {loading ? "Saving..." : "Save assignment"}
         </button>

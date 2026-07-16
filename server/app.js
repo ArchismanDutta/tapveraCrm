@@ -55,6 +55,7 @@ const projectReportRoutes = require("./routes/projectReportRoutes");
 const clientRemarkRoutes = require("./routes/clientRemarkRoutes");
 const sheetRoutes = require("./routes/sheetRoutes");
 const positionRoutes = require("./routes/positionRoutes");
+const departmentRoutes = require("./routes/departmentRoutes"); // Access-management rework (2026-07-03)
 const transferRoutes = require("./routes/transferRoutes");
 const callIntelligenceRoutes = require("./routes/callIntelligenceRoutes");
 const internalRoutes         = require("./routes/internalRoutes");
@@ -200,6 +201,7 @@ app.use("/api/projects", clientRemarkRoutes);
 // Mount general project routes LAST
 app.use("/api/projects", projectRoutes);
 app.use("/api/positions", positionRoutes);
+app.use("/api/departments", departmentRoutes); // Access-management rework (2026-07-03)
 app.use("/api/call-intelligence", callIntelligenceRoutes);
 app.use("/api/internal", internalRoutes);
 

@@ -6,9 +6,11 @@ import {
   FolderOpen,
   ListTodo,
   Pin,
+  TrendingUp,
   Users,
   X,
 } from "lucide-react";
+import { getTaskProgress } from "../../utils/projectProgress";
 
 const getInitials = (value = "") => {
   const parts = value.trim().split(/\s+/).filter(Boolean);
@@ -41,7 +43,7 @@ export default function ProjectCommunicationContext({
       id: client._id,
       name: client.clientName || client.businessName || "Client",
       role: "Client",
-      color: "bg-sky-500/20 text-sky-300 border-sky-400/20",
+      color: "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-400/20 dark:bg-sky-500/20 dark:text-sky-300",
     }));
 
     const teamParticipants = (project?.assignedTo || []).map((member) => ({
@@ -50,7 +52,7 @@ export default function ProjectCommunicationContext({
         ? member.employeeId || member.designation || "Team member"
         : member.name || member.employeeId || "Team member",
       role: member.designation || "Project team",
-      color: "bg-teal-500/20 text-teal-200 border-teal-400/20",
+      color: "border-teal-200 bg-teal-50 text-teal-700 dark:border-teal-400/20 dark:bg-teal-500/20 dark:text-teal-200",
     }));
 
     return [...clientParticipants, ...teamParticipants];
@@ -65,6 +67,8 @@ export default function ProjectCommunicationContext({
     () => tasks.filter((task) => !["completed", "rejected"].includes(task.status)),
     [tasks]
   );
+
+  const progress = useMemo(() => getTaskProgress(tasks), [tasks]);
 
   const nextTask = useMemo(() => {
     const datedTasks = openTasks
@@ -90,16 +94,16 @@ export default function ProjectCommunicationContext({
   }, [messages]);
 
   return (
-    <aside className="absolute inset-y-0 right-0 z-40 flex w-[min(22rem,92vw)] flex-col border-l border-white/10 bg-[#0d151c] shadow-2xl shadow-black/30">
-      <div className="flex items-center justify-between border-b border-white/10 px-4 py-4">
+    <aside className="absolute inset-y-0 right-0 z-40 flex w-[min(22rem,92vw)] flex-col border-l border-slate-200 bg-white shadow-2xl shadow-slate-900/10 dark:border-white/10 dark:bg-[#0d151c] dark:shadow-black/30">
+      <div className="flex items-center justify-between border-b border-slate-200 px-4 py-4 dark:border-white/10">
         <div>
-          <h2 className="text-sm font-semibold text-white">Project details</h2>
-          <p className="mt-0.5 text-xs text-slate-500">Conversation context</p>
+          <h2 className="text-sm font-semibold text-slate-950 dark:text-white">Project details</h2>
+          <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">Conversation context</p>
         </div>
         <button
           type="button"
           onClick={onClose}
-          className="rounded-lg p-2 text-slate-400 transition hover:bg-white/5 hover:text-white"
+          className="rounded-lg p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-white/5 dark:hover:text-white"
           aria-label="Close project details"
         >
           <X className="h-4 w-4" />
@@ -107,11 +111,30 @@ export default function ProjectCommunicationContext({
       </div>
 
       <div className="flex-1 overflow-y-auto">
-        <section className="border-b border-white/10 p-4">
-          <div className="mb-3 flex items-center gap-2 text-sm font-medium text-white">
+        <section className="border-b border-slate-200 p-4 dark:border-white/10">
+          <div className="mb-3 flex items-center gap-2 text-sm font-medium text-slate-900 dark:text-white">
+            <TrendingUp className="h-4 w-4 text-teal-400" />
+            Progress
+            <span className="ml-auto text-xs font-normal text-slate-500 dark:text-slate-400">
+              {progress.total === 0 ? "No tasks yet" : `${progress.completed}/${progress.total} tasks`}
+            </span>
+          </div>
+          <div className="h-1.5 overflow-hidden rounded-full bg-slate-100 dark:bg-white/[0.06]">
+            <div
+              className="h-full rounded-full bg-teal-400 transition-all"
+              style={{ width: `${progress.percent}%` }}
+            />
+          </div>
+          {progress.total > 0 && (
+            <p className="mt-1.5 text-right text-[11px] text-slate-500 dark:text-slate-400">{progress.percent}% complete</p>
+          )}
+        </section>
+
+        <section className="border-b border-slate-200 p-4 dark:border-white/10">
+          <div className="mb-3 flex items-center gap-2 text-sm font-medium text-slate-900 dark:text-white">
             <Users className="h-4 w-4 text-teal-400" />
             Participants
-            <span className="ml-auto text-xs font-normal text-slate-500">
+            <span className="ml-auto text-xs font-normal text-slate-500 dark:text-slate-400">
               {participants.length}
             </span>
           </div>
@@ -119,14 +142,14 @@ export default function ProjectCommunicationContext({
             {participants.slice(0, 6).map((participant) => (
               <div
                 key={participant.id || `${participant.name}-${participant.role}`}
-                className={`flex h-9 w-9 items-center justify-center rounded-full border text-[11px] font-semibold ring-2 ring-[#0d151c] ${participant.color}`}
+                className={`flex h-9 w-9 items-center justify-center rounded-full border text-[11px] font-semibold ring-2 ring-white dark:ring-[#0d151c] ${participant.color}`}
                 title={`${participant.name} - ${participant.role}`}
               >
                 {getInitials(participant.name)}
               </div>
             ))}
             {participants.length > 6 && (
-              <div className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-slate-800 text-[11px] font-semibold text-slate-300 ring-2 ring-[#0d151c]">
+              <div className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-slate-100 text-[11px] font-semibold text-slate-600 ring-2 ring-white dark:border-white/10 dark:bg-slate-800 dark:text-slate-300 dark:ring-[#0d151c]">
                 +{participants.length - 6}
               </div>
             )}
@@ -134,62 +157,62 @@ export default function ProjectCommunicationContext({
           <div className="mt-3 space-y-1.5">
             {participants.slice(0, 3).map((participant) => (
               <div key={`${participant.id}-label`} className="flex items-center justify-between gap-3 text-xs">
-                <span className="truncate text-slate-300">{participant.name}</span>
-                <span className="truncate text-slate-500">{participant.role}</span>
+                <span className="truncate text-slate-700 dark:text-slate-300">{participant.name}</span>
+                <span className="truncate text-slate-500 dark:text-slate-400">{participant.role}</span>
               </div>
             ))}
           </div>
         </section>
 
-        <section className="border-b border-white/10 p-4">
-          <div className="mb-3 flex items-center gap-2 text-sm font-medium text-white">
+        <section className="border-b border-slate-200 p-4 dark:border-white/10">
+          <div className="mb-3 flex items-center gap-2 text-sm font-medium text-slate-900 dark:text-white">
             <Pin className="h-4 w-4 text-amber-400" />
             Pinned decision
           </div>
           <button
             type="button"
             onClick={onOpenPinned}
-            className="group w-full rounded-xl border border-white/10 bg-white/[0.035] p-3 text-left transition hover:border-teal-400/25 hover:bg-white/[0.055]"
+            className="group w-full rounded-xl border border-slate-200 bg-slate-50 p-3 text-left transition hover:border-teal-300 hover:bg-teal-50/60 dark:border-white/10 dark:bg-white/[0.035] dark:hover:border-teal-400/25 dark:hover:bg-white/[0.055]"
           >
             <div className="flex items-start gap-3">
-              <div className="rounded-lg bg-teal-500/10 p-2 text-teal-400">
+              <div className="rounded-lg bg-teal-100 p-2 text-teal-700 dark:bg-teal-500/10 dark:text-teal-400">
                 <FileText className="h-4 w-4" />
               </div>
               <div className="min-w-0 flex-1">
-                <p className="line-clamp-3 text-xs leading-5 text-slate-300">
+                <p className="line-clamp-3 text-xs leading-5 text-slate-700 dark:text-slate-300">
                   {pinnedMessage?.message || "No project decision has been pinned yet."}
                 </p>
-                <p className="mt-2 text-[11px] text-slate-500">
+                <p className="mt-2 text-[11px] text-slate-500 dark:text-slate-400">
                   {pinnedMessage ? "Open pinned messages" : "Pin a message to keep it visible here"}
                 </p>
               </div>
-              <ChevronRight className="mt-1 h-4 w-4 text-slate-600 transition group-hover:text-teal-400" />
+              <ChevronRight className="mt-1 h-4 w-4 text-slate-400 transition group-hover:text-teal-500 dark:text-slate-600 dark:group-hover:text-teal-400" />
             </div>
           </button>
         </section>
 
-        <section className="border-b border-white/10 p-4">
-          <div className="mb-3 flex items-center gap-2 text-sm font-medium text-white">
+        <section className="border-b border-slate-200 p-4 dark:border-white/10">
+          <div className="mb-3 flex items-center gap-2 text-sm font-medium text-slate-900 dark:text-white">
             <Calendar className="h-4 w-4 text-teal-400" />
             Next deadline
           </div>
-          <div className="rounded-xl border border-white/10 bg-white/[0.035] p-3">
-            <p className="text-sm font-medium text-slate-200">
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-white/10 dark:bg-white/[0.035]">
+            <p className="text-sm font-medium text-slate-900 dark:text-slate-200">
               {nextTask?.title || project?.projectName}
             </p>
-            <p className="mt-1 text-xs text-slate-500">{formatDate(nextDeadline)}</p>
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{formatDate(nextDeadline)}</p>
           </div>
         </section>
 
-        <section className="border-b border-white/10 p-4">
+        <section className="border-b border-slate-200 p-4 dark:border-white/10">
           <button
             type="button"
             onClick={onOpenTasks}
-            className="mb-3 flex w-full items-center gap-2 text-left text-sm font-medium text-white"
+            className="mb-3 flex w-full items-center gap-2 text-left text-sm font-medium text-slate-900 dark:text-white"
           >
             <ListTodo className="h-4 w-4 text-teal-400" />
             Open tasks
-            <span className="ml-auto rounded-full bg-teal-500/10 px-2 py-0.5 text-[11px] text-teal-300">
+            <span className="ml-auto rounded-full bg-teal-50 px-2 py-0.5 text-[11px] text-teal-700 dark:bg-teal-500/10 dark:text-teal-300">
               {openTasks.length}
             </span>
           </button>
@@ -199,26 +222,26 @@ export default function ProjectCommunicationContext({
                 key={task._id}
                 type="button"
                 onClick={onOpenTasks}
-                className="flex w-full items-center gap-3 rounded-lg px-2 py-1.5 text-left transition hover:bg-white/5"
+                className="flex w-full items-center gap-3 rounded-lg px-2 py-1.5 text-left transition hover:bg-slate-100 dark:hover:bg-white/5"
               >
                 <span className="h-1.5 w-1.5 rounded-full bg-teal-400" />
-                <span className="min-w-0 flex-1 truncate text-xs text-slate-300">
+                <span className="min-w-0 flex-1 truncate text-xs text-slate-700 dark:text-slate-300">
                   {task.title}
                 </span>
-                <span className="text-[11px] capitalize text-slate-600">{task.status}</span>
+                <span className="text-[11px] capitalize text-slate-500 dark:text-slate-500">{task.status}</span>
               </button>
             ))}
             {openTasks.length === 0 && (
-              <p className="px-2 py-1 text-xs text-slate-500">No open tasks</p>
+              <p className="px-2 py-1 text-xs text-slate-500 dark:text-slate-400">No open tasks</p>
             )}
           </div>
         </section>
 
         <section className="p-4">
-          <div className="mb-3 flex items-center gap-2 text-sm font-medium text-white">
+          <div className="mb-3 flex items-center gap-2 text-sm font-medium text-slate-900 dark:text-white">
             <FolderOpen className="h-4 w-4 text-teal-400" />
             Shared files
-            <span className="ml-auto text-xs font-normal text-slate-500">
+            <span className="ml-auto text-xs font-normal text-slate-500 dark:text-slate-400">
               {sharedFiles.length}
             </span>
           </div>
@@ -226,21 +249,21 @@ export default function ProjectCommunicationContext({
             {sharedFiles.map((attachment) => (
               <div
                 key={attachment._id || attachment.url || attachment.filename}
-                className="flex items-center gap-3 rounded-lg border border-white/5 bg-white/[0.025] p-2.5"
+                className="flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 p-2.5 dark:border-white/5 dark:bg-white/[0.025]"
               >
-                <div className="rounded-lg bg-sky-500/10 p-2 text-sky-400">
+                <div className="rounded-lg bg-sky-100 p-2 text-sky-700 dark:bg-sky-500/10 dark:text-sky-400">
                   <FileText className="h-4 w-4" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-xs text-slate-300">{attachment.filename}</p>
-                  <p className="mt-0.5 text-[11px] uppercase text-slate-600">
+                  <p className="truncate text-xs text-slate-700 dark:text-slate-300">{attachment.filename}</p>
+                  <p className="mt-0.5 text-[11px] uppercase text-slate-500 dark:text-slate-600">
                     {attachment.fileType || "File"}
                   </p>
                 </div>
               </div>
             ))}
             {sharedFiles.length === 0 && (
-              <p className="text-xs text-slate-500">Files shared in this conversation appear here.</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400">Files shared in this conversation appear here.</p>
             )}
           </div>
         </section>

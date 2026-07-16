@@ -16,6 +16,7 @@ import {
   Clock,
   AlertTriangle,
 } from "lucide-react";
+import { getTaskProgress } from "../../utils/projectProgress";
 
 const PROJECT_TYPE_ICONS = {
   Website: Globe,
@@ -84,6 +85,8 @@ const ProjectCard = ({
     if (!project.endDate) return false;
     return new Date(project.endDate) < new Date();
   };
+
+  const progress = getTaskProgress(project.tasks);
 
   return (
     <article className="group relative h-full overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition-all hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-md dark:border-slate-800 dark:bg-[#11141b] dark:hover:border-blue-500/30">
@@ -177,6 +180,24 @@ const ProjectCard = ({
                 {formatDate(project.endDate)}
               </div>
             </div>
+          </div>
+        </div>
+
+        {/* Task Progress */}
+        <div className="mb-5 border-t border-slate-100 pt-4 dark:border-slate-800">
+          <div className="mb-1.5 flex items-center justify-between text-xs">
+            <span className="font-medium text-slate-500 dark:text-slate-400">Task progress</span>
+            <span className="text-slate-500 dark:text-slate-400">
+              {progress.total === 0
+                ? "No tasks yet"
+                : `${progress.completed}/${progress.total} tasks (${progress.percent}%)`}
+            </span>
+          </div>
+          <div className="h-1.5 overflow-hidden rounded-full bg-slate-100 dark:bg-white/[0.07]">
+            <div
+              className="h-full rounded-full bg-blue-600 transition-all"
+              style={{ width: `${progress.percent}%` }}
+            />
           </div>
         </div>
 

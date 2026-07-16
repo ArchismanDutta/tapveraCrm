@@ -61,6 +61,22 @@ const userSchema = new mongoose.Schema(
     password: { type: String, required: true },
     role: { type: String, enum: ["super-admin", "admin", "hr", "employee"], default: "employee" },
     department: { type: String, enum: ["executives", "development", "marketingAndSales", "humanResource", ""], default: "" },
+    // ====== ACCESS-MANAGEMENT REWORK (2026-07-03) ======
+    // Additive reference fields — see docs/superpowers/specs/2026-07-03-access-management-design.md
+    // `department` and `position` (string fields above/below) are left untouched for backward
+    // compatibility during the transition. New code should prefer departmentRef/positionRef;
+    // they're populated via server/scripts/migrateToPositionRefs.js and kept in sync by the
+    // Access Management page going forward.
+    departmentRef: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Department",
+      default: null
+    },
+    positionRef: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Position",
+      default: null
+    },
     designation: {
       type: String,
       trim: true,
@@ -201,6 +217,8 @@ const userSchema = new mongoose.Schema(
 userSchema.index({ shiftType: 1, assignedShift: 1 });
 userSchema.index({ department: 1, designation: 1 });
 userSchema.index({ status: 1 });
+userSchema.index({ departmentRef: 1 });
+userSchema.index({ positionRef: 1 });
 
 // ======================
 // Pre-save hook to ensure consistent shift data

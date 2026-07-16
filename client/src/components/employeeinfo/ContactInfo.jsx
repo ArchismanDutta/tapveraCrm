@@ -1,27 +1,23 @@
 import React from "react";
 
+const rows = [
+  ["Email", "email"],
+  ["Phone", "phone"],
+  ["Address", "address"],
+  ["Emergency Contact", "emergencyContact"],
+];
+
 const ContactInfo = ({ info }) => (
-  <div className="p-6 rounded-2xl shadow-md border border-[#283255] bg-[#181f34] text-blue-100">
-    <h3 className="text-xl font-bold text-cyan-300 mb-4 flex items-center gap-2">
-      <span role="img" aria-label="Contact">📞</span> Contact Info
-    </h3>
-    <div className="space-y-2">
-      <p>
-        <span className="font-semibold">Email:</span>{" "}
-        <span className="text-cyan-200">{info.email || "N/A"}</span>
-      </p>
-      <p>
-        <span className="font-semibold">Phone:</span>{" "}
-        <span className="text-cyan-200">{info.phone || "N/A"}</span>
-      </p>
-      <p>
-        <span className="font-semibold">Address:</span>{" "}
-        <span className="text-cyan-200">{info.address || "N/A"}</span>
-      </p>
-      <p>
-        <span className="font-semibold">Emergency Contact:</span>{" "}
-        <span className="text-cyan-200">{info.emergencyContact || "N/A"}</span>
-      </p>
+  <div className="app-panel rounded-2xl p-5">
+    <p className="app-eyebrow">Communication</p>
+    <h3 className="mt-1 text-lg font-semibold text-slate-950 dark:text-white">Contact Info</h3>
+    <div className="mt-4 space-y-3">
+      {rows.map(([label, key]) => (
+        <div key={key} className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-white/10 dark:bg-white/[0.04]">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{label}</p>
+          <p className="mt-1 break-words text-sm font-medium text-slate-900 dark:text-slate-100">{info[key] || "N/A"}</p>
+        </div>
+      ))}
     </div>
   </div>
 );

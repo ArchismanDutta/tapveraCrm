@@ -5,7 +5,7 @@ import ManageGroupModal from "../components/chat/ManageGroupModal";
 import ChatWindow from "../components/chat/chatWindow";
 import { useWebSocketContext } from "../contexts/WebSocketContext";
 import Sidebar from "../components/dashboard/Sidebar";
-import { ArrowLeft, Search, Filter, X, SortAsc, Users, Settings } from "lucide-react";
+import { ArrowLeft, Search, Filter, X, SortAsc, Users, Settings, Trash2, MessageSquare } from "lucide-react";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
 
@@ -377,7 +377,7 @@ const ChatPage = ({ onLogout }) => {
   }, [conversations, debouncedSearchTerm, filterType, sortBy, getUnreadCount]);
 
   return (
-    <div className="app-shell h-[100dvh] overflow-hidden">
+    <div className="app-shell messages-theme h-[100dvh] overflow-hidden">
       {/* Shared Sidebar (same as AttendancePage) */}
       <Sidebar
         onLogout={onLogout}
@@ -393,13 +393,18 @@ const ChatPage = ({ onLogout }) => {
         }`}
       >
         {/* Conversations Panel */}
-        <section className={`h-full w-[320px] min-w-[280px] max-w-[36vw] flex-col border-r border-white/10 bg-[#0b0d14] ${selectedConversation ? "flex max-sm:hidden" : "flex max-sm:w-full max-sm:max-w-none"}`}>
+        <section className={`h-full w-[340px] min-w-[280px] max-w-[34vw] flex-col border-r border-slate-200 bg-white dark:border-white/10 dark:bg-[#10131c] ${selectedConversation ? "flex max-sm:hidden" : "flex max-sm:w-full max-sm:max-w-none"}`}>
           {/* Header with title and filter button */}
-          <div className="border-b border-white/10 p-4 pb-3">
+          <div className="border-b border-slate-200 p-4 pb-3 dark:border-white/10">
             <div className="flex items-center justify-between mb-3">
-              <div>
-                <p className="app-eyebrow">Messages</p>
-                <h1 className="mt-1 text-lg font-semibold text-white">Conversations</h1>
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-600 text-white shadow-sm shadow-blue-600/20">
+                  <MessageSquare className="h-4 w-4" />
+                </div>
+                <div>
+                  <p className="app-eyebrow">Messages</p>
+                  <h1 className="text-lg font-semibold text-slate-950 dark:text-white">Conversations</h1>
+                </div>
               </div>
               <button
                 onClick={() => setShowFilters(!showFilters)}
@@ -448,7 +453,7 @@ const ChatPage = ({ onLogout }) => {
                         className={`flex-1 px-3 py-1.5 rounded text-xs font-medium transition-all ${
                           filterType === type
                             ? "bg-blue-600 text-white"
-                            : "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                            : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300 dark:hover:bg-white/[0.08]"
                         }`}
                       >
                         {type === "all"
@@ -478,7 +483,7 @@ const ChatPage = ({ onLogout }) => {
                   <select
                     value={sortBy}
                     onChange={(e) => setSortBy(e.target.value)}
-                    className="w-full px-3 py-1.5 bg-gray-700 border border-gray-600 rounded text-xs text-white focus:outline-none focus:border-blue-500 transition-colors"
+                    className="app-control w-full px-3 py-1.5 text-xs"
                   >
                     <option value="recent">Most Recent</option>
                     <option value="alphabetical">Alphabetical</option>
@@ -541,12 +546,12 @@ const ChatPage = ({ onLogout }) => {
                 return (
                   <li
                     key={conv._id}
-                    className={`cursor-pointer px-3 py-2 rounded transition-colors relative ${
+                  className={`relative cursor-pointer rounded-xl border px-3 py-3 transition-colors ${
                       selectedConversation?._id === conv._id
-                        ? "bg-gray-700 text-white"
+                        ? "border-blue-200 bg-blue-50 text-blue-950 dark:border-blue-400/25 dark:bg-blue-400/10 dark:text-white"
                         : hasUnread
-                        ? "bg-blue-900/30 border border-blue-500/50 hover:bg-blue-800/40"
-                        : "hover:bg-gray-600"
+                        ? "border-blue-200 bg-blue-50/70 text-slate-900 hover:bg-blue-100 dark:border-blue-400/25 dark:bg-blue-400/10 dark:text-white dark:hover:bg-blue-400/15"
+                        : "border-transparent text-slate-700 hover:border-slate-200 hover:bg-slate-50 dark:text-slate-200 dark:hover:border-white/10 dark:hover:bg-white/[0.05]"
                     }`}
                     onClick={() => handleSelectConversation(conv)}
                   >
@@ -582,11 +587,11 @@ const ChatPage = ({ onLogout }) => {
         </section>
 
         {/* Chat Panel */}
-        <section className={`h-full min-w-0 flex-1 flex-col bg-[#07080d] ${selectedConversation ? "flex" : "flex max-sm:hidden"}`}>
+        <section className={`h-full min-w-0 flex-1 flex-col bg-slate-50 dark:bg-[#0b0d12] ${selectedConversation ? "flex" : "flex max-sm:hidden"}`}>
           {selectedConversation ? (
             <>
               {/* Header */}
-              <div className="flex items-center justify-between border-b border-white/10 bg-[#0b0d14] p-4">
+              <div className="flex items-center justify-between border-b border-slate-200 bg-white p-4 dark:border-white/10 dark:bg-[#10131c]">
                 <div className="flex min-w-0 items-center gap-2">
                   <button
                     type="button"
@@ -596,13 +601,13 @@ const ChatPage = ({ onLogout }) => {
                   >
                     <ArrowLeft className="h-4 w-4" />
                   </button>
-                  <h4 className="truncate text-lg font-semibold text-white">
+                  <h4 className="truncate text-lg font-semibold text-slate-950 dark:text-white">
                     {selectedConversation.name || "Group Chat"}
                   </h4>
                 </div>
                 <div className="flex items-center gap-4">
                   {selectedConversation.members && (
-                    <div className="text-sm text-gray-400">
+                    <div className="hidden max-w-sm truncate text-sm text-slate-500 dark:text-slate-400 lg:block">
                       Members:{" "}
                       {selectedConversation.members
                         .map((m) => m.name || m._id)
@@ -625,8 +630,10 @@ const ChatPage = ({ onLogout }) => {
                         onClick={() =>
                           handleDeleteConversation(selectedConversation._id)
                         }
-                        className="text-red-500 hover:text-red-700 transition"
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-rose-200 bg-rose-50 text-[0px] text-rose-600 transition hover:bg-rose-100 dark:border-rose-400/20 dark:bg-rose-400/10 dark:text-rose-300 dark:hover:bg-rose-400/15"
+                        aria-label="Delete conversation"
                       >
+                        <Trash2 className="h-4 w-4" />
                         🗑️
                       </button>
                     </>
@@ -646,8 +653,14 @@ const ChatPage = ({ onLogout }) => {
               </div>
             </>
           ) : (
-            <div className="flex items-center justify-center flex-1 text-gray-500 text-center font-medium">
-              Select a conversation to start chatting
+            <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
+              <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-slate-200 bg-white text-blue-600 shadow-sm dark:border-white/10 dark:bg-[#10131c] dark:text-blue-300">
+                <MessageSquare className="h-6 w-6" />
+              </div>
+              <div>
+                <p className="font-semibold text-slate-900 dark:text-white">Choose a conversation</p>
+                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Select a team or group from the left to start chatting.</p>
+              </div>
             </div>
           )}
         </section>

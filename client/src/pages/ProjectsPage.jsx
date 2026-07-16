@@ -182,7 +182,7 @@ const ProjectsPageNew = ({ onLogout }) => {
   };
 
   const handleViewProject = (project) => {
-    navigate(`/projects/${project._id}`);
+    navigate(`/project/${project._id}`);
   };
 
   const handleEditProject = () => {
@@ -206,7 +206,9 @@ const ProjectsPageNew = ({ onLogout }) => {
   };
 
   const handleCommunication = (project) => {
-    navigate(`/project-communication/${project._id}`);
+    // Note: communication tracking is a cross-project dashboard (no per-project
+    // route exists), so this links to the list rather than a project-specific page.
+    navigate(`/communication-tracking`);
   };
 
   const handleExport = async () => {

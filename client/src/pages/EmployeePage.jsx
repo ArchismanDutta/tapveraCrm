@@ -31,7 +31,6 @@ import QualificationsSkills from "../components/employeeinfo/QualificationsSkill
 import ShiftDetails from "../components/employeeinfo/ShiftDetails";
 import { formatDepartment } from "../utils/formatters";
 
-const SIDEBAR_WIDTH = 250;
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
 
 const DEPARTMENTS = [
@@ -49,10 +48,22 @@ const STATUSES = ["active", "inactive", "terminated", "absconded"];
 const ROLES = ["employee", "hr", "admin", "super-admin"];
 
 const ROLE_META = {
-  "super-admin": { label: "Super Admin", color: "text-purple-300 bg-purple-500/10 border-purple-500/30" },
-  admin:         { label: "Admin",       color: "text-blue-300 bg-blue-500/10 border-blue-500/30" },
-  hr:            { label: "HR",          color: "text-teal-300 bg-teal-500/10 border-teal-500/30" },
-  employee:      { label: "Employee",    color: "text-slate-300 bg-slate-700/30 border-slate-600/40" },
+  "super-admin": {
+    label: "Super Admin",
+    color: "border-purple-200 bg-purple-50 text-purple-700 dark:border-purple-500/30 dark:bg-purple-500/10 dark:text-purple-200",
+  },
+  admin: {
+    label: "Admin",
+    color: "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-200",
+  },
+  hr: {
+    label: "HR",
+    color: "border-teal-200 bg-teal-50 text-teal-700 dark:border-teal-500/30 dark:bg-teal-500/10 dark:text-teal-200",
+  },
+  employee: {
+    label: "Employee",
+    color: "border-slate-200 bg-slate-100 text-slate-700 dark:border-white/10 dark:bg-white/[0.06] dark:text-slate-200",
+  },
 };
 const GENDERS = ["male", "female", "other"];
 const PAYMENT_MODES = ["bank", "cash"];
@@ -173,7 +184,7 @@ const buildPayload = (formData) => ({
 
 const Field = ({ label, children, className = "" }) => (
   <label className={`block ${className}`}>
-    <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-400">
+    <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
       {label}
     </span>
     {children}
@@ -181,18 +192,18 @@ const Field = ({ label, children, className = "" }) => (
 );
 
 const inputClass =
-  "w-full rounded-lg border border-slate-700 bg-slate-950/70 px-3 py-2.5 text-sm text-slate-100 outline-none transition focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/20";
+  "app-control w-full px-3 py-2.5 text-sm outline-none transition focus:ring-2 focus:ring-blue-500/20";
 
 const textAreaClass = `${inputClass} min-h-24 resize-y`;
 
 const InfoPill = ({ icon: Icon, label, value }) => (
-  <div className="flex min-w-0 items-center gap-3 rounded-lg border border-slate-700/70 bg-slate-900/60 px-4 py-3">
-    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-cyan-500/10 text-cyan-300">
-      <Icon className="h-4 w-4" />
+  <div className="flex min-w-0 items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-white/10 dark:bg-white/[0.04]">
+    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-100 text-blue-600 dark:bg-blue-500/15 dark:text-blue-300">
+      {React.createElement(Icon, { className: "h-4 w-4" })}
     </div>
     <div className="min-w-0">
-      <p className="text-xs uppercase text-slate-500">{label}</p>
-      <p className="truncate text-sm font-semibold text-slate-100">{value || "Not set"}</p>
+      <p className="text-xs uppercase text-slate-500 dark:text-slate-400">{label}</p>
+      <p className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">{value || "Not set"}</p>
     </div>
   </div>
 );
@@ -391,12 +402,12 @@ const EmployeePage = () => {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen bg-slate-950 text-white">
+      <div className="app-shell employee-detail-theme h-[100dvh] overflow-hidden">
         <Sidebar collapsed={collapsed} setCollapsed={setCollapsed} userRole="admin" />
-        <main className={`flex flex-1 items-center justify-center transition-all ${collapsed ? "ml-24" : "ml-72"}`}>
-          <div className="flex items-center gap-3 rounded-lg border border-slate-800 bg-slate-900 px-5 py-4">
-            <div className="h-6 w-6 animate-spin rounded-full border-2 border-cyan-400 border-t-transparent" />
-            <span className="text-cyan-200">Loading employee details...</span>
+        <main className={`app-main flex items-center justify-center transition-all ${collapsed ? "ml-16" : "ml-16 sm:ml-56"}`}>
+          <div className="app-panel flex items-center gap-3 rounded-2xl px-5 py-4">
+            <div className="h-6 w-6 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" />
+            <span className="text-sm font-medium text-slate-700 dark:text-slate-200">Loading employee details...</span>
           </div>
         </main>
       </div>
@@ -405,16 +416,16 @@ const EmployeePage = () => {
 
   if (error && !selectedEmployee) {
     return (
-      <div className="flex min-h-screen bg-slate-950 text-white">
+      <div className="app-shell employee-detail-theme h-[100dvh] overflow-hidden">
         <Sidebar collapsed={collapsed} setCollapsed={setCollapsed} userRole="admin" />
-        <main className={`flex flex-1 items-center justify-center transition-all ${collapsed ? "ml-24" : "ml-72"}`}>
-          <div className="max-w-md rounded-lg border border-red-500/30 bg-red-950/20 p-8 text-center">
-            <AlertCircle className="mx-auto mb-4 h-10 w-10 text-red-300" />
-            <h2 className="mb-2 text-xl font-bold text-red-100">Error Loading Employee</h2>
-            <p className="mb-6 text-sm text-red-200">{error}</p>
+        <main className={`app-main flex items-center justify-center transition-all ${collapsed ? "ml-16" : "ml-16 sm:ml-56"}`}>
+          <div className="app-panel max-w-md rounded-2xl border-red-200 p-8 text-center dark:border-red-500/30">
+            <AlertCircle className="mx-auto mb-4 h-10 w-10 text-red-500 dark:text-red-300" />
+            <h2 className="mb-2 text-xl font-bold text-slate-950 dark:text-white">Error Loading Employee</h2>
+            <p className="mb-6 text-sm text-slate-600 dark:text-slate-300">{error}</p>
             <button
               onClick={() => navigate(-1)}
-              className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700"
+              className="inline-flex items-center gap-2 rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-700"
             >
               <ArrowLeft className="h-4 w-4" />
               Go Back
@@ -426,30 +437,29 @@ const EmployeePage = () => {
   }
 
   return (
-    <div className="flex min-h-screen bg-slate-950 text-slate-100">
-      <Sidebar />
+    <div className="app-shell employee-detail-theme h-[100dvh] overflow-hidden">
+      <Sidebar collapsed={collapsed} setCollapsed={setCollapsed} userRole="admin" />
       <main
-        style={{ marginLeft: SIDEBAR_WIDTH }}
-        className="w-full px-4 py-8 sm:px-6 lg:px-10"
+        className={`app-main h-[100dvh] overflow-y-auto overflow-x-hidden px-3 py-4 transition-all duration-300 [scrollbar-gutter:stable] sm:px-5 lg:px-6 ${collapsed ? "ml-16" : "ml-16 sm:ml-56"}`}
       >
-        <div className="mx-auto max-w-6xl space-y-6">
+        <div className="app-page max-w-6xl space-y-5 pb-8">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <button
               onClick={() => navigate(-1)}
-              className="inline-flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm font-semibold text-slate-200 hover:border-slate-500 hover:bg-slate-800"
+              className="app-secondary-button inline-flex items-center gap-2 px-3 py-2 text-sm font-semibold"
             >
               <ArrowLeft className="h-4 w-4" />
               Back
             </button>
             {successMessage && (
-              <div className="inline-flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-200">
+              <div className="inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-200">
                 <CheckCircle2 className="h-4 w-4" />
                 {successMessage}
               </div>
             )}
           </div>
 
-          <header className="overflow-hidden rounded-lg border border-slate-800 bg-slate-900">
+          <header className="app-header overflow-hidden rounded-2xl p-0">
             <div className="flex flex-col gap-6 p-6 md:flex-row md:items-center md:justify-between">
               <div className="flex min-w-0 items-center gap-5">
                 <img
@@ -458,14 +468,14 @@ const EmployeePage = () => {
                     `https://ui-avatars.com/api/?name=${encodeURIComponent(selectedEmployee.name || "Employee")}&background=0891b2&color=ffffff&size=128`
                   }
                   alt={selectedEmployee.name}
-                  className="h-24 w-24 shrink-0 rounded-lg border border-slate-700 object-cover"
+                  className="h-24 w-24 shrink-0 rounded-2xl border border-slate-200 object-cover shadow-sm dark:border-white/10"
                 />
                 <div className="min-w-0">
                   <div className="mb-2 flex flex-wrap items-center gap-2">
-                    <span className="rounded-md border border-cyan-500/30 bg-cyan-500/10 px-2 py-1 text-xs font-semibold uppercase text-cyan-200">
+                    <span className="rounded-lg border border-blue-200 bg-blue-50 px-2 py-1 text-xs font-semibold uppercase text-blue-700 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-200">
                       {selectedEmployee.employeeId || "No ID"}
                     </span>
-                    <span className="rounded-md border border-slate-700 bg-slate-950 px-2 py-1 text-xs font-semibold capitalize text-slate-300">
+                    <span className="rounded-lg border border-slate-200 bg-slate-100 px-2 py-1 text-xs font-semibold capitalize text-slate-700 dark:border-white/10 dark:bg-white/[0.06] dark:text-slate-200">
                       {selectedEmployee.status || "active"}
                     </span>
                     {/* Role badge — clickable dropdown for super-admin */}
@@ -475,22 +485,22 @@ const EmployeePage = () => {
                           <button
                             onClick={() => setRoleDropdownOpen(o => !o)}
                             disabled={roleChanging}
-                            className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-semibold capitalize transition hover:opacity-80 ${ROLE_META[selectedEmployee.role]?.color || ROLE_META.employee.color}`}
+                            className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-xs font-semibold capitalize transition hover:opacity-80 ${ROLE_META[selectedEmployee.role]?.color || ROLE_META.employee.color}`}
                           >
                             <ShieldCheck className="h-3 w-3" />
-                            {roleChanging ? "Updating…" : (ROLE_META[selectedEmployee.role]?.label || selectedEmployee.role)}
+                            {roleChanging ? "Updating..." : (ROLE_META[selectedEmployee.role]?.label || selectedEmployee.role)}
                             <ChevronDown className="h-3 w-3 opacity-60" />
                           </button>
                           {roleDropdownOpen && (
-                            <div className="absolute left-0 top-full z-50 mt-1 min-w-[170px] rounded-xl border border-slate-700 bg-slate-900 py-1 shadow-2xl">
-                              <p className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-500">Change Role</p>
+                            <div className="app-panel absolute left-0 top-full z-50 mt-2 min-w-[170px] overflow-hidden rounded-xl py-1 shadow-2xl">
+                              <p className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">Change Role</p>
                               {ROLES.map(r => (
                                 <button
                                   key={r}
                                   onClick={() => handleRoleChange(r)}
-                                  className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition hover:bg-slate-800 ${selectedEmployee.role === r ? "font-semibold text-white" : "text-slate-400"}`}
+                                  className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition hover:bg-slate-100 dark:hover:bg-white/[0.06] ${selectedEmployee.role === r ? "font-semibold text-slate-950 dark:text-white" : "text-slate-500 dark:text-slate-400"}`}
                                 >
-                                  <span className={`h-2 w-2 rounded-full flex-shrink-0 ${selectedEmployee.role === r ? "bg-orange-400" : "bg-slate-600"}`} />
+                                  <span className={`h-2 w-2 flex-shrink-0 rounded-full ${selectedEmployee.role === r ? "bg-blue-500" : "bg-slate-300 dark:bg-slate-600"}`} />
                                   {ROLE_META[r]?.label || r}
                                 </button>
                               ))}
@@ -498,15 +508,15 @@ const EmployeePage = () => {
                           )}
                         </>
                       ) : (
-                        <span className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-semibold capitalize ${ROLE_META[selectedEmployee.role]?.color || ROLE_META.employee.color}`}>
+                        <span className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-xs font-semibold capitalize ${ROLE_META[selectedEmployee.role]?.color || ROLE_META.employee.color}`}>
                           <ShieldCheck className="h-3 w-3" />
                           {ROLE_META[selectedEmployee.role]?.label || selectedEmployee.role}
                         </span>
                       )}
                     </div>
                   </div>
-                  <h1 className="truncate text-3xl font-bold text-white">{selectedEmployee.name}</h1>
-                  <p className="mt-1 text-sm text-slate-400">
+                  <h1 className="truncate text-3xl font-bold text-slate-950 dark:text-white">{selectedEmployee.name}</h1>
+                  <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
                     {selectedEmployee.designation || "No designation"} at{" "}
                     {formatDepartment(selectedEmployee.department) || "Unassigned department"}
                   </p>
@@ -514,13 +524,13 @@ const EmployeePage = () => {
               </div>
               <button
                 onClick={openEditModal}
-                className="inline-flex items-center justify-center gap-2 rounded-lg bg-cyan-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-cyan-950/40 hover:bg-cyan-500"
+                className="app-primary-button inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold"
               >
                 <Edit className="h-4 w-4" />
                 Edit Details
               </button>
             </div>
-            <div className="grid gap-3 border-t border-slate-800 bg-slate-950/40 p-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid gap-3 border-t border-slate-200 bg-slate-50/70 p-4 dark:border-white/10 dark:bg-white/[0.03] sm:grid-cols-2 lg:grid-cols-4">
               {summary.map((item) => (
                 <InfoPill key={item.label} {...item} />
               ))}
@@ -528,7 +538,7 @@ const EmployeePage = () => {
           </header>
 
           {error && (
-            <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+            <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-200">
               {error}
             </div>
           )}
@@ -582,27 +592,28 @@ const EmployeePage = () => {
       </main>
 
       {isEditing && formData && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 px-3 py-6 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 px-3 py-6 backdrop-blur-sm">
           <form
             onSubmit={handleSave}
-            className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-lg border border-slate-700 bg-slate-900 shadow-2xl"
+            className="app-panel flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl shadow-2xl"
           >
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 px-5 py-4">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-5 py-4 dark:border-white/10">
               <div>
-                <h2 className="text-xl font-bold text-white">Edit Employee Details</h2>
-                <p className="text-sm text-slate-400">{selectedEmployee.name}</p>
+                <p className="app-eyebrow">Employee profile</p>
+                <h2 className="text-xl font-bold text-slate-950 dark:text-white">Edit Employee Details</h2>
+                <p className="text-sm text-slate-500 dark:text-slate-400">{selectedEmployee.name}</p>
               </div>
               <button
                 type="button"
                 onClick={closeEditModal}
-                className="rounded-lg border border-slate-700 p-2 text-slate-300 hover:bg-slate-800"
+                className="app-icon-button p-2"
                 aria-label="Close"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
 
-            <div className="border-b border-slate-800 px-4 pt-3">
+            <div className="border-b border-slate-200 px-4 pt-3 dark:border-white/10">
               <div className="flex gap-2 overflow-x-auto pb-3">
                 {[
                   ["personal", User, "Personal"],
@@ -617,11 +628,11 @@ const EmployeePage = () => {
                     onClick={() => setActiveTab(key)}
                     className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition ${
                       activeTab === key
-                        ? "bg-cyan-500 text-white"
-                        : "bg-slate-950 text-slate-300 hover:bg-slate-800"
+                        ? "bg-blue-600 text-white"
+                        : "border border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300 dark:hover:bg-white/[0.08]"
                     }`}
                   >
-                    <Icon className="h-4 w-4" />
+                    {React.createElement(Icon, { className: "h-4 w-4" })}
                     {label}
                   </button>
                 ))}
@@ -721,7 +732,7 @@ const EmployeePage = () => {
                     <input className={inputClass} value={formData.timeZone} onChange={(e) => setField("timeZone", e.target.value)} />
                   </Field>
                   <div className="md:col-span-2">
-                    <span className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-400">
+                    <span className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                       Region Access
                     </span>
                     <div className="flex flex-wrap gap-2">
@@ -732,8 +743,8 @@ const EmployeePage = () => {
                           onClick={() => toggleRegion(region)}
                           className={`rounded-lg border px-3 py-2 text-sm font-semibold ${
                             formData.regions.includes(region)
-                              ? "border-cyan-400 bg-cyan-500/20 text-cyan-100"
-                              : "border-slate-700 bg-slate-950 text-slate-300 hover:bg-slate-800"
+                              ? "border-blue-300 bg-blue-50 text-blue-700 dark:border-blue-500/40 dark:bg-blue-500/15 dark:text-blue-200"
+                              : "border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300 dark:hover:bg-white/[0.08]"
                           }`}
                         >
                           {region}
@@ -779,12 +790,12 @@ const EmployeePage = () => {
                   <Field label="Duration Hours">
                     <input className={inputClass} type="number" min="1" max="24" value={formData.shift.durationHours} onChange={(e) => setNestedField("shift", "durationHours", e.target.value)} />
                   </Field>
-                  <label className="flex items-center gap-3 rounded-lg border border-slate-700 bg-slate-950/70 px-3 py-3 text-sm font-semibold text-slate-200">
+                  <label className="flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-sm font-semibold text-slate-700 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-200">
                     <input
                       type="checkbox"
                       checked={formData.shift.isFlexible}
                       onChange={(e) => setNestedField("shift", "isFlexible", e.target.checked)}
-                      className="h-4 w-4 rounded border-slate-600 bg-slate-900 text-cyan-500"
+                      className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 dark:border-white/20 dark:bg-slate-900"
                     />
                     Flexible shift
                   </label>
@@ -804,13 +815,13 @@ const EmployeePage = () => {
 
                   <div>
                     <div className="mb-3 flex items-center justify-between gap-3">
-                      <h3 className="text-sm font-bold uppercase tracking-wide text-slate-300">
+                      <h3 className="text-sm font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300">
                         Qualifications
                       </h3>
                       <button
                         type="button"
                         onClick={addQualification}
-                        className="inline-flex items-center gap-2 rounded-lg border border-cyan-500/40 bg-cyan-500/10 px-3 py-2 text-sm font-semibold text-cyan-200 hover:bg-cyan-500/20"
+                        className="app-secondary-button inline-flex items-center gap-2 px-3 py-2 text-sm font-semibold"
                       >
                         <Plus className="h-4 w-4" />
                         Add
@@ -818,12 +829,12 @@ const EmployeePage = () => {
                     </div>
                     <div className="space-y-3">
                       {formData.qualifications.map((qualification, index) => (
-                        <div key={index} className="rounded-lg border border-slate-700 bg-slate-950/50 p-4">
+                        <div key={index} className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-white/10 dark:bg-white/[0.04]">
                           <div className="mb-3 flex justify-end">
                             <button
                               type="button"
                               onClick={() => removeQualification(index)}
-                              className="inline-flex items-center gap-2 rounded-lg border border-red-500/30 px-3 py-1.5 text-sm font-semibold text-red-200 hover:bg-red-500/10"
+                              className="inline-flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-sm font-semibold text-red-700 transition hover:bg-red-100 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-200 dark:hover:bg-red-500/20"
                             >
                               <Trash2 className="h-4 w-4" />
                               Remove
@@ -846,7 +857,7 @@ const EmployeePage = () => {
                         </div>
                       ))}
                       {formData.qualifications.length === 0 && (
-                        <div className="rounded-lg border border-dashed border-slate-700 p-8 text-center text-sm text-slate-400">
+                        <div className="rounded-2xl border border-dashed border-slate-300 p-8 text-center text-sm text-slate-500 dark:border-white/10 dark:text-slate-400">
                           No qualifications added.
                         </div>
                       )}
@@ -856,8 +867,8 @@ const EmployeePage = () => {
               )}
             </div>
 
-            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-800 px-5 py-4">
-              <div className="inline-flex items-center gap-2 text-xs text-slate-500">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 px-5 py-4 dark:border-white/10">
+              <div className="inline-flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
                 <Shield className="h-4 w-4" />
                 Changes are saved to the employee profile.
               </div>
@@ -865,14 +876,14 @@ const EmployeePage = () => {
                 <button
                   type="button"
                   onClick={closeEditModal}
-                  className="rounded-lg border border-slate-700 px-4 py-2 text-sm font-semibold text-slate-200 hover:bg-slate-800"
+                  className="app-secondary-button px-4 py-2 text-sm font-semibold"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={saving}
-                  className="inline-flex items-center gap-2 rounded-lg bg-cyan-600 px-4 py-2 text-sm font-semibold text-white hover:bg-cyan-500 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="app-primary-button inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   <Save className="h-4 w-4" />
                   {saving ? "Saving..." : "Save Changes"}
