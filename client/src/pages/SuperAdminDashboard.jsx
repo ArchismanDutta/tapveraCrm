@@ -304,14 +304,19 @@ const SuperAdminDashboard = ({ onLogout }) => {
     return () => window.clearInterval(timer);
   }, []);
 
+  // Background refresh of today's workforce snapshot. Previously a 30s poll;
+  // now driven by the server's "attendance:updated" broadcast (see
+  // AttendanceController.punchAction / manualPunchAction), which fires the
+  // moment anyone punches in/out, starts/ends a break, or has a manual edit
+  // — so this only refetches when something actually changed, and picks it
+  // up immediately instead of up to 30s late. Still scoped to "viewing
+  // today", same as the poll was, since a past date's snapshot won't change.
   useEffect(() => {
     if (selectedDate !== getLocalDateInput()) return undefined;
 
-    const timer = window.setInterval(
-      () => fetchEmployees(selectedDate, { background: true }),
-      30000,
-    );
-    return () => window.clearInterval(timer);
+    const handleLiveUpdate = () => fetchEmployees(selectedDate, { background: true });
+    window.addEventListener('attendance-updated', handleLiveUpdate);
+    return () => window.removeEventListener('attendance-updated', handleLiveUpdate);
   }, [fetchEmployees, selectedDate]);
 
   const stats = useMemo(() => {

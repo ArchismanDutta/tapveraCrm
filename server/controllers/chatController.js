@@ -116,6 +116,22 @@ exports.getConversationById = async (conversationId) => {
   return await Conversation.findById(conversationId);
 };
 
+// Mark every message in a conversation as read by this user (excluding their
+// own messages, and skipping ones already marked). ChatMessage.readBy is a
+// flat array of user-id strings (unlike Project Message's {user, userModel}
+// sub-documents), so a plain $addToSet is enough — no elemMatch needed.
+exports.markConversationAsRead = async (conversationId, userId) => {
+  const result = await ChatMessage.updateMany(
+    {
+      conversationId,
+      senderId: { $ne: String(userId) },
+      readBy: { $ne: String(userId) },
+    },
+    { $addToSet: { readBy: String(userId) } }
+  );
+  return result.modifiedCount ?? result.nModified ?? 0;
+};
+
 
 // Get all messages for a conversation (ordered by time)
 exports.getMessagesByConversation = async (conversationId) => {

@@ -3,7 +3,6 @@ const Task = require("../models/Task");
 const User = require("../models/User");
 const Project = require("../models/Project");
 const { notifyAdmins } = require("../services/whatsappService");
-const { sendNotificationToUser, sendNotificationToMultipleUsers } = require("../utils/websocket");
 const { updateWorkloadOnTaskChange } = require("../services/workloadService");
 const notificationService = require("../services/notificationService");
 // Access-management rework (2026-07-03) - Phase 4.1.
@@ -307,16 +306,17 @@ exports.editTask = async (req, res) => {
       (id) => id !== req.user._id.toString()
     );
 
-    sendNotificationToMultipleUsers(uniqueUserIds, {
-      channel: "task",
-      title: "Task Updated",
-      message: `${populated.title} was updated`,
-      body: `${populated.title}\nStatus: ${populated.status}\nPriority: ${populated.priority}\nUpdated by: ${req.user.name}`,
-      taskId: populated._id,
-      status: populated.status,
-      priority: populated.priority,
-      action: "task_updated",
-    });
+    notificationService
+      .notifyUsers(uniqueUserIds, {
+        type: "task",
+        channel: "task",
+        title: "Task Updated",
+        message: `${populated.title} was updated`,
+        body: `${populated.title}\nStatus: ${populated.status}\nPriority: ${populated.priority}\nUpdated by: ${req.user.name}`,
+        priority: mapTaskPriorityToNotification(populated.priority),
+        relatedData: { taskId: populated._id, url: "/tasks" },
+      })
+      .catch((err) => console.error("Task-updated notification failed:", err));
 
     res.json(populated);
   } catch (err) {
@@ -372,15 +372,17 @@ exports.updateTaskStatus = async (req, res) => {
       (id) => id !== req.user._id.toString()
     );
 
-    sendNotificationToMultipleUsers(uniqueUserIds, {
-      channel: "task",
-      title: "Task Status Changed",
-      message: `${populated.title} is now ${status}`,
-      body: `${populated.title}\nNew Status: ${status}\nChanged by: ${req.user.name}`,
-      taskId: populated._id,
-      status: populated.status,
-      action: "task_status_changed",
-    });
+    notificationService
+      .notifyUsers(uniqueUserIds, {
+        type: "task",
+        channel: "task",
+        title: "Task Status Changed",
+        message: `${populated.title} is now ${status}`,
+        body: `${populated.title}\nNew Status: ${status}\nChanged by: ${req.user.name}`,
+        priority: mapTaskPriorityToNotification(populated.priority),
+        relatedData: { taskId: populated._id, url: "/tasks" },
+      })
+      .catch((err) => console.error("Task-status notification failed:", err));
 
     res.json(populated);
   } catch (err) {
@@ -434,15 +436,17 @@ exports.rejectTask = async (req, res) => {
     );
 
     const assignedUserIds = populated.assignedTo.map((u) => u._id.toString());
-    sendNotificationToMultipleUsers(assignedUserIds, {
-      channel: "task",
-      title: "Task Rejected",
-      message: `"${populated.title}" was rejected and needs rework`,
-      body: `Task rejected by ${req.user.name}\nReason: ${populated.rejectionReason}`,
-      taskId: populated._id,
-      status: populated.status,
-      action: "task_rejected",
-    });
+    notificationService
+      .notifyUsers(assignedUserIds, {
+        type: "task",
+        channel: "task",
+        title: "Task Rejected",
+        message: `"${populated.title}" was rejected and needs rework`,
+        body: `Task rejected by ${req.user.name}\nReason: ${populated.rejectionReason}`,
+        priority: "high",
+        relatedData: { taskId: populated._id, url: "/tasks" },
+      })
+      .catch((err) => console.error("Task-rejected notification failed:", err));
 
     res.json(populated);
   } catch (err) {
@@ -542,6 +546,26 @@ exports.getTasks = async (req, res) => {
       query.title = { $regex: req.query.search, $options: "i" };
     }
 
+    // Date filter (UnifiedTaskPage's always-visible date-preset pills —
+    // Today/This Week/This Month resolve to dueDateFrom+dueDateTo client-side;
+    // "Custom" sends the same two params from raw date inputs; "Overdue" sends
+    // its own flag instead since it also has to exclude completed/rejected
+    // tasks, which a plain date range can't express).
+    if (req.query.dueDateFrom || req.query.dueDateTo) {
+      query.dueDate = query.dueDate || {};
+      if (req.query.dueDateFrom) query.dueDate.$gte = new Date(req.query.dueDateFrom);
+      if (req.query.dueDateTo) query.dueDate.$lte = new Date(req.query.dueDateTo);
+    }
+    if (req.query.overdue === "true") {
+      const startOfToday = new Date();
+      startOfToday.setHours(0, 0, 0, 0);
+      query.dueDate = { ...(query.dueDate || {}), $lt: startOfToday };
+      // Don't clobber an explicit status filter the caller also asked for.
+      if (!query.status) {
+        query.status = { $nin: ["completed", "rejected"] };
+      }
+    }
+
     // Pagination — project-scoped fetches (or admin/elevated-view fetches) allow a
     // higher limit. Expanded alongside the scope change above so a Supervisor/TL
     // who can now see their team's tasks isn't silently capped at the low limit
@@ -616,6 +640,20 @@ exports.addRemark = async (req, res) => {
     await task.save();
 
     const populated = await populateTask(Task.findById(taskId)).lean();
+
+    try {
+      const { broadcastTaskRemark } = require("../utils/websocket");
+      const memberIds = new Set(
+        [...(task.assignedTo || []), task.assignedBy]
+          .filter(Boolean)
+          .map((id) => String(id))
+      );
+      const newRemark = populated.remarks[populated.remarks.length - 1];
+      broadcastTaskRemark(taskId, Array.from(memberIds), { remark: newRemark });
+    } catch (wsError) {
+      console.warn("WebSocket broadcast failed (task remark added):", wsError.message);
+    }
+
     res.json(populated);
   } catch (err) {
     console.error("Error adding remark:", err);

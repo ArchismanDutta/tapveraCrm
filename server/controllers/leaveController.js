@@ -76,6 +76,14 @@ exports.createLeave = async (req, res) => {
     };
 
     const leave = await LeaveRequest.create(payload);
+
+    try {
+      const { broadcastLeaveUpdated } = require("../utils/websocket");
+      broadcastLeaveUpdated(req.user._id, { action: "created", leaveId: leave._id });
+    } catch (wsError) {
+      console.warn("WebSocket broadcast failed (leave created):", wsError.message);
+    }
+
     res.status(201).json(leave);
   } catch (error) {
     console.error("Create Leave Error:", error);
@@ -139,6 +147,17 @@ exports.updateLeaveStatus = async (req, res) => {
 
     if (!updatedLeave)
       return res.status(404).json({ message: "Leave request not found" });
+
+    try {
+      const { broadcastLeaveUpdated } = require("../utils/websocket");
+      broadcastLeaveUpdated(updatedLeave.employee?._id, {
+        action: "status_changed",
+        leaveId: updatedLeave._id,
+        status: updatedLeave.status,
+      });
+    } catch (wsError) {
+      console.warn("WebSocket broadcast failed (leave status changed):", wsError.message);
+    }
 
     res.json(updatedLeave);
   } catch (error) {

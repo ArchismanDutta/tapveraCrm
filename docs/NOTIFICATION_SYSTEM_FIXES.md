@@ -1,5 +1,11 @@
 # Notification System Fixes Applied
 
+> **2026-07-16 update:** the transport this document describes (raw `ws`,
+> per-user connection map) has been replaced by Socket.IO + Redis, and the
+> "Multiple WebSocket Connections" and "No Notification Persistence" issues
+> noted below as unfixed have both been addressed. See
+> `NOTIFICATION_REALTIME_ARCHITECTURE.md` for the current architecture.
+
 **Date:** 2025-10-21
 **Status:** ✅ **FIXES APPLIED**
 

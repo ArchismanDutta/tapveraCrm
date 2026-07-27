@@ -1,5 +1,11 @@
 # 🔔 Notification Center UI - Build Summary
 
+> **2026-07-16 update:** the UI and data model described here are still
+> accurate. The real-time transport underneath (WebSocket delivery,
+> `notificationService`) was rebuilt on Socket.IO + Redis with the service
+> as the single producer for every feature, not just tasks — see
+> `NOTIFICATION_REALTIME_ARCHITECTURE.md`.
+
 **Date:** 2025-10-22
 **Status:** ✅ **COMPLETE**
 

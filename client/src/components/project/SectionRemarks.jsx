@@ -12,6 +12,7 @@ import {
   ChevronDown,
   ChevronUp,
 } from "lucide-react";
+import { useWebSocketContext } from "../../contexts/WebSocketContext";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
 
@@ -22,6 +23,7 @@ const SectionRemarks = ({ projectId, section, userRole, userId, title }) => {
   const [notification, setNotification] = useState(null);
   const [newRemark, setNewRemark] = useState("");
   const [isExpanded, setIsExpanded] = useState(false);
+  const { joinProject, leaveProject } = useWebSocketContext();
 
   // Only clients can add remarks (this is specifically for client feedback)
   const canAdd = userRole === "client";
@@ -30,6 +32,46 @@ const SectionRemarks = ({ projectId, section, userRole, userId, title }) => {
     if (projectId && section) {
       fetchRemarks();
     }
+  }, [projectId, section]);
+
+  // Real-time: join this project's socket room so new/deleted remarks show
+  // up live below, without relying on some ancestor page having already
+  // joined it (ProjectDetailPage/ProjectMessagePanel join it too, but this
+  // section shouldn't depend on that — e.g. a client viewing the Report tab
+  // has no chat panel mounted at all).
+  useEffect(() => {
+    if (!projectId) return undefined;
+    joinProject(projectId);
+    return () => leaveProject(projectId);
+  }, [projectId, joinProject, leaveProject]);
+
+  // Real-time: live-append/remove remarks for this exact project+section as
+  // they're added/deleted elsewhere, instead of waiting for a manual refetch.
+  useEffect(() => {
+    if (!projectId || !section) return undefined;
+
+    const handleNewRemark = (event) => {
+      const data = event.detail || {};
+      if (String(data.projectId) !== String(projectId) || data.section !== section) return;
+      const incoming = data.remark;
+      if (!incoming?._id) return;
+      setRemarks((prev) =>
+        prev.some((r) => r._id === incoming._id) ? prev : [incoming, ...prev]
+      );
+    };
+
+    const handleRemarkDeleted = (event) => {
+      const data = event.detail || {};
+      if (String(data.projectId) !== String(projectId) || data.section !== section) return;
+      setRemarks((prev) => prev.filter((r) => r._id !== data.remarkId));
+    };
+
+    window.addEventListener("project-remark", handleNewRemark);
+    window.addEventListener("project-remark-deleted", handleRemarkDeleted);
+    return () => {
+      window.removeEventListener("project-remark", handleNewRemark);
+      window.removeEventListener("project-remark-deleted", handleRemarkDeleted);
+    };
   }, [projectId, section]);
 
   const fetchRemarks = async () => {

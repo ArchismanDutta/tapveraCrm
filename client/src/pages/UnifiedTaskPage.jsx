@@ -36,6 +36,80 @@ const PAGE_SIZE = 10;
 const INPUT_CLS = "rounded-xl border border-slate-200 bg-white text-slate-700 text-xs outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 cursor-pointer dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-200";
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Date filter — always-visible pill row (shared by AllTasksPanel + ScopedTaskPanel)
+// ─────────────────────────────────────────────────────────────────────────────
+const DATE_PILL_OPTIONS = [
+  { id: "all", label: "All dates" },
+  { id: "today", label: "Today" },
+  { id: "week", label: "This week" },
+  { id: "month", label: "This month" },
+  { id: "overdue", label: "Overdue" },
+  { id: "custom", label: "Custom" },
+];
+
+// Resolves a preset (plus the custom range, when relevant) into the query
+// params taskController.getTasks understands: dueDateFrom/dueDateTo for a
+// plain range, or `overdue` for the one preset that also needs to exclude
+// completed/rejected tasks — something a date range alone can't express.
+const resolveDatePreset = (preset, customFrom, customTo) => {
+  switch (preset) {
+    case "today":
+      return { dueDateFrom: dayjs().startOf("day").toISOString(), dueDateTo: dayjs().endOf("day").toISOString() };
+    case "week":
+      return { dueDateFrom: dayjs().startOf("week").toISOString(), dueDateTo: dayjs().endOf("week").toISOString() };
+    case "month":
+      return { dueDateFrom: dayjs().startOf("month").toISOString(), dueDateTo: dayjs().endOf("month").toISOString() };
+    case "overdue":
+      return { overdue: "true" };
+    case "custom": {
+      const out = {};
+      if (customFrom) out.dueDateFrom = dayjs(customFrom).startOf("day").toISOString();
+      if (customTo) out.dueDateTo = dayjs(customTo).endOf("day").toISOString();
+      return out;
+    }
+    default:
+      return {};
+  }
+};
+
+const DateFilterPills = ({ value, onChange, customFrom, customTo, onCustomFromChange, onCustomToChange }) => (
+  <div className="flex flex-wrap items-center gap-1.5">
+    {DATE_PILL_OPTIONS.map((opt) => (
+      <button
+        key={opt.id}
+        type="button"
+        aria-pressed={value === opt.id}
+        onClick={() => onChange(opt.id)}
+        className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${
+          value === opt.id
+            ? "border-blue-600 bg-blue-600 text-white shadow-sm dark:border-blue-400 dark:bg-blue-500 dark:text-white"
+            : "border-slate-200 bg-white text-slate-500 hover:border-slate-300 hover:text-slate-800 dark:border-white/10 dark:bg-white/[0.03] dark:text-slate-400 dark:hover:border-white/20 dark:hover:text-slate-100"
+        }`}
+      >
+        {opt.label}
+      </button>
+    ))}
+    {value === "custom" && (
+      <span className="flex items-center gap-1.5">
+        <input
+          type="date"
+          value={customFrom}
+          onChange={(e) => onCustomFromChange(e.target.value)}
+          className={`${INPUT_CLS} px-2 py-1.5`}
+        />
+        <span className="text-xs text-slate-400 dark:text-slate-500">to</span>
+        <input
+          type="date"
+          value={customTo}
+          onChange={(e) => onCustomToChange(e.target.value)}
+          className={`${INPUT_CLS} px-2 py-1.5`}
+        />
+      </span>
+    )}
+  </div>
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Tab Bar (shared)
 // ─────────────────────────────────────────────────────────────────────────────
 const TabBar = ({ tabs, active, onChange }) => (
@@ -295,7 +369,7 @@ const AllTasksPanel = ({ users, onEditTask, onRefreshStats }) => {
   const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
-  const [filters, setFilters] = useState({ search: "", status: "all", priority: "all", assignee: "all", dateFrom: "", dateTo: "" });
+  const [filters, setFilters] = useState({ search: "", status: "all", priority: "all", assignee: "all", datePreset: "all", customFrom: "", customTo: "" });
   const [debounced, setDebounced] = useState(filters);
   const navigate = useNavigate();
 
@@ -311,11 +385,14 @@ const AllTasksPanel = ({ users, onEditTask, onRefreshStats }) => {
       if (debounced.search) params.search = debounced.search;
       if (debounced.status !== "all") params.status = debounced.status;
       if (debounced.priority !== "all") params.priority = debounced.priority;
+      Object.assign(params, resolveDatePreset(debounced.datePreset, debounced.customFrom, debounced.customTo));
 
       const r = await API.get("/api/tasks", { params, headers: { Authorization: `Bearer ${token}` } });
       let list = r.data?.tasks || [];
 
-      // Client-side filters not supported as backend query params
+      // Assignee isn't a backend query param — filtered client-side on the
+      // current page only (pre-existing limitation, unrelated to the date
+      // filter above, which the server now applies across the full result set).
       if (debounced.assignee !== "all") {
         list = list.filter((t) =>
           Array.isArray(t.assignedTo)
@@ -323,8 +400,6 @@ const AllTasksPanel = ({ users, onEditTask, onRefreshStats }) => {
             : (t.assignedTo?._id || t.assignedTo) === debounced.assignee
         );
       }
-      if (debounced.dateFrom) list = list.filter((t) => t.dueDate && dayjs(t.dueDate).isAfter(dayjs(debounced.dateFrom).startOf("day")));
-      if (debounced.dateTo) list = list.filter((t) => t.dueDate && dayjs(t.dueDate).isBefore(dayjs(debounced.dateTo).endOf("day")));
 
       setTasks(list);
       setTotal(r.data?.total || 0);
@@ -341,7 +416,7 @@ const AllTasksPanel = ({ users, onEditTask, onRefreshStats }) => {
     try { await taskApi.deleteTask(id); fetchTasks(page); onRefreshStats?.(); } catch (error) { console.error("Failed to delete task:", error); }
   };
 
-  const clearFilters = () => setFilters({ search: "", status: "all", priority: "all", assignee: "all", dateFrom: "", dateTo: "" });
+  const clearFilters = () => setFilters({ search: "", status: "all", priority: "all", assignee: "all", datePreset: "all", customFrom: "", customTo: "" });
 
   const exportCSV = () => {
     if (!tasks.length) return;
@@ -357,7 +432,7 @@ const AllTasksPanel = ({ users, onEditTask, onRefreshStats }) => {
     a.click();
   };
 
-  const hasFilter = filters.status !== "all" || filters.priority !== "all" || filters.assignee !== "all" || filters.dateFrom || filters.dateTo || filters.search;
+  const hasFilter = filters.status !== "all" || filters.priority !== "all" || filters.assignee !== "all" || filters.datePreset !== "all" || filters.search;
 
   return (
     <div className="space-y-4">
@@ -390,8 +465,20 @@ const AllTasksPanel = ({ users, onEditTask, onRefreshStats }) => {
           </div>
         </div>
 
+        {/* Date filter — always visible, never hidden behind the Filters toggle */}
+        <div className="pt-1">
+          <DateFilterPills
+            value={filters.datePreset}
+            onChange={(v) => setFilters((p) => ({ ...p, datePreset: v }))}
+            customFrom={filters.customFrom}
+            customTo={filters.customTo}
+            onCustomFromChange={(v) => setFilters((p) => ({ ...p, customFrom: v }))}
+            onCustomToChange={(v) => setFilters((p) => ({ ...p, customTo: v }))}
+          />
+        </div>
+
         {showFilters && (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 pt-2 border-t border-[rgba(84,123,209,0.1)]">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-2 border-t border-[rgba(84,123,209,0.1)]">
             {[
               { label: "Status", key: "status", options: [["all", "All Status"], ["pending", "Pending"], ["in-progress", "In Progress"], ["completed", "Completed"], ["rejected", "Rejected"]] },
               { label: "Priority", key: "priority", options: [["all", "All Priority"], ["High", "High"], ["Medium", "Medium"], ["Low", "Low"]] },
@@ -412,16 +499,6 @@ const AllTasksPanel = ({ users, onEditTask, onRefreshStats }) => {
                 {users.map((u) => <option key={u._id} value={u._id}>{u.name}</option>)}
               </select>
             </div>
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">From</label>
-              <input type="date" value={filters.dateFrom} onChange={(e) => setFilters((p) => ({ ...p, dateFrom: e.target.value }))}
-                className={`${INPUT_CLS} px-2 py-2 w-full`} />
-            </div>
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">To</label>
-              <input type="date" value={filters.dateTo} onChange={(e) => setFilters((p) => ({ ...p, dateTo: e.target.value }))}
-                className={`${INPUT_CLS} px-2 py-2 w-full`} />
-            </div>
           </div>
         )}
 
@@ -431,8 +508,6 @@ const AllTasksPanel = ({ users, onEditTask, onRefreshStats }) => {
             {filters.status !== "all" && <Chip label={`Status: ${filters.status}`} onRemove={() => setFilters((p) => ({ ...p, status: "all" }))} color="cyan" />}
             {filters.priority !== "all" && <Chip label={`Priority: ${filters.priority}`} onRemove={() => setFilters((p) => ({ ...p, priority: "all" }))} color="orange" />}
             {filters.assignee !== "all" && <Chip label={`Assignee: ${users.find((u) => u._id === filters.assignee)?.name || "?"}`} onRemove={() => setFilters((p) => ({ ...p, assignee: "all" }))} color="purple" />}
-            {filters.dateFrom && <Chip label={`From: ${filters.dateFrom}`} onRemove={() => setFilters((p) => ({ ...p, dateFrom: "" }))} color="green" />}
-            {filters.dateTo && <Chip label={`To: ${filters.dateTo}`} onRemove={() => setFilters((p) => ({ ...p, dateTo: "" }))} color="green" />}
           </div>
         )}
         <p className="text-gray-600 text-xs">{total} task{total !== 1 ? "s" : ""} found</p>
@@ -467,7 +542,7 @@ const ScopedTaskPanel = ({ scope, onTaskCreated }) => {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalTasks, setTotalTasks] = useState(0);
-  const [filters, setFilters] = useState({ status: "all", priority: "all", search: "" });
+  const [filters, setFilters] = useState({ status: "all", priority: "all", search: "", datePreset: "all", customFrom: "", customTo: "" });
   const [debounced, setDebounced] = useState(filters);
 
   useEffect(() => { const t = setTimeout(() => setDebounced(filters), 400); return () => clearTimeout(t); }, [filters]);
@@ -480,6 +555,7 @@ const ScopedTaskPanel = ({ scope, onTaskCreated }) => {
       if (debounced.status !== "all") params.status = debounced.status;
       if (debounced.priority !== "all") params.priority = debounced.priority;
       if (debounced.search) params.search = debounced.search;
+      Object.assign(params, resolveDatePreset(debounced.datePreset, debounced.customFrom, debounced.customTo));
       const data = await taskApi.getTasks(params);
       const list = data?.tasks || (Array.isArray(data) ? data : []);
       setTasks(list);
@@ -518,8 +594,8 @@ const ScopedTaskPanel = ({ scope, onTaskCreated }) => {
     a.download = `tasks-${scope}-${dayjs().format("YYYY-MM-DD")}.csv`; a.click();
   };
 
-  const clearFilters = () => setFilters({ status: "all", priority: "all", search: "" });
-  const hasFilter = filters.status !== "all" || filters.priority !== "all" || !!filters.search;
+  const clearFilters = () => setFilters({ status: "all", priority: "all", search: "", datePreset: "all", customFrom: "", customTo: "" });
+  const hasFilter = filters.status !== "all" || filters.priority !== "all" || !!filters.search || filters.datePreset !== "all";
 
   const toggleStatusPill = (status) => {
     setFilters((current) => ({
@@ -621,6 +697,17 @@ const ScopedTaskPanel = ({ scope, onTaskCreated }) => {
               {qp.label}
             </button>
           ))}
+        </div>
+
+        <div className="mt-3 border-t border-slate-100 pt-3 dark:border-white/[0.07]">
+          <DateFilterPills
+            value={filters.datePreset}
+            onChange={(v) => setFilters((p) => ({ ...p, datePreset: v }))}
+            customFrom={filters.customFrom}
+            customTo={filters.customTo}
+            onCustomFromChange={(v) => setFilters((p) => ({ ...p, customFrom: v }))}
+            onCustomToChange={(v) => setFilters((p) => ({ ...p, customTo: v }))}
+          />
         </div>
 
       </div>

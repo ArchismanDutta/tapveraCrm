@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect } from "react";
 import {
   Lock,
   IndianRupee,
@@ -12,32 +12,16 @@ import toast from "react-hot-toast";
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
 
 const PaymentBlockOverlay = ({ payment, onPaymentCleared }) => {
-  const [autoRefresh, setAutoRefresh] = useState(true);
-  const [countdown, setCountdown] = useState(30);
-
+  // Previously polled every 30s (with a matching 1s countdown just to show
+  // "next check in Ns"). Now event-driven: the server emits "payment:updated"
+  // (bridged by WebSocketContext.jsx) the moment a super-admin approves/
+  // rejects/cancels this payment, targeted at this employee's own user:<id>
+  // room, so it arrives instantly instead of up to 30s late. "Check Now"
+  // still does a manual on-demand check below.
   useEffect(() => {
-    if (!autoRefresh) return;
-
-    // Check payment status every 30 seconds
-    const interval = setInterval(async () => {
-      await checkPaymentStatus();
-    }, 30000);
-
-    // Countdown timer
-    const countdownInterval = setInterval(() => {
-      setCountdown((prev) => {
-        if (prev <= 1) {
-          return 30;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
-    return () => {
-      clearInterval(interval);
-      clearInterval(countdownInterval);
-    };
-  }, [autoRefresh]);
+    window.addEventListener("payment-updated", checkPaymentStatus);
+    return () => window.removeEventListener("payment-updated", checkPaymentStatus);
+  }, []);
 
   const checkPaymentStatus = async () => {
     try {
@@ -64,7 +48,6 @@ const PaymentBlockOverlay = ({ payment, onPaymentCleared }) => {
   };
 
   const handleManualRefresh = () => {
-    setCountdown(30);
     checkPaymentStatus();
   };
 
@@ -263,12 +246,9 @@ const PaymentBlockOverlay = ({ payment, onPaymentCleared }) => {
                   <div className="flex items-center gap-2">
                     <RefreshCw className="w-5 h-5 text-gray-600" />
                     <span className="text-sm text-gray-700">
-                      Auto-checking status...
+                      Watching for approval in real time...
                     </span>
                   </div>
-                  <span className="text-sm font-mono text-gray-600">
-                    Next check in {countdown}s
-                  </span>
                 </div>
                 <button
                   onClick={handleManualRefresh}

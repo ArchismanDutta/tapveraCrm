@@ -68,7 +68,7 @@ const ProjectReportTab = ({ projectId, userRole, userId }) => {
       )}
 
       {/* Download Report Button */}
-      <div className="bg-[#202c33] border-b border-[#2a3942] px-4 py-3 flex justify-center">
+      <div className="flex justify-center border-b border-slate-200 bg-slate-50 px-4 py-3 dark:border-[#2a3942] dark:bg-[#202c33]">
         <button
           onClick={handleDownloadReport}
           disabled={downloading}
@@ -89,14 +89,14 @@ const ProjectReportTab = ({ projectId, userRole, userId }) => {
       </div>
 
       {/* SEO Sub-tabs */}
-      <div className="border-b border-[#2a3942] bg-[#202c33]">
+      <div className="border-b border-slate-200 bg-white dark:border-[#2a3942] dark:bg-[#202c33]">
         <div className="flex">
           <button
             onClick={() => setActiveSEOTab("onpage")}
             className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium transition-all ${
               activeSEOTab === "onpage"
                 ? "text-[#00a884] border-b-2 border-[#00a884]"
-                : "text-gray-400 hover:text-white"
+                : "text-slate-500 hover:text-slate-900 dark:text-gray-400 dark:hover:text-white"
             }`}
           >
             <Search className="w-4 h-4" />
@@ -107,7 +107,7 @@ const ProjectReportTab = ({ projectId, userRole, userId }) => {
             className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium transition-all ${
               activeSEOTab === "offpage"
                 ? "text-[#00a884] border-b-2 border-[#00a884]"
-                : "text-gray-400 hover:text-white"
+                : "text-slate-500 hover:text-slate-900 dark:text-gray-400 dark:hover:text-white"
             }`}
           >
             <BarChart3 className="w-4 h-4" />
@@ -118,7 +118,7 @@ const ProjectReportTab = ({ projectId, userRole, userId }) => {
             className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium transition-all ${
               activeSEOTab === "screenshots"
                 ? "text-[#00a884] border-b-2 border-[#00a884]"
-                : "text-gray-400 hover:text-white"
+                : "text-slate-500 hover:text-slate-900 dark:text-gray-400 dark:hover:text-white"
             }`}
           >
             <Image className="w-4 h-4" />

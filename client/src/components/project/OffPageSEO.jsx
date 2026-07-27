@@ -637,11 +637,11 @@ const OffPageSEO = ({ projectId, userRole, userId }) => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h3 className="text-xl font-bold text-white flex items-center gap-2">
+          <h3 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
             <LinkIcon className="w-6 h-6 text-blue-400" />
             Backlinks Tracking
           </h3>
-          <p className="text-sm text-gray-400 mt-1">
+          <p className="text-sm text-slate-500 dark:text-gray-400 mt-1">
             Manage backlinks and social media profiles
           </p>
           {selectedBacklinks.length > 0 && (
@@ -699,21 +699,21 @@ const OffPageSEO = ({ projectId, userRole, userId }) => {
       {/* Stats Cards */}
       {stats && (
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div className="bg-[#0f1419] border border-[#232945] rounded-lg p-4">
+          <div className="rounded-lg border border-slate-200 bg-white p-4 dark:border-[#232945] dark:bg-[#0f1419]">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-400">Total Backlinks</p>
-                <p className="text-2xl font-bold text-white mt-1">
+                <p className="text-sm text-slate-500 dark:text-gray-400">Total Backlinks</p>
+                <p className="text-2xl font-bold text-slate-900 dark:text-white mt-1">
                   {stats.totalBacklinks}
                 </p>
               </div>
               <LinkIcon className="w-8 h-8 text-blue-400" />
             </div>
           </div>
-          <div className="bg-[#0f1419] border border-[#232945] rounded-lg p-4">
+          <div className="rounded-lg border border-slate-200 bg-white p-4 dark:border-[#232945] dark:bg-[#0f1419]">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-400">Social Media</p>
+                <p className="text-sm text-slate-500 dark:text-gray-400">Social Media</p>
                 <p className="text-2xl font-bold text-purple-400 mt-1">
                   {stats.socialMedia}
                 </p>
@@ -721,10 +721,10 @@ const OffPageSEO = ({ projectId, userRole, userId }) => {
               <div className="text-2xl">🌐</div>
             </div>
           </div>
-          <div className="bg-[#0f1419] border border-[#232945] rounded-lg p-4">
+          <div className="rounded-lg border border-slate-200 bg-white p-4 dark:border-[#232945] dark:bg-[#0f1419]">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-400">Others</p>
+                <p className="text-sm text-slate-500 dark:text-gray-400">Others</p>
                 <p className="text-2xl font-bold text-blue-400 mt-1">
                   {stats.others}
                 </p>
@@ -738,19 +738,19 @@ const OffPageSEO = ({ projectId, userRole, userId }) => {
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-4">
         <div className="flex-1 relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-500" />
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-400 dark:text-gray-500" />
           <input
             type="text"
             placeholder="Search backlinks..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 bg-[#0f1419] border border-[#232945] rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
+            className="w-full rounded-lg border border-slate-200 bg-white py-2 pl-10 pr-4 text-slate-900 placeholder-slate-400 focus:border-blue-500 focus:outline-none dark:border-[#232945] dark:bg-[#0f1419] dark:text-white dark:placeholder-gray-500"
           />
         </div>
         <select
           value={filterCategory}
           onChange={(e) => setFilterCategory(e.target.value)}
-          className="px-4 py-2 bg-[#0f1419] border border-[#232945] rounded-lg text-white focus:outline-none focus:border-blue-500"
+          className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-slate-900 focus:border-blue-500 focus:outline-none dark:border-[#232945] dark:bg-[#0f1419] dark:text-white"
         >
           <option value="all">All Categories</option>
           <option value="Social Media">Social Media</option>
@@ -764,26 +764,26 @@ const OffPageSEO = ({ projectId, userRole, userId }) => {
           <div className="w-12 h-12 border-4 border-blue-500/20 border-t-blue-500 rounded-full animate-spin"></div>
         </div>
       ) : filteredBacklinks.length === 0 ? (
-        <div className="bg-[#0f1419] border border-[#232945] rounded-lg p-8 text-center">
-          <LinkIcon className="w-16 h-16 text-gray-600 mx-auto mb-4" />
-          <p className="text-gray-400">No backlinks found</p>
+        <div className="rounded-lg border border-slate-200 bg-white p-8 text-center dark:border-[#232945] dark:bg-[#0f1419]">
+          <LinkIcon className="w-16 h-16 text-slate-300 dark:text-gray-600 mx-auto mb-4" />
+          <p className="text-slate-500 dark:text-gray-400">No backlinks found</p>
           {canEdit && (
-            <p className="text-sm text-gray-500 mt-2">
+            <p className="text-sm text-slate-400 dark:text-gray-500 mt-2">
               Click "Add Backlink" to start tracking backlinks
             </p>
           )}
         </div>
       ) : (
-        <div className="bg-[#0f1419] border border-[#232945] rounded-lg overflow-hidden">
+        <div className="overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-[#232945] dark:bg-[#0f1419]">
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="bg-[#141a21] border-b border-[#232945]">
+              <thead className="border-b border-slate-200 bg-slate-50 dark:border-[#232945] dark:bg-[#141a21]">
                 <tr>
                   {canEdit && (
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider w-12">
+                    <th className="w-12 px-4 py-3 text-left text-xs font-semibold text-slate-500 dark:text-gray-400 uppercase tracking-wider">
                       <button
                         onClick={handleSelectAll}
-                        className="p-1 hover:bg-[#232945] rounded transition-colors"
+                        className="rounded p-1 transition-colors hover:bg-slate-100 dark:hover:bg-[#232945]"
                         title={
                           selectedBacklinks.length === filteredBacklinks.length
                             ? "Deselect All"
@@ -793,44 +793,44 @@ const OffPageSEO = ({ projectId, userRole, userId }) => {
                         {selectedBacklinks.length === filteredBacklinks.length ? (
                           <CheckSquare className="w-5 h-5 text-blue-400" />
                         ) : (
-                          <Square className="w-5 h-5 text-gray-400" />
+                          <Square className="w-5 h-5 text-slate-400 dark:text-gray-400" />
                         )}
                       </button>
                     </th>
                   )}
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 dark:text-gray-400 uppercase tracking-wider">
                     Platform/URL
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 dark:text-gray-400 uppercase tracking-wider">
                     Category
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 dark:text-gray-400 uppercase tracking-wider">
                     Date Added
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 dark:text-gray-400 uppercase tracking-wider">
                     Added By
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 dark:text-gray-400 uppercase tracking-wider">
                     Actions
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#232945]">
+              <tbody className="divide-y divide-slate-200 dark:divide-[#232945]">
                 {filteredBacklinks.map((backlink) => (
                   <tr
                     key={backlink._id}
-                    className="hover:bg-[#141a21] transition-colors"
+                    className="transition-colors hover:bg-slate-50 dark:hover:bg-[#141a21]"
                   >
                     {canEdit && (
                       <td className="px-4 py-4">
                         <button
                           onClick={() => handleSelectBacklink(backlink._id)}
-                          className="p-1 hover:bg-[#232945] rounded transition-colors"
+                          className="rounded p-1 transition-colors hover:bg-slate-100 dark:hover:bg-[#232945]"
                         >
                           {selectedBacklinks.includes(backlink._id) ? (
                             <CheckSquare className="w-5 h-5 text-blue-400" />
                           ) : (
-                            <Square className="w-5 h-5 text-gray-400" />
+                            <Square className="w-5 h-5 text-slate-400 dark:text-gray-400" />
                           )}
                         </button>
                       </td>
@@ -842,7 +842,7 @@ const OffPageSEO = ({ projectId, userRole, userId }) => {
                           getSocialMediaIcon(backlink.platform)}
                         <div className="flex-1">
                           {backlink.platform && (
-                            <div className="text-sm font-medium text-white mb-1">
+                            <div className="text-sm font-medium text-slate-900 dark:text-white mb-1">
                               {backlink.platform}
                             </div>
                           )}
@@ -859,7 +859,7 @@ const OffPageSEO = ({ projectId, userRole, userId }) => {
                             <ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
                           </a>
                           {backlink.notes && (
-                            <div className="text-xs text-gray-500 mt-1">
+                            <div className="text-xs text-slate-400 dark:text-gray-500 mt-1">
                               {backlink.notes}
                             </div>
                           )}
@@ -876,13 +876,13 @@ const OffPageSEO = ({ projectId, userRole, userId }) => {
                       </span>
                     </td>
                     <td className="px-4 py-4">
-                      <div className="flex items-center gap-1 text-sm text-gray-400">
+                      <div className="flex items-center gap-1 text-sm text-slate-500 dark:text-gray-400">
                         <Calendar className="w-4 h-4" />
                         {new Date(backlink.createdAt).toLocaleDateString()}
                       </div>
                     </td>
                     <td className="px-4 py-4">
-                      <div className="flex items-center gap-1 text-sm text-gray-400">
+                      <div className="flex items-center gap-1 text-sm text-slate-500 dark:text-gray-400">
                         <User className="w-4 h-4" />
                         {backlink.addedBy?.name || "Unknown"}
                       </div>
@@ -929,24 +929,24 @@ const OffPageSEO = ({ projectId, userRole, userId }) => {
       {/* Add Backlink Modal */}
       {showAddModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70">
-          <div className="bg-[#191f2b] rounded-xl shadow-2xl border border-[#232945] w-full max-w-lg">
+          <div className="rounded-xl border border-slate-200 bg-white shadow-2xl dark:border-[#232945] dark:bg-[#191f2b] w-full max-w-lg">
             <div className="p-6">
               <div className="flex items-center justify-between mb-6">
-                <h3 className="text-xl font-bold text-white">Add Backlink</h3>
+                <h3 className="text-xl font-bold text-slate-900 dark:text-white">Add Backlink</h3>
                 <button
                   onClick={() => {
                     setShowAddModal(false);
                     resetForm();
                   }}
-                  className="p-1 hover:bg-[#0f1419] rounded transition-colors"
+                  className="rounded p-1 transition-colors hover:bg-slate-100 dark:hover:bg-[#0f1419]"
                 >
-                  <X className="w-5 h-5 text-gray-400" />
+                  <X className="w-5 h-5 text-slate-400 dark:text-gray-400" />
                 </button>
               </div>
 
               <form onSubmit={handleAddBacklink} className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                  <label className="block text-sm font-medium text-slate-700 dark:text-gray-300 mb-2">
                     URL *
                   </label>
                   <input
@@ -955,14 +955,14 @@ const OffPageSEO = ({ projectId, userRole, userId }) => {
                     onChange={(e) =>
                       setFormData({ ...formData, url: e.target.value })
                     }
-                    className="w-full px-4 py-2 bg-[#0f1419] border border-[#232945] rounded-lg text-white focus:outline-none focus:border-blue-500"
+                    className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2 text-slate-900 focus:border-blue-500 focus:outline-none dark:border-[#232945] dark:bg-[#0f1419] dark:text-white"
                     placeholder="https://example.com"
                     required
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                  <label className="block text-sm font-medium text-slate-700 dark:text-gray-300 mb-2">
                     Category *
                   </label>
                   <select
@@ -970,7 +970,7 @@ const OffPageSEO = ({ projectId, userRole, userId }) => {
                     onChange={(e) =>
                       setFormData({ ...formData, category: e.target.value })
                     }
-                    className="w-full px-4 py-2 bg-[#0f1419] border border-[#232945] rounded-lg text-white focus:outline-none focus:border-blue-500"
+                    className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2 text-slate-900 focus:border-blue-500 focus:outline-none dark:border-[#232945] dark:bg-[#0f1419] dark:text-white"
                   >
                     <option value="Social Media">Social Media</option>
                     <option value="Others">Others</option>
@@ -978,7 +978,7 @@ const OffPageSEO = ({ projectId, userRole, userId }) => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                  <label className="block text-sm font-medium text-slate-700 dark:text-gray-300 mb-2">
                     Notes
                   </label>
                   <textarea
@@ -986,7 +986,7 @@ const OffPageSEO = ({ projectId, userRole, userId }) => {
                     onChange={(e) =>
                       setFormData({ ...formData, notes: e.target.value })
                     }
-                    className="w-full px-4 py-2 bg-[#0f1419] border border-[#232945] rounded-lg text-white focus:outline-none focus:border-blue-500"
+                    className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2 text-slate-900 focus:border-blue-500 focus:outline-none dark:border-[#232945] dark:bg-[#0f1419] dark:text-white"
                     rows="3"
                   />
                 </div>
@@ -998,7 +998,7 @@ const OffPageSEO = ({ projectId, userRole, userId }) => {
                       setShowAddModal(false);
                       resetForm();
                     }}
-                    className="flex-1 px-4 py-2 bg-[#0f1419] border border-[#232945] text-white rounded-lg hover:bg-[#141a21] transition-colors"
+                    className="flex-1 rounded-lg border border-slate-200 bg-white px-4 py-2 text-slate-900 transition-colors hover:bg-slate-50 dark:border-[#232945] dark:bg-[#0f1419] dark:text-white dark:hover:bg-[#141a21]"
                   >
                     Cancel
                   </button>
@@ -1018,25 +1018,25 @@ const OffPageSEO = ({ projectId, userRole, userId }) => {
       {/* Edit Backlink Modal */}
       {showEditModal && selectedBacklink && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70">
-          <div className="bg-[#191f2b] rounded-xl shadow-2xl border border-[#232945] w-full max-w-lg">
+          <div className="rounded-xl border border-slate-200 bg-white shadow-2xl dark:border-[#232945] dark:bg-[#191f2b] w-full max-w-lg">
             <div className="p-6">
               <div className="flex items-center justify-between mb-6">
-                <h3 className="text-xl font-bold text-white">Edit Backlink</h3>
+                <h3 className="text-xl font-bold text-slate-900 dark:text-white">Edit Backlink</h3>
                 <button
                   onClick={() => {
                     setShowEditModal(false);
                     setSelectedBacklink(null);
                     resetForm();
                   }}
-                  className="p-1 hover:bg-[#0f1419] rounded transition-colors"
+                  className="rounded p-1 transition-colors hover:bg-slate-100 dark:hover:bg-[#0f1419]"
                 >
-                  <X className="w-5 h-5 text-gray-400" />
+                  <X className="w-5 h-5 text-slate-400 dark:text-gray-400" />
                 </button>
               </div>
 
               <form onSubmit={handleEditBacklink} className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                  <label className="block text-sm font-medium text-slate-700 dark:text-gray-300 mb-2">
                     URL *
                   </label>
                   <input
@@ -1045,13 +1045,13 @@ const OffPageSEO = ({ projectId, userRole, userId }) => {
                     onChange={(e) =>
                       setFormData({ ...formData, url: e.target.value })
                     }
-                    className="w-full px-4 py-2 bg-[#0f1419] border border-[#232945] rounded-lg text-white focus:outline-none focus:border-blue-500"
+                    className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2 text-slate-900 focus:border-blue-500 focus:outline-none dark:border-[#232945] dark:bg-[#0f1419] dark:text-white"
                     required
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                  <label className="block text-sm font-medium text-slate-700 dark:text-gray-300 mb-2">
                     Category *
                   </label>
                   <select
@@ -1059,7 +1059,7 @@ const OffPageSEO = ({ projectId, userRole, userId }) => {
                     onChange={(e) =>
                       setFormData({ ...formData, category: e.target.value })
                     }
-                    className="w-full px-4 py-2 bg-[#0f1419] border border-[#232945] rounded-lg text-white focus:outline-none focus:border-blue-500"
+                    className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2 text-slate-900 focus:border-blue-500 focus:outline-none dark:border-[#232945] dark:bg-[#0f1419] dark:text-white"
                   >
                     <option value="Social Media">Social Media</option>
                     <option value="Others">Others</option>
@@ -1067,7 +1067,7 @@ const OffPageSEO = ({ projectId, userRole, userId }) => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                  <label className="block text-sm font-medium text-slate-700 dark:text-gray-300 mb-2">
                     Notes
                   </label>
                   <textarea
@@ -1075,7 +1075,7 @@ const OffPageSEO = ({ projectId, userRole, userId }) => {
                     onChange={(e) =>
                       setFormData({ ...formData, notes: e.target.value })
                     }
-                    className="w-full px-4 py-2 bg-[#0f1419] border border-[#232945] rounded-lg text-white focus:outline-none focus:border-blue-500"
+                    className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2 text-slate-900 focus:border-blue-500 focus:outline-none dark:border-[#232945] dark:bg-[#0f1419] dark:text-white"
                     rows="3"
                   />
                 </div>
@@ -1088,7 +1088,7 @@ const OffPageSEO = ({ projectId, userRole, userId }) => {
                       setSelectedBacklink(null);
                       resetForm();
                     }}
-                    className="flex-1 px-4 py-2 bg-[#0f1419] border border-[#232945] text-white rounded-lg hover:bg-[#141a21] transition-colors"
+                    className="flex-1 rounded-lg border border-slate-200 bg-white px-4 py-2 text-slate-900 transition-colors hover:bg-slate-50 dark:border-[#232945] dark:bg-[#0f1419] dark:text-white dark:hover:bg-[#141a21]"
                   >
                     Cancel
                   </button>
@@ -1108,10 +1108,10 @@ const OffPageSEO = ({ projectId, userRole, userId }) => {
       {/* Bulk Add Backlinks Modal */}
       {showBulkAddModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70">
-          <div className="bg-[#191f2b] rounded-xl shadow-2xl border border-[#232945] w-full max-w-3xl max-h-[90vh] flex flex-col">
-            <div className="p-6 border-b border-[#232945]">
+          <div className="rounded-xl border border-slate-200 bg-white shadow-2xl dark:border-[#232945] dark:bg-[#191f2b] w-full max-w-3xl max-h-[90vh] flex flex-col">
+            <div className="border-b border-slate-200 p-6 dark:border-[#232945]">
               <div className="flex items-center justify-between">
-                <h3 className="text-xl font-bold text-white">
+                <h3 className="text-xl font-bold text-slate-900 dark:text-white">
                   {bulkStep === 1 ? "Add Multiple Backlinks" : "Configure Backlinks"}
                 </h3>
                 <button
@@ -1130,9 +1130,9 @@ const OffPageSEO = ({ projectId, userRole, userId }) => {
                       setParsedBacklinks([]);
                     }
                   }}
-                  className="p-1 hover:bg-[#0f1419] rounded transition-colors"
+                  className="rounded p-1 transition-colors hover:bg-slate-100 dark:hover:bg-[#0f1419]"
                 >
-                  <X className="w-5 h-5 text-gray-400" />
+                  <X className="w-5 h-5 text-slate-400 dark:text-gray-400" />
                 </button>
               </div>
             </div>
@@ -1141,16 +1141,16 @@ const OffPageSEO = ({ projectId, userRole, userId }) => {
               {bulkStep === 1 ? (
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                    <label className="block text-sm font-medium text-slate-700 dark:text-gray-300 mb-2">
                       Paste URLs (one per line)
                     </label>
                     <textarea
                       value={bulkUrls}
                       onChange={(e) => setBulkUrls(e.target.value)}
-                      className="w-full h-64 px-4 py-3 bg-[#0f1419] border border-[#232945] rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 font-mono text-sm"
+                      className="w-full h-64 rounded-lg border border-slate-200 bg-white px-4 py-3 font-mono text-sm text-slate-900 placeholder-slate-400 focus:border-blue-500 focus:outline-none dark:border-[#232945] dark:bg-[#0f1419] dark:text-white dark:placeholder-gray-500"
                       placeholder="https://facebook.com/yourpage&#10;https://twitter.com/yourprofile&#10;https://example.com/blog&#10;..."
                     />
-                    <p className="text-xs text-gray-500 mt-2">
+                    <p className="text-xs text-slate-400 dark:text-gray-500 mt-2">
                       Maximum 50 URLs per batch. Protocol (https://) will be added automatically if missing.
                     </p>
                   </div>
@@ -1158,7 +1158,7 @@ const OffPageSEO = ({ projectId, userRole, userId }) => {
               ) : (
                 <div className="space-y-4">
                   <div className="bg-blue-600/10 border border-blue-500/30 rounded-lg p-3 mb-4">
-                    <p className="text-sm text-blue-300">
+                    <p className="text-sm text-blue-700 dark:text-blue-300">
                       {parsedBacklinks.filter(b => b.status === "valid").length} valid,{" "}
                       {parsedBacklinks.filter(b => b.status === "invalid").length} invalid,{" "}
                       {parsedBacklinks.filter(b => b.status === "duplicate").length} duplicate
@@ -1169,9 +1169,9 @@ const OffPageSEO = ({ projectId, userRole, userId }) => {
                     {parsedBacklinks.map((item) => (
                       <div
                         key={item.id}
-                        className={`bg-[#0f1419] border rounded-lg p-4 ${
+                        className={`rounded-lg border bg-white p-4 dark:bg-[#0f1419] ${
                           item.status === "valid"
-                            ? "border-[#232945]"
+                            ? "border-slate-200 dark:border-[#232945]"
                             : item.status === "invalid"
                             ? "border-red-500/50"
                             : "border-yellow-500/50"
@@ -1199,7 +1199,7 @@ const OffPageSEO = ({ projectId, userRole, userId }) => {
                             {item.status === "valid" && (
                               <>
                                 <div>
-                                  <label className="block text-xs font-medium text-gray-400 mb-1">
+                                  <label className="block text-xs font-medium text-slate-500 dark:text-gray-400 mb-1">
                                     Category
                                   </label>
                                   <select
@@ -1207,7 +1207,7 @@ const OffPageSEO = ({ projectId, userRole, userId }) => {
                                     onChange={(e) =>
                                       updateParsedBacklink(item.id, "category", e.target.value)
                                     }
-                                    className="w-full px-3 py-2 bg-[#141a21] border border-[#232945] rounded text-white text-sm focus:outline-none focus:border-blue-500"
+                                    className="w-full rounded border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-blue-500 focus:outline-none dark:border-[#232945] dark:bg-[#141a21] dark:text-white"
                                   >
                                     <option value="Social Media">Social Media</option>
                                     <option value="Others">Others</option>
@@ -1215,7 +1215,7 @@ const OffPageSEO = ({ projectId, userRole, userId }) => {
                                 </div>
 
                                 <div>
-                                  <label className="block text-xs font-medium text-gray-400 mb-1">
+                                  <label className="block text-xs font-medium text-slate-500 dark:text-gray-400 mb-1">
                                     Notes (optional)
                                   </label>
                                   <textarea
@@ -1223,7 +1223,7 @@ const OffPageSEO = ({ projectId, userRole, userId }) => {
                                     onChange={(e) =>
                                       updateParsedBacklink(item.id, "notes", e.target.value)
                                     }
-                                    className="w-full px-3 py-2 bg-[#141a21] border border-[#232945] rounded text-white text-sm focus:outline-none focus:border-blue-500"
+                                    className="w-full rounded border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-blue-500 focus:outline-none dark:border-[#232945] dark:bg-[#141a21] dark:text-white"
                                     rows="2"
                                     placeholder="Add notes..."
                                   />
@@ -1246,7 +1246,7 @@ const OffPageSEO = ({ projectId, userRole, userId }) => {
               )}
             </div>
 
-            <div className="p-6 border-t border-[#232945] flex gap-3">
+            <div className="flex gap-3 border-t border-slate-200 p-6 dark:border-[#232945]">
               {bulkStep === 1 ? (
                 <>
                   <button
@@ -1255,7 +1255,7 @@ const OffPageSEO = ({ projectId, userRole, userId }) => {
                       setShowBulkAddModal(false);
                       setBulkUrls("");
                     }}
-                    className="flex-1 px-4 py-2 bg-[#0f1419] border border-[#232945] text-white rounded-lg hover:bg-[#141a21] transition-colors"
+                    className="flex-1 rounded-lg border border-slate-200 bg-white px-4 py-2 text-slate-900 transition-colors hover:bg-slate-50 dark:border-[#232945] dark:bg-[#0f1419] dark:text-white dark:hover:bg-[#141a21]"
                   >
                     Cancel
                   </button>
@@ -1275,7 +1275,7 @@ const OffPageSEO = ({ projectId, userRole, userId }) => {
                     onClick={() => {
                       setBulkStep(1);
                     }}
-                    className="px-4 py-2 bg-[#0f1419] border border-[#232945] text-white rounded-lg hover:bg-[#141a21] transition-colors"
+                    className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-slate-900 transition-colors hover:bg-slate-50 dark:border-[#232945] dark:bg-[#0f1419] dark:text-white dark:hover:bg-[#141a21]"
                   >
                     Back
                   </button>
@@ -1287,7 +1287,7 @@ const OffPageSEO = ({ projectId, userRole, userId }) => {
                       setBulkUrls("");
                       setParsedBacklinks([]);
                     }}
-                    className="px-4 py-2 bg-[#0f1419] border border-[#232945] text-white rounded-lg hover:bg-[#141a21] transition-colors"
+                    className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-slate-900 transition-colors hover:bg-slate-50 dark:border-[#232945] dark:bg-[#0f1419] dark:text-white dark:hover:bg-[#141a21]"
                   >
                     Cancel
                   </button>

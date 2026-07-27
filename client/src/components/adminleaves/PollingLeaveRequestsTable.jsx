@@ -1,8 +1,6 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import LeaveRequestsTable from "./LeaveRequestsTable";
 import { fetchAllLeaveRequests } from "../../api/leaveApi";
-
-const POLL_INTERVAL = 10000; // 10 seconds
 
 const PollingLeaveRequestsTable = ({
   selectedId,
@@ -14,7 +12,6 @@ const PollingLeaveRequestsTable = ({
 }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const pollingRef = useRef(null);
 
   const loadRequests = useCallback(async () => {
     try {
@@ -33,10 +30,14 @@ const PollingLeaveRequestsTable = ({
     }
   }, [setRequests]);
 
+  // One fetch on mount, then event-driven: the server emits "leave:updated"
+  // (bridged to this window event by WebSocketContext.jsx) whenever a leave
+  // request is created or approved/rejected, so a 10s re-poll of the whole
+  // queue is redundant with it.
   useEffect(() => {
     loadRequests();
-    pollingRef.current = setInterval(loadRequests, POLL_INTERVAL);
-    return () => clearInterval(pollingRef.current);
+    window.addEventListener("leave-updated", loadRequests);
+    return () => window.removeEventListener("leave-updated", loadRequests);
   }, [loadRequests]);
 
   if (loading)

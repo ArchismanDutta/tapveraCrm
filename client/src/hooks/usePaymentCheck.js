@@ -40,15 +40,16 @@ const usePaymentCheck = () => {
     setActivePayment(null);
   }, []);
 
+  // One authoritative check on mount, then event-driven: the server emits
+  // "payment:updated" (bridged to this window event by WebSocketContext.jsx)
+  // whenever this user's blocking payment is activated/approved/rejected/
+  // cancelled, targeted at their own user:<id> room — so a blind 30s re-poll
+  // (this hook is shared across ~6 pages) is redundant with it.
   useEffect(() => {
     checkPaymentStatus();
 
-    // Check payment status every 30 seconds
-    const interval = setInterval(() => {
-      checkPaymentStatus();
-    }, 30000);
-
-    return () => clearInterval(interval);
+    window.addEventListener("payment-updated", checkPaymentStatus);
+    return () => window.removeEventListener("payment-updated", checkPaymentStatus);
   }, [checkPaymentStatus]);
 
   return {

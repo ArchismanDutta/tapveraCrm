@@ -6,8 +6,10 @@ import ProjectsHeader from "../components/projects/ProjectsHeader";
 import ProjectStats from "../components/projects/ProjectStats";
 import ProjectFilters from "../components/projects/ProjectFilters";
 import ProjectList from "../components/projects/ProjectList";
+import ProjectFormModal from "../components/projects/ProjectFormModal";
 import { toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
+import { useWebSocketContext } from "../contexts/WebSocketContext";
 
 // Custom hook for debouncing
 const useDebounce = (value, delay) => {
@@ -28,13 +30,22 @@ const useDebounce = (value, delay) => {
 
 const ProjectsPageNew = ({ onLogout }) => {
   const navigate = useNavigate();
+  const { joinProject, leaveProject } = useWebSocketContext();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [projects, setProjects] = useState([]);
-  const [, setClients] = useState([]);
-  const [, setEmployees] = useState([]);
+  const [clients, setClients] = useState([]);
+  const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(false);
   const [userRole, setUserRole] = useState("admin");
   const [currentUserId, setCurrentUserId] = useState(null);
+
+  // Live remark counts for the badge on each project card — { [projectId]: count }.
+  const [remarkCounts, setRemarkCounts] = useState({});
+
+  // Add/Edit project modal state
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [selectedProject, setSelectedProject] = useState(null);
 
   // Filter state
   const [searchTerm, setSearchTerm] = useState("");
@@ -89,6 +100,50 @@ const ProjectsPageNew = ({ onLogout }) => {
     sortBy,
   ]);
 
+  // Keep this socket joined to the room for every project currently visible
+  // on screen, so 'project-remark' events (and the count updates below)
+  // actually arrive. React runs this effect's cleanup (leaving the previous
+  // page/filter's ids) before re-running the body (joining the new ids)
+  // whenever `projects` changes, and once more on unmount — so plain
+  // join-then-leave here is enough; no manual diffing against a previous
+  // set is needed.
+  useEffect(() => {
+    const ids = projects.map((p) => p._id);
+    ids.forEach((id) => joinProject(id));
+    return () => {
+      ids.forEach((id) => leaveProject(id));
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projects]);
+
+  // Live remark-count updates for the badge on each card.
+  useEffect(() => {
+    const handleNewRemark = (event) => {
+      const projectId = event.detail?.projectId;
+      if (!projectId) return;
+      setRemarkCounts((prev) => ({
+        ...prev,
+        [projectId]: (prev[projectId] || 0) + 1,
+      }));
+    };
+
+    const handleRemarkDeleted = (event) => {
+      const projectId = event.detail?.projectId;
+      if (!projectId) return;
+      setRemarkCounts((prev) => ({
+        ...prev,
+        [projectId]: Math.max(0, (prev[projectId] || 0) - 1),
+      }));
+    };
+
+    window.addEventListener("project-remark", handleNewRemark);
+    window.addEventListener("project-remark-deleted", handleRemarkDeleted);
+    return () => {
+      window.removeEventListener("project-remark", handleNewRemark);
+      window.removeEventListener("project-remark-deleted", handleRemarkDeleted);
+    };
+  }, []);
+
   const fetchAllData = async (page) => {
     setLoading(true);
     try {
@@ -123,6 +178,7 @@ const ProjectsPageNew = ({ onLogout }) => {
       const normalizedProjects = normalizeProjects(projectsData);
 
       setProjects(normalizedProjects);
+      fetchRemarkCounts(normalizedProjects.map((p) => p._id));
       setPagination({
         total: res.data.total || normalizedProjects.length,
         page: res.data.page || page,
@@ -142,6 +198,22 @@ const ProjectsPageNew = ({ onLogout }) => {
     } catch (error) {
       console.error("Error fetching projects:", error);
       toast.error(error.response?.data?.message || "Failed to load projects");
+    }
+  };
+
+  // Bulk-fetch live remark counts for exactly the projects on screen right
+  // now (one request for the whole page instead of one per card). Merges
+  // into the existing map rather than replacing it outright, so a slightly
+  // late response can't wipe out counts a socket event already updated.
+  const fetchRemarkCounts = async (projectIds) => {
+    if (!projectIds || projectIds.length === 0) return;
+    try {
+      const res = await API.get(
+        `/api/projects/remarks/counts?projectIds=${projectIds.join(",")}`
+      );
+      setRemarkCounts((prev) => ({ ...prev, ...(res.data?.data || {}) }));
+    } catch (error) {
+      console.error("Error fetching remark counts:", error);
     }
   };
 
@@ -176,18 +248,46 @@ const ProjectsPageNew = ({ onLogout }) => {
   };
 
   const handleAddProject = () => {
-    // Navigate to add project page or open modal
-    // For now, let's show a toast
-    toast.info("Add project modal would open here");
+    setShowAddModal(true);
   };
 
   const handleViewProject = (project) => {
     navigate(`/project/${project._id}`);
   };
 
-  const handleEditProject = () => {
-    // Navigate to edit project page or open modal
-    toast.info("Edit project modal would open here");
+  const handleEditProject = (project) => {
+    setSelectedProject(project);
+    setShowEditModal(true);
+  };
+
+  const closeProjectModals = () => {
+    setShowAddModal(false);
+    setShowEditModal(false);
+    setSelectedProject(null);
+  };
+
+  const handleCreateProjectSubmit = async (payload) => {
+    try {
+      await API.post("/api/projects", payload);
+      toast.success("Project created successfully");
+      closeProjectModals();
+      fetchAllData(1);
+    } catch (error) {
+      console.error("Error creating project:", error);
+      toast.error(error.response?.data?.message || "Failed to create project");
+    }
+  };
+
+  const handleUpdateProjectSubmit = async (payload) => {
+    try {
+      await API.put(`/api/projects/${selectedProject._id}`, payload);
+      toast.success("Project updated successfully");
+      closeProjectModals();
+      fetchAllData(currentPage);
+    } catch (error) {
+      console.error("Error updating project:", error);
+      toast.error(error.response?.data?.message || "Failed to update project");
+    }
   };
 
   const handleDeleteProject = async (project) => {
@@ -309,9 +409,21 @@ const ProjectsPageNew = ({ onLogout }) => {
             onCommunication={handleCommunication}
             canEdit={canEdit()}
             canDelete={canDelete()}
+            remarkCounts={remarkCounts}
           />
         </div>
       </main>
+
+      {(showAddModal || showEditModal) && (
+        <ProjectFormModal
+          isEditing={showEditModal}
+          project={selectedProject}
+          clients={clients}
+          employees={employees}
+          onClose={closeProjectModals}
+          onSubmit={showEditModal ? handleUpdateProjectSubmit : handleCreateProjectSubmit}
+        />
+      )}
     </div>
   );
 };

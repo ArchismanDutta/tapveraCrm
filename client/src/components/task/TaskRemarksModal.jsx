@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import axios from "axios";
 import dayjs from "dayjs";
 import { FaCommentDots, FaTimes, FaLink, FaPaperPlane } from "react-icons/fa";
+import { useWebSocketContext } from "../../contexts/WebSocketContext";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
 
@@ -57,6 +58,7 @@ export default function TaskRemarksModal({ task, onClose, onAddRemark }) {
   const modalRef = useRef(null);
   const bottomRef = useRef(null);
   const textareaRef = useRef(null);
+  const { joinTask, leaveTask } = useWebSocketContext();
 
   // Close on outside click
   useEffect(() => {
@@ -81,11 +83,32 @@ export default function TaskRemarksModal({ task, onClose, onAddRemark }) {
     }
   }, [task._id]);
 
+  // One authoritative fetch on open — refreshes populated user names/etc.
+  // beyond what the parent's `task` prop may already have cached.
   useEffect(() => { fetchRemarks(); }, [fetchRemarks]);
+
+  // Join this task's room so new remarks (from anyone, including this same
+  // user's own submission — see handleSubmit below) arrive live instead of
+  // being caught by a 5s poll of GET /api/tasks/:taskId.
   useEffect(() => {
-    const id = setInterval(fetchRemarks, 5000);
-    return () => clearInterval(id);
-  }, [fetchRemarks]);
+    if (!task._id) return undefined;
+    joinTask(task._id);
+    return () => leaveTask(task._id);
+  }, [task._id, joinTask, leaveTask]);
+
+  useEffect(() => {
+    const handleTaskRemark = (event) => {
+      const data = event.detail || {};
+      if (String(data.taskId) !== String(task._id)) return;
+      const incoming = data.remark;
+      if (!incoming?._id) return;
+      setRemarks((prev) =>
+        prev.some((r) => String(r._id) === String(incoming._id)) ? prev : [...prev, incoming]
+      );
+    };
+    window.addEventListener("task-remark", handleTaskRemark);
+    return () => window.removeEventListener("task-remark", handleTaskRemark);
+  }, [task._id]);
 
   // Scroll to bottom when remarks change
   useEffect(() => {
@@ -103,10 +126,12 @@ export default function TaskRemarksModal({ task, onClose, onAddRemark }) {
     try {
       await onAddRemark(comment);
       setComment("");
-      setRemarks((prev) => [
-        ...prev,
-        { comment, user: { name: "You" }, createdAt: new Date().toISOString(), _id: Date.now() },
-      ]);
+      // No optimistic local append: this modal always has the task's room
+      // joined while open (see the joinTask effect above), so the
+      // "task-remark" broadcast the server sends right after this POST
+      // resolves delivers the real, persisted remark back to this same
+      // client a moment later — appending a fake one here too would just
+      // show the comment twice.
     } catch (err) {
       console.error("Failed to add remark:", err);
       alert("Could not add remark.");
@@ -123,6 +148,15 @@ export default function TaskRemarksModal({ task, onClose, onAddRemark }) {
   };
 
   const testUrl = (text) => { URL_REGEX.lastIndex = 0; return URL_REGEX.test(text); };
+
+  // Remarks now always arrive with a real populated `user` ({_id, name,
+  // email}) — from the initial fetch, and from the live "task-remark" event
+  // for anyone's submission including this user's own (see handleSubmit) —
+  // so "is this mine" has to be an ID comparison, not the old optimistic
+  // entry's literal user.name === "You" placeholder.
+  const currentUserId = (() => {
+    try { return JSON.parse(localStorage.getItem("user") || "{}")._id; } catch { return null; }
+  })();
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/55 backdrop-blur-sm sm:items-center">
@@ -159,7 +193,7 @@ export default function TaskRemarksModal({ task, onClose, onAddRemark }) {
             </div>
           ) : (
             remarks.map((r, idx) => {
-              const isYou = r.user?.name === "You";
+              const isYou = String(r.user?._id || r.user) === String(currentUserId);
               const hasLink = testUrl(r.comment || "");
               return (
                 <div

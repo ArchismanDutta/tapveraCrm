@@ -1674,6 +1674,12 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
       const updateData = event.detail || {};
       const affectedEmployeeId = updateData.employeeId || updateData.userId;
 
+      // Any attendance change (this admin's manual edit, or the cross-client
+      // "attendance-updated" broadcast from a punch/break/manual-punch
+      // anywhere else) affects the aggregate active-employees count, so keep
+      // it fresh unconditionally rather than waiting on the old 2-minute poll.
+      fetchActiveEmployeesStats();
+
       // Smart cache invalidation
       if (affectedEmployeeId) {
         // Clear cache only for affected employee for better performance
@@ -1720,11 +1726,19 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
       }
     };
 
-    // Enhanced event listeners for comprehensive sync
+    // Enhanced event listeners for comprehensive sync. "attendance-updated"
+    // is the real cross-client one (bridged from the server's Socket.IO
+    // "attendance:updated" event — fires for ANY user's punch/break/manual
+    // edit, from any browser/session); the other three are same-tab-only
+    // events ManualAttendanceForm/ManualAttendanceManagement dispatch to
+    // themselves right after their own edits succeed. handleAttendanceUpdate
+    // already reads updateData.userId as a fallback for updateData.employeeId,
+    // which matches the payload shape broadcastAttendanceUpdated sends.
     window.addEventListener('attendanceDataUpdated', handleAttendanceUpdate);
     window.addEventListener('manualAttendanceUpdated', handleAttendanceUpdate);
     window.addEventListener('statusUpdate', handleStatusUpdate);
     window.addEventListener('attendanceRecordModified', handleAttendanceUpdate);
+    window.addEventListener('attendance-updated', handleAttendanceUpdate);
 
     console.log('🎧 SuperAdmin: Enhanced sync listeners registered');
 
@@ -1733,32 +1747,20 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
       window.removeEventListener('manualAttendanceUpdated', handleAttendanceUpdate);
       window.removeEventListener('statusUpdate', handleStatusUpdate);
       window.removeEventListener('attendanceRecordModified', handleAttendanceUpdate);
+      window.removeEventListener('attendance-updated', handleAttendanceUpdate);
       console.log('🎧 SuperAdmin: Sync listeners cleanup completed');
     };
-  }, [selectedEmployee, fetchAttendanceData, fetchCurrentStatus, fetchEmployees, clearEmployeeCache, refreshEmployeeData]);
+  }, [selectedEmployee, fetchAttendanceData, fetchCurrentStatus, fetchEmployees, clearEmployeeCache, refreshEmployeeData, fetchActiveEmployeesStats]);
 
-  // Auto-refresh current employee data periodically for real-time accuracy
-  useEffect(() => {
-    if (!selectedEmployee) return;
-
-    // More aggressive refresh during work hours for 100% accuracy
-    const refreshInterval = setInterval(() => {
-      const now = new Date();
-      const hour = now.getHours();
-      const isWeekday = now.getDay() >= 1 && now.getDay() <= 5;
-      const isWorkingHours = hour >= 8 && hour <= 19;
-
-      // Force refresh to ensure latest data (bypasses cache)
-      if (isWeekday && isWorkingHours) {
-        console.log('🔄 Auto-refresh: Fetching latest attendance data');
-        fetchAttendanceData(selectedEmployee._id, true);
-        // Also refresh active employees stats
-        fetchActiveEmployeesStats();
-      }
-    }, 120000); // 2 minutes for more real-time updates
-
-    return () => clearInterval(refreshInterval);
-  }, [selectedEmployee, fetchAttendanceData, fetchActiveEmployeesStats]);
+  // NOTE: this used to be a 2-minute setInterval poll (further gated to
+  // weekday 8am-7pm as a crude guess at "work hours"), forcing a refetch of
+  // the selected employee's data + active-employee stats whether or not
+  // anything had actually changed. That's now handled by the
+  // "attendance-updated" listener in the effect above (which calls
+  // fetchActiveEmployeesStats unconditionally and refreshEmployeeData for
+  // the selected employee when they're the affected one) — reacting the
+  // moment a punch/break/manual-edit happens, anywhere, any time of day,
+  // instead of up to 2 minutes late and only during a guessed work window.
 
   // Load attendance data when employee is selected
   useEffect(() => {

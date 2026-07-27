@@ -13,6 +13,7 @@ const ProjectList = ({
   onCommunication,
   canEdit = false,
   canDelete = false,
+  remarkCounts = {},
 }) => {
   if (loading) {
     return (
@@ -67,6 +68,7 @@ const ProjectList = ({
             onCommunication={onCommunication}
             canEdit={canEdit}
             canDelete={canDelete}
+            remarkCount={remarkCounts[project._id] || 0}
           />
         ))}
       </div>

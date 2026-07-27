@@ -1,6 +1,6 @@
 const Payslip = require("../models/Payslip");
 const User    = require("../models/User");
-const { sendNotificationToUser } = require("../utils/websocket");
+const notificationService = require("../services/notificationService");
 
 // West Bengal Professional Tax Slabs
 function calculatePTax(monthlySalary) {
@@ -213,13 +213,16 @@ exports.togglePublish = async (req, res) => {
     await payslip.save();
 
     if (payslip.isPublished && payslip.employee) {
-      try {
-        sendNotificationToUser(payslip.employee._id.toString(), {
-          type: "payslip_published",
-          message: "Your payslip for " + payslip.payPeriod + " is now available.",
-          payslipId: payslip._id,
-        });
-      } catch (_) {}
+      notificationService
+        .notifyUser({
+          userId: payslip.employee._id.toString(),
+          type: "payslip",
+          channel: "payslip",
+          title: "Payslip Published",
+          body: `Your payslip for ${payslip.payPeriod} is now available.`,
+          relatedData: { payslipId: payslip._id, url: "/my-payslips" },
+        })
+        .catch((err) => console.error("Payslip-published notification failed:", err));
     }
 
     res.json({ success: true, data: payslip });

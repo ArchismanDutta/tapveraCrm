@@ -3,7 +3,7 @@
 
 const AutoPayrollService = require('../services/AutoPayrollService');
 const Payslip = require('../models/Payslip');
-const { sendNotificationToUser } = require('../utils/websocket');
+const notificationService = require('../services/notificationService');
 
 /**
  * Preview salary calculation for an employee without saving
@@ -145,18 +145,17 @@ exports.generateSinglePayslip = async (req, res) => {
     await result.payslip.populate('employee', 'name employeeId email department designation');
     await result.payslip.populate('createdBy', 'name email');
 
-    // Send notification to employee
-    const notificationSent = sendNotificationToUser(employeeId.toString(), {
-      channel: 'payslip',
-      title: 'New Payslip Generated',
-      message: `Your payslip for ${new Date(payPeriod + '-01').toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })} has been generated automatically`,
-      payPeriod: payPeriod,
-      netPayment: result.calculations.netPayment,
-      timestamp: Date.now(),
-      action: 'view_payslip'
-    });
-
-    console.log(`Payslip notification sent to ${employeeId}: ${notificationSent ? 'Success' : 'User offline'}`);
+    // Send notification to employee (persisted + real-time)
+    notificationService
+      .notifyUser({
+        userId: employeeId.toString(),
+        type: 'payslip',
+        channel: 'payslip',
+        title: 'New Payslip Generated',
+        body: `Your payslip for ${new Date(payPeriod + '-01').toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })} has been generated automatically`,
+        relatedData: { payslipId: result.payslip._id, url: '/my-payslips' },
+      })
+      .catch((err) => console.error('Payslip-generated notification failed:', err));
 
     res.status(201).json({
       success: true,
@@ -210,18 +209,22 @@ exports.generateBulkPayslips = async (req, res) => {
       { skipExisting, employeeIds }
     );
 
-    // Send notifications to all employees who got payslips
+    // Send notifications to all employees who got payslips (one persisted
+    // row per employee via notifyUsers, instead of N unpersisted WS pings)
     const successfulGenerations = results.details.filter(d => d.status === 'success');
-    for (const detail of successfulGenerations) {
-      sendNotificationToUser(detail.employeeId.toString(), {
-        channel: 'payslip',
-        title: 'New Payslip Generated',
-        message: `Your payslip for ${new Date(payPeriod + '-01').toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })} has been generated automatically`,
-        payPeriod: payPeriod,
-        netPayment: detail.netPayment,
-        timestamp: Date.now(),
-        action: 'view_payslip'
-      });
+    if (successfulGenerations.length) {
+      notificationService
+        .notifyUsers(
+          successfulGenerations.map((d) => d.employeeId.toString()),
+          {
+            type: 'payslip',
+            channel: 'payslip',
+            title: 'New Payslip Generated',
+            body: `Your payslip for ${new Date(payPeriod + '-01').toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })} has been generated automatically`,
+            relatedData: { url: '/my-payslips' },
+          }
+        )
+        .catch((err) => console.error('Bulk payslip notification failed:', err));
     }
 
     res.status(200).json({
@@ -356,16 +359,17 @@ exports.recalculatePayslip = async (req, res) => {
     await result.payslip.populate('employee', 'name employeeId email department designation');
     await result.payslip.populate('createdBy', 'name email');
 
-    // Send notification
-    sendNotificationToUser(employeeId.toString(), {
-      channel: 'payslip',
-      title: 'Payslip Updated',
-      message: `Your payslip for ${new Date(payPeriod + '-01').toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })} has been recalculated`,
-      payPeriod: payPeriod,
-      netPayment: result.calculations.netPayment,
-      timestamp: Date.now(),
-      action: 'view_payslip'
-    });
+    // Send notification (persisted + real-time)
+    notificationService
+      .notifyUser({
+        userId: employeeId.toString(),
+        type: 'payslip',
+        channel: 'payslip',
+        title: 'Payslip Updated',
+        body: `Your payslip for ${new Date(payPeriod + '-01').toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })} has been recalculated`,
+        relatedData: { payslipId: result.payslip._id, url: '/my-payslips' },
+      })
+      .catch((err) => console.error('Payslip-updated notification failed:', err));
 
     res.json({
       success: true,

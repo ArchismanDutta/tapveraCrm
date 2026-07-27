@@ -321,11 +321,11 @@ const Screenshot = ({ projectId, userRole, userId }) => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h3 className="text-xl font-bold text-white flex items-center gap-2">
+          <h3 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
             <ImageIcon className="w-6 h-6 text-blue-400" />
             Screenshots
           </h3>
-          <p className="text-sm text-gray-400 mt-1">
+          <p className="text-sm text-slate-500 dark:text-gray-400 mt-1">
             Upload, view, and manage project screenshots
           </p>
         </div>
@@ -343,11 +343,11 @@ const Screenshot = ({ projectId, userRole, userId }) => {
       {/* Stats Cards */}
       {stats && (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="bg-[#0f1419] border border-[#232945] rounded-lg p-4">
+          <div className="rounded-lg border border-slate-200 bg-white p-4 dark:border-[#232945] dark:bg-[#0f1419]">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-400">Total Screenshots</p>
-                <p className="text-2xl font-bold text-white mt-1">
+                <p className="text-sm text-slate-500 dark:text-gray-400">Total Screenshots</p>
+                <p className="text-2xl font-bold text-slate-900 dark:text-white mt-1">
                   {stats.totalScreenshots}
                 </p>
               </div>
@@ -363,11 +363,11 @@ const Screenshot = ({ projectId, userRole, userId }) => {
           <div className="w-12 h-12 border-4 border-blue-500/20 border-t-blue-500 rounded-full animate-spin"></div>
         </div>
       ) : screenshots.length === 0 ? (
-        <div className="bg-[#0f1419] border border-[#232945] rounded-lg p-8 text-center">
-          <ImageIcon className="w-16 h-16 text-gray-600 mx-auto mb-4" />
-          <p className="text-gray-400">No screenshots uploaded yet</p>
+        <div className="rounded-lg border border-slate-200 bg-white p-8 text-center dark:border-[#232945] dark:bg-[#0f1419]">
+          <ImageIcon className="w-16 h-16 text-slate-300 dark:text-gray-600 mx-auto mb-4" />
+          <p className="text-slate-500 dark:text-gray-400">No screenshots uploaded yet</p>
           {canEdit && (
-            <p className="text-sm text-gray-500 mt-2">
+            <p className="text-sm text-slate-400 dark:text-gray-500 mt-2">
               Click "Upload Screenshot" to add your first screenshot
             </p>
           )}
@@ -377,11 +377,11 @@ const Screenshot = ({ projectId, userRole, userId }) => {
           {screenshots.map((screenshot) => (
             <div
               key={screenshot._id}
-              className="bg-[#0f1419] border border-[#232945] rounded-lg overflow-hidden hover:border-purple-500/50 transition-all group"
+              className="group overflow-hidden rounded-lg border border-slate-200 bg-white transition-all hover:border-purple-500/50 dark:border-[#232945] dark:bg-[#0f1419]"
             >
               {/* Image */}
               <div
-                className="relative aspect-video bg-[#141a21] cursor-pointer"
+                className="relative aspect-video cursor-pointer bg-slate-100 dark:bg-[#141a21]"
                 onClick={() => openViewModal(screenshot)}
               >
                 <img
@@ -396,11 +396,11 @@ const Screenshot = ({ projectId, userRole, userId }) => {
 
               {/* Content */}
               <div className="p-4">
-                <h4 className="text-white font-medium mb-1 truncate">
+                <h4 className="text-slate-900 dark:text-white font-medium mb-1 truncate">
                   {screenshot.title}
                 </h4>
                 {screenshot.description && (
-                  <p className="text-sm text-gray-400 mb-2 line-clamp-2">
+                  <p className="text-sm text-slate-500 dark:text-gray-400 mb-2 line-clamp-2">
                     {screenshot.description}
                   </p>
                 )}
@@ -420,7 +420,7 @@ const Screenshot = ({ projectId, userRole, userId }) => {
                 )}
 
                 {/* Meta Info */}
-                <div className="flex items-center justify-between text-xs text-gray-500 mb-3">
+                <div className="flex items-center justify-between text-xs text-slate-400 dark:text-gray-500 mb-3">
                   <div className="flex items-center gap-1">
                     <Calendar className="w-3 h-3" />
                     {new Date(screenshot.createdAt).toLocaleDateString()}
@@ -487,10 +487,10 @@ const Screenshot = ({ projectId, userRole, userId }) => {
       {/* Upload Modal */}
       {showUploadModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70">
-          <div className="bg-[#191f2b] rounded-xl shadow-2xl border border-[#232945] w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+          <div className="rounded-xl border border-slate-200 bg-white shadow-2xl dark:border-[#232945] dark:bg-[#191f2b] w-full max-w-2xl max-h-[90vh] overflow-y-auto">
             <div className="p-6">
               <div className="flex items-center justify-between mb-6">
-                <h3 className="text-xl font-bold text-white">
+                <h3 className="text-xl font-bold text-slate-900 dark:text-white">
                   Upload Screenshot
                 </h3>
                 <button
@@ -498,9 +498,9 @@ const Screenshot = ({ projectId, userRole, userId }) => {
                     setShowUploadModal(false);
                     resetForm();
                   }}
-                  className="p-1 hover:bg-[#0f1419] rounded transition-colors"
+                  className="rounded p-1 transition-colors hover:bg-slate-100 dark:hover:bg-[#0f1419]"
                 >
-                  <X className="w-5 h-5 text-gray-400" />
+                  <X className="w-5 h-5 text-slate-400 dark:text-gray-400" />
                 </button>
               </div>
 
@@ -514,7 +514,7 @@ const Screenshot = ({ projectId, userRole, userId }) => {
                   className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-all ${
                     isDragging
                       ? "border-blue-500 bg-blue-500/10"
-                      : "border-[#232945] hover:border-blue-500/50"
+                      : "border-slate-300 dark:border-[#232945] hover:border-blue-500/50"
                   }`}
                 >
                   {formData.preview ? (
@@ -537,12 +537,12 @@ const Screenshot = ({ projectId, userRole, userId }) => {
                     </div>
                   ) : (
                     <div>
-                      <Upload className="w-12 h-12 text-gray-500 mx-auto mb-3" />
-                      <p className="text-white mb-1">
+                      <Upload className="w-12 h-12 text-slate-400 dark:text-gray-500 mx-auto mb-3" />
+                      <p className="text-slate-900 dark:text-white mb-1">
                         Drop an image here, paste from clipboard, or click to
                         browse
                       </p>
-                      <p className="text-sm text-gray-500">
+                      <p className="text-sm text-slate-400 dark:text-gray-500">
                         Supports: JPG, PNG, GIF, WebP (max 10MB)
                       </p>
                     </div>
@@ -559,7 +559,7 @@ const Screenshot = ({ projectId, userRole, userId }) => {
 
                 {/* Title */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                  <label className="block text-sm font-medium text-slate-700 dark:text-gray-300 mb-2">
                     Title
                   </label>
                   <input
@@ -568,13 +568,13 @@ const Screenshot = ({ projectId, userRole, userId }) => {
                     onChange={(e) =>
                       setFormData({ ...formData, title: e.target.value })
                     }
-                    className="w-full px-4 py-2 bg-[#0f1419] border border-[#232945] rounded-lg text-white focus:outline-none focus:border-blue-500"
+                    className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2 text-slate-900 focus:border-blue-500 focus:outline-none dark:border-[#232945] dark:bg-[#0f1419] dark:text-white"
                   />
                 </div>
 
                 {/* Description */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                  <label className="block text-sm font-medium text-slate-700 dark:text-gray-300 mb-2">
                     Description
                   </label>
                   <textarea
@@ -582,14 +582,14 @@ const Screenshot = ({ projectId, userRole, userId }) => {
                     onChange={(e) =>
                       setFormData({ ...formData, description: e.target.value })
                     }
-                    className="w-full px-4 py-2 bg-[#0f1419] border border-[#232945] rounded-lg text-white focus:outline-none focus:border-blue-500"
+                    className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2 text-slate-900 focus:border-blue-500 focus:outline-none dark:border-[#232945] dark:bg-[#0f1419] dark:text-white"
                     rows="3"
                   />
                 </div>
 
                 {/* Tags */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                  <label className="block text-sm font-medium text-slate-700 dark:text-gray-300 mb-2">
                     Tags (comma-separated)
                   </label>
                   <input
@@ -598,7 +598,7 @@ const Screenshot = ({ projectId, userRole, userId }) => {
                     onChange={(e) =>
                       setFormData({ ...formData, tags: e.target.value })
                     }
-                    className="w-full px-4 py-2 bg-[#0f1419] border border-[#232945] rounded-lg text-white focus:outline-none focus:border-blue-500"
+                    className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2 text-slate-900 focus:border-blue-500 focus:outline-none dark:border-[#232945] dark:bg-[#0f1419] dark:text-white"
                     placeholder="ui, mockup, homepage"
                   />
                 </div>
@@ -610,7 +610,7 @@ const Screenshot = ({ projectId, userRole, userId }) => {
                       setShowUploadModal(false);
                       resetForm();
                     }}
-                    className="flex-1 px-4 py-2 bg-[#0f1419] border border-[#232945] text-white rounded-lg hover:bg-[#141a21] transition-colors"
+                    className="flex-1 rounded-lg border border-slate-200 bg-white px-4 py-2 text-slate-900 transition-colors hover:bg-slate-50 dark:border-[#232945] dark:bg-[#0f1419] dark:text-white dark:hover:bg-[#141a21]"
                   >
                     Cancel
                   </button>
@@ -630,10 +630,10 @@ const Screenshot = ({ projectId, userRole, userId }) => {
       {/* Edit Modal */}
       {showEditModal && selectedScreenshot && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70">
-          <div className="bg-[#191f2b] rounded-xl shadow-2xl border border-[#232945] w-full max-w-lg">
+          <div className="rounded-xl border border-slate-200 bg-white shadow-2xl dark:border-[#232945] dark:bg-[#191f2b] w-full max-w-lg">
             <div className="p-6">
               <div className="flex items-center justify-between mb-6">
-                <h3 className="text-xl font-bold text-white">
+                <h3 className="text-xl font-bold text-slate-900 dark:text-white">
                   Edit Screenshot
                 </h3>
                 <button
@@ -642,15 +642,15 @@ const Screenshot = ({ projectId, userRole, userId }) => {
                     setSelectedScreenshot(null);
                     resetForm();
                   }}
-                  className="p-1 hover:bg-[#0f1419] rounded transition-colors"
+                  className="rounded p-1 transition-colors hover:bg-slate-100 dark:hover:bg-[#0f1419]"
                 >
-                  <X className="w-5 h-5 text-gray-400" />
+                  <X className="w-5 h-5 text-slate-400 dark:text-gray-400" />
                 </button>
               </div>
 
               <form onSubmit={handleEdit} className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                  <label className="block text-sm font-medium text-slate-700 dark:text-gray-300 mb-2">
                     Title
                   </label>
                   <input
@@ -659,12 +659,12 @@ const Screenshot = ({ projectId, userRole, userId }) => {
                     onChange={(e) =>
                       setFormData({ ...formData, title: e.target.value })
                     }
-                    className="w-full px-4 py-2 bg-[#0f1419] border border-[#232945] rounded-lg text-white focus:outline-none focus:border-blue-500"
+                    className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2 text-slate-900 focus:border-blue-500 focus:outline-none dark:border-[#232945] dark:bg-[#0f1419] dark:text-white"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                  <label className="block text-sm font-medium text-slate-700 dark:text-gray-300 mb-2">
                     Description
                   </label>
                   <textarea
@@ -672,13 +672,13 @@ const Screenshot = ({ projectId, userRole, userId }) => {
                     onChange={(e) =>
                       setFormData({ ...formData, description: e.target.value })
                     }
-                    className="w-full px-4 py-2 bg-[#0f1419] border border-[#232945] rounded-lg text-white focus:outline-none focus:border-blue-500"
+                    className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2 text-slate-900 focus:border-blue-500 focus:outline-none dark:border-[#232945] dark:bg-[#0f1419] dark:text-white"
                     rows="3"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                  <label className="block text-sm font-medium text-slate-700 dark:text-gray-300 mb-2">
                     Tags (comma-separated)
                   </label>
                   <input
@@ -687,7 +687,7 @@ const Screenshot = ({ projectId, userRole, userId }) => {
                     onChange={(e) =>
                       setFormData({ ...formData, tags: e.target.value })
                     }
-                    className="w-full px-4 py-2 bg-[#0f1419] border border-[#232945] rounded-lg text-white focus:outline-none focus:border-blue-500"
+                    className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2 text-slate-900 focus:border-blue-500 focus:outline-none dark:border-[#232945] dark:bg-[#0f1419] dark:text-white"
                   />
                 </div>
 
@@ -699,7 +699,7 @@ const Screenshot = ({ projectId, userRole, userId }) => {
                       setSelectedScreenshot(null);
                       resetForm();
                     }}
-                    className="flex-1 px-4 py-2 bg-[#0f1419] border border-[#232945] text-white rounded-lg hover:bg-[#141a21] transition-colors"
+                    className="flex-1 rounded-lg border border-slate-200 bg-white px-4 py-2 text-slate-900 transition-colors hover:bg-slate-50 dark:border-[#232945] dark:bg-[#0f1419] dark:text-white dark:hover:bg-[#141a21]"
                   >
                     Cancel
                   </button>

@@ -534,7 +534,7 @@ const ClientPortal = ({ onLogout, clientId, clientEmail }) => {
                             <div className="relative">
                               <MessageCircle className="w-5 h-5 text-gray-400" />
                               <div className="absolute -top-1 -right-1">
-                                <UnreadMessageBadge projectId={project._id} refreshInterval={60000} />
+                                <UnreadMessageBadge projectId={project._id} />
                               </div>
                             </div>
                           </div>
@@ -655,7 +655,7 @@ const ClientPortal = ({ onLogout, clientId, clientEmail }) => {
                         <div className="relative">
                           <MessageCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-400" />
                           <div className="absolute -top-1 -right-1">
-                            <UnreadMessageBadge projectId={project._id} refreshInterval={60000} className="text-[8px] sm:text-[10px] min-w-[14px] sm:min-w-[16px] h-3.5 sm:h-4 px-0.5 sm:px-1" />
+                            <UnreadMessageBadge projectId={project._id} className="text-[8px] sm:text-[10px] min-w-[14px] sm:min-w-[16px] h-3.5 sm:h-4 px-0.5 sm:px-1" />
                           </div>
                         </div>
                         <button

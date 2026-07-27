@@ -41,6 +41,13 @@ class AttendanceController {
       // Log the action for audit
       console.log(`User ${userId} performed ${action} at ${new Date().toISOString()}`);
 
+      try {
+        const { broadcastAttendanceUpdated } = require('../utils/websocket');
+        broadcastAttendanceUpdated(userId, { action, manual: false });
+      } catch (wsError) {
+        console.warn('WebSocket broadcast failed (attendance punch):', wsError.message);
+      }
+
       res.json({
         success: true,
         data: {
@@ -479,6 +486,13 @@ class AttendanceController {
 
       // Log the manual action
       console.log(`Admin ${adminId} manually recorded ${action} for user ${userId} at ${timestamp}`);
+
+      try {
+        const { broadcastAttendanceUpdated } = require('../utils/websocket');
+        broadcastAttendanceUpdated(userId, { action, manual: true, adminId });
+      } catch (wsError) {
+        console.warn('WebSocket broadcast failed (manual attendance punch):', wsError.message);
+      }
 
       res.json({
         success: true,

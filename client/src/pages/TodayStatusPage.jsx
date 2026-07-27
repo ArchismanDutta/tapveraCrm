@@ -668,23 +668,29 @@ const TodayStatusPage = ({ onLogout }) => {
     fetchAllData({ isInitial: true });
   }, [fetchAllData]);
 
+  // Previously a 30s/120s poll pair. Now event-driven: the server emits
+  // "attendance:updated" (bridged to this window event by
+  // WebSocketContext.jsx) whenever this same user's attendance changes —
+  // covering both another device/tab punching for them, and an admin's
+  // manual correction — so a blind re-poll of this page's own data is
+  // redundant with it. Filtered to this user's own ID because an admin/hr
+  // viewer also gets this event for every OTHER employee's punches (they're
+  // in the admin/hr role rooms too), and this page only cares about its own.
   useEffect(() => {
-    const statusInterval = setInterval(() => {
-      if (!requestInProgress) {
-        fetchStatus();
-      }
-    }, 30000);
+    const currentUserId = (() => {
+      try { return JSON.parse(localStorage.getItem("user") || "{}")._id; } catch { return null; }
+    })();
 
-    const summaryInterval = setInterval(() => {
-      if (!requestInProgress) {
-        fetchWeeklySummary();
-      }
-    }, 120000);
-
-    return () => {
-      clearInterval(statusInterval);
-      clearInterval(summaryInterval);
+    const handleLiveAttendanceUpdate = (event) => {
+      if (requestInProgress) return;
+      const data = event.detail || {};
+      if (data.userId && currentUserId && String(data.userId) !== String(currentUserId)) return;
+      fetchStatus();
+      fetchWeeklySummary();
     };
+
+    window.addEventListener("attendance-updated", handleLiveAttendanceUpdate);
+    return () => window.removeEventListener("attendance-updated", handleLiveAttendanceUpdate);
   }, [fetchStatus, fetchWeeklySummary, requestInProgress]);
 
   // Enhanced punch logic

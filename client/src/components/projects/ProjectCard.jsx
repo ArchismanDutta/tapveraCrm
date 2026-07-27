@@ -4,6 +4,7 @@ import {
   Users,
   User,
   MessageSquare,
+  MessageCircle,
   Edit2,
   Trash2,
   Eye,
@@ -35,6 +36,7 @@ const ProjectCard = ({
   onCommunication,
   canEdit = false,
   canDelete = false,
+  remarkCount = 0,
 }) => {
   const getStatusColor = (status) => {
     switch (status?.toLowerCase()) {
@@ -254,6 +256,20 @@ const ProjectCard = ({
               Chat
             </button>
           )}
+
+          <button
+            onClick={() => onView(project)}
+            title="Client remarks"
+            className="relative inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-purple-200 bg-purple-50 px-3 py-2 text-xs font-medium text-purple-700 transition hover:bg-purple-100 dark:border-purple-500/25 dark:bg-purple-500/10 dark:text-purple-300 dark:hover:bg-purple-500/20"
+          >
+            <MessageCircle className="h-3.5 w-3.5" />
+            Remarks
+            {remarkCount > 0 && (
+              <span className="inline-flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-purple-600 px-1 text-[10px] font-semibold leading-none text-white dark:bg-purple-500">
+                {remarkCount > 99 ? "99+" : remarkCount}
+              </span>
+            )}
+          </button>
 
           {canEdit && (
             <button

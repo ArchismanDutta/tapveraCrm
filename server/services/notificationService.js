@@ -2,13 +2,34 @@ const mongoose = require("mongoose");
 const Notification = require("../models/Notification");
 const { sendNotificationToUser } = require("../utils/websocket");
 
+/**
+ * NotificationService — the single producer for every in-app notification.
+ *
+ * Any feature that wants to notify someone (tasks, payslips, chat, wishes...)
+ * is expected to call into here and nowhere else. Each call does two things,
+ * in this order:
+ *   1. PERSIST — write the notification row(s) so they survive offline users
+ *      and power the notification centre + unread badge.
+ *   2. EMIT — push a live Socket.IO signal so anyone currently connected sees
+ *      it instantly, without polling.
+ *
+ * Emitting is best-effort and never allowed to throw: server/utils/websocket.js
+ * already swallows its own errors, but the `delivered`/`deliveredAt` bookkeeping
+ * below is wrapped too, so a Socket.IO hiccup can never fail the request that
+ * triggered the notification. Persistence is the guarantee; the socket is
+ * just the "make it feel instant" layer on top.
+ *
+ * Ported from kha-crm-hrms's notification.service.js, adapted to this
+ * project's richer Notification schema (priority, relatedData, expiresAt)
+ * and kept backward-compatible with the existing `createAndSend` call sites
+ * in taskController.js / chatController.js.
+ */
 class NotificationService {
   /**
-   * Create and send a notification
-   * @param {Object} notificationData - Notification details
-   * @returns {Promise<Notification>}
+   * Notify a single user. Persists one row and pushes it to that user's
+   * personal socket room.
    */
-  async createAndSend(notificationData) {
+  async notifyUser(notificationData) {
     const {
       userId,
       type,
@@ -21,7 +42,6 @@ class NotificationService {
       expiresInDays = 30,
     } = notificationData;
 
-    // Create notification in database
     const notification = await Notification.create({
       userId,
       type,
@@ -34,10 +54,8 @@ class NotificationService {
       expiresAt: new Date(Date.now() + expiresInDays * 24 * 60 * 60 * 1000),
     });
 
-    // Send real-time notification via WebSocket
     try {
       sendNotificationToUser(userId, {
-        type: "notification",
         channel,
         title,
         body,
@@ -49,16 +67,110 @@ class NotificationService {
         ...relatedData,
       });
 
-      // Mark as delivered
       notification.delivered = true;
       notification.deliveredAt = new Date();
       await notification.save();
     } catch (error) {
       console.error("Failed to send WebSocket notification:", error);
-      // Don't throw - notification is saved even if WebSocket fails
+      // Don't throw - notification is saved even if the socket push fails.
     }
 
     return notification;
+  }
+
+  // Backward-compatible alias — existing call sites (taskController,
+  // chatController) already use this name; no need to touch them.
+  async createAndSend(notificationData) {
+    return this.notifyUser(notificationData);
+  }
+
+  /**
+   * Notify several specific users at once (e.g. every assignee on a task).
+   * Persists one row per recipient (insertMany, so it's one round trip
+   * instead of N) then fans the live signal out to each user's room.
+   */
+  async notifyUsers(userIds, notificationData) {
+    const uniqueIds = [...new Set((userIds || []).map(String))];
+    if (uniqueIds.length === 0) return [];
+
+    const {
+      type,
+      channel,
+      title,
+      body,
+      message,
+      priority = "normal",
+      relatedData = {},
+      expiresInDays = 30,
+    } = notificationData;
+
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + expiresInDays * 24 * 60 * 60 * 1000);
+
+    const docs = await Notification.insertMany(
+      uniqueIds.map((userId) => ({
+        userId,
+        type,
+        channel,
+        title,
+        body,
+        message: message || body,
+        priority,
+        relatedData,
+        expiresAt,
+      }))
+    );
+
+    docs.forEach((notification) => {
+      try {
+        sendNotificationToUser(notification.userId, {
+          channel,
+          title,
+          body,
+          message: message || body,
+          priority,
+          notificationId: notification._id,
+          timestamp: notification.createdAt || now,
+          read: false,
+          ...relatedData,
+        });
+      } catch (error) {
+        console.error(`Failed to send WebSocket notification to ${notification.userId}:`, error);
+      }
+    });
+
+    // Best-effort delivered flag; not worth a second round trip failing the caller.
+    Notification.updateMany(
+      { _id: { $in: docs.map((d) => d._id) } },
+      { delivered: true, deliveredAt: now }
+    ).catch((err) => console.error("Failed to mark notifications delivered:", err.message));
+
+    return docs;
+  }
+
+  /**
+   * Notify everyone holding any of `roles` (e.g. all admins/super-admins).
+   * Fans out to one persisted row per active user, matching notifyUsers'
+   * semantics, so a broadcast-style notification still gets normal per-user
+   * read/unread state with no special-casing in the UI.
+   *
+   * @param {string[]} roles   e.g. ["admin", "super-admin"]
+   * @param {object}   payload { type, channel, title, body, priority, relatedData }
+   * @param {object}   [opts]
+   * @param {string}   [opts.excludeUserId]  don't notify this user (e.g. the actor)
+   */
+  async notifyRoles(roles, payload, { excludeUserId } = {}) {
+    const User = require("../models/User");
+    const query = { role: { $in: roles }, status: "active" };
+    if (excludeUserId) query._id = { $ne: excludeUserId };
+
+    const recipients = await User.find(query).select("_id").lean();
+    if (recipients.length === 0) {
+      console.warn(`[Notifications] notifyRoles(${roles.join(",")}) matched no active users.`);
+      return [];
+    }
+
+    return this.notifyUsers(recipients.map((u) => u._id), payload);
   }
 
   /**

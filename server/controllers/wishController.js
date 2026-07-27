@@ -1,6 +1,7 @@
 // controllers/wishController.js
 const Wish = require("../models/Wish");
 const User = require("../models/User");
+const notificationService = require("../services/notificationService");
 
 // HR sends a wish
 exports.sendWish = async (req, res) => {
@@ -18,12 +19,21 @@ exports.sendWish = async (req, res) => {
     const wish = new Wish({ type, message, senderId, recipientId });
     await wish.save();
 
-    // Optional: send via WebSocket to live recipient
-    if (global.users && global.users[recipientId]) {
-      global.users[recipientId].send(
-        JSON.stringify({ type: "wish", wish })
-      );
-    }
+    // Persisted + real-time notification to the recipient. (This used to
+    // reach for a `global.users` socket map that was never actually
+    // populated anywhere, so wishes never made it to the recipient in
+    // real time — this now goes through the same centralized path as
+    // every other notification.)
+    notificationService
+      .notifyUser({
+        userId: recipientId,
+        type: "wish",
+        channel: "wish",
+        title: `You received a ${type}!`,
+        body: message,
+        relatedData: { wishId: wish._id },
+      })
+      .catch((err) => console.error("Wish notification failed:", err));
 
     res.status(201).json({ message: "Wish sent", wish });
   } catch (err) {

@@ -5,6 +5,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
 import { BrowserNotificationManager } from "../utils/browserNotifications";
+import { useWebSocketContext } from "../contexts/WebSocketContext";
 import useMessageSuggestions from "../hooks/useMessageSuggestions";
 import ProjectTaskModal from "../components/project/ProjectTaskModal";
 import ProjectTaskEditModal from "../components/project/ProjectTaskEditModal";
@@ -153,12 +154,15 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
   const chatContainerRef = useRef(null);
   const fileInputRef = useRef(null);
   const textareaRef = useRef(null);
-  const wsRef = useRef(null);
   const prevMessagesLengthRef = useRef(0);
-  const reconnectTimeoutRef = useRef(null);
-  const reconnectAttemptsRef = useRef(0);
-  const maxReconnectAttempts = 10;
-  const [wsConnected, setWsConnected] = useState(false);
+  const {
+    isConnected: wsConnected,
+    joinProject,
+    leaveProject,
+    sendProjectMessage,
+    sendProjectTyping,
+    sendProjectStopTyping,
+  } = useWebSocketContext();
 
   // Message suggestions
   const { getSuggestions } = useMessageSuggestions(projectId, messages);
@@ -181,201 +185,110 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
   const [showComposerTools, setShowComposerTools] = useState(false);
   const suggestionsRef = useRef(null);
 
-  // WebSocket connection with exponential backoff reconnection
+  // Initial data load for this project
   useEffect(() => {
     fetchProjectDetails();
     fetchMessages();
     fetchStarredMessages();
+  }, [projectId]);
 
-    const token = localStorage.getItem("token");
-    let isComponentMounted = true;
+  // Real-time project room — join on mount / project change, leave on
+  // unmount. The actual socket connection is owned by WebSocketContext
+  // (one shared connection for the whole app); this used to open its own
+  // separate `new WebSocket(...)` here, which was the duplicate-connection
+  // bug flagged in docs/NOTIFICATION_SYSTEM_FIXES.md.
+  useEffect(() => {
+    if (!projectId) return undefined;
 
-    // Determine WebSocket URL from environment variables
-    const getWebSocketURL = () => {
-      // 1) Explicit WS base overrides everything
-      if (import.meta.env.VITE_WS_BASE) return import.meta.env.VITE_WS_BASE;
+    joinProject(projectId);
 
-      // 2) Prefer API base if provided; convert http(s) -> ws(s)
-      const apiBase = import.meta.env.VITE_API_BASE;
-      if (apiBase) {
-        try {
-          const u = new URL(apiBase);
-          u.protocol = u.protocol === "https:" ? "wss:" : "ws:";
-          return `${u.protocol}//${u.host}`;
-        } catch (error) {
-          console.error("Failed to parse WebSocket URL:", error);
-          return null;
-        }
-      }
+    const handleProjectMessage = (event) => {
+      const data = event.detail || {};
+      if (data.projectId !== projectId) return;
 
-      // 3) Fallback to window origin with default port
-      if (typeof window !== "undefined" && window.location) {
-        const protocol = window.location.protocol === "https:" ? "wss" : "ws";
-        const defaultHost = window.location.hostname === "localhost"
-          ? "localhost:5000"
-          : window.location.host;
-        return `${protocol}://${defaultHost}`;
-      }
+      console.log("Received real-time project message");
+      const messageData = data.messageData || data.message || {};
 
-      // 4) Final fallback
-      return "ws://localhost:5000";
-    };
+      // Check if message already exists (prevent duplicates)
+      setMessages((prevMessages) => {
+        const exists = prevMessages.some((m) => m._id === messageData._id);
+        if (exists) return prevMessages;
 
-    const connectWebSocket = () => {
-      if (!isComponentMounted) return;
+        // Invalidate cache when new message arrives
+        invalidateMessageCache();
 
-      const wsURL = getWebSocketURL();
-      console.log("[ProjectDetailPage] Connecting to WebSocket:", wsURL);
-      const ws = new WebSocket(wsURL);
-      wsRef.current = ws;
+        // Append new message and increment total count
+        setTotalMessages((prev) => prev + 1);
+        return [...prevMessages, messageData];
+      });
 
-      ws.onopen = () => {
-        console.log("WebSocket connected for project messages");
-        setWsConnected(true);
-        reconnectAttemptsRef.current = 0; // Reset reconnection attempts on successful connection
-        // Authenticate
-        ws.send(JSON.stringify({ type: "authenticate", token }));
-      };
+      // Show browser notification for project messages
+      const senderDesignation = messageData.senderType === "client"
+        ? "Client"
+        : (messageData.sentBy?.designation || "Team Member");
 
-      ws.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-
-          if (data.type === "authenticated") {
-            console.log("WebSocket authenticated");
-          } else if (data.type === "project_message") {
-            console.log("Received real-time project message");
-
-            // Add message to list if it's for this project
-            if (data.projectId === projectId) {
-              const messageData = data.messageData || data.message || {};
-
-              // Check if message already exists (prevent duplicates)
-              setMessages((prevMessages) => {
-                const exists = prevMessages.some(
-                  (m) => m._id === messageData._id
-                );
-                if (exists) return prevMessages;
-
-                // Invalidate cache when new message arrives
-                invalidateMessageCache();
-
-                // Append new message and increment total count
-                setTotalMessages((prev) => prev + 1);
-                return [...prevMessages, messageData];
-              });
-            }
-
-            // Show browser notification for project messages
-            const messageData = data.messageData || data.message || {};
-            const senderDesignation = messageData.senderType === "client"
-              ? "Client"
-              : (messageData.sentBy?.designation || "Team Member");
-
-            // Don't notify for own messages
-            if (messageData.sentBy?._id !== userId && messageData.sentBy !== userId) {
-              const notificationManager = BrowserNotificationManager.getInstance();
-              notificationManager.show(
-                "New Project Message",
-                `${senderDesignation}: ${messageData.message || "Sent an attachment"}`,
-                {
-                  tag: `project-${data.projectId}`,
-                  icon: "/icon.png",
-                  requireInteraction: false,
-                }
-              );
-            }
-          } else if (data.type === "user_typing") {
-            // Handle typing indicator
-            if (data.projectId === projectId && data.userId !== userId) {
-              setTypingUsers((prev) => {
-                const exists = prev.some(u => u.userId === data.userId);
-                if (!exists) {
-                  return [...prev, { userId: data.userId, userName: data.userName }];
-                }
-                return prev;
-              });
-
-              // Remove typing indicator after 3 seconds
-              setTimeout(() => {
-                setTypingUsers((prev) => prev.filter(u => u.userId !== data.userId));
-              }, 3000);
-            }
-          } else if (data.type === "user_stopped_typing") {
-            // Handle stop typing
-            if (data.projectId === projectId) {
-              setTypingUsers((prev) => prev.filter(u => u.userId !== data.userId));
-            }
-          } else if (data.type === "message_read") {
-            // Handle message read receipts
-            if (data.projectId === projectId) {
-              setMessages((prevMessages) =>
-                prevMessages.map((msg) =>
-                  msg._id === data.messageId
-                    ? { ...msg, status: 'read' }
-                    : msg
-                )
-              );
-            }
+      // Don't notify for own messages
+      if (messageData.sentBy?._id !== userId && messageData.sentBy !== userId) {
+        const notificationManager = BrowserNotificationManager.getInstance();
+        notificationManager.show(
+          "New Project Message",
+          `${senderDesignation}: ${messageData.message || "Sent an attachment"}`,
+          {
+            tag: `project-${data.projectId}`,
+            icon: "/icon.png",
+            requireInteraction: false,
           }
-        } catch (error) {
-          console.error("WebSocket message error:", error);
-        }
-      };
-
-      ws.onerror = (error) => {
-        console.error("[ProjectDetailPage] WebSocket error:", error);
-        setWsConnected(false);
-      };
-
-      ws.onclose = () => {
-        console.log("[ProjectDetailPage] WebSocket disconnected");
-        setWsConnected(false);
-
-        // Attempt to reconnect with exponential backoff
-        if (isComponentMounted && reconnectAttemptsRef.current < maxReconnectAttempts) {
-          const backoffDelay = Math.min(1000 * Math.pow(2, reconnectAttemptsRef.current), 30000);
-          reconnectAttemptsRef.current += 1;
-
-          console.log(
-            `[ProjectDetailPage] Reconnecting in ${backoffDelay}ms (attempt ${reconnectAttemptsRef.current}/${maxReconnectAttempts})`
-          );
-
-          reconnectTimeoutRef.current = setTimeout(() => {
-            connectWebSocket();
-          }, backoffDelay);
-        } else if (reconnectAttemptsRef.current >= maxReconnectAttempts) {
-          console.error("[ProjectDetailPage] Max reconnection attempts reached");
-        }
-      };
+        );
+      }
     };
 
-    // Initial connection
-    connectWebSocket();
+    const handleTyping = (event) => {
+      const data = event.detail || {};
+      if (data.projectId !== projectId || data.userId === userId) return;
+
+      setTypingUsers((prev) => {
+        const exists = prev.some((u) => u.userId === data.userId);
+        if (!exists) {
+          return [...prev, { userId: data.userId, userName: data.userName }];
+        }
+        return prev;
+      });
+
+      // Remove typing indicator after 3 seconds
+      setTimeout(() => {
+        setTypingUsers((prev) => prev.filter((u) => u.userId !== data.userId));
+      }, 3000);
+    };
+
+    const handleStopTyping = (event) => {
+      const data = event.detail || {};
+      if (data.projectId !== projectId) return;
+      setTypingUsers((prev) => prev.filter((u) => u.userId !== data.userId));
+    };
+
+    const handleMessageRead = (event) => {
+      const data = event.detail || {};
+      if (data.projectId !== projectId) return;
+      setMessages((prevMessages) =>
+        prevMessages.map((msg) =>
+          msg._id === data.messageId ? { ...msg, status: "read" } : msg
+        )
+      );
+    };
+
+    window.addEventListener("project-message", handleProjectMessage);
+    window.addEventListener("project-typing", handleTyping);
+    window.addEventListener("project-stop-typing", handleStopTyping);
+    window.addEventListener("project-message-read", handleMessageRead);
 
     return () => {
-      isComponentMounted = false;
-
-      // Clear reconnection timeout
-      if (reconnectTimeoutRef.current) {
-        clearTimeout(reconnectTimeoutRef.current);
-        reconnectTimeoutRef.current = null;
-      }
-
-      // Close WebSocket
-      if (wsRef.current) {
-        const ws = wsRef.current;
-        if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
-          ws.close();
-        }
-        wsRef.current = null;
-      }
-
-      // Reset connection state
-      setWsConnected(false);
-      reconnectAttemptsRef.current = 0;
+      leaveProject(projectId);
+      window.removeEventListener("project-message", handleProjectMessage);
+      window.removeEventListener("project-typing", handleTyping);
+      window.removeEventListener("project-stop-typing", handleStopTyping);
+      window.removeEventListener("project-message-read", handleMessageRead);
     };
-  }, [projectId]);
+  }, [projectId, joinProject, leaveProject, userId]);
 
   // Auto-scroll only when new messages are added (not when reactions update)
   useEffect(() => {
@@ -842,14 +755,8 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
         }
       );
 
-      // Broadcast via WebSocket for real-time updates
-      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-        wsRef.current.send(JSON.stringify({
-          type: "project_message",
-          projectId: projectId,
-          messageData: response.data
-        }));
-      }
+      // Broadcast via Socket.IO for real-time updates
+      sendProjectMessage(projectId, response.data);
 
       setNewMessage("");
       setSelectedFiles([]);
@@ -954,13 +861,27 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
 
   // Typing indicator functions
   const sendTypingIndicator = () => {
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({
-        type: "typing",
-        projectId: projectId,
-        userId: userId,
-        userName: project?.assignedTo?.find(u => u._id === userId)?.name || "User"
-      }));
+    if (wsConnected) {
+      // Resolve the current user's own display name. assignedTo only lists
+      // employees on this project, so an admin/superadmin (or a client)
+      // typing would never be found there and would silently show up as
+      // "User" to everyone else. localStorage's "user" record is set at
+      // login for every role and always reflects who's actually typing, so
+      // it's checked first; the project arrays are kept only as a fallback.
+      let myName;
+      try {
+        const storedUser = JSON.parse(localStorage.getItem("user") || "{}");
+        myName = storedUser?.name || storedUser?.clientName;
+      } catch {
+        myName = null;
+      }
+      if (!myName) {
+        myName =
+          project?.assignedTo?.find((u) => u._id === userId)?.name ||
+          project?.clients?.find((c) => c._id === userId)?.clientName;
+      }
+
+      sendProjectTyping(projectId, myName || "User");
 
       // Clear existing timeout
       if (typingTimeoutRef.current) {
@@ -975,12 +896,8 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
   };
 
   const stopTypingIndicator = () => {
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({
-        type: "stop_typing",
-        projectId: projectId,
-        userId: userId
-      }));
+    if (wsConnected) {
+      sendProjectStopTyping(projectId);
     }
   };
 
@@ -1226,10 +1143,10 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-[#141a21] via-[#191f2b] to-[#101218] flex items-center justify-center">
+      <div className="flex min-h-screen items-center justify-center bg-slate-50 dark:bg-gradient-to-br dark:from-[#141a21] dark:via-[#191f2b] dark:to-[#101218]">
         <div className="text-center">
           <div className="w-12 h-12 border-4 border-blue-500/20 border-t-blue-500 rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-gray-400">Loading project details...</p>
+          <p className="text-slate-500 dark:text-gray-400">Loading project details...</p>
         </div>
       </div>
     );
@@ -1237,10 +1154,10 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
 
   if (!project) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-[#141a21] via-[#191f2b] to-[#101218] flex items-center justify-center">
+      <div className="flex min-h-screen items-center justify-center bg-slate-50 dark:bg-gradient-to-br dark:from-[#141a21] dark:via-[#191f2b] dark:to-[#101218]">
         <div className="text-center">
           <AlertCircle className="w-12 h-12 text-red-400 mx-auto mb-4" />
-          <p className="text-gray-400">Project not found</p>
+          <p className="text-slate-500 dark:text-gray-400">Project not found</p>
           <button
             onClick={onBack}
             className="mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
@@ -1381,7 +1298,7 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                 >
                   <Mail className="h-4 w-4" />
                   <span>Chat</span>
-                  <UnreadMessageBadge projectId={projectId} refreshInterval={30000} className="text-xs" />
+                  <UnreadMessageBadge projectId={projectId} className="text-xs" />
                 </button>
                 <button
                   type="button"
@@ -2133,7 +2050,7 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                           <div className="flex items-start gap-2">
                             <div className="flex-shrink-0 mt-1">
                               {suggestion.type === "history" && (
-                                <Clock className="w-3 h-3 text-gray-400" />
+                                <Clock className="w-3 h-3 text-slate-400 dark:text-gray-400" />
                               )}
                               {suggestion.type === "quick" && (
                                 <Zap className="w-3 h-3 text-yellow-400" />
@@ -2315,14 +2232,14 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
               <div className="flex-1 flex flex-col overflow-hidden">
                 {/* Tasks Header with Create Button */}
                 {(userRole === "super-admin" || userRole === "superadmin" || userRole === "admin") && (
-                  <div className="p-4 bg-[#202c33] border-b border-[#2a3942]">
+                  <div className="border-b border-slate-200 bg-white p-4 dark:border-[#2a3942] dark:bg-[#202c33]">
                     <div className="flex items-center justify-between">
                       <div>
-                        <h2 className="text-base font-semibold text-white flex items-center gap-2">
+                        <h2 className="text-base font-semibold text-slate-900 dark:text-white flex items-center gap-2">
                           <ListTodo className="w-5 h-5 text-[#00a884]" />
                           Project Tasks
                         </h2>
-                        <p className="text-xs text-gray-400 mt-1">
+                        <p className="text-xs text-slate-500 dark:text-gray-400 mt-1">
                           {tasks.length} task{tasks.length !== 1 ? "s" : ""}
                         </p>
                       </div>
@@ -2339,16 +2256,16 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                 )}
 
                 {/* Tasks List */}
-                <div className="flex-1 overflow-y-auto p-4 bg-[#0b141a]">
+                <div className="flex-1 overflow-y-auto bg-slate-50 p-4 dark:bg-[#0b141a]">
                   {loadingTasks ? (
                     <div className="flex items-center justify-center h-full">
                       <div className="w-12 h-12 border-4 border-[#00a884]/20 border-t-[#00a884] rounded-full animate-spin"></div>
                     </div>
                   ) : tasks.length === 0 ? (
                     <div className="flex flex-col items-center justify-center h-full text-center">
-                      <ListTodo className="w-16 h-16 text-gray-600 mb-4" />
-                      <p className="text-gray-500 text-base">No tasks for this project</p>
-                      <p className="text-gray-600 text-sm mt-2">
+                      <ListTodo className="w-16 h-16 text-slate-300 dark:text-gray-600 mb-4" />
+                      <p className="text-slate-400 dark:text-gray-500 text-base">No tasks for this project</p>
+                      <p className="text-slate-300 dark:text-gray-600 text-sm mt-2">
                         {(userRole === "super-admin" || userRole === "superadmin" || userRole === "admin")
                           ? "Click 'Create Task' to assign tasks to team members"
                           : "Tasks will appear here when assigned by your admin"}
@@ -2359,12 +2276,12 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                     {tasks.map((task) => (
                       <div
                         key={task._id}
-                        className="bg-[#202c33] rounded-xl border border-[#2a3942] p-4 hover:border-[#00a884] transition-colors"
+                        className="rounded-xl border border-slate-200 bg-white p-4 transition-colors hover:border-[#00a884] dark:border-[#2a3942] dark:bg-[#202c33]"
                       >
                         <div className="flex items-start justify-between gap-4 mb-4">
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center justify-between mb-2">
-                              <h3 className="text-white font-semibold text-base sm:text-lg flex items-center gap-2">
+                              <h3 className="text-slate-900 dark:text-white font-semibold text-base sm:text-lg flex items-center gap-2">
                                 {task.title}
                                 <span
                                   className={`px-2 py-0.5 rounded-full text-xs font-medium ${
@@ -2390,11 +2307,11 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                               )}
                             </div>
                             {task.description && (
-                              <p className="text-gray-400 text-sm mb-3">{task.description}</p>
+                              <p className="text-slate-500 dark:text-gray-400 text-sm mb-3">{task.description}</p>
                             )}
 
                             <div className="space-y-3">
-                              <div className="flex items-center gap-1 text-xs text-gray-500">
+                              <div className="flex items-center gap-1 text-xs text-slate-400 dark:text-gray-500">
                                 <Calendar className="w-3 h-3" />
                                 <span>Due: {task.dueDate ? new Date(task.dueDate).toLocaleDateString() : "No due date"}</span>
                               </div>
@@ -2402,7 +2319,7 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                               {/* Assigned Employees */}
                               {task.assignedTo && task.assignedTo.length > 0 && (
                                 <div>
-                                  <p className="text-xs text-gray-500 mb-2 flex items-center gap-1">
+                                  <p className="text-xs text-slate-400 dark:text-gray-500 mb-2 flex items-center gap-1">
                                     <Users className="w-3 h-3" />
                                     Assigned to:
                                   </p>
@@ -2418,7 +2335,7 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                                             <div className="w-5 h-5 rounded-full bg-[#00a884] flex items-center justify-center text-white text-[10px] font-semibold flex-shrink-0">
                                               {(emp.name || "U").charAt(0).toUpperCase()}
                                             </div>
-                                            <span className="text-white text-xs font-medium">
+                                            <span className="text-slate-900 dark:text-white text-xs font-medium">
                                               {emp.name || "Unknown"}
                                             </span>
                                           </>
@@ -2426,10 +2343,10 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                                           // Show employee ID and designation for clients
                                           <>
                                             <Briefcase className="w-3 h-3 text-[#00a884]" />
-                                            <span className="text-white text-xs font-medium">
+                                            <span className="text-slate-900 dark:text-white text-xs font-medium">
                                               {emp.employeeId || emp._id?.substring(0, 8) || "N/A"}
                                             </span>
-                                            <span className="text-gray-400 text-xs">|</span>
+                                            <span className="text-slate-500 dark:text-gray-400 text-xs">|</span>
                                             <span className="text-blue-400 text-xs">
                                               {emp.designation || "No designation"}
                                             </span>
@@ -2451,7 +2368,7 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                                 ? "bg-blue-500/20 text-blue-400 border border-blue-500/50"
                                 : task.status === "rejected"
                                 ? "bg-red-500/20 text-red-400 border border-red-500/50"
-                                : "bg-gray-500/20 text-gray-400 border border-gray-500/50"
+                                : "bg-slate-200 text-slate-600 border border-slate-300 dark:bg-gray-500/20 dark:text-gray-400 dark:border-gray-500/50"
                             }`}
                           >
                             {task.status}
@@ -2460,13 +2377,13 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
 
                         {/* Rejection info */}
                         {task.status === "rejected" && (
-                          <div className="mt-4 pt-4 border-t border-[#232945]">
+                          <div className="mt-4 pt-4 border-t border-slate-200 dark:border-[#232945]">
                             <p className="text-red-400 text-sm font-medium mb-1">❌ Rejected</p>
-                            <p className="text-gray-300 text-sm">
+                            <p className="text-slate-700 dark:text-gray-300 text-sm">
                               {task.rejectionReason || "No reason provided"}
                             </p>
                             {task.rejectedAt && (
-                              <p className="text-xs text-gray-500 mt-1">
+                              <p className="text-xs text-slate-400 dark:text-gray-500 mt-1">
                                 Rejected on: {new Date(task.rejectedAt).toLocaleString()}
                               </p>
                             )}
@@ -2477,8 +2394,8 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                         {userRole !== "admin" && userRole !== "super-admin" && userRole !== "superadmin" &&
                           task.status !== "completed" && task.status !== "rejected" &&
                           task.assignedTo?.some((emp) => emp._id?.toString() === userId?.toString()) && (
-                          <div className="mt-4 pt-4 border-t border-[#232945]">
-                            <p className="text-xs text-gray-500 mb-2">Update your status:</p>
+                          <div className="mt-4 pt-4 border-t border-slate-200 dark:border-[#232945]">
+                            <p className="text-xs text-slate-400 dark:text-gray-500 mb-2">Update your status:</p>
                             <div className="flex gap-2">
                               {task.status !== "in-progress" && (
                                 <button
@@ -2501,14 +2418,14 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                         {/* Completion review (admin / task assigner can reject completed tasks with a reason) */}
                         {task.status === "completed" &&
                           (userRole === "super-admin" || userRole === "superadmin" || userRole === "admin") && (
-                          <div className="mt-4 pt-4 border-t border-[#232945]">
+                          <div className="mt-4 pt-4 border-t border-slate-200 dark:border-[#232945]">
                             {selectedTask === task._id ? (
                               <div className="space-y-3">
                                 <textarea
                                   value={approvalRemark}
                                   onChange={(e) => setApprovalRemark(e.target.value)}
                                   placeholder="Rejection reason (required)..."
-                                  className="w-full px-3 py-2 bg-[#191f2b] border border-[#232945] rounded-lg text-white text-sm placeholder-gray-500 focus:outline-none focus:border-[#00a884] h-20 resize-none"
+                                  className="h-20 w-full resize-none rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:border-[#00a884] focus:outline-none dark:border-[#232945] dark:bg-[#191f2b] dark:text-white dark:placeholder-gray-500"
                                 />
                                 <div className="flex gap-2">
                                   <button
@@ -2523,7 +2440,7 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                                       setSelectedTask(null);
                                       setApprovalRemark("");
                                     }}
-                                    className="px-4 py-2 bg-gray-600/20 hover:bg-gray-600/40 text-gray-400 rounded-lg transition-colors"
+                                    className="rounded-lg bg-slate-200 px-4 py-2 text-slate-700 transition-colors hover:bg-slate-300 dark:bg-gray-600/20 dark:text-gray-400 dark:hover:bg-gray-600/40"
                                   >
                                     Cancel
                                   </button>

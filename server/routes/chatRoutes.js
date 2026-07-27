@@ -4,7 +4,7 @@ const fetch = require("node-fetch"); // Polyfill for Node.js < 18
 const chatController = require("../controllers/chatController");
 const { protect } = require("../middlewares/authMiddleware");
 const { uploadToS3, getFileType, convertToCloudFrontUrl } = require("../config/s3Config");
-const { broadcastMessageToConversation } = require("../utils/websocket");
+const { broadcastMessageToConversation, broadcastConversationUpdated } = require("../utils/websocket");
 
 // router.use(authMiddleware);
 
@@ -14,6 +14,11 @@ router.post("/groups", protect, async (req, res) => {
     const { name, memberIds } = req.body;
     const createdBy = req.user._id;
     const newGroup = await chatController.createGroupConversation(name, memberIds, createdBy);
+    try {
+      broadcastConversationUpdated(newGroup.members, { action: "created", conversationId: newGroup._id });
+    } catch (wsError) {
+      console.warn("WebSocket broadcast failed (group created):", wsError.message);
+    }
     res.status(201).json(newGroup);
   } catch (error) {
     res.status(500).json({ error: "Failed to create group conversation" });
@@ -115,6 +120,20 @@ router.post("/messages", protect, uploadToS3.array("files", 5), async (req, res)
   } catch (error) {
     console.error("Error sending message:", error);
     res.status(500).json({ error: "Failed to send message" });
+  }
+});
+
+// Mark all messages in a conversation as read by the current user.
+// The client (ChatPage.jsx) has been calling this exact URL for a while;
+// it previously 404'd because this route didn't exist yet.
+router.post("/:conversationId/mark-read", protect, async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const count = await chatController.markConversationAsRead(conversationId, req.user._id);
+    res.json({ message: "Messages marked as read", count });
+  } catch (error) {
+    console.error("Error marking conversation as read:", error);
+    res.status(500).json({ error: "Failed to mark messages as read" });
   }
 });
 
@@ -267,6 +286,12 @@ router.post("/groups/:conversationId/members", protect, async (req, res) => {
       requestingUserId
     );
 
+    try {
+      broadcastConversationUpdated(updatedGroup.members, { action: "members_added", conversationId });
+    } catch (wsError) {
+      console.warn("WebSocket broadcast failed (members added):", wsError.message);
+    }
+
     res.json({
       message: "Members added successfully",
       group: updatedGroup
@@ -288,6 +313,18 @@ router.delete("/groups/:conversationId/members/:memberId", protect, async (req, 
       memberId,
       requestingUserId
     );
+
+    try {
+      // Include the removed member — they're no longer in updatedGroup.members
+      // but still need the "conversation:updated" event so the group
+      // disappears from their own sidebar list.
+      broadcastConversationUpdated([...updatedGroup.members, memberId], {
+        action: "member_removed",
+        conversationId,
+      });
+    } catch (wsError) {
+      console.warn("WebSocket broadcast failed (member removed):", wsError.message);
+    }
 
     res.json({
       message: "Member removed successfully",
@@ -311,6 +348,12 @@ router.put("/groups/:conversationId", protect, async (req, res) => {
       updates,
       requestingUserId
     );
+
+    try {
+      broadcastConversationUpdated(updatedGroup.members, { action: "updated", conversationId });
+    } catch (wsError) {
+      console.warn("WebSocket broadcast failed (group updated):", wsError.message);
+    }
 
     res.json({
       message: "Group updated successfully",

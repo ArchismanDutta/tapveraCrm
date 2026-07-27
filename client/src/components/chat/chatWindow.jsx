@@ -21,34 +21,20 @@ import {
   Lightbulb,
   Clock,
   Zap,
+  Plus,
 } from "lucide-react";
 import MediaLightbox from "../common/MediaLightbox";
+import MessageDateSeparator from "../message/MessageDateSeparator";
+import TypingIndicator from "../message/TypingIndicator";
 import useMessageSuggestions from "../../hooks/useMessageSuggestions";
 import MentionInput from "../common/MentionInput";
+import { useWebSocketContext } from "../../contexts/WebSocketContext";
 
-const DateDivider = ({ date }) => {
-  const now = new Date();
-  const messageDate = new Date(date);
-  let label;
-
-  const isToday = now.toDateString() === messageDate.toDateString();
-  const yesterday = new Date(now);
-  yesterday.setDate(now.getDate() - 1);
-  const isYesterday = yesterday.toDateString() === messageDate.toDateString();
-
-  if (isToday) label = "Today";
-  else if (isYesterday) label = "Yesterday";
-  else label = messageDate.toLocaleDateString();
-
-  return (
-    <div className="flex justify-center my-3 w-full">
-      <span className="bg-gray-700 text-gray-300 rounded-full px-3 py-1 text-xs select-none">
-        {label}
-      </span>
-    </div>
-  );
-};
-
+// ─── Main component ──────────────────────────────────────────────────────────
+// Styling here is kept in lockstep with ChatPage.jsx (its parent shell) —
+// same light/dark theme tokens, same blue accent — so this looks like it
+// belongs inside the "Messages" page it lives in, the same way
+// ProjectMessagePanel was brought in line with ProjectDetailPage's teal theme.
 const ChatWindow = ({
   messages,
   sendMessage,
@@ -65,6 +51,7 @@ const ChatWindow = ({
   const [dateFilter, setDateFilter] = useState({ start: "", end: "" });
   const [showFilters, setShowFilters] = useState(false);
   const [showFormatting, setShowFormatting] = useState(false);
+  const [showComposerTools, setShowComposerTools] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(null);
   const [copiedText, setCopiedText] = useState(null);
   const [lightboxMedia, setLightboxMedia] = useState(null);
@@ -74,12 +61,21 @@ const ChatWindow = ({
   const [summary, setSummary] = useState("");
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [summaryDays, setSummaryDays] = useState(7);
+  const [typingUsers, setTypingUsers] = useState([]);
   const commonEmojis = ["👍", "❤️", "😂", "😮", "😢", "🎉", "🔥", "👏"];
   const chatEndRef = useRef(null);
   const fileInputRef = useRef(null);
   const textareaRef = useRef(null);
   const prevMessagesLengthRef = useRef(0);
   const emojiPickerRef = useRef(null);
+  const typingTimeoutRef = useRef(null);
+
+  // ── shared real-time connection (see WebSocketContext) ──
+  const {
+    isConnected: wsConnected,
+    sendChatTyping,
+    sendChatStopTyping,
+  } = useWebSocketContext();
 
   // Message suggestions
   const { getSuggestions, getQuickReplies } = useMessageSuggestions(conversationId, messages);
@@ -90,11 +86,46 @@ const ChatWindow = ({
   const [showQuickReplies, setShowQuickReplies] = useState(true);
   const suggestionsRef = useRef(null);
 
+  // ── typing indicator ──
+  const resolveMyName = () => {
+    // Resolve the current user's own display name. localStorage's "user"
+    // record is set at login for every role and always reflects who's
+    // actually typing; conversationMembers is kept only as a fallback (e.g.
+    // if that record is ever missing).
+    try {
+      const storedUser = JSON.parse(localStorage.getItem("user") || "{}");
+      if (storedUser?.name) return storedUser.name;
+    } catch {
+      // fall through to the members-list lookup below
+    }
+    const member = Array.isArray(conversationMembers)
+      ? conversationMembers.find((m) => m._id === currentUserId)
+      : null;
+    return member?.name || "User";
+  };
+
+  const sendTypingIndicator = () => {
+    if (!wsConnected || !conversationId) return;
+    sendChatTyping(conversationId, resolveMyName());
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    typingTimeoutRef.current = setTimeout(() => {
+      stopTypingIndicator();
+    }, 3000);
+  };
+
+  const stopTypingIndicator = () => {
+    if (!wsConnected || !conversationId) return;
+    sendChatStopTyping(conversationId);
+  };
+
   const handleSendMessage = async () => {
     if (!input.trim() && selectedFiles.length === 0) return;
 
     const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
     const token = localStorage.getItem("token");
+
+    stopTypingIndicator();
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
 
     try {
       // If there are files, reply, or mentions, use HTTP POST (FormData required)
@@ -200,9 +231,9 @@ const ChatWindow = ({
     if (element) {
       element.scrollIntoView({ behavior: "smooth", block: "center" });
       // Highlight the message briefly
-      element.classList.add("bg-blue-500", "bg-opacity-20");
+      element.classList.add("bg-blue-100", "dark:bg-blue-500/20");
       setTimeout(() => {
-        element.classList.remove("bg-blue-500", "bg-opacity-20");
+        element.classList.remove("bg-blue-100", "dark:bg-blue-500/20");
       }, 2000);
     }
   };
@@ -435,6 +466,43 @@ const ChatWindow = ({
     }
   }, [messages, currentUserId, getQuickReplies]);
 
+  // Typing indicator — listen for other members typing in this conversation.
+  useEffect(() => {
+    if (!conversationId) return undefined;
+
+    const handleTyping = (event) => {
+      const data = event.detail || {};
+      if (data.conversationId !== conversationId || data.userId === currentUserId) return;
+      setTypingUsers((prev) => {
+        const exists = prev.some((u) => u.userId === data.userId);
+        if (!exists) return [...prev, { userId: data.userId, userName: data.userName }];
+        return prev;
+      });
+      setTimeout(() => {
+        setTypingUsers((prev) => prev.filter((u) => u.userId !== data.userId));
+      }, 3000);
+    };
+
+    const handleStopTyping = (event) => {
+      const data = event.detail || {};
+      if (data.conversationId !== conversationId) return;
+      setTypingUsers((prev) => prev.filter((u) => u.userId !== data.userId));
+    };
+
+    window.addEventListener("chat-typing", handleTyping);
+    window.addEventListener("chat-stop-typing", handleStopTyping);
+    return () => {
+      window.removeEventListener("chat-typing", handleTyping);
+      window.removeEventListener("chat-stop-typing", handleStopTyping);
+    };
+  }, [conversationId, currentUserId]);
+
+  // Reset typing state when switching conversations
+  useEffect(() => {
+    setTypingUsers([]);
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+  }, [conversationId]);
+
   // Handle suggestion selection
   const acceptSuggestion = (suggestion) => {
     setInput(suggestion.text);
@@ -449,36 +517,42 @@ const ChatWindow = ({
   };
 
   return (
-    <div className="flex flex-col h-full bg-gray-900 text-gray-100">
+    <div className="flex h-full flex-col bg-slate-50 text-slate-900 dark:bg-[#0b0d12] dark:text-slate-100">
       {/* Search and Filter Panel */}
-      <div className="bg-gray-800 border-b border-gray-700">
+      <div className="border-b border-slate-200 bg-white dark:border-white/10 dark:bg-[#10131c]">
         <div className="flex items-center">
           <button
             onClick={() => setShowFilters(!showFilters)}
-            className="flex-1 px-4 py-2 text-sm text-left text-gray-300 hover:bg-gray-700 transition flex items-center gap-2"
+            className="flex flex-1 items-center gap-2 px-4 py-2 text-left text-sm text-slate-600 transition hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-white/[0.06]"
           >
-            <Filter className="w-4 h-4" />
+            <Filter className="h-4 w-4" />
             <span>Search & Filters {showFilters ? "▼" : "▶"}</span>
           </button>
+          {!wsConnected && (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-rose-50 px-2 py-1 text-[10px] text-rose-700 dark:bg-rose-500/10 dark:text-rose-300">
+              <span className="h-1.5 w-1.5 rounded-full bg-rose-400" />
+              Reconnecting
+            </span>
+          )}
           <button
             onClick={handleSummarize}
-            className="px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 transition flex items-center gap-2 border-l border-gray-700"
+            className="flex items-center gap-2 border-l border-slate-200 px-4 py-2 text-sm text-slate-600 transition hover:bg-slate-100 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/[0.06]"
             title="Summarize conversation"
           >
-            <Sparkles className="w-4 h-4 text-purple-400" />
+            <Sparkles className="h-4 w-4 text-blue-500 dark:text-blue-400" />
             <span>Summarize</span>
           </button>
         </div>
         {showFilters && (
-          <div className="p-4 space-y-3 border-t border-gray-700">
+          <div className="grid grid-cols-1 gap-3 border-t border-slate-200 bg-slate-50 p-3 dark:border-white/10 dark:bg-[#0d1017] sm:grid-cols-2">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               <input
                 type="text"
                 placeholder="Search messages..."
                 value={messageSearchTerm}
                 onChange={(e) => setMessageSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 bg-gray-700 text-gray-100 rounded border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                className="app-control w-full py-2 pl-10 pr-4 text-sm"
               />
             </div>
             <input
@@ -486,7 +560,7 @@ const ChatWindow = ({
               placeholder="Filter by sender name..."
               value={searchSender}
               onChange={(e) => setSearchSender(e.target.value)}
-              className="w-full px-3 py-2 bg-gray-700 text-gray-100 rounded border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+              className="app-control px-4 py-2 text-sm"
             />
             <div className="flex gap-2">
               <input
@@ -495,7 +569,7 @@ const ChatWindow = ({
                 onChange={(e) =>
                   setDateFilter((prev) => ({ ...prev, start: e.target.value }))
                 }
-                className="flex-1 px-3 py-2 bg-gray-700 text-gray-100 rounded border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                className="app-control flex-1 px-3 py-2 text-sm"
               />
               <input
                 type="date"
@@ -503,13 +577,13 @@ const ChatWindow = ({
                 onChange={(e) =>
                   setDateFilter((prev) => ({ ...prev, end: e.target.value }))
                 }
-                className="flex-1 px-3 py-2 bg-gray-700 text-gray-100 rounded border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                className="app-control flex-1 px-3 py-2 text-sm"
               />
             </div>
             {(messageSearchTerm || searchSender || dateFilter.start || dateFilter.end) && (
               <button
                 onClick={clearFilters}
-                className="w-full px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded text-sm transition flex items-center justify-center gap-2"
+                className="flex items-center justify-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 transition hover:bg-red-100 dark:border-red-500/30 dark:bg-red-600/20 dark:text-red-400 dark:hover:bg-red-600/40 sm:col-span-2"
               >
                 <XCircle className="w-4 h-4" />
                 Clear Filters
@@ -519,9 +593,9 @@ const ChatWindow = ({
         )}
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-3 hide-scrollbar">
+      <div className="flex-1 overflow-y-auto p-3 sm:px-5 sm:py-4">
         {filteredMessages.length === 0 ? (
-          <p className="text-gray-500 text-center text-sm">
+          <p className="mt-10 text-center text-sm text-slate-500 dark:text-slate-400">
             No messages found...
           </p>
         ) : (
@@ -537,39 +611,39 @@ const ChatWindow = ({
 
             return (
               <React.Fragment key={msg.messageId}>
-                {showDateDivider && <DateDivider date={msg.timestamp} />}
+                {showDateDivider && <MessageDateSeparator date={msg.timestamp} />}
                 <div
                   id={`message-${msg.messageId || msg._id}`}
                   className={`flex w-full transition-colors duration-500 ${
                     isSelf ? "justify-end" : "justify-start"
-                  }`}
+                  } mb-3`}
                 >
-                  <div className="flex flex-col max-w-[70%]">
+                  <div className="flex max-w-[85%] flex-col sm:max-w-[70%]">
                     {!isSelf && (
-                      <p className="text-xs font-semibold text-gray-400 mb-1">
+                      <p className="mb-1 px-1 text-xs text-slate-500 dark:text-gray-400">
                         {getSenderName(msg.senderId)}
                       </p>
                     )}
                     <div
-                      className={`px-3 py-2 rounded-lg ${
+                      className={`w-fit max-w-full rounded-xl border p-3 shadow-sm transition-colors duration-200 ${
                         isSelf
-                          ? "bg-blue-600 text-white rounded-br-none self-end"
-                          : "bg-gray-700 text-gray-100 rounded-bl-none self-start"
+                          ? "border-blue-600/20 bg-blue-600 text-white dark:border-blue-400/15"
+                          : "border-slate-200 bg-white text-slate-900 dark:border-white/10 dark:bg-[#1a2433] dark:text-white"
                       }`}
                     >
                       {/* Reply Preview */}
                       {msg.replyTo && (
                         <div
                           onClick={() => scrollToMessage(msg.replyTo?._id || msg.replyTo?.messageId)}
-                          className="bg-gray-800 bg-opacity-50 px-2 py-1 rounded mb-2 text-xs border-l-2 border-blue-400 cursor-pointer hover:bg-opacity-70 transition overflow-hidden"
+                          className="mb-2 cursor-pointer overflow-hidden rounded border-l-2 border-blue-400 bg-black/10 px-2 py-1 text-xs transition hover:bg-black/15 dark:bg-black/20 dark:hover:bg-black/30"
                           style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}
                         >
-                          <p className="text-blue-300 font-semibold truncate">
+                          <p className={`truncate font-semibold ${isSelf ? "text-blue-50" : "text-slate-700 dark:text-blue-300"}`}>
                             {msg.replyTo?.senderId?.name ||
                              (Array.isArray(conversationMembers) ? conversationMembers.find(m => m?._id === msg.replyTo?.senderId) : null)?.name ||
                              "Unknown"}
                           </p>
-                          <p className="text-gray-400 italic overflow-hidden" style={{
+                          <p className={`overflow-hidden italic ${isSelf ? "text-blue-50/80" : "text-slate-500 dark:text-gray-400"}`} style={{
                             display: '-webkit-box',
                             WebkitLineClamp: 2,
                             WebkitBoxOrient: 'vertical',
@@ -583,14 +657,14 @@ const ChatWindow = ({
 
                       {/* Message with Markdown rendering */}
                       {msg.message || msg.text ? (
-                        <div className="text-sm prose prose-invert prose-sm max-w-none">
+                        <div className={`prose prose-sm max-w-none break-words text-sm leading-relaxed ${isSelf ? "prose-invert text-white" : "prose-slate dark:prose-invert dark:text-white"}`}>
                           <ReactMarkdown
                             remarkPlugins={[remarkGfm]}
                             rehypePlugins={[rehypeRaw]}
                             components={{
                               // Custom styling for markdown elements
                               p: ({ children }) => (
-                                <p className="mb-1 last:mb-0">{children}</p>
+                                <p className="mb-1 last:mb-0 whitespace-pre-wrap">{children}</p>
                               ),
                               h1: ({ children }) => (
                                 <h1 className="text-lg font-bold mb-1">
@@ -622,11 +696,11 @@ const ChatWindow = ({
                               ),
                               code: ({ inline, children }) =>
                                 inline ? (
-                                  <code className="bg-gray-800 px-1 rounded text-xs">
+                                  <code className="rounded bg-black/10 px-1 text-xs dark:bg-black/30">
                                     {children}
                                   </code>
                                 ) : (
-                                  <code className="block bg-gray-800 p-2 rounded text-xs overflow-x-auto">
+                                  <code className="block overflow-x-auto rounded bg-black/10 p-2 text-xs dark:bg-black/30">
                                     {children}
                                   </code>
                                 ),
@@ -641,7 +715,7 @@ const ChatWindow = ({
                                   href={href || '#'}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className="text-blue-400 underline hover:text-blue-300"
+                                  className={`underline ${isSelf ? "text-blue-50 hover:text-white" : "text-blue-600 hover:text-blue-700 dark:text-blue-300 dark:hover:text-blue-200"}`}
                                 >
                                   {children}
                                 </a>
@@ -664,13 +738,13 @@ const ChatWindow = ({
                             return (
                               <div key={att?._id || attIdx}>
                                 {!isMedia && att?.url && (
-                                  <div className="flex items-center gap-2 p-2 bg-black/20 rounded">
+                                  <div className="flex items-center gap-2 rounded border border-[#1e2a35]/0 bg-black/10 p-2 dark:bg-black/20">
                                     {getFileIcon(att?.fileType)}
-                                    <div className="flex-1 min-w-0">
-                                      <div className="text-xs text-white truncate">
+                                    <div className="min-w-0 flex-1">
+                                      <div className={`truncate text-xs ${isSelf ? "text-white" : "text-slate-900 dark:text-white"}`}>
                                         {att?.filename || 'Unknown file'}
                                       </div>
-                                      <div className="text-xs text-gray-400">
+                                      <div className={`text-xs ${isSelf ? "text-blue-50/75" : "text-slate-500 dark:text-gray-400"}`}>
                                         {att?.size ? `${(att.size / 1024).toFixed(1)} KB` : 'N/A'}
                                       </div>
                                     </div>
@@ -678,10 +752,10 @@ const ChatWindow = ({
                                       href={att.url?.startsWith('http') ? att.url : `${import.meta.env.VITE_API_BASE || 'http://localhost:5000'}${att.url || ''}`}
                                       target="_blank"
                                       rel="noopener noreferrer"
-                                      className="p-1 hover:bg-white/10 rounded"
+                                      className="rounded p-1 hover:bg-black/10 dark:hover:bg-white/10"
                                       download
                                     >
-                                      <Download className="w-4 h-4 text-gray-300" />
+                                      <Download className={`h-4 w-4 ${isSelf ? "text-blue-50/80" : "text-slate-500 dark:text-gray-300"}`} />
                                     </a>
                                   </div>
                                 )}
@@ -691,14 +765,13 @@ const ChatWindow = ({
                                     <img
                                       src={att.url?.startsWith('http') ? att.url : `${import.meta.env.VITE_API_BASE || 'http://localhost:5000'}${att.url || ''}`}
                                       alt={att?.filename || 'Image'}
-                                      className="w-48 h-48 object-cover rounded cursor-pointer hover:opacity-90 transition-opacity"
+                                      className="h-48 w-48 cursor-pointer rounded object-cover transition-opacity hover:opacity-90"
                                       onClick={() => {
                                         setLightboxAllMedia(mediaAttachments);
                                         setLightboxIndex(mediaAttachments.findIndex(a => a?._id === att._id));
                                         setLightboxMedia(att);
                                       }}
                                     />
-                                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 rounded transition-colors pointer-events-none" />
                                   </div>
                                 )}
 
@@ -706,16 +779,16 @@ const ChatWindow = ({
                                   <div className="relative">
                                     <video
                                       src={att.url?.startsWith('http') ? att.url : `${import.meta.env.VITE_API_BASE || 'http://localhost:5000'}${att.url || ''}`}
-                                      className="w-48 h-48 object-cover rounded cursor-pointer"
+                                      className="h-48 w-48 cursor-pointer rounded object-cover"
                                       onClick={() => {
                                         setLightboxAllMedia(mediaAttachments);
                                         setLightboxIndex(mediaAttachments.findIndex(a => a?._id === att._id));
                                         setLightboxMedia(att);
                                       }}
                                     />
-                                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                                      <div className="bg-black/50 rounded-full p-3">
-                                        <Video className="w-6 h-6 text-white" />
+                                    <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                                      <div className="rounded-full bg-black/50 p-3">
+                                        <Video className="h-6 w-6 text-white" />
                                       </div>
                                     </div>
                                   </div>
@@ -728,7 +801,7 @@ const ChatWindow = ({
 
                       {/* Reactions Display */}
                       {Array.isArray(msg.reactions) && msg.reactions.length > 0 && (
-                        <div className="flex flex-wrap gap-1 mt-2">
+                        <div className="mt-2 flex flex-wrap gap-1">
                           {msg.reactions.map((reaction, idx) => {
                             if (!reaction) return null;
                             const userReacted = Array.isArray(reaction?.users) && reaction.users.includes(String(currentUserId));
@@ -736,15 +809,15 @@ const ChatWindow = ({
                               <button
                                 key={idx}
                                 onClick={() => handleReaction(msg.messageId, reaction?.emoji)}
-                                className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs transition-all ${
+                                className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-xs transition-all ${
                                   userReacted
-                                    ? "bg-blue-500/30 border border-blue-400"
-                                    : "bg-gray-700/50 hover:bg-gray-700"
+                                    ? "border border-blue-300 bg-blue-100 text-blue-700 dark:border-blue-400 dark:bg-blue-500/30 dark:text-white"
+                                    : "bg-black/10 hover:bg-black/15 dark:bg-black/20 dark:hover:bg-black/30"
                                 }`}
                                 title={userReacted ? "Remove reaction" : "Add reaction"}
                               >
                                 <span>{reaction?.emoji || ''}</span>
-                                <span className="text-gray-300 text-[10px]">
+                                <span className={`text-[10px] ${isSelf ? "text-blue-50/80" : "text-slate-500 dark:text-gray-300"}`}>
                                   {Array.isArray(reaction?.users) ? reaction.users.length : 0}
                                 </span>
                               </button>
@@ -753,30 +826,30 @@ const ChatWindow = ({
                         </div>
                       )}
 
-                      <div className="flex items-center justify-between mt-1">
-                        <span className="text-[10px] text-gray-400">
+                      <div className="mt-1 flex items-center justify-between gap-3">
+                        <span className={`text-[10px] ${isSelf ? "text-blue-50/80" : "text-slate-500 dark:text-gray-400"}`}>
                           {msg?.timestamp ? new Date(msg.timestamp).toLocaleTimeString([], {
                             hour: "2-digit",
                             minute: "2-digit",
                           }) : ''}
                         </span>
-                        <div className="flex items-center gap-1 relative">
+                        <div className="relative flex items-center gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
                           <button
                             onClick={() => handleReply(msg)}
-                            className="p-1 rounded hover:bg-white/10 transition-colors"
+                            className="rounded-md p-1 transition-colors hover:bg-black/10 dark:hover:bg-white/10"
                             title="Reply to message"
                           >
-                            <ReplyIcon className="w-3 h-3 text-gray-400 hover:text-purple-400" />
+                            <ReplyIcon className={`h-3.5 w-3.5 ${isSelf ? "text-blue-50/80 hover:text-white" : "text-slate-400 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400"}`} />
                           </button>
                           <button
                             onClick={() => copyToClipboard(msg.message || msg.text || '')}
-                            className="p-1 rounded hover:bg-white/10 transition-colors"
+                            className="rounded-md p-1 transition-colors hover:bg-black/10 dark:hover:bg-white/10"
                             title="Copy message"
                           >
                             {copiedText === (msg.message || msg.text) ? (
-                              <Check className="w-3 h-3 text-green-400" />
+                              <Check className="h-3.5 w-3.5 text-green-400" />
                             ) : (
-                              <Copy className="w-3 h-3 text-gray-400 hover:text-blue-400" />
+                              <Copy className={`h-3.5 w-3.5 ${isSelf ? "text-blue-50/80 hover:text-white" : "text-slate-400 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400"}`} />
                             )}
                           </button>
                           <button
@@ -785,33 +858,31 @@ const ChatWindow = ({
                                 showEmojiPicker === msg.messageId ? null : msg.messageId
                               )
                             }
-                            className="p-1 rounded hover:bg-white/10 transition-colors"
+                            className="rounded-md p-1 transition-colors hover:bg-black/10 dark:hover:bg-white/10"
                             title="Add reaction"
                           >
-                            <Smile className="w-3 h-3 text-gray-400 hover:text-yellow-400" />
+                            <Smile className={`h-3.5 w-3.5 ${isSelf ? "text-blue-50/80 hover:text-white" : "text-slate-400 hover:text-yellow-500 dark:text-gray-400 dark:hover:text-yellow-400"}`} />
                           </button>
 
                           {/* Emoji Picker Popup */}
                           {showEmojiPicker === msg.messageId && (
                             <div
                               ref={emojiPickerRef}
-                              className={`absolute ${isSelf ? 'right-0' : 'left-0'} bottom-full mb-1 p-2 bg-gray-800 border border-gray-600 rounded-lg shadow-xl z-50`}
+                              className={`absolute ${isSelf ? 'right-0' : 'left-0'} bottom-full z-50 mb-1 flex gap-1 rounded-lg border border-slate-200 bg-white p-2 shadow-2xl shadow-slate-900/15 dark:border-[#232945] dark:bg-[#1a2332]`}
                             >
-                              <div className="flex gap-1">
-                                {commonEmojis.map((emoji, emojiIdx) => (
-                                  <button
-                                    key={emojiIdx}
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleReaction(msg.messageId, emoji);
-                                    }}
-                                    className="p-1 hover:bg-gray-700 rounded text-lg transition-transform hover:scale-125"
-                                    title={`React with ${emoji}`}
-                                  >
-                                    {emoji}
-                                  </button>
-                                ))}
-                              </div>
+                              {commonEmojis.map((emoji, emojiIdx) => (
+                                <button
+                                  key={emojiIdx}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleReaction(msg.messageId, emoji);
+                                  }}
+                                  className="rounded p-1.5 text-lg transition-transform hover:scale-125 hover:bg-slate-100 dark:hover:bg-white/10"
+                                  title={`React with ${emoji}`}
+                                >
+                                  {emoji}
+                                </button>
+                              ))}
                             </div>
                           )}
                         </div>
@@ -826,15 +897,18 @@ const ChatWindow = ({
         <div ref={chatEndRef} />
       </div>
 
+      {/* Typing Indicator */}
+      <TypingIndicator typingUsers={typingUsers} />
+
       {/* Reply Preview Bar */}
       {replyingTo && (
-        <div className="bg-gray-800 border-t border-gray-700 px-4 py-2 flex justify-between items-start gap-2 overflow-hidden">
-          <div className="text-sm text-gray-300 flex-1 min-w-0 overflow-hidden">
-            <div className="flex items-center gap-2 text-sm text-blue-400 mb-1">
+        <div className="flex items-start justify-between gap-2 overflow-hidden border-t border-blue-200 bg-blue-50 px-4 py-2 dark:border-blue-400/20 dark:bg-blue-500/10">
+          <div className="min-w-0 flex-1 overflow-hidden text-sm text-slate-700 dark:text-gray-300">
+            <div className="mb-1 flex items-center gap-2 text-sm text-blue-700 dark:text-blue-300">
               <ReplyIcon className="w-3 h-3 flex-shrink-0" />
               <span className="font-medium truncate">Replying to {getSenderName(replyingTo?.senderId)}</span>
             </div>
-            <div className="text-xs text-gray-400 overflow-hidden" style={{
+            <div className="overflow-hidden text-xs text-slate-500 dark:text-gray-400" style={{
               display: '-webkit-box',
               WebkitLineClamp: 2,
               WebkitBoxOrient: 'vertical',
@@ -846,32 +920,32 @@ const ChatWindow = ({
           </div>
           <button
             onClick={() => setReplyingTo(null)}
-            className="p-1 hover:bg-white/10 rounded flex-shrink-0"
+            className="flex-shrink-0 rounded p-1 hover:bg-black/5 dark:hover:bg-white/10"
           >
-            <XCircle className="w-4 h-4 text-gray-400" />
+            <XCircle className="w-4 h-4 text-slate-400" />
           </button>
         </div>
       )}
 
       {/* File Preview */}
       {selectedFiles.length > 0 && (
-        <div className="bg-gray-800 border-t border-gray-700 px-4 py-2">
-          <p className="text-xs text-gray-400 mb-2">
+        <div className="border-t border-slate-200 bg-white px-4 py-2 dark:border-white/10 dark:bg-[#10131c]">
+          <p className="mb-2 text-xs text-slate-500 dark:text-gray-400">
             Selected files ({selectedFiles.length}/5):
           </p>
           <div className="flex flex-wrap gap-2">
             {selectedFiles.map((file, idx) => (
               <div
                 key={idx}
-                className="flex items-center gap-2 bg-gray-700 px-3 py-1 rounded text-xs"
+                className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 dark:border-white/10 dark:bg-white/[0.04]"
               >
-                <FileIcon className="w-4 h-4 text-gray-400" />
-                <span className="text-gray-300 truncate max-w-[150px]">{file.name}</span>
+                <FileIcon className="h-4 w-4 text-slate-500 dark:text-gray-300" />
+                <span className="max-w-[150px] truncate text-xs text-slate-700 dark:text-gray-300">{file.name}</span>
                 <button
                   onClick={() => removeFile(idx)}
-                  className="p-1 hover:bg-white/10 rounded"
+                  className="rounded p-1 hover:bg-slate-100 dark:hover:bg-white/10"
                 >
-                  <XCircle className="w-3 h-3 text-gray-400" />
+                  <XCircle className="h-3 w-3 text-slate-400" />
                 </button>
               </div>
             ))}
@@ -881,83 +955,82 @@ const ChatWindow = ({
 
       {/* Formatting Toolbar */}
       {showFormatting && (
-        <div className="bg-gray-800 border-t border-gray-700 px-4 py-2">
+        <div className="border-t border-slate-200 bg-slate-50 px-4 py-3 dark:border-white/10 dark:bg-[#0d1017]">
           <div className="flex flex-wrap gap-2">
             <button
+              type="button"
               onClick={formatBold}
-              className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded text-xs font-bold transition-colors"
+              className="rounded border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 transition-colors hover:bg-slate-100 dark:border-white/10 dark:bg-[#232945] dark:text-white dark:hover:bg-[#2a3142]"
               title="Bold (Ctrl+B)"
             >
               B
             </button>
             <button
+              type="button"
               onClick={formatItalic}
-              className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded text-xs italic transition-colors"
+              className="rounded border border-slate-200 bg-white px-3 py-1.5 text-xs italic text-slate-700 transition-colors hover:bg-slate-100 dark:border-white/10 dark:bg-[#232945] dark:text-white dark:hover:bg-[#2a3142]"
               title="Italic (Ctrl+I)"
             >
               I
             </button>
             <button
+              type="button"
               onClick={formatStrikethrough}
-              className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded text-xs line-through transition-colors"
+              className="rounded border border-slate-200 bg-white px-3 py-1.5 text-xs line-through text-slate-700 transition-colors hover:bg-slate-100 dark:border-white/10 dark:bg-[#232945] dark:text-white dark:hover:bg-[#2a3142]"
               title="Strikethrough (Ctrl+U)"
             >
               S
             </button>
             <button
+              type="button"
               onClick={formatCode}
-              className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded text-xs font-mono transition-colors"
+              className="rounded border border-slate-200 bg-white px-3 py-1.5 font-mono text-xs text-slate-700 transition-colors hover:bg-slate-100 dark:border-white/10 dark:bg-[#232945] dark:text-white dark:hover:bg-[#2a3142]"
               title="Code (Ctrl+E)"
             >
               &lt;/&gt;
             </button>
             <button
+              type="button"
               onClick={formatHeading}
-              className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded text-xs font-bold transition-colors"
+              className="rounded border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 transition-colors hover:bg-slate-100 dark:border-white/10 dark:bg-[#232945] dark:text-white dark:hover:bg-[#2a3142]"
               title="Heading (Ctrl+D)"
             >
               H1
             </button>
             <button
+              type="button"
               onClick={formatBullet}
-              className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded text-xs transition-colors"
+              className="rounded border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-700 transition-colors hover:bg-slate-100 dark:border-white/10 dark:bg-[#232945] dark:text-white dark:hover:bg-[#2a3142]"
               title="Bullet List (Ctrl+L)"
             >
               • List
             </button>
             <button
+              type="button"
               onClick={formatNumbered}
-              className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded text-xs transition-colors"
+              className="rounded border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-700 transition-colors hover:bg-slate-100 dark:border-white/10 dark:bg-[#232945] dark:text-white dark:hover:bg-[#2a3142]"
               title="Numbered List (Ctrl+Shift+L)"
             >
               1. List
             </button>
-          </div>
-          <div className="mt-2 text-xs text-gray-400 space-y-1">
-            <p>
-              <strong>Keyboard Shortcuts:</strong> Ctrl+B (Bold) • Ctrl+I (Italic) • Ctrl+U (Strike) • Ctrl+E/K (Code) • Ctrl+D (Heading) • Ctrl+L (Bullet) • Ctrl+Shift+L (Numbered)
-            </p>
-            <p>
-              <strong>Markdown:</strong> **bold** *italic* ~~strikethrough~~ `code` ## Heading - Bullet 1. Numbered
-            </p>
           </div>
         </div>
       )}
 
       {/* Quick Replies */}
       {quickReplies.length > 0 && input.length === 0 && showQuickReplies && (
-        <div className="bg-gray-800 border-t border-gray-700 px-4 py-2">
-          <div className="flex items-center justify-between mb-2">
+        <div className="border-t border-slate-200 bg-white px-4 py-2 dark:border-white/10 dark:bg-[#10131c]">
+          <div className="mb-2 flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <Zap className="w-4 h-4 text-yellow-400" />
-              <span className="text-xs text-gray-400">Quick Replies:</span>
+              <Zap className="h-4 w-4 text-yellow-500 dark:text-yellow-400" />
+              <span className="text-xs text-slate-500 dark:text-gray-400">Quick Replies:</span>
             </div>
             <button
               onClick={() => setShowQuickReplies(false)}
-              className="p-1 hover:bg-gray-700 rounded transition-colors"
+              className="rounded p-1 transition-colors hover:bg-slate-100 dark:hover:bg-gray-700"
               title="Hide quick replies"
             >
-              <XCircle className="w-4 h-4 text-gray-400" />
+              <XCircle className="h-4 w-4 text-slate-400" />
             </button>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -965,9 +1038,9 @@ const ChatWindow = ({
               <button
                 key={idx}
                 onClick={() => handleQuickReply(reply)}
-                className="px-3 py-1.5 bg-gradient-to-r from-blue-600/20 to-purple-600/20 hover:from-blue-600/30 hover:to-purple-600/30 border border-blue-500/30 rounded-full text-xs text-gray-200 transition-all hover:scale-105 flex items-center gap-1"
+                className="flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs text-slate-700 transition-all hover:scale-105 hover:bg-blue-100 dark:border-blue-400/30 dark:bg-blue-500/15 dark:text-blue-100 dark:hover:bg-blue-500/25"
               >
-                <Lightbulb className="w-3 h-3 text-yellow-400" />
+                <Lightbulb className="h-3 w-3 text-yellow-500 dark:text-yellow-400" />
                 {reply}
               </button>
             ))}
@@ -976,26 +1049,26 @@ const ChatWindow = ({
       )}
 
       {/* Input Area */}
-      <div className="sticky bottom-0 bg-gray-800 border-t border-gray-700 relative">
+      <div className="relative border-t border-slate-200 bg-white p-2 dark:border-white/10 dark:bg-[#10131c] sm:px-3">
         {/* Suggestions Dropdown */}
         {showSuggestions && suggestions.length > 0 && (
           <div
             ref={suggestionsRef}
-            className="absolute bottom-full left-0 right-0 bg-gray-900 border-t border-l border-r border-gray-600 shadow-2xl max-h-64 overflow-y-auto"
+            className="absolute bottom-full left-0 right-0 z-50 mb-2 max-h-64 overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-2xl shadow-slate-900/15 dark:border-[#232945] dark:bg-gray-900"
           >
-            <div className="p-2 border-b border-gray-700 flex items-center gap-2">
+            <div className="sticky top-0 flex items-center gap-2 border-b border-slate-200 bg-white p-2 dark:border-[#232945] dark:bg-gray-900">
               <Sparkles className="w-4 h-4 text-blue-400" />
-              <span className="text-xs text-gray-400">
-                Suggestions ({suggestions.length}) • <kbd className="px-1 py-0.5 bg-gray-700 rounded text-[10px]">↑↓</kbd> to navigate • <kbd className="px-1 py-0.5 bg-gray-700 rounded text-[10px]">Tab</kbd> or <kbd className="px-1 py-0.5 bg-gray-700 rounded text-[10px]">Enter</kbd> to select
+              <span className="text-xs text-slate-500 dark:text-gray-400">
+                Suggestions ({suggestions.length}) · <kbd className="rounded bg-slate-100 px-1 py-0.5 text-[10px] dark:bg-gray-700">↑↓</kbd> to navigate · <kbd className="rounded bg-slate-100 px-1 py-0.5 text-[10px] dark:bg-gray-700">Tab</kbd> or <kbd className="rounded bg-slate-100 px-1 py-0.5 text-[10px] dark:bg-gray-700">Enter</kbd> to select
               </span>
             </div>
             {suggestions.map((suggestion, idx) => (
               <button
                 key={idx}
                 onClick={() => acceptSuggestion(suggestion)}
-                className={`w-full text-left px-4 py-2 hover:bg-gray-800 transition-colors border-l-2 ${
+                className={`w-full border-l-2 px-4 py-2 text-left transition-colors hover:bg-slate-100 dark:hover:bg-gray-800 ${
                   idx === selectedSuggestionIndex
-                    ? "bg-gray-800 border-blue-500"
+                    ? "border-blue-500 bg-blue-50 dark:bg-gray-800"
                     : "border-transparent"
                 }`}
               >
@@ -1014,14 +1087,14 @@ const ChatWindow = ({
                       <FileIcon className="w-3 h-3 text-blue-400" />
                     )}
                     {suggestion.type === "frequent" && (
-                      <Sparkles className="w-3 h-3 text-purple-400" />
+                      <Sparkles className="w-3 h-3 text-blue-400" />
                     )}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm text-gray-200 truncate">
+                    <p className="truncate text-sm text-slate-800 dark:text-gray-200">
                       {suggestion.text}
                     </p>
-                    <p className="text-xs text-gray-500 capitalize">
+                    <p className="text-xs capitalize text-slate-500 dark:text-gray-500">
                       {suggestion.type === "history" && "From your history"}
                       {suggestion.type === "quick" && "Quick reply"}
                       {suggestion.type === "task" && "Task suggestion"}
@@ -1035,7 +1108,7 @@ const ChatWindow = ({
           </div>
         )}
 
-        <div className="flex items-start gap-2 p-2">
+        <div className="flex items-center gap-2">
           <input
             type="file"
             ref={fileInputRef}
@@ -1044,21 +1117,44 @@ const ChatWindow = ({
             accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.txt"
             className="hidden"
           />
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            className="px-3 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded transition flex-shrink-0"
-            title="Attach files"
-          >
-            <Paperclip className="w-5 h-5" />
-          </button>
-          <button
-            onClick={() => setShowFormatting(!showFormatting)}
-            className="px-3 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded transition flex-shrink-0"
-            title="Text formatting"
-          >
-            <Type className="w-5 h-5" />
-          </button>
-          <div className="flex-1" onFocus={() => {
+
+          <div className="relative flex-shrink-0">
+            <button
+              type="button"
+              onClick={() => setShowComposerTools((v) => !v)}
+              className={`flex h-11 w-11 items-center justify-center rounded-lg border transition ${
+                showComposerTools
+                  ? "border-blue-300 bg-blue-50 text-blue-700 dark:border-blue-400/30 dark:bg-blue-500/10 dark:text-blue-300"
+                  : "border-slate-200 bg-slate-50 text-slate-500 hover:bg-slate-100 hover:text-slate-950 dark:border-white/10 dark:bg-white/[0.035] dark:text-slate-400 dark:hover:bg-white/[0.065] dark:hover:text-white"
+              }`}
+              aria-label="Add attachment or formatting"
+            >
+              <Plus className={`h-4 w-4 transition-transform ${showComposerTools ? "rotate-45" : ""}`} />
+            </button>
+
+            {showComposerTools && (
+              <div className="absolute bottom-[calc(100%+0.5rem)] left-0 z-50 w-44 rounded-xl border border-slate-200 bg-white p-1.5 shadow-2xl shadow-slate-900/15 dark:border-white/10 dark:bg-[#131c24] dark:shadow-black/40">
+                <button
+                  type="button"
+                  onClick={() => { fileInputRef.current?.click(); setShowComposerTools(false); }}
+                  className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-slate-600 transition hover:bg-slate-100 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-white/5 dark:hover:text-white"
+                >
+                  <Paperclip className="h-4 w-4 text-sky-400" />
+                  Attach files
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setShowFormatting((v) => !v); setShowComposerTools(false); }}
+                  className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-slate-600 transition hover:bg-slate-100 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-white/5 dark:hover:text-white"
+                >
+                  <Type className="h-4 w-4 text-blue-400" />
+                  Formatting
+                </button>
+              </div>
+            )}
+          </div>
+
+          <div className="min-w-0 flex-1" onFocus={() => {
             // Scroll to bottom when focused
             chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
           }}>
@@ -1068,13 +1164,15 @@ const ChatWindow = ({
               onChange={(newValue, mentions) => {
                 setInput(newValue);
                 setMentionedUsers(mentions);
+                if (newValue.length > 0) sendTypingIndicator();
+                else stopTypingIndicator();
                 // Auto-scroll to bottom when typing
                 chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
               }}
               users={conversationMembers || []}
-              placeholder="Type @ to mention someone... (Ctrl+B for bold)"
-              rows={2}
-              className="bg-gray-700 text-gray-100 border-gray-600 focus:ring-blue-500"
+              placeholder="Write a message... (@ to mention someone)"
+              rows={1}
+              className="h-11 w-full rounded-xl border-slate-200 bg-white py-2.5 text-slate-900 placeholder-slate-400 focus:border-blue-400/50 dark:border-white/10 dark:bg-[#101820] dark:text-white dark:placeholder-slate-500"
               onKeyDown={(e) => {
                 // Handle suggestion navigation
                 if (showSuggestions && suggestions.length > 0) {
@@ -1186,15 +1284,12 @@ const ChatWindow = ({
           <button
             onClick={handleSendMessage}
             disabled={!input.trim() && selectedFiles.length === 0}
-            className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-medium shadow-md hover:shadow-lg transition flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            className="flex h-11 flex-shrink-0 items-center gap-2 rounded-lg bg-blue-600 px-3 text-white shadow-lg shadow-blue-950/20 transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-40 sm:px-4"
           >
-            <Send className="w-4 h-4" />
-            <span>Send</span>
+            <Send className="h-4 w-4" />
+            <span className="hidden text-sm sm:inline">Send</span>
           </button>
         </div>
-        <p className="text-xs text-gray-500 px-2 pb-2">
-          Max 5 files • Supports formatting: **bold** *italic* `code` ## heading - lists
-        </p>
       </div>
 
       {/* Media Lightbox */}
@@ -1214,38 +1309,37 @@ const ChatWindow = ({
       {/* AI Summary Modal */}
       {showSummaryModal && (
         <div
-          className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4"
-          style={{ zIndex: 9999 }}
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm"
           onClick={() => setShowSummaryModal(false)}
         >
           <div
-            className="bg-gray-800 rounded-lg shadow-2xl max-w-3xl w-full max-h-[80vh] flex flex-col border border-gray-700"
+            className="flex max-h-[80vh] w-full max-w-3xl flex-col rounded-xl border border-slate-200 bg-white shadow-2xl dark:border-[#232945] dark:bg-[#0f1419]"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Modal Header */}
-            <div className="flex items-center justify-between p-4 border-b border-gray-700">
+            <div className="flex items-center justify-between border-b border-slate-200 p-4 dark:border-[#1e2a35]">
               <div className="flex items-center gap-3">
-                <Sparkles className="w-5 h-5 text-purple-400" />
-                <h2 className="text-xl font-semibold text-gray-100">
+                <Sparkles className="h-5 w-5 text-blue-500 dark:text-blue-400" />
+                <h2 className="text-xl font-semibold text-slate-950 dark:text-white">
                   AI Conversation Summary
                 </h2>
               </div>
               <button
                 onClick={() => setShowSummaryModal(false)}
-                className="p-2 hover:bg-gray-700 rounded-lg transition"
+                className="rounded-lg p-2 transition hover:bg-slate-100 dark:hover:bg-[#141a21]"
               >
-                <XCircle className="w-5 h-5 text-gray-400" />
+                <XCircle className="h-5 w-5 text-slate-400" />
               </button>
             </div>
 
             {/* Days Selector */}
-            <div className="px-4 py-3 border-b border-gray-700 bg-gray-800/50">
+            <div className="border-b border-slate-200 bg-slate-50 px-4 py-3 dark:border-[#1e2a35] dark:bg-[#0a0e14]/50">
               <div className="flex items-center gap-3">
-                <label className="text-sm text-gray-400">Time period:</label>
+                <label className="text-sm text-slate-500 dark:text-gray-400">Time period:</label>
                 <select
                   value={summaryDays}
                   onChange={(e) => setSummaryDays(Number(e.target.value))}
-                  className="px-3 py-1.5 bg-gray-700 text-gray-100 rounded border border-gray-600 focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm"
+                  className="rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 dark:border-[#2a3340] dark:bg-[#141a21] dark:text-blue-100"
                 >
                   <option value={1}>Last 24 hours</option>
                   <option value={3}>Last 3 days</option>
@@ -1256,60 +1350,60 @@ const ChatWindow = ({
                 <button
                   onClick={handleSummarize}
                   disabled={summaryLoading}
-                  className="px-4 py-1.5 bg-purple-600 hover:bg-purple-500 text-white rounded text-sm transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  className="flex items-center gap-2 rounded bg-blue-600 px-4 py-1.5 text-sm text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  <Sparkles className="w-4 h-4" />
+                  <Sparkles className="h-4 w-4" />
                   {summaryLoading ? "Generating..." : "Regenerate"}
                 </button>
               </div>
             </div>
 
             {/* Modal Body */}
-            <div className="flex-1 overflow-y-auto p-6">
+            <div className="flex-1 overflow-y-auto bg-slate-50/50 p-6 dark:bg-[#0a0e14]/30">
               {summaryLoading ? (
-                <div className="flex flex-col items-center justify-center h-full gap-4">
+                <div className="flex h-full flex-col items-center justify-center gap-4">
                   <div className="relative">
-                    <div className="w-16 h-16 border-4 border-purple-500/30 border-t-purple-500 rounded-full animate-spin"></div>
-                    <Sparkles className="w-6 h-6 text-purple-400 absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2" />
+                    <div className="h-16 w-16 animate-spin rounded-full border-4 border-blue-500/30 border-t-blue-500"></div>
+                    <Sparkles className="absolute left-1/2 top-1/2 h-6 w-6 -translate-x-1/2 -translate-y-1/2 text-blue-400" />
                   </div>
-                  <p className="text-gray-400 text-sm">Analyzing conversation with AI...</p>
+                  <p className="text-sm text-slate-500 dark:text-gray-400">Analyzing conversation with AI...</p>
                 </div>
               ) : (
-                <div className="prose prose-invert prose-sm max-w-none">
+                <div className="prose prose-sm prose-slate max-w-none dark:prose-invert">
                   <ReactMarkdown
                     remarkPlugins={[remarkGfm]}
                     components={{
                       p: ({ children }) => (
-                        <p className="mb-3 text-gray-200 leading-relaxed">{children}</p>
+                        <p className="mb-3 leading-relaxed text-slate-700 dark:text-gray-200">{children}</p>
                       ),
                       h1: ({ children }) => (
-                        <h1 className="text-2xl font-bold mb-3 text-gray-100">{children}</h1>
+                        <h1 className="mb-3 text-2xl font-bold text-slate-950 dark:text-gray-100">{children}</h1>
                       ),
                       h2: ({ children }) => (
-                        <h2 className="text-xl font-bold mb-2 text-gray-100">{children}</h2>
+                        <h2 className="mb-2 text-xl font-bold text-slate-950 dark:text-gray-100">{children}</h2>
                       ),
                       h3: ({ children }) => (
-                        <h3 className="text-lg font-bold mb-2 text-gray-100">{children}</h3>
+                        <h3 className="mb-2 text-lg font-bold text-slate-950 dark:text-gray-100">{children}</h3>
                       ),
                       ul: ({ children }) => (
-                        <ul className="list-disc list-inside mb-3 space-y-1">{children}</ul>
+                        <ul className="mb-3 list-inside list-disc space-y-1">{children}</ul>
                       ),
                       ol: ({ children }) => (
-                        <ol className="list-decimal list-inside mb-3 space-y-1">{children}</ol>
+                        <ol className="mb-3 list-inside list-decimal space-y-1">{children}</ol>
                       ),
                       li: ({ children }) => (
-                        <li className="ml-2 text-gray-200">{children}</li>
+                        <li className="ml-2 text-slate-700 dark:text-gray-200">{children}</li>
                       ),
                       strong: ({ children }) => (
-                        <strong className="font-bold text-purple-300">{children}</strong>
+                        <strong className="font-bold text-blue-700 dark:text-blue-300">{children}</strong>
                       ),
                       code: ({ inline, children }) =>
                         inline ? (
-                          <code className="bg-gray-900 px-1.5 py-0.5 rounded text-purple-300 text-xs">
+                          <code className="rounded bg-slate-100 px-1.5 py-0.5 text-xs text-blue-700 dark:bg-gray-900 dark:text-blue-300">
                             {children}
                           </code>
                         ) : (
-                          <code className="block bg-gray-900 p-3 rounded text-sm overflow-x-auto text-gray-300">
+                          <code className="block overflow-x-auto rounded bg-slate-100 p-3 text-sm text-slate-700 dark:bg-gray-900 dark:text-gray-300">
                             {children}
                           </code>
                         ),
@@ -1322,23 +1416,23 @@ const ChatWindow = ({
             </div>
 
             {/* Modal Footer */}
-            <div className="p-4 border-t border-gray-700 flex justify-between items-center bg-gray-800/50">
-              <div className="text-xs text-gray-500">
-                Powered by AI • Last {summaryDays} day{summaryDays !== 1 ? 's' : ''}
+            <div className="flex items-center justify-between border-t border-slate-200 bg-slate-50 p-4 dark:border-[#1e2a35] dark:bg-[#0a0e14]/50">
+              <div className="text-xs text-slate-500 dark:text-gray-500">
+                Powered by AI · Last {summaryDays} day{summaryDays !== 1 ? 's' : ''}
               </div>
               <button
                 onClick={() => copyToClipboard(summary)}
                 disabled={!summary || summaryLoading}
-                className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-200 rounded transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 text-sm"
+                className="flex items-center gap-2 rounded border border-slate-200 bg-white px-4 py-2 text-sm text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-[#2a3340] dark:bg-[#141a21] dark:text-gray-200 dark:hover:bg-[#1e2a35]"
               >
                 {copiedText === summary ? (
                   <>
-                    <Check className="w-4 h-4" />
+                    <Check className="h-4 w-4" />
                     Copied!
                   </>
                 ) : (
                   <>
-                    <Copy className="w-4 h-4" />
+                    <Copy className="h-4 w-4" />
                     Copy Summary
                   </>
                 )}

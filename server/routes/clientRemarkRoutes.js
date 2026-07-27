@@ -110,6 +110,17 @@ router.post("/:projectId/client-remarks", protect, async (req, res) => {
     // Populate the addedBy field with both name and clientName
     await newRemark.populate("addedBy", "name email clientName");
 
+    // Real-time: push the new remark to anyone viewing this project/section
+    // right now, and to all admins for the live counter badge on the
+    // projects list. Best-effort — a broadcast failure must never fail the
+    // request that already succeeded in saving the remark.
+    try {
+      const { broadcastProjectRemark } = require("../utils/websocket");
+      broadcastProjectRemark(projectId, { remark: newRemark, section });
+    } catch (wsError) {
+      console.warn("WebSocket broadcast failed (client remark added):", wsError.message);
+    }
+
     res.status(201).json({
       success: true,
       message: "Remark added successfully",
@@ -145,6 +156,19 @@ router.delete("/:projectId/client-remarks/:remarkId", protect, async (req, res) 
     // Soft delete
     remark.isActive = false;
     await remark.save();
+
+    // Real-time: let anyone viewing this project/section (and the projects
+    // list's live counter) know this remark is gone, without waiting on a
+    // refetch. Best-effort, same reasoning as the POST handler above.
+    try {
+      const { broadcastProjectRemarkDeleted } = require("../utils/websocket");
+      broadcastProjectRemarkDeleted(projectId, {
+        remarkId: remark._id,
+        section: remark.section,
+      });
+    } catch (wsError) {
+      console.warn("WebSocket broadcast failed (client remark deleted):", wsError.message);
+    }
 
     res.status(200).json({
       success: true,
@@ -190,6 +214,46 @@ router.get("/:projectId/client-remarks/stats", protect, async (req, res) => {
     });
   } catch (error) {
     console.error("Error fetching remarks stats:", error);
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
+});
+
+// @route   GET /api/projects/remarks/counts
+// @desc    Bulk live remark counts for the projects list (ProjectCard badge).
+//          Scoped to whatever project IDs the caller passes in — those IDs
+//          already came from the caller's own role-filtered GET /api/projects
+//          response, so there's no separate access check to duplicate here.
+// @access  Private
+router.get("/remarks/counts", protect, async (req, res) => {
+  try {
+    const { projectIds } = req.query;
+    if (!projectIds) {
+      return res.status(200).json({ success: true, data: {} });
+    }
+
+    const ids = String(projectIds)
+      .split(",")
+      .map((id) => id.trim())
+      .filter((id) => mongoose.Types.ObjectId.isValid(id))
+      .map((id) => new mongoose.Types.ObjectId(id));
+
+    if (ids.length === 0) {
+      return res.status(200).json({ success: true, data: {} });
+    }
+
+    const counts = await ClientRemark.aggregate([
+      { $match: { project: { $in: ids }, isActive: true } },
+      { $group: { _id: "$project", count: { $sum: 1 } } },
+    ]);
+
+    const data = {};
+    counts.forEach((row) => {
+      data[row._id.toString()] = row.count;
+    });
+
+    res.status(200).json({ success: true, data });
+  } catch (error) {
+    console.error("Error fetching bulk remark counts:", error);
     res.status(500).json({ message: "Server error", error: error.message });
   }
 });

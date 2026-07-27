@@ -363,11 +363,6 @@ const menuConfig = {
       icon: <Gauge size={18} animateOnHover />,
       label: "Dashboard",
     },
-    {
-      to: "/tasks",
-      icon: <CircleCheckBig size={18} animateOnHover />,
-      label: "Tasks",
-    },
 
     // 🧑‍💼 Employees Dropdown
     {
@@ -660,56 +655,48 @@ const Sidebar = ({
     fetchPermissions();
   }, [userRole]);
 
-  // Listen for chat unread total to show badge on Messages item
+  // Listen for chat unread total to show badge on Messages item.
+  // sessionStorage is only read once on mount as the initial baseline —
+  // every update after that comes from the "chat-unread-total" window event,
+  // which is dispatched in real time by ChatPage/WebSocketContext, so a
+  // polling re-read of storage is redundant with it.
   useEffect(() => {
-    const updateFromStorage = () => {
-      try {
-        const stored = Number(sessionStorage.getItem("chat_unread_total") || 0);
-        setChatUnread(isNaN(stored) ? 0 : stored);
-      } catch {
-        setChatUnread(0);
-      }
-    };
-    updateFromStorage();
+    try {
+      const stored = Number(sessionStorage.getItem("chat_unread_total") || 0);
+      setChatUnread(isNaN(stored) ? 0 : stored);
+    } catch {
+      setChatUnread(0);
+    }
     const handler = (e) => {
       const total = Number(e.detail?.total || 0);
       setChatUnread(isNaN(total) ? 0 : total);
     };
     window.addEventListener("chat-unread-total", handler);
-    const interval = setInterval(updateFromStorage, 3000);
-    return () => {
-      window.removeEventListener("chat-unread-total", handler);
-      clearInterval(interval);
-    };
+    return () => window.removeEventListener("chat-unread-total", handler);
   }, []);
 
-  // Listen for chat unread map to show which conversations have unread messages
+  // Listen for chat unread map to show which conversations have unread
+  // messages. Same reasoning as above — one initial read, then event-driven.
   useEffect(() => {
-    const updateMapFromStorage = () => {
-      try {
-        const raw = sessionStorage.getItem("chat_unread_map");
-        if (raw) {
-          const map = JSON.parse(raw);
-          setChatUnreadMap(map);
-        }
-      } catch {
-        setChatUnreadMap({});
-      }
-    };
-    updateMapFromStorage();
+    try {
+      const raw = sessionStorage.getItem("chat_unread_map");
+      if (raw) setChatUnreadMap(JSON.parse(raw));
+    } catch {
+      setChatUnreadMap({});
+    }
     const handler = (e) => {
       const map = e.detail?.map || {};
       setChatUnreadMap(map);
     };
     window.addEventListener("chat-unread-map", handler);
-    const interval = setInterval(updateMapFromStorage, 3000);
-    return () => {
-      window.removeEventListener("chat-unread-map", handler);
-      clearInterval(interval);
-    };
+    return () => window.removeEventListener("chat-unread-map", handler);
   }, []);
 
-  // Fetch conversations to map IDs to names
+  // Fetch conversations to map IDs to names. One fetch on mount for the
+  // baseline, then event-driven from here: the server emits
+  // "conversation:updated" (bridged to this window event by
+  // WebSocketContext.jsx) whenever a group is created/renamed or its
+  // membership changes, so a 30s re-poll of the whole list is redundant.
   useEffect(() => {
     const fetchConversations = async () => {
       try {
@@ -729,8 +716,8 @@ const Sidebar = ({
       }
     };
     fetchConversations();
-    const interval = setInterval(fetchConversations, 30000);
-    return () => clearInterval(interval);
+    window.addEventListener("conversation-updated", fetchConversations);
+    return () => window.removeEventListener("conversation-updated", fetchConversations);
   }, []);
 
   // Check if user has supervisor/team lead position

@@ -123,25 +123,25 @@ const ProjectTaskEditModal = ({ task, projectEmployees, onClose, onTaskUpdated }
   const timeSlots = generateTimeSlots();
 
   const commonInputClasses =
-    "bg-[#0f1419] border border-[#232945] p-3 rounded-lg text-sm text-white w-full focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none transition-all";
+    "rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-900 w-full transition-all outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 dark:border-[#232945] dark:bg-[#0f1419] dark:text-white";
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="bg-[#191f2b] rounded-xl shadow-2xl border border-[#232945] w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+      <div className="rounded-xl border border-slate-200 bg-white shadow-2xl dark:border-[#232945] dark:bg-[#191f2b] w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         {/* Header */}
-        <div className="sticky top-0 bg-[#191f2b] border-b border-[#232945] p-6 flex items-center justify-between">
+        <div className="sticky top-0 flex items-center justify-between border-b border-slate-200 bg-white p-6 dark:border-[#232945] dark:bg-[#191f2b]">
           <div>
-            <h2 className="text-xl font-bold text-white flex items-center gap-2">
+            <h2 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
               <Edit2 className="w-6 h-6 text-blue-400" />
               Edit Task
             </h2>
-            <p className="text-sm text-gray-400 mt-1">
+            <p className="text-sm text-slate-500 dark:text-gray-400 mt-1">
               Update task details and assignments
             </p>
           </div>
           <button
             onClick={onClose}
-            className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-[#0f1419] transition-all"
+            className="rounded-lg p-2 text-slate-500 transition-all hover:bg-slate-100 hover:text-slate-900 dark:text-gray-400 dark:hover:text-white dark:hover:bg-[#0f1419]"
           >
             <X className="w-5 h-5" />
           </button>
@@ -155,14 +155,14 @@ const ProjectTaskEditModal = ({ task, projectEmployees, onClose, onTaskUpdated }
               <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
               <div>
                 <p className="text-red-400 font-medium">Error</p>
-                <p className="text-red-300 text-sm">{error}</p>
+                <p className="text-red-700 dark:text-red-300 text-sm">{error}</p>
               </div>
             </div>
           )}
 
           {/* Task Title */}
           <div>
-            <label className="block text-sm font-medium text-white mb-2">
+            <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
               Task Title <span className="text-red-400">*</span>
             </label>
             <input
@@ -177,7 +177,7 @@ const ProjectTaskEditModal = ({ task, projectEmployees, onClose, onTaskUpdated }
 
           {/* Assign To */}
           <div className="relative" ref={dropdownRef}>
-            <label className="block text-sm font-medium text-white mb-2">
+            <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
               Assign To <span className="text-red-400">*</span>
             </label>
             <div
@@ -191,18 +191,18 @@ const ProjectTaskEditModal = ({ task, projectEmployees, onClose, onTaskUpdated }
                   ? `${formData.assignedTo.length} employee(s) selected`
                   : "Select employees from project team..."}
               </span>
-              <Users className="w-4 h-4 text-gray-400" />
+              <Users className="w-4 h-4 text-slate-400 dark:text-gray-400" />
             </div>
 
             {dropdownOpen && (
-              <div className="absolute left-0 top-full mt-2 border border-[#232945] bg-[#0f1419] rounded-lg shadow-xl w-full z-50 max-h-60 overflow-hidden">
-                <div className="p-3 border-b border-[#232945] bg-[#191f2b]">
+              <div className="absolute left-0 top-full mt-2 rounded-lg border border-slate-200 bg-white shadow-xl dark:border-[#232945] dark:bg-[#0f1419] w-full z-50 max-h-60 overflow-hidden">
+                <div className="border-b border-slate-200 bg-slate-50 p-3 dark:border-[#232945] dark:bg-[#191f2b]">
                   <input
                     type="text"
                     placeholder="Search employees..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="bg-[#0f1419] border border-[#232945] rounded-lg p-2 text-white w-full text-sm focus:ring-2 focus:ring-purple-500 outline-none"
+                    className="rounded-lg border border-slate-200 bg-white p-2 text-sm text-slate-900 w-full outline-none focus:ring-2 focus:ring-purple-500 dark:border-[#232945] dark:bg-[#0f1419] dark:text-white"
                   />
                 </div>
 
@@ -224,16 +224,16 @@ const ProjectTaskEditModal = ({ task, projectEmployees, onClose, onTaskUpdated }
                             {emp.name.charAt(0).toUpperCase()}
                           </div>
                           <div>
-                            <p className="text-white text-sm font-medium">{emp.name}</p>
-                            <p className="text-gray-400 text-xs">{emp.email}</p>
+                            <p className="text-slate-900 dark:text-white text-sm font-medium">{emp.name}</p>
+                            <p className="text-slate-500 dark:text-gray-400 text-xs">{emp.email}</p>
                           </div>
                         </div>
                       </label>
                     ))
                   ) : (
                     <div className="px-4 py-6 text-center">
-                      <Users className="w-8 h-8 text-gray-600 mx-auto mb-2" />
-                      <p className="text-sm text-gray-400">No employees found</p>
+                      <Users className="w-8 h-8 text-slate-300 dark:text-gray-600 mx-auto mb-2" />
+                      <p className="text-sm text-slate-500 dark:text-gray-400">No employees found</p>
                     </div>
                   )}
                 </div>
@@ -254,11 +254,11 @@ const ProjectTaskEditModal = ({ task, projectEmployees, onClose, onTaskUpdated }
                       <div className="w-5 h-5 rounded-full bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center text-white text-xs font-semibold">
                         {emp.name.charAt(0).toUpperCase()}
                       </div>
-                      <span className="text-white text-sm">{emp.name}</span>
+                      <span className="text-slate-900 dark:text-white text-sm">{emp.name}</span>
                       <button
                         type="button"
                         onClick={() => toggleUserSelection(userId)}
-                        className="text-gray-400 hover:text-red-400 transition-colors"
+                        className="text-slate-500 dark:text-gray-400 hover:text-red-400 transition-colors"
                       >
                         <X className="w-3 h-3" />
                       </button>
@@ -273,7 +273,7 @@ const ProjectTaskEditModal = ({ task, projectEmployees, onClose, onTaskUpdated }
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {/* Date Picker */}
             <div>
-              <label className="block text-sm font-medium text-white mb-2">
+              <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
                 Due Date <span className="text-red-400">*</span>
               </label>
               <div className="relative">
@@ -288,13 +288,13 @@ const ProjectTaskEditModal = ({ task, projectEmployees, onClose, onTaskUpdated }
                   wrapperClassName="w-full"
                   disabled={loading}
                 />
-                <Calendar className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                <Calendar className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 dark:text-gray-400 pointer-events-none" />
               </div>
             </div>
 
             {/* Time Picker */}
             <div className="relative" ref={timeRef}>
-              <label className="block text-sm font-medium text-white mb-2">
+              <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
                 Due Time (Optional)
               </label>
               <div className="relative">
@@ -308,14 +308,14 @@ const ProjectTaskEditModal = ({ task, projectEmployees, onClose, onTaskUpdated }
                   value={formData.dueTime}
                   onClick={() => !loading && setTimeOpen((prev) => !prev)}
                 />
-                <Clock className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                <Clock className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 dark:text-gray-400 pointer-events-none" />
               </div>
               {timeOpen && (
-                <div className="absolute top-full mt-2 bg-[#0f1419] border border-[#232945] rounded-lg shadow-xl max-h-60 overflow-y-auto w-full z-50">
+                <div className="absolute top-full mt-2 rounded-lg border border-slate-200 bg-white shadow-xl dark:border-[#232945] dark:bg-[#0f1419] max-h-60 overflow-y-auto w-full z-50">
                   {timeSlots.map((time) => (
                     <div
                       key={time}
-                      className="px-4 py-2 hover:bg-blue-600/20 cursor-pointer transition-colors text-sm text-white"
+                      className="px-4 py-2 hover:bg-blue-600/20 cursor-pointer transition-colors text-sm text-slate-900 dark:text-white"
                       onClick={() => {
                         setFormData({ ...formData, dueTime: time });
                         setTimeOpen(false);
@@ -331,7 +331,7 @@ const ProjectTaskEditModal = ({ task, projectEmployees, onClose, onTaskUpdated }
 
           {/* Priority */}
           <div>
-            <label className="block text-sm font-medium text-white mb-2">
+            <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
               Priority <span className="text-red-400">*</span>
             </label>
             <select
@@ -349,7 +349,7 @@ const ProjectTaskEditModal = ({ task, projectEmployees, onClose, onTaskUpdated }
 
           {/* Description */}
           <div>
-            <label className="block text-sm font-medium text-white mb-2">
+            <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
               Description (Optional)
             </label>
             <textarea
@@ -363,11 +363,11 @@ const ProjectTaskEditModal = ({ task, projectEmployees, onClose, onTaskUpdated }
           </div>
 
           {/* Action Buttons */}
-          <div className="flex gap-3 pt-4 border-t border-[#232945]">
+          <div className="flex gap-3 border-t border-slate-200 pt-4 dark:border-[#232945]">
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 px-4 py-3 rounded-lg font-semibold bg-gray-600/20 hover:bg-gray-600/40 text-gray-300 border border-gray-500/30 transition-all"
+              className="flex-1 rounded-lg border border-slate-300 bg-slate-200 px-4 py-3 font-semibold text-slate-700 transition-all hover:bg-slate-300 dark:border-gray-500/30 dark:bg-gray-600/20 dark:text-gray-300 dark:hover:bg-gray-600/40"
               disabled={loading}
             >
               Cancel

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import LeaveSummary from "../components/leaves/LeaveSummary";
 import RecentLeaveRequests from "../components/leaves/RecentLeaveRequests";
 import LeaveApplicationForm from "../components/leaves/LeaveApplicationForm";
@@ -13,7 +13,6 @@ import axios from "axios";
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
 
 const MAX_REQUESTS = 4;
-const POLL_INTERVAL = 30000;
 
 const getRequestedDays = (request) => {
   if (request?.type === "halfDay") return 0.5;
@@ -40,8 +39,6 @@ const HolidaysAndLeaves = ({ onLogout }) => {
 
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [editingRequest, setEditingRequest] = useState(null);
-
-  const pollingRef = useRef(null);
 
   const importantNotices = [
     "All leaves should be applied at least 7 days in advance.",
@@ -105,13 +102,15 @@ const HolidaysAndLeaves = ({ onLogout }) => {
     }
   };
 
-  // Initial load + polling for leaves
+  // Initial load, then event-driven: the server emits "leave:updated"
+  // (bridged to this window event by WebSocketContext.jsx) whenever this
+  // employee's leave request is created or approved/rejected, so a 30s
+  // re-poll is redundant with it.
   useEffect(() => {
     loadLeaves();
     loadHolidays();
-    pollingRef.current = setInterval(loadLeaves, POLL_INTERVAL);
-
-    return () => clearInterval(pollingRef.current);
+    window.addEventListener("leave-updated", loadLeaves);
+    return () => window.removeEventListener("leave-updated", loadLeaves);
   }, []);
 
   // Handle leave submission from LeaveApplicationForm

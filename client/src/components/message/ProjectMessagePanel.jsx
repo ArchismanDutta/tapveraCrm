@@ -18,56 +18,24 @@ import {
   Type,
   Send,
   Sparkles,
+  Plus,
 } from "lucide-react";
 import MediaLightbox from "../common/MediaLightbox";
+import MessageDateSeparator from "./MessageDateSeparator";
+import MessageStatus from "./MessageStatus";
+import TypingIndicator from "./TypingIndicator";
+import { useWebSocketContext } from "../../contexts/WebSocketContext";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
 
 const commonEmojis = ["👍", "❤️", "😂", "😮", "😢", "🙏", "🔥", "✅"];
 
-const getWebSocketURL = () => {
-  if (import.meta.env.VITE_WS_BASE) return import.meta.env.VITE_WS_BASE;
-  const apiBase = import.meta.env.VITE_API_BASE;
-  if (apiBase) {
-    try {
-      const u = new URL(apiBase);
-      u.protocol = u.protocol === "https:" ? "wss:" : "ws:";
-      return `${u.protocol}//${u.host}`;
-    } catch {}
-  }
-  if (typeof window !== "undefined") {
-    const protocol = window.location.protocol === "https:" ? "wss" : "ws";
-    const host =
-      window.location.hostname === "localhost"
-        ? "localhost:5000"
-        : window.location.host;
-    return `${protocol}://${host}`;
-  }
-  return "ws://localhost:5000";
-};
-
-// ─── Date divider (Today / Yesterday / date) ────────────────────────────────
-const DateDivider = ({ date }) => {
-  const now = new Date();
-  const d = new Date(date);
-  const yesterday = new Date(now);
-  yesterday.setDate(now.getDate() - 1);
-  const label =
-    now.toDateString() === d.toDateString()
-      ? "Today"
-      : yesterday.toDateString() === d.toDateString()
-      ? "Yesterday"
-      : d.toLocaleDateString();
-  return (
-    <div className="flex justify-center my-3 w-full">
-      <span className="bg-[#1e2a35] text-gray-400 rounded-full px-3 py-1 text-xs select-none">
-        {label}
-      </span>
-    </div>
-  );
-};
-
 // ─── Main component ──────────────────────────────────────────────────────────
+// Styling here is intentionally kept in lockstep with the admin-facing chat
+// (the inline "Chat" tab in pages/ProjectDetailPage.jsx) — same light/dark
+// theme tokens, same teal accent, same input layout — so an employee and an
+// admin looking at the same project conversation see the same UI, just
+// through two different page shells (EmployeePortal vs ProjectDetailPage).
 const ProjectMessagePanel = ({ projectId, currentUser }) => {
   // ── state ──
   const [messages, setMessages] = useState([]);
@@ -79,6 +47,7 @@ const ProjectMessagePanel = ({ projectId, currentUser }) => {
   const [dateFilter, setDateFilter] = useState({ start: "", end: "" });
   const [showFilters, setShowFilters] = useState(false);
   const [showFormatting, setShowFormatting] = useState(false);
+  const [showComposerTools, setShowComposerTools] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(null);
   const [copiedText, setCopiedText] = useState(null);
   const [lightboxMedia, setLightboxMedia] = useState(null);
@@ -88,14 +57,25 @@ const ProjectMessagePanel = ({ projectId, currentUser }) => {
   const [summary, setSummary] = useState("");
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [summaryDays, setSummaryDays] = useState(7);
+  const [typingUsers, setTypingUsers] = useState([]);
 
   // ── refs ──
   const chatEndRef = useRef(null);
   const fileInputRef = useRef(null);
   const textareaRef = useRef(null);
-  const wsRef = useRef(null);
   const emojiPickerRef = useRef(null);
   const prevLengthRef = useRef(0);
+  const typingTimeoutRef = useRef(null);
+
+  // ── shared real-time connection (see WebSocketContext) ──
+  const {
+    isConnected: wsConnected,
+    joinProject,
+    leaveProject,
+    sendProjectMessage,
+    sendProjectTyping,
+    sendProjectStopTyping,
+  } = useWebSocketContext();
 
   // ── resolve current user ──
   const user = currentUser || JSON.parse(localStorage.getItem("user") || "{}");
@@ -115,17 +95,17 @@ const ProjectMessagePanel = ({ projectId, currentUser }) => {
   };
 
   const getFileIcon = (fileType) => {
-    if (fileType === "image") return <ImageIcon className="w-4 h-4 text-blue-400" />;
-    if (fileType === "video") return <Video className="w-4 h-4 text-purple-400" />;
-    return <FileIcon className="w-4 h-4 text-gray-400" />;
+    if (fileType === "image") return <ImageIcon className="h-4 w-4 text-blue-400" />;
+    if (fileType === "video") return <Video className="h-4 w-4 text-purple-400" />;
+    return <FileIcon className="h-4 w-4 text-slate-400" />;
   };
 
   const scrollToMessage = (id) => {
     const el = document.getElementById(`pmsg-${id}`);
     if (!el) return;
     el.scrollIntoView({ behavior: "smooth", block: "center" });
-    el.classList.add("bg-blue-900/30");
-    setTimeout(() => el.classList.remove("bg-blue-900/30"), 1500);
+    el.classList.add("bg-teal-100", "dark:bg-teal-900/30");
+    setTimeout(() => el.classList.remove("bg-teal-100", "dark:bg-teal-900/30"), 1500);
   };
 
   const copyToClipboard = (text) => {
@@ -163,6 +143,21 @@ const ProjectMessagePanel = ({ projectId, currentUser }) => {
   const formatHeading = () => setInput((p) => "## " + p);
   const formatBullet = () => setInput((p) => p + "\n- ");
   const formatNumbered = () => setInput((p) => p + "\n1. ");
+
+  // ── typing indicator ──
+  const sendTypingIndicator = () => {
+    if (!wsConnected) return;
+    sendProjectTyping(projectId, user?.name || "User");
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    typingTimeoutRef.current = setTimeout(() => {
+      stopTypingIndicator();
+    }, 3000);
+  };
+
+  const stopTypingIndicator = () => {
+    if (!wsConnected) return;
+    sendProjectStopTyping(projectId);
+  };
 
   const handleKeyDown = (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -223,11 +218,9 @@ const ProjectMessagePanel = ({ projectId, currentUser }) => {
       );
       const messageData = await resp.json();
 
-      if (wsRef.current?.readyState === WebSocket.OPEN) {
-        wsRef.current.send(
-          JSON.stringify({ type: "project_message", projectId, messageData })
-        );
-      }
+      sendProjectMessage(projectId, messageData);
+      stopTypingIndicator();
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
 
       await fetchMessages();
       setInput("");
@@ -303,24 +296,103 @@ const ProjectMessagePanel = ({ projectId, currentUser }) => {
     prevLengthRef.current = messages.length;
   }, [messages]);
 
-  // WebSocket
+  // Real-time — join this project's room on the shared socket connection
+  // (see WebSocketContext) instead of opening a second connection of its own.
   useEffect(() => {
-    if (!projectId) return;
-    const token = localStorage.getItem("token");
-    const ws = new WebSocket(getWebSocketURL());
-    wsRef.current = ws;
-    ws.onopen = () =>
-      ws.send(JSON.stringify({ type: "authenticate", token }));
-    ws.onmessage = (evt) => {
-      try {
-        const data = JSON.parse(evt.data);
-        if (data.type === "project_message" && data.projectId === projectId) {
-          fetchMessages();
-        }
-      } catch {}
+    if (!projectId) return undefined;
+
+    joinProject(projectId);
+
+    const handleProjectMessage = (event) => {
+      const data = event.detail || {};
+      if (data.projectId === projectId) {
+        fetchMessages();
+      }
     };
-    return () => ws.close();
-  }, [projectId]);
+
+    const handleTyping = (event) => {
+      const data = event.detail || {};
+      if (data.projectId !== projectId || data.userId === user._id) return;
+      setTypingUsers((prev) => {
+        const exists = prev.some((u) => u.userId === data.userId);
+        if (!exists) return [...prev, { userId: data.userId, userName: data.userName }];
+        return prev;
+      });
+      setTimeout(() => {
+        setTypingUsers((prev) => prev.filter((u) => u.userId !== data.userId));
+      }, 3000);
+    };
+
+    const handleStopTyping = (event) => {
+      const data = event.detail || {};
+      if (data.projectId !== projectId) return;
+      setTypingUsers((prev) => prev.filter((u) => u.userId !== data.userId));
+    };
+
+    // Real-time read receipts — fired when anyone (any tab/user) marks a
+    // message read via the intersection observer below, so this message's
+    // checkmark advances to "read" without needing a refetch.
+    const handleMessageRead = (event) => {
+      const data = event.detail || {};
+      if (data.projectId !== projectId) return;
+      setMessages((prevMessages) =>
+        prevMessages.map((msg) =>
+          msg._id === data.messageId ? { ...msg, status: "read" } : msg
+        )
+      );
+    };
+
+    window.addEventListener("project-message", handleProjectMessage);
+    window.addEventListener("project-typing", handleTyping);
+    window.addEventListener("project-stop-typing", handleStopTyping);
+    window.addEventListener("project-message-read", handleMessageRead);
+    return () => {
+      leaveProject(projectId);
+      window.removeEventListener("project-message", handleProjectMessage);
+      window.removeEventListener("project-typing", handleTyping);
+      window.removeEventListener("project-stop-typing", handleStopTyping);
+      window.removeEventListener("project-message-read", handleMessageRead);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId, joinProject, leaveProject, fetchMessages]);
+
+  // Intersection Observer for read receipts — marks each non-own message as
+  // read (POST .../messages/:messageId/read) once it's at least 50% visible,
+  // mirroring ProjectDetailPage.jsx's admin-side behavior exactly.
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach(async (entry) => {
+          if (entry.isIntersecting) {
+            const messageId = entry.target.getAttribute("data-message-id");
+            const messageOwnerId = entry.target.getAttribute("data-owner-id");
+
+            if (messageId && messageOwnerId !== String(user._id)) {
+              try {
+                const token = localStorage.getItem("token");
+                await fetch(
+                  `${API_BASE}/api/projects/${projectId}/messages/${messageId}/read`,
+                  {
+                    method: "POST",
+                    headers: { Authorization: `Bearer ${token}` },
+                  }
+                );
+              } catch (error) {
+                console.error("Error marking message as read:", error);
+              }
+            }
+          }
+        });
+      },
+      { threshold: 0.5 }
+    );
+
+    const messageElements = document.querySelectorAll("[data-message-id]");
+    messageElements.forEach((el) => observer.observe(el));
+
+    return () => observer.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messages, projectId]);
 
   // Close emoji picker on outside click
   useEffect(() => {
@@ -356,38 +428,52 @@ const ProjectMessagePanel = ({ projectId, currentUser }) => {
 
   // ── render ──
   return (
-    <div className="flex flex-col h-full bg-[#0a0e14] text-blue-100">
+    <div className="flex h-full flex-col bg-slate-50 text-slate-900 dark:bg-[#090f14] dark:text-slate-100">
+
+      {/* ── Conversation header ── */}
+      <div className="flex items-center gap-2 border-b border-slate-200 bg-white px-3 py-2 dark:border-white/10 dark:bg-[#0d151c] sm:px-4">
+        <h2 className="truncate text-sm font-medium text-slate-900 dark:text-slate-200">Project conversation</h2>
+        <span className="text-[11px] text-slate-500 dark:text-slate-500">
+          {messages.length} message{messages.length !== 1 ? "s" : ""}
+        </span>
+        {!wsConnected && (
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-rose-50 px-2 py-1 text-[10px] text-rose-700 dark:bg-rose-500/10 dark:text-rose-300">
+            <span className="h-1.5 w-1.5 rounded-full bg-rose-400" />
+            Reconnecting
+          </span>
+        )}
+      </div>
 
       {/* ── Search & Filter panel ── */}
-      <div className="bg-[#0f1419] border-b border-[#1e2a35]">
+      <div className="border-b border-slate-200 bg-white dark:border-white/10 dark:bg-[#0d151c]">
         <div className="flex items-center">
           <button
             onClick={() => setShowFilters(!showFilters)}
-            className="flex-1 px-4 py-2 text-sm text-left text-gray-300 hover:bg-[#141a21] transition flex items-center gap-2"
+            className="flex flex-1 items-center gap-2 px-4 py-2 text-left text-sm text-slate-600 transition hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-white/[0.06]"
           >
-            <Filter className="w-4 h-4" />
+            <Filter className="h-4 w-4" />
             <span>Search & Filters {showFilters ? "▼" : "▶"}</span>
           </button>
           <button
             onClick={handleSummarize}
-            className="px-4 py-2 text-sm text-gray-300 hover:bg-[#141a21] transition flex items-center gap-2 border-l border-[#1e2a35]"
+            className="flex items-center gap-2 border-l border-slate-200 px-4 py-2 text-sm text-slate-600 transition hover:bg-slate-100 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/[0.06]"
             title="AI summary of this conversation"
           >
-            <Sparkles className="w-4 h-4 text-purple-400" />
+            <Sparkles className="h-4 w-4 text-teal-500 dark:text-teal-400" />
             <span>Summarize</span>
           </button>
         </div>
 
         {showFilters && (
-          <div className="p-4 space-y-3 border-t border-[#1e2a35]">
+          <div className="grid grid-cols-1 gap-3 border-t border-slate-200 bg-slate-50 p-3 dark:border-white/10 dark:bg-[#0b1218] sm:grid-cols-2">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               <input
                 type="text"
                 placeholder="Search messages..."
                 value={messageSearchTerm}
                 onChange={(e) => setMessageSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 bg-[#141a21] text-blue-100 rounded border border-[#2a3340] focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                className="app-control w-full py-2 pl-10 pr-4 text-sm"
               />
             </div>
             <input
@@ -395,42 +481,39 @@ const ProjectMessagePanel = ({ projectId, currentUser }) => {
               placeholder="Filter by sender name..."
               value={searchSender}
               onChange={(e) => setSearchSender(e.target.value)}
-              className="w-full px-3 py-2 bg-[#141a21] text-blue-100 rounded border border-[#2a3340] focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+              className="app-control px-4 py-2 text-sm"
+            />
+            <input
+              type="date"
+              value={dateFilter.start}
+              onChange={(e) => setDateFilter((p) => ({ ...p, start: e.target.value }))}
+              className="app-control px-4 py-2 text-sm"
             />
             <div className="flex gap-2">
               <input
                 type="date"
-                value={dateFilter.start}
-                onChange={(e) =>
-                  setDateFilter((p) => ({ ...p, start: e.target.value }))
-                }
-                className="flex-1 px-3 py-2 bg-[#141a21] text-blue-100 rounded border border-[#2a3340] focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-              />
-              <input
-                type="date"
                 value={dateFilter.end}
-                onChange={(e) =>
-                  setDateFilter((p) => ({ ...p, end: e.target.value }))
-                }
-                className="flex-1 px-3 py-2 bg-[#141a21] text-blue-100 rounded border border-[#2a3340] focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                onChange={(e) => setDateFilter((p) => ({ ...p, end: e.target.value }))}
+                className="app-control flex-1 px-4 py-2 text-sm"
               />
+              {(messageSearchTerm || searchSender || dateFilter.start || dateFilter.end) && (
+                <button
+                  onClick={clearFilters}
+                  className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-red-700 transition-colors hover:bg-red-100 dark:border-red-500/30 dark:bg-red-600/20 dark:text-red-400 dark:hover:bg-red-600/40"
+                  title="Clear filters"
+                >
+                  <XCircle className="h-4 w-4" />
+                </button>
+              )}
             </div>
-            {(messageSearchTerm || searchSender || dateFilter.start || dateFilter.end) && (
-              <button
-                onClick={clearFilters}
-                className="w-full px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded text-sm transition flex items-center justify-center gap-2"
-              >
-                <XCircle className="w-4 h-4" /> Clear Filters
-              </button>
-            )}
           </div>
         )}
       </div>
 
       {/* ── Message list ── */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-3 hide-scrollbar">
+      <div className="flex-1 overflow-y-auto bg-slate-50 p-3 dark:bg-[#090f14] sm:px-5 sm:py-4">
         {filteredMessages.length === 0 && (
-          <p className="text-gray-500 text-center text-sm mt-10">
+          <p className="mt-10 text-center text-sm text-slate-500 dark:text-slate-400">
             {messages.length === 0
               ? "No messages yet — be the first!"
               : "No messages match your filters."}
@@ -448,18 +531,20 @@ const ProjectMessagePanel = ({ projectId, currentUser }) => {
 
           return (
             <React.Fragment key={msg._id}>
-              {showDivider && <DateDivider date={msg.createdAt} />}
+              {showDivider && <MessageDateSeparator date={msg.createdAt} />}
 
               <div
                 id={`pmsg-${msg._id}`}
+                data-message-id={msg._id}
+                data-owner-id={msg.sentBy?._id || msg.sentBy}
                 className={`flex w-full transition-colors duration-500 ${
                   own ? "justify-end" : "justify-start"
-                }`}
+                } mb-3`}
               >
-                <div className="flex flex-col max-w-[70%]">
+                <div className="flex max-w-[85%] flex-col sm:max-w-[70%]">
                   {/* Sender name (other side only) */}
                   {!own && (
-                    <p className="text-xs font-semibold text-gray-400 mb-1">
+                    <p className="mb-1 px-1 text-xs text-slate-500 dark:text-gray-400">
                       {senderName}
                       {msg.senderType === "client" && " (Client)"}
                       {msg.senderType === "superadmin" && " (Admin)"}
@@ -467,24 +552,24 @@ const ProjectMessagePanel = ({ projectId, currentUser }) => {
                   )}
 
                   <div
-                    className={`px-3 py-2 rounded-lg ${
+                    className={`relative group w-fit max-w-full overflow-hidden rounded-xl border p-3 shadow-sm transition-colors duration-200 ${
                       own
-                        ? "bg-blue-600 text-white rounded-br-none self-end"
-                        : "bg-[#1a2433] text-blue-100 rounded-bl-none self-start border border-[#1e2a35]"
+                        ? "border-teal-600/20 bg-teal-600 text-white dark:border-teal-400/15 dark:bg-[#075d55]"
+                        : "border-slate-200 bg-white text-slate-900 dark:border-white/10 dark:bg-[#1a242d] dark:text-white"
                     }`}
                   >
                     {/* Reply preview */}
                     {msg.replyTo && (
                       <div
                         onClick={() => scrollToMessage(msg.replyTo._id)}
-                        className="bg-[#0f1419] bg-opacity-80 px-2 py-1 rounded mb-2 text-xs border-l-2 border-blue-400 cursor-pointer hover:bg-opacity-100 transition overflow-hidden"
+                        className="mb-2 cursor-pointer overflow-hidden rounded border-l-2 border-teal-400 bg-black/10 px-2 py-1 text-xs transition hover:bg-black/15 dark:bg-black/20 dark:hover:bg-black/30"
                         style={{ wordBreak: "break-word", overflowWrap: "anywhere" }}
                       >
-                        <p className="text-blue-300 font-semibold truncate">
+                        <p className={`truncate font-semibold ${own ? "text-teal-50" : "text-slate-700 dark:text-blue-300"}`}>
                           {getSenderName(msg.replyTo.sentBy)}
                         </p>
                         <p
-                          className="text-gray-400 italic overflow-hidden"
+                          className={`overflow-hidden italic ${own ? "text-teal-50/80" : "text-slate-500 dark:text-gray-400"}`}
                           style={{
                             display: "-webkit-box",
                             WebkitLineClamp: 2,
@@ -498,39 +583,39 @@ const ProjectMessagePanel = ({ projectId, currentUser }) => {
 
                     {/* Markdown body */}
                     {msg.message && (
-                      <div className="text-sm prose prose-invert prose-sm max-w-none">
+                      <div className={`prose prose-sm max-w-none break-words text-sm leading-relaxed ${own ? "prose-invert text-white" : "prose-slate dark:prose-invert dark:text-white"}`}>
                         <ReactMarkdown
                           remarkPlugins={[remarkGfm]}
                           rehypePlugins={[rehypeRaw]}
                           components={{
                             p: ({ children }) => (
-                              <p className="mb-1 last:mb-0">{children}</p>
+                              <p className="mb-1 whitespace-pre-wrap last:mb-0">{children}</p>
                             ),
                             h1: ({ children }) => (
-                              <h1 className="text-lg font-bold mb-1">{children}</h1>
+                              <h1 className="mb-1 text-lg font-bold">{children}</h1>
                             ),
                             h2: ({ children }) => (
-                              <h2 className="text-base font-bold mb-1">{children}</h2>
+                              <h2 className="mb-1 text-base font-bold">{children}</h2>
                             ),
                             h3: ({ children }) => (
-                              <h3 className="text-sm font-bold mb-1">{children}</h3>
+                              <h3 className="mb-1 text-sm font-bold">{children}</h3>
                             ),
                             ul: ({ children }) => (
-                              <ul className="list-disc list-inside mb-1">{children}</ul>
+                              <ul className="mb-1 list-inside list-disc">{children}</ul>
                             ),
                             ol: ({ children }) => (
-                              <ol className="list-decimal list-inside mb-1">{children}</ol>
+                              <ol className="mb-1 list-inside list-decimal">{children}</ol>
                             ),
                             li: ({ children }) => (
                               <li className="ml-2">{children}</li>
                             ),
                             code: ({ inline, children }) =>
                               inline ? (
-                                <code className="bg-[#0f1419] px-1 rounded text-xs">
+                                <code className="rounded bg-black/10 px-1 text-xs dark:bg-black/30">
                                   {children}
                                 </code>
                               ) : (
-                                <code className="block bg-[#0f1419] p-2 rounded text-xs overflow-x-auto">
+                                <code className="block overflow-x-auto rounded bg-black/10 p-2 text-xs dark:bg-black/30">
                                   {children}
                                 </code>
                               ),
@@ -545,7 +630,7 @@ const ProjectMessagePanel = ({ projectId, currentUser }) => {
                                 href={href}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="text-blue-400 underline hover:text-blue-300"
+                                className={`underline ${own ? "text-teal-50 hover:text-white" : "text-blue-600 hover:text-blue-700 dark:text-blue-300 dark:hover:text-blue-200"}`}
                               >
                                 {children}
                               </a>
@@ -574,13 +659,13 @@ const ProjectMessagePanel = ({ projectId, currentUser }) => {
                             <div key={ai}>
                               {/* Non-media file */}
                               {!isMedia && (
-                                <div className="flex items-center gap-2 p-2 bg-[#0a0e14]/60 rounded border border-[#1e2a35]">
+                                <div className="flex items-center gap-2 rounded bg-black/10 p-2 dark:bg-black/20">
                                   {getFileIcon(att.fileType)}
-                                  <div className="flex-1 min-w-0">
-                                    <div className="text-xs text-white truncate">
+                                  <div className="min-w-0 flex-1">
+                                    <div className={`truncate text-xs ${own ? "text-white" : "text-slate-900 dark:text-white"}`}>
                                       {att.filename}
                                     </div>
-                                    <div className="text-xs text-gray-400">
+                                    <div className={`text-xs ${own ? "text-teal-50/75" : "text-slate-500 dark:text-gray-400"}`}>
                                       {att.size
                                         ? `${(att.size / 1024).toFixed(1)} KB`
                                         : ""}
@@ -606,10 +691,10 @@ const ProjectMessagePanel = ({ projectId, currentUser }) => {
                                       a.click();
                                       window.URL.revokeObjectURL(url);
                                     }}
-                                    className="p-1 hover:bg-white/10 rounded"
+                                    className="rounded p-1 hover:bg-black/10 dark:hover:bg-white/10"
                                     title="Download"
                                   >
-                                    <Download className="w-4 h-4 text-gray-300" />
+                                    <Download className={`h-4 w-4 ${own ? "text-teal-50/80" : "text-slate-500 dark:text-gray-300"}`} />
                                   </button>
                                 </div>
                               )}
@@ -620,7 +705,7 @@ const ProjectMessagePanel = ({ projectId, currentUser }) => {
                                   <img
                                     src={attUrl}
                                     alt={att.filename}
-                                    className="w-48 h-48 object-cover rounded cursor-pointer hover:opacity-90 transition-opacity"
+                                    className="h-48 w-48 cursor-pointer rounded object-cover transition-opacity hover:opacity-90"
                                     onClick={() => {
                                       setLightboxAllMedia(mediaAtts);
                                       setLightboxIndex(mediaAtts.indexOf(att));
@@ -635,16 +720,16 @@ const ProjectMessagePanel = ({ projectId, currentUser }) => {
                                 <div className="relative">
                                   <video
                                     src={attUrl}
-                                    className="w-48 h-48 object-cover rounded cursor-pointer"
+                                    className="h-48 w-48 cursor-pointer rounded object-cover"
                                     onClick={() => {
                                       setLightboxAllMedia(mediaAtts);
                                       setLightboxIndex(mediaAtts.indexOf(att));
                                       setLightboxMedia(att);
                                     }}
                                   />
-                                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                                    <div className="bg-black/50 rounded-full p-3">
-                                      <Video className="w-6 h-6 text-white" />
+                                  <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                                    <div className="rounded-full bg-black/50 p-3">
+                                      <Video className="h-6 w-6 text-white" />
                                     </div>
                                   </div>
                                 </div>
@@ -657,7 +742,7 @@ const ProjectMessagePanel = ({ projectId, currentUser }) => {
 
                     {/* Emoji reactions */}
                     {msg.reactions?.length > 0 && (
-                      <div className="flex flex-wrap gap-1 mt-2">
+                      <div className="mt-2 flex flex-wrap gap-1">
                         {msg.reactions.map((reaction, ri) => {
                           const reacted = reaction.users?.includes(
                             String(user._id)
@@ -668,14 +753,14 @@ const ProjectMessagePanel = ({ projectId, currentUser }) => {
                               onClick={() =>
                                 handleReaction(msg._id, reaction.emoji)
                               }
-                              className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs transition-all ${
+                              className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-xs transition-all ${
                                 reacted
-                                  ? "bg-blue-500/30 border border-blue-400"
-                                  : "bg-[#141a21]/80 hover:bg-[#1e2a35]"
+                                  ? "border border-blue-300 bg-blue-100 text-blue-700 dark:border-blue-400 dark:bg-blue-500/30 dark:text-white"
+                                  : "bg-black/10 hover:bg-black/15 dark:bg-black/20 dark:hover:bg-black/30"
                               }`}
                             >
                               <span>{reaction.emoji}</span>
-                              <span className="text-gray-300 text-[10px]">
+                              <span className={`text-[10px] ${own ? "text-teal-50/80" : "text-slate-500 dark:text-gray-300"}`}>
                                 {reaction.users?.length || 0}
                               </span>
                             </button>
@@ -685,30 +770,33 @@ const ProjectMessagePanel = ({ projectId, currentUser }) => {
                     )}
 
                     {/* Timestamp + action buttons */}
-                    <div className="flex items-center justify-between mt-1">
-                      <span className="text-[10px] text-gray-400">
-                        {new Date(msg.createdAt).toLocaleTimeString([], {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </span>
-                      <div className="flex items-center gap-1 relative">
+                    <div className="mt-1 flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2">
+                        <span className={`text-[10px] ${own ? "text-teal-50/80" : "text-slate-500 dark:text-gray-400"}`}>
+                          {new Date(msg.createdAt).toLocaleTimeString([], {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </span>
+                        {own && <MessageStatus status={msg.status || "sent"} />}
+                      </div>
+                      <div className="relative flex items-center gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
                         <button
                           onClick={() => setReplyingTo(msg)}
-                          className="p-1 rounded hover:bg-white/10 transition-colors"
+                          className="rounded-md p-1 transition-colors hover:bg-black/10 dark:hover:bg-white/10"
                           title="Reply"
                         >
-                          <ReplyIcon className="w-3 h-3 text-gray-400 hover:text-purple-400" />
+                          <ReplyIcon className={`h-3.5 w-3.5 ${own ? "text-teal-50/80 hover:text-white" : "text-slate-400 hover:text-teal-600 dark:text-gray-400 dark:hover:text-[#00a884]"}`} />
                         </button>
                         <button
                           onClick={() => copyToClipboard(msg.message)}
-                          className="p-1 rounded hover:bg-white/10 transition-colors"
+                          className="rounded-md p-1 transition-colors hover:bg-black/10 dark:hover:bg-white/10"
                           title="Copy"
                         >
                           {copiedText === msg.message ? (
-                            <Check className="w-3 h-3 text-green-400" />
+                            <Check className="h-3.5 w-3.5 text-green-400" />
                           ) : (
-                            <Copy className="w-3 h-3 text-gray-400 hover:text-blue-400" />
+                            <Copy className={`h-3.5 w-3.5 ${own ? "text-teal-50/80 hover:text-white" : "text-slate-400 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400"}`} />
                           )}
                         </button>
                         <button
@@ -717,10 +805,10 @@ const ProjectMessagePanel = ({ projectId, currentUser }) => {
                               showEmojiPicker === msg._id ? null : msg._id
                             )
                           }
-                          className="p-1 rounded hover:bg-white/10 transition-colors"
+                          className="rounded-md p-1 transition-colors hover:bg-black/10 dark:hover:bg-white/10"
                           title="React"
                         >
-                          <Smile className="w-3 h-3 text-gray-400 hover:text-yellow-400" />
+                          <Smile className={`h-3.5 w-3.5 ${own ? "text-teal-50/80 hover:text-white" : "text-slate-400 hover:text-yellow-500 dark:text-gray-400 dark:hover:text-yellow-400"}`} />
                         </button>
 
                         {/* Emoji picker popup */}
@@ -729,22 +817,20 @@ const ProjectMessagePanel = ({ projectId, currentUser }) => {
                             ref={emojiPickerRef}
                             className={`absolute ${
                               own ? "right-0" : "left-0"
-                            } bottom-full mb-1 p-2 bg-[#0f1419] border border-[#2a3340] rounded-lg shadow-xl z-50`}
+                            } bottom-full z-50 mb-1 flex gap-1 rounded-lg border border-slate-200 bg-white p-2 shadow-2xl shadow-slate-900/15 dark:border-[#232945] dark:bg-[#1a2332]`}
                           >
-                            <div className="flex gap-1">
-                              {commonEmojis.map((emoji, ei) => (
-                                <button
-                                  key={ei}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleReaction(msg._id, emoji);
-                                  }}
-                                  className="p-1 hover:bg-[#1e2a35] rounded text-lg transition-transform hover:scale-125"
-                                >
-                                  {emoji}
-                                </button>
-                              ))}
-                            </div>
+                            {commonEmojis.map((emoji, ei) => (
+                              <button
+                                key={ei}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleReaction(msg._id, emoji);
+                                }}
+                                className="rounded p-1.5 text-lg transition-transform hover:scale-125 hover:bg-slate-100 dark:hover:bg-white/10"
+                              >
+                                {emoji}
+                              </button>
+                            ))}
                           </div>
                         )}
                       </div>
@@ -759,18 +845,21 @@ const ProjectMessagePanel = ({ projectId, currentUser }) => {
         <div ref={chatEndRef} />
       </div>
 
+      {/* ── Typing indicator ── */}
+      <TypingIndicator typingUsers={typingUsers} />
+
       {/* ── Reply preview bar ── */}
       {replyingTo && (
-        <div className="bg-[#0f1419] border-t border-[#1e2a35] px-4 py-2 flex justify-between items-start gap-2 overflow-hidden">
-          <div className="text-sm text-gray-300 flex-1 min-w-0">
-            <div className="flex items-center gap-2 text-sm text-blue-400 mb-1">
-              <ReplyIcon className="w-3 h-3 flex-shrink-0" />
-              <span className="font-medium truncate">
+        <div className="flex items-start justify-between gap-2 overflow-hidden border-t border-teal-200 bg-teal-50 px-4 py-2 dark:border-teal-400/20 dark:bg-teal-500/10">
+          <div className="min-w-0 flex-1 text-sm text-slate-700 dark:text-gray-300">
+            <div className="mb-1 flex items-center gap-2 text-sm text-teal-700 dark:text-teal-300">
+              <ReplyIcon className="h-3 w-3 flex-shrink-0" />
+              <span className="truncate font-medium">
                 Replying to {getSenderName(replyingTo.sentBy)}
               </span>
             </div>
             <div
-              className="text-xs text-gray-400 overflow-hidden"
+              className="overflow-hidden text-xs text-slate-500 dark:text-gray-400"
               style={{
                 display: "-webkit-box",
                 WebkitLineClamp: 2,
@@ -784,34 +873,34 @@ const ProjectMessagePanel = ({ projectId, currentUser }) => {
           </div>
           <button
             onClick={() => setReplyingTo(null)}
-            className="p-1 hover:bg-white/10 rounded flex-shrink-0"
+            className="flex-shrink-0 rounded p-1 hover:bg-black/5 dark:hover:bg-white/10"
           >
-            <XCircle className="w-4 h-4 text-gray-400" />
+            <XCircle className="h-4 w-4 text-slate-400" />
           </button>
         </div>
       )}
 
       {/* ── File preview chips ── */}
       {selectedFiles.length > 0 && (
-        <div className="bg-[#0f1419] border-t border-[#1e2a35] px-4 py-2">
-          <p className="text-xs text-gray-400 mb-2">
+        <div className="border-t border-slate-200 bg-white px-4 py-2 dark:border-white/10 dark:bg-[#0d151c]">
+          <p className="mb-2 text-xs text-slate-500 dark:text-gray-400">
             Selected files ({selectedFiles.length}/5):
           </p>
           <div className="flex flex-wrap gap-2">
             {selectedFiles.map((file, idx) => (
               <div
                 key={idx}
-                className="flex items-center gap-2 bg-[#141a21] border border-[#2a3340] px-3 py-1 rounded text-xs"
+                className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 dark:border-white/10 dark:bg-white/[0.04]"
               >
-                <FileIcon className="w-4 h-4 text-gray-400" />
-                <span className="text-gray-300 truncate max-w-[150px]">
+                <FileIcon className="h-4 w-4 text-slate-500 dark:text-gray-300" />
+                <span className="max-w-[150px] truncate text-xs text-slate-700 dark:text-gray-300">
                   {file.name}
                 </span>
                 <button
                   onClick={() => removeFile(idx)}
-                  className="p-1 hover:bg-white/10 rounded"
+                  className="rounded p-1 hover:bg-slate-100 dark:hover:bg-white/10"
                 >
-                  <XCircle className="w-3 h-3 text-gray-400" />
+                  <XCircle className="h-3 w-3 text-slate-400" />
                 </button>
               </div>
             ))}
@@ -821,7 +910,7 @@ const ProjectMessagePanel = ({ projectId, currentUser }) => {
 
       {/* ── Formatting toolbar ── */}
       {showFormatting && (
-        <div className="bg-[#0f1419] border-t border-[#1e2a35] px-4 py-2">
+        <div className="border-t border-slate-200 bg-slate-50 px-4 py-3 dark:border-white/10 dark:bg-[#101820]">
           <div className="flex flex-wrap gap-2">
             {[
               ["B", formatBold, "Bold (Ctrl+B)", "font-bold"],
@@ -834,23 +923,21 @@ const ProjectMessagePanel = ({ projectId, currentUser }) => {
             ].map(([label, fn, title, extra]) => (
               <button
                 key={label}
+                type="button"
                 onClick={fn}
                 title={title}
-                className={`px-3 py-1.5 bg-[#141a21] hover:bg-[#1e2a35] rounded text-xs transition-colors ${extra}`}
+                className={`rounded border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-700 transition-colors hover:bg-slate-100 dark:border-white/10 dark:bg-[#232945] dark:text-white dark:hover:bg-[#2a3142] ${extra}`}
               >
                 {label}
               </button>
             ))}
           </div>
-          <p className="mt-2 text-xs text-gray-500">
-            **bold** *italic* ~~strike~~ `code` ## heading - list 1. list
-          </p>
         </div>
       )}
 
       {/* ── Input area ── */}
-      <div className="sticky bottom-0 bg-[#0f1419] border-t border-[#1e2a35]">
-        <div className="flex items-start gap-2 p-2">
+      <div className="border-t border-slate-200 bg-white p-2 dark:border-white/10 dark:bg-[#0d151c] sm:px-3">
+        <div className="flex items-center gap-2">
           <input
             type="file"
             ref={fileInputRef}
@@ -859,41 +946,66 @@ const ProjectMessagePanel = ({ projectId, currentUser }) => {
             accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.txt"
             className="hidden"
           />
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            className="px-3 py-2 bg-[#141a21] hover:bg-[#1e2a35] border border-[#2a3340] text-gray-300 rounded transition flex-shrink-0"
-            title="Attach files"
-          >
-            <Paperclip className="w-5 h-5" />
-          </button>
-          <button
-            onClick={() => setShowFormatting(!showFormatting)}
-            className="px-3 py-2 bg-[#141a21] hover:bg-[#1e2a35] border border-[#2a3340] text-gray-300 rounded transition flex-shrink-0"
-            title="Text formatting"
-          >
-            <Type className="w-5 h-5" />
-          </button>
+
+          <div className="relative flex-shrink-0">
+            <button
+              type="button"
+              onClick={() => setShowComposerTools((v) => !v)}
+              className={`flex h-11 w-11 items-center justify-center rounded-lg border transition ${
+                showComposerTools
+                  ? "border-teal-300 bg-teal-50 text-teal-700 dark:border-teal-400/30 dark:bg-teal-500/10 dark:text-teal-300"
+                  : "border-slate-200 bg-slate-50 text-slate-500 hover:bg-slate-100 hover:text-slate-950 dark:border-white/10 dark:bg-white/[0.035] dark:text-slate-400 dark:hover:bg-white/[0.065] dark:hover:text-white"
+              }`}
+              aria-label="Add attachment or formatting"
+            >
+              <Plus className={`h-4 w-4 transition-transform ${showComposerTools ? "rotate-45" : ""}`} />
+            </button>
+
+            {showComposerTools && (
+              <div className="absolute bottom-[calc(100%+0.5rem)] left-0 z-50 w-44 rounded-xl border border-slate-200 bg-white p-1.5 shadow-2xl shadow-slate-900/15 dark:border-white/10 dark:bg-[#131c24] dark:shadow-black/40">
+                <button
+                  type="button"
+                  onClick={() => { fileInputRef.current?.click(); setShowComposerTools(false); }}
+                  className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-slate-600 transition hover:bg-slate-100 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-white/5 dark:hover:text-white"
+                >
+                  <Paperclip className="h-4 w-4 text-sky-400" />
+                  Attach files
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setShowFormatting((v) => !v); setShowComposerTools(false); }}
+                  className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-slate-600 transition hover:bg-slate-100 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-white/5 dark:hover:text-white"
+                >
+                  <Type className="h-4 w-4 text-teal-400" />
+                  Formatting
+                </button>
+              </div>
+            )}
+          </div>
+
           <textarea
             ref={textareaRef}
             value={input}
-            onChange={(e) => setInput(e.target.value)}
+            onChange={(e) => {
+              setInput(e.target.value);
+              if (e.target.value.length > 0) sendTypingIndicator();
+              else stopTypingIndicator();
+            }}
             onKeyDown={handleKeyDown}
-            placeholder="Type a message... (Enter to send, Shift+Enter for new line)"
-            rows={2}
-            className="flex-1 bg-[#141a21] text-blue-100 border border-[#2a3340] rounded px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-gray-500"
+            placeholder="Write a message..."
+            rows={1}
+            className="h-11 flex-1 resize-none rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 placeholder-slate-400 outline-none transition focus:border-teal-400/50 focus:ring-2 focus:ring-teal-500/15 dark:border-white/10 dark:bg-[#101820] dark:text-white dark:placeholder-slate-500"
           />
+
           <button
             onClick={handleSend}
             disabled={!input.trim() && selectedFiles.length === 0}
-            className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-medium shadow-md hover:shadow-lg transition flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            className="flex h-11 flex-shrink-0 items-center gap-2 rounded-lg bg-teal-600 px-3 text-white shadow-lg shadow-teal-950/20 transition hover:bg-teal-500 disabled:cursor-not-allowed disabled:opacity-40 sm:px-4"
           >
-            <Send className="w-4 h-4" />
-            <span>Send</span>
+            <Send className="h-4 w-4" />
+            <span className="hidden text-sm sm:inline">Send</span>
           </button>
         </div>
-        <p className="text-xs text-gray-600 px-2 pb-2">
-          Max 5 files · **bold** *italic* `code` ## heading
-        </p>
       </div>
 
       {/* ── Media lightbox ── */}
@@ -913,37 +1025,36 @@ const ProjectMessagePanel = ({ projectId, currentUser }) => {
       {/* ── AI Summary modal ── */}
       {showSummaryModal && (
         <div
-          className="fixed inset-0 bg-black/75 flex items-center justify-center p-4"
-          style={{ zIndex: 9999 }}
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm"
           onClick={() => setShowSummaryModal(false)}
         >
           <div
-            className="bg-[#0f1419] rounded-xl shadow-2xl max-w-3xl w-full max-h-[80vh] flex flex-col border border-[#232945]"
+            className="flex max-h-[80vh] w-full max-w-3xl flex-col rounded-xl border border-slate-200 bg-white shadow-2xl dark:border-[#232945] dark:bg-[#0f1419]"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
-            <div className="flex items-center justify-between p-4 border-b border-[#1e2a35]">
+            <div className="flex items-center justify-between border-b border-slate-200 p-4 dark:border-[#1e2a35]">
               <div className="flex items-center gap-3">
-                <Sparkles className="w-5 h-5 text-purple-400" />
-                <h2 className="text-xl font-semibold text-white">
+                <Sparkles className="h-5 w-5 text-teal-500 dark:text-teal-400" />
+                <h2 className="text-xl font-semibold text-slate-950 dark:text-white">
                   AI Conversation Summary
                 </h2>
               </div>
               <button
                 onClick={() => setShowSummaryModal(false)}
-                className="p-2 hover:bg-[#141a21] rounded-lg transition"
+                className="rounded-lg p-2 transition hover:bg-slate-100 dark:hover:bg-[#141a21]"
               >
-                <XCircle className="w-5 h-5 text-gray-400" />
+                <XCircle className="h-5 w-5 text-slate-400" />
               </button>
             </div>
 
             {/* Days selector */}
-            <div className="px-4 py-3 border-b border-[#1e2a35] bg-[#0a0e14]/50 flex items-center gap-3">
-              <label className="text-sm text-gray-400">Time period:</label>
+            <div className="flex items-center gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3 dark:border-[#1e2a35] dark:bg-[#0a0e14]/50">
+              <label className="text-sm text-slate-500 dark:text-gray-400">Time period:</label>
               <select
                 value={summaryDays}
                 onChange={(e) => setSummaryDays(Number(e.target.value))}
-                className="px-3 py-1.5 bg-[#141a21] text-blue-100 rounded border border-[#2a3340] focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm"
+                className="rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500/20 dark:border-[#2a3340] dark:bg-[#141a21] dark:text-blue-100"
               >
                 <option value={1}>Last 24 hours</option>
                 <option value={3}>Last 3 days</option>
@@ -954,27 +1065,27 @@ const ProjectMessagePanel = ({ projectId, currentUser }) => {
               <button
                 onClick={handleSummarize}
                 disabled={summaryLoading}
-                className="px-4 py-1.5 bg-purple-600 hover:bg-purple-500 text-white rounded text-sm transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                className="flex items-center gap-2 rounded bg-teal-600 px-4 py-1.5 text-sm text-white transition hover:bg-teal-500 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <Sparkles className="w-4 h-4" />
+                <Sparkles className="h-4 w-4" />
                 {summaryLoading ? "Generating..." : "Regenerate"}
               </button>
             </div>
 
             {/* Body */}
-            <div className="flex-1 overflow-y-auto p-6 bg-[#0a0e14]/30">
+            <div className="flex-1 overflow-y-auto bg-slate-50/50 p-6 dark:bg-[#0a0e14]/30">
               {summaryLoading ? (
-                <div className="flex flex-col items-center justify-center h-full gap-4">
+                <div className="flex h-full flex-col items-center justify-center gap-4">
                   <div className="relative">
-                    <div className="w-16 h-16 border-4 border-purple-500/30 border-t-purple-500 rounded-full animate-spin" />
-                    <Sparkles className="w-6 h-6 text-purple-400 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
+                    <div className="h-16 w-16 animate-spin rounded-full border-4 border-teal-500/30 border-t-teal-500" />
+                    <Sparkles className="absolute left-1/2 top-1/2 h-6 w-6 -translate-x-1/2 -translate-y-1/2 text-teal-400" />
                   </div>
-                  <p className="text-gray-400 text-sm">
+                  <p className="text-sm text-slate-500 dark:text-gray-400">
                     Analysing conversation with AI...
                   </p>
                 </div>
               ) : (
-                <div className="prose prose-invert prose-sm max-w-none">
+                <div className="prose prose-sm prose-slate max-w-none dark:prose-invert">
                   <ReactMarkdown remarkPlugins={[remarkGfm]}>
                     {summary}
                   </ReactMarkdown>
@@ -983,23 +1094,23 @@ const ProjectMessagePanel = ({ projectId, currentUser }) => {
             </div>
 
             {/* Footer */}
-            <div className="p-4 border-t border-[#1e2a35] flex justify-between items-center bg-[#0a0e14]/50">
-              <span className="text-xs text-gray-500">
+            <div className="flex items-center justify-between border-t border-slate-200 bg-slate-50 p-4 dark:border-[#1e2a35] dark:bg-[#0a0e14]/50">
+              <span className="text-xs text-slate-500 dark:text-gray-500">
                 Powered by AI · Last {summaryDays} day
                 {summaryDays !== 1 ? "s" : ""}
               </span>
               <button
                 onClick={() => copyToClipboard(summary)}
                 disabled={!summary || summaryLoading}
-                className="px-4 py-2 bg-[#141a21] hover:bg-[#1e2a35] border border-[#2a3340] text-gray-200 rounded transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 text-sm"
+                className="flex items-center gap-2 rounded border border-slate-200 bg-white px-4 py-2 text-sm text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-[#2a3340] dark:bg-[#141a21] dark:text-gray-200 dark:hover:bg-[#1e2a35]"
               >
                 {copiedText === summary ? (
                   <>
-                    <Check className="w-4 h-4" /> Copied!
+                    <Check className="h-4 w-4" /> Copied!
                   </>
                 ) : (
                   <>
-                    <Copy className="w-4 h-4" /> Copy Summary
+                    <Copy className="h-4 w-4" /> Copy Summary
                   </>
                 )}
               </button>

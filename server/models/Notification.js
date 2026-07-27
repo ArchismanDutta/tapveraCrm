@@ -13,7 +13,7 @@ const notificationSchema = new mongoose.Schema(
     // Notification Content
     type: {
       type: String,
-      enum: ["task", "chat", "payslip", "leave", "attendance", "system", "achievement"],
+      enum: ["task", "chat", "payslip", "leave", "attendance", "system", "achievement", "wish"],
       required: true,
       index: true,
     },

@@ -132,49 +132,15 @@ const ChatPage = ({ onLogout }) => {
     return () => window.removeEventListener("chat-unread-map", onMap);
   }, []);
 
-  // Track new live messages for unread counts
-  useEffect(() => {
-    // Only proceed if we have allMessages (from updated WebSocket hook)
-    if (allMessages && allMessages.length > 0) {
-      // Get the latest message
-      const latestMessage = allMessages[allMessages.length - 1];
-      const messageFromCurrentUser =
-        String(latestMessage.senderId || latestMessage.sender?._id) ===
-        String(currentUserId);
-      const isSelectedConversation =
-        selectedConversation?._id === latestMessage.conversationId;
-
-      // Don't count messages from current user or messages in currently selected conversation
-      if (!messageFromCurrentUser && !isSelectedConversation) {
-        setUnreadMessages((prev) => ({
-          ...prev,
-          [latestMessage.conversationId]:
-            (prev[latestMessage.conversationId] || 0) + 1,
-        }));
-      }
-
-    } else if (liveMessages && liveMessages.length > 0) {
-      // Fallback: use liveMessages for basic unread tracking if allMessages isn't available
-      const latestMessage = liveMessages[liveMessages.length - 1];
-      const messageFromCurrentUser =
-        String(latestMessage.senderId || latestMessage.sender?._id) ===
-        String(currentUserId);
-
-      // For messages in non-selected conversations, increment unread count
-      if (
-        !messageFromCurrentUser &&
-        latestMessage.conversationId &&
-        latestMessage.conversationId !== selectedConversation?._id
-      ) {
-        setUnreadMessages((prev) => ({
-          ...prev,
-          [latestMessage.conversationId]:
-            (prev[latestMessage.conversationId] || 0) + 1,
-        }));
-      }
-
-    }
-  }, [allMessages, liveMessages, selectedConversation, currentUserId]);
+  // NOTE: Unread counts are incremented exactly once, inside
+  // WebSocketContext.jsx's chat:message socket handler (it owns
+  // sessionStorage's chat_unread_map and dispatches "chat-unread-map" /
+  // "chat-unread-total", which the listener above adopts via
+  // setUnreadMessages(incoming)). A second effect used to duplicate that
+  // same increment here by separately watching allMessages/liveMessages,
+  // which caused every incoming message to count twice against the badge.
+  // Removed — this component only needs to react to the map events plus
+  // clear counts locally when a conversation is opened/deleted (below).
 
   // Broadcast total unread count for sidebar badge
   useEffect(() => {
@@ -322,6 +288,21 @@ const ChatPage = ({ onLogout }) => {
     window.dispatchEvent(
       new CustomEvent("chat-active-conversation", { detail: { conversationId: conv._id } })
     );
+
+    // Persist read status server-side too — this used to only happen on the
+    // notification-navigation path (and that call 404'd since the route
+    // didn't exist). This is the actual common case: a user opening a
+    // conversation from the list.
+    if (jwtToken) {
+      fetch(`${API_BASE}/api/chat/${conv._id}/mark-read`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${jwtToken}`,
+        },
+        body: JSON.stringify({ userId: currentUserId }),
+      }).catch((err) => console.error("Failed to mark messages as read:", err));
+    }
   };
 
   // Get unread count for a conversation

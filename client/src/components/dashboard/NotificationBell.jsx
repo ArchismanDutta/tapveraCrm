@@ -1,79 +1,45 @@
 import React, { useEffect, useRef, useState, useCallback } from "react";
+import { useDispatch, useSelector } from "react-redux";
 import { Bell, Volume2, VolumeX } from "lucide-react";
 import notiSound from "../../assets/notisound.wav";
 import NotificationDropdown from "../notifications/NotificationDropdown";
-
-const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
+import { fetchUnreadCount, selectUnreadCount } from "../../store/slices/notificationSlice";
 
 const NotificationBell = () => {
+  const dispatch = useDispatch();
+  const unreadCount = useSelector(selectUnreadCount);
   const [open, setOpen] = useState(false);
   const [isRinging, setIsRinging] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [audioUnlocked, setAudioUnlocked] = useState(false);
-  const [unreadCount, setUnreadCount] = useState(0);
   const audioRef = useRef(null);
   const prevUnreadCount = useRef(0);
 
-  // Fetch unread count
-  const fetchUnreadCount = async () => {
-    try {
-      const token = localStorage.getItem("token");
-      if (!token) return;
-
-      const response = await fetch(`${API_BASE}/api/notifications/unread-count`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) return;
-
-      const data = await response.json();
-      setUnreadCount(data.count || 0);
-    } catch (error) {
-      console.error("Error fetching unread count:", error);
-    }
-  };
-
-  // Initial fetch and periodic refresh
+  // Initial load — the Redux store (fed by WebSocketContext's
+  // `notification:new` handler in real time) is the single source of truth
+  // for the unread count from here on; no more independent polling.
   useEffect(() => {
-    fetchUnreadCount();
-    const interval = setInterval(fetchUnreadCount, 30000); // Refresh every 30s
-    return () => clearInterval(interval);
-  }, []);
+    dispatch(fetchUnreadCount());
+  }, [dispatch]);
 
-  // Listen for notification read events
+  // Listen for notification read events (dispatched by the dropdown /
+  // notification centre) to reconcile the count with the server.
   useEffect(() => {
-    const handleNotificationRead = (e) => {
-      // Immediately decrement the local count for instant feedback
-      if (e.detail?.notificationId) {
-        setUnreadCount((prev) => Math.max(0, prev - 1));
-      } else if (e.detail?.markAllRead) {
-        setUnreadCount(0);
-      }
-
-      // Then fetch the actual count from server to ensure accuracy
-      setTimeout(() => {
-        fetchUnreadCount();
-      }, 200);
+    const handleNotificationRead = () => {
+      setTimeout(() => dispatch(fetchUnreadCount()), 200);
     };
 
     window.addEventListener("notification-read", handleNotificationRead);
     return () => window.removeEventListener("notification-read", handleNotificationRead);
-  }, []);
+  }, [dispatch]);
 
-  // Listen for new WebSocket notifications
+  // Ring + sound on new real-time notifications. The Redux store already
+  // updates the count itself (via WebSocketContext -> receiveRealtime), so
+  // this only owns the bell animation/sound side effect.
   useEffect(() => {
     const handleWsNotification = (e) => {
       const data = e.detail;
       if (data && data.type === "notification") {
-        // Don't double-count chat — chat unread badge is tracked separately
-        // via the chat-unread-total event / sessionStorage in WebSocketContext
-        if ((data.channel || "").toLowerCase() !== "chat") {
-          setUnreadCount((prev) => prev + 1);
-        }
-
-        // Ring bell and play sound for all notification types
         setIsRinging(true);
         if (soundEnabled && audioUnlocked && audioRef.current) {
           audioRef.current.currentTime = 0;

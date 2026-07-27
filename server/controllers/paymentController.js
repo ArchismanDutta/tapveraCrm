@@ -203,6 +203,13 @@ exports.activatePayment = async (req, res) => {
       { path: "activatedBy", select: "name email employeeId" },
     ]);
 
+    try {
+      const { broadcastPaymentUpdated } = require("../utils/websocket");
+      broadcastPaymentUpdated(employeeId, { action: "activated", paymentId: payment._id });
+    } catch (wsError) {
+      console.warn("WebSocket broadcast failed (payment activated):", wsError.message);
+    }
+
     res.status(201).json({
       success: true,
       message: "Payment QR code activated successfully",
@@ -316,6 +323,13 @@ exports.approvePayment = async (req, res) => {
       { path: "approvedBy", select: "name email employeeId" },
     ]);
 
+    try {
+      const { broadcastPaymentUpdated } = require("../utils/websocket");
+      broadcastPaymentUpdated(payment.employee._id, { action: "approved", paymentId: payment._id });
+    } catch (wsError) {
+      console.warn("WebSocket broadcast failed (payment approved):", wsError.message);
+    }
+
     res.status(200).json({
       success: true,
       message: "Payment approved successfully",
@@ -368,6 +382,13 @@ exports.rejectPayment = async (req, res) => {
       { path: "approvedBy", select: "name email employeeId" },
     ]);
 
+    try {
+      const { broadcastPaymentUpdated } = require("../utils/websocket");
+      broadcastPaymentUpdated(payment.employee._id, { action: "rejected", paymentId: payment._id });
+    } catch (wsError) {
+      console.warn("WebSocket broadcast failed (payment rejected):", wsError.message);
+    }
+
     res.status(200).json({
       success: true,
       message: "Payment rejected successfully",
@@ -411,6 +432,13 @@ exports.cancelPayment = async (req, res) => {
 
     // Cancel the payment
     await payment.cancel(notes);
+
+    try {
+      const { broadcastPaymentUpdated } = require("../utils/websocket");
+      broadcastPaymentUpdated(payment.employee, { action: "cancelled", paymentId: payment._id });
+    } catch (wsError) {
+      console.warn("WebSocket broadcast failed (payment cancelled):", wsError.message);
+    }
 
     res.status(200).json({
       success: true,
