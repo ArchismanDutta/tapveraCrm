@@ -94,12 +94,35 @@ const userSchema = new mongoose.Schema(
       min: 0,
       max: 100
     },
+
+    // ====== ROLE & DEPARTMENT HIERARCHY REVAMP v2 (2026-07-27) ======
+    // Additive — see docs/superpowers/specs/2026-07-27-role-hierarchy-revamp-design.md
+    // Rare, explicit per-user exceptions layered on top of the resolved
+    // Position's permissions in accessControl.js's evaluate(). Keys are
+    // Position.permissions flag names (e.g. "canApproveLeaves"); an entry
+    // here wins over the Position default when present. Subject to the same
+    // ceiling rule as everything else in the delegated-access system — see
+    // canManageAccessFor(). Kept intentionally small: the Access Overview
+    // tab flags any user with a non-empty map so it can't silently sprawl
+    // into unaudited one-offs — if overrides become the common case for a
+    // role, that's a signal to make it a real Position instead.
+    permissionOverrides: {
+      type: Map,
+      of: Boolean,
+      default: () => new Map()
+    },
+
     jobLevel: { type: String, enum: ["intern", "junior", "mid", "senior", "lead", "director", "executive"], default: "junior" },
     employmentType: { type: String, enum: ["full-time", "part-time", "contract", "internship"], default: "full-time" },
     skills: [{ type: String, trim: true }],
     qualifications: [qualificationSchema],
     outlookEmail: { type: String, lowercase: true, trim: true },
     outlookAppPassword: { type: String, trim: true },
+
+    // ====== CRM CREDENTIALS (Super-Admin Access Only) ======
+    crmUsername: { type: String, trim: true, default: "" },
+    crmPassword: { type: String, trim: true, default: "" },
+
     location: { type: String, trim: true, default: "India" },
     avatar: { type: String, trim: true, default: "" },
     timeZone: { type: String, default: "Asia/Kolkata" }, // Added timezone support

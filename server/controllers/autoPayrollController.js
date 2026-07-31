@@ -111,12 +111,14 @@ exports.generateSinglePayslip = async (req, res) => {
       const monthlySalary = AutoPayrollService.getMonthlySalary(employee);
 
       // Recalculate with manual values
+      // CRITICAL FIX (2026-07-31): Pass lwp (unpaidLeaveDays) to enable LWP deduction
       const calculations = AutoPayrollService.calculateSalaryBreakdown(
         monthlySalary,
         result.payslip.workingDays,
         result.payslip.paidDays,
         result.payslip.lateDays,
         result.payslip.halfDays,
+        result.payslip.lwp || 0,
         manualDeductions
       );
 
@@ -324,12 +326,14 @@ exports.recalculatePayslip = async (req, res) => {
       const monthlySalary = AutoPayrollService.getMonthlySalary(employee);
 
       // Recalculate with manual values
+      // CRITICAL FIX (2026-07-31): Pass lwp (unpaidLeaveDays) to enable LWP deduction
       const calculations = AutoPayrollService.calculateSalaryBreakdown(
         monthlySalary,
         result.payslip.workingDays,
         result.payslip.paidDays,
         result.payslip.lateDays,
         result.payslip.halfDays,
+        result.payslip.lwp || 0,
         manualDeductions
       );
 

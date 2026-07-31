@@ -264,14 +264,26 @@ class AutoPayrollService {
     const weekendDays = this.getWeekendDaysInMonth(year, month);
 
     // Calculate paid days
-    // Paid days = Present days + Paid leave days + WFH days + Weekend days
+    // CRITICAL FIX (2026-07-31): Remove automatic weekend payment
+    //
+    // Paid days = Present days + Paid leave days + WFH days - Unpaid leave days
+    //
     // Note:
     // - WFH days receive full payment (no deduction)
     // - Paid leave days receive full payment (no deduction)
     // - Present days receive payment based on attendance (with half-day deductions if applicable)
-    // - Weekend days (Saturday & Sunday) are always paid (no attendance required)
+    // - Weekend days are NOT automatically paid (employees only paid for days worked)
     // - Unpaid leave days receive NO payment
-    const paidDays = presentDays + paidLeaveDays + wfhDays + weekendDays;
+    //
+    // REMOVED: Weekend days auto-payment (Bug #1 fix)
+    // Previously, all weekend days were added to paidDays, causing 26-40% overpayment.
+    // Now, employees are only paid for actual working days + approved leaves.
+    //
+    // If weekend work is required, it should be marked as:
+    // - Present day (with punch in/out records)
+    // - Paid leave day (if company policy pays weekends)
+    // - WFH day (if working from home on weekend)
+    const paidDays = presentDays + paidLeaveDays + wfhDays - unpaidLeaveDays;
 
     // Log final summary
     console.log(`✅ Attendance Summary for ${userId}:`);
@@ -279,7 +291,7 @@ class AutoPayrollService {
     console.log(`   Present Days: ${presentDays}`);
     console.log(`   Paid Leave Days: ${paidLeaveDays}`);
     console.log(`   WFH Days (Full Payment): ${wfhDays}`);
-    console.log(`   Weekend Days (Sat & Sun - Always Paid): ${weekendDays}`);
+    console.log(`   Weekend Days (Sat & Sun - NOT Auto-Paid): ${weekendDays}`);
     console.log(`   Unpaid Leave Days: ${unpaidLeaveDays}`);
     console.log(`   Total Paid Days: ${paidDays}`);
     console.log(`   Late Days: ${lateDays}`);
@@ -445,11 +457,15 @@ class AutoPayrollService {
 
   /**
    * Calculate complete salary breakdown with all deductions
+   *
+   * CRITICAL FIX (2026-07-31): Added unpaidLeaveDays parameter to calculate LWP deduction
+   *
    * @param {number} monthlySalary
    * @param {number} workingDays
    * @param {number} paidDays
    * @param {number} lateDays
    * @param {number} halfDays
+   * @param {number} unpaidLeaveDays - Leave Without Pay days (will be deducted)
    * @param {Object} manualDeductions
    * @returns {Object} Complete salary calculation
    */
@@ -459,6 +475,7 @@ class AutoPayrollService {
     paidDays,
     lateDays,
     halfDays,
+    unpaidLeaveDays = 0,
     manualDeductions = {}
   ) {
     const safeWorkingDays = workingDays > 0 ? workingDays : 1;
@@ -502,6 +519,14 @@ class AutoPayrollService {
       grossTotal <= this.DEDUCTION_CONSTANTS.ESI_SALARY_LIMIT;
 
     // Step 6: Calculate deductions.
+    //
+    // CRITICAL FIX (2026-07-31): Added LWP (Leave Without Pay) deduction
+    // LWP deduction = (Monthly Salary / Working Days) × Unpaid Leave Days
+    //
+    const lwpDeduction = unpaidLeaveDays > 0
+      ? (monthlySalary / safeWorkingDays) * unpaidLeaveDays
+      : 0;
+
     const deductions = {
       // Employee PF
       employeePF: pfEligible
@@ -518,6 +543,10 @@ class AutoPayrollService {
 
       // Professional Tax
       ptax: this.calculatePTax(monthlySalary),
+
+      // LWP (Leave Without Pay) deduction
+      // CRITICAL FIX (2026-07-31): This was previously always 0
+      lwpDeduction: lwpDeduction,
 
       // Manual deductions
       tds: manualDeductions.tds || 0,
@@ -543,11 +572,13 @@ class AutoPayrollService {
     };
 
     // Step 8: Calculate totals using the requested formula.
+    // CRITICAL FIX (2026-07-31): Added lwpDeduction to total deductions
     const totalDeductions =
       deductions.employeePF +
       deductions.esi +
       deductions.tds +
       deductions.ptax +
+      deductions.lwpDeduction +
       deductions.other +
       deductions.advance;
     const netPayment = netTotal - totalDeductions;
@@ -648,12 +679,14 @@ class AutoPayrollService {
     });
 
     // Step 3: Calculate salary with bonus eligibility
+    // CRITICAL FIX (2026-07-31): Pass unpaidLeaveDays to enable LWP deduction
     const calculations = this.calculateSalaryBreakdown(
       monthlySalary,
       attendanceData.workingDays,
       attendanceData.paidDays,
       attendanceData.lateDays,
       attendanceData.halfDays,
+      attendanceData.unpaidLeaveDays,
       manualDeductions
     );
 
@@ -824,12 +857,14 @@ class AutoPayrollService {
     );
 
     // Calculate salary
+    // CRITICAL FIX (2026-07-31): Pass unpaidLeaveDays to enable LWP deduction
     const calculations = this.calculateSalaryBreakdown(
       monthlySalary,
       attendanceData.workingDays,
       attendanceData.paidDays,
       attendanceData.lateDays,
       attendanceData.halfDays,
+      attendanceData.unpaidLeaveDays,
       manualDeductions
     );
 

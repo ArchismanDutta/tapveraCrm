@@ -21,6 +21,7 @@
 
 const Position = require("../models/Position");
 const hierarchyUtils = require("./hierarchyUtils"); // existing, kept working as-is
+const AccessAuditLog = require("../models/AccessAuditLog"); // Role & Department Hierarchy Revamp v2 (2026-07-27)
 
 // ---------------------------------------------------------------------------
 // Action -> Position.permissions flag(s) that grant it.
@@ -48,6 +49,22 @@ const ACTION_PERMISSION_MAP = {
   "callbacks:edit": ["canEditSubordinateCallbacks"],
   "subordinates:assign": ["canAssignToSubordinates"],
 };
+
+// Canonical list of every Position.permissions flag — single source of
+// truth for validating flag names (e.g. positionRoutes.js's "my-team"
+// delegated permission-editing routes) and for userController.js's
+// getMyPermissions response. Keep in sync with the `permissions` subdocument
+// in server/models/Position.js.
+const PERMISSION_FLAG_KEYS = [
+  "canManageUsers", "canManageClients", "canManageProjects", "canAssignTasks",
+  "canApproveLeaves", "canApproveShifts", "canViewReports", "canManageAttendance",
+  "canViewSubordinateLeads", "canViewSubordinateCallbacks", "canViewSubordinateTasks", "canViewSubordinateProjects",
+  "canEditSubordinateLeads", "canEditSubordinateCallbacks", "canAssignToSubordinates",
+  "canViewDepartmentLeads", "canViewDepartmentCallbacks", "canViewDepartmentTasks",
+  "canManageDepartments", "canManagePositions",
+  // Role & Department Hierarchy Revamp v2 (2026-07-27):
+  "canManageSubordinateAccess",
+];
 
 // Actions where a user always implicitly has access to their OWN data,
 // regardless of Position permissions — mirrors the "self" carve-out that
@@ -91,18 +108,40 @@ async function resolvePosition(user) {
 }
 
 /**
- * Evaluate whether a resolved Position grants a given action.
+ * Merge a resolved Position's permission flags with a user's
+ * permissionOverrides (Mongoose Map, plain object, or undefined/null) —
+ * override wins when present for a given flag, falls through to the
+ * Position's flag otherwise. Pure, no DB access.
+ *
+ * Role & Department Hierarchy Revamp v2 (2026-07-27) — see
+ * docs/superpowers/specs/2026-07-27-role-hierarchy-revamp-design.md Section 2
+ * ("the escape hatch"). `overrides` is subject to the same ceiling rule as
+ * everything else in the delegated-access system at write time
+ * (canManageAccessFor/grantableFlags below) — this function just applies
+ * whatever was already written, at read time.
+ */
+function resolveEffectivePermissions(position, overrides) {
+  const base = { ...(position?.permissions || {}) };
+  if (!overrides) return base;
+  const overridesObj = typeof overrides.entries === "function" ? Object.fromEntries(overrides) : overrides;
+  return { ...base, ...overridesObj };
+}
+
+/**
+ * Evaluate whether a resolved Position (plus optional permissionOverrides)
+ * grants a given action.
  * Pure function (no DB access) so it's directly unit-testable — see
  * server/tests/accessControl.test.js.
  */
-function evaluate(position, action) {
-  if (!position) return false;
+function evaluate(position, action, overrides) {
   const flags = ACTION_PERMISSION_MAP[action];
   if (!flags) {
     console.warn(`[accessControl] Unknown action "${action}" — denying by default. Add it to ACTION_PERMISSION_MAP if this is intentional.`);
     return false;
   }
-  return flags.some((flag) => position.permissions?.[flag] === true);
+  if (!position && !overrides) return false;
+  const effective = resolveEffectivePermissions(position, overrides);
+  return flags.some((flag) => effective[flag] === true);
 }
 
 /**
@@ -145,11 +184,11 @@ async function can(user, action, options = {}) {
       );
       return true;
     }
-    return evaluate(position, action);
+    return evaluate(position, action, user.permissionOverrides);
   }
 
   const position = await resolvePosition(user);
-  return evaluate(position, action);
+  return evaluate(position, action, user.permissionOverrides);
 }
 
 /**
@@ -204,12 +243,110 @@ function requirePermission(action) {
   };
 }
 
+// ---------------------------------------------------------------------------
+// Delegated permission editing (Role & Department Hierarchy Revamp v2,
+// 2026-07-27). See docs/superpowers/specs/2026-07-27-role-hierarchy-revamp-design.md
+// Section 2. Lets a Position holder with `canManageSubordinateAccess` (seeded
+// on Admin only for now, extensible to any Position later — no code change
+// needed) open a bounded editor over their own subordinates' access, subject
+// to three rules enforced together every time: (1) ceiling — can't grant a
+// flag you don't hold yourself, (2) scope — target must be inside your own
+// hierarchyUtils reach AND strictly lower level, (3) root of trust —
+// super-admin is never editable by anyone but itself, admin only by
+// super-admin.
+// ---------------------------------------------------------------------------
+
+/**
+ * Pure decision core for "can `grantor` manage `targetUser`'s access at
+ * all?" (the relationship, not which flags — that's grantableFlags below).
+ * No DB access — directly unit-testable. `accessibleIds` is the grantor's
+ * hierarchyUtils.getAccessibleUserIds() result, already resolved by the
+ * caller (canManageAccessFor).
+ */
+function evaluateManageAccess({ grantorRole, grantorPosition, targetRole, targetUserId, targetPosition, accessibleIds }) {
+  if (grantorRole === "super-admin" || grantorRole === "superadmin") return true;
+  if (targetRole === "super-admin" || targetRole === "superadmin") return false; // root of trust: nobody edits super-admin but itself
+  if (targetRole === "admin") return false; // root of trust: only super-admin edits admin
+
+  if (!grantorPosition?.permissions?.canManageSubordinateAccess) return false;
+  if (!targetPosition) return false;
+  if (targetPosition.level >= grantorPosition.level) return false; // no lateral or upward edits
+
+  const ids = (accessibleIds || []).map(String);
+  return ids.includes(String(targetUserId));
+}
+
+/**
+ * async wrapper around evaluateManageAccess() that resolves Positions and
+ * the accessible-ID scope from the DB. This is what routes should actually
+ * call.
+ */
+async function canManageAccessFor(grantor, targetUser) {
+  if (!grantor || !targetUser) return false;
+
+  if (grantor.role === "super-admin" || grantor.role === "superadmin") return true;
+  if (targetUser.role === "super-admin" || targetUser.role === "superadmin") return false;
+  if (targetUser.role === "admin") return false;
+
+  const [grantorPosition, targetPosition, accessibleIds] = await Promise.all([
+    resolvePosition(grantor),
+    resolvePosition(targetUser),
+    hierarchyUtils.getAccessibleUserIds(grantor),
+  ]);
+
+  return evaluateManageAccess({
+    grantorRole: grantor.role,
+    grantorPosition,
+    targetRole: targetUser.role,
+    targetUserId: targetUser._id,
+    targetPosition,
+    accessibleIds,
+  });
+}
+
+/**
+ * The subset of PERMISSION_FLAG_KEYS the grantor can hand out — never more
+ * than they currently hold themselves (the "ceiling" rule). Pure, no DB
+ * access. Only meaningful for GRANTING (value: true); revoking a
+ * subordinate's flag (value: false) never escalates privilege, so routes
+ * should only consult this when value === true.
+ */
+function grantableFlags(grantorPosition) {
+  if (!grantorPosition) return [];
+  return Object.entries(grantorPosition.permissions || {})
+    .filter(([, value]) => value === true)
+    .map(([key]) => key);
+}
+
+/**
+ * Records a delegated access change to AccessAuditLog — every grant,
+ * revoke, position reassignment, or position creation by anyone other than
+ * Super Admin should call this. The shipped answer to "who gave X this
+ * access and when," surfaced on the Access Overview tab. Deliberately
+ * swallows its own errors: a logging failure must never block the
+ * underlying permission change from taking effect.
+ */
+async function logAccessChange({ actorId, targetUserId, action, flagOrPositionName, previousValue, newValue }) {
+  try {
+    await AccessAuditLog.create({ actorId, targetUserId, action, flagOrPositionName, previousValue, newValue });
+  } catch (err) {
+    console.error("[accessControl] Failed to write access audit log (underlying change was NOT blocked):", err.message);
+  }
+}
+
 module.exports = {
   can,
   scopeQuery,
   requirePermission,
   resolvePosition,
   evaluate,
+  resolveEffectivePermissions,
   ACTION_PERMISSION_MAP,
   SELF_IMPLICIT_ACTIONS,
+  PERMISSION_FLAG_KEYS,
+  // Delegated permission editing (2026-07-27):
+  evaluateManageAccess,
+  canManageAccessFor,
+  grantableFlags,
+  logAccessChange,
 };

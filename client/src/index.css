@@ -1144,3 +1144,325 @@ html.light .Toastify__toast-theme--dark {
   background: var(--app-surface);
   color: var(--app-text);
 }
+
+/* ============================================
+   GLOBAL BUTTON COLOR OVERRIDE
+   Replace all blue buttons with teal (#00a884)
+   EXCEPT: Sidebar navigation items (keep existing teal/green)
+   ============================================ */
+
+/* Override Tailwind blue-500, blue-600, blue-700 backgrounds */
+[class*="bg-blue-500"]:not(.sidebar-nav):not([class*="bg-teal-"]):not([class*="bg-emerald-"]):not([class*="bg-green-"]),
+[class*="bg-blue-600"]:not(.sidebar-nav):not([class*="bg-teal-"]):not([class*="bg-emerald-"]):not([class*="bg-green-"]),
+[class*="bg-blue-700"]:not(.sidebar-nav):not([class*="bg-teal-"]):not([class*="bg-emerald-"]):not([class*="bg-green-"]),
+button[class*="bg-blue-"]:not(.sidebar-nav):not([class*="bg-teal-"]):not([class*="bg-emerald-"]):not([class*="bg-green-"]),
+a[class*="bg-blue-"]:not(.sidebar-nav):not([class*="bg-teal-"]):not([class*="bg-emerald-"]):not([class*="bg-green-"]) {
+  background-color: #00a884 !important;
+  color: white !important;
+}
+
+/* Override hover states */
+[class*="hover:bg-blue-500"]:hover:not(.sidebar-nav):not([class*="bg-teal-"]):not([class*="bg-emerald-"]):not([class*="bg-green-"]),
+[class*="hover:bg-blue-600"]:hover:not(.sidebar-nav):not([class*="bg-teal-"]):not([class*="bg-emerald-"]):not([class*="bg-green-"]),
+[class*="hover:bg-blue-700"]:hover:not(.sidebar-nav):not([class*="bg-teal-"]):not([class*="bg-emerald-"]):not([class*="bg-green-"]),
+button[class*="hover:bg-blue-"]:hover:not(.sidebar-nav):not([class*="bg-teal-"]):not([class*="bg-emerald-"]):not([class*="bg-green-"]),
+a[class*="hover:bg-blue-"]:hover:not(.sidebar-nav):not([class*="bg-teal-"]):not([class*="bg-emerald-"]):not([class*="bg-green-"]) {
+  background-color: #008f6f !important;
+  color: white !important;
+}
+
+/* Override focus states */
+[class*="focus:bg-blue-500"]:focus,
+[class*="focus:bg-blue-600"]:focus,
+[class*="focus:bg-blue-700"]:focus {
+  background-color: #007a5e !important;
+  color: white !important;
+}
+
+/* Override active states */
+[class*="active:bg-blue-500"]:active,
+[class*="active:bg-blue-600"]:active,
+[class*="active:bg-blue-700"]:active {
+  background-color: #007a5e !important;
+  color: white !important;
+}
+
+/* Override hex blue colors commonly used in the CRM */
+[class*="bg-[#0066cc]"],
+[class*="bg-[#007bff]"],
+[class*="bg-[#3b82f6]"],
+[class*="bg-[#2563eb]"],
+[class*="bg-[#1d4ed8]"],
+button[style*="background:#0066cc"],
+button[style*="background: #0066cc"],
+button[style*="background:#007bff"],
+button[style*="background: #007bff"],
+button[style*="background:#3b82f6"],
+button[style*="background: #3b82f6"] {
+  background-color: #00a884 !important;
+  color: white !important;
+}
+
+/* Override button element with blue backgrounds */
+button.bg-blue-500,
+button.bg-blue-600,
+button.bg-blue-700 {
+  background-color: #00a884 !important;
+  color: white !important;
+  border-color: #00a884 !important;
+}
+
+button.bg-blue-500:hover,
+button.bg-blue-600:hover,
+button.bg-blue-700:hover {
+  background-color: #008f6f !important;
+  color: white !important;
+  border-color: #008f6f !important;
+}
+
+/* Override blue gradient backgrounds */
+[class*="from-blue-500"],
+[class*="from-blue-600"],
+[class*="from-blue-700"],
+[class*="to-blue-500"],
+[class*="to-blue-600"],
+[class*="to-blue-700"],
+[class*="via-blue-500"],
+[class*="via-blue-600"],
+[class*="via-blue-700"] {
+  background-image: linear-gradient(to right, #00a884, #008f6f) !important;
+}
+
+/* Override blue text colors on buttons to ensure contrast */
+button[class*="text-blue-"],
+a[class*="text-blue-"] {
+  color: #00a884 !important;
+}
+
+/* Override blue border colors */
+[class*="border-blue-500"],
+[class*="border-blue-600"],
+[class*="border-blue-700"] {
+  border-color: #00a884 !important;
+}
+
+[class*="hover:border-blue-500"]:hover,
+[class*="hover:border-blue-600"]:hover,
+[class*="hover:border-blue-700"]:hover {
+  border-color: #008f6f !important;
+}
+
+/* Override ring colors for focus states */
+[class*="ring-blue-500"],
+[class*="ring-blue-600"],
+[class*="ring-blue-700"],
+[class*="focus:ring-blue-500"],
+[class*="focus:ring-blue-600"],
+[class*="focus:ring-blue-700"] {
+  --tw-ring-color: #00a884 !important;
+}
+
+/* Communication chat button override (from index.css) */
+.communication-chat-button {
+  border: 1px solid rgba(0, 168, 132, 0.22) !important;
+  background: rgba(0, 168, 132, 0.1) !important;
+  color: #00a884 !important;
+}
+
+.communication-chat-button:hover {
+  border-color: rgba(0, 168, 132, 0.34) !important;
+  background: rgba(0, 168, 132, 0.16) !important;
+  color: #008f6f !important;
+}
+
+.dark .communication-chat-button {
+  border-color: rgba(0, 168, 132, 0.28) !important;
+  background: rgba(0, 168, 132, 0.13) !important;
+  color: #00a884 !important;
+}
+
+.dark .communication-chat-button:hover {
+  border-color: rgba(0, 168, 132, 0.4) !important;
+  background: rgba(0, 168, 132, 0.2) !important;
+  color: #00e6b8 !important;
+}
+
+/* Transfer export button override */
+.transfer-export-button {
+  border: 1px solid rgba(0, 168, 132, 0.22) !important;
+  background: rgba(0, 168, 132, 0.1) !important;
+  color: #00a884 !important;
+}
+
+.transfer-export-button:hover {
+  border-color: rgba(0, 168, 132, 0.34) !important;
+  background: rgba(0, 168, 132, 0.16) !important;
+  color: #008f6f !important;
+}
+
+.dark .transfer-export-button {
+  border-color: rgba(0, 168, 132, 0.28) !important;
+  background: rgba(0, 168, 132, 0.13) !important;
+  color: #00a884 !important;
+}
+
+.dark .transfer-export-button:hover {
+  border-color: rgba(0, 168, 132, 0.4) !important;
+  background: rgba(0, 168, 132, 0.2) !important;
+  color: #00e6b8 !important;
+}
+
+/* Client blue button override */
+.client-blue-button {
+  border: 1px solid rgba(0, 168, 132, 0.22) !important;
+  background: rgba(0, 168, 132, 0.1) !important;
+  color: #00a884 !important;
+}
+
+.client-blue-button:hover {
+  border-color: rgba(0, 168, 132, 0.34) !important;
+  background: rgba(0, 168, 132, 0.16) !important;
+  color: #008f6f !important;
+}
+
+.dark .client-blue-button {
+  border-color: rgba(0, 168, 132, 0.28) !important;
+  background: rgba(0, 168, 132, 0.13) !important;
+  color: #00a884 !important;
+}
+
+.dark .client-blue-button:hover {
+  border-color: rgba(0, 168, 132, 0.4) !important;
+  background: rgba(0, 168, 132, 0.2) !important;
+  color: #00e6b8 !important;
+}
+
+/* Override clients theme blue/purple/cyan accent colors */
+.clients-theme [class*="border-purple-500"],
+.clients-theme [class*="border-cyan-500"] {
+  border-color: rgba(0, 168, 132, 0.28) !important;
+}
+
+.clients-theme .text-purple-300,
+.clients-theme .text-purple-400,
+.clients-theme .text-cyan-300,
+.clients-theme .text-cyan-400 {
+  color: #00a884 !important;
+}
+
+.dark .clients-theme .text-purple-300,
+.dark .clients-theme .text-purple-400,
+.dark .clients-theme .text-cyan-300,
+.dark .clients-theme .text-cyan-400 {
+  color: #00e6b8 !important;
+}
+
+.clients-theme [class*="bg-purple-500"],
+.clients-theme [class*="bg-cyan-500"] {
+  background-color: rgba(0, 168, 132, 0.1) !important;
+}
+
+.clients-theme [class*="from-purple-600"][class*="to-pink-600"],
+.clients-theme [class*="from-purple-500"][class*="to-pink-500"] {
+  background-color: #00a884 !important;
+  background-image: none !important;
+}
+
+/* Override attendance portal cyan colors */
+.attendance-portal-theme .text-cyan-300,
+.attendance-portal-theme .text-cyan-400,
+.attendance-portal-theme .text-cyan-500 {
+  color: #00a884 !important;
+}
+
+.dark .attendance-portal-theme .text-cyan-300,
+.dark .attendance-portal-theme .text-cyan-400,
+.dark .attendance-portal-theme .text-cyan-500 {
+  color: #00e6b8 !important;
+}
+
+/* Override light theme blue accent colors */
+html.light [class*="text-blue-300"],
+html.light [class*="text-blue-400"],
+html.light [class*="text-cyan-300"],
+html.light [class*="text-cyan-400"] {
+  color: #00a884 !important;
+}
+
+/* Ensure all buttons with blue classes have white text */
+button[class*="bg-blue-"],
+a[class*="bg-blue-"],
+[role="button"][class*="bg-blue-"] {
+  color: white !important;
+}
+
+/* Override specific blue shades used throughout the app */
+.bg-blue-50 {
+  background-color: rgba(0, 168, 132, 0.05) !important;
+}
+
+.bg-blue-100 {
+  background-color: rgba(0, 168, 132, 0.1) !important;
+}
+
+.bg-blue-200 {
+  background-color: rgba(0, 168, 132, 0.2) !important;
+}
+
+.bg-blue-300 {
+  background-color: rgba(0, 168, 132, 0.3) !important;
+}
+
+.bg-blue-400 {
+  background-color: rgba(0, 168, 132, 0.4) !important;
+}
+
+.bg-blue-500 {
+  background-color: #00a884 !important;
+}
+
+.bg-blue-600 {
+  background-color: #00a884 !important;
+}
+
+.bg-blue-700 {
+  background-color: #008f6f !important;
+}
+
+.bg-blue-800 {
+  background-color: #007a5e !important;
+}
+
+.bg-blue-900 {
+  background-color: #00664d !important;
+}
+
+/* Hover variants */
+.hover\:bg-blue-500:hover {
+  background-color: #00a884 !important;
+}
+
+.hover\:bg-blue-600:hover {
+  background-color: #008f6f !important;
+}
+
+.hover\:bg-blue-700:hover {
+  background-color: #007a5e !important;
+}
+
+.hover\:bg-blue-800:hover {
+  background-color: #00664d !important;
+}
+
+/* Focus variants */
+.focus\:bg-blue-500:focus {
+  background-color: #00a884 !important;
+}
+
+.focus\:bg-blue-600:focus {
+  background-color: #008f6f !important;
+}
+
+.focus\:bg-blue-700:focus {
+  background-color: #007a5e !important;
+}

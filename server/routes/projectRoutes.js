@@ -735,19 +735,35 @@ router.put("/:id", protect, async (req, res) => {
       }
     }
 
-    // Validate that all assigned employees are active (if assignedTo is being updated)
-    if (assignedTo && assignedTo.length > 0) {
-      const User = require("../models/User");
-      const employees = await User.find({
-        _id: { $in: assignedTo },
-        status: { $ne: "active" }
-      }).select("name status");
+    // If assignedTo is being updated, filter out any inactive/terminated/absconded members
+    const User = require("../models/User");
+    let cleanedAssignedTo = assignedTo;
 
-      if (employees.length > 0) {
-        const inactiveNames = employees.map(emp => `${emp.name} (${emp.status})`).join(", ");
+    if (assignedTo && assignedTo.length > 0) {
+      // Check which members in the assignedTo array are inactive/terminated/absconded
+      const allMembers = await User.find({
+        _id: { $in: assignedTo }
+      }).select("_id name status");
+
+      const inactiveMembers = allMembers.filter(m =>
+        ["inactive", "terminated", "absconded"].includes(m.status)
+      );
+
+      if (inactiveMembers.length > 0) {
+        // Filter out inactive members automatically
+        const inactiveMemberIds = inactiveMembers.map(m => m._id.toString());
+        cleanedAssignedTo = assignedTo.filter(
+          memberId => !inactiveMemberIds.includes(memberId.toString())
+        );
+
+        const inactiveNames = inactiveMembers.map(m => m.name).join(", ");
+        console.log(`Auto-removed inactive members from project update: ${inactiveNames}`);
+      }
+
+      // Validate that at least one active member remains
+      if (cleanedAssignedTo.length === 0) {
         return res.status(400).json({
-          message: `Cannot assign project to inactive employees: ${inactiveNames}. Please select only active employees.`,
-          inactiveEmployees: employees
+          message: "Project must have at least one active team member.",
         });
       }
     }
@@ -755,7 +771,7 @@ router.put("/:id", protect, async (req, res) => {
     // Update fields
     if (projectName) project.projectName = projectName;
     if (type) project.type = type;
-    if (assignedTo) project.assignedTo = assignedTo;
+    if (cleanedAssignedTo) project.assignedTo = cleanedAssignedTo;
     if (clients) project.clients = clients;
     if (startDate) project.startDate = startDate;
     if (endDate) project.endDate = endDate;

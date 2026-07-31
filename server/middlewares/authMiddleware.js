@@ -74,6 +74,10 @@ exports.protect = async (req, res, next) => {
         // back to the legacy `department`/`position` strings above when so.
         departmentRef: user.departmentRef || null,
         positionRef: user.positionRef || null,
+        // Role & Department Hierarchy Revamp v2 (2026-07-27): additive.
+        // Layered on top of the resolved Position's flags by
+        // accessControl.js's evaluate() — see resolveEffectivePermissions().
+        permissionOverrides: user.permissionOverrides || new Map(),
         avatar: user.avatar || "",
         userType: "User",
         regions: user.regions || [user.region] || ['Global'], // CRITICAL: Include regions for filtering

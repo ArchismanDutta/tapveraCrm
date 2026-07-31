@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 import UnreadMessageBadge from "../components/message/UnreadMessageBadge";
 import WonderseedInvoice from "../components/WonderseedInvoice";
+import QuickActionsCard from "../components/client/QuickActionsCard";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
 
@@ -281,6 +282,11 @@ const ClientPortal = ({ onLogout, clientId, clientEmail }) => {
         {clientEmail?.toLowerCase() === WONDERSEED_EMAIL && (
           <WonderseedInvoice />
         )}
+
+        {/* Quick Actions Card */}
+        <div className="mb-4 sm:mb-6 lg:mb-8">
+          <QuickActionsCard clientId={clientId} onRequestCreated={fetchProjects} />
+        </div>
 
         {/* Statistics Cards */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3 md:gap-4 lg:gap-6 mb-4 sm:mb-6 lg:mb-8">

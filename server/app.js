@@ -54,9 +54,11 @@ const clientRemarkRoutes = require("./routes/clientRemarkRoutes");
 const sheetRoutes = require("./routes/sheetRoutes");
 const positionRoutes = require("./routes/positionRoutes");
 const departmentRoutes = require("./routes/departmentRoutes"); // Access-management rework (2026-07-03)
+const hierarchySetupRoutes = require("./routes/hierarchySetupRoutes"); // Role & Department Hierarchy Revamp v2 (2026-07-27)
 const transferRoutes = require("./routes/transferRoutes");
 const callIntelligenceRoutes = require("./routes/callIntelligenceRoutes");
 const internalRoutes         = require("./routes/internalRoutes");
+const clientRequestRoutes = require("./routes/clientRequestRoutes");
 
 // Real-time (Socket.IO — see server/socket/index.js)
 const { initSocket } = require("./socket");
@@ -199,8 +201,10 @@ app.use("/api/projects", clientRemarkRoutes);
 app.use("/api/projects", projectRoutes);
 app.use("/api/positions", positionRoutes);
 app.use("/api/departments", departmentRoutes); // Access-management rework (2026-07-03)
+app.use("/api/hierarchy-setup", hierarchySetupRoutes); // Role & Department Hierarchy Revamp v2 (2026-07-27)
 app.use("/api/call-intelligence", callIntelligenceRoutes);
 app.use("/api/internal", internalRoutes);
+app.use("/api/client-requests", clientRequestRoutes); // Client quote & support requests
 
 // =====================
 // Serve frontend in production

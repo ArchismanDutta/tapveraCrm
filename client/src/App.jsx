@@ -68,6 +68,8 @@ import ManualAttendanceManagement from "./pages/admin/ManualAttendanceManagement
 import SalaryManagement from "./pages/admin/SalaryManagement";
 import PositionManagement from "./pages/admin/PositionManagement"; // Superseded by AccessManagementPage below - kept live for rollback safety until the access-management rework's Phase 6 (see docs/superpowers/plans/2026-07-03-access-management-rework.md)
 import AccessManagementPage from "./pages/admin/AccessManagementPage";
+import MyTeamAccessPage from "./pages/admin/MyTeamAccessPage"; // Role & Department Hierarchy Revamp v2 (2026-07-27)
+import ClientRequestsPage from "./pages/admin/ClientRequestsPage"; // Client quote & support requests (2026-07-30)
 import PayslipManagement from "./pages/admin/PayslipManagement";
 import ClientsPage from "./pages/ClientsPage";
 import ProjectCommunicationPage from "./pages/ProjectCommunicationPage";
@@ -84,6 +86,7 @@ const SuperAdminDashboard = lazy(() => import("./pages/SuperAdminDashboard"));
 const AttendancePage = lazy(() => import("./pages/AttendancePage"));
 const LeavesPage = lazy(() => import("./pages/HolidaysAndLeaves"));
 const UnifiedTaskPage = lazy(() => import("./pages/UnifiedTaskPage"));
+const TeamTaskManagementPage = lazy(() => import("./pages/TeamTaskManagementPage"));
 const MyPayslipsPage = lazy(() => import("./pages/MyPayslipsPage"));
 const EmployeePage = lazy(() => import("./pages/EmployeePage"));
 // Lead & Callback Management
@@ -102,8 +105,7 @@ import NotepadPage from "./pages/NotepadPage";
 import SuperAdminNotepadViewer from "./pages/SuperAdminNotepadViewer";
 import NotificationCenterPage from "./pages/NotificationCenterPage";
 
-// Payment Management
-import EmployeePaymentManagement from "./components/payment/EmployeePaymentManagement";
+// Payment Management - REMOVED
 
 // Sheet Management
 import SheetManagerPage from "./pages/SheetManagerPage";
@@ -526,16 +528,7 @@ const AppWrapper = () => {
             )
           }
         />
-        <Route
-          path="/super-admin/payments"
-          element={
-            isAuthenticated && isSuperAdmin ? (
-              <EmployeePaymentManagement onLogout={handleLogout} />
-            ) : (
-              <Navigate to="/login" replace />
-            )
-          }
-        />
+        {/* Payment Management route - REMOVED */}
         <Route
           path="/sheets"
           element={
@@ -734,8 +727,8 @@ const AppWrapper = () => {
           }
         />
 
-        {/* Salary/Payslip Management */}
-        <Route
+        {/* Salary/Payslip Management - Hidden from UI but route still works */}
+        {/* <Route
           path="/admin/salary-management"
           element={
             isAuthenticated && (isHR || isSuperAdmin) ? (
@@ -747,7 +740,7 @@ const AppWrapper = () => {
               />
             )
           }
-        />
+        /> */}
 
         {/* Position Management - superseded by Access Management below, route kept for rollback safety */}
         <Route
@@ -779,9 +772,44 @@ const AppWrapper = () => {
           }
         />
 
-
-        {/* Payslip Management - redirects to new SalaryManagement */}
+        {/* Client Requests (2026-07-30) - quote requests and support tickets from clients */}
         <Route
+          path="/admin/client-requests"
+          element={
+            isAuthenticated && isSuperAdmin ? (
+              <ClientRequestsPage onLogout={handleLogout} />
+            ) : (
+              <Navigate
+                to={isAuthenticated ? "/dashboard" : "/login"}
+                replace
+              />
+            )
+          }
+        />
+
+        {/* My Team's Access (Role & Department Hierarchy Revamp v2, 2026-07-27) -
+            bounded delegated permission editing for anyone whose Position holds
+            canManageSubordinateAccess (Admin, seeded, today). Gated on the
+            permission flag with fallback to isAdmin (for when permissions haven't
+            loaded yet); the page itself and every API call re-check the real flag
+            server-side via accessControl.canManageAccessFor - this is not a
+            security boundary by itself, same pattern every other route uses. */}
+        <Route
+          path="/my-team/access"
+          element={
+            isAuthenticated && (permissions?.permissions?.canManageSubordinateAccess || isAdmin) ? (
+              <MyTeamAccessPage onLogout={handleLogout} />
+            ) : (
+              <Navigate
+                to={isAuthenticated ? "/dashboard" : "/login"}
+                replace
+              />
+            )
+          }
+        />
+
+        {/* Payslip Management - redirects to new SalaryManagement - Hidden from UI but route still works */}
+        {/* <Route
           path="/admin/payslips"
           element={
             isAuthenticated && (isHR || isSuperAdmin) ? (
@@ -793,7 +821,7 @@ const AppWrapper = () => {
               />
             )
           }
-        />
+        /> */}
 
         {/* My Payslips - Employee, Admin, HR View (Everyone except Super Admin) */}
         <Route
@@ -972,6 +1000,16 @@ const AppWrapper = () => {
               <UnifiedTaskPage onLogout={handleLogout} />
             ) : (
               <Navigate to="/login" replace />
+            )
+          }
+        />
+        <Route
+          path="/team/tasks"
+          element={
+            isAuthenticated && permissions?.permissions?.canViewSubordinateTasks ? (
+              <TeamTaskManagementPage onLogout={handleLogout} />
+            ) : (
+              <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />
             )
           }
         />

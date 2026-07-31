@@ -517,6 +517,28 @@ exports.getTasks = async (req, res) => {
         $or: [{ client: req.user._id }, { clients: req.user._id }],
       }).select("_id");
       query.project = { $in: clientProjects.map((p) => p._id) };
+    } else if (req.query.assignedTo) {
+      // Team Task Management (2026-07-30): Allow managers to query tasks for
+      // specific subordinates. Verify the requested user is actually accessible
+      // to the current user via hierarchy before allowing the query.
+      const { getAccessibleUserIds } = require("../utils/hierarchyUtils");
+      const { can } = require("../utils/accessControl");
+
+      const hasPermission = await can(req.user, "tasks:view");
+      if (!hasPermission) {
+        return res.status(403).json({
+          error: "Access denied. You don't have permission to view subordinate tasks.",
+        });
+      }
+
+      const accessibleUserIds = await getAccessibleUserIds(req.user);
+      if (!accessibleUserIds.includes(req.query.assignedTo)) {
+        return res.status(403).json({
+          error: "Access denied. You can only view tasks for your subordinates.",
+        });
+      }
+
+      query.assignedTo = req.query.assignedTo;
     } else if (req.query.scope === "assigned-by-me") {
       // Tasks this user created — regardless of role
       query = { assignedBy: req.user._id };
@@ -827,6 +849,114 @@ exports.getEmployeeTaskAnalytics = async (req, res) => {
     });
   } catch (err) {
     console.error("Error fetching employee task analytics:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+// ------------------- TEAM TASK OVERVIEW -------------------
+// Get team task overview for managers - shows subordinates and their tasks
+// Requires canViewSubordinateTasks permission or admin/super-admin role
+exports.getTeamTaskOverview = async (req, res) => {
+  try {
+    const currentUser = req.user;
+    const { getAccessibleUserIds } = require("../utils/hierarchyUtils");
+    const { can } = require("../utils/accessControl");
+
+    // Access-management rework (2026-07-30, Team Task Management):
+    // Use permission-based authorization via can() helper, which resolves
+    // the user's effective permissions (Position + overrides) and handles
+    // super-admin/admin bypass automatically. No hardcoded role checks needed.
+    const hasPermission = await can(currentUser, "tasks:view");
+
+    if (!hasPermission) {
+      return res.status(403).json({
+        error: "Access denied. You don't have permission to view team tasks.",
+      });
+    }
+
+    // Get accessible user IDs (subordinates + self)
+    const accessibleUserIds = await getAccessibleUserIds(currentUser);
+
+    // Remove current user from the list (we only want subordinates)
+    const subordinateIds = accessibleUserIds.filter(
+      (id) => id !== currentUser._id.toString()
+    );
+
+    if (subordinateIds.length === 0) {
+      return res.json({
+        teamMembers: [],
+        message: "No team members found under your supervision.",
+      });
+    }
+
+    // Fetch all subordinate users with their basic info
+    const subordinates = await User.find({
+      _id: { $in: subordinateIds },
+      status: "active",
+    })
+      .select("_id name email employeeId designation department position positionLevel")
+      .lean();
+
+    // Fetch all tasks for these subordinates
+    const now = new Date();
+    const tasks = await Task.find({
+      assignedTo: { $in: subordinateIds },
+    })
+      .populate("assignedTo", "name email employeeId designation")
+      .populate("assignedBy", "name email")
+      .populate("project", "projectName type")
+      .sort({ createdAt: -1 })
+      .lean();
+
+    // Build team member stats
+    const teamMemberStats = subordinates.map((member) => {
+      const memberTasks = tasks.filter((task) =>
+        task.assignedTo.some((assignee) => assignee._id.toString() === member._id.toString())
+      );
+
+      const totalTasks = memberTasks.length;
+      const completedTasks = memberTasks.filter((t) => t.status === "completed").length;
+      const inProgressTasks = memberTasks.filter((t) => t.status === "in-progress").length;
+      const pendingTasks = memberTasks.filter((t) => t.status === "pending").length;
+      const overdueTasks = memberTasks.filter(
+        (t) =>
+          t.dueDate &&
+          t.status !== "completed" &&
+          t.status !== "rejected" &&
+          new Date(t.dueDate) < now
+      ).length;
+
+      const highPriorityTasks = memberTasks.filter((t) => t.priority === "High").length;
+
+      return {
+        userId: member._id,
+        name: member.name,
+        email: member.email,
+        employeeId: member.employeeId,
+        designation: member.designation,
+        department: member.department,
+        position: member.position,
+        positionLevel: member.positionLevel,
+        stats: {
+          totalTasks,
+          completedTasks,
+          inProgressTasks,
+          pendingTasks,
+          overdueTasks,
+          highPriorityTasks,
+        },
+      };
+    });
+
+    // Sort team members by total tasks descending
+    teamMemberStats.sort((a, b) => b.stats.totalTasks - a.stats.totalTasks);
+
+    res.json({
+      teamMembers: teamMemberStats,
+      totalSubordinates: subordinates.length,
+    });
+  } catch (err) {
+    console.error("Error fetching team task overview:", err);
     res.status(500).json({ message: "Server error" });
   }
 };

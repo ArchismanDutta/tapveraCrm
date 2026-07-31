@@ -500,7 +500,7 @@ const Signup = () => {
                         <option value="">Select department</option>
                         <option value="executives">Executives</option>
                         <option value="development">Development</option>
-                        <option value="marketingAndSales">Marketing & Sales</option>
+                        <option value="marketingAndSales">Sales</option>
                         <option value="humanResource">Human Resource</option>
                       </select>
                     </Field>

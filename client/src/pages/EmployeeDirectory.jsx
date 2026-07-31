@@ -284,12 +284,12 @@ const EmployeeDirectory = ({ onLogout }) => {
     return filtered;
   }, [employees, filters]);
 
-  // Calculate stats based on filtered data
-  const totalEmployees = filteredEmployees.length;
-  const activeEmployees = filteredEmployees.filter(emp => emp.status?.toLowerCase() === "active").length;
-  const terminatedEmployees = filteredEmployees.filter(emp => emp.status?.toLowerCase() === "terminated").length;
-  const abscondedEmployees = filteredEmployees.filter(emp => emp.status?.toLowerCase() === "absconded").length;
-  const departments = [...new Set(filteredEmployees.map(emp => emp.department).filter(dep => dep !== "N/A"))];
+  // Calculate stats based on ALL employees (not filtered)
+  const totalEmployees = employees.length;
+  const activeEmployees = employees.filter(emp => emp.status?.toLowerCase() === "active").length;
+  const terminatedEmployees = employees.filter(emp => emp.status?.toLowerCase() === "terminated").length;
+  const abscondedEmployees = employees.filter(emp => emp.status?.toLowerCase() === "absconded").length;
+  const departments = [...new Set(employees.map(emp => emp.department).filter(dep => dep && dep !== "N/A" && dep !== ""))];
   const normalizedRole = currentUser?.role?.toLowerCase() || "employee";
   const canManageEmployees = ["admin", "hr", "super-admin"].includes(normalizedRole);
 
@@ -303,37 +303,31 @@ const EmployeeDirectory = ({ onLogout }) => {
       />
 
       <main
-        className={`h-[100dvh] min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 transition-all duration-300 sm:px-5 lg:px-6 ${
+        className={`h-[100dvh] min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-2 py-3 transition-all duration-300 sm:px-3 lg:px-4 ${
           collapsed ? "ml-16" : "ml-16 sm:ml-56"
         }`}
       >
-        <div className="mx-auto max-w-[1500px] pb-8">
-        <header className="mb-5 rounded-2xl border border-slate-200 bg-white px-5 py-5 shadow-sm dark:border-white/10 dark:bg-[#10131c] sm:px-6">
-          <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
-            <div>
-              <div className="inline-flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 dark:border-blue-400/20 dark:bg-blue-400/10 dark:text-blue-200">
-                <Users className="h-3.5 w-3.5" /> People operations
+        <div className="pb-6">
+        <header className="mb-3 rounded-lg border border-slate-200 bg-white px-4 py-3 shadow-sm dark:border-white/10 dark:bg-[#10131c]">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-2 py-1 text-[10px] font-semibold text-blue-700 dark:border-blue-400/20 dark:bg-blue-400/10 dark:text-blue-200">
+                <Users className="h-3 w-3" /> People operations
               </div>
-              <h1 className="mt-3 text-2xl font-semibold tracking-tight text-slate-950 dark:text-white">
+              <h1 className="text-lg font-semibold tracking-tight text-slate-950 dark:text-white">
                 Employee directory
               </h1>
-              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                Find employees, manage access status, and review team assignments.
-              </p>
             </div>
             <div className="flex items-center">
-              <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 dark:border-white/10 dark:bg-white/[0.025]">
-                <div className="flex items-center space-x-3">
-                  <div className="h-2 w-2 rounded-full bg-green-400"></div>
-                  <div>
-                    <p className="text-[10px] uppercase tracking-wide text-slate-400">Local time</p>
-                    <p className="font-mono text-xs text-slate-700 dark:text-slate-200">
-                      {new Date().toLocaleTimeString("en-US", {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </p>
-                  </div>
+              <div className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 dark:border-white/10 dark:bg-white/[0.025]">
+                <div className="flex items-center space-x-2">
+                  <div className="h-1.5 w-1.5 rounded-full bg-green-400"></div>
+                  <p className="font-mono text-[10px] text-slate-700 dark:text-slate-200">
+                    {new Date().toLocaleTimeString("en-US", {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </p>
                 </div>
               </div>
             </div>
@@ -350,84 +344,75 @@ const EmployeeDirectory = ({ onLogout }) => {
         )}
 
         {/* Stats Dashboard */}
-        <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-5">
+        <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
           {/* Total Employees */}
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-[#10131c]">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50 dark:bg-blue-400/10">
-                <Users className="h-4 w-4 text-blue-600 dark:text-blue-300" />
+          <div className="rounded-lg border border-slate-200 bg-white p-2.5 shadow-sm dark:border-white/10 dark:bg-[#10131c]">
+            <div className="flex items-center justify-between">
+              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-50 dark:bg-blue-400/10">
+                <Users className="h-3.5 w-3.5 text-blue-600 dark:text-blue-300" />
               </div>
               <div className="text-right">
-                <p className="text-2xl font-semibold text-slate-950 dark:text-white">{totalEmployees}</p>
-                <p className="text-xs text-slate-500 dark:text-slate-400">Total</p>
+                <p className="text-lg font-semibold text-slate-950 dark:text-white">{totalEmployees}</p>
+                <p className="text-[10px] text-slate-500 dark:text-slate-400">Total</p>
               </div>
             </div>
           </div>
 
           {/* Active Employees */}
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-[#10131c]">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-50 dark:bg-emerald-400/10">
-                <Badge className="h-4 w-4 text-emerald-600 dark:text-emerald-300" />
+          <div className="rounded-lg border border-slate-200 bg-white p-2.5 shadow-sm dark:border-white/10 dark:bg-[#10131c]">
+            <div className="flex items-center justify-between">
+              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-50 dark:bg-emerald-400/10">
+                <Badge className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-300" />
               </div>
               <div className="text-right">
-                <p className="text-2xl font-semibold text-slate-950 dark:text-white">{activeEmployees}</p>
-                <p className="text-xs text-slate-500 dark:text-slate-400">Active</p>
+                <p className="text-lg font-semibold text-slate-950 dark:text-white">{activeEmployees}</p>
+                <p className="text-[10px] text-slate-500 dark:text-slate-400">Active</p>
               </div>
             </div>
           </div>
 
           {/* Terminated Employees */}
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-[#10131c]">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-rose-50 dark:bg-rose-400/10">
-                <X className="h-4 w-4 text-rose-600 dark:text-rose-300" />
+          <div className="rounded-lg border border-slate-200 bg-white p-2.5 shadow-sm dark:border-white/10 dark:bg-[#10131c]">
+            <div className="flex items-center justify-between">
+              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-rose-50 dark:bg-rose-400/10">
+                <X className="h-3.5 w-3.5 text-rose-600 dark:text-rose-300" />
               </div>
               <div className="text-right">
-                <p className="text-2xl font-semibold text-slate-950 dark:text-white">{terminatedEmployees}</p>
-                <p className="text-xs text-slate-500 dark:text-slate-400">Terminated</p>
+                <p className="text-lg font-semibold text-slate-950 dark:text-white">{terminatedEmployees}</p>
+                <p className="text-[10px] text-slate-500 dark:text-slate-400">Terminated</p>
               </div>
             </div>
           </div>
 
           {/* Absconded Employees */}
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-[#10131c]">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-orange-50 dark:bg-orange-400/10">
-                <AlertCircle className="h-4 w-4 text-orange-600 dark:text-orange-300" />
+          <div className="rounded-lg border border-slate-200 bg-white p-2.5 shadow-sm dark:border-white/10 dark:bg-[#10131c]">
+            <div className="flex items-center justify-between">
+              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-orange-50 dark:bg-orange-400/10">
+                <AlertCircle className="h-3.5 w-3.5 text-orange-600 dark:text-orange-300" />
               </div>
               <div className="text-right">
-                <p className="text-2xl font-semibold text-slate-950 dark:text-white">{abscondedEmployees}</p>
-                <p className="text-xs text-slate-500 dark:text-slate-400">Absconded</p>
+                <p className="text-lg font-semibold text-slate-950 dark:text-white">{abscondedEmployees}</p>
+                <p className="text-[10px] text-slate-500 dark:text-slate-400">Absconded</p>
               </div>
             </div>
           </div>
 
           {/* Departments */}
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-[#10131c]">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-violet-50 dark:bg-violet-400/10">
-                <Building2 className="h-4 w-4 text-violet-600 dark:text-violet-300" />
+          <div className="rounded-lg border border-slate-200 bg-white p-2.5 shadow-sm dark:border-white/10 dark:bg-[#10131c]">
+            <div className="flex items-center justify-between">
+              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-violet-50 dark:bg-violet-400/10">
+                <Building2 className="h-3.5 w-3.5 text-violet-600 dark:text-violet-300" />
               </div>
               <div className="text-right">
-                <p className="text-2xl font-semibold text-slate-950 dark:text-white">{departments.length}</p>
-                <p className="text-xs text-slate-500 dark:text-slate-400">Departments</p>
+                <p className="text-lg font-semibold text-slate-950 dark:text-white">{departments.length}</p>
+                <p className="text-[10px] text-slate-500 dark:text-slate-400">Departments</p>
               </div>
             </div>
           </div>
         </div>
 
         {/* Filters Section */}
-        <div className="mb-5 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-[#10131c] sm:p-5">
-          <div className="mb-4 flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-cyan-400/10">
-              <Search className="h-4 w-4 text-cyan-400" />
-            </div>
-            <div>
-              <h2 className="text-base font-semibold text-slate-950 dark:text-white">Search and filter</h2>
-              <p className="text-xs text-slate-500 dark:text-slate-400">Find people by name, team, role, or status.</p>
-            </div>
-          </div>
+        <div className="mb-4 rounded-lg border border-slate-200 bg-white p-3 shadow-sm dark:border-white/10 dark:bg-[#10131c]">
           <EmployeeFilters
             filters={filters}
             setFilters={setFilters}
@@ -436,14 +421,14 @@ const EmployeeDirectory = ({ onLogout }) => {
         </div>
 
         {/* Employee Table Section */}
-        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-[#10131c] sm:p-5">
-          <div className="mb-4 flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-400/10">
-              <Users className="h-4 w-4 text-emerald-400" />
+        <div className="overflow-hidden rounded-lg border border-slate-200 bg-white p-3 shadow-sm dark:border-white/10 dark:bg-[#10131c]">
+          <div className="mb-3 flex items-center gap-2">
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-400/10">
+              <Users className="h-3.5 w-3.5 text-emerald-400" />
             </div>
             <div>
-              <h2 className="text-base font-semibold text-slate-950 dark:text-white">Team directory</h2>
-              <p className="text-xs text-slate-500 dark:text-slate-400">{totalEmployees} matching employee{totalEmployees === 1 ? "" : "s"}</p>
+              <h2 className="text-sm font-semibold text-slate-950 dark:text-white">Team directory</h2>
+              <p className="text-[10px] text-slate-500 dark:text-slate-400">{totalEmployees} matching employee{totalEmployees === 1 ? "" : "s"}</p>
             </div>
           </div>
 

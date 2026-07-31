@@ -20,6 +20,10 @@ module.exports = {
         gradientPink: '#f19ad2',
         gradientViolet: '#ab4ee1',
         gradientDeepViolet: '#9743c8',
+        // New teal brand color
+        tealPrimary: '#00a884',
+        tealHover: '#008f6f',
+        tealDark: '#007a5e',
       },
       backdropBlur: {
         sm: '4px', // Enable blur small for backdrop-blur-sm usage

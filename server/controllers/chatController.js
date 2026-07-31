@@ -179,12 +179,15 @@ exports.getGroupConversationsForUser = async (userId) => {
   const userIdStr = String(userId);
   const groups = await Conversation.find({ type: "group", members: userIdStr });
 
-  // For each group, fetch user details for members manually
+  // For each group, fetch user details for members manually (exclude terminated and absconded)
   const populatedGroups = await Promise.all(
     groups.map(async (group) => {
       const memberDetails = await User.find(
-        { _id: { $in: group.members } },
-        "name role"
+        {
+          _id: { $in: group.members },
+          status: { $nin: ["terminated", "absconded"] } // Exclude terminated and absconded employees
+        },
+        "name role status"
       );
       return {
         ...group.toObject(),

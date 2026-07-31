@@ -9,10 +9,8 @@ import {
   Calendar,
   Cake,
   Clock,
-  FileText,
   RefreshCw,
   Send,
-  UserCheck,
   Users,
 } from "lucide-react";
 import { toast, ToastContainer } from "react-toastify";
@@ -339,33 +337,6 @@ const HRDashboard = ({ onLogout }) => {
     );
   };
 
-  const quickLinks = [
-    {
-      label: "Employee directory",
-      description: "Profiles, roles and employee details",
-      icon: Users,
-      path: "/directory",
-    },
-    {
-      label: "Shift management",
-      description: "Schedules, shifts and assignments",
-      icon: Clock,
-      path: "/admin/shifts",
-    },
-    {
-      label: "Attendance status",
-      description: "See who is working right now",
-      icon: UserCheck,
-      path: "/super-admin",
-    },
-    {
-      label: "Notice board",
-      description: "Publish and manage team notices",
-      icon: FileText,
-      path: "/admin/notices",
-    },
-  ];
-
   return (
     <div className="relative flex h-[100dvh] overflow-hidden bg-slate-50 text-slate-900 dark:bg-[#0b0d12] dark:text-slate-100">
       <Sidebar
@@ -482,79 +453,45 @@ const HRDashboard = ({ onLogout }) => {
             />
           </section>
 
-          <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(300px,0.65fr)]">
-            <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-[#10131c] sm:p-5">
-              <div>
-                <h2 className="text-base font-semibold text-slate-950 dark:text-white">
-                  Action queue
-                </h2>
-                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                  The HR items most likely to need attention today.
-                </p>
-              </div>
-              <div className="mt-4 space-y-3">
-                <QueueItem
-                  icon={AlertCircle}
-                  title="Leave approvals"
-                  description="Review pending time-off requests and employee notes."
-                  count={pendingLeaves.length}
-                  tone="rose"
-                  actionLabel="Review"
-                  onClick={() => navigate("/admin/leaves")}
-                />
-                <QueueItem
-                  icon={Clock}
-                  title="Flexible-shift requests"
-                  description="Approve or reject requested schedule adjustments."
-                  count={pendingFlexibleRequests.length}
-                  tone="violet"
-                  actionLabel="Open"
-                  onClick={() => setShowFlexModal(true)}
-                />
-                <QueueItem
-                  icon={Calendar}
-                  title="Employees away today"
-                  description="Check the approved leave affecting today’s availability."
-                  count={activeLeaves.length}
-                  tone="amber"
-                  actionLabel="View"
-                  onClick={() => setShowLeavesModal(true)}
-                />
-              </div>
-            </section>
-
-            <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-[#10131c] sm:p-5">
+          <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-[#10131c] sm:p-5">
+            <div>
               <h2 className="text-base font-semibold text-slate-950 dark:text-white">
-                HR shortcuts
+                Action queue
               </h2>
               <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                Open the most-used people tools.
+                The HR items most likely to need attention today.
               </p>
-              <div className="mt-4 space-y-2">
-                {quickLinks.map((link) => (
-                  <button
-                    key={link.path}
-                    type="button"
-                    onClick={() => navigate(link.path)}
-                    className="group flex w-full items-center gap-3 rounded-xl border border-slate-200 p-3 text-left transition hover:border-blue-200 hover:bg-blue-50 dark:border-white/10 dark:hover:border-blue-400/20 dark:hover:bg-blue-400/10"
-                  >
-                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-600 transition group-hover:bg-blue-600 group-hover:text-white dark:bg-white/[0.05] dark:text-slate-300">
-                      {React.createElement(link.icon, { className: "h-4 w-4" })}
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block text-sm font-semibold text-slate-800 dark:text-slate-100">
-                        {link.label}
-                      </span>
-                      <span className="mt-0.5 block text-xs leading-4 text-slate-500 dark:text-slate-400">
-                        {link.description}
-                      </span>
-                    </span>
-                    <ArrowRight className="h-4 w-4 shrink-0 text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-blue-600 dark:text-slate-600 dark:group-hover:text-blue-300" />
-                  </button>
-                ))}
-              </div>
-            </section>
-          </div>
+            </div>
+            <div className="mt-4 space-y-3">
+              <QueueItem
+                icon={AlertCircle}
+                title="Leave approvals"
+                description="Review pending time-off requests and employee notes."
+                count={pendingLeaves.length}
+                tone="rose"
+                actionLabel="Review"
+                onClick={() => navigate("/admin/leaves")}
+              />
+              <QueueItem
+                icon={Clock}
+                title="Flexible-shift requests"
+                description="Approve or reject requested schedule adjustments."
+                count={pendingFlexibleRequests.length}
+                tone="violet"
+                actionLabel="Open"
+                onClick={() => setShowFlexModal(true)}
+              />
+              <QueueItem
+                icon={Calendar}
+                title="Employees away today"
+                description="Check the approved leave affecting today's availability."
+                count={activeLeaves.length}
+                tone="amber"
+                actionLabel="View"
+                onClick={() => setShowLeavesModal(true)}
+              />
+            </div>
+          </section>
 
           <section className="grid gap-4 lg:grid-cols-2">
             <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-[#10131c] sm:p-5">

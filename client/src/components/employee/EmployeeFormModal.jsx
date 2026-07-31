@@ -315,22 +315,31 @@ const EmployeeFormModal = ({ isEditing, employee, onClose, onSubmit, existingIds
                     <option value="">Select Department</option>
                     <option value="executives">Executives</option>
                     <option value="development">Development</option>
-                    <option value="marketingAndSales">Marketing & Sales</option>
+                    <option value="marketingAndSales">Sales</option>
                     <option value="humanResource">Human Resource</option>
                   </select>
                   {errors.department && <p className="text-red-400 text-xs mt-1">{errors.department}</p>}
                 </Field>
 
-                <Field label="Designation" required>
+                <Field label={formData.department === "development" ? "Specialization" : "Designation"} required>
                   <input
                     type="text"
                     name="designation"
                     value={formData.designation}
                     onChange={handleChange}
-                    placeholder="e.g. Senior Developer"
+                    placeholder={
+                      formData.department === "development"
+                        ? "e.g. Digital Marketing, Content Writer, SEO Expert"
+                        : "e.g. Senior Developer"
+                    }
                     className={`${inputClass} ${errors.designation ? "border-red-500" : ""}`}
                   />
                   {errors.designation && <p className="text-red-400 text-xs mt-1">{errors.designation}</p>}
+                  {formData.department === "development" && (
+                    <p className="text-xs text-slate-400 mt-1">
+                      Free-text specialization label (e.g. Digital Marketing, Content Writer, SEO Expert) — doesn't affect access/permissions.
+                    </p>
+                  )}
                 </Field>
 
                 <Field label="Position / Title">

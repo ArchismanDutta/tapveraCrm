@@ -37,7 +37,7 @@ const DEPARTMENTS = [
   { value: "", label: "Not assigned" },
   { value: "executives", label: "Executives" },
   { value: "development", label: "Development" },
-  { value: "marketingAndSales", label: "Marketing & Sales" },
+  { value: "marketingAndSales", label: "Sales" },
   { value: "humanResource", label: "Human Resource" },
 ];
 

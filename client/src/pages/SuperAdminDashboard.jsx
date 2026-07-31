@@ -4,18 +4,13 @@ import { useNavigate } from "react-router-dom";
 import {
   Activity,
   AlertCircle,
-  ArrowRight,
   Calendar,
   CheckCircle2,
-  Clock,
   Coffee,
   Download,
-  FileText,
   Filter,
   RefreshCw,
   Search,
-  Timer,
-  TrendingUp,
   UserCheck,
   Users,
   UserX,
@@ -39,6 +34,74 @@ const parseWorkDuration = (duration) => {
   const hours = Number(duration.match(/(\d+)h/)?.[1] || 0);
   const minutes = Number(duration.match(/(\d+)m/)?.[1] || 0);
   return hours + minutes / 60;
+};
+
+const formatHMS = (seconds = 0) => {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = seconds % 60;
+  return `${h}h ${m.toString().padStart(2, "0")}m ${s.toString().padStart(2, "0")}s`;
+};
+
+const calculateLiveDuration = (employee) => {
+  if (!employee.timeline || !Array.isArray(employee.timeline)) {
+    return { workSeconds: 0, breakSeconds: 0 };
+  }
+
+  const now = new Date();
+  const todayStart = new Date(now);
+  todayStart.setHours(0, 0, 0, 0);
+
+  const events = employee.timeline
+    .filter(e => {
+      const eventDate = new Date(e.time || e.timestamp);
+      return eventDate >= todayStart && eventDate <= now;
+    })
+    .sort((a, b) => new Date(a.time || a.timestamp) - new Date(b.time || b.timestamp));
+
+  let totalWorkSeconds = 0;
+  let totalBreakSeconds = 0;
+  let currentSessionStart = null;
+  let currentBreakStart = null;
+
+  for (const event of events) {
+    const eventType = (event.type || '').toUpperCase();
+    const eventTime = new Date(event.time || event.timestamp);
+
+    if (eventType === 'PUNCH_IN' || eventType === 'BREAK_END' || eventType === 'RESUME_WORK') {
+      currentSessionStart = eventTime;
+      if (currentBreakStart) {
+        totalBreakSeconds += Math.floor((eventTime - currentBreakStart) / 1000);
+        currentBreakStart = null;
+      }
+    } else if (eventType === 'BREAK_START') {
+      if (currentSessionStart) {
+        totalWorkSeconds += Math.floor((eventTime - currentSessionStart) / 1000);
+        currentSessionStart = null;
+      }
+      currentBreakStart = eventTime;
+    } else if (eventType === 'PUNCH_OUT') {
+      if (currentSessionStart) {
+        totalWorkSeconds += Math.floor((eventTime - currentSessionStart) / 1000);
+        currentSessionStart = null;
+      }
+      if (currentBreakStart) {
+        totalBreakSeconds += Math.floor((eventTime - currentBreakStart) / 1000);
+        currentBreakStart = null;
+      }
+    }
+  }
+
+  // Add ongoing session time
+  if (currentSessionStart && employee.currentlyWorking) {
+    totalWorkSeconds += Math.floor((now - currentSessionStart) / 1000);
+  }
+
+  if (currentBreakStart && employee.onBreak) {
+    totalBreakSeconds += Math.floor((now - currentBreakStart) / 1000);
+  }
+
+  return { workSeconds: totalWorkSeconds, breakSeconds: totalBreakSeconds };
 };
 
 const formatTime = (value) => {
@@ -138,13 +201,71 @@ const StatusBadge = ({ employee }) => {
   const meta = STATUS_META[status];
 
   return (
-    <span
-      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold ${meta.badge}`}
-    >
-      <span className={`h-1.5 w-1.5 rounded-full ${meta.dot}`} />
-      {meta.label}
-    </span>
+    <div className="flex flex-wrap items-center gap-1.5">
+      <span
+        className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold ${meta.badge}`}
+      >
+        <span className={`h-1.5 w-1.5 rounded-full ${meta.dot}`} />
+        {meta.label}
+      </span>
+
+      {/* Late Badge */}
+      {employee.isLate && employee.arrivalTime && (
+        <span className="inline-flex items-center gap-1 rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-[10px] font-semibold text-rose-700 dark:border-rose-400/20 dark:bg-rose-400/10 dark:text-rose-200">
+          🔴 Late
+        </span>
+      )}
+
+      {/* Overtime Badge */}
+      {employee.isOvertime && employee.currentlyWorking && (
+        <span className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-700 dark:border-blue-400/20 dark:bg-blue-400/10 dark:text-blue-200">
+          ⏰ Overtime
+        </span>
+      )}
+    </div>
   );
+};
+
+const LiveWorkDuration = ({ employee }) => {
+  const [seconds, setSeconds] = React.useState(0);
+
+  React.useEffect(() => {
+    const updateDuration = () => {
+      const { workSeconds } = calculateLiveDuration(employee);
+      setSeconds(workSeconds);
+    };
+
+    updateDuration();
+
+    // Only update if currently working or if they have worked today
+    if (employee.currentlyWorking || employee.arrivalTime) {
+      const interval = setInterval(updateDuration, 1000);
+      return () => clearInterval(interval);
+    }
+  }, [employee]);
+
+  return <span>{formatHMS(seconds)}</span>;
+};
+
+const LiveBreakDuration = ({ employee }) => {
+  const [seconds, setSeconds] = React.useState(0);
+
+  React.useEffect(() => {
+    const updateDuration = () => {
+      const { breakSeconds } = calculateLiveDuration(employee);
+      setSeconds(breakSeconds);
+    };
+
+    updateDuration();
+
+    // Only update if on break or if they have taken breaks today
+    if (employee.onBreak || (employee.timeline && employee.timeline.some(e => (e.type || '').toUpperCase().includes('BREAK')))) {
+      const interval = setInterval(updateDuration, 1000);
+      return () => clearInterval(interval);
+    }
+  }, [employee]);
+
+  return <span>{formatHMS(seconds)}</span>;
 };
 
 const EmployeeIdentity = ({ employee }) => (
@@ -164,11 +285,6 @@ const EmployeeIdentity = ({ employee }) => (
 );
 
 const EmployeeMobileCard = ({ employee }) => {
-  const breakMinutes = attendanceUtils.calculateBreakMinutes(
-    employee,
-    employee.onBreak,
-  );
-
   return (
     <article className="rounded-xl border border-slate-200 bg-white p-4 dark:border-white/10 dark:bg-white/[0.02]">
       <div className="flex items-start justify-between gap-3">
@@ -191,13 +307,13 @@ const EmployeeMobileCard = ({ employee }) => {
         <div>
           <dt className="text-slate-400">Work time</dt>
           <dd className="mt-1 font-semibold text-slate-700 dark:text-slate-200">
-            {employee.workDuration}
+            <LiveWorkDuration employee={employee} />
           </dd>
         </div>
         <div>
           <dt className="text-slate-400">Break time</dt>
           <dd className="mt-1 font-semibold text-slate-700 dark:text-slate-200">
-            {breakMinutes} min
+            <LiveBreakDuration employee={employee} />
           </dd>
         </div>
       </dl>
@@ -419,27 +535,6 @@ const SuperAdminDashboard = ({ onLogout }) => {
   );
   const hasFilters = searchTerm || filterStatus !== "all";
 
-  const quickActions = [
-    {
-      label: "Employee directory",
-      description: "Profiles, roles and employee details",
-      icon: Users,
-      action: () => navigate("/directory"),
-    },
-    {
-      label: "Attendance portal",
-      description: "Review and manage attendance records",
-      icon: Calendar,
-      action: () => navigate("/super-admin/attendance"),
-    },
-    {
-      label: "Leave requests",
-      description: "Review pending employee requests",
-      icon: FileText,
-      action: () => navigate("/admin/leaves"),
-    },
-  ];
-
   return (
     <div className="relative flex h-[100dvh] overflow-hidden bg-slate-50 text-slate-900 dark:bg-[#0b0d12] dark:text-slate-100">
       <Sidebar
@@ -553,8 +648,7 @@ const SuperAdminDashboard = ({ onLogout }) => {
             />
           </section>
 
-          <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_330px]">
-            <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-white/10 dark:bg-[#10131c]">
+          <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-white/10 dark:bg-[#10131c]">
               <div className="border-b border-slate-200 p-4 dark:border-white/10 sm:p-5">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
@@ -708,14 +802,10 @@ const SuperAdminDashboard = ({ onLogout }) => {
                               {formatTime(employee.punchOutTime)}
                             </td>
                             <td className="px-4 py-3.5 text-sm font-medium text-slate-700 dark:text-slate-200">
-                              {employee.workDuration}
+                              <LiveWorkDuration employee={employee} />
                             </td>
                             <td className="px-4 py-3.5 text-sm font-medium text-slate-700 dark:text-slate-200">
-                              {attendanceUtils.calculateBreakMinutes(
-                                employee,
-                                employee.onBreak,
-                              )}{" "}
-                              min
+                              <LiveBreakDuration employee={employee} />
                             </td>
                           </tr>
                         ))}
@@ -724,97 +814,7 @@ const SuperAdminDashboard = ({ onLogout }) => {
                   </div>
                 </>
               )}
-            </section>
-
-            <aside className="grid gap-4 md:grid-cols-2 xl:grid-cols-1">
-              <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-[#10131c]">
-                <div className="flex items-center gap-2">
-                  <TrendingUp className="h-4 w-4 text-blue-600 dark:text-blue-300" />
-                  <h2 className="text-sm font-semibold text-slate-950 dark:text-white">
-                    Daily summary
-                  </h2>
-                </div>
-
-                <div className="mt-5 flex items-end justify-between gap-4">
-                  <div>
-                    <p className="text-3xl font-semibold tracking-tight text-slate-950 dark:text-white">
-                      {stats.attendanceRate}%
-                    </p>
-                    <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                      Attendance rate
-                    </p>
-                  </div>
-                  <p className="text-right text-xs text-slate-500 dark:text-slate-400">
-                    {stats.present} present
-                    <br />
-                    {stats.absent} not checked in
-                  </p>
-                </div>
-                <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-white/[0.06]">
-                  <div
-                    className="h-full rounded-full bg-blue-600 transition-all dark:bg-blue-400"
-                    style={{ width: `${stats.attendanceRate}%` }}
-                  />
-                </div>
-
-                <dl className="mt-5 grid grid-cols-2 gap-3 border-t border-slate-200 pt-4 dark:border-white/10">
-                  <div className="rounded-xl bg-slate-50 p-3 dark:bg-white/[0.03]">
-                    <dt className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
-                      <Timer className="h-3.5 w-3.5" />
-                      Avg. work
-                    </dt>
-                    <dd className="mt-1 text-lg font-semibold text-slate-900 dark:text-white">
-                      {stats.averageWorkHours.toFixed(1)}h
-                    </dd>
-                  </div>
-                  <div className="rounded-xl bg-slate-50 p-3 dark:bg-white/[0.03]">
-                    <dt className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
-                      <Clock className="h-3.5 w-3.5" />
-                      Completed
-                    </dt>
-                    <dd className="mt-1 text-lg font-semibold text-slate-900 dark:text-white">
-                      {stats.completed}
-                    </dd>
-                  </div>
-                </dl>
-              </section>
-
-              <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-[#10131c]">
-                <h2 className="text-sm font-semibold text-slate-950 dark:text-white">
-                  Admin shortcuts
-                </h2>
-                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                  Open the most-used workforce tools.
-                </p>
-                <div className="mt-4 space-y-2">
-                  {quickActions.map((action) => {
-                    const ActionIcon = action.icon;
-                    return (
-                      <button
-                        key={action.label}
-                        type="button"
-                        onClick={action.action}
-                        className="group flex w-full items-center gap-3 rounded-xl border border-slate-200 p-3 text-left transition hover:border-blue-200 hover:bg-blue-50 dark:border-white/10 dark:hover:border-blue-400/20 dark:hover:bg-blue-400/10"
-                      >
-                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-600 transition group-hover:bg-blue-600 group-hover:text-white dark:bg-white/[0.05] dark:text-slate-300">
-                          <ActionIcon className="h-4 w-4" />
-                        </span>
-                        <span className="min-w-0 flex-1">
-                          <span className="block text-sm font-semibold text-slate-800 dark:text-slate-100">
-                            {action.label}
-                          </span>
-                          <span className="mt-0.5 block text-xs leading-4 text-slate-500 dark:text-slate-400">
-                            {action.description}
-                          </span>
-                        </span>
-                        <ArrowRight className="h-4 w-4 shrink-0 text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-blue-600 dark:text-slate-600 dark:group-hover:text-blue-300" />
-                      </button>
-                    );
-                  })}
-                </div>
-              </section>
-            </aside>
-          </div>
+          </section>
         </div>
       </main>
 

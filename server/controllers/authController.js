@@ -189,6 +189,14 @@ exports.login = async (req, res) => {
       }
     }
 
+    // Check if user status is inactive, terminated, or absconded (only for User type, not Client)
+    if (userType === "User" && user.status && ["inactive", "terminated", "absconded"].includes(user.status)) {
+      return res.status(403).json({
+        message: "Access denied. Your account has been deactivated. Please contact your administrator.",
+        accountStatus: user.status
+      });
+    }
+
     if (!(await passwordMatches(password, user.password))) {
       return res.status(401).json({ message: "Invalid credentials." });
     }

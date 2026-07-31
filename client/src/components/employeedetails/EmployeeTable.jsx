@@ -4,7 +4,9 @@ import {
   ChevronDown,
   Crown,
   Eye,
+  EyeOff,
   Globe,
+  Key,
   Loader2,
   Mail,
   MapPin,
@@ -34,6 +36,9 @@ const EmployeeTable = ({
   const navigate = useNavigate();
   const [statusDropdownOpen, setStatusDropdownOpen] = useState(null);
   const [regionDropdownOpen, setRegionDropdownOpen] = useState(null);
+  const [crmCredentialsModal, setCrmCredentialsModal] = useState(null);
+
+  const isSuperAdmin = currentUser?.role?.toLowerCase() === "super-admin";
 
   const sortedEmployees = useMemo(() => {
     const currentUserId = String(currentUser?._id || "");
@@ -126,7 +131,7 @@ const EmployeeTable = ({
           <table className="w-full min-w-[1080px] text-left">
             <thead className="sticky top-0 z-10 bg-slate-50 dark:bg-[#151923]">
               <tr className="border-b border-slate-200 dark:border-white/10">
-                {["Employee", "Contact", "Department", "Position", "Region", "Status", ""].map(
+                {["Employee", "Contact", "Department", "Position", "Region", ...(isSuperAdmin ? ["CRM Cred"] : []), "Status", ""].map(
                   (heading) => (
                     <th
                       key={heading || "actions"}
@@ -169,6 +174,21 @@ const EmployeeTable = ({
                     <td className="px-4 py-3.5">
                       <RegionControl employee={employee} {...sharedControlProps} />
                     </td>
+                    {isSuperAdmin && (
+                      <td className="px-4 py-3.5">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setCrmCredentialsModal(employee);
+                          }}
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition hover:bg-slate-50 hover:text-blue-600 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300 dark:hover:bg-white/[0.07] dark:hover:text-blue-400"
+                          aria-label={`View CRM credentials for ${employee.name}`}
+                        >
+                          <Key className="h-3.5 w-3.5" />
+                        </button>
+                      </td>
+                    )}
                     <td className="px-4 py-3.5">
                       <StatusControl employee={employee} {...sharedControlProps} />
                     </td>
@@ -201,6 +221,14 @@ const EmployeeTable = ({
           ))}
         </div>
       </div>
+
+      {/* CRM Credentials Modal */}
+      {crmCredentialsModal && (
+        <CrmCredentialsModal
+          employee={crmCredentialsModal}
+          onClose={() => setCrmCredentialsModal(null)}
+        />
+      )}
     </div>
   );
 };
@@ -379,5 +407,131 @@ const EmployeeAction = ({ employee, canManage, onView }) =>
       <Mail className="h-3.5 w-3.5" /> Email
     </a>
   );
+
+const CrmCredentialsModal = ({ employee, onClose }) => {
+  const [showPassword, setShowPassword] = useState(false);
+  const [copied, setCopied] = useState({ username: false, password: false });
+
+  const copyToClipboard = (text, field) => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied({ ...copied, [field]: true });
+      setTimeout(() => setCopied({ ...copied, [field]: false }), 2000);
+    });
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div
+        className="w-full max-w-md rounded-2xl border border-slate-200 bg-white shadow-xl dark:border-white/10 dark:bg-[#10131c]"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between border-b border-slate-200 p-5 dark:border-white/10">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 dark:bg-blue-400/10">
+              <Key className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold text-slate-900 dark:text-white">
+                CRM Credentials
+              </h3>
+              <p className="text-sm text-slate-500 dark:text-slate-400">
+                {employee.name}
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-white/[0.05] dark:hover:text-slate-200"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="space-y-4 p-5">
+          {/* Username Field */}
+          <div>
+            <label className="mb-2 block text-xs font-semibold text-slate-500 dark:text-slate-400">
+              CRM Username
+            </label>
+            <div className="flex items-center gap-2">
+              <div className="flex-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 font-mono text-sm text-slate-900 dark:border-white/10 dark:bg-white/[0.02] dark:text-white">
+                {employee.crmUsername || "Not set"}
+              </div>
+              {employee.crmUsername && (
+                <button
+                  type="button"
+                  onClick={() => copyToClipboard(employee.crmUsername, "username")}
+                  className="rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-xs font-semibold text-slate-600 transition hover:bg-slate-50 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300 dark:hover:bg-white/[0.07]"
+                >
+                  {copied.username ? "Copied!" : "Copy"}
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Password Field */}
+          <div>
+            <label className="mb-2 block text-xs font-semibold text-slate-500 dark:text-slate-400">
+              CRM Password
+            </label>
+            <div className="flex items-center gap-2">
+              <div className="flex flex-1 items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 dark:border-white/10 dark:bg-white/[0.02]">
+                <span className="flex-1 font-mono text-sm text-slate-900 dark:text-white">
+                  {employee.crmPassword
+                    ? showPassword
+                      ? employee.crmPassword
+                      : "••••••••"
+                    : "Not set"}
+                </span>
+                {employee.crmPassword && (
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="text-slate-400 transition hover:text-slate-600 dark:hover:text-slate-200"
+                  >
+                    {showPassword ? (
+                      <EyeOff className="h-4 w-4" />
+                    ) : (
+                      <Eye className="h-4 w-4" />
+                    )}
+                  </button>
+                )}
+              </div>
+              {employee.crmPassword && (
+                <button
+                  type="button"
+                  onClick={() => copyToClipboard(employee.crmPassword, "password")}
+                  className="rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-xs font-semibold text-slate-600 transition hover:bg-slate-50 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300 dark:hover:bg-white/[0.07]"
+                >
+                  {copied.password ? "Copied!" : "Copy"}
+                </button>
+              )}
+            </div>
+          </div>
+
+          {!employee.crmUsername && !employee.crmPassword && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-700 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-200">
+              <AlertCircle className="mb-1 inline h-4 w-4" /> No CRM credentials have been set for this employee.
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="border-t border-slate-200 p-5 dark:border-white/10">
+          <button
+            type="button"
+            onClick={onClose}
+            className="h-10 w-full rounded-lg bg-blue-600 text-sm font-semibold text-white transition hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-400"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 export default EmployeeTable;

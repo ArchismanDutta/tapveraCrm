@@ -77,6 +77,11 @@ const menuConfig = {
       label: "My Tasks",
     },
     {
+      to: "/team/tasks",
+      icon: <Users size={18} animateOnHover />,
+      label: "Team Task Management",
+    },
+    {
       to: "/sheets",
       icon: <FileSpreadsheet size={18} />,
       label: "Shared Sheets",
@@ -142,6 +147,16 @@ const menuConfig = {
       icon: <ArrowLeftRight size={18} animateOnHover />,
       label: "My Transfers",
     },
+    {
+      // Role & Department Hierarchy Revamp v2 (2026-07-27): present in this
+      // array (and hr/admin's) so the item can appear for ANY Position later
+      // granted canManageSubordinateAccess, not just today's Admin-only
+      // seeding — visibility is decided by the permission-gated filter below,
+      // not by which role array it's listed in.
+      to: "/my-team/access",
+      icon: <Shield size={18} />,
+      label: "My Team's Access",
+    },
   ],
   hr: [
     {
@@ -165,15 +180,21 @@ const menuConfig = {
       label: "My Tasks",
     },
     {
+      to: "/team/tasks",
+      icon: <Users size={18} animateOnHover />,
+      label: "Team Task Management",
+    },
+    {
       to: "/super-admin/attendance",
       icon: <Pin size={16} animateOnHover />,
       label: "Attendance Portal",
     },
-    {
-      to: "/admin/salary-management",
-      icon: <Fingerprint size={16} animateOnHover />,
-      label: "Salary Management",
-    },
+    // Hidden: Manual Payslip Management (backend still works, just hidden from UI)
+    // {
+    //   to: "/admin/salary-management",
+    //   icon: <Fingerprint size={16} animateOnHover />,
+    //   label: "Salary Management",
+    // },
 
     {
       to: "/my-payslips",
@@ -242,6 +263,11 @@ const menuConfig = {
       to: "/super-admin",
       icon: <ClipboardList size={18} />,
       label: "Employees Current Status",
+    },
+    {
+      to: "/my-team/access",
+      icon: <Shield size={18} />,
+      label: "My Team's Access",
     },
     {
       type: "achievements",
@@ -318,7 +344,12 @@ const menuConfig = {
     {
       to: "/tasks",
       icon: <CircleCheckBig size={18} animateOnHover />,
-      label: "Tasks",
+      label: "My Tasks",
+    },
+    {
+      to: "/team/tasks",
+      icon: <Users size={18} animateOnHover />,
+      label: "Team Task Management",
     },
     { to: "/leaves", icon: <FileText size={18} />, label: "My Leaves" },
     {
@@ -350,6 +381,11 @@ const menuConfig = {
       to: "/profile",
       icon: <AnimatedUser size={18} animateOnHover />,
       label: "My Profile",
+    },
+    {
+      to: "/my-team/access",
+      icon: <Shield size={18} />,
+      label: "My Team's Access",
     },
     {
       type: "achievements",
@@ -399,11 +435,12 @@ const menuConfig = {
           icon: <Disc3 size={16} animateOnHover />,
           label: "Manual Attendance",
         },
-        {
-          to: "/admin/salary-management",
-          icon: <Fingerprint size={16} animateOnHover />,
-          label: "Salary Management",
-        },
+        // Hidden: Manual Payslip Management (backend still works, just hidden from UI)
+        // {
+        //   to: "/admin/salary-management",
+        //   icon: <Fingerprint size={16} animateOnHover />,
+        //   label: "Salary Management",
+        // },
         {
           to: "/admin/access-management",
           icon: <Shield size={16} />,
@@ -422,11 +459,6 @@ const menuConfig = {
           icon: <BookOpen size={16} animateOnHover />,
           label: "Employee Notepads",
         },
-        {
-          to: "/super-admin/payments",
-          icon: <DollarSign size={16} />,
-          label: "Payment Management",
-        },
       ],
     },
 
@@ -439,6 +471,11 @@ const menuConfig = {
           to: "/clients",
           icon: <Briefcase size={16} />,
           label: "Client Management",
+        },
+        {
+          to: "/admin/client-requests",
+          icon: <Mail size={16} />,
+          label: "Client Requests",
         },
         {
           to: "/projects",
@@ -739,6 +776,31 @@ const Sidebar = ({
          userPosition.toLowerCase().includes("manager"))
       );
 
+  // Check if user has task/project team viewing permissions
+  const hasTaskTeamView = permissions
+    ? Boolean(
+        permissions.permissions?.canViewSubordinateTasks ||
+        permissions.permissions?.canViewDepartmentTasks
+      )
+    : Boolean(
+        userPosition &&
+        (userPosition.toLowerCase().includes("supervisor") ||
+         userPosition.toLowerCase().includes("team lead") ||
+         userPosition.toLowerCase().includes("manager"))
+      );
+
+  const hasProjectTeamView = permissions
+    ? Boolean(
+        permissions.permissions?.canViewSubordinateProjects ||
+        permissions.permissions?.canViewDepartmentProjects
+      )
+    : Boolean(
+        userPosition &&
+        (userPosition.toLowerCase().includes("supervisor") ||
+         userPosition.toLowerCase().includes("team lead") ||
+         userPosition.toLowerCase().includes("manager"))
+      );
+
   // Filter menu items based on role, department, and position
   const rawMenuItems = menuConfig[role] || menuConfig["employee"];
   const menuItems = rawMenuItems.map((item) => {
@@ -748,6 +810,10 @@ const Sidebar = ({
     }
     if (item.to === "/callbacks" && isSupervisor) {
       return { ...item, label: "Team Callbacks" };
+    }
+    // Update labels for projects based on permissions (tasks label stays "My Tasks")
+    if (item.to === "/projects" && hasProjectTeamView) {
+      return { ...item, label: "Team Projects" };
     }
     return item;
   }).filter((item) => {
@@ -760,6 +826,10 @@ const Sidebar = ({
         }
         if (child.to === "/callbacks" && isSupervisor) {
           return { ...child, label: "Team Callbacks" };
+        }
+        // Update labels for projects in dropdowns (tasks label stays "My Tasks")
+        if (child.to === "/projects" && hasProjectTeamView) {
+          return { ...child, label: "Team Projects" };
         }
         return child;
       }).filter((child) => {
@@ -798,6 +868,35 @@ const Sidebar = ({
             (userPosition && userPosition.trim() !== "")
           );
     }
+
+    // Role & Department Hierarchy Revamp v2 (2026-07-27): "My Team's Access"
+    // is gated on the server-resolved canManageSubordinateAccess flag, not a
+    // hardcoded role check — seeded true on Admin only today, but any
+    // Position can get it later from the Access Management page with no
+    // further code change. Falls back to role === "admin"/"super-admin"
+    // until permissions load (or if the fetch fails), same
+    // never-lock-someone-out pattern as isSupervisor/canAccessLeadManagement
+    // above.
+    if (item.to === "/my-team/access") {
+      return permissions
+        ? Boolean(permissions.permissions?.canManageSubordinateAccess)
+        : (role === "super-admin" || role === "admin");
+    }
+
+    // Team Task Management (2026-07-30): Only show for users with
+    // canViewSubordinateTasks permission. Uses server-resolved permission
+    // flag as the single source of truth. Falls back to position-string
+    // check until permissions load (same pattern as other permission checks).
+    if (item.to === "/team/tasks") {
+      return permissions
+        ? Boolean(permissions.permissions?.canViewSubordinateTasks)
+        : (userPosition && (
+            userPosition.toLowerCase().includes("manager") ||
+            userPosition.toLowerCase().includes("supervisor") ||
+            userPosition.toLowerCase().includes("team lead")
+          ));
+    }
+
     return true;
   });
 
@@ -1087,10 +1186,10 @@ const Sidebar = ({
         </div>
 
         {/* Logout Button */}
-        <div className="relative z-10 border-t border-white/10 px-3 py-3">
+        <div className="relative z-10 border-t border-gray-200 dark:border-white/10 px-3 py-3">
           <button
             onClick={onLogout}
-            className={`inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-rose-300/20 bg-rose-400/10 px-3 text-sm font-semibold text-rose-100 transition hover:bg-rose-400/15 ${
+            className={`inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-rose-300 dark:border-rose-300/20 bg-rose-100 dark:bg-rose-400/10 px-3 text-sm font-semibold text-rose-700 dark:text-rose-100 transition hover:bg-rose-200 dark:hover:bg-rose-400/15 ${
               collapsed ? "px-0" : ""
             }`}
             title={collapsed ? "Logout" : undefined}

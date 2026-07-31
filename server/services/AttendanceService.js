@@ -1,5 +1,6 @@
 // services/AttendanceService.js
 // Complete business logic for the new date-centric attendance system
+const mongoose = require("mongoose");
 const AttendanceRecord = require("../models/AttendanceRecord");
 const User = require("../models/User");
 const Shift = require("../models/Shift");
@@ -110,7 +111,53 @@ class AttendanceService {
   }
 
   /**
+   * Get or create attendance record with MongoDB session (for transactions)
+   *
+   * CRITICAL FIX (2026-07-31): This method is used within transactions to ensure
+   * proper locking and prevent race conditions when multiple concurrent requests
+   * try to modify the same attendance record.
+   *
+   * The session parameter ensures that:
+   * 1. Reads are isolated within the transaction
+   * 2. Record is locked until transaction commits
+   * 3. Concurrent requests wait for lock to be released
+   */
+  async getAttendanceRecordWithSession(date, session) {
+    const targetDate = this.normalizeDate(date);
+
+    // Use session for the query to ensure transaction isolation
+    let record = await AttendanceRecord.findOne({ date: targetDate }).session(session);
+
+    if (!record) {
+      record = new AttendanceRecord({
+        date: targetDate,
+        employees: [],
+        dailyStats: this.getDefaultDailyStats(),
+        departmentStats: [],
+        specialDay: await this.getSpecialDayInfo(targetDate)
+      });
+      // Save with session to include in transaction
+      await record.save({ session });
+    }
+
+    return record;
+  }
+
+  /**
    * Record punch event for employee
+   *
+   * CRITICAL FIX (2026-07-31): Uses MongoDB transactions to prevent race conditions
+   * when multiple concurrent punch requests try to modify the same attendance record.
+   *
+   * Without transactions, concurrent requests could:
+   * 1. Both read the same attendance record
+   * 2. Both add their events
+   * 3. Only the last save() wins, losing the first event
+   *
+   * With transactions:
+   * - First request locks the record
+   * - Second request waits until first completes
+   * - Both events are properly saved
    */
   async recordPunchEvent(userId, eventType, options = {}) {
     // Use actual UTC timestamp - JavaScript Date is always UTC internally
@@ -136,49 +183,69 @@ class AttendanceService {
     console.log(`   Assigned to attendance date: ${today.toISOString().split('T')[0]}`);
     console.log(`   Expected date (simple): ${now.toISOString().split('T')[0]}`);
 
-    // Get attendance record for the determined date
-    const record = await this.getAttendanceRecord(today);
+    // 🔒 TRANSACTION START: Prevent race conditions
+    const session = await mongoose.startSession();
+    session.startTransaction();
 
-    // Find or create employee record
-    let employee = record.getEmployee(userId);
+    try {
+      // Get attendance record for the determined date (with session lock)
+      const record = await this.getAttendanceRecordWithSession(today, session);
 
-    if (!employee) {
-      const employeeData = await this.createEmployeeRecord(userId, today);
-      employee = record.upsertEmployee(employeeData);
+      // Find or create employee record
+      let employee = record.getEmployee(userId);
+
+      if (!employee) {
+        const employeeData = await this.createEmployeeRecord(userId, today);
+        employee = record.upsertEmployee(employeeData);
+      }
+
+      // Validate punch event
+      this.validatePunchEvent(employee, eventType, now);
+
+      // Add punch event with actual UTC timestamp
+      const punchEvent = {
+        type: eventType,
+        timestamp: now,  // Store actual UTC timestamp
+        location: options.location,
+        ipAddress: options.ipAddress,
+        device: options.device,
+        manual: options.manual || false,
+        approvedBy: options.approvedBy,
+        notes: options.notes
+      };
+
+      employee.events.push(punchEvent);
+
+      // Recalculate all derived data
+      this.recalculateEmployeeData(employee, today);
+
+      // Update daily statistics
+      this.updateDailyStats(record);
+
+      // Save the record within the transaction
+      await record.save({ session });
+
+      // 🔒 COMMIT: All operations succeeded
+      await session.commitTransaction();
+      console.log(`   ✅ Transaction committed successfully`);
+
+      return {
+        success: true,
+        employee,
+        event: punchEvent,
+        message: this.getPunchMessage(eventType)
+      };
+
+    } catch (error) {
+      // 🔒 ROLLBACK: Operation failed, undo all changes
+      await session.abortTransaction();
+      console.error(`   ❌ Transaction aborted:`, error.message);
+      throw error;
+
+    } finally {
+      // 🔒 CLEANUP: Always end the session
+      session.endSession();
     }
-
-    // Validate punch event
-    this.validatePunchEvent(employee, eventType, now);
-
-    // Add punch event with actual UTC timestamp
-    const punchEvent = {
-      type: eventType,
-      timestamp: now,  // Store actual UTC timestamp
-      location: options.location,
-      ipAddress: options.ipAddress,
-      device: options.device,
-      manual: options.manual || false,
-      approvedBy: options.approvedBy,
-      notes: options.notes
-    };
-
-    employee.events.push(punchEvent);
-
-    // Recalculate all derived data
-    this.recalculateEmployeeData(employee, today);
-
-    // Update daily statistics
-    this.updateDailyStats(record);
-
-    // Save the record
-    await record.save();
-
-    return {
-      success: true,
-      employee,
-      event: punchEvent,
-      message: this.getPunchMessage(eventType)
-    };
   }
 
   /**

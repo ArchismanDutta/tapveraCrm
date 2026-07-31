@@ -81,7 +81,15 @@ const positionSchema = new mongoose.Schema(
       // everything; these exist so "Admin" (or any other position) can be
       // granted them explicitly instead of relying on a hardcoded bypass.
       canManageDepartments: { type: Boolean, default: false },
-      canManagePositions: { type: Boolean, default: false }
+      canManagePositions: { type: Boolean, default: false },
+
+      // Role & Department Hierarchy Revamp v2 (2026-07-27): lets a Position
+      // holder open a scoped editor over their own subordinates' access,
+      // subject to the ceiling/scope/root-of-trust rules in
+      // accessControl.js's canManageAccessFor(). Defaults false everywhere
+      // except the seeded Admin position (server/scripts/seedRoleHierarchyV2.js).
+      // See docs/superpowers/specs/2026-07-27-role-hierarchy-revamp-design.md
+      canManageSubordinateAccess: { type: Boolean, default: false }
     },
 
     // Hierarchical access configuration

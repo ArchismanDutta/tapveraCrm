@@ -806,6 +806,7 @@ export default function UnifiedTaskPage({ onLogout }) {
   const [popupMsg, setPopupMsg] = useState("");
   const [currentTime, setCurrentTime] = useState(new Date());
   const [statCounts, setStatCounts] = useState({ total: 0, assignedByMe: 0, dueToday: 0, overdue: 0, completed: 0, rejected: 0 });
+  const [permissions, setPermissions] = useState(null);
   const refreshMineRef = useRef(null);
   const refreshAssignedRef = useRef(null);
   const { activePayment, checkingPayment, clearPayment } = usePaymentCheck();
@@ -845,6 +846,9 @@ export default function UnifiedTaskPage({ onLogout }) {
     fetchStats();
     API.get("/api/users/assignable", { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } })
       .then((r) => setUsers(Array.isArray(r.data) ? r.data : [])).catch(() => {});
+    // Fetch user permissions to determine if "My Tasks" should be "Team Tasks"
+    API.get("/api/users/me/permissions", { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } })
+      .then((r) => setPermissions(r.data)).catch(() => {});
     const ci = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(ci);
   }, [fetchStats]);
@@ -857,8 +861,19 @@ export default function UnifiedTaskPage({ onLogout }) {
   if (activePayment) return <PaymentBlockOverlay payment={activePayment} onPaymentCleared={clearPayment} />;
 
   // ── Tab definitions ──────────────────────────────────────────────────────
+  // Check if user has team viewing permissions - if so, "My Tasks" becomes "Team Tasks"
+  const hasTeamTaskView = permissions?.permissions?.canViewSubordinateTasks ||
+                          permissions?.permissions?.canViewDepartmentTasks ||
+                          (user.position && (
+                            user.position.toLowerCase().includes("supervisor") ||
+                            user.position.toLowerCase().includes("team lead") ||
+                            user.position.toLowerCase().includes("manager")
+                          ));
+
+  const myTasksLabel = hasTeamTaskView ? "Team Tasks" : "My Tasks";
+
   const baseTabs = [
-    { id: "mine", label: "My Tasks", icon: <FaUserAlt size={11} /> },
+    { id: "mine", label: myTasksLabel, icon: <FaUserAlt size={11} /> },
     { id: "assigned-by-me", label: "Assigned by Me", icon: <FaListUl size={11} /> },
     { id: "create", label: "Create Task", icon: <FaPlus size={11} /> },
   ];
@@ -903,10 +918,14 @@ export default function UnifiedTaskPage({ onLogout }) {
               </div>
               <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Work</p>
               <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950 dark:text-white">
-                {adminUser ? "Task management" : "My tasks"}
+                {adminUser ? "Task management" : hasTeamTaskView ? "Team tasks" : "My tasks"}
               </h1>
               <p className="mt-1 max-w-2xl text-sm text-slate-500 dark:text-slate-400">
-                {adminUser ? `Good ${greeting}, ${user.name || "Admin"}. Review priorities, assignments, and team progress.` : "Focus on what is due, update progress, and keep work moving."}
+                {adminUser
+                  ? `Good ${greeting}, ${user.name || "Admin"}. Review priorities, assignments, and team progress.`
+                  : hasTeamTaskView
+                  ? `Good ${greeting}, ${user.name}. Monitor your team's tasks, track progress, and keep everyone on track.`
+                  : "Focus on what is due, update progress, and keep work moving."}
               </p>
             </div>
 

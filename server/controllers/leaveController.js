@@ -148,6 +148,15 @@ exports.updateLeaveStatus = async (req, res) => {
     if (!updatedLeave)
       return res.status(404).json({ message: "Leave request not found" });
 
+    // WFH Integration: Mark the dates as WFH-approved, but don't mark attendance
+    // Employee still needs to punch in to be counted as present
+    if (status === "Approved" && updatedLeave.type === "workFromHome") {
+      // Store WFH approval info - this will be checked when employee punches in
+      // The attendance system will reference approved WFH requests when validating punch-ins
+      console.log(`WFH request approved for user ${updatedLeave.employee._id} from ${updatedLeave.period.start} to ${updatedLeave.period.end}`);
+      console.log(`Employee must still punch in to be marked present - WFH status will be applied on punch-in`);
+    }
+
     try {
       const { broadcastLeaveUpdated } = require("../utils/websocket");
       broadcastLeaveUpdated(updatedLeave.employee?._id, {

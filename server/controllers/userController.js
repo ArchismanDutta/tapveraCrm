@@ -7,7 +7,7 @@ const Shift = require("../models/Shift");
 const bcrypt = require("bcryptjs");
 // Access-management rework (2026-07-03) - Phase 5.1.
 // See docs/superpowers/plans/2026-07-03-access-management-rework.md
-const { resolvePosition } = require("../utils/accessControl");
+const { resolvePosition, resolveEffectivePermissions, PERMISSION_FLAG_KEYS } = require("../utils/accessControl");
 
 
 // =========================
@@ -283,17 +283,30 @@ exports.getEmployeeDirectory = async (req, res) => {
       ];
     }
 
+    // Check if user is super-admin to include CRM credentials
+    const isSuperAdmin = req.user && req.user.role === 'super-admin';
+    const selectFields = "_id employeeId name email contact department departmentRef designation jobLevel status shiftType regions region position positionLevel" +
+      (isSuperAdmin ? " crmUsername crmPassword" : "");
+
     const employees = await User.find(filter)
-      .select("_id employeeId name email contact department designation jobLevel status shiftType regions region position positionLevel")
+      .select(selectFields)
+      .populate('departmentRef', 'name') // Populate department from Access Management
       .sort({ name: 1 });
 
-    const employeesWithStatus = employees.map(emp => ({
-      ...emp.toObject(),
-      status: emp.status, // Preserve actual status from database
-      shiftType: emp.shiftType || "standard",
-      jobLevel: emp.jobLevel || "junior",
-      regions: emp.regions || [emp.region] || ['Global'], // Ensure regions array exists
-    }));
+    const employeesWithStatus = employees.map(emp => {
+      const empObj = emp.toObject();
+      // Prefer departmentRef name over old department field
+      const departmentName = empObj.departmentRef?.name || empObj.department || null;
+
+      return {
+        ...empObj,
+        department: departmentName, // Use new department name if available
+        status: empObj.status, // Preserve actual status from database
+        shiftType: empObj.shiftType || "standard",
+        jobLevel: empObj.jobLevel || "junior",
+        regions: empObj.regions || [empObj.region] || ['Global'], // Ensure regions array exists
+      };
+    });
 
     res.json(employeesWithStatus);
   } catch (err) {
@@ -308,13 +321,13 @@ exports.getEmployeeDirectory = async (req, res) => {
 // =========================
 exports.getAllUsers = async (req, res) => {
   try {
-    // By default, exclude terminated and absconded employees
-    // Use ?includeInactive=true to get all users including terminated/absconded
+    // By default, exclude inactive, terminated, and absconded employees
+    // Use ?includeInactive=true to get all users including inactive/terminated/absconded
     const includeInactive = req.query.includeInactive === 'true';
 
     const filter = includeInactive
       ? {}
-      : { status: { $nin: ['terminated', 'absconded'] } };
+      : { status: { $nin: ['inactive', 'terminated', 'absconded'] } };
 
     const users = await User.find(filter)
       .select("_id name email role department designation employeeId dob doj shift shiftType jobLevel status salary");
@@ -402,14 +415,11 @@ exports.getMe = async (req, res) => {
 // position-name substring matching (see docs/superpowers/specs/2026-07-03-
 // access-management-design.md for why that pattern caused real incidents).
 // =========================
-const PERMISSION_KEYS = [
-  "canManageUsers", "canManageClients", "canManageProjects", "canAssignTasks",
-  "canApproveLeaves", "canApproveShifts", "canViewReports", "canManageAttendance",
-  "canViewSubordinateLeads", "canViewSubordinateCallbacks", "canViewSubordinateTasks", "canViewSubordinateProjects",
-  "canEditSubordinateLeads", "canEditSubordinateCallbacks", "canAssignToSubordinates",
-  "canViewDepartmentLeads", "canViewDepartmentCallbacks", "canViewDepartmentTasks",
-  "canManageDepartments", "canManagePositions",
-];
+// Role & Department Hierarchy Revamp v2 (2026-07-27): now sourced from
+// accessControl.js's PERMISSION_FLAG_KEYS (single source of truth) instead
+// of a separately-maintained local copy — that list also grew a 21st flag,
+// canManageSubordinateAccess, as part of this revamp.
+const PERMISSION_KEYS = PERMISSION_FLAG_KEYS;
 
 exports.getMyPermissions = async (req, res) => {
   try {
@@ -428,10 +438,20 @@ exports.getMyPermissions = async (req, res) => {
     // mirrors that exact fallback so the UI and the API never disagree).
     const bypass = isSuperAdmin || (isAdmin && !position);
 
+    // Role & Department Hierarchy Revamp v2 (2026-07-27): layer the user's
+    // own permissionOverrides on top of their resolved Position's flags, so
+    // a delegated grant/revoke (server/routes/positionRoutes.js's
+    // PATCH /my-team/:userId/permissions) is immediately reflected in what
+    // the affected user sees themselves — same effective-permissions logic
+    // accessControl.js's can()/evaluate() already use for authorization.
+    const effectivePermissions = resolveEffectivePermissions(position, user.permissionOverrides);
+
     const permissions = {};
     PERMISSION_KEYS.forEach((key) => {
-      permissions[key] = bypass ? true : position?.permissions?.[key] === true;
+      permissions[key] = bypass ? true : effectivePermissions[key] === true;
     });
+
+    const hasPermissionOverrides = Boolean(user.permissionOverrides && user.permissionOverrides.size > 0);
 
     // Mirrors leadController.js's local canAccessLeadManagement() helper so
     // the sidebar/menu never has to re-derive this logic independently.
@@ -461,6 +481,7 @@ exports.getMyPermissions = async (req, res) => {
           }
         : null,
       permissions,
+      hasPermissionOverrides,
       canAccessLeadManagement,
     });
   } catch (err) {
@@ -638,6 +659,95 @@ exports.updateEmployeeStatus = async (req, res) => {
 
     const user = await User.findByIdAndUpdate(userId, { status }, { new: true });
     if (!user) return res.status(404).json({ message: "User not found" });
+
+    // If status is changed to inactive, terminated, or absconded, perform cleanup
+    if (["inactive", "terminated", "absconded"].includes(status)) {
+      const Project = require("../models/Project");
+      const Task = require("../models/Task");
+      const Message = require("../models/Message");
+
+      // 1. Find all projects where this user is createdBy
+      const projectsCreatedByUser = await Project.find({ createdBy: userId });
+
+      for (const project of projectsCreatedByUser) {
+        // Find any active admin or the first active user in the system as fallback
+        const activeAdmin = await User.findOne({
+          status: "active",
+          role: { $in: ["admin", "super-admin"] }
+        });
+
+        const fallbackUser = activeAdmin || await User.findOne({
+          status: "active",
+          _id: { $ne: userId }
+        });
+
+        if (fallbackUser) {
+          // Reassign project ownership
+          project.createdBy = fallbackUser._id;
+
+          // Update notes createdBy references
+          if (project.notes && project.notes.length > 0) {
+            project.notes = project.notes.map(note => {
+              if (note.createdBy && note.createdBy.toString() === userId.toString()) {
+                note.createdBy = fallbackUser._id;
+              }
+              return note;
+            });
+          }
+
+          await project.save();
+          console.log(`Reassigned project ${project._id} from user ${userId} to ${fallbackUser._id}`);
+        }
+      }
+
+      // 2. Remove user from all projects' clients array if they were a client
+      await Project.updateMany(
+        { clients: userId },
+        { $pull: { clients: userId } }
+      );
+
+      // 2b. Remove user from all projects' assignedTo array (team members)
+      await Project.updateMany(
+        { assignedTo: userId },
+        { $pull: { assignedTo: userId } }
+      );
+
+      // 3. Update all tasks where this user is assignedBy
+      const tasksAssignedByUser = await Task.find({ assignedBy: userId });
+      if (tasksAssignedByUser.length > 0) {
+        const activeAdmin = await User.findOne({
+          status: "active",
+          role: { $in: ["admin", "super-admin"] }
+        });
+
+        const fallbackUser = activeAdmin || await User.findOne({
+          status: "active",
+          _id: { $ne: userId }
+        });
+
+        if (fallbackUser) {
+          await Task.updateMany(
+            { assignedBy: userId },
+            { assignedBy: fallbackUser._id }
+          );
+          console.log(`Reassigned ${tasksAssignedByUser.length} tasks from user ${userId} to ${fallbackUser._id}`);
+        }
+      }
+
+      // 4. Remove user from tasks' assignedTo array
+      await Task.updateMany(
+        { assignedTo: userId },
+        { $pull: { assignedTo: userId } }
+      );
+
+      // 5. Remove user from messaging groups
+      await Message.updateMany(
+        { participants: userId },
+        { $pull: { participants: userId } }
+      );
+
+      console.log(`Completed cleanup for user ${userId} with status ${status}`);
+    }
 
     res.json({ message: "Status updated successfully", user });
   } catch (err) {

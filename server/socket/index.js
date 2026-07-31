@@ -85,6 +85,7 @@ function initSocket(httpServer) {
 
     require('./handlers/chat.handler')(io, socket);
     require('./handlers/notification.handler')(io, socket);
+    require('./handlers/clientRequest.handler')(io, socket);
 
     socket.on('disconnect', (reason) => {
       console.log(`[Socket.IO] Disconnected: ${socket.id} (${reason})`);

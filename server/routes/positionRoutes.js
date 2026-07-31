@@ -4,6 +4,8 @@ const User = require("../models/User");
 const Department = require("../models/Department"); // Access-management rework (2026-07-03)
 const { protect, authorize } = require("../middlewares/authMiddleware");
 const hierarchyUtils = require("../utils/hierarchyUtils");
+const accessControl = require("../utils/accessControl"); // Role & Department Hierarchy Revamp v2 (2026-07-27)
+const AccessAuditLog = require("../models/AccessAuditLog");
 
 const router = express.Router();
 
@@ -389,17 +391,255 @@ router.get("/stats", protect, authorize("super-admin", "admin"), async (req, res
 });
 
 // ==========================================
+// DELEGATED PERMISSION EDITING — "MY TEAM'S ACCESS"
+// Role & Department Hierarchy Revamp v2 (2026-07-27). See
+// docs/superpowers/specs/2026-07-27-role-hierarchy-revamp-design.md Section 2.
+//
+// Deliberately NOT gated with a static authorize("admin") role list — the
+// whole point is that the check is relationship-dependent, per target user,
+// via accessControl.canManageAccessFor(). Today only the seeded Admin
+// Position holds canManageSubordinateAccess, but nothing here hardcodes
+// that: any Position can be granted the flag later from the Access
+// Management page, and these routes would just start working for it.
+// ==========================================
+
+// Users the caller may manage: hierarchyUtils scope, filtered to strictly
+// lower level than the caller.
+router.get("/my-team", protect, async (req, res) => {
+  try {
+    const isSuperAdmin = req.user.role === "super-admin" || req.user.role === "superadmin";
+    const grantorPosition = await accessControl.resolvePosition(req.user);
+
+    if (!isSuperAdmin && !grantorPosition?.permissions?.canManageSubordinateAccess) {
+      return res.status(403).json({ error: "You don't have delegated access management permission." });
+    }
+
+    const accessibleIds = await hierarchyUtils.getAccessibleUserIds(req.user);
+    const grantorLevel = isSuperAdmin ? Infinity : (grantorPosition?.level ?? -1);
+
+    const users = await User.find({
+      _id: { $in: accessibleIds, $ne: req.user._id },
+      status: "active",
+    })
+      .select("employeeId name email role department departmentRef designation position positionRef positionLevel permissionOverrides avatar")
+      .populate("departmentRef", "name code")
+      .populate("positionRef", "name level")
+      .sort({ positionLevel: -1, name: 1 });
+
+    // Defense in depth — the PATCH route below re-checks this per-user via
+    // canManageAccessFor(); don't even list people who wouldn't pass it.
+    const filtered = users.filter((u) => {
+      const level = u.positionRef?.level ?? u.positionLevel ?? 0;
+      return level < grantorLevel;
+    });
+
+    res.json(
+      filtered.map((u) => ({
+        _id: u._id,
+        employeeId: u.employeeId,
+        name: u.name,
+        email: u.email,
+        role: u.role,
+        department: u.departmentRef || (u.department ? { name: u.department, code: u.department } : null),
+        designation: u.designation,
+        position: u.positionRef ? { _id: u.positionRef._id, name: u.positionRef.name, level: u.positionRef.level } : { name: u.position, level: u.positionLevel },
+        hasOverrides: Boolean(u.permissionOverrides && u.permissionOverrides.size > 0),
+      }))
+    );
+  } catch (err) {
+    console.error("Error fetching my-team:", err);
+    res.status(500).json({ error: "Server Error", message: err.message });
+  }
+});
+
+// What the caller is currently allowed to hand out — drives which toggles
+// the "My Team's Access" editor renders enabled vs. disabled-with-tooltip.
+router.get("/my-team/grantable-flags", protect, async (req, res) => {
+  try {
+    if (req.user.role === "super-admin" || req.user.role === "superadmin") {
+      return res.json({ flags: accessControl.PERMISSION_FLAG_KEYS });
+    }
+    const grantorPosition = await accessControl.resolvePosition(req.user);
+    res.json({ flags: accessControl.grantableFlags(grantorPosition) });
+  } catch (err) {
+    console.error("Error fetching grantable flags:", err);
+    res.status(500).json({ error: "Server Error", message: err.message });
+  }
+});
+
+// Grant or revoke a single permission override on a subordinate.
+// Ceiling (ownFlag must be true on grantor's own Position), scope (target
+// must be in grantor's own accessible-users tree, strictly lower level),
+// and root-of-trust (super-admin/admin untouchable except by super-admin)
+// are all enforced by canManageAccessFor() + the ceiling check below.
+router.patch("/my-team/:userId/permissions", protect, async (req, res) => {
+  try {
+    const { flag, value } = req.body;
+
+    if (typeof flag !== "string" || !accessControl.PERMISSION_FLAG_KEYS.includes(flag)) {
+      return res.status(400).json({ error: `Unknown permission flag "${flag}".` });
+    }
+    if (typeof value !== "boolean") {
+      return res.status(400).json({ error: "Body must include a boolean `value`." });
+    }
+
+    const targetUser = await User.findById(req.params.userId);
+    if (!targetUser) {
+      return res.status(404).json({ error: "User not found." });
+    }
+
+    const allowed = await accessControl.canManageAccessFor(req.user, targetUser);
+    if (!allowed) {
+      return res.status(403).json({ error: "You don't have permission to manage this user's access." });
+    }
+
+    // Ceiling rule only applies to GRANTING (value: true) — revoking a
+    // subordinate's flag only ever tightens access, so it never needs it.
+    if (value === true && req.user.role !== "super-admin") {
+      const grantorPosition = await accessControl.resolvePosition(req.user);
+      const grantable = accessControl.grantableFlags(grantorPosition);
+      if (!grantable.includes(flag)) {
+        return res.status(403).json({ error: `You can't grant "${flag}" — you don't hold it yourself.` });
+      }
+    }
+
+    const previousValue = targetUser.permissionOverrides?.get
+      ? targetUser.permissionOverrides.get(flag)
+      : undefined;
+
+    if (!targetUser.permissionOverrides) targetUser.permissionOverrides = new Map();
+    targetUser.permissionOverrides.set(flag, value);
+    targetUser.markModified("permissionOverrides");
+    await targetUser.save();
+
+    await accessControl.logAccessChange({
+      actorId: req.user._id,
+      targetUserId: targetUser._id,
+      action: value ? "grant" : "revoke",
+      flagOrPositionName: flag,
+      previousValue: previousValue === undefined ? null : previousValue,
+      newValue: value,
+    });
+
+    res.json({
+      message: "Permission override updated.",
+      userId: targetUser._id,
+      flag,
+      value,
+    });
+  } catch (err) {
+    console.error("Error updating subordinate permission:", err);
+    res.status(500).json({ error: "Server Error", message: err.message });
+  }
+});
+
+// Scoped Position create (e.g. clone "Agent — Sales", adjust one flag, name
+// it "Senior Agent — Sales") — the recommended path for "this one person
+// needs a different permission than their peers" instead of mutating a
+// shared Position template out from under everyone else pointing at it.
+router.post("/my-team/positions", protect, async (req, res) => {
+  try {
+    const isSuperAdmin = req.user.role === "super-admin" || req.user.role === "superadmin";
+    const grantorPosition = await accessControl.resolvePosition(req.user);
+
+    if (!isSuperAdmin && !grantorPosition?.permissions?.canManageSubordinateAccess) {
+      return res.status(403).json({ error: "You don't have delegated access management permission." });
+    }
+
+    const { name, level, description, permissions, parentPosition } = req.body;
+    if (!name || !name.trim()) {
+      return res.status(400).json({ error: "Position name is required." });
+    }
+
+    const existingPosition = await Position.findOne({ name: { $regex: new RegExp(`^${name}$`, "i") } });
+    if (existingPosition) {
+      return res.status(400).json({ error: "Position with this name already exists" });
+    }
+
+    const requestedPermissions = permissions || {};
+    let requestedLevel = level !== undefined && level !== null ? Number(level) : 10;
+
+    if (!isSuperAdmin) {
+      const grantable = accessControl.grantableFlags(grantorPosition);
+      const overreach = Object.entries(requestedPermissions)
+        .filter(([, v]) => v === true)
+        .map(([k]) => k)
+        .filter((k) => !grantable.includes(k));
+      if (overreach.length > 0) {
+        return res.status(403).json({
+          error: `You can't grant these flags — you don't hold them yourself: ${overreach.join(", ")}`,
+        });
+      }
+
+      // A delegated position must sit strictly below its creator's own
+      // level — same scope rule as everything else in this system.
+      if (requestedLevel >= grantorPosition.level) {
+        return res.status(400).json({ error: `Level must be lower than your own position's level (${grantorPosition.level}).` });
+      }
+    }
+
+    const newPosition = new Position({
+      name: name.trim(),
+      level: requestedLevel,
+      department: "all",
+      departmentRef: (!isSuperAdmin ? grantorPosition?.departmentRef : req.body.departmentRef) || null,
+      parentPosition: parentPosition || grantorPosition?._id || null,
+      description: description || "",
+      permissions: requestedPermissions,
+      createdBy: req.user._id,
+    });
+    await newPosition.save();
+
+    await accessControl.logAccessChange({
+      actorId: req.user._id,
+      targetUserId: req.user._id, // position creation has no single target user
+      action: "create-position",
+      flagOrPositionName: newPosition.name,
+      previousValue: null,
+      newValue: newPosition.permissions,
+    });
+
+    res.status(201).json(newPosition);
+  } catch (err) {
+    console.error("Error creating scoped position:", err);
+    res.status(500).json({ error: "Server Error", message: err.message });
+  }
+});
+
+// ==========================================
 // ACCESS OVERVIEW (Access-management rework, 2026-07-03)
 // Resolves a user's effective department/position/permissions and (for
 // hierarchical positions) who they can see - the shipped answer to
 // "why can't X see Y", replacing the need for a hand-run diagnostic script
 // like server/diagnose-hierarchy.js.
+//
+// Role & Department Hierarchy Revamp v2 (2026-07-27): Changed from
+// authorize("super-admin", "admin") to permission-based check, since this
+// is used by MyTeamAccessPage for anyone with canManageSubordinateAccess.
 // ==========================================
-router.get("/users/:userId/access-overview", protect, authorize("super-admin", "admin"), async (req, res) => {
+router.get("/users/:userId/access-overview", protect, async (req, res) => {
   try {
     const user = await User.findById(req.params.userId).select("-password");
     if (!user) {
       return res.status(404).json({ error: "User not found" });
+    }
+
+    // Permission check: super-admin/admin always allowed, otherwise check
+    // canManageSubordinateAccess permission and scope (must be able to manage this specific user).
+    const isSuperAdmin = req.user.role === "super-admin" || req.user.role === "superadmin";
+    const isAdmin = req.user.role === "admin";
+
+    if (!isSuperAdmin && !isAdmin) {
+      const grantorPosition = await accessControl.resolvePosition(req.user);
+      if (!grantorPosition?.permissions?.canManageSubordinateAccess) {
+        return res.status(403).json({ error: "Access denied. You need 'Delegate access to subordinates' permission." });
+      }
+
+      // Check if this user is actually within the manager's scope
+      const canManage = await accessControl.canManageAccessFor(req.user, user);
+      if (!canManage) {
+        return res.status(403).json({ error: "Access denied. This user is not in your reporting tree." });
+      }
     }
 
     // Resolve effective position: positionRef first, legacy string match as fallback.
@@ -442,6 +682,23 @@ router.get("/users/:userId/access-overview", protect, authorize("super-admin", "
         .lean();
     }
 
+    // Role & Department Hierarchy Revamp v2 (2026-07-27), Task 2.3: surface
+    // the delegated-access audit trail right next to the current-state view
+    // this endpoint already provides — "who changed what, for whom, when."
+    const recentAccessChanges = await AccessAuditLog.find({ targetUserId: user._id })
+      .sort({ createdAt: -1 })
+      .limit(20)
+      .populate("actorId", "name employeeId")
+      .lean();
+
+    // Same revamp: the Position's raw permissions alone under-report a user
+    // who has permissionOverrides layered on top (server/routes/positionRoutes.js's
+    // PATCH /my-team/:userId/permissions writes there). Surface both the raw
+    // overrides map and the merged effective result, reused by both this
+    // super-admin/admin Access Overview tab and MyTeamAccessPage.jsx's editor.
+    const permissionOverrides = user.permissionOverrides ? Object.fromEntries(user.permissionOverrides) : {};
+    const effectivePermissions = accessControl.resolveEffectivePermissions(position, user.permissionOverrides);
+
     res.json({
       user: {
         _id: user._id,
@@ -468,6 +725,9 @@ router.get("/users/:userId/access-overview", protect, authorize("super-admin", "
       bypassesEverything,
       accessibleUsersCount: bypassesEverything ? "all" : accessibleUsers.length,
       accessibleUsers: bypassesEverything ? [] : accessibleUsers,
+      recentAccessChanges,
+      permissionOverrides,
+      effectivePermissions,
     });
   } catch (err) {
     console.error("Error building access overview:", err);

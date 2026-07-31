@@ -28,7 +28,16 @@
 //   node tests/accessControl.test.js --with-db     # Part 1 + Part 2 (read-only)
 
 const assert = require("assert");
-const { evaluate, ACTION_PERMISSION_MAP, SELF_IMPLICIT_ACTIONS } = require("../utils/accessControl");
+const {
+  evaluate,
+  ACTION_PERMISSION_MAP,
+  SELF_IMPLICIT_ACTIONS,
+  // Role & Department Hierarchy Revamp v2 (2026-07-27):
+  resolveEffectivePermissions,
+  evaluateManageAccess,
+  grantableFlags,
+  PERMISSION_FLAG_KEYS,
+} = require("../utils/accessControl");
 
 let passed = 0;
 let failed = 0;
@@ -98,6 +107,178 @@ test("every SELF_IMPLICIT_ACTIONS entry is also a known action in ACTION_PERMISS
       `"${action}" is in SELF_IMPLICIT_ACTIONS but not in ACTION_PERMISSION_MAP`
     );
   });
+});
+
+// ---------------------------------------------------------------------------
+// Role & Department Hierarchy Revamp v2 (2026-07-27) — delegated permission
+// editing. See docs/superpowers/specs/2026-07-27-role-hierarchy-revamp-design.md
+// Section 2. All still Part 1 style: pure functions, no DB, no risk.
+// ---------------------------------------------------------------------------
+
+console.log("==========================================");
+console.log("PART 1b: DELEGATED PERMISSION EDITING (no DB required)");
+console.log("==========================================\n");
+
+// ---- resolveEffectivePermissions / evaluate() override layering ----
+
+test("evaluate() ignores overrides when they don't mention the relevant flag", () => {
+  const position = { permissions: { canEditSubordinateLeads: true } };
+  assert.strictEqual(evaluate(position, "leads:edit", { canApproveLeaves: true }), true);
+});
+
+test("a permissionOverrides grant (true) turns on a flag the Position doesn't have", () => {
+  const position = { permissions: { canEditSubordinateLeads: false } };
+  assert.strictEqual(evaluate(position, "leads:edit", { canEditSubordinateLeads: true }), true);
+});
+
+test("a permissionOverrides revoke (false) turns off a flag the Position does have", () => {
+  const position = { permissions: { canEditSubordinateLeads: true } };
+  assert.strictEqual(evaluate(position, "leads:edit", { canEditSubordinateLeads: false }), false);
+});
+
+test("overrides work when passed as a real Map (not just a plain object)", () => {
+  const position = { permissions: { canEditSubordinateLeads: false } };
+  const overrides = new Map([["canEditSubordinateLeads", true]]);
+  assert.strictEqual(evaluate(position, "leads:edit", overrides), true);
+});
+
+test("evaluate() with a null position but a granting override still returns true", () => {
+  assert.strictEqual(evaluate(null, "leads:edit", { canEditSubordinateLeads: true }), true);
+});
+
+test("resolveEffectivePermissions treats a missing overrides arg as a no-op", () => {
+  const position = { permissions: { canApproveLeaves: true } };
+  assert.deepStrictEqual(resolveEffectivePermissions(position, undefined), { canApproveLeaves: true });
+});
+
+// ---- grantableFlags() — the ceiling rule's building block ----
+
+test("grantableFlags() returns [] for a null grantor position", () => {
+  assert.deepStrictEqual(grantableFlags(null), []);
+});
+
+test("grantableFlags() returns only the flags that are true on the grantor's Position", () => {
+  const grantorPosition = {
+    permissions: { canApproveLeaves: true, canManageAttendance: true, canManageUsers: false },
+  };
+  assert.deepStrictEqual(grantableFlags(grantorPosition).sort(), ["canApproveLeaves", "canManageAttendance"]);
+});
+
+test("every flag PERMISSION_FLAG_KEYS lists is a real key ACTION_PERMISSION_MAP or the delegation system understands", () => {
+  // Sanity check the two vocabularies haven't drifted apart silently.
+  assert.ok(PERMISSION_FLAG_KEYS.includes("canManageSubordinateAccess"));
+  assert.ok(PERMISSION_FLAG_KEYS.length >= 21);
+});
+
+// ---- evaluateManageAccess() — ceiling / scope / root-of-trust, together ----
+
+const seniorGrantorPosition = { level: 95, permissions: { canManageSubordinateAccess: true } };
+const juniorTargetPosition = { level: 10, permissions: {} };
+const peerTargetPosition = { level: 95, permissions: {} };
+
+test("super-admin grantor can always manage access, no matter what", () => {
+  assert.strictEqual(
+    evaluateManageAccess({ grantorRole: "super-admin", grantorPosition: null, targetRole: "employee", targetUserId: "u1", targetPosition: null, accessibleIds: [] }),
+    true
+  );
+});
+
+test("root of trust: nobody can manage a super-admin target, even another super-admin's Position-based flag", () => {
+  assert.strictEqual(
+    evaluateManageAccess({
+      grantorRole: "admin",
+      grantorPosition: seniorGrantorPosition,
+      targetRole: "super-admin",
+      targetUserId: "u1",
+      targetPosition: peerTargetPosition,
+      accessibleIds: ["u1"],
+    }),
+    false
+  );
+});
+
+test("root of trust: admin cannot manage another admin (only super-admin can)", () => {
+  assert.strictEqual(
+    evaluateManageAccess({
+      grantorRole: "admin",
+      grantorPosition: seniorGrantorPosition,
+      targetRole: "admin",
+      targetUserId: "u1",
+      targetPosition: peerTargetPosition,
+      accessibleIds: ["u1"],
+    }),
+    false
+  );
+});
+
+test("grantor without canManageSubordinateAccess cannot manage anyone", () => {
+  assert.strictEqual(
+    evaluateManageAccess({
+      grantorRole: "admin",
+      grantorPosition: { level: 95, permissions: {} }, // flag not set
+      targetRole: "employee",
+      targetUserId: "u1",
+      targetPosition: juniorTargetPosition,
+      accessibleIds: ["u1"],
+    }),
+    false
+  );
+});
+
+test("ceiling/scope rule: cannot manage a target at an equal or higher level (no lateral/upward edits)", () => {
+  assert.strictEqual(
+    evaluateManageAccess({
+      grantorRole: "admin",
+      grantorPosition: seniorGrantorPosition,
+      targetRole: "employee",
+      targetUserId: "u1",
+      targetPosition: { level: 95, permissions: {} }, // equal level
+      accessibleIds: ["u1"],
+    }),
+    false
+  );
+});
+
+test("scope rule: cannot manage a target outside the grantor's own accessible-users reach", () => {
+  assert.strictEqual(
+    evaluateManageAccess({
+      grantorRole: "admin",
+      grantorPosition: seniorGrantorPosition,
+      targetRole: "employee",
+      targetUserId: "someone-else",
+      targetPosition: juniorTargetPosition,
+      accessibleIds: ["u1", "u2"], // target not in this list
+    }),
+    false
+  );
+});
+
+test("scope rule: a target with no resolved Position at all cannot be managed", () => {
+  assert.strictEqual(
+    evaluateManageAccess({
+      grantorRole: "admin",
+      grantorPosition: seniorGrantorPosition,
+      targetRole: "employee",
+      targetUserId: "u1",
+      targetPosition: null,
+      accessibleIds: ["u1"],
+    }),
+    false
+  );
+});
+
+test("happy path: lower level, in-scope, flag-holding grantor CAN manage the target", () => {
+  assert.strictEqual(
+    evaluateManageAccess({
+      grantorRole: "admin",
+      grantorPosition: seniorGrantorPosition,
+      targetRole: "employee",
+      targetUserId: "u1",
+      targetPosition: juniorTargetPosition,
+      accessibleIds: ["u1", "u2"],
+    }),
+    true
+  );
 });
 
 console.log(`\nPart 1 result: ${passed} passed, ${failed} failed.\n`);

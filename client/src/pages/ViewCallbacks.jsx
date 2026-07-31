@@ -639,7 +639,7 @@ const ViewCallbacks = ({ onLogout }) => {
                   onChange={(e) => setAssignedToFilter(e.target.value)}
                   className="app-control w-full cursor-pointer appearance-none px-4"
                 >
-                  <option value="">👥 All Marketing & Sales</option>
+                  <option value="">👥 All Sales</option>
                   {employees.map((emp) => (
                     <option key={emp._id} value={emp._id}>
                       👤 {emp.name}

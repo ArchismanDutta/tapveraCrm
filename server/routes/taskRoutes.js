@@ -4,6 +4,11 @@ const router = express.Router();
 const { protect } = require("../middlewares/authMiddleware");
 const taskController = require("../controllers/taskController");
 
+// ------------------- TEAM OVERVIEW -------------------
+// Get team task overview for managers - shows subordinates and their tasks
+// Requires canViewSubordinateTasks permission - enforced in controller
+router.get("/team-overview", protect, taskController.getTeamTaskOverview);
+
 // ------------------- ANALYTICS -------------------
 // Admin / Super-admin, or reports:view + hierarchical oversight of the
 // employee — enforced in controller (moved 2026-07-03, access-management

@@ -3,7 +3,7 @@
 const DEPARTMENT_LABELS = {
   executives: "Executives",
   development: "Development",
-  marketingAndSales: "Marketing & Sales",
+  marketingAndSales: "Sales", // Role & Department Hierarchy Revamp v2 (2026-07-27): renamed from "Marketing & Sales" — digital marketing moved under Development's specializations. Enum value kept as-is (legacy bridge), only the display label changed.
   humanResource: "Human Resource",
   finance: "Finance",
   operations: "Operations",

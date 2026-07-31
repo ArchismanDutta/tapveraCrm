@@ -9,6 +9,7 @@ import {
   ChevronRight,
   Edit2,
   Eye,
+  Network,
   Plus,
   Search,
   Shield,
@@ -78,6 +79,12 @@ const PERMISSION_GROUPS = [
     keys: {
       canManageDepartments: "Manage departments",
       canManagePositions: "Manage positions & permissions",
+      // Role & Department Hierarchy Revamp v2 (2026-07-27): lets this
+      // Position's holder open "My Team's Access" — a scoped editor over
+      // their own subordinates' permissions (ceiling/scope/audit-logged,
+      // see server/utils/accessControl.js's canManageAccessFor). Seeded
+      // true on Admin only for now; any Position can get it from here.
+      canManageSubordinateAccess: "Delegate access to subordinates (My Team's Access)",
     },
   },
 ];
@@ -809,6 +816,14 @@ const OverviewPanel = ({ users, selectedUserId, onSelectUser, data, loading }) =
                 <span className="rounded-full border border-slate-200 px-2.5 py-1 text-xs capitalize text-slate-600 dark:border-white/10 dark:text-slate-300">
                   role: {data.user.role}
                 </span>
+                {Object.keys(data.permissionOverrides || {}).length > 0 && (
+                  <span
+                    title="This user has one or more per-user permission overrides layered on top of their Position — see server/models/User.js's permissionOverrides."
+                    className="rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1 text-xs font-medium text-violet-700 dark:border-violet-400/20 dark:bg-violet-400/10 dark:text-violet-200"
+                  >
+                    Custom access
+                  </span>
+                )}
               </div>
               <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{data.user.employeeId} · {data.user.email}</p>
 
@@ -848,16 +863,26 @@ const OverviewPanel = ({ users, selectedUserId, onSelectUser, data, loading }) =
 
                   {data.position && (
                     <div className="mt-4">
-                      <p className="mb-2 text-[11px] uppercase tracking-wide text-slate-400">Granted permissions</p>
+                      <p className="mb-2 text-[11px] uppercase tracking-wide text-slate-400">
+                        Granted permissions {data.effectivePermissions ? "(effective — Position + any overrides)" : ""}
+                      </p>
                       <div className="flex flex-wrap gap-1.5">
-                        {Object.entries(data.position.permissions || {})
+                        {Object.entries(data.effectivePermissions || data.position.permissions || {})
                           .filter(([, v]) => v)
                           .map(([key]) => (
-                            <span key={key} className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-medium text-emerald-700 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-200">
+                            <span
+                              key={key}
+                              title={data.permissionOverrides?.[key] !== undefined ? "Via per-user override, not the Position template" : "Via Position"}
+                              className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${
+                                data.permissionOverrides?.[key] !== undefined
+                                  ? "border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-400/20 dark:bg-violet-400/10 dark:text-violet-200"
+                                  : "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-200"
+                              }`}
+                            >
                               {PERMISSION_LABELS[key] || key}
                             </span>
                           ))}
-                        {Object.values(data.position.permissions || {}).every((v) => !v) && (
+                        {Object.values(data.effectivePermissions || data.position.permissions || {}).every((v) => !v) && (
                           <span className="text-xs text-slate-400">No permissions granted on this position.</span>
                         )}
                       </div>
@@ -887,6 +912,263 @@ const OverviewPanel = ({ users, selectedUserId, onSelectUser, data, loading }) =
                 )}
               </div>
             )}
+
+            {/* Role & Department Hierarchy Revamp v2 (2026-07-27), Task 2.3:
+                the delegated-access audit trail, right next to the
+                current-state view above — "who changed what, for whom,
+                when," same as this tab already answers "what can X access." */}
+            {data.recentAccessChanges?.length > 0 && (
+              <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-white/10 dark:bg-[#10131c]">
+                <p className="text-sm font-semibold text-slate-900 dark:text-white">Recent access changes</p>
+                <ul className="mt-3 divide-y divide-slate-100 dark:divide-white/10">
+                  {data.recentAccessChanges.map((entry) => (
+                    <li key={entry._id} className="py-2 text-xs text-slate-600 dark:text-slate-300">
+                      <span className="font-medium text-slate-800 dark:text-slate-100">{entry.actorId?.name || "Unknown"}</span>{" "}
+                      {entry.action === "grant" && <>granted <span className="font-mono">{entry.flagOrPositionName}</span></>}
+                      {entry.action === "revoke" && <>revoked <span className="font-mono">{entry.flagOrPositionName}</span></>}
+                      {entry.action === "assign-position" && <>reassigned this person to <span className="font-medium">{entry.flagOrPositionName}</span></>}
+                      {entry.action === "create-position" && <>created position <span className="font-medium">{entry.flagOrPositionName}</span></>}
+                      <span className="ml-1.5 text-slate-400">· {new Date(entry.createdAt).toLocaleString()}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// ============================================================================
+// Hierarchy Setup tab (Role & Department Hierarchy Revamp v2, 2026-07-27)
+// Puts server/scripts/updateDepartmentsV2.js, seedRoleHierarchyV2.js, and
+// migrateToRoleHierarchyV2.js behind buttons instead of a terminal — see
+// server/routes/hierarchySetupRoutes.js. Renaming/seeding is additive and
+// idempotent (upsert-based, safe to click more than once). The migration
+// report is strictly read-only and never reassigns anyone by itself — each
+// row's "Apply" click is a separate, deliberate call to the same
+// PATCH /api/positions/users/:userId/assign endpoint the Assign Employees
+// tab already uses.
+// ============================================================================
+
+const CONFIDENCE_STYLES = {
+  "no-action-needed": "border-slate-200 bg-slate-50 text-slate-500 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-400",
+  direct: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-200",
+  "best-guess": "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-200",
+  uncertain: "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-400/20 dark:bg-rose-400/10 dark:text-rose-200",
+};
+
+const ConfidenceBadge = ({ confidence }) => (
+  <span
+    className={`whitespace-nowrap rounded-full border px-2.5 py-1 text-[11px] font-semibold capitalize ${
+      CONFIDENCE_STYLES[confidence] || CONFIDENCE_STYLES["no-action-needed"]
+    }`}
+  >
+    {confidence ? confidence.replace(/-/g, " ") : "n/a"}
+  </span>
+);
+
+const HierarchySetupPanel = ({
+  status,
+  statusLoading,
+  onRefreshStatus,
+  onApply,
+  applying,
+  applyLog,
+  report,
+  reportLoading,
+  onLoadReport,
+  onApplySuggestion,
+  applyingUserId,
+  onGoToAssign,
+}) => {
+  const cards = status
+    ? [
+        {
+          label: "Departments renamed",
+          value: status.departmentsApplied ? "Done" : "Pending",
+          tone: status.departmentsApplied ? "text-emerald-600 dark:text-emerald-300" : "text-amber-600 dark:text-amber-300",
+        },
+        {
+          label: "V2 positions seeded",
+          value: status.positionsApplied ? "Done" : "Pending",
+          tone: status.positionsApplied ? "text-emerald-600 dark:text-emerald-300" : "text-amber-600 dark:text-amber-300",
+        },
+        {
+          label: "Employees on old positions",
+          value: status.usersOnOldPositions,
+          tone: status.usersOnOldPositions > 0 ? "text-amber-600 dark:text-amber-300" : "text-emerald-600 dark:text-emerald-300",
+        },
+        {
+          label: "Unresolved position",
+          value: status.usersUnresolved,
+          tone: status.usersUnresolved > 0 ? "text-rose-600 dark:text-rose-300" : "text-emerald-600 dark:text-emerald-300",
+        },
+      ]
+    : [];
+
+  const grouped = useMemo(() => {
+    const byConfidence = { uncertain: [], "best-guess": [], direct: [], "no-action-needed": [] };
+    if (!report) return byConfidence;
+    report.onOldPosition.forEach((r) => byConfidence[r.confidence]?.push(r));
+    return byConfidence;
+  }, [report]);
+
+  return (
+    <div className="space-y-6">
+      <div className="rounded-xl border border-blue-200 bg-blue-50/60 p-4 text-sm leading-6 text-blue-900 dark:border-blue-400/20 dark:bg-blue-400/[0.06] dark:text-blue-100">
+        Applies the 2026-07-27 role hierarchy revamp: renames Tech → Development and Marketing &amp; Sales → Sales,
+        then seeds the 11 new positions (Admin; Project Manager, Supervisor, and Agent — Sales; Team Lead,
+        Supervisor, Employee, and Intern — Development; Senior HR, Junior HR, and HR Intern). Safe to click more
+        than once — nothing is ever deleted, only renamed or added. Existing employees are never moved
+        automatically; the report below is for review, and every reassignment below is a separate, deliberate
+        click.
+      </div>
+
+      <div>
+        <div className="mb-3 flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Setup status</h3>
+          <button
+            type="button"
+            onClick={onRefreshStatus}
+            disabled={statusLoading}
+            className="text-xs font-medium text-blue-600 hover:underline disabled:opacity-50 dark:text-blue-300"
+          >
+            {statusLoading ? "Refreshing…" : "Refresh"}
+          </button>
+        </div>
+
+        {statusLoading && !status ? (
+          <LoadingRows />
+        ) : (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            {cards.map((c) => (
+              <div key={c.label} className="rounded-xl border border-slate-200 p-4 dark:border-white/10">
+                <p className="text-xs font-medium text-slate-500 dark:text-slate-400">{c.label}</p>
+                <p className={`mt-1 text-xl font-semibold ${c.tone}`}>{c.value}</p>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <button
+          type="button"
+          onClick={() => onApply(["departments", "positions"])}
+          disabled={applying}
+          className="mt-4 inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:opacity-50"
+        >
+          {applying && <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />}
+          {applying ? "Applying…" : "Apply v2 hierarchy setup"}
+        </button>
+
+        {applyLog.length > 0 && (
+          <pre className="mt-3 max-h-48 overflow-y-auto whitespace-pre-wrap rounded-xl bg-slate-950 p-3 text-[11px] leading-5 text-slate-200">
+            {applyLog.join("\n")}
+          </pre>
+        )}
+      </div>
+
+      <div className="border-t border-slate-200 pt-6 dark:border-white/10">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Migration report</h3>
+            <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+              Read-only suggestions for anyone still on an old (pre-v2) position. Nothing changes until you click
+              Apply on a row.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onLoadReport}
+            disabled={reportLoading}
+            className="h-9 shrink-0 rounded-lg border border-slate-200 px-3 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50 dark:border-white/10 dark:text-slate-200 dark:hover:bg-white/[0.05]"
+          >
+            {reportLoading ? "Loading…" : report ? "Refresh report" : "Load report"}
+          </button>
+        </div>
+
+        {reportLoading && !report ? (
+          <LoadingRows />
+        ) : !report ? (
+          <EmptyState title="No report loaded yet" description='Click "Load report" to see who still needs review.' />
+        ) : report.onOldPosition.length === 0 ? (
+          <EmptyState title="Nothing to review" description="No active employees are on an old (pre-v2) position." />
+        ) : (
+          <div className="space-y-5">
+            {["uncertain", "best-guess", "direct", "no-action-needed"].map((level) =>
+              grouped[level]?.length ? (
+                <div key={level}>
+                  <div className="mb-2 flex items-center gap-2">
+                    <ConfidenceBadge confidence={level} />
+                    <span className="text-xs text-slate-500 dark:text-slate-400">{grouped[level].length} employee(s)</span>
+                  </div>
+                  <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-white/10">
+                    <table className="w-full min-w-[820px] text-left">
+                      <thead className="bg-slate-50 text-[11px] uppercase tracking-wide text-slate-500 dark:bg-white/[0.03] dark:text-slate-400">
+                        <tr>
+                          <th className="px-4 py-2.5 font-medium">Employee</th>
+                          <th className="px-4 py-2.5 font-medium">Current position</th>
+                          <th className="px-4 py-2.5 font-medium">Suggested position</th>
+                          <th className="px-4 py-2.5 font-medium">Why</th>
+                          <th className="px-4 py-2.5 font-medium text-right">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 dark:divide-white/5">
+                        {grouped[level].map((row) => (
+                          <tr key={row.userId}>
+                            <td className="px-4 py-3">
+                              <p className="text-sm font-medium text-slate-900 dark:text-white">{row.name}</p>
+                              <p className="text-xs text-slate-500 dark:text-slate-400">{row.employeeId}</p>
+                            </td>
+                            <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-300">{row.currentPosition}</td>
+                            <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-300">
+                              {row.suggestedPosition || <span className="text-slate-400">No change needed</span>}
+                            </td>
+                            <td className="max-w-xs px-4 py-3 text-xs text-slate-500 dark:text-slate-400">{row.reason}</td>
+                            <td className="px-4 py-3 text-right">
+                              {row.suggestedPositionId ? (
+                                <button
+                                  type="button"
+                                  onClick={() => onApplySuggestion(row)}
+                                  disabled={applyingUserId === row.userId}
+                                  className="h-8 shrink-0 rounded-lg bg-blue-600 px-3 text-xs font-semibold text-white transition hover:bg-blue-700 disabled:opacity-50"
+                                >
+                                  {applyingUserId === row.userId ? "Applying…" : "Apply"}
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={onGoToAssign}
+                                  className="h-8 shrink-0 rounded-lg border border-slate-200 px-3 text-xs font-semibold text-slate-600 transition hover:bg-slate-50 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/[0.05]"
+                                >
+                                  Review manually
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ) : null
+            )}
+          </div>
+        )}
+
+        {report?.noPositionResolved?.length > 0 && (
+          <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50/60 p-4 dark:border-amber-400/20 dark:bg-amber-400/[0.06]">
+            <p className="text-sm font-semibold text-amber-800 dark:text-amber-200">
+              {report.noPositionResolved.length} active employee(s) have no resolvable position at all
+            </p>
+            <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">
+              Not covered by this report — assign them a position directly from the "Assign employees" tab.
+            </p>
+            <button type="button" onClick={onGoToAssign} className="mt-2 text-xs font-semibold text-amber-800 underline dark:text-amber-200">
+              Go to Assign employees
+            </button>
           </div>
         )}
       </div>
@@ -934,6 +1216,15 @@ const AccessManagementPage = ({ onLogout }) => {
   const [overviewUserId, setOverviewUserId] = useState("");
   const [overviewData, setOverviewData] = useState(null);
   const [overviewLoading, setOverviewLoading] = useState(false);
+
+  // Hierarchy Setup tab state (Role & Department Hierarchy Revamp v2, 2026-07-27)
+  const [hierarchyStatus, setHierarchyStatus] = useState(null);
+  const [hierarchyStatusLoading, setHierarchyStatusLoading] = useState(false);
+  const [hierarchyApplying, setHierarchyApplying] = useState(false);
+  const [hierarchyApplyLog, setHierarchyApplyLog] = useState([]);
+  const [migrationReport, setMigrationReport] = useState(null);
+  const [migrationReportLoading, setMigrationReportLoading] = useState(false);
+  const [applyingSuggestionUserId, setApplyingSuggestionUserId] = useState(null);
 
   const showNotification = (message, type) => setNotification({ message, type });
   useEffect(() => {
@@ -1125,6 +1416,72 @@ const AccessManagementPage = ({ onLogout }) => {
     }
   };
 
+  // ---- Hierarchy Setup handlers ----
+  const loadHierarchyStatus = async () => {
+    setHierarchyStatusLoading(true);
+    try {
+      const res = await API.get("/api/hierarchy-setup/status");
+      setHierarchyStatus(res.data);
+    } catch (err) {
+      showNotification(err.response?.data?.error || "Could not load hierarchy setup status", "error");
+    } finally {
+      setHierarchyStatusLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === "hierarchy" && !hierarchyStatus && !hierarchyStatusLoading) {
+      loadHierarchyStatus();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- lazy-load once when this tab is first opened
+  }, [activeTab]);
+
+  const applyHierarchySteps = async (steps) => {
+    setHierarchyApplying(true);
+    try {
+      const res = await API.post("/api/hierarchy-setup/apply", { steps });
+      setHierarchyApplyLog(res.data.log || []);
+      showNotification(res.data.message || "Hierarchy setup applied", "success");
+      await loadHierarchyStatus();
+      await loadAll();
+    } catch (err) {
+      setHierarchyApplyLog(err.response?.data?.log || []);
+      showNotification(err.response?.data?.message || err.response?.data?.error || "Could not apply hierarchy setup", "error");
+    } finally {
+      setHierarchyApplying(false);
+    }
+  };
+
+  const loadMigrationReport = async () => {
+    setMigrationReportLoading(true);
+    try {
+      const res = await API.get("/api/hierarchy-setup/migration-report");
+      setMigrationReport(res.data);
+    } catch (err) {
+      showNotification(err.response?.data?.error || "Could not load migration report", "error");
+    } finally {
+      setMigrationReportLoading(false);
+    }
+  };
+
+  const applySuggestion = async (row) => {
+    if (!row.suggestedPositionId) return;
+    setApplyingSuggestionUserId(row.userId);
+    try {
+      await API.patch(`/api/positions/users/${row.userId}/assign`, { positionId: row.suggestedPositionId });
+      showNotification(`${row.name} reassigned to ${row.suggestedPosition}`, "success");
+      setMigrationReport((prev) =>
+        prev ? { ...prev, onOldPosition: prev.onOldPosition.filter((r) => r.userId !== row.userId) } : prev
+      );
+      await loadHierarchyStatus();
+      await loadAll();
+    } catch (err) {
+      showNotification(err.response?.data?.error || "Could not reassign", "error");
+    } finally {
+      setApplyingSuggestionUserId(null);
+    }
+  };
+
   const summary = {
     totalDepartments: departmentStats?.totalDepartments ?? departments.length,
     totalPositions: positions.length,
@@ -1144,6 +1501,7 @@ const AccessManagementPage = ({ onLogout }) => {
     ["positions", "Positions & permissions", Briefcase],
     ["assign", "Assign employees", Users],
     ["overview", "Access overview", Shield],
+    ["hierarchy", "Hierarchy setup", Network],
   ];
 
   return (
@@ -1261,6 +1619,22 @@ const AccessManagementPage = ({ onLogout }) => {
                   onSelectUser={selectOverviewUser}
                   data={overviewData}
                   loading={overviewLoading}
+                />
+              )}
+              {activeTab === "hierarchy" && (
+                <HierarchySetupPanel
+                  status={hierarchyStatus}
+                  statusLoading={hierarchyStatusLoading}
+                  onRefreshStatus={loadHierarchyStatus}
+                  onApply={applyHierarchySteps}
+                  applying={hierarchyApplying}
+                  applyLog={hierarchyApplyLog}
+                  report={migrationReport}
+                  reportLoading={migrationReportLoading}
+                  onLoadReport={loadMigrationReport}
+                  onApplySuggestion={applySuggestion}
+                  applyingUserId={applyingSuggestionUserId}
+                  onGoToAssign={() => setActiveTab("assign")}
                 />
               )}
             </div>

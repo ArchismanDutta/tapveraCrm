@@ -36,11 +36,14 @@ router.get("/employees-today", async (req, res) => {
     const endOfDay = new Date(targetDate);
     endOfDay.setHours(23, 59, 59, 999);
 
-    // Fetch users with role employee, admin, or hr
+    // Fetch users with role employee, admin, or hr (exclude terminated and absconded)
     const users = await User.find({
       role: { $in: ["employee", "admin", "hr"] },
-    }).lean();
-    console.log(`Found ${users.length} users with roles: employee, admin, hr`);
+      status: { $nin: ["terminated", "absconded"] }, // Exclude terminated and absconded employees
+    })
+    .populate('assignedShift') // Populate shift details for late/overtime calculation
+    .lean();
+    console.log(`Found ${users.length} active users with roles: employee, admin, hr`);
 
     // OPTIMIZATION: Fetch the date record ONCE for all employees
     const dateRecord = await AttendanceRecord.findOne({
@@ -74,6 +77,7 @@ router.get("/employees-today", async (req, res) => {
                 departureTime: employeeData.calculated?.departureTime,
                 isPresent: employeeData.calculated?.isPresent || false,
                 isLate: employeeData.calculated?.isLate || false,
+                isOvertime: employeeData.calculated?.isOvertime || false,
                 isHalfDay: employeeData.calculated?.isHalfDay || false,
                 currentlyWorking: employeeData.calculated?.currentlyWorking || false,
                 onBreak: employeeData.calculated?.onBreak || false,
@@ -270,6 +274,9 @@ router.get("/employees-today", async (req, res) => {
           const currentlyWorking = attendanceRecord?.currentlyWorking ?? status?.currentlyWorking ?? false;
           const onBreak = attendanceRecord?.onBreak ?? status?.onBreak ?? false;
 
+          // Merge timeline from both sources - prefer AttendanceRecord, fallback to UserStatus
+          const timeline = attendanceRecord?.timeline || status?.timeline || [];
+
           return {
             userId: user._id,
             employeeId: user.employeeId || `EMP${user._id.toString().slice(-4)}`,
@@ -282,6 +289,10 @@ router.get("/employees-today", async (req, res) => {
             breakType, // include break type
             workDuration: workDurationStr,
             currentlyWorking,
+            isLate: attendanceRecord?.isLate || false, // Late arrival flag
+            isOvertime: attendanceRecord?.isOvertime || false, // Overtime flag
+            assignedShift: user.assignedShift, // Shift information
+            timeline, // Include timeline for real-time calculations
             // Add debug fields
             hasStatus: !!status,
             hasAttendanceRecord: !!attendanceRecord,
