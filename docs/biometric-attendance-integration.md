@@ -113,7 +113,36 @@ If SSL/TLS → Edge Certificates → Minimum TLS Version is 1.2 or higher, the
 handshake fails before any HTTP request is made. Check `Zone → SSL/TLS` and lower
 it if the device won't connect.
 
-### Step 3 — Environment variables
+### Step 3 — Nginx (required — this was the original blocker)
+
+Nginx sits in front of Node and routes by path. It has explicit blocks for
+`/api` and `/health`; everything else falls through to `try_files → index.html`.
+So without a rule, `/iclock/*` gets served the React app instead of reaching
+Express — and because the device receives a normal HTTP 200 the whole time, it
+fails completely silently.
+
+Add **above** the catch-all `location /`:
+
+```nginx
+location /iclock/ {
+    proxy_pass http://127.0.0.1:5000;
+    proxy_set_header Host              $host;
+    proxy_set_header X-Real-IP         $remote_addr;
+    proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
+```
+
+```bash
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+**How to tell whether a response came from Node or from Nginx:** Express stamps
+`x-powered-by: Express` on every response it produces. If
+`curl -i https://web.tapvera.io/iclock/cdata` returns HTML *without* that header,
+the request never reached Node and this rule is missing.
+
+### Step 4 — Environment variables
 
 Add to `server/.env`:
 
@@ -142,7 +171,7 @@ BIOMETRIC_ALLOWED_IPS=
 BIOMETRIC_PUSH_SECRET=
 ```
 
-### Step 4 — Register the device
+### Step 5 — Register the device
 
 Power on the terminal and watch the server log:
 
@@ -156,7 +185,7 @@ It registers in **dry-run**: punches are captured and interpreted but not
 written to attendance. This is deliberate — watch a day of real traffic before
 letting the machine affect anyone's timesheet.
 
-### Step 5 — Map employees to PINs
+### Step 6 — Map employees to PINs
 
 Nothing works until this is done: an unmapped PIN produces no attendance.
 
@@ -188,7 +217,7 @@ GET  /api/biometric/mappings             # employees + who's still unmapped
 PUT  /api/biometric/mappings/:userId     # { "biometricPin": "1001" }
 ```
 
-### Step 6 — Go live
+### Step 7 — Go live
 
 On the Biometric Device page, find your terminal under **Terminals** and click
 the **Dry-run** toggle to switch it off. Punches start counting from that
@@ -255,6 +284,14 @@ The handshake response format is almost always the cause — the device requires
 specific plain-text config block before it will push anything, and returns HTTP
 200 the whole time. Confirm `🤝 Handshake completed` appears in the log, then
 check for a Cloudflare challenge on `/iclock/*`.
+
+**`❓ Unhandled path` in the log.**
+The firmware is using an endpoint name we don't handle. Identix/eSSL units
+descended from the original ASP.NET iClock server append `.aspx` to everything
+(`/iclock/getrequest.aspx`), which `normaliseLegacyPath` in `iclockRoutes.js`
+strips automatically. If a *different* unhandled path shows up, add it there —
+the catch-all returns 200 OK, so the device will look connected while silently
+delivering nothing.
 
 **A specific employee's punches don't appear.**
 `GET /api/biometric/punches?pin=1001` and read the `status`:

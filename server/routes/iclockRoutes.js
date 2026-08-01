@@ -90,11 +90,43 @@ function clientIp(req) {
   );
 }
 
+/**
+ * Normalise legacy `.aspx` endpoint names.
+ *
+ * The ADMS protocol has two path conventions in the wild. Newer firmware calls
+ * clean paths (/iclock/cdata, /iclock/getrequest). Older firmware — and many
+ * Identix/eSSL units, which descend from the original ASP.NET "iClock" server —
+ * appends .aspx to everything:
+ *
+ *     GET /iclock/getrequest.aspx?SN=CGKK223860508
+ *     POST /iclock/cdata.aspx?SN=...&table=ATTLOG
+ *
+ * Both refer to the same endpoints. Rather than duplicating every route, strip
+ * the suffix here so one set of handlers serves both dialects — and so any
+ * further variants this firmware family uses are covered automatically.
+ *
+ * This is a silent-failure trap: an unmatched path still returns 200 OK from the
+ * catch-all, so the device looks connected and simply never delivers data.
+ */
+function normaliseLegacyPath(req, _res, next) {
+  // Case-insensitive throughout: firmware has been seen sending .aspx, .ASPX
+  // and .Aspx. Only strip when it terminates the path — never inside a query
+  // value like ?file=photo.aspx.
+  const LEGACY_SUFFIX = /\.aspx(?=$|\?)/i;
+
+  if (LEGACY_SUFFIX.test(req.url)) {
+    req.legacyAspx = true;
+    req.url = req.url.replace(LEGACY_SUFFIX, "");
+  }
+  next();
+}
+
 /** Log every device interaction — invaluable when a punch "didn't show up". */
 function logRequest(req, _res, next) {
   const bodySize = req.body ? String(req.body).length : 0;
   console.log(
-    `📟 [iclock] ${req.method} ${req.path} SN=${req.query.SN || "-"} ` +
+    `📟 [iclock] ${req.method} ${req.path}${req.legacyAspx ? " (.aspx)" : ""} ` +
+      `SN=${req.query.SN || "-"} ` +
       `table=${req.query.table || "-"} ip=${clientIp(req)} bytes=${bodySize}`
   );
   next();
@@ -178,7 +210,9 @@ async function resolveDevice(req, res, next) {
   }
 }
 
-router.use(logRequest, checkIpAllowlist, checkSecret);
+// normaliseLegacyPath MUST run first — it rewrites req.url before route matching,
+// so /cdata.aspx reaches the /cdata handler instead of the catch-all.
+router.use(normaliseLegacyPath, logRequest, checkIpAllowlist, checkSecret);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 1. HANDSHAKE  —  GET /iclock/cdata?SN=...&options=all&pushver=...
