@@ -36,6 +36,19 @@ const shiftOverrideSchema = new mongoose.Schema({
 const userSchema = new mongoose.Schema(
   {
     employeeId: { type: String, required: true, unique: true, trim: true, uppercase: true, index: true },
+    // ====== BIOMETRIC ATTENDANCE INTEGRATION (Identix / ZKTeco ADMS) ======
+    // The PIN / User ID enrolled on the fingerprint device for this employee.
+    // The device only knows this number — it has no concept of our Mongo _id or
+    // employeeId — so every ATTLOG push is resolved back to a user through this
+    // field. Optional + sparse so existing users are unaffected and unmapped
+    // employees simply don't produce device attendance.
+    // See docs/biometric-attendance-integration.md
+    biometricPin: {
+      type: String,
+      trim: true,
+      default: undefined,
+      index: { unique: true, sparse: true },
+    },
     name: { type: String, required: true, trim: true },
     email: {
       type: String,

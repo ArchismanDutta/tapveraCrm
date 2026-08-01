@@ -1,5 +1,25 @@
 import React from "react";
-import { Clock3, Coffee, Home, Loader2, LogIn, LogOut, Target, Timer } from "lucide-react";
+import { Clock3, Coffee, Fingerprint, Home, Loader2, LogIn, LogOut, Target, Timer } from "lucide-react";
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BIOMETRIC ATTENDANCE
+// ─────────────────────────────────────────────────────────────────────────────
+// Punch in / punch out is captured by the Identix fingerprint terminal at the
+// office and pushed to the CRM automatically (see server /iclock endpoints and
+// docs/biometric-attendance-integration.md). The in-app punch buttons are
+// therefore hidden — two competing ways to punch would produce conflicting
+// arrival/departure times for the same day.
+//
+// Everything else is untouched and still works exactly as before:
+//   • Break start / resume stay in the app (see BreakActions) — the terminal
+//     only reports arrival and departure.
+//   • The onPunchIn / onPunchOut handlers, the POST /api/attendance-new/punch
+//     endpoint, and all the logic below are intentionally left in place. Missed
+//     punches are corrected by an admin via manual punch.
+//
+// Set this to false to restore the original in-app punch buttons exactly as
+// they were — nothing has been removed.
+const BIOMETRIC_ATTENDANCE_ENABLED = true;
 
 const statusStyles = {
   break: {
@@ -122,27 +142,54 @@ const AttendanceHero = ({
           </div>
 
           <div className="border-t border-slate-200 pt-4 dark:border-white/10">
-            <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">
-              {showPunchIn ? "Ready to start your workday" : showPunchOut ? onBreak ? "Break is currently active" : "Work session in progress" : "Attendance completed for today"}
-            </p>
-            {showPunchIn || showPunchOut ? (
-              <button
-                type="button"
-                onClick={buttonAction}
-                disabled={disabled}
-                className={`inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl px-4 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-[#10131c] ${
-                  disabled
-                    ? "cursor-not-allowed border border-slate-200 bg-slate-100 text-slate-400 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-500"
+            {BIOMETRIC_ATTENDANCE_ENABLED ? (
+              /* Fingerprint terminal is the source of punch in / punch out.
+                 The in-app buttons below are hidden rather than removed — flip
+                 BIOMETRIC_ATTENDANCE_ENABLED at the top of this file to bring
+                 them straight back. */
+              <>
+                <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">
+                  {showPunchIn
+                    ? "Scan your finger at the office terminal to start your day"
                     : showPunchOut
-                    ? "border border-rose-200 bg-white text-rose-700 hover:bg-rose-50 dark:border-rose-400/25 dark:bg-transparent dark:text-rose-200 dark:hover:bg-rose-400/10"
-                    : "border border-blue-600 bg-blue-600 text-white hover:border-blue-700 hover:bg-blue-700"
-                }`}
-              >
-                <ButtonIcon className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
-                {buttonLabel}
-              </button>
+                    ? onBreak
+                      ? "Break is currently active"
+                      : "Work session in progress"
+                    : "Attendance completed for today"}
+                </p>
+                <div className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-100 px-4 py-2.5 text-center text-xs font-medium text-slate-500 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-400">
+                  <Fingerprint className="h-4 w-4 shrink-0" />
+                  <span>Attendance is recorded at the fingerprint machine</span>
+                </div>
+                <p className="mt-2 text-center text-[11px] leading-relaxed text-slate-400 dark:text-slate-500">
+                  Punch missing? Ask HR to add it from the admin panel.
+                </p>
+              </>
             ) : (
-              <div className="inline-flex h-10 w-full items-center justify-center rounded-xl border border-slate-200 bg-slate-100 px-4 text-sm font-semibold text-slate-500 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-400">{buttonLabel}</div>
+              <>
+                <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">
+                  {showPunchIn ? "Ready to start your workday" : showPunchOut ? onBreak ? "Break is currently active" : "Work session in progress" : "Attendance completed for today"}
+                </p>
+                {showPunchIn || showPunchOut ? (
+                  <button
+                    type="button"
+                    onClick={buttonAction}
+                    disabled={disabled}
+                    className={`inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl px-4 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-[#10131c] ${
+                      disabled
+                        ? "cursor-not-allowed border border-slate-200 bg-slate-100 text-slate-400 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-500"
+                        : showPunchOut
+                        ? "border border-rose-200 bg-white text-rose-700 hover:bg-rose-50 dark:border-rose-400/25 dark:bg-transparent dark:text-rose-200 dark:hover:bg-rose-400/10"
+                        : "border border-blue-600 bg-blue-600 text-white hover:border-blue-700 hover:bg-blue-700"
+                    }`}
+                  >
+                    <ButtonIcon className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
+                    {buttonLabel}
+                  </button>
+                ) : (
+                  <div className="inline-flex h-10 w-full items-center justify-center rounded-xl border border-slate-200 bg-slate-100 px-4 text-sm font-semibold text-slate-500 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-400">{buttonLabel}</div>
+                )}
+              </>
             )}
           </div>
         </div>

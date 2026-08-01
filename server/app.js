@@ -59,12 +59,38 @@ const transferRoutes = require("./routes/transferRoutes");
 const callIntelligenceRoutes = require("./routes/callIntelligenceRoutes");
 const internalRoutes         = require("./routes/internalRoutes");
 const clientRequestRoutes = require("./routes/clientRequestRoutes");
+// Biometric attendance (Identix / ZKTeco ADMS fingerprint terminals)
+// iclockRoutes speaks the device's plain-text protocol at /iclock;
+// biometricAdminRoutes is the authenticated admin API at /api/biometric.
+// See docs/biometric-attendance-integration.md
+const iclockRoutes = require("./routes/iclockRoutes");
+const biometricAdminRoutes = require("./routes/biometricAdminRoutes");
 
 // Real-time (Socket.IO — see server/socket/index.js)
 const { initSocket } = require("./socket");
 
 const app = express();
 const server = http.createServer(app);
+
+// =====================
+// Biometric device endpoints (MOUNTED FIRST — order matters)
+// =====================
+// The fingerprint terminal speaks plain text, not JSON, and its firmware has
+// the /iclock path hardcoded. This is mounted BEFORE express.json() and before
+// CORS deliberately:
+//
+//   • express.json() would be a no-op for text/plain anyway, but some firmware
+//     revisions send no Content-Type at all — keeping the device path away from
+//     the JSON parser entirely removes any chance of the body being swallowed.
+//   • The device is not a browser: it sends no Origin header and does not
+//     understand a CORS preflight.
+//   • It must also sit above the production `app.get("*")` SPA catch-all further
+//     down, or the device would be served index.html instead of the protocol
+//     response.
+//
+// The router handles its own body parsing, auth (serial allowlist) and errors.
+// See docs/biometric-attendance-integration.md
+app.use("/iclock", iclockRoutes);
 
 // =====================
 // Middleware
@@ -205,6 +231,7 @@ app.use("/api/hierarchy-setup", hierarchySetupRoutes); // Role & Department Hier
 app.use("/api/call-intelligence", callIntelligenceRoutes);
 app.use("/api/internal", internalRoutes);
 app.use("/api/client-requests", clientRequestRoutes); // Client quote & support requests
+app.use("/api/biometric", biometricAdminRoutes); // Fingerprint device admin: PIN mapping, punch log, device health
 
 // =====================
 // Serve frontend in production

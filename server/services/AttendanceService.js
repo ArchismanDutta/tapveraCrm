@@ -160,14 +160,40 @@ class AttendanceService {
    * - Both events are properly saved
    */
   async recordPunchEvent(userId, eventType, options = {}) {
-    // Use actual UTC timestamp - JavaScript Date is always UTC internally
-    const now = new Date();
+    // ====== EFFECTIVE EVENT TIME ======
+    // Defaults to "now", which is the interactive in-app punch path and is
+    // completely unchanged. An explicit options.timestamp now takes precedence
+    // so that punches which did not happen *at this instant* are booked
+    // correctly:
+    //
+    //   • Admin manual-punch corrections — AttendanceController.manualPunchAction
+    //     has always passed options.timestamp, but this method ignored it and
+    //     stamped Date.now() instead, so backdated corrections silently landed
+    //     at the wrong time. Passing it through fixes that.
+    //
+    //   • Biometric device pushes — an Identix/ZKTeco terminal sends the moment
+    //     the finger touched the sensor. That batch may arrive seconds later, or
+    //     hours later if the network dropped. The punch must be recorded at the
+    //     sensor time, never at the delivery time.
+    //
+    // JavaScript Date is always UTC internally.
+    const receivedAt = new Date();
+    const now = options.timestamp ? new Date(options.timestamp) : receivedAt;
+
+    if (Number.isNaN(now.getTime())) {
+      throw new Error("Invalid timestamp supplied to recordPunchEvent");
+    }
 
     console.log(`⏰ Recording punch event:`);
     console.log(`   User: ${userId}`);
     console.log(`   Event: ${eventType}`);
+    console.log(`   Source: ${options.source || "APP"}`);
     console.log(`   UTC timestamp: ${now.toISOString()}`);
     console.log(`   Server local time: ${now.toLocaleString()}`);
+    if (options.timestamp) {
+      const lagSeconds = Math.round((receivedAt - now) / 1000);
+      console.log(`   Backdated event — received ${lagSeconds}s after it occurred`);
+    }
 
     // IMPORTANT: For night shifts, determine the correct date
     // First, get user's shift to determine correct date
@@ -200,7 +226,11 @@ class AttendanceService {
       }
 
       // Validate punch event
-      this.validatePunchEvent(employee, eventType, now);
+      // `options` is forwarded so trusted sources (biometric hardware, admin
+      // corrections) can relax rules that only make sense for live in-app
+      // punches. Omitting it — as every existing caller does — behaves exactly
+      // as before.
+      this.validatePunchEvent(employee, eventType, now, options);
 
       // Add punch event with actual UTC timestamp
       const punchEvent = {
@@ -233,6 +263,11 @@ class AttendanceService {
         success: true,
         employee,
         event: punchEvent,
+        // Attendance date the event was booked against. For night shifts this is
+        // not necessarily the calendar date of the punch, so callers that need
+        // to record where the punch landed (e.g. the biometric audit log) should
+        // use this rather than deriving it themselves.
+        date: today,
         message: this.getPunchMessage(eventType)
       };
 
@@ -443,7 +478,7 @@ class AttendanceService {
    * @param {String} eventType - Type of punch event
    * @param {Date} timestamp - Timestamp of the event
    */
-  validatePunchEvent(employee, eventType, timestamp) {
+  validatePunchEvent(employee, eventType, timestamp, options = {}) {
     const lastEvent = employee.events[employee.events.length - 1];
     const currentStatus = employee.calculated.currentStatus;
 
@@ -457,7 +492,18 @@ class AttendanceService {
         }
 
         // Validate early punch-in for standard shifts (not for flexible shifts)
-        if (employee.assignedShift && !employee.assignedShift.isFlexible) {
+        //
+        // options.allowEarlyPunch bypasses this for trusted, after-the-fact
+        // sources. A fingerprint terminal reports something that already
+        // physically happened — if an employee walked in 40 minutes early, we
+        // cannot refuse to record it, we can only record it and let the shift
+        // calculations judge it. Rejecting here would silently discard a real
+        // punch and leave the employee marked absent all day.
+        if (
+          employee.assignedShift &&
+          !employee.assignedShift.isFlexible &&
+          !options.allowEarlyPunch
+        ) {
           this.validateEarlyPunchIn(timestamp, employee.assignedShift);
         }
         break;
@@ -495,12 +541,17 @@ class AttendanceService {
     }
 
     // Check for events too far in the past or future
-    const maxPastHours = 24;
+    //
+    // options.maxPastHours widens the backfill window for trusted sources. A
+    // fingerprint terminal that lost network connectivity buffers punches
+    // internally and pushes the whole backlog when it reconnects — those
+    // records are legitimately days old and must still be accepted.
+    const maxPastHours = Number(options.maxPastHours) > 0 ? Number(options.maxPastHours) : 24;
     const maxFutureMinutes = 5;
     const now = new Date();
 
     if (timestamp < new Date(now.getTime() - maxPastHours * 60 * 60 * 1000)) {
-      throw new Error('Cannot record events more than 24 hours in the past');
+      throw new Error(`Cannot record events more than ${maxPastHours} hours in the past`);
     }
 
     if (timestamp > new Date(now.getTime() + maxFutureMinutes * 60 * 1000)) {
