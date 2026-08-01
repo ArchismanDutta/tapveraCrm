@@ -571,32 +571,56 @@ const BiometricAttendanceManagement = ({ onLogout }) => {
                         ` · ${d.stats.totalPunchesApplied} punches applied`}
                     </p>
 
+                    {/* ── Current state, then the action ──────────────────────
+                        Two independent switches that are easy to confuse:
+                          • Enabled — a disabled device is rejected outright and
+                            nothing is recorded at all.
+                          • Dry-run — punches are recorded and interpreted, but
+                            deliberately not written to attendance.
+                        Both must be in the right position for punches to count,
+                        so the current state is spelled out in words and the
+                        buttons say what they will DO, not what things are. */}
+                    <div
+                      className={`mb-2.5 rounded-lg border px-3 py-2 text-xs font-medium ${
+                        !d.enabled
+                          ? "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-400/20 dark:bg-rose-400/10 dark:text-rose-200"
+                          : d.dryRun
+                          ? "border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-400/20 dark:bg-violet-400/10 dark:text-violet-200"
+                          : "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-200"
+                      }`}
+                    >
+                      {!d.enabled
+                        ? "⛔ Disabled — punches from this device are rejected and not recorded at all"
+                        : d.dryRun
+                        ? "🧪 Dry-run — punches are recorded here, but NOT added to anyone's attendance"
+                        : "✅ Live — punches are being added to attendance"}
+                    </div>
+
                     <div className="flex flex-wrap gap-2">
-                      {/* Dry-run: captures and interprets punches without writing
-                          them to attendance. Turn off once the traffic looks right. */}
                       <button
                         type="button"
-                        onClick={() => updateDevice(d._id, { dryRun: !d.dryRun })}
-                        className={`inline-flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-medium transition ${
-                          d.dryRun
-                            ? "border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100 dark:border-violet-400/20 dark:bg-violet-400/10 dark:text-violet-200"
-                            : "border-slate-200 text-slate-600 hover:bg-slate-50 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/5"
+                        onClick={() => updateDevice(d._id, { enabled: !d.enabled })}
+                        className={`inline-flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-semibold transition ${
+                          d.enabled
+                            ? "border-slate-200 text-slate-600 hover:bg-slate-50 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/5"
+                            : "border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700"
                         }`}
                       >
-                        <FlaskConical className="h-3.5 w-3.5" />
-                        {d.dryRun ? "Dry-run ON — not saving attendance" : "Dry-run off (live)"}
+                        {d.enabled ? "Disable device" : "Enable device"}
                       </button>
 
                       <button
                         type="button"
-                        onClick={() => updateDevice(d._id, { enabled: !d.enabled })}
-                        className={`inline-flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-medium transition ${
-                          d.enabled
-                            ? "border-slate-200 text-slate-600 hover:bg-slate-50 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/5"
-                            : "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-400/20 dark:bg-rose-400/10 dark:text-rose-200"
+                        onClick={() => updateDevice(d._id, { dryRun: !d.dryRun })}
+                        disabled={!d.enabled}
+                        className={`inline-flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-40 ${
+                          d.dryRun
+                            ? "border-blue-600 bg-blue-600 text-white hover:bg-blue-700"
+                            : "border-slate-200 text-slate-600 hover:bg-slate-50 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/5"
                         }`}
                       >
-                        {d.enabled ? "Enabled" : "Disabled"}
+                        <FlaskConical className="h-3.5 w-3.5" />
+                        {d.dryRun ? "Go live (start saving attendance)" : "Switch to dry-run"}
                       </button>
                     </div>
                   </div>
