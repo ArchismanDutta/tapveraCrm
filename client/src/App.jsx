@@ -65,6 +65,9 @@ import HolidayManagementPage from "./pages/HolidayManagementPage";
 import SuperAdminAttendancePortal from "./pages/SuperAdminAttendancePortal";
 import ShiftManagement from "./components/humanResource/ShiftManagement";
 import ManualAttendanceManagement from "./pages/admin/ManualAttendanceManagement";
+// Biometric attendance: map employees to fingerprint-device PINs and monitor
+// the terminal. See docs/biometric-attendance-integration.md
+import BiometricAttendanceManagement from "./pages/admin/BiometricAttendanceManagement";
 import SalaryManagement from "./pages/admin/SalaryManagement";
 import PositionManagement from "./pages/admin/PositionManagement"; // Superseded by AccessManagementPage below - kept live for rollback safety until the access-management rework's Phase 6 (see docs/superpowers/plans/2026-07-03-access-management-rework.md)
 import AccessManagementPage from "./pages/admin/AccessManagementPage";
@@ -841,6 +844,23 @@ const AppWrapper = () => {
           element={
             isAuthenticated && (isSuperAdmin || isHR || isAdmin) ? (
               <ManualAttendanceManagement onLogout={handleLogout} />
+            ) : (
+              <Navigate
+                to={isAuthenticated ? "/dashboard" : "/login"}
+                replace
+              />
+            )
+          }
+        />
+
+        {/* Biometric Attendance — fingerprint device PIN mapping & monitoring */}
+        {/* Same gating as Manual Attendance above, matching the backend's
+            requireAttendanceManage guard on /api/biometric. */}
+        <Route
+          path="/admin/biometric-attendance"
+          element={
+            isAuthenticated && (isSuperAdmin || isHR || isAdmin) ? (
+              <BiometricAttendanceManagement onLogout={handleLogout} />
             ) : (
               <Navigate
                 to={isAuthenticated ? "/dashboard" : "/login"}

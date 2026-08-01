@@ -57,6 +57,7 @@ Identix terminal ──HTTPS POST──▶ Cloudflare ──▶ VPS ──▶ Ex
 | `server/services/biometric/BiometricAttendanceService.js` | Maps punches to employees and applies them |
 | `server/models/BiometricDevice.js` | Device registry + allowlist + telemetry |
 | `server/models/BiometricPunch.js` | Raw device log, dedupe index, audit trail |
+| `client/.../admin/BiometricAttendanceManagement.jsx` | Admin UI: PIN mapping, device status, punch feed |
 
 ### Modified (additive only — nothing removed)
 
@@ -66,6 +67,8 @@ Identix terminal ──HTTPS POST──▶ Cloudflare ──▶ VPS ──▶ Ex
 | `server/services/AttendanceService.js` | `recordPunchEvent` now honours `options.timestamp`; `validatePunchEvent` accepts `allowEarlyPunch` / `maxPastHours` |
 | `server/app.js` | Mounted `/iclock` (before `express.json()`) and `/api/biometric` |
 | `client/.../AttendanceHero.jsx` | Punch buttons hidden behind `BIOMETRIC_ATTENDANCE_ENABLED`; original JSX intact |
+| `client/src/App.jsx` | Route `/admin/biometric-attendance` (admin/HR/super-admin) |
+| `client/.../dashboard/Sidebar.jsx` | "Biometric Device" nav entry for HR and super-admin |
 
 ---
 
@@ -157,16 +160,41 @@ letting the machine affect anyone's timesheet.
 
 Nothing works until this is done: an unmapped PIN produces no attendance.
 
+Go to **Sidebar → Biometric Device** (`/admin/biometric-attendance`), available
+to admin, HR and super-admin.
+
+The page has four sections:
+
+1. **Health strip** — devices online, punches applied in the last 24h, and how
+   many staff still have no PIN
+2. **PINs waiting to be assigned** — the work queue. Every PIN the device has
+   sent that matches nobody, with a dropdown to pick the employee. This is the
+   fastest path: have everyone scan once, then assign from this list rather than
+   typing numbers.
+3. **Employee PIN mapping** — the full roster with an editable PIN per row.
+   Search by name, employee ID or PIN; filter to unmapped only.
+4. **Terminals + Recent punches** — device online status, the dry-run toggle,
+   and a live feed of exactly what the hardware sent and what the CRM did with it
+
+Mapping someone **automatically replays** their earlier unmapped punches, so
+enrolling staff on the device before mapping them in the CRM loses nothing —
+you'll see a toast confirming how many were recovered.
+
+The equivalent API calls, if you'd rather script it:
+
 ```http
 GET  /api/biometric/unmapped-pins        # PINs the device has sent
 GET  /api/biometric/mappings             # employees + who's still unmapped
 PUT  /api/biometric/mappings/:userId     # { "biometricPin": "1001" }
 ```
 
-Mapping someone **automatically replays** their earlier unmapped punches, so
-enrolling staff on the device before mapping them in the CRM loses nothing.
-
 ### Step 6 — Go live
+
+On the Biometric Device page, find your terminal under **Terminals** and click
+the **Dry-run** toggle to switch it off. Punches start counting from that
+moment.
+
+Or via API:
 
 ```http
 PUT /api/biometric/devices/:id     { "dryRun": false, "name": "Reception" }
@@ -267,8 +295,6 @@ path still works if called directly.
 
 ## 8. Suggested next steps
 
-- **Admin UI** for PIN mapping. The API is ready; a screen under Admin →
-  Attendance would let HR self-serve instead of calling endpoints.
 - **Alert on device silence.** A `node-cron` job (already a dependency) checking
   `lastSeenAt` and notifying HR after ~30 minutes turns a silent hardware
   failure into a notification rather than a payroll surprise a week later.

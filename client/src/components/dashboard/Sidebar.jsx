@@ -238,6 +238,11 @@ const menuConfig = {
       icon: <Disc3 size={18} animateOnHover />,
       label: "Manual Attendance",
     },
+    {
+      to: "/admin/biometric-attendance",
+      icon: <Fingerprint size={18} animateOnHover />,
+      label: "Biometric Device",
+    },
     { to: "/admin/notices", icon: <Flag size={18} />, label: "Notice Board" },
     {
       to: "/admin/holidays",
@@ -434,6 +439,11 @@ const menuConfig = {
           to: "/admin/manual-attendance",
           icon: <Disc3 size={16} animateOnHover />,
           label: "Manual Attendance",
+        },
+        {
+          to: "/admin/biometric-attendance",
+          icon: <Fingerprint size={16} animateOnHover />,
+          label: "Biometric Device",
         },
         // Hidden: Manual Payslip Management (backend still works, just hidden from UI)
         // {
