@@ -21,6 +21,7 @@ const EmployeeDirectory = ({ onLogout }) => {
   });
   const [updatingStatus, setUpdatingStatus] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
+  const [userPermissions, setUserPermissions] = useState({});
   const [loadError, setLoadError] = useState("");
   const [actionError, setActionError] = useState("");
 
@@ -152,6 +153,16 @@ const EmployeeDirectory = ({ onLogout }) => {
       }
       const user = JSON.parse(userData);
       setCurrentUser(user);
+
+      // Fetch position-based permissions so canManageUsers is respected
+      // regardless of the user's system role (e.g. employee with HR position)
+      const permRes = await fetch(`${API_BASE}/api/users/me/permissions`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (permRes.ok) {
+        const permData = await permRes.json();
+        setUserPermissions(permData);
+      }
 
       // Fetch all employees without server-side filtering
       const url = `${API_BASE}/api/users/directory`;
@@ -291,7 +302,9 @@ const EmployeeDirectory = ({ onLogout }) => {
   const abscondedEmployees = employees.filter(emp => emp.status?.toLowerCase() === "absconded").length;
   const departments = [...new Set(employees.map(emp => emp.department).filter(dep => dep && dep !== "N/A" && dep !== ""))];
   const normalizedRole = currentUser?.role?.toLowerCase() || "employee";
-  const canManageEmployees = ["admin", "hr", "super-admin"].includes(normalizedRole);
+  const canManageEmployees =
+    ["admin", "hr", "super-admin"].includes(normalizedRole) ||
+    !!userPermissions?.permissions?.canManageUsers;
 
   return (
     <div className="relative flex h-[100dvh] overflow-hidden bg-slate-50 text-slate-900 dark:bg-[#0b0d12] dark:text-slate-100">

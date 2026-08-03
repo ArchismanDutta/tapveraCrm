@@ -66,7 +66,7 @@ const userSchema = new mongoose.Schema(
     currentAddress: { type: String, trim: true },
     emergencyContact: { type: String, trim: true },
     ps: { type: String, trim: true },
-    doj: { type: Date, required: true, validate: { validator: v => v <= new Date(), message: "DOJ cannot be a future date" } },
+    doj: { type: Date, required: true },
     salary: { type: salarySchema, default: () => ({}) },
     ref: { type: String, trim: true },
     status: { type: String, enum: ["active", "inactive", "terminated", "absconded"], default: "active" },

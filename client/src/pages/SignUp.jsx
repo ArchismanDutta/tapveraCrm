@@ -98,6 +98,7 @@ const Signup = () => {
   const [skillsInput, setSkillsInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [role, setRole] = useState(null);
+  const [canManage, setCanManage] = useState(false);
   const [availableShifts, setAvailableShifts] = useState([]);
   const [loadingShifts, setLoadingShifts] = useState(true);
   const [fetchingId, setFetchingId] = useState(false);
@@ -113,15 +114,28 @@ const Signup = () => {
   }, [navigate]);
 
   useEffect(() => {
-    if (role && !["hr", "admin", "super-admin"].includes(role)) {
-      toast.error("Access denied. Only HR/Admin/Super Admin can register employees.");
-      navigate("/login");
-    }
+    if (!role) return;
+    const privilegedRole = ["hr", "admin", "super-admin"].includes(role);
+    if (privilegedRole) { setCanManage(true); return; }
+
+    // Check position-based canManageUsers permission
+    const token = localStorage.getItem("token");
+    if (!token) { navigate("/login"); return; }
+    fetch(`${API_BASE}/api/users/me/permissions`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data?.permissions?.canManageUsers) { setCanManage(true); }
+        else {
+          toast.error("Access denied. Only HR/Admin/Super Admin can register employees.");
+          navigate("/login");
+        }
+      })
+      .catch(() => { navigate("/login"); });
   }, [role, navigate]);
 
   // Auto-fetch next employee ID
   useEffect(() => {
-    if (!role || !["hr", "admin", "super-admin"].includes(role)) return;
+    if (!canManage) return;
     const fetchNextId = async () => {
       setFetchingId(true);
       try {
@@ -140,7 +154,7 @@ const Signup = () => {
       }
     };
     fetchNextId();
-  }, [role]);
+  }, [canManage]);
 
   useEffect(() => {
     const fetchShifts = async () => {
@@ -165,8 +179,8 @@ const Signup = () => {
         setLoadingShifts(false);
       }
     };
-    if (role && ["hr", "admin", "super-admin"].includes(role)) fetchShifts();
-  }, [role]);
+    if (canManage) fetchShifts();
+  }, [canManage]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -307,7 +321,7 @@ const Signup = () => {
     }
   };
 
-  if (!["hr", "admin", "super-admin"].includes(role)) return null;
+  if (!canManage) return null;
 
   const isLastStep = step === STEPS.length - 1;
 
