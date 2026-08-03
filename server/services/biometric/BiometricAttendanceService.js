@@ -26,6 +26,14 @@
 //    later found to be wrong (bad PIN mapping, wrong shift), the original data
 //    is still there to replay. Nothing is lost to a logic bug.
 //
+// 4. THE TERMINAL OPENS A DAY; IT NEVER CLOSES ONE.
+//    The first scan of an attendance day becomes PUNCH_IN. Every later scan is
+//    stored as LOGGED presence evidence and produces no attendance event. The
+//    day is closed by the employee pressing Punch Out in the CRM, or by the
+//    auto-close job booking their last scan as the departure. See
+//    resolveAction() for why, and services/AttendanceAutoCloseService.js for the
+//    safety net.
+//
 // See docs/biometric-attendance-integration.md
 "use strict";
 
@@ -77,6 +85,7 @@ class BiometricAttendanceService {
     const summary = {
       received: records.length,
       applied: 0,
+      logged: 0,
       duplicate: 0,
       unmapped: 0,
       skipped: 0,
@@ -104,6 +113,12 @@ class BiometricAttendanceService {
       switch (outcome.status) {
         case "APPLIED":
           summary.applied += 1;
+          break;
+        case "LOGGED":
+          // Presence evidence for a day that is already open or already closed.
+          // Expected and normal — most scans in a day land here — so it must not
+          // be counted as a failure.
+          summary.logged += 1;
           break;
         case "DUPLICATE":
           summary.duplicate += 1;
@@ -205,9 +220,14 @@ class BiometricAttendanceService {
       const decision = await this.resolveAction(user._id, record);
 
       if (!decision.action) {
+        // Not an error and not a rejection — the day is already open (or already
+        // closed) and this scan is simply part of the raw trail. It is booked
+        // against the attendance date it belongs to so the auto-close job can
+        // find it later as a candidate departure time.
         return this.finalise(punchDoc, {
-          status: "SKIPPED",
+          status: "LOGGED",
           userId: user._id,
+          attendanceDate: decision.attendanceDate,
           message: decision.reason,
         });
       }
@@ -273,65 +293,67 @@ class BiometricAttendanceService {
   // ───────────────────────────────────────────────────────────────────────────
 
   /**
-   * Decide whether a device punch is a PUNCH_IN or a PUNCH_OUT.
+   * Decide what a device punch means.
    *
-   * Why we infer from CRM state instead of trusting the device's Status column:
-   * that column reflects which mode key the employee pressed on the terminal
-   * before scanning. In practice almost nobody presses it — they just scan — so
-   * the column is overwhelmingly 0 ("check-in") regardless of what the person
-   * actually meant. Treating it as authoritative would mean nobody ever punches
-   * out. Inferring from the state we already hold is far more reliable, and the
-   * raw status is still stored for audit.
+   * ─── THE TERMINAL OPENS THE DAY. IT NEVER CLOSES IT. ───
    *
-   * Breaks are deliberately NOT derived here. Break tracking stays in the CRM
-   * app, where the employee explicitly chooses it; a device punch during a break
-   * is ambiguous and is skipped rather than guessed at.
+   * Only the FIRST scan of an attendance day produces an attendance event
+   * (PUNCH_IN). Every subsequent scan that day is recorded raw and produces no
+   * event at all. The day is closed exactly one way: the employee presses Punch
+   * Out in the CRM — or, if they forget, the auto-close job books their last
+   * scan of the day as the departure (see services/AttendanceAutoCloseService).
    *
-   * @returns {Promise<{action: String|null, reason: String}>}
+   * Why not infer PUNCH_OUT from a second scan (the previous behaviour):
+   * people leave and re-enter the building repeatedly during a normal day —
+   * lunch, a bank run, seeing a client to the door — and the terminal sits at
+   * that door. Treating the next scan as a departure ended the workday at
+   * whatever time someone stepped out for tea, and the scan on the way back in
+   * opened a fresh session, fragmenting one day into several. Inferring nothing
+   * is both simpler and closer to what the hardware actually tells us: that this
+   * person was physically present at this moment.
+   *
+   * The device's own Status column is still ignored. It reflects which mode key
+   * was pressed before scanning, almost nobody presses it, so it is
+   * overwhelmingly 0 regardless of intent. It remains stored for audit.
+   *
+   * Breaks are likewise not derived here — break tracking stays in the app,
+   * where the employee explicitly chooses it.
+   *
+   * @returns {Promise<{action: String|null, reason: String, attendanceDate: Date|null}>}
    */
   async resolveAction(userId, record) {
-    const currentStatus = await this.getCurrentStatus(userId, record.punchedAt);
+    const { status, attendanceDate } = await this.getDayState(userId, record.punchedAt);
 
-    switch (currentStatus) {
-      case "NOT_STARTED":
-        // No punches yet for this attendance day → arrival.
-        return { action: "PUNCH_IN", reason: "First punch of the attendance day" };
-
-      case "WORKING":
-        // Already in and not on a break → this scan ends the session.
-        return { action: "PUNCH_OUT", reason: "Currently working" };
-
-      case "ON_BREAK":
-        // The employee started a break in the app but is scanning at the
-        // terminal. Recording PUNCH_OUT here would end their day mid-break and
-        // lose the break duration; recording PUNCH_IN is invalid while on
-        // break. Neither is safe to guess, so the punch is preserved and
-        // surfaced to admin rather than applied.
-        return {
-          action: null,
-          reason: "Employee is on a break in the CRM — end the break in the app first",
-        };
-
-      case "FINISHED":
-        // Punched out earlier and has come back (stepped out for lunch, returned
-        // after a client visit). A new session starts.
-        return { action: "PUNCH_IN", reason: "Returning after punch-out — new work session" };
-
-      default:
-        return { action: "PUNCH_IN", reason: "Unknown state, defaulting to punch-in" };
+    if (status === "NOT_STARTED") {
+      // Nothing recorded yet for this attendance day → this is their arrival.
+      return {
+        action: "PUNCH_IN",
+        reason: "First scan of the attendance day — arrival",
+        attendanceDate,
+      };
     }
+
+    // The day is already open (WORKING / ON_BREAK) or already closed
+    // (FINISHED). Either way the scan changes nothing about their attendance
+    // state; it is kept as presence evidence and as a candidate departure time.
+    const reason =
+      status === "FINISHED"
+        ? "Already punched out in the CRM — scan logged, day stays closed"
+        : "Day already open — scan logged; day is closed from the CRM";
+
+    return { action: null, reason, attendanceDate };
   }
 
   /**
-   * Read the employee's current attendance state for the day this punch belongs
-   * to.
+   * Read the employee's attendance state for the day this punch belongs to,
+   * along with the attendance date itself.
    *
    * Uses the same shift-aware date resolution as recordPunchEvent, because for a
    * night shift a 01:00 punch belongs to the previous day's record — reading
    * today's record instead would show NOT_STARTED and wrongly produce a second
-   * punch-in.
+   * punch-in at 1am.
    */
-  async getCurrentStatus(userId, punchedAt) {
+  async getDayState(userId, punchedAt) {
     try {
       const shift = await this.attendanceService.getUserShift(userId, punchedAt);
       const attendanceDate = this.attendanceService.getAttendanceDateForPunch(punchedAt, shift);
@@ -340,16 +362,25 @@ class BiometricAttendanceService {
         .select("employees.userId employees.calculated.currentStatus")
         .lean();
 
-      if (!record) return "NOT_STARTED";
+      if (!record) return { status: "NOT_STARTED", attendanceDate };
 
       const employee = (record.employees || []).find(
         (e) => String(e.userId) === String(userId)
       );
 
-      return employee?.calculated?.currentStatus || "NOT_STARTED";
+      return {
+        status: employee?.calculated?.currentStatus || "NOT_STARTED",
+        attendanceDate,
+      };
     } catch (err) {
-      console.warn("⚠️  Could not read current attendance status:", err.message);
-      return "NOT_STARTED";
+      // Deliberately rethrown rather than defaulted. Guessing NOT_STARTED here
+      // would open a brand new work session for someone who may already be
+      // FINISHED for the day; guessing WORKING would silently discard a real
+      // arrival. Letting it fail marks the row FAILED, which surfaces it in the
+      // admin error view and makes it eligible for the default replayPunches
+      // sweep — so the punch is recovered rather than misinterpreted.
+      console.error("❌ Could not resolve attendance state for punch:", err.message);
+      throw new Error(`Attendance state lookup failed: ${err.message}`);
     }
   }
 

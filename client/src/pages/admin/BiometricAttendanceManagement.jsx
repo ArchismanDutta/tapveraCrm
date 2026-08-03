@@ -40,6 +40,10 @@ const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
 // model for what each one means.
 const STATUS_STYLES = {
   APPLIED: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-400/10 dark:text-emerald-200 dark:border-emerald-400/20",
+  // Presence evidence for a day that was already open — the common case, since
+  // only the first scan of a day becomes an attendance event. Deliberately
+  // muted: these are routine, not something an admin needs to act on.
+  LOGGED: "bg-slate-50 text-slate-500 border-slate-200 dark:bg-white/[0.03] dark:text-slate-400 dark:border-white/10",
   DUPLICATE: "bg-slate-50 text-slate-600 border-slate-200 dark:bg-white/[0.04] dark:text-slate-300 dark:border-white/10",
   UNMAPPED: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-400/10 dark:text-amber-200 dark:border-amber-400/20",
   SKIPPED: "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-400/10 dark:text-blue-200 dark:border-blue-400/20",

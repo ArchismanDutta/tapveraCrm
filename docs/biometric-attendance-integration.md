@@ -24,7 +24,7 @@ Identix terminal ──HTTPS POST──▶ Cloudflare ──▶ VPS ──▶ Ex
                                           │  3. Save raw punch  (BiometricPunch) │
                                           │  4. Map PIN → User.biometricPin      │
                                           │  5. Collapse re-scans (90s window)   │
-                                          │  6. Decide PUNCH_IN vs PUNCH_OUT     │
+                                          │  6. First scan of day? IN : just log │
                                           └──────────────────┬──────────────────┘
                                                              ▼
                                     AttendanceService.recordPunchEvent()
@@ -39,9 +39,17 @@ Identix terminal ──HTTPS POST──▶ Cloudflare ──▶ VPS ──▶ Ex
 
 | Action | Where it happens |
 |---|---|
-| Punch in / punch out | **Fingerprint terminal only** — in-app buttons hidden |
+| Punch in (arrival) | **Fingerprint terminal only** — no in-app button |
+| Punch out (departure) | **CRM app** — employee presses Punch Out on Today Status |
+| Forgotten punch out | **Auto-close job** — books their last scan of the day |
 | Break start / resume | **CRM app** — unchanged |
 | Missed / corrected punches | **Admin manual punch** — unchanged |
+
+Arrival is terminal-only because it is the number worth protecting from
+self-reporting: it drives late marking and payroll. Departure is app-only
+because the terminal sits by the door and people pass it several times a day —
+no scan can be distinguished from a lunch run, so only the employee knows which
+exit is the last one.
 
 ---
 
@@ -57,6 +65,7 @@ Identix terminal ──HTTPS POST──▶ Cloudflare ──▶ VPS ──▶ Ex
 | `server/services/biometric/BiometricAttendanceService.js` | Maps punches to employees and applies them |
 | `server/models/BiometricDevice.js` | Device registry + allowlist + telemetry |
 | `server/models/BiometricPunch.js` | Raw device log, dedupe index, audit trail |
+| `server/services/AttendanceAutoCloseService.js` | Closes days nobody punched out of, using the last scan (§6) |
 | `client/.../admin/BiometricAttendanceManagement.jsx` | Admin UI: PIN mapping, device status, punch feed |
 
 ### Modified (additive only — nothing removed)
@@ -66,9 +75,12 @@ Identix terminal ──HTTPS POST──▶ Cloudflare ──▶ VPS ──▶ Ex
 | `server/models/User.js` | Added optional `biometricPin` (sparse unique) |
 | `server/services/AttendanceService.js` | `recordPunchEvent` now honours `options.timestamp`; `validatePunchEvent` accepts `allowEarlyPunch` / `maxPastHours` |
 | `server/app.js` | Mounted `/iclock` (before `express.json()`) and `/api/biometric` |
-| `client/.../AttendanceHero.jsx` | Punch buttons hidden behind `BIOMETRIC_ATTENDANCE_ENABLED`; original JSX intact |
+| `client/.../AttendanceHero.jsx` | Punch-**in** replaced by a fingerprint notice behind `BIOMETRIC_PUNCH_IN_ONLY`; punch-**out** button shown. Also fixed: an employee on a break was offered "Punch in" |
+| `client/.../workstatus/PunchOutConfirmPopup.jsx` | Reworded for the terminal reality; light-mode styling |
 | `client/src/App.jsx` | Route `/admin/biometric-attendance` (admin/HR/super-admin) |
 | `client/.../dashboard/Sidebar.jsx` | "Biometric Device" nav entry for HR and super-admin |
+| `server/models/BiometricPunch.js` | Added `LOGGED` status for scans that are presence evidence only |
+| `server/jobs/cronJobs.js` | Registered the hourly auto-close sweep |
 
 ---
 
@@ -231,21 +243,39 @@ PUT /api/biometric/devices/:id     { "dryRun": false, "name": "Reception" }
 
 ---
 
-## 4. How a punch becomes IN or OUT
+## 4. How a punch is interpreted
 
-Decided from the employee's current CRM state, not the device's status column:
+**The terminal opens a day. It never closes one.** Decided from the employee's
+current CRM state, not the device's status column:
 
 | CRM state | Device punch becomes |
 |---|---|
-| `NOT_STARTED` | `PUNCH_IN` — first punch of the day |
-| `WORKING` | `PUNCH_OUT` — ends the session |
-| `ON_BREAK` | *skipped* — break must be ended in the app first |
-| `FINISHED` | `PUNCH_IN` — returning, new session |
+| `NOT_STARTED` | `PUNCH_IN` — first scan of the attendance day, their arrival |
+| `WORKING` | `LOGGED` — presence evidence, no attendance event |
+| `ON_BREAK` | `LOGGED` — same; breaks are managed in the app |
+| `FINISHED` | `LOGGED` — day already closed, and it stays closed |
+
+So exactly one attendance event per employee per day comes from the hardware:
+the arrival. Everything after it is raw presence data.
+
+**Why not treat the second scan as a punch-out?** That was the original design
+and it broke on contact with a real office. People leave and re-enter all day —
+lunch, a bank run, seeing a client to the door — and the terminal is at that
+door. Reading the next scan as a departure ended the workday at whatever time
+someone stepped out for tea, and the scan on the way back in opened a fresh
+session, fragmenting one day into several. Inferring nothing is both simpler and
+closer to what the hardware actually knows: that this person was physically
+present at this moment.
+
+**So how does a day end?** The employee presses Punch Out in the CRM (Today
+Status → confirmation dialog). If they forget, `AttendanceAutoCloseService` books
+a `PUNCH_OUT` at their **last fingerprint scan of that attendance day** — the
+last moment we can prove they were in the building. See §6.
 
 **Why not use the device's status column?** It reflects which mode key the
 employee pressed before scanning. Almost nobody presses it — they just scan — so
-it reads `0` ("check-in") regardless of intent. Trusting it would mean nobody
-ever punches out. The raw value is still stored on every punch for audit.
+it reads `0` ("check-in") regardless of intent. The raw value is still stored on
+every punch for audit.
 
 ---
 
@@ -277,7 +307,56 @@ sensor time, not delivery time.
 
 ---
 
-## 6. Troubleshooting
+## 6. Closing the day (auto-close)
+
+`server/services/AttendanceAutoCloseService.js`, run hourly at `:15` from
+`jobs/cronJobs.js`.
+
+An employee who never punches out would otherwise stay `WORKING` forever:
+`departureTime` never set, `currentStatus` never `FINISHED`, and the duration
+calculation accruing time against `now` — a number that grows on its own and
+feeds payroll.
+
+**When it fires.** Per employee, not per clock time: shift end (from their own
+assigned shift, rolled to the next day for night shifts) **+ 4 hours grace**
+(`ATTENDANCE_AUTOCLOSE_GRACE_HOURS`). Hourly rather than nightly because one
+fixed hour cannot serve day and night shifts at once — it would either close
+night-shift staff mid-shift or leave day-shift staff open until the next
+evening. Anyone still inside their grace window is skipped, which makes the
+extra runs nearly free. It sweeps 7 days back
+(`ATTENDANCE_AUTOCLOSE_LOOKBACK_DAYS`) so days missed during an outage are still
+closed.
+
+**What time it uses as the departure.**
+
+| Situation | Departure booked at | Flagged? |
+|---|---|---|
+| Any scan after their arrival | That last scan — the last moment we can prove they were in the building | no |
+| Arrival was their only scan | Their shift end time | **yes** — `source: "SHIFT_END"`, needs HR review |
+
+The fallback exists because booking the departure at the arrival would record a
+zero-hour day for someone who demonstrably worked. Assuming their scheduled
+shift is the lesser error, but it is a guess, so it is marked as one.
+
+Events are written through `recordPunchEvent` like any other punch — same
+transaction, same night-shift date handling — tagged
+`device: "SYSTEM:AUTO_CLOSE"` with `manual: false`, since nobody typed it in.
+A `PUNCH_OUT` from `ON_BREAK` closes the open break too, so no separate
+`BREAK_END` is needed.
+
+**Dry run it first.** On the day you switch this on:
+
+```js
+const { runAttendanceAutoClose } = require("./jobs/cronJobs");
+await runAttendanceAutoClose({ dryRun: true }); // computes everything, writes nothing
+```
+
+The returned summary lists every employee it would close, the timestamp, and
+whether it came from a scan or the shift-end fallback.
+
+---
+
+## 7. Troubleshooting
 
 **Device connects but no attendance arrives.**
 The handshake response format is almost always the cause — the device requires a
@@ -315,7 +394,7 @@ default and drifts minutes per month.
 
 ---
 
-## 7. Rollback
+## 8. Rollback
 
 Bring the in-app punch buttons back instantly: set
 `BIOMETRIC_ATTENDANCE_ENABLED = false` in
@@ -330,13 +409,15 @@ path still works if called directly.
 
 ---
 
-## 8. Suggested next steps
+## 9. Suggested next steps
 
 - **Alert on device silence.** A `node-cron` job (already a dependency) checking
   `lastSeenAt` and notifying HR after ~30 minutes turns a silent hardware
   failure into a notification rather than a payroll surprise a week later.
-- **Missing punch-out sweep.** People forget to scan on the way out. A nightly
-  job flagging `WORKING` employees for HR review is worth adding.
+- **Surface auto-closed days in the HR view.** The job already flags the ones it
+  had to guess (`source: "SHIFT_END"` — no scan after arrival). A filter for
+  those in the attendance admin page would make the weekly review a minute's
+  work instead of a scroll.
 - **Tighten security before this is public for long.** `BIOMETRIC_ALLOWED_IPS`
   and `BIOMETRIC_PUSH_SECRET` are both off by default; the serial allowlist is
   the only active guard, and serials are guessable.

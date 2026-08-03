@@ -6,6 +6,7 @@ const vicidialService  = require("../services/vicidialService");
 const callAnalysisService = require("../services/callAnalysisService");
 const KeywordRank      = require("../models/KeywordRank");
 const hybridRankService = require("../services/hybridRankService");
+const AttendanceAutoCloseService = require("../services/AttendanceAutoCloseService");
 
 // ─── Keyword rank fetch ────────────────────────────────────────────────────────
 
@@ -77,6 +78,23 @@ async function runAllKeywordsFetch() {
 function initializeCronJobs() {
   console.log("Initializing cron jobs...");
 
+  // Attendance auto-close — hourly at :15
+  //
+  // Hourly rather than nightly because the job is gated per employee on their
+  // own shift end plus a grace window, so it only ever touches people who are
+  // genuinely finished. A single nightly run at a fixed hour cannot serve day
+  // and night shifts at once — it would either close night-shift workers while
+  // they are still on the floor, or leave day-shift workers open until the next
+  // evening. Employees still open within their grace window are simply skipped,
+  // which makes the extra runs almost free.
+  cron.schedule("15 * * * *", async () => {
+    try {
+      await new AttendanceAutoCloseService().closeStaleDays();
+    } catch (error) {
+      console.error("Attendance auto-close failed:", error.message);
+    }
+  });
+
   // Media cleanup — daily at 2:00 AM
   cron.schedule("0 2 * * *", async () => {
     console.log("Running scheduled media cleanup...");
@@ -146,6 +164,7 @@ function initializeCronJobs() {
   });
 
   console.log("Cron jobs initialized successfully!");
+  console.log("   - Attendance auto-close:           Hourly at :15");
   console.log("   - Media cleanup:                  Daily at 2:00 AM");
   console.log("   - Chat notification cleanup:       Daily at 3:00 AM");
   console.log("   - Vicidial recording sync:         Every 2 hours at :00");
@@ -163,9 +182,20 @@ async function runManualCleanup() {
   return await cleanupOldMedia();
 }
 
+/**
+ * Trigger the attendance auto-close by hand.
+ * Pass { dryRun: true } to see exactly who would be closed, and at what time,
+ * without writing anything — worth doing on the first day this is switched on.
+ */
+async function runAttendanceAutoClose(options = {}) {
+  console.log("Running manual attendance auto-close...");
+  return await new AttendanceAutoCloseService().closeStaleDays(options);
+}
+
 module.exports = {
   initializeCronJobs,
   runManualCleanup,
+  runAttendanceAutoClose,
   runKeywordRankFetch,
   runAllKeywordsFetch,
 };

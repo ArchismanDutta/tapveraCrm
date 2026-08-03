@@ -285,9 +285,10 @@ router.post("/cdata", resolveDevice, async (req, res) => {
 
     console.log(
       `✅ [iclock] ${device.serialNumber}: received=${summary.received} ` +
-        `applied=${summary.applied} duplicate=${summary.duplicate} ` +
-        `unmapped=${summary.unmapped} skipped=${summary.skipped} ` +
-        `failed=${summary.failed} dryRun=${summary.dryRun}`
+        `applied=${summary.applied} logged=${summary.logged} ` +
+        `duplicate=${summary.duplicate} unmapped=${summary.unmapped} ` +
+        `skipped=${summary.skipped} failed=${summary.failed} ` +
+        `dryRun=${summary.dryRun}`
     );
 
     if (summary.unmapped > 0) {

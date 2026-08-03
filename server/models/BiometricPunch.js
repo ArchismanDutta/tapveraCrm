@@ -56,9 +56,16 @@ const BiometricPunchSchema = new mongoose.Schema(
       enum: [
         "PENDING", // received, not yet processed
         "APPLIED", // successfully written into AttendanceRecord
+        // Recorded as presence evidence, intentionally without an attendance
+        // event. The terminal only ever opens a day (the first scan becomes
+        // PUNCH_IN); every later scan that day lands here. These are the rows
+        // the auto-close job searches to find someone's last known presence
+        // when they forget to punch out in the CRM. Not an error — on a normal
+        // day most of an employee's scans are LOGGED.
+        "LOGGED",
         "DUPLICATE", // identical punch already applied (device re-send / double scan)
         "UNMAPPED", // no user has this biometricPin
-        "SKIPPED", // deliberately not applied (business rule, e.g. already punched out)
+        "SKIPPED", // deliberately not applied (business rule, e.g. inactive employee)
         "FAILED", // processing threw — safe to retry
         "DRY_RUN", // device is in dryRun mode; captured but intentionally not applied
       ],

@@ -1,11 +1,18 @@
 import React from "react";
 import { Coffee, Loader2, Play, UserRound, Utensils } from "lucide-react";
 
-const breakTypes = [
+// Exported so the confirmation dialog can show the same label and icon the
+// employee just clicked, rather than keeping a second copy that drifts.
+export const BREAK_TYPES = [
   { id: "Lunch", label: "Lunch", description: "Meal break", icon: Utensils },
   { id: "Coffee", label: "Coffee", description: "Quick reset", icon: Coffee },
   { id: "Personal", label: "Personal", description: "Personal time", icon: UserRound },
 ];
+
+export const getBreakType = (id) =>
+  BREAK_TYPES.find((b) => b.id === id) || null;
+
+const breakTypes = BREAK_TYPES;
 
 const BreakActions = ({ breakDuration = "0h 00m 00s", onBreak = false, onStartBreak, onResumeWork, currentlyWorking = false, isLoading = false, currentBreakType = "", className = "" }) => {
   const canStartBreak = currentlyWorking && !isLoading && !onBreak;

@@ -2,24 +2,30 @@ import React from "react";
 import { Clock3, Coffee, Fingerprint, Home, Loader2, LogIn, LogOut, Target, Timer } from "lucide-react";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// BIOMETRIC ATTENDANCE
+// BIOMETRIC ATTENDANCE — ARRIVAL FROM THE TERMINAL, DEPARTURE FROM THE APP
 // ─────────────────────────────────────────────────────────────────────────────
-// Punch in / punch out is captured by the Identix fingerprint terminal at the
-// office and pushed to the CRM automatically (see server /iclock endpoints and
-// docs/biometric-attendance-integration.md). The in-app punch buttons are
-// therefore hidden — two competing ways to punch would produce conflicting
-// arrival/departure times for the same day.
+// Arrival is captured by the Identix fingerprint terminal at the office and
+// pushed to the CRM automatically (see server /iclock endpoints and
+// docs/biometric-attendance-integration.md). There is no in-app punch-in button,
+// because arrival is the number worth protecting from self-reporting — it drives
+// late marking and payroll, and a second way to record it would let someone
+// stamp a 9am start from their sofa.
 //
-// Everything else is untouched and still works exactly as before:
-//   • Break start / resume stay in the app (see BreakActions) — the terminal
-//     only reports arrival and departure.
-//   • The onPunchIn / onPunchOut handlers, the POST /api/attendance-new/punch
-//     endpoint, and all the logic below are intentionally left in place. Missed
-//     punches are corrected by an admin via manual punch.
+// Departure is the opposite case. The terminal sits by the door and people pass
+// it several times a day — lunch, a bank run, seeing a client out — so no scan
+// can be read as "I have finished for the day" without ending someone's day the
+// moment they step out for tea. Only the employee knows which exit is the last
+// one, so they say so explicitly here. If they forget, the nightly auto-close
+// books their last scan of the day as the departure
+// (server/services/AttendanceAutoCloseService.js).
 //
-// Set this to false to restore the original in-app punch buttons exactly as
-// they were — nothing has been removed.
-const BIOMETRIC_ATTENDANCE_ENABLED = true;
+// Unchanged: break start / resume stay in the app (see BreakActions), and the
+// onPunchIn handler plus POST /api/attendance-new/punch are left in place.
+// Missed punches are still corrected by an admin via manual punch.
+//
+// Set this to false to restore the in-app punch-IN button as well — nothing has
+// been removed.
+const BIOMETRIC_PUNCH_IN_ONLY = true;
 
 const statusStyles = {
   break: {
@@ -78,20 +84,32 @@ const AttendanceHero = ({
     { label: "Remaining", value: remainingHours, icon: Target },
   ];
 
-  const showPunchIn = !currentlyWorking && !alreadyPunchedOut;
-  const showPunchOut = currentlyWorking || onBreak;
+  // The day is open while working OR on a break — a break is a pause, not an
+  // exit. Deriving both flags from that one fact keeps them mutually exclusive;
+  // testing `!currentlyWorking` on its own used to make an employee on a break
+  // look like someone who had not arrived yet, and offered them Punch In.
+  const dayOpen = currentlyWorking || onBreak;
+  const showPunchOut = dayOpen;
+  const showPunchIn = !dayOpen && !alreadyPunchedOut;
+
   const disabled = isLoading || (showPunchIn && alreadyPunchedIn);
   const buttonLabel = isLoading
     ? "Processing"
+    : showPunchOut
+    ? "Punch out"
     : showPunchIn
     ? alreadyPunchedIn
       ? "Punched in"
       : "Punch in"
-    : showPunchOut
-    ? "Punch out"
     : "Day complete";
   const ButtonIcon = isLoading ? Loader2 : showPunchOut ? LogOut : LogIn;
-  const buttonAction = showPunchIn ? onPunchIn : showPunchOut ? onPunchOut : undefined;
+  const buttonAction = showPunchOut ? onPunchOut : showPunchIn ? onPunchIn : undefined;
+
+  // Arrival comes from the terminal, so the punch-IN button is replaced by a
+  // notice. The punch-OUT button is always the real thing — see the block
+  // comment at the top of this file.
+  const showFingerprintNotice = BIOMETRIC_PUNCH_IN_ONLY && showPunchIn;
+  const showActionButton = showPunchOut || (showPunchIn && !BIOMETRIC_PUNCH_IN_ONLY);
 
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-[#10131c] sm:p-6">
@@ -142,54 +160,65 @@ const AttendanceHero = ({
           </div>
 
           <div className="border-t border-slate-200 pt-4 dark:border-white/10">
-            {BIOMETRIC_ATTENDANCE_ENABLED ? (
-              /* Fingerprint terminal is the source of punch in / punch out.
-                 The in-app buttons below are hidden rather than removed — flip
-                 BIOMETRIC_ATTENDANCE_ENABLED at the top of this file to bring
-                 them straight back. */
+            <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">
+              {showPunchOut
+                ? onBreak
+                  ? "Break is currently active"
+                  : "Work session in progress"
+                : showPunchIn
+                ? BIOMETRIC_PUNCH_IN_ONLY
+                  ? "Scan your finger at the office terminal to start your day"
+                  : "Ready to start your workday"
+                : "Attendance completed for today"}
+            </p>
+
+            {showFingerprintNotice && (
               <>
-                <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">
-                  {showPunchIn
-                    ? "Scan your finger at the office terminal to start your day"
-                    : showPunchOut
-                    ? onBreak
-                      ? "Break is currently active"
-                      : "Work session in progress"
-                    : "Attendance completed for today"}
-                </p>
                 <div className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-100 px-4 py-2.5 text-center text-xs font-medium text-slate-500 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-400">
                   <Fingerprint className="h-4 w-4 shrink-0" />
-                  <span>Attendance is recorded at the fingerprint machine</span>
+                  <span>Your arrival is recorded at the fingerprint machine</span>
                 </div>
                 <p className="mt-2 text-center text-[11px] leading-relaxed text-slate-400 dark:text-slate-500">
                   Punch missing? Ask HR to add it from the admin panel.
                 </p>
               </>
-            ) : (
+            )}
+
+            {showActionButton && (
               <>
-                <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">
-                  {showPunchIn ? "Ready to start your workday" : showPunchOut ? onBreak ? "Break is currently active" : "Work session in progress" : "Attendance completed for today"}
-                </p>
-                {showPunchIn || showPunchOut ? (
-                  <button
-                    type="button"
-                    onClick={buttonAction}
-                    disabled={disabled}
-                    className={`inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl px-4 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-[#10131c] ${
-                      disabled
-                        ? "cursor-not-allowed border border-slate-200 bg-slate-100 text-slate-400 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-500"
-                        : showPunchOut
-                        ? "border border-rose-200 bg-white text-rose-700 hover:bg-rose-50 dark:border-rose-400/25 dark:bg-transparent dark:text-rose-200 dark:hover:bg-rose-400/10"
-                        : "border border-blue-600 bg-blue-600 text-white hover:border-blue-700 hover:bg-blue-700"
-                    }`}
-                  >
-                    <ButtonIcon className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
-                    {buttonLabel}
-                  </button>
-                ) : (
-                  <div className="inline-flex h-10 w-full items-center justify-center rounded-xl border border-slate-200 bg-slate-100 px-4 text-sm font-semibold text-slate-500 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-400">{buttonLabel}</div>
+                <button
+                  type="button"
+                  onClick={buttonAction}
+                  disabled={disabled}
+                  className={`inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl px-4 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-[#10131c] ${
+                    disabled
+                      ? "cursor-not-allowed border border-slate-200 bg-slate-100 text-slate-400 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-500"
+                      : showPunchOut
+                      ? "border border-rose-200 bg-white text-rose-700 hover:bg-rose-50 dark:border-rose-400/25 dark:bg-transparent dark:text-rose-200 dark:hover:bg-rose-400/10"
+                      : "border border-blue-600 bg-blue-600 text-white hover:border-blue-700 hover:bg-blue-700"
+                  }`}
+                >
+                  <ButtonIcon className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
+                  {buttonLabel}
+                </button>
+                {showPunchOut && (
+                  /* Stepping out for lunch is not the end of the day — the
+                     terminal logs those scans without closing anything, so this
+                     button is the only thing that ends it. Said plainly here
+                     because the previous behaviour trained people to expect a
+                     scan to punch them out. */
+                  <p className="mt-2 text-center text-[11px] leading-relaxed text-slate-400 dark:text-slate-500">
+                    Press this only when you are leaving for the day. Stepping out
+                    and scanning back in will not end it.
+                  </p>
                 )}
               </>
+            )}
+
+            {!showFingerprintNotice && !showActionButton && (
+              <div className="inline-flex h-10 w-full items-center justify-center rounded-xl border border-slate-200 bg-slate-100 px-4 text-sm font-semibold text-slate-500 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-400">
+                {buttonLabel}
+              </div>
             )}
           </div>
         </div>
