@@ -1,6 +1,7 @@
 const ClientRequest = require("../models/ClientRequest");
 const Client = require("../models/Client");
 const User = require("../models/User");
+const { can } = require("../utils/accessControl");
 
 // Create a new client request (quote or support)
 exports.createRequest = async (req, res) => {
@@ -163,7 +164,7 @@ exports.getRequestById = async (req, res) => {
       });
     }
 
-    if (!isClient && !isSuperAdmin && !["admin", "hr"].includes(req.user.role)) {
+    if (!isClient && !isSuperAdmin && !["admin", "hr"].includes(req.user.role) && !(await can(req.user, "clients:manage"))) {
       return res.status(403).json({
         message: "Not authorized to view this request",
       });
@@ -267,7 +268,7 @@ exports.sendMessage = async (req, res) => {
       });
     }
 
-    if (!isClient && !isSuperAdmin && !["admin", "hr"].includes(req.user.role)) {
+    if (!isClient && !isSuperAdmin && !["admin", "hr"].includes(req.user.role) && !(await can(req.user, "clients:manage"))) {
       return res.status(403).json({
         message: "Not authorized to send messages in this request",
       });

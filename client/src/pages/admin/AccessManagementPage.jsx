@@ -43,6 +43,7 @@ const PERMISSION_GROUPS = [
       canManageClients: "Manage clients",
       canManageProjects: "Manage projects",
       canAssignTasks: "Assign tasks",
+      canViewCommunicationTracking: "View project communication tracking",
     },
   },
   {
@@ -52,6 +53,7 @@ const PERMISSION_GROUPS = [
       canApproveShifts: "Approve shifts",
       canViewReports: "View reports",
       canManageAttendance: "Manage attendance",
+      canManageSalary: "Manage salary",
     },
   },
   {

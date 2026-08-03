@@ -189,13 +189,16 @@ const menuConfig = {
       icon: <Pin size={16} animateOnHover />,
       label: "Attendance Portal",
     },
-    // Hidden: Manual Payslip Management (backend still works, just hidden from UI)
-    // {
-    //   to: "/admin/salary-management",
-    //   icon: <Fingerprint size={16} animateOnHover />,
-    //   label: "Salary Management",
-    // },
-
+    {
+      to: "/admin/auto-payroll",
+      icon: <DollarSign size={18} />,
+      label: "Salary Generation",
+    },
+    {
+      to: "/admin/salary-management",
+      icon: <FileText size={18} />,
+      label: "Salary Management",
+    },
     {
       to: "/my-payslips",
       icon: <DollarSign size={16} />,
@@ -445,12 +448,16 @@ const menuConfig = {
           icon: <Fingerprint size={16} animateOnHover />,
           label: "Biometric Device",
         },
-        // Hidden: Manual Payslip Management (backend still works, just hidden from UI)
-        // {
-        //   to: "/admin/salary-management",
-        //   icon: <Fingerprint size={16} animateOnHover />,
-        //   label: "Salary Management",
-        // },
+        {
+          to: "/admin/auto-payroll",
+          icon: <DollarSign size={16} />,
+          label: "Salary Generation",
+        },
+        {
+          to: "/admin/salary-management",
+          icon: <FileText size={16} />,
+          label: "Salary Management",
+        },
         {
           to: "/admin/access-management",
           icon: <Shield size={16} />,
@@ -950,6 +957,22 @@ const Sidebar = ({
         label: "Shift Management",
       });
     }
+    if (perms.canManageSalary) {
+      if (!existingRoutes.has("/admin/auto-payroll")) {
+        menuItems.push({
+          to: "/admin/auto-payroll",
+          icon: <DollarSign size={18} />,
+          label: "Salary Generation",
+        });
+      }
+      if (!existingRoutes.has("/admin/salary-management")) {
+        menuItems.push({
+          to: "/admin/salary-management",
+          icon: <FileText size={18} />,
+          label: "Salary Management",
+        });
+      }
+    }
     if (perms.canManageAttendance) {
       if (!existingRoutes.has("/super-admin/attendance")) {
         menuItems.push({
@@ -975,11 +998,25 @@ const Sidebar = ({
     }
 
     // ── Business management ───────────────────────────────────────────────
+    if (perms.canViewCommunicationTracking && !existingRoutes.has("/communication-tracking")) {
+      menuItems.push({
+        to: "/communication-tracking",
+        icon: <MessageSquareQuote size={18} animateOnHover />,
+        label: "Project Communication",
+      });
+    }
     if (perms.canManageClients && !existingRoutes.has("/clients")) {
       menuItems.push({
         to: "/clients",
         icon: <Briefcase size={18} />,
         label: "Client Management",
+      });
+    }
+    if (perms.canManageClients && !existingRoutes.has("/admin/client-requests")) {
+      menuItems.push({
+        to: "/admin/client-requests",
+        icon: <Mail size={18} />,
+        label: "Client Requests",
       });
     }
     if (
@@ -1008,17 +1045,6 @@ const Sidebar = ({
       });
     }
 
-    // ── Access management ─────────────────────────────────────────────────
-    if (
-      (perms.canManageDepartments || perms.canManagePositions) &&
-      !existingRoutes.has("/admin/access-management")
-    ) {
-      menuItems.push({
-        to: "/admin/access-management",
-        icon: <Shield size={18} />,
-        label: "Access Management",
-      });
-    }
   }
 
   // Helper to check if a route is active

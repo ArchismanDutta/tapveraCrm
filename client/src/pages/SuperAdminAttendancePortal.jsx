@@ -2053,7 +2053,7 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
               ))}
             </section>
 
-            <section className="app-panel relative rounded-2xl p-4 sm:p-5">
+            <section className="app-panel relative z-10 rounded-2xl p-4 sm:p-5">
               <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                 <div className="w-full min-w-0 lg:max-w-2xl" ref={selectorRef}>
                   <label className="block">
@@ -2176,16 +2176,37 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
             </section>
 
             {!selectedEmployee && !loading && (
-              <section className="app-panel rounded-2xl border-dashed px-6 py-16 text-center">
-                <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-400/10 dark:text-blue-200">
-                  <UserCheck className="h-5 w-5" />
-                </span>
-                <h2 className="mt-4 text-base font-semibold text-slate-900 dark:text-white">
-                  Select an employee to begin
-                </h2>
-                <p className="mx-auto mt-1 max-w-md text-sm text-slate-500 dark:text-slate-400">
-                  Search above to open an employee’s monthly attendance record and exception details.
+              <section className="app-panel rounded-2xl p-4 sm:p-5">
+                <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                  All employees — {employees.length} total
                 </p>
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+                  {employees.map((employee) => (
+                    <button
+                      key={employee._id}
+                      type="button"
+                      onClick={() => handleEmployeeSelect(employee)}
+                      className="flex flex-col items-center gap-2 rounded-xl border border-transparent p-3 text-center transition hover:border-white/10"
+                    >
+                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-sm font-semibold text-white">
+                        {employee.name?.charAt(0)?.toUpperCase() || "?"}
+                      </span>
+                      <span className="w-full min-w-0">
+                        <span className="block truncate text-xs font-semibold text-slate-900 dark:text-white">
+                          {employee.name || "Unknown"}
+                        </span>
+                        <span className="mt-0.5 block truncate text-[11px] text-slate-500 dark:text-slate-400">
+                          {employee.employeeId || "—"}
+                        </span>
+                        {employee.designation && (
+                          <span className="mt-0.5 block truncate text-[10px] text-slate-400 dark:text-slate-500">
+                            {employee.designation}
+                          </span>
+                        )}
+                      </span>
+                    </button>
+                  ))}
+                </div>
               </section>
             )}
 

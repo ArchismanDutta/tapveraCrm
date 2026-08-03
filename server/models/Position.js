@@ -55,12 +55,14 @@ const positionSchema = new mongoose.Schema(
       canManageClients: { type: Boolean, default: false },
       canManageProjects: { type: Boolean, default: false },
       canAssignTasks: { type: Boolean, default: false },
+      canViewCommunicationTracking: { type: Boolean, default: false },
 
       // HR Permissions
       canApproveLeaves: { type: Boolean, default: false },
       canApproveShifts: { type: Boolean, default: false },
       canViewReports: { type: Boolean, default: false },
       canManageAttendance: { type: Boolean, default: false },
+      canManageSalary: { type: Boolean, default: false },
 
       // Hierarchical Data Access
       canViewSubordinateLeads: { type: Boolean, default: false },

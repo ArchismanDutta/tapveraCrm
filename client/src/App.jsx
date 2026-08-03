@@ -69,6 +69,7 @@ import ManualAttendanceManagement from "./pages/admin/ManualAttendanceManagement
 // the terminal. See docs/biometric-attendance-integration.md
 import BiometricAttendanceManagement from "./pages/admin/BiometricAttendanceManagement";
 import SalaryManagement from "./pages/admin/SalaryManagement";
+import AutoPayrollManagement from "./pages/admin/AutoPayrollManagement";
 import PositionManagement from "./pages/admin/PositionManagement"; // Superseded by AccessManagementPage below - kept live for rollback safety until the access-management rework's Phase 6 (see docs/superpowers/plans/2026-07-03-access-management-rework.md)
 import AccessManagementPage from "./pages/admin/AccessManagementPage";
 import MyTeamAccessPage from "./pages/admin/MyTeamAccessPage"; // Role & Department Hierarchy Revamp v2 (2026-07-27)
@@ -735,11 +736,11 @@ const AppWrapper = () => {
           }
         />
 
-        {/* Salary/Payslip Management - Hidden from UI but route still works */}
-        {/* <Route
+        {/* Salary Management - view & edit generated payslips */}
+        <Route
           path="/admin/salary-management"
           element={
-            isAuthenticated && (isHR || isSuperAdmin) ? (
+            isAuthenticated && (isHR || isSuperAdmin || hasPermission("canManageSalary")) ? (
               <SalaryManagement onLogout={handleLogout} />
             ) : (
               <Navigate
@@ -748,7 +749,22 @@ const AppWrapper = () => {
               />
             )
           }
-        /> */}
+        />
+
+        {/* Auto Payroll - generate payslips from attendance data */}
+        <Route
+          path="/admin/auto-payroll"
+          element={
+            isAuthenticated && (isHR || isSuperAdmin || hasPermission("canManageSalary")) ? (
+              <AutoPayrollManagement onLogout={handleLogout} />
+            ) : (
+              <Navigate
+                to={isAuthenticated ? "/dashboard" : "/login"}
+                replace
+              />
+            )
+          }
+        />
 
         {/* Position Management - superseded by Access Management below, route kept for rollback safety */}
         <Route
@@ -769,7 +785,7 @@ const AppWrapper = () => {
         <Route
           path="/admin/access-management"
           element={
-            isAuthenticated && (isSuperAdmin || hasPermission("canManageDepartments") || hasPermission("canManagePositions")) ? (
+            isAuthenticated && isSuperAdmin ? (
               <AccessManagementPage onLogout={handleLogout} />
             ) : (
               <Navigate
@@ -784,7 +800,7 @@ const AppWrapper = () => {
         <Route
           path="/admin/client-requests"
           element={
-            isAuthenticated && isSuperAdmin ? (
+            isAuthenticated && (isSuperAdmin || isAdmin || isHR || hasPermission("canManageClients")) ? (
               <ClientRequestsPage onLogout={handleLogout} />
             ) : (
               <Navigate

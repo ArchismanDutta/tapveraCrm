@@ -37,12 +37,14 @@ const ACTION_PERMISSION_MAP = {
   "clients:manage": ["canManageClients"],
   "projects:manage": ["canManageProjects"],
   "projects:view": ["canManageProjects", "canViewSubordinateProjects"],
+  "communication:view": ["canViewCommunicationTracking"],
   "tasks:assign": ["canAssignTasks"],
   "tasks:view": ["canAssignTasks", "canViewSubordinateTasks", "canViewDepartmentTasks"],
   "leaves:approve": ["canApproveLeaves"],
   "shifts:approve": ["canApproveShifts"],
   "reports:view": ["canViewReports"],
   "attendance:manage": ["canManageAttendance"],
+  "salary:manage": ["canManageSalary"],
   "leads:view": ["canViewSubordinateLeads", "canViewDepartmentLeads"],
   "leads:edit": ["canEditSubordinateLeads"],
   "callbacks:view": ["canViewSubordinateCallbacks", "canViewDepartmentCallbacks"],
@@ -56,8 +58,8 @@ const ACTION_PERMISSION_MAP = {
 // getMyPermissions response. Keep in sync with the `permissions` subdocument
 // in server/models/Position.js.
 const PERMISSION_FLAG_KEYS = [
-  "canManageUsers", "canManageClients", "canManageProjects", "canAssignTasks",
-  "canApproveLeaves", "canApproveShifts", "canViewReports", "canManageAttendance",
+  "canManageUsers", "canManageClients", "canManageProjects", "canAssignTasks", "canViewCommunicationTracking",
+  "canApproveLeaves", "canApproveShifts", "canViewReports", "canManageAttendance", "canManageSalary",
   "canViewSubordinateLeads", "canViewSubordinateCallbacks", "canViewSubordinateTasks", "canViewSubordinateProjects",
   "canEditSubordinateLeads", "canEditSubordinateCallbacks", "canAssignToSubordinates",
   "canViewDepartmentLeads", "canViewDepartmentCallbacks", "canViewDepartmentTasks",
