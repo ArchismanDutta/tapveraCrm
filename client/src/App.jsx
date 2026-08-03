@@ -475,6 +475,11 @@ const AppWrapper = () => {
     return false;
   };
 
+  // Permission-flag helper — prefer the server-resolved value; returns false
+  // while permissions are still loading (null) so nothing accidentally opens
+  // before the server has confirmed the grant.
+  const hasPermission = (flag) => permissions?.permissions?.[flag] === true;
+
   // ------------------- Routes -------------------
   return (
     <>
@@ -514,7 +519,7 @@ const AppWrapper = () => {
         <Route
           path="/super-admin/attendance"
           element={
-            isAuthenticated && (isHR || isSuperAdmin) ? (
+            isAuthenticated && (isHR || isSuperAdmin || hasPermission("canManageAttendance")) ? (
               <SuperAdminAttendancePortal onLogout={handleLogout} />
             ) : (
               <Navigate to="/login" replace />
@@ -764,7 +769,7 @@ const AppWrapper = () => {
         <Route
           path="/admin/access-management"
           element={
-            isAuthenticated && isSuperAdmin ? (
+            isAuthenticated && (isSuperAdmin || hasPermission("canManageDepartments") || hasPermission("canManagePositions")) ? (
               <AccessManagementPage onLogout={handleLogout} />
             ) : (
               <Navigate
@@ -842,7 +847,7 @@ const AppWrapper = () => {
         <Route
           path="/admin/manual-attendance"
           element={
-            isAuthenticated && (isSuperAdmin || isHR || isAdmin) ? (
+            isAuthenticated && (isSuperAdmin || isHR || isAdmin || hasPermission("canManageAttendance")) ? (
               <ManualAttendanceManagement onLogout={handleLogout} />
             ) : (
               <Navigate
@@ -859,7 +864,7 @@ const AppWrapper = () => {
         <Route
           path="/admin/biometric-attendance"
           element={
-            isAuthenticated && (isSuperAdmin || isHR || isAdmin) ? (
+            isAuthenticated && (isSuperAdmin || isHR || isAdmin || hasPermission("canManageAttendance")) ? (
               <BiometricAttendanceManagement onLogout={handleLogout} />
             ) : (
               <Navigate
@@ -889,7 +894,7 @@ const AppWrapper = () => {
         <Route
           path="/admin/leaves"
           element={
-            isAuthenticated && (isSuperAdmin || isHR || isAdmin) ? (
+            isAuthenticated && (isSuperAdmin || isHR || isAdmin || hasPermission("canApproveLeaves")) ? (
               <AdminLeaveRequests onLogout={handleLogout} />
             ) : (
               <Navigate
@@ -904,7 +909,7 @@ const AppWrapper = () => {
         <Route
           path="/admin/shifts"
           element={
-            isAuthenticated && (isSuperAdmin || isHR || isAdmin) ? (
+            isAuthenticated && (isSuperAdmin || isHR || isAdmin || hasPermission("canApproveShifts")) ? (
               <ShiftManagement onLogout={handleLogout} />
             ) : (
               <Navigate
@@ -949,7 +954,7 @@ const AppWrapper = () => {
         <Route
           path="/signup"
           element={
-            isAuthenticated && (isAdmin || isHR) ? (
+            isAuthenticated && (isAdmin || isHR || hasPermission("canManageUsers")) ? (
               <Signup onLoginSuccess={handleLoginSuccess} />
             ) : (
               <Navigate to={isAuthenticated ? "/" : "/login"} replace />
@@ -1003,7 +1008,7 @@ const AppWrapper = () => {
         <Route
           path="/employee/:id"
           element={
-            isAuthenticated && (isAdmin || isHR) ? (
+            isAuthenticated && (isAdmin || isHR || hasPermission("canManageUsers")) ? (
               <EmployeePage userRole={role} onLogout={handleLogout} />
             ) : (
               <Navigate
@@ -1026,7 +1031,12 @@ const AppWrapper = () => {
         <Route
           path="/team/tasks"
           element={
-            isAuthenticated && permissions?.permissions?.canViewSubordinateTasks ? (
+            isAuthenticated && (
+              hasPermission("canViewSubordinateTasks") ||
+              hasPermission("canViewDepartmentTasks") ||
+              hasPermission("canAssignTasks") ||
+              hasPermission("canAssignToSubordinates")
+            ) ? (
               <TeamTaskManagementPage onLogout={handleLogout} />
             ) : (
               <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />
@@ -1100,7 +1110,7 @@ const AppWrapper = () => {
         <Route
           path="/clients"
           element={
-            isAuthenticated && isAdmin ? (
+            isAuthenticated && (isAdmin || hasPermission("canManageClients")) ? (
               <ClientsPage onLogout={handleLogout} />
             ) : (
               <Navigate
@@ -1115,7 +1125,7 @@ const AppWrapper = () => {
         <Route
           path="/projects"
           element={
-            isAuthenticated && isAdmin ? (
+            isAuthenticated && (isAdmin || hasPermission("canManageProjects") || hasPermission("canViewSubordinateProjects")) ? (
               <ProjectsPage onLogout={handleLogout} />
             ) : (
               <Navigate

@@ -3,8 +3,16 @@ const Department = require("../models/Department");
 const Position = require("../models/Position");
 const User = require("../models/User");
 const { protect, authorize } = require("../middlewares/authMiddleware");
+const { can } = require("../utils/accessControl");
 
 const router = express.Router();
+
+// Additive: super-admin keeps existing access. Any Position explicitly granted
+// "canManageDepartments" (via Access Management) is also allowed in.
+const requireDeptManage = async (req, res, next) => {
+  if (await can(req.user, "departments:manage")) return next();
+  return authorize("super-admin")(req, res, next);
+};
 
 // ==========================================
 // DEPARTMENT MANAGEMENT
@@ -38,7 +46,7 @@ router.get("/", protect, async (req, res) => {
 });
 
 // Get department statistics (member + position counts per department)
-router.get("/stats", protect, authorize("super-admin", "admin"), async (req, res) => {
+router.get("/stats", protect, requireDeptManage, async (req, res) => {
   try {
     const departments = await Department.find().lean();
 
@@ -71,7 +79,7 @@ router.get("/stats", protect, authorize("super-admin", "admin"), async (req, res
 });
 
 // Create new department
-router.post("/", protect, authorize("super-admin"), async (req, res) => {
+router.post("/", protect, requireDeptManage, async (req, res) => {
   try {
     const { name, code, description, legacyEnumValue } = req.body;
 
@@ -111,7 +119,7 @@ router.post("/", protect, authorize("super-admin"), async (req, res) => {
 });
 
 // Update (rename/describe/activate/deactivate) a department
-router.put("/:id", protect, authorize("super-admin"), async (req, res) => {
+router.put("/:id", protect, requireDeptManage, async (req, res) => {
   try {
     const { name, code, description, status } = req.body;
 
@@ -155,7 +163,7 @@ router.put("/:id", protect, authorize("super-admin"), async (req, res) => {
 });
 
 // Delete (or soft-delete) a department — blocked if positions or users still reference it
-router.delete("/:id", protect, authorize("super-admin"), async (req, res) => {
+router.delete("/:id", protect, requireDeptManage, async (req, res) => {
   try {
     const department = await Department.findById(req.params.id);
     if (!department) {

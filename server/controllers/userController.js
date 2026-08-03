@@ -76,12 +76,14 @@ exports.createEmployee = async (req, res) => {
         : [];
 
     const qualificationsArray = Array.isArray(qualifications)
-      ? qualifications.map(q => ({
-          school: q.school?.trim() || "",
-          degree: q.degree?.trim() || "",
-          year: Number(q.year) || null,
-          marks: q.marks?.trim() || "",
-        }))
+      ? qualifications
+          .map(q => ({
+            school: q.school?.trim() || "",
+            degree: q.degree?.trim() || "",
+            year: Number(q.year) || null,
+            marks: q.marks?.trim() || "",
+          }))
+          .filter(q => q.school && q.degree && q.year)
       : [];
 
     const userData = {

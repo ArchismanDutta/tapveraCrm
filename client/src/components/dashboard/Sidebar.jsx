@@ -843,11 +843,12 @@ const Sidebar = ({
         }
         return child;
       }).filter((child) => {
-        if (child.to === "/leads" || child.to === "/callbacks") {
-          // Access-management rework (2026-07-03, Phase 5.4): prefer the
-          // server-resolved canAccessLeadManagement flag. Falls back to the
-          // old role/department/position-string logic until permissions
-          // load (or if the fetch fails), so nothing regresses.
+        if (
+          child.to === "/leads" ||
+          child.to === "/callbacks" ||
+          child.to === "/call-intelligence" ||
+          child.to === "/my-transfers"
+        ) {
           return permissions
             ? permissions.canAccessLeadManagement
             : (
@@ -863,12 +864,17 @@ const Sidebar = ({
       return item.children.length > 0;
     }
 
-    // Allow access to leads/callbacks for super-admin, admin, marketingAndSales employees, or users with positions
-    if (item.to === "/leads" || item.to === "/callbacks") {
-      // Access-management rework (2026-07-03, Phase 5.4): prefer the
-      // server-resolved canAccessLeadManagement flag. Falls back to the old
-      // role/department/position-string logic until permissions load (or if
-      // the fetch fails), so nothing regresses.
+    // Leads, callbacks, call intelligence, and transfers are all part of the
+    // CRM/sales workflow — show them only to users who have lead management
+    // access. Routes for /call-intelligence and /my-transfers already enforce
+    // canAccessLeadManagement on the route level; this keeps the sidebar
+    // consistent so HR/non-sales employees don't see irrelevant CRM items.
+    if (
+      item.to === "/leads" ||
+      item.to === "/callbacks" ||
+      item.to === "/call-intelligence" ||
+      item.to === "/my-transfers"
+    ) {
       return permissions
         ? permissions.canAccessLeadManagement
         : (
@@ -893,13 +899,17 @@ const Sidebar = ({
         : (role === "super-admin" || role === "admin");
     }
 
-    // Team Task Management (2026-07-30): Only show for users with
-    // canViewSubordinateTasks permission. Uses server-resolved permission
-    // flag as the single source of truth. Falls back to position-string
-    // check until permissions load (same pattern as other permission checks).
+    // Team Task Management: show for any task-related supervisory flag.
+    // Uses server-resolved permission flags as single source of truth.
+    // Falls back to position-string check until permissions load.
     if (item.to === "/team/tasks") {
       return permissions
-        ? Boolean(permissions.permissions?.canViewSubordinateTasks)
+        ? Boolean(
+            permissions.permissions?.canViewSubordinateTasks ||
+            permissions.permissions?.canViewDepartmentTasks ||
+            permissions.permissions?.canAssignTasks ||
+            permissions.permissions?.canAssignToSubordinates
+          )
         : (userPosition && (
             userPosition.toLowerCase().includes("manager") ||
             userPosition.toLowerCase().includes("supervisor") ||
@@ -909,6 +919,107 @@ const Sidebar = ({
 
     return true;
   });
+
+  // For employees assigned to positions with elevated permissions via Access
+  // Management, inject the matching pages into their sidebar after permissions
+  // load. Only fires for role === "employee" — HR/admin/super-admin already
+  // have these pages in their respective menuConfig arrays.
+  if (role === "employee" && permissions) {
+    const perms = permissions.permissions || {};
+    const existingRoutes = new Set(menuItems.map((i) => i.to).filter(Boolean));
+
+    // ── HR & operations ──────────────────────────────────────────────────
+    if (perms.canManageUsers && !existingRoutes.has("/directory")) {
+      menuItems.push({
+        to: "/directory",
+        icon: <Users size={18} animateOnHover />,
+        label: "Employee Directory",
+      });
+    }
+    if (perms.canApproveLeaves && !existingRoutes.has("/admin/leaves")) {
+      menuItems.push({
+        to: "/admin/leaves",
+        icon: <Send size={18} animateOnHover />,
+        label: "Leave Approvals",
+      });
+    }
+    if (perms.canApproveShifts && !existingRoutes.has("/admin/shifts")) {
+      menuItems.push({
+        to: "/admin/shifts",
+        icon: <Clock size={18} />,
+        label: "Shift Management",
+      });
+    }
+    if (perms.canManageAttendance) {
+      if (!existingRoutes.has("/super-admin/attendance")) {
+        menuItems.push({
+          to: "/super-admin/attendance",
+          icon: <Pin size={16} animateOnHover />,
+          label: "Attendance Portal",
+        });
+      }
+      if (!existingRoutes.has("/admin/manual-attendance")) {
+        menuItems.push({
+          to: "/admin/manual-attendance",
+          icon: <Disc3 size={18} animateOnHover />,
+          label: "Manual Attendance",
+        });
+      }
+      if (!existingRoutes.has("/admin/biometric-attendance")) {
+        menuItems.push({
+          to: "/admin/biometric-attendance",
+          icon: <Fingerprint size={18} animateOnHover />,
+          label: "Biometric Device",
+        });
+      }
+    }
+
+    // ── Business management ───────────────────────────────────────────────
+    if (perms.canManageClients && !existingRoutes.has("/clients")) {
+      menuItems.push({
+        to: "/clients",
+        icon: <Briefcase size={18} />,
+        label: "Client Management",
+      });
+    }
+    if (
+      (perms.canManageProjects || perms.canViewSubordinateProjects) &&
+      !existingRoutes.has("/projects")
+    ) {
+      menuItems.push({
+        to: "/projects",
+        icon: <FolderKanban size={18} />,
+        label: perms.canManageProjects ? "Project Management" : "Team Projects",
+      });
+    }
+
+    // ── Team task management ──────────────────────────────────────────────
+    // canViewSubordinateTasks is already handled by the filter above.
+    // Add the Team Tasks page for the other task-related flags that also
+    // warrant visibility into subordinates' work.
+    const needsTeamTasks =
+      (perms.canAssignTasks || perms.canViewDepartmentTasks || perms.canAssignToSubordinates) &&
+      !existingRoutes.has("/team/tasks");
+    if (needsTeamTasks) {
+      menuItems.push({
+        to: "/team/tasks",
+        icon: <Users size={18} animateOnHover />,
+        label: "Team Task Management",
+      });
+    }
+
+    // ── Access management ─────────────────────────────────────────────────
+    if (
+      (perms.canManageDepartments || perms.canManagePositions) &&
+      !existingRoutes.has("/admin/access-management")
+    ) {
+      menuItems.push({
+        to: "/admin/access-management",
+        icon: <Shield size={18} />,
+        label: "Access Management",
+      });
+    }
+  }
 
   // Helper to check if a route is active
   const isRouteActive = (path) => {

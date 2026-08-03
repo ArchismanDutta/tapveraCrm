@@ -9,6 +9,15 @@ const AccessAuditLog = require("../models/AccessAuditLog");
 
 const router = express.Router();
 
+// Additive: super-admin keeps existing access. Any Position explicitly granted
+// "canManagePositions" is also allowed for create/update/delete operations.
+// Position-to-user assignment (PATCH /users/:userId/assign) stays super-admin
+// only — that is the root-of-trust boundary for the whole permission system.
+const requirePositionManage = async (req, res, next) => {
+  if (await accessControl.can(req.user, "positions:manage")) return next();
+  return authorize("super-admin")(req, res, next);
+};
+
 // Legacy User.department enum values (server/models/User.js) — a Department
 // document can only be synced into that legacy string field if its
 // legacyEnumValue is one of these; otherwise the field is left untouched
@@ -42,7 +51,7 @@ router.get("/", protect, async (req, res) => {
 });
 
 // Create new position
-router.post("/", protect, authorize("super-admin"), async (req, res) => {
+router.post("/", protect, requirePositionManage, async (req, res) => {
   try {
     const {
       name, level, department, description, permissions,
@@ -102,7 +111,7 @@ router.post("/", protect, authorize("super-admin"), async (req, res) => {
 });
 
 // Update position
-router.put("/:id", protect, authorize("super-admin"), async (req, res) => {
+router.put("/:id", protect, requirePositionManage, async (req, res) => {
   try {
     const {
       name, level, department, description, permissions, status,
@@ -176,7 +185,7 @@ router.put("/:id", protect, authorize("super-admin"), async (req, res) => {
 });
 
 // Delete position
-router.delete("/:id", protect, authorize("super-admin"), async (req, res) => {
+router.delete("/:id", protect, requirePositionManage, async (req, res) => {
   try {
     const position = await Position.findById(req.params.id);
     if (!position) {
@@ -205,8 +214,17 @@ router.delete("/:id", protect, authorize("super-admin"), async (req, res) => {
 // USER POSITION ASSIGNMENT (Super-Admin Only)
 // ==========================================
 
-// Get users with their positions
-router.get("/users/list", protect, authorize("super-admin", "admin", "hr"), async (req, res) => {
+// Get users with their positions — read-only; assignment itself stays super-admin only.
+// Opened to canManagePositions/canManageDepartments so the Access Management page's
+// Assign Employees and Access Overview tabs load correctly for delegated managers.
+const requirePositionOrDeptManage = async (req, res, next) => {
+  if (
+    await accessControl.can(req.user, "positions:manage") ||
+    await accessControl.can(req.user, "departments:manage")
+  ) return next();
+  return authorize("super-admin", "admin", "hr")(req, res, next);
+};
+router.get("/users/list", protect, requirePositionOrDeptManage, async (req, res) => {
   try {
     const { department, position, role } = req.query;
 
@@ -364,7 +382,7 @@ router.post("/users/bulk-assign", protect, authorize("super-admin"), async (req,
 });
 
 // Get position statistics
-router.get("/stats", protect, authorize("super-admin", "admin"), async (req, res) => {
+router.get("/stats", protect, requirePositionManage, async (req, res) => {
   try {
     const [totalPositions, activePositions, usersWithPositions, positionDistribution] = await Promise.all([
       Position.countDocuments(),

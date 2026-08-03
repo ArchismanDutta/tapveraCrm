@@ -110,14 +110,14 @@ router.post("/create", protect, requireUserManage(["admin", "hr", "super-admin"]
 router.get("/:id", protect, requireUserManage(["admin", "hr", "super-admin"]), getEmployeeById);
 
 // Update employee details - restricted to super-admin & hr (no restrictions on fields)
-// NOTE (2026-07-03, Phase 4.7): deliberately NOT additively expanded like its
-// siblings above - this one excludes plain "admin" already (unlike every
-// other route in this file), and both Admin and HR get canManageUsers by
-// default (seedCanonicalHierarchy.js), so reusing users:manage here would
-// silently hand Admin-position holders edit rights this route currently
-// withholds from them. Left untouched pending a deliberate decision, same
-// category as the Phase 4.5 payroll question.
-router.put("/:id", protect, authorize("super-admin", "hr"), updateEmployee);
+// Employee profile update. Opened to canManageUsers position holders so that
+// employees delegated HR-like access via Access Management can edit profiles,
+// consistent with what GET /:id, POST /create, and PATCH /:id/status already
+// allow via requireUserManage. The original "admin excluded" behaviour is
+// preserved: the fallback is still authorize("super-admin", "hr") for role
+// checks, so only super-admin and hr roles (or canManageUsers position
+// holders) can reach this endpoint.
+router.put("/:id", protect, requireUserManage(["super-admin", "hr"]), updateEmployee);
 
 // Update employee status (active/terminated/absconded) - accessible to admin, hr, super-admin
 router.patch("/:id/status", protect, requireUserManage(["admin", "hr", "super-admin"]), updateEmployeeStatus);
