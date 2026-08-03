@@ -974,6 +974,13 @@ const Sidebar = ({
       }
     }
     if (perms.canManageAttendance) {
+      if (!existingRoutes.has("/super-admin")) {
+        menuItems.push({
+          to: "/super-admin",
+          icon: <ClipboardList size={18} />,
+          label: "Employees Current Status",
+        });
+      }
       if (!existingRoutes.has("/super-admin/attendance")) {
         menuItems.push({
           to: "/super-admin/attendance",

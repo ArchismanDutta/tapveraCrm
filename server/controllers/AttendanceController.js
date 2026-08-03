@@ -235,12 +235,12 @@ class AttendanceController {
       const { userId } = req.params;
       const { startDate, endDate } = req.query;
 
-      // Check permissions - self, admin/hr (unchanged), or a Position with
-      // hierarchical reach over this specific employee (additive - see
-      // docs/superpowers/plans/2026-07-03-access-management-rework.md Phase 4.3)
+      // Check permissions - self, admin/hr (unchanged), canManageAttendance
+      // position holders, or hierarchical reach over this specific employee.
       if (
         userId !== req.user._id.toString() &&
         !['admin', 'super-admin', 'hr'].includes(req.user.role) &&
+        !(await can(req.user, 'attendance:manage')) &&
         !(await canAccessUserData(req.user, userId))
       ) {
         return res.status(403).json({
@@ -284,11 +284,12 @@ class AttendanceController {
     try {
       const { userId, year, month } = req.params;
 
-      // Check permissions - self, admin/hr (unchanged), or a Position with
-      // hierarchical reach over this specific employee (additive - Phase 4.3)
+      // Check permissions - self, admin/hr (unchanged), canManageAttendance
+      // position holders, or hierarchical reach over this specific employee.
       if (
         userId !== req.user._id.toString() &&
         !['admin', 'super-admin', 'hr'].includes(req.user.role) &&
+        !(await can(req.user, 'attendance:manage')) &&
         !(await canAccessUserData(req.user, userId))
       ) {
         return res.status(403).json({

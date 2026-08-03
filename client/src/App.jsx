@@ -510,7 +510,7 @@ const AppWrapper = () => {
         <Route
           path="/super-admin"
           element={
-            isAuthenticated && (isHR || isSuperAdmin) ? (
+            isAuthenticated && (isHR || isSuperAdmin || hasPermission("canManageAttendance")) ? (
               <SuperAdminDashboard onLogout={handleLogout} />
             ) : (
               <Navigate to="/login" replace />

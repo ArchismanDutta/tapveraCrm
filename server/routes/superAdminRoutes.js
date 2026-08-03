@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const { protect } = require("../middlewares/authMiddleware");
+const { can } = require("../utils/accessControl");
 const User = require("../models/User");
 const UserStatus = require("../models/UserStatus");
 // const DailyWork = require("../models/DailyWork"); // REMOVED - Using new AttendanceRecord system
@@ -14,12 +15,13 @@ router.get("/employees-today", async (req, res) => {
   try {
     // Check if user has permission to access this endpoint
     const userRole = req.user.role;
-    if (!["super-admin", "hr", "admin"].includes(userRole)) {
+    const hasAttendancePermission = await can(req.user, "attendance:manage");
+    if (!["super-admin", "hr", "admin"].includes(userRole) && !hasAttendancePermission) {
       return res
         .status(403)
         .json({
           error:
-            "Access denied. Super admin, HR, or admin privileges required.",
+            "Access denied. Super admin, HR, admin privileges, or attendance management permission required.",
         });
     }
 
