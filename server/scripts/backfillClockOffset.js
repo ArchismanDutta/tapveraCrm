@@ -73,33 +73,63 @@ const ist = (d) => d ? new Intl.DateTimeFormat('en-GB', {
 
   let shifted = 0, notFound = 0, failed = 0;
   const touchedRecords = new Map(); // date-key -> record doc
+  const missReasons = {};
+  const miss = (why, detail) => {
+    notFound += 1;
+    missReasons[why] = (missReasons[why] || 0) + 1;
+    if (detail) console.log(`  – ${why}: ${detail}`);
+  };
 
   for (const punch of stale) {
     try {
-      const dateKey = punch.attendanceDate
-        ? new Date(punch.attendanceDate).toISOString()
-        : null;
+      // Fall back to deriving the attendance date from the punch itself when
+      // the row doesn't carry one — older rows predate that field being set.
+      let attendanceDate = punch.attendanceDate;
+      if (!attendanceDate) {
+        attendanceDate = attendanceService.normalizeDate(punch.punchedAt);
+      }
 
-      if (!dateKey) { notFound += 1; continue; }
+      const dateKey = new Date(attendanceDate).toISOString();
 
       let record = touchedRecords.get(dateKey);
       if (!record) {
-        record = await AttendanceRecord.findOne({ date: punch.attendanceDate });
-        if (!record) { notFound += 1; continue; }
+        record = await AttendanceRecord.findOne({ date: attendanceDate });
+        if (!record) {
+          miss('no AttendanceRecord for that date', `PIN ${punch.pin} · ${dateKey.slice(0, 10)}`);
+          continue;
+        }
         touchedRecords.set(dateKey, record);
       }
 
       const employee = record.employees.find((e) => String(e.userId) === String(punch.userId));
-      if (!employee) { notFound += 1; continue; }
+      if (!employee) {
+        miss('employee not in that record', `PIN ${punch.pin} · userId ${punch.userId}`);
+        continue;
+      }
 
-      // Exact timestamp match — recordPunchEvent stored punchedAt verbatim.
-      const event = employee.events.find(
-        (ev) =>
-          new Date(ev.timestamp).getTime() === new Date(punch.punchedAt).getTime() &&
-          String(ev.device || '').startsWith('BIOMETRIC:')
+      // Match on timestamp. recordPunchEvent stored punchedAt verbatim, so an
+      // exact match is expected — but tolerate a second of drift rather than
+      // silently skipping, since a near-miss here is indistinguishable from
+      // "no event at all" and that is what made the first version useless.
+      const target = new Date(punch.punchedAt).getTime();
+      const biometricEvents = employee.events.filter((ev) =>
+        String(ev.device || '').startsWith('BIOMETRIC:')
       );
 
-      if (!event) { notFound += 1; continue; }
+      const event =
+        biometricEvents.find((ev) => Math.abs(new Date(ev.timestamp).getTime() - target) < 1000) ||
+        null;
+
+      if (!event) {
+        const shown = employee.events
+          .map((ev) => `${ev.type}@${ist(ev.timestamp)}${ev.device ? '' : ' (no device)'}`)
+          .join(', ') || 'none';
+        miss(
+          'no matching BIOMETRIC event',
+          `PIN ${punch.pin} · looking for ${ist(punch.punchedAt)} · record has: ${shown}`
+        );
+        continue;
+      }
 
       const before = new Date(event.timestamp);
       const after = new Date(before.getTime() + OFFSET * 60000);
@@ -134,7 +164,10 @@ const ist = (d) => d ? new Intl.DateTimeFormat('en-GB', {
 
   console.log('─'.repeat(96));
   console.log(`  ${DRY_RUN ? 'would shift' : 'shifted'} : ${shifted}`);
-  console.log(`  no matching event : ${notFound}`);
+  console.log(`  skipped           : ${notFound}`);
+  for (const [why, n] of Object.entries(missReasons)) {
+    console.log(`      ${n} × ${why}`);
+  }
   console.log(`  failed            : ${failed}`);
   console.log(`  records recalculated : ${DRY_RUN ? 0 : touchedRecords.size}`);
 

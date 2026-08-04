@@ -84,10 +84,38 @@ const ist = (d) =>
   console.log(`    pm2 info <app> | grep uptime   — restart it if older than your .env edit)`);
 
   console.log('─'.repeat(72));
-  const anyUncorrected = recent.some((p) => !p.appliedOffsetMinutes);
-  if (anyUncorrected && envVal && Number(envVal) !== 0) {
-    console.log('DIAGNOSIS: punches are arriving with no correction while the env var is set.');
-    console.log('           The running process predates the change — restart it.');
+
+  // Judge on the NEWEST punch only. Older rows legitimately carry no
+  // correction — they were processed before the offset was configured, and
+  // nothing rewrites them retrospectively. An earlier version of this script
+  // flagged "restart needed" whenever ANY row was uncorrected, which meant it
+  // kept reporting a problem long after the restart had fixed things.
+  const newestPunch = recent[0];
+  const wantOffset = Number(envVal || 0);
+
+  if (!newestPunch) {
+    console.log('DIAGNOSIS: no punches received yet — scan a finger and re-run.');
+  } else if (wantOffset !== 0 && !newestPunch.appliedOffsetMinutes) {
+    console.log('DIAGNOSIS: the most recent punch carries no correction while the env var is set.');
+    console.log('           The running process predates the change — restart it');
+    console.log('           (pm2 restart <app> --update-env).');
+  } else {
+    console.log('DIAGNOSIS: the correction is being applied to incoming punches. ✓');
+
+    const notApplied = recent.filter((p) => p.status !== 'APPLIED');
+    if (notApplied.length === recent.length) {
+      console.log('');
+      console.log('   BUT none of these became attendance — every one was ' +
+        `${[...new Set(notApplied.map((p) => p.status))].join('/')}.`);
+      console.log('   A corrected punch that is rejected changes nothing on screen, so the CRM');
+      console.log('   keeps showing whatever was recorded earlier, at the OLD wrong time.');
+      console.log('');
+      console.log('   Most likely the day was already opened by a pre-fix punch. Fix the');
+      console.log('   already-recorded times with:');
+      console.log('       node scripts/backfillClockOffset.js --dry-run');
+      console.log('   and see why punches are being rejected with:');
+      console.log('       node scripts/checkPunchRejections.js');
+    }
   }
   process.exit(0);
 })().catch((err) => {
