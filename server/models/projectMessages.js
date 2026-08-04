@@ -146,7 +146,8 @@ router.post(
         for (const file of req.files) {
           const fileUrl = isS3Configured
             ? convertToCloudFrontUrl(file.location) // CloudFront URL
-            : `/uploads/messages/${file.filename}`; // Local URL
+            // storedPath, not filename — see routes/chatRoutes.js.
+            : `/uploads/${file.storedPath}`;
 
           // Extract S3 key from file location for deletion
           const s3Key = isS3Configured && file.key ? file.key : null;

@@ -461,6 +461,31 @@ class BiometricAttendanceService {
     try {
       const newest = ordered.length ? ordered[ordered.length - 1].punchedAt : null;
 
+      // ---- Clock-skew estimate ----
+      // Only measurable on realtime-sized batches: with Realtime=1 the device
+      // pushes each punch within seconds, so arrival lag ≈ clock error. A large
+      // batch is a backlog dump after an outage, where hours of lag are
+      // legitimate — measuring those would scream "skew" at a healthy clock.
+      //
+      // Threshold of 120s: realtime delivery plus server processing is
+      // single-digit seconds in practice; the failure modes worth catching
+      // (TimeZone truncated to the wrong offset = 1800s, clock never set,
+      // battery-backed RTC drifting) are minutes to hours.
+      let skewSeconds = null;
+      if (ordered.length > 0 && ordered.length <= 3 && newest) {
+        skewSeconds = Math.round((Date.now() - newest.getTime()) / 1000);
+
+        if (Math.abs(skewSeconds) > 120) {
+          const behindAhead = skewSeconds > 0 ? "behind" : "ahead";
+          console.warn(
+            `⚠️  [iclock] Device ${device.serialNumber} clock appears ~${Math.abs(
+              Math.round(skewSeconds / 60)
+            )} min ${behindAhead}: every punch it stamps is off by that much. ` +
+              `Check the device clock/timezone and the handshake TimeZone value.`
+          );
+        }
+      }
+
       await BiometricDevice.updateOne(
         { _id: device._id },
         {
@@ -468,6 +493,12 @@ class BiometricAttendanceService {
             lastSeenAt: new Date(),
             lastPushAt: new Date(),
             ...(newest ? { lastPunchAt: newest } : {}),
+            ...(skewSeconds !== null
+              ? {
+                  "stats.lastClockSkewSeconds": skewSeconds,
+                  "stats.lastClockSkewAt": new Date(),
+                }
+              : {}),
           },
           $inc: {
             "stats.totalPushes": 1,

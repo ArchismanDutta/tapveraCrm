@@ -140,8 +140,10 @@ router.post(
         // S3 upload with key instead of location
         fileUrl = `https://${process.env.AWS_S3_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${req.file.key}`;
       } else {
-        // Local storage fallback
-        fileUrl = `/uploads/screenshots/${req.file.filename}`;
+        // Local storage fallback. storedPath, not filename — local files are
+        // sharded under UPLOAD_ROOT, so the bare leaf builds a path that
+        // doesn't exist. See routes/chatRoutes.js.
+        fileUrl = `/uploads/${req.file.storedPath}`;
       }
       const cloudFrontUrl = convertToCloudFrontUrl(fileUrl);
 

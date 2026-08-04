@@ -103,6 +103,44 @@ On the terminal (`Menu → Comm → Cloud Server` / ADMS):
 The device clock matters. It has no timezone awareness — it reports whatever
 its own clock reads, and that's the time recorded against the punch.
 
+**The handshake sets that clock.** The `TimeZone=` line in our handshake
+response rebases the device's wall clock. The ZK PUSH convention: whole-hour
+zones send hours (`TimeZone=8`); fractional zones send **minutes**
+(`TimeZone=330` for IST). We originally sent the literal `5.5`, which
+integer-parsing firmware truncates to UTC+5:00 — every punch then stamps 30
+minutes early at the source ("punched at 5:00, CRM shows 4:30"). The value is
+now derived from `BIOMETRIC_DEVICE_TIMEZONE`; `BIOMETRIC_HANDSHAKE_TIMEZONE`
+overrides it verbatim for firmware that wants another spelling (e.g. `+05:30`).
+
+**"I keep fixing the clock and it un-fixes itself −30 min."** That IS this bug.
+The device re-handshakes on every boot and at the `TransTimes` sync points
+(00:00 and 14:05), and each handshake re-applies `TimeZone=` — so a manually
+corrected clock is re-broken within hours by the next handshake. The fix
+sequence:
+
+1. Deploy, power-cycle the terminal, and watch the server log. Every handshake
+   now logs exactly what it sent:
+   `Handshake completed with <SN> — sent TimeZone=330 (clock will rebase...)`.
+   If the log still shows `TimeZone=5.5`, the old build is running.
+2. Set the clock on the device panel, wait past a handshake (or reboot it
+   again), and check the panel. If it now holds — done.
+3. If the clock STILL rebases wrong with `330`, this firmware mishandles the
+   minutes form too. Set `BIOMETRIC_HANDSHAKE_TIMEZONE=+05:30` and repeat, or
+   set `BIOMETRIC_HANDSHAKE_TIMEZONE=none` to omit the line entirely — the
+   server then never touches the device clock and the panel setting is final.
+   (The line is optional in the protocol; the rest of the handshake is
+   unchanged.)
+
+**Verifying the clock:** `node scripts/checkDeviceClockSkew.js` measures the
+device clock against ours from existing punch data (realtime pushes arrive
+seconds after the scan, so sustained arrival lag = clock error). The server
+also records a per-push estimate on the device
+(`stats.lastClockSkewSeconds`) and warns in the log when it exceeds 2 minutes —
+this watchdog stays useful even with `TimeZone=none`, since it also catches a
+wrong panel setting. Punches recorded while the clock was wrong stay wrong in
+the database (they were stamped wrong at the source); correct any that matter
+via admin manual punch.
+
 ### Step 2 — Cloudflare
 
 `web.tapvera.io` already resolves to the VPS, so no new DNS record and no new

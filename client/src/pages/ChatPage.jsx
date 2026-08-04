@@ -70,13 +70,20 @@ const ChatPage = ({ onLogout }) => {
       setConversations(data);
       updateWebSocketConversations(data);
 
-      try {
-        const raw = sessionStorage.getItem("chat_unread_map");
-        const map = raw ? JSON.parse(raw) : {};
-        window.dispatchEvent(new CustomEvent("chat-unread-map", { detail: { map } }));
-      } catch (error) {
-        console.warn("Unable to restore chat unread state", error);
+      // Seed the unread counts from the server rather than from sessionStorage.
+      //
+      // sessionStorage only ever held what the live socket handler had counted
+      // in this tab, this session — so anything that arrived while the user was
+      // logged out, on their phone, or in another tab simply never appeared.
+      // The server now returns unreadCount per conversation, which is the real
+      // number; from here the socket handler keeps incrementing it as before.
+      const seeded = {};
+      for (const conversation of data) {
+        if (conversation?.unreadCount > 0) {
+          seeded[String(conversation._id)] = conversation.unreadCount;
+        }
       }
+      setUnreadMessages(seeded);
     } catch (error) {
       console.error("Failed to load conversations", error);
     }
@@ -92,6 +99,24 @@ const ChatPage = ({ onLogout }) => {
       setJwtToken(storedToken);
       fetchConversations(storedToken);
     }
+  }, [fetchConversations]);
+
+  // Refetch when a group is created, renamed, or its membership changes.
+  //
+  // The server already broadcasts "conversation:updated" to every member
+  // (routes/chatRoutes.js), and WebSocketContext bridges it to this window
+  // event — but only Sidebar was listening. So a newly created group appeared
+  // in the sidebar immediately while this page, the actual message portal,
+  // kept showing a stale list until the user reloaded.
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    if (!token) return undefined;
+
+    const onConversationUpdated = () => fetchConversations(token);
+
+    window.addEventListener("conversation-updated", onConversationUpdated);
+    return () =>
+      window.removeEventListener("conversation-updated", onConversationUpdated);
   }, [fetchConversations]);
 
   useEffect(() => {
@@ -116,19 +141,18 @@ const ChatPage = ({ onLogout }) => {
     fetchMessages();
   }, [selectedConversation, jwtToken]);
 
-  // Listen for global unread map updates and initialize from storage
+  // Listen for live unread map updates (from WebSocketContext's chat:message
+  // handler, and from the sidebar's own server seed).
+  //
+  // No longer seeds from sessionStorage on mount: fetchConversations above now
+  // seeds from the server, which is authoritative. Reading storage here as well
+  // just raced that fetch and briefly showed a stale count.
   useEffect(() => {
     const onMap = (e) => {
       const incoming = e.detail?.map || {};
       setUnreadMessages(incoming);
     };
     window.addEventListener("chat-unread-map", onMap);
-    try {
-      const raw = sessionStorage.getItem("chat_unread_map");
-      if (raw) setUnreadMessages(JSON.parse(raw));
-    } catch (error) {
-      console.warn("Unable to restore unread messages", error);
-    }
     return () => window.removeEventListener("chat-unread-map", onMap);
   }, []);
 

@@ -1,2 +1,16 @@
 node_modules
+
+# Secrets.
+# `.env` alone was not enough: an `.env.bak.<timestamp>` created while editing
+# config was left tracked, and would have published every credential in the file
+# to the remote. Glob every variant and re-include only the template.
 .env
+.env.*
+!.env.example
+
+# Uploaded documents and media.
+# These are user data, not source. Committing them bloats the repo and puts
+# private files (medical certificates, ID documents, chat attachments) into git
+# history, where deleting them later does not remove them.
+# Production stores these under UPLOAD_ROOT, outside the repo entirely.
+uploads/

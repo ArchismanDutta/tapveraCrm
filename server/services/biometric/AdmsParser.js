@@ -206,6 +206,41 @@ function parseAttlog(body, timeZone = "Asia/Kolkata") {
 }
 
 /**
+ * The TimeZone value the handshake should carry for a given IANA zone.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * THIS LINE SETS THE DEVICE'S CLOCK. GET IT WRONG AND EVERY PUNCH IS WRONG.
+ * ─────────────────────────────────────────────────────────────────────────────
+ * `TimeZone=` in the handshake is not display metadata — the terminal rebases
+ * its wall clock to this offset. The ZK PUSH convention is:
+ *
+ *     whole-hour zones      → hours:    TimeZone=8      (UTC+8)
+ *     fractional zones      → MINUTES:  TimeZone=330    (UTC+5:30)
+ *
+ * We used to send the literal "5.5". Firmware that parses the value with atoi()
+ * reads that as 5 and quietly rebases the clock to UTC+5:00 — thirty minutes
+ * behind IST. From that moment every punch is stamped 30 minutes early at the
+ * source: an employee scanning at a true 05:00 IST is recorded as "04:30:00" by
+ * the device itself. No amount of server-side conversion can repair it, because
+ * the raw datum is wrong before it reaches us. That was the "punched at 5:00,
+ * CRM shows 4:30" bug.
+ *
+ * Derived from the IANA zone so the one BIOMETRIC_DEVICE_TIMEZONE env setting
+ * drives both directions (device→UTC parsing above, and this). Overridable via
+ * opts.timeZone / BIOMETRIC_HANDSHAKE_TIMEZONE for firmware that wants another
+ * spelling (e.g. "+05:30").
+ *
+ * @param {String} timeZone IANA zone, e.g. "Asia/Kolkata"
+ * @returns {String} value for the TimeZone= handshake line
+ */
+function handshakeTimeZoneValue(timeZone = "Asia/Kolkata") {
+  const offsetMinutes = Math.round(timeZoneOffsetMs(Date.now(), timeZone) / 60000);
+  return offsetMinutes % 60 === 0
+    ? String(offsetMinutes / 60) // whole hours: "8", "-5"
+    : String(offsetMinutes);     // fractional zones, in minutes: "330", "345", "-210"
+}
+
+/**
  * Build the plain-text handshake response.
  *
  * Getting this wrong is the single most common reason an ADMS integration
@@ -231,10 +266,23 @@ function buildHandshakeResponse(serialNumber, opts = {}) {
     // Which record types to transmit: AttLog, OpLog, AttPhoto, EnrollUser,
     // ChgUser, EnrollFP, ChgFP, UserPic
     transFlag = "TransData AttLog OpLog AttPhoto EnrollUser ChgUser EnrollFP ChgFP UserPic",
-    timeZone = "5.5", // device-facing UTC offset in hours (IST = 5.5)
+    // See handshakeTimeZoneValue above. Was the literal "5.5", which integer-
+    // parsing firmware truncates to UTC+5:00, shifting every punch 30 min early.
+    //
+    // Set BIOMETRIC_HANDSHAKE_TIMEZONE=none to OMIT the line entirely. This is
+    // the escape hatch for firmware that mangles every fractional-zone spelling:
+    // with no TimeZone line, the server never touches the device clock, so the
+    // time set on the device's own panel is honoured and stays put. The line is
+    // optional in the protocol; devices keep their current clock when absent.
+    // (The clock-skew watchdog in BiometricAttendanceService still reports if
+    // the panel setting itself is wrong.)
+    timeZone = process.env.BIOMETRIC_HANDSHAKE_TIMEZONE ||
+      handshakeTimeZoneValue(process.env.BIOMETRIC_DEVICE_TIMEZONE || "Asia/Kolkata"),
     realtime = 1, // 1 = push immediately on each punch, don't wait for interval
     encrypt = 0,
   } = opts;
+
+  const omitTimeZone = /^(none|off|omit)$/i.test(String(timeZone).trim());
 
   return [
     `GET OPTION FROM: ${serialNumber}`,
@@ -246,7 +294,7 @@ function buildHandshakeResponse(serialNumber, opts = {}) {
     `TransTimes=${transTimes}`,
     `TransInterval=${transInterval}`,
     `TransFlag=${transFlag}`,
-    `TimeZone=${timeZone}`,
+    ...(omitTimeZone ? [] : [`TimeZone=${timeZone}`]),
     `Realtime=${realtime}`,
     `Encrypt=${encrypt}`,
     "",
@@ -266,6 +314,7 @@ module.exports = {
   VERIFY_MODE,
   timeZoneOffsetMs,
   deviceTimeToUtc,
+  handshakeTimeZoneValue,
   parseAttlog,
   buildHandshakeResponse,
   buildPushAck,

@@ -54,6 +54,16 @@ const BiometricDeviceSchema = new mongoose.Schema(
       totalPunchesDuplicate: { type: Number, default: 0 },
       totalPunchesUnmapped: { type: Number, default: 0 },
       totalPunchesFailed: { type: Number, default: 0 },
+
+      // Estimated device clock error, measured on realtime pushes: the device
+      // pushes each punch within seconds of the finger touching the sensor
+      // (Realtime=1), so received-time minus punch-time ≈ how far off the
+      // device clock is. Positive = clock runs behind (punch times too early).
+      // A mis-set clock silently corrupts every arrival time it stamps — this
+      // is how the "punched at 5:00, shows 4:30" class of bug becomes a
+      // visible number instead of a payroll dispute weeks later.
+      lastClockSkewSeconds: { type: Number, default: null },
+      lastClockSkewAt: { type: Date, default: null },
     },
 
     // Raw options string reported by the device on handshake, kept verbatim for

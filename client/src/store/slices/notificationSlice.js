@@ -72,8 +72,16 @@ const notificationSlice = createSlice({
 
       state.items = [
         {
+          // Spread FIRST, then pin the canonical fields on top. The other way
+          // round, `...n` clobbered them: every socket payload carries
+          // type: "notification" (the envelope discriminator set by
+          // server/utils/websocket.js), so a live task notification was stored
+          // with type "notification" while the same row fetched over REST had
+          // type "task" — the same notification changing shape depending on
+          // whether it arrived live or after a refresh.
+          ...n,
           _id: id || `live-${Date.now()}`,
-          type: n.channel,
+          type: n.type && n.type !== "notification" ? n.type : n.channel,
           channel: n.channel,
           title: n.title,
           body: n.body || n.message,
@@ -81,7 +89,6 @@ const notificationSlice = createSlice({
           priority: n.priority,
           read: false,
           createdAt: n.timestamp || new Date().toISOString(),
-          ...n,
         },
         ...state.items,
       ].slice(0, 20);

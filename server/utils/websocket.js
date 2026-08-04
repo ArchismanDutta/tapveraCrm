@@ -37,7 +37,12 @@ function sendNotificationToMultipleUsers(userIds, notification) {
 
 function broadcastMessageToConversation(conversationId, memberIds, messageData) {
   try {
-    const payload = { type: 'message', ...messageData };
+    // Socket payloads bypass Express, so the res.json interceptor that signs
+    // /uploads/... paths never sees them. Without this the sender's own HTTP
+    // response has working image URLs while every recipient gets the raw path
+    // and a broken image until they refresh.
+    const { signPayload } = require('../middlewares/signFileUrls');
+    const payload = signPayload({ type: 'message', ...messageData });
     const io = _io();
     io.to(`conversation:${conversationId}`).emit('chat:message', payload);
     (memberIds || []).forEach((userId) => io.to(`user:${userId}`).emit('chat:message', payload));
@@ -56,7 +61,10 @@ function broadcastMessageToConversation(conversationId, memberIds, messageData) 
  */
 function broadcastProjectMessage(projectId, memberIds, messageData) {
   try {
-    const payload = { projectId, messageData, timestamp: Date.now() };
+    // See broadcastMessageToConversation — socket payloads don't pass through
+    // the res.json signing interceptor.
+    const { signPayload } = require('../middlewares/signFileUrls');
+    const payload = signPayload({ projectId, messageData, timestamp: Date.now() });
     const io = _io();
     io.to(`project:${projectId}`).emit('project:message', payload);
     (memberIds || []).forEach((userId) => io.to(`user:${userId}`).emit('project:message', payload));

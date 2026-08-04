@@ -38,6 +38,7 @@ const {
   updateEmployeeStatus,
   updateEmployee,
   getNextEmployeeId,
+  setEmployeeCrmPassword,
 } = require("../controllers/userController");
 
 // ================================
@@ -46,6 +47,16 @@ const {
 
 // Employee Directory - accessible to all logged-in users, with optional filters & search
 router.get("/directory", protect, getEmployeeDirectory);
+
+// Issue a new CRM login password for an employee. Super-admin only — this
+// grants access to someone else's account, so it is deliberately not part of
+// the broader "manage users" permission that admin and HR hold.
+router.post(
+  "/:id/crm-password",
+  protect,
+  authorize("super-admin"),
+  setEmployeeCrmPassword
+);
 
 // Get all employees with workload information - for task assignment
 router.get("/workload", protect, requireWorkloadView, async (req, res) => {

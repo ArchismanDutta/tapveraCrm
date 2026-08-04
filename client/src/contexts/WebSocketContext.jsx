@@ -2,8 +2,8 @@ import React, { createContext, useContext, useEffect, useRef, useState, useCallb
 import { io } from "socket.io-client";
 import { useDispatch } from "react-redux";
 import notificationManager from "../utils/browserNotifications";
-import { audioManager } from '../utils/audioManager';
 import { receiveRealtime } from "../store/slices/notificationSlice";
+import { AUTH_CHANGED_EVENT, readAuthToken } from "../utils/authEvents";
 
 const WebSocketContext = createContext(null);
 
@@ -46,6 +46,22 @@ const resolveSocketUrl = () => {
   return "http://localhost:5000";
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// AUTH → SOCKET LIFETIME
+// ─────────────────────────────────────────────────────────────────────────────
+// The socket's lifetime is tied to the TOKEN, not to this provider's mount.
+//
+// This provider is mounted in App.jsx above the router, so on a cold load it
+// mounts while the user is still logged OUT and there is nothing to connect
+// with. Logging in is pure SPA state, so nothing here changes when it happens.
+// Read once at mount, the provider would therefore sit tokenless for the entire
+// session, and every live feature in the app — chat, notifications, attendance,
+// leave approvals — would silently degrade to needing a manual page refresh.
+// Reloading was the only cure, because only a reload remounted this provider at
+// a moment when the token already existed.
+//
+// See utils/authEvents.js for why the signal is a window event.
+
 export const WebSocketProvider = ({ children }) => {
   const dispatch = useDispatch();
   const socketRef = useRef(null);
@@ -56,16 +72,34 @@ export const WebSocketProvider = ({ children }) => {
   const [allChatMessages, setAllChatMessages] = useState([]); // All messages
   const notificationHandlersRef = useRef(new Set());
 
+  // The token drives the connection — see the AUTH → SOCKET LIFETIME note above.
+  const [token, setToken] = useState(readAuthToken);
+
+  useEffect(() => {
+    const sync = () => setToken(readAuthToken());
+
+    window.addEventListener(AUTH_CHANGED_EVENT, sync);
+    // `storage` fires only in OTHER tabs, which is precisely the case the custom
+    // event cannot reach: logging out in one tab should drop this tab's socket
+    // too, rather than leaving it authenticated as the previous user.
+    window.addEventListener("storage", sync);
+
+    return () => {
+      window.removeEventListener(AUTH_CHANGED_EVENT, sync);
+      window.removeEventListener("storage", sync);
+    };
+  }, []);
+
   // Register notification handler
   const registerNotificationHandler = useCallback((handler) => {
     notificationHandlersRef.current.add(handler);
     return () => notificationHandlersRef.current.delete(handler);
   }, []);
 
-  // Play notification sound
-  const playNotificationSound = useCallback(() => {
-    audioManager.playNotificationSound();
-  }, []);
+  // Notification sound lives in NotificationBell (notisound.wav, gated on the
+  // user's mute toggle and on audio being unlocked by a real interaction).
+  // This provider used to own a second, competing sound for payslips only —
+  // removed, so there is one sound for one notification.
 
   // Update active conversation
   const setActiveConversation = useCallback((conversationId) => {
@@ -91,11 +125,13 @@ export const WebSocketProvider = ({ children }) => {
     }
   }, []);
 
-  // Connect to the Socket.IO server
+  // Connect to the Socket.IO server.
+  // Re-runs whenever the token changes, so login connects and logout tears down.
   useEffect(() => {
-    const token = localStorage.getItem("token");
     if (!token) {
-      console.log("[Socket] No token found, skipping connection");
+      console.log("[Socket] No auth token — not connecting");
+      // Otherwise a logout would leave the UI showing a stale "connected" state.
+      setIsConnected(false);
       return undefined;
     }
 
@@ -200,32 +236,23 @@ export const WebSocketProvider = ({ children }) => {
           window.dispatchEvent(new CustomEvent("chat-unread-total", { detail: { total } }));
           window.dispatchEvent(new CustomEvent("chat-unread-map", { detail: { map } }));
 
-          // Show browser notification
-          const conversation = conversationsRef.current.find(c => c._id === convId);
-          const conversationName = conversation?.name || "Group Chat";
-          const messagePreview = (data.message || "").substring(0, 100);
-
-          if (notificationManager.isEnabled()) {
-            notificationManager.showNotification(`New message in ${conversationName}`, {
-              body: messagePreview,
-              tag: `chat-${convId}`,
-              icon: "/favicon.ico",
-              data: { conversationId: convId, type: "chat" }
-            });
-          }
-
-          // Dispatch ws-notification for toast
-          window.dispatchEvent(new CustomEvent("ws-notification", {
-            detail: {
-              type: "notification",
-              channel: "chat",
-              title: `New message in ${conversationName}`,
-              body: messagePreview,
-              message: messagePreview,
-              from: data.senderId,
-              conversationId: convId
-            }
-          }));
+          // Deliberately NOT raising a browser notification or dispatching
+          // "ws-notification" here.
+          //
+          // Every chat message also produces a persisted notification
+          // (chatController.saveMessage -> notificationService), which arrives
+          // separately as "notification:new" and is handled further down. Doing
+          // it in both places rang the bell twice and played the sound twice
+          // for one message.
+          //
+          // The other copy is the better one to keep: it carries a
+          // notificationId, and the server builds its title from the real
+          // conversation name — whereas `conversationsRef` here is only
+          // populated while the chat page is mounted, so everywhere else in the
+          // app this fell back to the literal string "Group Chat".
+          //
+          // Division of labour: this handler owns message data and the unread
+          // counter; "notification:new" owns telling the user about it.
         } catch (err) {
           console.error("Failed to update unread counters:", err);
         }
@@ -246,10 +273,11 @@ export const WebSocketProvider = ({ children }) => {
     socket.on("notification:new", (data) => {
       console.log("[Socket] Notification received:", data);
 
-      // Play sound for payslip notifications
-      if (data.channel === "payslip") {
-        playNotificationSound();
-      }
+      // Sound is intentionally NOT played here. NotificationBell already plays
+      // notisound.wav for every "ws-notification" (dispatched below), so the
+      // payslip-only chime that used to live here meant payslips played two
+      // different sounds at once while task, chat and wish played one.
+      // One notification, one sound — the bell owns it.
 
       // Feed the Redux store (single source of truth for the bell's unread
       // count — see store/slices/notificationSlice.js).
@@ -362,8 +390,9 @@ export const WebSocketProvider = ({ children }) => {
       socket.removeAllListeners();
       socket.disconnect();
       socketRef.current = null;
+      setIsConnected(false);
     };
-  }, [dispatch, playNotificationSound]);
+  }, [token, dispatch]);
 
   // Send a chat message
   const sendMessage = useCallback((conversationId, message) => {

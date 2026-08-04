@@ -15,6 +15,8 @@ import {
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
+const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
+
 const statusStyles = {
   active:
     "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-200",
@@ -408,15 +410,62 @@ const EmployeeAction = ({ employee, canManage, onView }) =>
     </a>
   );
 
+// ─────────────────────────────────────────────────────────────────────────────
+// CRM CREDENTIALS
+// ─────────────────────────────────────────────────────────────────────────────
+// This dialog used to read `employee.crmUsername` / `employee.crmPassword` —
+// two schema fields nothing in the codebase ever wrote — so it showed "Not set"
+// for every employee, forever. Both fields have been removed.
+//
+// The real credentials are: username = the login email, password = bcrypt-
+// hashed. Bcrypt is one-way, so an employee's current password cannot be shown
+// here or anywhere else; it does not exist in recoverable form. The only honest
+// version of "get me their credentials" is to issue a new password, which is
+// what this does. The plaintext comes back from the server exactly once, in
+// that one response, and is never stored — hence the copy-before-you-close
+// warning.
 const CrmCredentialsModal = ({ employee, onClose }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [copied, setCopied] = useState({ username: false, password: false });
 
+  const [issuing, setIssuing] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const [issued, setIssued] = useState(null); // the one-time plaintext
+  const [error, setError] = useState("");
+
   const copyToClipboard = (text, field) => {
     navigator.clipboard.writeText(text).then(() => {
-      setCopied({ ...copied, [field]: true });
-      setTimeout(() => setCopied({ ...copied, [field]: false }), 2000);
+      setCopied((prev) => ({ ...prev, [field]: true }));
+      setTimeout(() => setCopied((prev) => ({ ...prev, [field]: false })), 2000);
     });
+  };
+
+  const issuePassword = async () => {
+    setIssuing(true);
+    setError("");
+    try {
+      const res = await fetch(
+        `${API_BASE}/api/users/${employee._id}/crm-password`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+          },
+          body: JSON.stringify({}), // no password supplied — let the server generate
+        }
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.message || "Failed to set password");
+
+      setIssued(data.password);
+      setShowPassword(true);
+      setConfirming(false);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setIssuing(false);
+    }
   };
 
   return (
@@ -451,72 +500,114 @@ const CrmCredentialsModal = ({ employee, onClose }) => {
 
         {/* Body */}
         <div className="space-y-4 p-5">
-          {/* Username Field */}
+          {/* Username — always known, it's how they log in */}
           <div>
             <label className="mb-2 block text-xs font-semibold text-slate-500 dark:text-slate-400">
-              CRM Username
+              Username
             </label>
             <div className="flex items-center gap-2">
-              <div className="flex-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 font-mono text-sm text-slate-900 dark:border-white/10 dark:bg-white/[0.02] dark:text-white">
-                {employee.crmUsername || "Not set"}
+              <div className="flex-1 truncate rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 font-mono text-sm text-slate-900 dark:border-white/10 dark:bg-white/[0.02] dark:text-white">
+                {employee.email}
               </div>
-              {employee.crmUsername && (
-                <button
-                  type="button"
-                  onClick={() => copyToClipboard(employee.crmUsername, "username")}
-                  className="rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-xs font-semibold text-slate-600 transition hover:bg-slate-50 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300 dark:hover:bg-white/[0.07]"
-                >
-                  {copied.username ? "Copied!" : "Copy"}
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={() => copyToClipboard(employee.email, "username")}
+                className="shrink-0 rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-xs font-semibold text-slate-600 transition hover:bg-slate-50 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300 dark:hover:bg-white/[0.07]"
+              >
+                {copied.username ? "Copied!" : "Copy"}
+              </button>
             </div>
           </div>
 
-          {/* Password Field */}
+          {/* Password */}
           <div>
             <label className="mb-2 block text-xs font-semibold text-slate-500 dark:text-slate-400">
-              CRM Password
+              Password
             </label>
-            <div className="flex items-center gap-2">
-              <div className="flex flex-1 items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 dark:border-white/10 dark:bg-white/[0.02]">
-                <span className="flex-1 font-mono text-sm text-slate-900 dark:text-white">
-                  {employee.crmPassword
-                    ? showPassword
-                      ? employee.crmPassword
-                      : "••••••••"
-                    : "Not set"}
-                </span>
-                {employee.crmPassword && (
+
+            {issued ? (
+              <>
+                <div className="flex items-center gap-2">
+                  <div className="flex flex-1 items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5 dark:border-emerald-400/20 dark:bg-emerald-400/10">
+                    <span className="flex-1 break-all font-mono text-sm text-slate-900 dark:text-white">
+                      {showPassword ? issued : "•".repeat(issued.length)}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="shrink-0 text-slate-400 transition hover:text-slate-600 dark:hover:text-slate-200"
+                    >
+                      {showPassword ? (
+                        <EyeOff className="h-4 w-4" />
+                      ) : (
+                        <Eye className="h-4 w-4" />
+                      )}
+                    </button>
+                  </div>
                   <button
                     type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="text-slate-400 transition hover:text-slate-600 dark:hover:text-slate-200"
+                    onClick={() => copyToClipboard(issued, "password")}
+                    className="shrink-0 rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-xs font-semibold text-slate-600 transition hover:bg-slate-50 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300 dark:hover:bg-white/[0.07]"
                   >
-                    {showPassword ? (
-                      <EyeOff className="h-4 w-4" />
-                    ) : (
-                      <Eye className="h-4 w-4" />
-                    )}
+                    {copied.password ? "Copied!" : "Copy"}
+                  </button>
+                </div>
+                <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-200">
+                  <AlertCircle className="mb-0.5 mr-1 inline h-4 w-4" />
+                  Copy this now — it is not stored anywhere and cannot be shown
+                  again. {employee.name?.split(" ")[0] || "They"} should change
+                  it after signing in.
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-500 dark:border-white/10 dark:bg-white/[0.02] dark:text-slate-400">
+                  Stored as a one-way hash — it can&apos;t be displayed
+                </div>
+
+                {confirming ? (
+                  <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 dark:border-amber-400/20 dark:bg-amber-400/10">
+                    <p className="text-sm text-amber-800 dark:text-amber-200">
+                      This replaces {employee.name}&apos;s current password.
+                      They will be signed out of other sessions and must use the
+                      new one.
+                    </p>
+                    <div className="mt-3 flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setConfirming(false)}
+                        className="flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 transition hover:bg-slate-50 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={issuePassword}
+                        disabled={issuing}
+                        className="flex-1 rounded-lg bg-amber-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-amber-700 disabled:opacity-60"
+                      >
+                        {issuing ? "Generating…" : "Yes, generate"}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setConfirming(true)}
+                    className="mt-3 h-10 w-full rounded-lg border border-blue-600 bg-blue-600 text-sm font-semibold text-white transition hover:bg-blue-700"
+                  >
+                    Generate new password
                   </button>
                 )}
-              </div>
-              {employee.crmPassword && (
-                <button
-                  type="button"
-                  onClick={() => copyToClipboard(employee.crmPassword, "password")}
-                  className="rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-xs font-semibold text-slate-600 transition hover:bg-slate-50 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300 dark:hover:bg-white/[0.07]"
-                >
-                  {copied.password ? "Copied!" : "Copy"}
-                </button>
-              )}
-            </div>
-          </div>
+              </>
+            )}
 
-          {!employee.crmUsername && !employee.crmPassword && (
-            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-700 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-200">
-              <AlertCircle className="mb-1 inline h-4 w-4" /> No CRM credentials have been set for this employee.
-            </div>
-          )}
+            {error && (
+              <div className="mt-3 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700 dark:border-rose-400/20 dark:bg-rose-400/10 dark:text-rose-200">
+                {error}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Footer */}
@@ -526,7 +617,7 @@ const CrmCredentialsModal = ({ employee, onClose }) => {
             onClick={onClose}
             className="h-10 w-full rounded-lg bg-blue-600 text-sm font-semibold text-white transition hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-400"
           >
-            Close
+            {issued ? "Done — I've copied it" : "Close"}
           </button>
         </div>
       </div>

@@ -133,8 +133,12 @@ const userSchema = new mongoose.Schema(
     outlookAppPassword: { type: String, trim: true },
 
     // ====== CRM CREDENTIALS (Super-Admin Access Only) ======
-    crmUsername: { type: String, trim: true, default: "" },
-    crmPassword: { type: String, trim: true, default: "" },
+    // REMOVED: crmUsername / crmPassword.
+    // Nothing in the codebase ever assigned them, so they held the empty
+    // default for every user and made the CRM Credentials modal show "Not set"
+    // for everyone. The CRM login username is `email` (above); the password is
+    // the bcrypt-hashed `password` field and is issued, never read back, via
+    // POST /api/users/:id/crm-password.
 
     location: { type: String, trim: true, default: "India" },
     avatar: { type: String, trim: true, default: "" },

@@ -121,6 +121,31 @@ router.post("/:projectId/client-remarks", protect, async (req, res) => {
       console.warn("WebSocket broadcast failed (client remark added):", wsError.message);
     }
 
+    // Tell the team assigned to this project.
+    //
+    // These remarks are client feedback — only a client can post one (see the
+    // access check above) — so this is a customer waiting on a response, and
+    // the broadcast alone reaches only whoever happens to have that project's
+    // section open. No author exclusion is needed: the author is the client,
+    // and `assignedTo` holds staff.
+    const teamIds = (project.assignedTo || []).map(String);
+    if (teamIds.length) {
+      const notificationService = require("../services/notificationService");
+      const authorName =
+        newRemark.addedBy?.clientName || newRemark.addedBy?.name || "The client";
+
+      notificationService
+        .notifyUsers(teamIds, {
+          type: "system",
+          channel: "project",
+          title: `${authorName} commented on ${project.projectName}`,
+          body: `${section}: ${newRemark.remark.slice(0, 200)}`,
+          priority: "normal",
+          relatedData: { projectId, url: `/projects/${projectId}` },
+        })
+        .catch((err) => console.error("Project-remark notification failed:", err));
+    }
+
     res.status(201).json({
       success: true,
       message: "Remark added successfully",

@@ -764,6 +764,38 @@ const Sidebar = ({
         if (res.ok) {
           const data = await res.json();
           setConversations(data);
+
+          // Seed the unread badge from the server.
+          //
+          // This is why the badge looked "missing": the count lived only in
+          // sessionStorage and was only ever incremented by the live socket
+          // handler, so on a fresh login — or in a second tab, or after
+          // messages arrived overnight — it started at zero and stayed there
+          // until someone messaged you while you happened to be watching.
+          //
+          // The sidebar is the right place to do this: it's mounted on every
+          // page, whereas ChatPage only exists while the user is actually in
+          // the message portal. Broadcasting it means ChatPage adopts the same
+          // numbers if it's open.
+          const map = {};
+          for (const conversation of data) {
+            if (conversation?.unreadCount > 0) {
+              map[String(conversation._id)] = conversation.unreadCount;
+            }
+          }
+          const total = Object.values(map).reduce((a, b) => a + Number(b || 0), 0);
+
+          try {
+            sessionStorage.setItem("chat_unread_map", JSON.stringify(map));
+            sessionStorage.setItem("chat_unread_total", String(total));
+          } catch {
+            // Private-mode storage failure shouldn't cost us the badge.
+          }
+
+          setChatUnreadMap(map);
+          setChatUnread(total);
+          window.dispatchEvent(new CustomEvent("chat-unread-map", { detail: { map } }));
+          window.dispatchEvent(new CustomEvent("chat-unread-total", { detail: { total } }));
         }
       } catch (error) {
         console.error("Failed to fetch conversations:", error);

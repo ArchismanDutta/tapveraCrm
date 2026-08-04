@@ -42,7 +42,12 @@ module.exports = (io, socket) => {
         replyTo || null
       );
 
-      const payload = {
+      // signPayload turns stored /uploads/... paths into signed URLs. This path
+      // never touches Express, so the res.json interceptor that normally does
+      // it doesn't run here — without it every recipient of a message with an
+      // attachment gets a raw path and a broken image.
+      const { signPayload } = require('../../middlewares/signFileUrls');
+      const payload = signPayload({
         _id: savedMessage._id,
         conversationId: savedMessage.conversationId,
         senderId: savedMessage.senderId,
@@ -50,7 +55,7 @@ module.exports = (io, socket) => {
         timestamp: savedMessage.timestamp,
         attachments: savedMessage.attachments || [],
         replyTo: savedMessage.replyTo || null,
-      };
+      });
 
       // Everyone subscribed to this conversation (including the sender's
       // other tabs) gets the message instantly. Persisted "new message"

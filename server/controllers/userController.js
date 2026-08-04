@@ -285,10 +285,15 @@ exports.getEmployeeDirectory = async (req, res) => {
       ];
     }
 
-    // Check if user is super-admin to include CRM credentials
-    const isSuperAdmin = req.user && req.user.role === 'super-admin';
-    const selectFields = "_id employeeId name email contact department departmentRef designation jobLevel status shiftType regions region position positionLevel" +
-      (isSuperAdmin ? " crmUsername crmPassword" : "");
+    // `email` is already selected below and is the CRM login username, so the
+    // credentials modal needs nothing extra here.
+    //
+    // This used to append " crmUsername crmPassword" for super-admins. Those
+    // two schema fields were never written by any code path, so they were
+    // always the empty default and the modal reported "Not set" for every
+    // employee. They've been removed rather than left to mislead the next
+    // reader; passwords are issued via POST /api/users/:id/crm-password.
+    const selectFields = "_id employeeId name email contact department departmentRef designation jobLevel status shiftType regions region position positionLevel";
 
     const employees = await User.find(filter)
       .select(selectFields)
@@ -754,6 +759,113 @@ exports.updateEmployeeStatus = async (req, res) => {
     res.json({ message: "Status updated successfully", user });
   } catch (err) {
     console.error("Update employee status error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+// =========================
+// CRM login credentials
+// =========================
+
+// Excludes the characters people misread when copying a password off a screen
+// or reading it down the phone: 0/O, 1/l/I, 5/S, 2/Z.
+const PASSWORD_ALPHABET =
+  "abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ346789!@#$%&*?";
+const GENERATED_PASSWORD_LENGTH = 14;
+
+/**
+ * A random password, drawn with rejection sampling from crypto bytes.
+ *
+ * The naive `bytes[i] % alphabet.length` is biased: 256 doesn't divide evenly
+ * by the alphabet size, so the first few characters come up more often than
+ * the rest. Discarding the values in that uneven tail keeps every character
+ * equally likely.
+ */
+const generatePassword = () => {
+  const crypto = require("crypto");
+  const n = PASSWORD_ALPHABET.length;
+  const limit = Math.floor(256 / n) * n;
+
+  let out = "";
+  while (out.length < GENERATED_PASSWORD_LENGTH) {
+    for (const byte of crypto.randomBytes(GENERATED_PASSWORD_LENGTH)) {
+      if (byte >= limit) continue;
+      out += PASSWORD_ALPHABET[byte % n];
+      if (out.length === GENERATED_PASSWORD_LENGTH) break;
+    }
+  }
+  return out;
+};
+
+/**
+ * Set an employee's CRM login password. Super-admin only.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * WHY THIS SETS RATHER THAN READS
+ * ─────────────────────────────────────────────────────────────────────────────
+ * Login passwords are bcrypt-hashed at cost 12 (see authController). Bcrypt is
+ * one-way, so no endpoint can ever show you an employee's current password —
+ * it does not exist anywhere in recoverable form, by design.
+ *
+ * The old CRM Credentials modal implied otherwise: it read two schema fields,
+ * `crmUsername` / `crmPassword`, that nothing in the codebase ever wrote, so it
+ * showed "Not set" for every employee forever.
+ *
+ * So the only honest version of "give me this employee's credentials" is to
+ * issue new ones. The plaintext is returned in this response and nowhere else —
+ * not logged, not persisted — which is why the UI has to make the caller copy
+ * it before closing the dialog.
+ *
+ * @route POST /api/users/:id/crm-password
+ */
+exports.setEmployeeCrmPassword = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const supplied = typeof req.body?.password === "string" ? req.body.password.trim() : "";
+
+    if (supplied && supplied.length < 8) {
+      return res
+        .status(400)
+        .json({ message: "Password must be at least 8 characters" });
+    }
+
+    const user = await User.findById(id).select("_id name email role");
+    if (!user) return res.status(404).json({ message: "Employee not found" });
+
+    // A super-admin resetting another super-admin's password is an account
+    // takeover with extra steps. Changing your own goes through the normal
+    // profile flow, where you have to prove you know the current one.
+    if (String(user._id) === String(req.user._id)) {
+      return res.status(400).json({
+        message: "Use your own profile settings to change your password",
+      });
+    }
+    if (user.role === "super-admin") {
+      return res
+        .status(403)
+        .json({ message: "Cannot set the password of another super-admin" });
+    }
+
+    const password = supplied || generatePassword();
+
+    // Same cost factor as signup and the reset-link flow, so every hash in the
+    // collection stays consistent.
+    user.password = await bcrypt.hash(password, 12);
+    await user.save();
+
+    console.log(
+      `[Security] ${req.user.email} set the CRM password for ${user.email} (${user._id})`
+    );
+
+    res.json({
+      message: "Password updated",
+      username: user.email,
+      // Shown once. There is no second chance to read this.
+      password,
+      generated: !supplied,
+    });
+  } catch (err) {
+    console.error("Set CRM password error:", err);
     res.status(500).json({ message: "Server error" });
   }
 };

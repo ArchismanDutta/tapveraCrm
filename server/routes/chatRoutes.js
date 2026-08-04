@@ -66,7 +66,10 @@ router.post("/messages", protect, uploadToS3.array("files", 5), async (req, res)
     const attachments = [];
     if (req.files && req.files.length > 0) {
       for (const file of req.files) {
-        const fileUrl = file.location || `/uploads/messages/${file.filename}`;
+        // `storedPath` — files are sharded under UPLOAD_ROOT, so the bare
+        // `filename` leaf no longer locates them and produced a URL that 404'd
+        // on download. `location` is the S3 branch and is unaffected.
+        const fileUrl = file.location || `/uploads/${file.storedPath}`;
         const cloudFrontUrl = convertToCloudFrontUrl(fileUrl);
 
         attachments.push({
@@ -156,12 +159,30 @@ router.delete("/conversations/:id", protect, async (req, res) => {
 
     // Optionally: Add authorization checks if needed to allow only members or admins to delete
 
+    // Read the members BEFORE deleting — afterwards there is no document left
+    // to work out who needs telling.
+    const existing = await chatController.getConversationById(conversationId);
+    const memberIds = existing?.members || [];
+
     const deletedConversation = await chatController.deleteConversation(
       conversationId
     );
 
     if (!deletedConversation) {
       return res.status(404).json({ error: "Conversation not found" });
+    }
+
+    // Every other member is still showing this conversation in their list, and
+    // clicking it now 404s. Creation, rename and membership changes all
+    // broadcast; deletion was the one that didn't, so a deleted group lingered
+    // for everyone else until they happened to reload.
+    try {
+      broadcastConversationUpdated(memberIds, {
+        action: "deleted",
+        conversationId,
+      });
+    } catch (wsError) {
+      console.warn("WebSocket broadcast failed (conversation deleted):", wsError.message);
     }
 
     res.json({ message: "Conversation and its messages deleted successfully" });

@@ -3,6 +3,7 @@ const { S3Client, PutObjectCommand } = require("@aws-sdk/client-s3");
 const multer = require("multer");
 const multerS3 = require("multer-s3");
 const path = require("path");
+const { createDiskStorage } = require("./storage");
 
 // Initialize S3 Client
 const s3Client = new S3Client({
@@ -16,11 +17,55 @@ const s3Client = new S3Client({
 // CloudFront domain for CDN delivery
 const CLOUDFRONT_DOMAIN = process.env.CLOUDFRONT_DOMAIN || "d23ykfyewugz9v.cloudfront.net";
 
-// Check if AWS credentials are configured
-const isS3Configured = process.env.AWS_ACCESS_KEY_ID &&
-                       process.env.AWS_SECRET_ACCESS_KEY &&
-                       process.env.AWS_S3_BUCKET_NAME &&
-                       process.env.AWS_ACCESS_KEY_ID !== 'your_aws_access_key_id_here';
+// ─────────────────────────────────────────────────────────────────────────────
+// WHICH STORAGE BACKEND
+// ─────────────────────────────────────────────────────────────────────────────
+// STORAGE_DRIVER is explicit: "local" or "s3".
+//
+// This used to be INFERRED — "are AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY and
+// AWS_S3_BUCKET_NAME all set?" — which fails in the worst possible way when you
+// migrate off AWS. The variables stay in .env, the inference still says "yes,
+// use S3", and every single upload is shipped to a bucket whose credentials no
+// longer work. What the user sees is `500 Internal Server Error` on send; what
+// the log says is `InvalidAccessKeyId`; and nothing anywhere suggests the
+// server simply chose the wrong backend. Deleting three environment variables
+// is not an obvious fix for "messaging is broken".
+//
+// So the backend is now stated, not guessed. Leaving STORAGE_DRIVER unset keeps
+// the old inference for compatibility, but says out loud which way it went.
+const STORAGE_DRIVER = String(process.env.STORAGE_DRIVER || "").trim().toLowerCase();
+
+const hasAwsCredentials =
+  !!process.env.AWS_ACCESS_KEY_ID &&
+  !!process.env.AWS_SECRET_ACCESS_KEY &&
+  !!process.env.AWS_S3_BUCKET_NAME &&
+  process.env.AWS_ACCESS_KEY_ID !== 'your_aws_access_key_id_here';
+
+let isS3Configured;
+
+if (STORAGE_DRIVER === "local") {
+  isS3Configured = false;
+} else if (STORAGE_DRIVER === "s3") {
+  // Fail at boot rather than on the first upload. A misconfigured bucket should
+  // stop the server starting, not surface hours later as a 500 when somebody
+  // tries to send a file.
+  if (!hasAwsCredentials) {
+    throw new Error(
+      "STORAGE_DRIVER=s3 but AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY / AWS_S3_BUCKET_NAME are not all set"
+    );
+  }
+  isS3Configured = true;
+} else {
+  isS3Configured = hasAwsCredentials;
+  console.warn(
+    `⚠️  STORAGE_DRIVER is not set — falling back to inference from AWS credentials ` +
+      `(chose ${isS3Configured ? "S3" : "local disk"}). Set STORAGE_DRIVER=local or =s3 explicitly.`
+  );
+}
+
+console.log(
+  `📦 File storage driver: ${isS3Configured ? `S3 (${process.env.AWS_S3_BUCKET_NAME})` : "local disk"}`
+);
 
 // Configure multer to use S3
 const uploadToS3 = isS3Configured ? multer({
@@ -86,26 +131,24 @@ const uploadToS3 = isS3Configured ? multer({
     }
   },
 }) : multer({
-  storage: multer.diskStorage({
-    destination: function (req, file, cb) {
-      const fs = require('fs');
-      // Determine folder based on the endpoint
-      let folder = "messages";
-      if (req.route && req.route.path && req.route.path.includes("screenshots")) {
-        folder = "screenshots";
-      }
-      const uploadDir = path.join(__dirname, `../uploads/${folder}`);
-      if (!fs.existsSync(uploadDir)) {
-        fs.mkdirSync(uploadDir, { recursive: true });
-      }
-      cb(null, uploadDir);
-    },
-    filename: function (req, file, cb) {
-      const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-      const sanitizedFilename = file.originalname.replace(/[^a-zA-Z0-9.-]/g, "-");
-      cb(null, uniqueSuffix + "-" + sanitizedFilename);
-    },
-  }),
+  // Local storage goes through config/storage.js so writes land under
+  // UPLOAD_ROOT.
+  //
+  // This previously hardcoded `path.join(__dirname, "../uploads/<folder>")` —
+  // the in-repo directory. Once UPLOAD_ROOT moved uploads out of the deploy
+  // tree, the writer and the reader were pointing at different directories:
+  // uploads succeeded, and every download 404'd with "File not found", because
+  // routes/fileRoutes.js resolves the stored path against UPLOAD_ROOT and the
+  // bytes were never there.
+  //
+  // Callers must use `file.storedPath` (the full relative path) rather than
+  // `file.filename` — files are sharded now, so the bare leaf name doesn't
+  // locate them.
+  storage: createDiskStorage((req) =>
+    req.route && req.route.path && req.route.path.includes("screenshots")
+      ? "screenshots"
+      : "messages"
+  ),
   limits: {
     fileSize: 10 * 1024 * 1024, // 10MB limit
   },
@@ -146,7 +189,15 @@ const uploadToS3 = isS3Configured ? multer({
 
 // Log configuration status
 if (!isS3Configured) {
-  console.warn("⚠️  AWS S3 not configured. Using local file storage. Configure AWS credentials in .env for S3 upload.");
+  // Only nag about missing AWS config when the backend was *inferred*. With
+  // STORAGE_DRIVER=local this is the deliberate choice for an in-house server,
+  // and telling the operator to "configure AWS credentials" on every boot is
+  // both wrong and the kind of noise that trains people to ignore warnings.
+  if (STORAGE_DRIVER !== "local") {
+    console.warn("⚠️  AWS S3 not configured. Using local file storage. Set STORAGE_DRIVER=local to make this explicit, or add AWS credentials for S3.");
+  } else {
+    console.log(`   Files are stored on this server under UPLOAD_ROOT (${process.env.UPLOAD_ROOT || "<default: server/uploads>"}).`);
+  }
 } else {
   console.log("✅ AWS S3 configured. Files will be uploaded to S3 and served via CloudFront.");
 }

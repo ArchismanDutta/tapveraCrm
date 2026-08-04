@@ -240,7 +240,16 @@ router.get("/cdata", resolveDevice, async (req, res) => {
     transInterval: 1,
   });
 
-  console.log(`🤝 [iclock] Handshake completed with ${device.serialNumber}`);
+  // The TimeZone line REBASES THE DEVICE'S CLOCK, and the device re-handshakes
+  // on every boot and at the TransTimes sync points — so if this value is wrong,
+  // a manually corrected clock is silently un-corrected within hours. Logged
+  // verbatim so "what was the device told, and when" is answerable from the
+  // server log instead of guesswork.
+  const tzLine = response.split("\n").find((l) => l.startsWith("TimeZone="));
+  console.log(
+    `🤝 [iclock] Handshake completed with ${device.serialNumber} — ` +
+      (tzLine ? `sent ${tzLine} (clock will rebase to this offset)` : "TimeZone omitted (device clock left untouched)")
+  );
   return sendText(res, response);
 });
 

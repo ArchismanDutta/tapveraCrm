@@ -32,7 +32,11 @@ router.post("/rank-alert", verifySecret, async (req, res) => {
     assignedTo.map((userId) =>
       notificationService.createAndSend({
         userId,
-        type:     "rank_drop_alert",
+        // See hybridRankService.js — "rank_drop_alert" is not in
+        // Notification.type's enum, so these all failed validation. Here the
+        // Promise.allSettled below swallowed the rejection and simply logged
+        // "failed=N", which is why it went unnoticed.
+        type:     "system",
         channel:  "keyword_rank",
         title,
         body,

@@ -1333,7 +1333,9 @@ router.post("/:id/messages", protect, uploadToS3.array("files", 5), async (req, 
       for (const file of req.files) {
         const fileUrl = isS3Configured
           ? convertToCloudFrontUrl(file.location) // CloudFront URL
-          : `/uploads/messages/${file.filename}`; // Local URL
+          // storedPath, not filename — local files are sharded under
+          // UPLOAD_ROOT, so the bare leaf builds a path that doesn't exist.
+          : `/uploads/${file.storedPath}`;
 
         attachments.push({
           filename: file.originalname,

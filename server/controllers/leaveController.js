@@ -3,6 +3,43 @@ const holidayService = require("../services/holidayService");
 // Access-management rework (2026-07-03) - Phase 4.4.
 // See docs/superpowers/plans/2026-07-03-access-management-rework.md
 const { can } = require("../utils/accessControl");
+const notificationService = require("../services/notificationService");
+
+// Who receives "a leave request is waiting" notifications. Mirrors
+// requireLeaveApprove in routes/leaveRoutes.js — if that list changes, change
+// this one too, or approvers will silently stop being told.
+const LEAVE_APPROVER_ROLES = ["admin", "super-admin", "hr"];
+
+// The schema's enum values are camelCase identifiers, not something to show a
+// person. Anything not listed falls back to the raw value rather than being
+// dropped, so a new leave type added to the schema still reads sensibly here.
+const LEAVE_TYPE_LABELS = {
+  maternity: "Maternity leave",
+  paid: "Paid leave",
+  unpaid: "Unpaid leave",
+  sick: "Sick leave",
+  workFromHome: "Work from home",
+  halfDay: "Half day",
+};
+
+// Dates are pinned to IST rather than the server's locale: this string is read
+// by employees in India, and a server in UTC would render a leave starting on
+// the 1st as the 31st.
+const fmtLeaveDate = (value) =>
+  new Date(value).toLocaleDateString("en-GB", {
+    timeZone: "Asia/Kolkata",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+
+/** "Sick leave · 12 Aug 2026" or "Paid leave · 12 Aug 2026 → 14 Aug 2026" */
+const describeLeave = (leave) => {
+  const label = LEAVE_TYPE_LABELS[leave.type] || leave.type;
+  const start = fmtLeaveDate(leave.period?.start);
+  const end = fmtLeaveDate(leave.period?.end);
+  return `${label} · ${start === end ? start : `${start} → ${end}`}`;
+};
 
 // Create a leave request with sandwich policy
 exports.createLeave = async (req, res) => {
@@ -60,9 +97,17 @@ exports.createLeave = async (req, res) => {
       document = {
         name: req.file.originalname,
         size: req.file.size,
-        url: `${req.protocol}://${req.get("host")}/uploads/${
-          req.file.filename
-        }`,
+        // `storedPath`, not `filename`: files are sharded, so the document
+        // lives at leave/2026/08/a3/<id>.pdf and the bare filename would build
+        // a path that doesn't exist. See config/storage.js createDiskStorage.
+        //
+        // Relative, not `${req.protocol}://${req.get("host")}/uploads/...`.
+        // Baking the hostname in makes every historical document point at
+        // whichever server received the upload — which breaks the moment you
+        // move hosts, as this deployment just did. The path is the durable
+        // fact; middlewares/signFileUrls turns it into a signed URL on the way
+        // out.
+        url: `/uploads/${req.file.storedPath}`,
       };
     }
 
@@ -83,6 +128,31 @@ exports.createLeave = async (req, res) => {
     } catch (wsError) {
       console.warn("WebSocket broadcast failed (leave created):", wsError.message);
     }
+
+    // Tell the approvers there's something waiting for them.
+    //
+    // The broadcast above only refreshes a list that's already on screen — it
+    // reaches nobody who isn't currently looking at the leave page, which is
+    // almost everybody almost all the time. A request could sit untouched for
+    // days simply because no approver happened to open that page.
+    //
+    // Roles mirror requireLeaveApprove in routes/leaveRoutes.js; keep them in
+    // step. The requester is excluded because admins and HR can file their own
+    // leave, and being told about your own request is noise.
+    notificationService
+      .notifyRoles(
+        LEAVE_APPROVER_ROLES,
+        {
+          type: "leave",
+          channel: "leave",
+          title: `Leave request from ${leave.employee?.name || "an employee"}`,
+          body: `${describeLeave(leave)}\nReason: ${leave.reason}`,
+          priority: "normal",
+          relatedData: { leaveId: leave._id, url: "/admin/leaves" },
+        },
+        { excludeUserId: req.user._id }
+      )
+      .catch((err) => console.error("Leave-requested notification failed:", err));
 
     res.status(201).json(leave);
   } catch (error) {
@@ -166,6 +236,40 @@ exports.updateLeaveStatus = async (req, res) => {
       });
     } catch (wsError) {
       console.warn("WebSocket broadcast failed (leave status changed):", wsError.message);
+    }
+
+    // Tell the employee the outcome. This is the half that matters most —
+    // previously the only way to discover your leave had been approved was to
+    // open the page and check, which people do far less often than they check
+    // the bell.
+    //
+    // Only for a decision, not for a revert to Pending: "your leave is pending
+    // again" is a confusing thing to receive and doesn't need acting on.
+    if (status === "Approved" || status === "Rejected") {
+      const employeeId = updatedLeave.employee?._id;
+      if (employeeId) {
+        notificationService
+          .notifyUser({
+            userId: employeeId.toString(),
+            type: "leave",
+            channel: "leave",
+            title: `Leave ${status.toLowerCase()}`,
+            body: [
+              describeLeave(updatedLeave),
+              updatedLeave.approvedBy?.name ? `By: ${updatedLeave.approvedBy.name}` : null,
+              updatedLeave.adminRemarks ? `Note: ${updatedLeave.adminRemarks}` : null,
+            ]
+              .filter(Boolean)
+              .join("\n"),
+            // A rejection usually needs the employee to do something about it
+            // (rearrange plans, re-apply); an approval is just good news.
+            priority: status === "Rejected" ? "high" : "normal",
+            relatedData: { leaveId: updatedLeave._id, url: "/leaves" },
+          })
+          .catch((err) => console.error("Leave-decision notification failed:", err));
+      } else {
+        console.warn(`Leave ${updatedLeave._id} has no employee._id; skipped notification.`);
+      }
     }
 
     res.json(updatedLeave);
@@ -253,7 +357,8 @@ exports.updateLeave = async (req, res) => {
       updateData.document = {
         name: req.file.originalname,
         size: req.file.size,
-        url: `${req.protocol}://${req.get("host")}/uploads/${req.file.filename}`,
+        // storedPath + relative — see the note in createLeave above.
+        url: `/uploads/${req.file.storedPath}`,
       };
     }
 

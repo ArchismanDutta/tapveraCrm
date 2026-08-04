@@ -26,6 +26,7 @@ import {
   WebSocketProvider,
   useWebSocketContext,
 } from "./contexts/WebSocketContext";
+import { notifyAuthChanged } from "./utils/authEvents";
 
 // Notifications
 import NotificationToast from "./components/NotificationToast";
@@ -218,6 +219,12 @@ const AppWrapper = () => {
     setCurrentUser(savedUser);
     setIsAuthenticated(true);
     setRole(normalizeRole(savedUser?.role));
+    // WebSocketProvider is mounted above this component and cannot see auth
+    // state, so it has to be told the token now exists — without this the
+    // socket stays down for the whole session and every live feature (chat,
+    // notifications, attendance, leave approvals) silently falls back to
+    // needing a manual page refresh. See utils/authEvents.js.
+    notifyAuthChanged();
     toast.success("✅ Login successful!");
   };
 
@@ -231,6 +238,9 @@ const AppWrapper = () => {
     setCurrentUser(null);
     setIsAuthenticated(false);
     setRole(null);
+    // Drops the socket, so it can't keep delivering the previous user's
+    // messages into a logged-out tab.
+    notifyAuthChanged();
     toast.info("👋 Logged out successfully!");
     navigate("/login", { replace: true });
   };

@@ -1,5 +1,6 @@
-import React, { useState, useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
-import { AtSign, X } from 'lucide-react';
+import React, { useState, useRef, useEffect, useMemo, forwardRef, useImperativeHandle } from 'react';
+import { AtSign, Users } from 'lucide-react';
+import { findMentions, mentionCandidates } from '../../utils/mentions';
 
 /**
  * MentionInput - A textarea with @ mention autocomplete functionality
@@ -31,6 +32,7 @@ const MentionInput = forwardRef(({
   className = "",
   disabled = false,
   onKeyDown,
+  currentUserId,
 }, ref) => {
   const [showMentionDropdown, setShowMentionDropdown] = useState(false);
   const [mentionSearch, setMentionSearch] = useState('');
@@ -43,9 +45,19 @@ const MentionInput = forwardRef(({
   // Expose textarea ref to parent component
   useImperativeHandle(ref, () => textareaRef.current);
 
-  // Filter users based on search term
-  const filteredUsers = users.filter(user =>
-    user.name?.toLowerCase().includes(mentionSearch.toLowerCase())
+  // @everyone first, then the members, minus yourself — mentioning yourself
+  // notifies nobody, so offering it is just a way to waste a click.
+  const candidates = useMemo(
+    () => mentionCandidates(users, currentUserId),
+    [users, currentUserId]
+  );
+
+  const filteredUsers = useMemo(
+    () =>
+      candidates.filter((user) =>
+        user.name?.toLowerCase().includes(mentionSearch.toLowerCase())
+      ),
+    [candidates, mentionSearch]
   );
 
   // Detect @ symbol and show dropdown
@@ -181,20 +193,14 @@ const MentionInput = forwardRef(({
     // Update cursor position immediately
     setCursorPosition(e.target.selectionStart);
 
-    // Parse mentions from text to keep track
-    const mentionPattern = /@(\w+(\s+\w+)*)/g;
-    const mentionsInText = [];
-    let match;
-
-    while ((match = mentionPattern.exec(newValue)) !== null) {
-      const mentionedName = match[1];
-      const user = users.find(u =>
-        u.name?.toLowerCase() === mentionedName.toLowerCase()
-      );
-      if (user && !mentionsInText.find(m => m._id === user._id)) {
-        mentionsInText.push(user);
-      }
-    }
+    // Re-derive the mention list from the text on every keystroke, so deleting
+    // part of a name un-mentions that person — the behaviour people expect from
+    // WhatsApp and Slack.
+    //
+    // The matching lives in utils/mentions.js. It used to be a greedy regex
+    // here, which swallowed the rest of the sentence into the name and dropped
+    // the mention entirely unless it happened to be the last thing typed.
+    const mentionsInText = findMentions(newValue, candidates);
 
     setMentionedUsers(mentionsInText);
     onChange(newValue, mentionsInText);
@@ -311,17 +317,35 @@ const MentionInput = forwardRef(({
                 }`}
               >
                 <div className="flex items-center gap-1.5 sm:gap-2">
-                  <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center text-white text-xs sm:text-sm font-semibold flex-shrink-0">
-                    {user.name?.charAt(0).toUpperCase()}
+                  <div
+                    className={`w-6 h-6 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-white text-xs sm:text-sm font-semibold flex-shrink-0 ${
+                      user.isEveryone
+                        ? "bg-gradient-to-br from-amber-400 to-orange-500"
+                        : "bg-gradient-to-br from-blue-400 to-purple-500"
+                    }`}
+                  >
+                    {user.isEveryone ? (
+                      <Users size={14} />
+                    ) : (
+                      user.name?.charAt(0).toUpperCase()
+                    )}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="text-xs sm:text-sm font-medium text-gray-900 truncate">
-                      {user.name}
+                      {user.isEveryone ? "everyone" : user.name}
                     </div>
-                    {user.email && (
-                      <div className="text-[10px] sm:text-xs text-gray-500 truncate hidden sm:block">
-                        {user.email}
+                    {user.isEveryone ? (
+                      // Says how many people this will actually ping, so nobody
+                      // fires it into a 40-person group by accident.
+                      <div className="text-[10px] sm:text-xs text-amber-700 truncate">
+                        Notify all {Math.max(candidates.length - 1, 0)} members
                       </div>
+                    ) : (
+                      user.email && (
+                        <div className="text-[10px] sm:text-xs text-gray-500 truncate hidden sm:block">
+                          {user.email}
+                        </div>
+                      )
                     )}
                   </div>
                 </div>

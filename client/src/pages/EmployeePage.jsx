@@ -1,6 +1,7 @@
 // File: src/pages/EmployeePage.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import { notifyAuthChanged } from "../utils/authEvents";
 import {
   AlertCircle,
   ArrowLeft,
@@ -246,6 +247,9 @@ const EmployeePage = () => {
         if (!res.ok) {
           if (res.status === 401) {
             localStorage.removeItem("token");
+            // navigate() is an SPA transition, so the app is never remounted —
+            // without this the socket keeps running on the expired token.
+            notifyAuthChanged();
             navigate("/login");
             return;
           }

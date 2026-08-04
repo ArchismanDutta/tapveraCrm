@@ -98,8 +98,25 @@ app.use("/iclock", iclockRoutes);
 app.use(express.json());
 app.use(morgan("dev"));
 
-// Serve uploaded files
-app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+// Turn stored /uploads/... paths into short-lived signed URLs on the way out.
+// Mounted before the routers so it wraps res.json for every one of them —
+// file URLs surface from eight-odd places at varying nesting depths, and
+// signing at each read site means any that's missed ships a broken image.
+// See middlewares/signFileUrls.js.
+app.use(require("./middlewares/signFileUrls"));
+
+// Serve uploaded files.
+//
+// This was `express.static(path.join(__dirname, "uploads"))` — no auth of any
+// kind, so every chat attachment, sick-leave certificate and ID document was
+// publicly downloadable by anyone with the URL. Leave documents were named
+// `document-<Date.now()>.pdf`, so the only thing protecting one was a
+// millisecond timestamp.
+//
+// fileRoutes requires a short-lived signed URL (or a Bearer token) and refuses
+// anything resolving outside UPLOAD_ROOT. See routes/fileRoutes.js and
+// config/storage.js.
+app.use("/uploads", require("./routes/fileRoutes"));
 
 // CORS setup
 const frontendOrigins = [
@@ -247,6 +264,30 @@ if (process.env.NODE_ENV === "production") {
 // Error handler
 // =====================
 app.use((err, req, res, next) => {
+  // Upload rejections are the user's problem to fix, not a server fault.
+  // Without this they fell through to the 500 below, so someone attaching a
+  // 12MB scan to a leave request got "Internal Server Error" and no idea that
+  // the file was simply too big. multer raises MulterError with a code; our own
+  // fileFilter raises a plain Error whose message is already user-facing.
+  const MAX_MB = Math.round(Number(process.env.UPLOAD_MAX_BYTES || 10485760) / 1024 / 1024);
+  const uploadMessages = {
+    LIMIT_FILE_SIZE: `File is too large. Maximum size is ${MAX_MB}MB.`,
+    LIMIT_FILE_COUNT: "Too many files attached.",
+    LIMIT_FIELD_COUNT: "Too many form fields.",
+    LIMIT_UNEXPECTED_FILE: "Unexpected file field.",
+  };
+
+  if (err && err.name === "MulterError") {
+    return res.status(400).json({
+      message: uploadMessages[err.code] || "Upload rejected.",
+      code: err.code,
+    });
+  }
+
+  if (err && /Only PDF, JPG, PNG, DOC and DOCX|Invalid file type/i.test(err.message || "")) {
+    return res.status(400).json({ message: err.message });
+  }
+
   console.error("❌ Unexpected error:", err.stack || err);
   console.error("Request path:", req.path);
   console.error("Request method:", req.method);

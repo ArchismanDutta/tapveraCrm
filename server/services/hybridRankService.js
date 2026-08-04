@@ -347,7 +347,13 @@ class HybridRankService {
       for (const userId of assignedTo) {
         await notificationService.createAndSend({
           userId,
-          type:     "rank_drop_alert",
+          // "rank_drop_alert" was not a member of Notification.type's enum, so
+          // every one of these threw a mongoose ValidationError before it could
+          // be saved or emitted — the alerts had never once been delivered.
+          // `type` is the coarse bucket the notification centre filters on (it
+          // offers a "System" option and no rank-specific one); `channel` below
+          // is free-form and is where the specificity belongs.
+          type:     "system",
           channel:  "keyword_rank",
           title,
           body:     message,

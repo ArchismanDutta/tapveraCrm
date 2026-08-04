@@ -28,6 +28,8 @@ import MessageDateSeparator from "../message/MessageDateSeparator";
 import TypingIndicator from "../message/TypingIndicator";
 import useMessageSuggestions from "../../hooks/useMessageSuggestions";
 import MentionInput from "../common/MentionInput";
+import MentionText from "../common/MentionText";
+import { messageMentionsUser, resolveMentionedUserIds } from "../../utils/mentions";
 import { useWebSocketContext } from "../../contexts/WebSocketContext";
 
 // ─── Main component ──────────────────────────────────────────────────────────
@@ -137,8 +139,18 @@ const ChatWindow = ({
         if (replyingTo) {
           formData.append("replyTo", replyingTo._id || replyingTo.messageId);
         }
-        if (mentionedUsers.length > 0) {
-          formData.append("mentions", JSON.stringify(mentionedUsers.map(u => u._id)));
+        // Resolve rather than mapping _id directly: @everyone is a sentinel
+        // option, not a person, so its placeholder id must never reach the
+        // server — it would be stored as a mention of a user that doesn't
+        // exist and would notify nobody. resolveMentionedUserIds expands it to
+        // the real members (minus you) and passes named mentions through.
+        const mentionIds = resolveMentionedUserIds(
+          input.trim(),
+          conversationMembers,
+          currentUserId
+        );
+        if (mentionIds.length > 0) {
+          formData.append("mentions", JSON.stringify(mentionIds));
         }
         selectedFiles.forEach((file) => {
           console.log('[ChatWindow] Adding file:', file.name, file.type, file.size);
@@ -603,6 +615,19 @@ const ChatWindow = ({
             // Ensure currentUserId and senderId are compared as strings
             const isSelf = String(msg.senderId) === String(currentUserId);
 
+            // Someone addressed you here (by name or via @everyone). Worth
+            // marking the whole bubble, not just the name: the point is to be
+            // findable when scrolling back through a busy group, which a chip
+            // buried mid-paragraph isn't. Never applies to your own messages —
+            // you can't summon yourself.
+            const mentionsMe =
+              !isSelf &&
+              messageMentionsUser(
+                msg.message || msg.text || "",
+                conversationMembers,
+                currentUserId
+              );
+
             const prevMsg = filteredMessages[index - 1];
             const showDateDivider =
               !prevMsg ||
@@ -628,6 +653,8 @@ const ChatWindow = ({
                       className={`w-fit max-w-full rounded-xl border p-3 shadow-sm transition-colors duration-200 ${
                         isSelf
                           ? "border-blue-600/20 bg-blue-600 text-white dark:border-blue-400/15"
+                          : mentionsMe
+                          ? "border-amber-200 border-l-4 border-l-amber-400 bg-amber-50/70 text-slate-900 dark:border-amber-400/25 dark:border-l-amber-400 dark:bg-amber-400/[0.07] dark:text-white"
                           : "border-slate-200 bg-white text-slate-900 dark:border-white/10 dark:bg-[#1a2433] dark:text-white"
                       }`}
                     >
@@ -664,7 +691,15 @@ const ChatWindow = ({
                             components={{
                               // Custom styling for markdown elements
                               p: ({ children }) => (
-                                <p className="mb-1 last:mb-0 whitespace-pre-wrap">{children}</p>
+                                <p className="mb-1 last:mb-0 whitespace-pre-wrap">
+                                  <MentionText
+                                    members={conversationMembers}
+                                    currentUserId={currentUserId}
+                                    isSelf={isSelf}
+                                  >
+                                    {children}
+                                  </MentionText>
+                                </p>
                               ),
                               h1: ({ children }) => (
                                 <h1 className="text-lg font-bold mb-1">
@@ -692,7 +727,15 @@ const ChatWindow = ({
                                 </ol>
                               ),
                               li: ({ children }) => (
-                                <li className="ml-2">{children}</li>
+                                <li className="ml-2">
+                                  <MentionText
+                                    members={conversationMembers}
+                                    currentUserId={currentUserId}
+                                    isSelf={isSelf}
+                                  >
+                                    {children}
+                                  </MentionText>
+                                </li>
                               ),
                               code: ({ inline, children }) =>
                                 inline ? (
@@ -1170,6 +1213,7 @@ const ChatWindow = ({
                 chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
               }}
               users={conversationMembers || []}
+              currentUserId={currentUserId}
               placeholder="Write a message... (@ to mention someone)"
               rows={1}
               className="h-11 w-full rounded-xl border-slate-200 bg-white py-2.5 text-slate-900 placeholder-slate-400 focus:border-blue-400/50 dark:border-white/10 dark:bg-[#101820] dark:text-white dark:placeholder-slate-500"

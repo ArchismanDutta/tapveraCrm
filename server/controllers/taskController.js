@@ -663,17 +663,42 @@ exports.addRemark = async (req, res) => {
 
     const populated = await populateTask(Task.findById(taskId)).lean();
 
+    const memberIds = new Set(
+      [...(task.assignedTo || []), task.assignedBy]
+        .filter(Boolean)
+        .map((id) => String(id))
+    );
+    const newRemark = populated.remarks[populated.remarks.length - 1];
+
     try {
       const { broadcastTaskRemark } = require("../utils/websocket");
-      const memberIds = new Set(
-        [...(task.assignedTo || []), task.assignedBy]
-          .filter(Boolean)
-          .map((id) => String(id))
-      );
-      const newRemark = populated.remarks[populated.remarks.length - 1];
       broadcastTaskRemark(taskId, Array.from(memberIds), { remark: newRemark });
     } catch (wsError) {
       console.warn("WebSocket broadcast failed (task remark added):", wsError.message);
+    }
+
+    // The broadcast above only reaches people with this task's remarks modal
+    // already open — i.e. the person you were already talking to. Anyone else
+    // on the task learned about a comment only by chancing upon it. This is the
+    // part that actually reaches them.
+    //
+    // The author is removed rather than filtered client-side: they know what
+    // they just wrote, and self-notifications make the unread badge lie.
+    const remarkRecipients = [...memberIds].filter(
+      (id) => id !== String(req.user._id)
+    );
+
+    if (remarkRecipients.length) {
+      notificationService
+        .notifyUsers(remarkRecipients, {
+          type: "task",
+          channel: "task",
+          title: `${req.user.name} commented on "${populated.title}"`,
+          body: comment.trim().slice(0, 200),
+          priority: "normal",
+          relatedData: { taskId: populated._id, url: "/tasks" },
+        })
+        .catch((err) => console.error("Task-remark notification failed:", err));
     }
 
     res.json(populated);
