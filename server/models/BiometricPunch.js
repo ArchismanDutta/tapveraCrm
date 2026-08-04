@@ -76,6 +76,15 @@ const BiometricPunchSchema = new mongoose.Schema(
     // Human-readable outcome, surfaced in the admin UI
     message: { type: String, default: "" },
 
+    // Clock correction applied to `punchedAt` before this punch was booked as
+    // attendance (see BiometricDevice.clockOffsetMinutes). `punchedAt` above
+    // always stays exactly as the device reported it — the raw datum is the
+    // thing worth preserving for a payroll dispute, and a correction that
+    // later proves wrong must be replayable against the original.
+    //
+    // correctedTime = punchedAt + appliedOffsetMinutes
+    appliedOffsetMinutes: { type: Number, default: 0 },
+
     // Set when the punch is written into AttendanceRecord
     appliedAt: { type: Date, default: null },
     // The attendance date the punch was ultimately booked against (night shifts

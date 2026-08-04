@@ -60,6 +60,11 @@ const MIN_PUNCH_GAP_SECONDS = Number(process.env.BIOMETRIC_MIN_PUNCH_GAP_SECONDS
 // whole backlog on reconnect.
 const MAX_BACKFILL_HOURS = Number(process.env.BIOMETRIC_MAX_BACKFILL_HOURS || 168); // 7 days
 
+// Global fallback clock correction, in minutes, for devices without their own
+// `clockOffsetMinutes`. See BiometricDevice for why this exists and the
+// warning about removing it once the device clock is fixed.
+const DEFAULT_CLOCK_OFFSET_MINUTES = Number(process.env.BIOMETRIC_CLOCK_OFFSET_MINUTES || 0);
+
 class BiometricAttendanceService {
   constructor() {
     this.attendanceService = new AttendanceService();
@@ -147,10 +152,35 @@ class BiometricAttendanceService {
   // ───────────────────────────────────────────────────────────────────────────
 
   /**
-   * Persist → dedupe → map → resolve → apply, for one device row.
+   * Minutes to add to this device's reported times. Per-device setting wins;
+   * otherwise the global env default.
+   */
+  clockOffsetFor(device) {
+    const perDevice = device?.clockOffsetMinutes;
+    return Number.isFinite(perDevice) && perDevice !== null
+      ? perDevice
+      : DEFAULT_CLOCK_OFFSET_MINUTES;
+  }
+
+  /**
+   * Correct → persist → dedupe → map → resolve → apply, for one device row.
    * Always resolves; never rejects.
    */
   async processSinglePunch(device, record) {
+    // ---- STEP 0: correct the device clock ----
+    // `record.punchedAt` is what the terminal said. `correctedAt` is what we
+    // believe actually happened. Everything downstream — duplicate detection,
+    // which attendance day this belongs to, the punch event itself — uses the
+    // corrected time; only the raw row below keeps the device's own figure.
+    //
+    // Splitting them matters: the raw value is the evidence in a payroll
+    // dispute, and if the correction later proves wrong the original is still
+    // there to replay against.
+    const offsetMinutes = this.clockOffsetFor(device);
+    const correctedAt = offsetMinutes
+      ? new Date(record.punchedAt.getTime() + offsetMinutes * 60 * 1000)
+      : record.punchedAt;
+
     // ---- STEP 1: persist the raw row (idempotent) ----
     // The unique index on (serialNumber, pin, punchedAt, rawStatus) is what makes
     // the whole integration safe to retry. A device re-sending yesterday's batch
@@ -166,6 +196,7 @@ class BiometricAttendanceService {
         rawVerify: record.rawVerify,
         rawWorkCode: record.rawWorkCode,
         rawLine: record.rawLine,
+        appliedOffsetMinutes: offsetMinutes,
         status: "PENDING",
       });
     } catch (err) {
@@ -206,9 +237,9 @@ class BiometricAttendanceService {
       punchDoc.userId = user._id;
 
       // ---- STEP 3: collapse rapid re-scans ----
-      const recentDuplicate = await this.findRecentAppliedPunch(user._id, record.punchedAt);
+      const recentDuplicate = await this.findRecentAppliedPunch(user._id, correctedAt);
       if (recentDuplicate) {
-        const gap = Math.round((record.punchedAt - recentDuplicate.punchedAt) / 1000);
+        const gap = Math.round((correctedAt - recentDuplicate.punchedAt) / 1000);
         return this.finalise(punchDoc, {
           status: "DUPLICATE",
           userId: user._id,
@@ -217,7 +248,7 @@ class BiometricAttendanceService {
       }
 
       // ---- STEP 4: decide what this punch means ----
-      const decision = await this.resolveAction(user._id, record);
+      const decision = await this.resolveAction(user._id, { ...record, punchedAt: correctedAt });
 
       if (!decision.action) {
         // Not an error and not a rejection — the day is already open (or already
@@ -247,7 +278,7 @@ class BiometricAttendanceService {
       // ---- STEP 6: hand off to the existing attendance engine ----
       const result = await this.attendanceService.recordPunchEvent(user._id, decision.action, {
         // The moment the finger touched the sensor, not the moment we got it.
-        timestamp: record.punchedAt,
+        timestamp: correctedAt,
         location: device.location || "Office",
         device: `BIOMETRIC:${device.serialNumber}`,
         source: "BIOMETRIC",
@@ -473,15 +504,36 @@ class BiometricAttendanceService {
       // battery-backed RTC drifting) are minutes to hours.
       let skewSeconds = null;
       if (ordered.length > 0 && ordered.length <= 3 && newest) {
+        // Measured against the RAW device time, so this reports the true state
+        // of the device clock regardless of any correction we're applying.
         skewSeconds = Math.round((Date.now() - newest.getTime()) / 1000);
 
-        if (Math.abs(skewSeconds) > 120) {
-          const behindAhead = skewSeconds > 0 ? "behind" : "ahead";
+        const offsetMinutes = this.clockOffsetFor(device);
+        const residualSeconds = skewSeconds - offsetMinutes * 60;
+
+        if (offsetMinutes !== 0 && Math.abs(residualSeconds) <= 120 && Math.abs(skewSeconds) > 120) {
+          // Correction is doing its job: raw clock is off, corrected time lands
+          // on now. Nothing to report.
+        } else if (offsetMinutes !== 0 && Math.abs(skewSeconds) <= 120) {
+          // The device clock has been FIXED while a correction is still
+          // configured — so we are now pushing correct punches out by
+          // offsetMinutes in the opposite direction. This is the failure mode
+          // that makes a hardcoded offset dangerous, and it is silent without
+          // this warning: attendance simply drifts the other way.
           console.warn(
-            `⚠️  [iclock] Device ${device.serialNumber} clock appears ~${Math.abs(
-              Math.round(skewSeconds / 60)
-            )} min ${behindAhead}: every punch it stamps is off by that much. ` +
-              `Check the device clock/timezone and the handshake TimeZone value.`
+            `⚠️  [iclock] Device ${device.serialNumber} clock now reads correctly, but a ` +
+              `${offsetMinutes} min correction is still applied — punches are being shifted ` +
+              `${offsetMinutes} min in the WRONG direction. Set clockOffsetMinutes to 0 ` +
+              `(or clear BIOMETRIC_CLOCK_OFFSET_MINUTES).`
+          );
+        } else if (Math.abs(residualSeconds) > 120) {
+          const behindAhead = residualSeconds > 0 ? "behind" : "ahead";
+          console.warn(
+            `⚠️  [iclock] Device ${device.serialNumber} is ~${Math.abs(
+              Math.round(residualSeconds / 60)
+            )} min ${behindAhead} even after a ${offsetMinutes} min correction: ` +
+              `every punch it stamps is off by that much. Check the device clock/timezone ` +
+              `and the handshake TimeZone value.`
           );
         }
       }

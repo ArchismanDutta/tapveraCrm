@@ -47,6 +47,24 @@ const BiometricDeviceSchema = new mongoose.Schema(
     deviceIp: { type: String, default: "" },
 
     // Cumulative counters (monitoring only — never used for calculations)
+    // Minutes to ADD to every punch this device reports, to compensate for a
+    // clock we cannot fix at the source.
+    //
+    // Some firmware mishandles the handshake TimeZone value and rebases its
+    // clock to the wrong offset — for IST that lands it 30 minutes slow, so a
+    // 05:00 arrival is stamped 04:30 by the device itself before we ever see
+    // it. Where the device can't be corrected, this brings attendance back to
+    // reality.
+    //
+    // null = fall back to BIOMETRIC_CLOCK_OFFSET_MINUTES (global default).
+    //
+    // ⚠️  This is a correction for a BROKEN clock. If the device clock is ever
+    // fixed, set this back to 0 — otherwise punches land 30 minutes LATE
+    // instead, which is the same bug pointing the other way and far harder to
+    // notice. The skew watchdog in BiometricAttendanceService warns when the
+    // offset stops matching reality.
+    clockOffsetMinutes: { type: Number, default: null },
+
     stats: {
       totalPushes: { type: Number, default: 0 },
       totalPunchesReceived: { type: Number, default: 0 },
