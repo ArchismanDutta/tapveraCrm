@@ -669,8 +669,22 @@ const BiometricAttendanceManagement = ({ onLogout }) => {
                           </span>
                         )}
                       </p>
+                      {/* Shows the CORRECTED time — the one attendance was
+                          actually booked at. `punchedAt` is the device's own
+                          clock, kept untouched in the database as the audit
+                          record, but displaying it here made a working
+                          correction look broken: the panel read 03:17 while the
+                          CRM had correctly recorded 03:47. The raw value is
+                          still on the row for anyone investigating. */}
                       <p className="truncate text-[11px] text-slate-400 dark:text-slate-500">
-                        {fmtDateTime(p.punchedAt)}
+                        {p.appliedOffsetMinutes
+                          ? fmtDateTime(
+                              new Date(
+                                new Date(p.punchedAt).getTime() +
+                                  p.appliedOffsetMinutes * 60000
+                              )
+                            )
+                          : fmtDateTime(p.punchedAt)}
                         {p.message ? ` · ${p.message}` : ""}
                       </p>
                     </div>
