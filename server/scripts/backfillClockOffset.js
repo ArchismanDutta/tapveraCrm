@@ -89,13 +89,47 @@ const ist = (d) => d ? new Intl.DateTimeFormat('en-GB', {
         attendanceDate = attendanceService.normalizeDate(punch.punchedAt);
       }
 
-      const dateKey = new Date(attendanceDate).toISOString();
+      // ── Match on a DAY RANGE, never on equality ──
+      //
+      // AttendanceRecord.date and BiometricPunch.attendanceDate are normalised
+      // differently and sit 5h30m apart:
+      //
+      //   getAttendanceDateForPunch() -> UTC midnight of the IST date
+      //                                  (2026-08-04T00:00:00Z)
+      //   getAttendanceRecord() then re-applies normalizeDate(), which uses
+      //   SERVER-LOCAL midnight        (2026-08-03T18:30:00Z on an IST box)
+      //
+      // recordPunchEvent returns the first as `result.date`, which is what gets
+      // written onto the punch — but the record itself is keyed by the second.
+      // So `findOne({ date: punch.attendanceDate })` matches nothing, every
+      // time, silently. A range spanning the day either side is immune to which
+      // convention any given row happens to use.
+      const anchor = new Date(attendanceDate);
+      const from = new Date(anchor.getTime() - 24 * 3600 * 1000);
+      const to = new Date(anchor.getTime() + 24 * 3600 * 1000);
+      const dateKey = anchor.toISOString();
 
       let record = touchedRecords.get(dateKey);
       if (!record) {
-        record = await AttendanceRecord.findOne({ date: attendanceDate });
+        // Narrow to records that actually contain an event at this exact
+        // instant, so a ±1 day window can't grab the wrong record.
+        const candidates = await AttendanceRecord.find({ date: { $gte: from, $lte: to } });
+        record = candidates.find((r) =>
+          (r.employees || []).some(
+            (e) =>
+              String(e.userId) === String(punch.userId) &&
+              (e.events || []).some(
+                (ev) =>
+                  Math.abs(new Date(ev.timestamp).getTime() - new Date(punch.punchedAt).getTime()) < 1000
+              )
+          )
+        );
+
         if (!record) {
-          miss('no AttendanceRecord for that date', `PIN ${punch.pin} · ${dateKey.slice(0, 10)}`);
+          miss(
+            'no AttendanceRecord containing that punch',
+            `PIN ${punch.pin} · ${dateKey.slice(0, 10)} · searched ${candidates.length} record(s)`
+          );
           continue;
         }
         touchedRecords.set(dateKey, record);

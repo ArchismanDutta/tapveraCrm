@@ -262,11 +262,31 @@ class AttendanceAutoCloseService {
     // Every scan the terminal sent for this attendance day, whatever its
     // outcome — LOGGED rows are the whole point, but an APPLIED arrival or a
     // DUPLICATE re-scan is equally valid evidence that they were standing there.
+    //
+    // Matched on a TIME WINDOW rather than on attendanceDate equality.
+    //
+    // BiometricPunch.attendanceDate and AttendanceRecord.date are normalised
+    // differently and sit 5h30m apart: getAttendanceDateForPunch() returns UTC
+    // midnight of the IST date, while getAttendanceRecord() re-applies
+    // normalizeDate(), which uses server-local midnight. `attendanceDate` here
+    // comes from the record, so joining it against the punch field matched
+    // nothing — and because "no scan found" is a legitimate outcome, this
+    // failed silently by always falling through to the shift-end guess.
+    //
+    // The window runs from the record's date to +36h, which covers a night
+    // shift crossing midnight regardless of which convention either side used.
+    const windowStart = new Date(new Date(attendanceDate).getTime() - 6 * HOUR_MS);
+    const windowEnd = new Date(new Date(attendanceDate).getTime() + 36 * HOUR_MS);
+
     const lastScan = await BiometricPunch.findOne({
       userId: employee.userId,
-      attendanceDate,
       status: { $in: ["APPLIED", "LOGGED", "DUPLICATE"] },
-      ...(arrival ? { punchedAt: { $gt: arrival } } : {}),
+      punchedAt: {
+        // Never earlier than their arrival — a scan before it belongs to a
+        // different day's record.
+        $gt: arrival && arrival > windowStart ? arrival : windowStart,
+        $lte: windowEnd,
+      },
     })
       .sort({ punchedAt: -1 })
       .select("punchedAt")
