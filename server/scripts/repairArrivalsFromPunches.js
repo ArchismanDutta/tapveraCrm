@@ -88,9 +88,22 @@ const ist = (d) => new Intl.DateTimeFormat('en-GB', {
   console.log('─'.repeat(100));
 
   for (const [userId, { at: trueArrival, pin }] of earliest) {
-    const record = records.find((r) =>
+    // Pick the record for the punch's OWN day — the NEAREST one, not merely the
+    // first that happens to contain this employee.
+    //
+    // The window spans yesterday and today, and `.find()` returned whichever
+    // came back first. That was frequently YESTERDAY's record, so the check
+    // compared today's 08:48 scan against yesterday's arrival, decided the
+    // arrival was already earlier, and skipped the repair — reporting "already
+    // correct" for people who were plainly still wrong on screen.
+    const candidates = records.filter((r) =>
       (r.employees || []).some((e) => String(e.userId) === String(userId))
     );
+
+    const record = candidates.sort(
+      (a, b) =>
+        Math.abs(new Date(a.date) - trueArrival) - Math.abs(new Date(b.date) - trueArrival)
+    )[0];
 
     if (!record) {
       console.log(`  – ${nameFor(userId).padEnd(24)} PIN ${String(pin).padEnd(4)} no attendance row — run replayFailedPunches.js first`);
@@ -117,9 +130,21 @@ const ist = (d) => new Intl.DateTimeFormat('en-GB', {
       continue;
     }
 
+    // Guard against repairing across days. If the chosen record is more than a
+    // day away from the punch, something is wrong with the match and moving the
+    // arrival would corrupt a different day's attendance rather than fix this
+    // one.
+    if (Math.abs(new Date(record.date) - trueArrival) > 36 * 3600 * 1000) {
+      console.log(
+        `  – ${nameFor(userId).padEnd(24)} PIN ${String(pin).padEnd(4)} nearest record is ${ist(record.date)}, too far from ${ist(trueArrival)} — skipped`
+      );
+      noRow += 1;
+      continue;
+    }
+
     const lateBy = Math.round((recorded - trueArrival) / 60000);
     console.log(
-      `  ${nameFor(userId).padEnd(24)} PIN ${String(pin).padEnd(4)} ${ist(recorded)} → ${ist(trueArrival)}  (${lateBy} min earlier)`
+      `  ${nameFor(userId).padEnd(24)} PIN ${String(pin).padEnd(4)} ${ist(recorded)} → ${ist(trueArrival)}  (${lateBy} min earlier)  [record ${ist(record.date).slice(0, 6)}]`
     );
 
     if (!DRY_RUN) {
