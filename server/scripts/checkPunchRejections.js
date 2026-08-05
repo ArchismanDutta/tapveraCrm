@@ -64,8 +64,26 @@ const ist = (d) => d ? new Intl.DateTimeFormat('en-GB', {
   const pins = [...new Set(punches.map((p) => p.pin))].slice(0, 8);
   const users = await User.find({ biometricPin: { $in: pins } }).select('_id name biometricPin').lean();
 
-  const today = new Date(); today.setUTCHours(0, 0, 0, 0);
-  const record = await AttendanceRecord.findOne({ date: today }).lean();
+  // Match on a day RANGE, not equality.
+  //
+  // AttendanceRecord.date is normalised with normalizeDate() — server-LOCAL
+  // midnight — while setUTCHours(0,0,0,0) gives UTC midnight. On an IST box
+  // those are 5h30m apart, so this lookup missed the record entirely and
+  // reported "no attendance row today" for people who did have one. A false
+  // alarm at exactly the moment you're trying to establish who is genuinely
+  // missing attendance.
+  const nowTs = Date.now();
+  const records = await AttendanceRecord.find({
+    date: { $gte: new Date(nowTs - 36 * 3600 * 1000), $lte: new Date(nowTs + 12 * 3600 * 1000) },
+  }).lean();
+
+  // Pick whichever record actually contains today's people.
+  const record = records
+    .slice()
+    .sort((a, b) => new Date(b.date) - new Date(a.date))
+    .find((r) => (r.employees || []).some((e) => users.some((u) => String(u._id) === String(e.userId))))
+    || records[records.length - 1]
+    || null;
 
   console.log("\nWhat attendance actually holds for today (what the CRM shows):\n");
   for (const u of users) {
