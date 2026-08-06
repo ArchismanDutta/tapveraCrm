@@ -8,6 +8,15 @@ const ChatMessageSchema = new mongoose.Schema({
   readBy: [{ type: String }], // array of user IDs who have read the message
   // Mentioned users (WhatsApp-style @mentions)
   mentions: [{ type: String }], // array of user IDs who were mentioned
+
+  // Relayed from another conversation rather than composed here.
+  //
+  // Deliberately a bare flag and not a reference to the source. The recipient
+  // may have no access to the conversation this came from, so naming it — or
+  // storing an id someone could resolve — would leak the existence and
+  // membership of a group they aren't in. "Forwarded" tells them the content
+  // isn't the sender's own words, which is the part that matters.
+  forwarded: { type: Boolean, default: false },
   // Reply to another message (WhatsApp-style)
   replyTo: {
     type: mongoose.Schema.Types.ObjectId,

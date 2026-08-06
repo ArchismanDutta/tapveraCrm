@@ -44,6 +44,7 @@ function normalize(doc) {
     body: m.message || '',
     attachments: m.attachments || [],
     replyTo: m.replyTo || null,
+    forwarded: Boolean(m.forwarded),
     // Flat id array here; the project adapter emits the same shape from its
     // {user, userModel} subdocuments.
     mentions: (m.mentions || []).map((id) => ({ id: String(id?.user ?? id), kind: 'User' })),
@@ -337,9 +338,81 @@ async function react(user, messageId, emoji) {
   return { raw: message, normalized: normalize(message), threadId: String(message.conversationId) };
 }
 
+/**
+ * Copy messages into other conversations.
+ *
+ * ─── WHY COPIES AND NOT REFERENCES ───
+ * A forward is a new message in the destination thread, not a pointer back to
+ * the original. Pointing back would mean the destination's history depends on a
+ * conversation its members may not be able to read — and would break outright
+ * if the source were ever deleted.
+ *
+ * ─── ATTACHMENTS ARE SHARED, NOT DUPLICATED ───
+ * The copy carries the SAME attachment records, so both messages point at one
+ * file on disk. Forwarding a 200MB video to four groups costs nothing extra.
+ *
+ * The consequence to know about: a stored file can now be referenced by more
+ * than one message, so anything that deletes files must check for OTHER
+ * references first. Deleting the source conversation must not unlink a file a
+ * forward still points at. See the orphan sweep.
+ *
+ * ─── WHAT IS DELIBERATELY DROPPED ───
+ * `mentions`, `replyTo`, `reactions` and receipts do not travel. A mention of
+ * someone who isn't in the destination would notify a stranger; a reply points
+ * at a message that doesn't exist there; reactions and read state belong to the
+ * conversation they happened in.
+ *
+ * @param {Object}   user
+ * @param {String[]} messageIds     source messages, any thread the user can read
+ * @param {String[]} destThreadIds  conversations to copy into
+ * @returns {Promise<Array>} one { threadId, raw, normalized, conversation } per copy
+ */
+async function forwardMessages(user, messageIds, destThreadIds) {
+  const senderId = String(user._id ?? user.id);
+
+  // Oldest first, so a multi-message forward lands in the destination in the
+  // order it was originally said rather than the order the ids happened to
+  // arrive in.
+  const sources = await ChatMessage.find({ _id: { $in: messageIds } })
+    .sort({ timestamp: 1 })
+    .lean();
+
+  const results = [];
+
+  for (const threadId of destThreadIds) {
+    const conversation = await Conversation.findById(threadId);
+    if (!conversation) continue;
+
+    for (const source of sources) {
+      const saved = await ChatMessage.create({
+        conversationId: String(threadId),
+        senderId,
+        message: source.message || '',
+        // Same attachment records — same files on disk.
+        attachments: source.attachments || [],
+        readBy: [senderId],
+        deliveredTo: [],
+        mentions: [],
+        replyTo: null,
+        forwarded: true,
+      });
+
+      results.push({
+        threadId: String(threadId),
+        raw: saved,
+        normalized: normalize(saved),
+        conversation,
+      });
+    }
+  }
+
+  return results;
+}
+
 module.exports = {
   SCOPE,
   normalize,
+  forwardMessages,
   getMemberIds,
   listThreads,
   getMessages,

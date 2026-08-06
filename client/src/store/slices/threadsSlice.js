@@ -181,6 +181,27 @@ export const sendMessage = createAsyncThunk(
   }
 );
 
+/**
+ * Forward messages to other conversations.
+ *
+ * No optimistic insert: the copies land in threads the user isn't necessarily
+ * looking at, and the server broadcasts each one over `thread:message` anyway,
+ * so the store fills in through the normal live path. Optimism here would risk
+ * showing a message in a destination that then rejected it.
+ */
+export const forwardMessages = createAsyncThunk(
+  "threads/forwardMessages",
+  async ({ scope, sourceThreadId, messageIds, destinationThreadIds }) => {
+    const result = await messagingApi.forwardMessages(
+      scope,
+      sourceThreadId,
+      messageIds,
+      destinationThreadIds
+    );
+    return result;
+  }
+);
+
 export const markThreadRead = createAsyncThunk(
   "threads/markRead",
   async ({ scope, threadId }) => {

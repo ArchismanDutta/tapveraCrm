@@ -585,6 +585,9 @@ const ChatPage = ({ onLogout }) => {
                   conversationId={selectedConversation._id}
                   currentUserId={currentUserId}
                   conversationMembers={selectedConversation.members || []}
+                  // Forward destinations. Owned here because ChatPage already
+                  // loads and filters the list; ChatWindow just renders it.
+                  conversations={conversations}
                 />
               </div>
             </>

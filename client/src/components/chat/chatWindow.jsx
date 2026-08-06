@@ -22,6 +22,8 @@ import {
   Clock,
   Zap,
   Plus,
+  Forward,
+  CheckSquare,
 } from "lucide-react";
 import MediaLightbox from "../common/MediaLightbox";
 import MessageDateSeparator from "../message/MessageDateSeparator";
@@ -40,6 +42,7 @@ import { queueAndSend } from "../../utils/sendMessage";
 import FailedMessageBar from "../message/FailedMessageBar";
 import UnreadDivider from "../message/UnreadDivider";
 import NewMessagesButton from "./NewMessagesButton";
+import ForwardMessagesModal from "./ForwardMessagesModal";
 import useMessageListMechanics, { startsGroup } from "../../hooks/useMessageListMechanics";
 import {
   fetchOlderMessages,
@@ -69,7 +72,35 @@ const ChatWindow = ({
   conversationId,
   currentUserId,
   conversationMembers,
+  // Destinations for forwarding. Passed down rather than selected here so the
+  // list stays owned by ChatPage, which already loads and filters it.
+  conversations = [],
 }) => {
+  // Selection mode — entered from a message's Forward action, exited by
+  // cancelling or sending. Holds message ids, not messages: the underlying list
+  // can change under us (a page of older history loading, a live arrival), and
+  // ids survive that where object references wouldn't.
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [selecting, setSelecting] = useState(false);
+  const [showForward, setShowForward] = useState(false);
+
+  const toggleSelected = React.useCallback((id) => {
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  }, []);
+
+  const exitSelection = React.useCallback(() => {
+    setSelecting(false);
+    setSelectedIds([]);
+  }, []);
+
+  // Start selection from one message — the common case is forwarding the
+  // message you just right-clicked, so it begins already ticked.
+  const startForward = React.useCallback((id) => {
+    setSelecting(true);
+    setSelectedIds([id]);
+  }, []);
   // Composer text is a per-thread DRAFT, not plain component state: switching
   // conversations mid-sentence and returning to an empty box feels careless.
   const { draft: input, setDraft: setInput, clearDraft } = useDraft({
@@ -622,6 +653,33 @@ const ChatWindow = ({
         onClear={clearFilters}
       />
 
+      {selecting && (
+        <div className="flex items-center justify-between gap-3 border-b border-blue-200 bg-blue-50 px-4 py-2 dark:border-blue-400/20 dark:bg-blue-400/10">
+          <span className="inline-flex items-center gap-2 text-sm font-medium text-blue-800 dark:text-blue-200">
+            <CheckSquare className="h-4 w-4" />
+            {selectedIds.length} selected
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={exitSelection}
+              className="rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:bg-white/60 dark:text-slate-300 dark:hover:bg-white/[0.06]"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowForward(true)}
+              disabled={selectedIds.length === 0}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Forward className="h-3.5 w-3.5" />
+              Forward
+            </button>
+          </div>
+        </div>
+      )}
+
       <div
         ref={containerRef}
         onScroll={onScroll}
@@ -695,9 +753,16 @@ const ChatWindow = ({
                 {showUnreadDivider && <UnreadDivider count={unreadOnOpen} />}
                 <div
                   id={`message-${msg.messageId || msg._id}`}
+                  onClick={selecting ? () => toggleSelected(msg.messageId) : undefined}
                   className={`flex w-full transition-colors duration-500 ${
                     isSelf ? "justify-end" : "justify-start"
-                  } ${isContinuation ? "mb-0.5" : "mb-3"}`}
+                  } ${isContinuation ? "mb-0.5" : "mb-3"} ${
+                    selecting ? "cursor-pointer rounded-lg px-1" : ""
+                  } ${
+                    selecting && selectedIds.includes(msg.messageId)
+                      ? "bg-blue-50 dark:bg-blue-400/10"
+                      : ""
+                  }`}
                 >
                   <div className="flex max-w-[85%] flex-col sm:max-w-[70%]">
                     {/* Sender name only on the first message of a block. */}
@@ -739,7 +804,17 @@ const ChatWindow = ({
                         </div>
                       )}
 
-                      {/* Message with Markdown rendering */}
+                      {/* Relayed from elsewhere. Deliberately does not name the
+                        source conversation — the recipient may have no access
+                        to it, so naming it would leak that group's existence. */}
+                    {msg.forwarded && (
+                      <p className={`mb-1 inline-flex items-center gap-1 text-[11px] italic ${isSelf ? "text-blue-50/70" : "text-slate-400 dark:text-slate-500"}`}>
+                        <Forward className="h-3 w-3" />
+                        Forwarded
+                      </p>
+                    )}
+
+                    {/* Message with Markdown rendering */}
                       {msg.message || msg.text ? (
                         <div className={`prose prose-sm max-w-none break-words text-sm leading-relaxed ${isSelf ? "prose-invert text-white" : "prose-slate dark:prose-invert dark:text-white"}`}>
                           <ReactMarkdown
@@ -953,6 +1028,13 @@ const ChatWindow = ({
                           >
                             <ReplyIcon className={`h-3.5 w-3.5 ${isSelf ? "text-blue-50/80 hover:text-white" : "text-slate-400 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400"}`} />
                           </button>
+                        <button
+                          onClick={() => startForward(msg.messageId)}
+                          className="rounded p-1 transition hover:bg-black/5 dark:hover:bg-white/10"
+                          title="Forward message"
+                        >
+                          <Forward className={`h-3.5 w-3.5 ${isSelf ? "text-blue-50/80 hover:text-white" : "text-slate-400 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400"}`} />
+                        </button>
                           <button
                             onClick={() => copyToClipboard(msg.message || msg.text || '')}
                             className="rounded-md p-1 transition-colors hover:bg-black/10 dark:hover:bg-white/10"
@@ -1428,6 +1510,15 @@ const ChatWindow = ({
           }}
         />
       )}
+
+      <ForwardMessagesModal
+        open={showForward}
+        onClose={() => setShowForward(false)}
+        sourceThreadId={conversationId}
+        messageIds={selectedIds}
+        conversations={conversations}
+        onDone={exitSelection}
+      />
 
       <ThreadSummaryModal
         open={showSummaryModal}

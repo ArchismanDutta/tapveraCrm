@@ -197,6 +197,80 @@ async function sendMessage(user, scope, threadId, payload = {}, { notify = true,
   return sent;
 }
 
+/**
+ * Forward messages into other conversations.
+ *
+ * ─── AUTHORIZATION IS PER DESTINATION ───
+ * Read access to the source is checked once; write access is checked for EVERY
+ * destination independently, and a destination that fails is skipped rather
+ * than failing the whole call. Forwarding to four groups where you've since
+ * been removed from one should deliver to the other three and tell you about
+ * the one, not silently deliver nothing.
+ *
+ * Each copy is broadcast and notified exactly like an ordinary send, so
+ * recipients get their unread badge, their push, and the message appears live —
+ * a forward is not a lesser kind of message.
+ *
+ * @param {Object}   user
+ * @param {String}   scope
+ * @param {String}   sourceThreadId  where the messages are being taken from
+ * @param {String[]} messageIds
+ * @param {String[]} destThreadIds
+ * @returns {Promise<{ delivered, failed }>}
+ */
+async function forwardMessages(user, scope, sourceThreadId, messageIds, destThreadIds) {
+  await authorize(user, scope, sourceThreadId, 'read');
+
+  const adapter = adapterFor(scope);
+  if (typeof adapter.forwardMessages !== 'function') {
+    throw new Error(`Forwarding is not supported for scope "${scope}"`);
+  }
+
+  // Check every destination BEFORE writing anything, so a partial failure can't
+  // leave messages copied into some threads and rejected by others mid-run.
+  const allowed = [];
+  const failed = [];
+  for (const threadId of destThreadIds || []) {
+    try {
+      await authorize(user, scope, threadId, 'write');
+      allowed.push(String(threadId));
+    } catch (err) {
+      failed.push({ threadId: String(threadId), reason: err.message });
+    }
+  }
+
+  if (allowed.length === 0) return { delivered: [], failed };
+
+  const copies = await adapter.forwardMessages(user, messageIds, allowed);
+
+  // Members are resolved once per destination, not once per copied message —
+  // forwarding 10 messages to 5 groups is 5 lookups, not 50.
+  const membersByThread = new Map();
+  for (const threadId of allowed) {
+    membersByThread.set(threadId, await adapter.getMemberIds(threadId));
+  }
+
+  for (const copy of copies) {
+    const memberIds = membersByThread.get(copy.threadId) || [];
+
+    await _notifyMembers(user, scope, copy.threadId, copy, memberIds).catch((err) =>
+      console.error(`[messaging] forward notification failed: ${err.message}`)
+    );
+
+    realtime.emitMessage({
+      scope,
+      threadId: copy.threadId,
+      message: copy.normalized,
+      memberIds,
+    });
+  }
+
+  return {
+    delivered: copies.map((c) => ({ threadId: c.threadId, id: String(c.raw._id) })),
+    failed,
+  };
+}
+
 async function react(user, scope, messageId, emoji) {
   const adapter = adapterFor(scope);
 
@@ -354,5 +428,6 @@ module.exports = {
   markDelivered,
   markReadUpTo,
   sendMessage,
+  forwardMessages,
   react,
 };

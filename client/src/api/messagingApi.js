@@ -97,6 +97,25 @@ export async function fetchMessages(scope, threadId, params = {}) {
   };
 }
 
+/**
+ * Forward messages into other conversations.
+ *
+ * Returns { delivered, failed } — partial success is normal, since a
+ * destination the user can no longer write to is skipped rather than failing
+ * the whole call.
+ */
+export async function forwardMessages(scope, sourceThreadId, messageIds, destinationThreadIds) {
+  if (scope === SCOPES.PROJECT) {
+    throw new Error("Forwarding is only supported for chat threads");
+  }
+  const { data } = await API.post(`/api/chat/messages/forward`, {
+    sourceConversationId: sourceThreadId,
+    messageIds,
+    destinationConversationIds: destinationThreadIds,
+  });
+  return { delivered: data?.delivered || [], failed: data?.failed || [] };
+}
+
 /** Unread count for a single thread. */
 export async function fetchUnreadCount(scope, threadId) {
   if (scope !== SCOPES.PROJECT) return null; // chat unread rides on listThreads
@@ -288,6 +307,7 @@ export default {
   parseKey,
   listThreads,
   fetchMessages,
+  forwardMessages,
   fetchUnreadCount,
   sendMessage,
   markRead,

@@ -370,6 +370,57 @@ router.post("/groups/:conversationId/members", protect, async (req, res) => {
   }
 });
 
+/**
+ * Forward messages into other conversations.
+ *
+ * POST /api/chat/messages/forward
+ *   { sourceConversationId, messageIds: [], destinationConversationIds: [] }
+ *
+ * Partial success is a normal outcome, not an error: destinations the user can
+ * no longer write to are reported in `failed` while the rest are delivered. A
+ * 403 for the whole request would throw away work that succeeded.
+ */
+router.post("/messages/forward", protect, async (req, res) => {
+  try {
+    const { sourceConversationId, messageIds, destinationConversationIds } = req.body;
+
+    if (!sourceConversationId) {
+      return res.status(400).json({ error: "sourceConversationId is required" });
+    }
+    if (!Array.isArray(messageIds) || messageIds.length === 0) {
+      return res.status(400).json({ error: "messageIds must be a non-empty array" });
+    }
+    if (!Array.isArray(destinationConversationIds) || destinationConversationIds.length === 0) {
+      return res.status(400).json({ error: "destinationConversationIds must be a non-empty array" });
+    }
+
+    // Bounded so one request can't fan out into thousands of writes.
+    if (messageIds.length > 30) {
+      return res.status(400).json({ error: "Cannot forward more than 30 messages at once" });
+    }
+    if (destinationConversationIds.length > 20) {
+      return res.status(400).json({ error: "Cannot forward to more than 20 conversations at once" });
+    }
+
+    const result = await messagingService.forwardMessages(
+      req.user,
+      CHAT,
+      sourceConversationId,
+      messageIds,
+      destinationConversationIds
+    );
+
+    return res.json(result);
+  } catch (error) {
+    try {
+      return sendAccessError(res, error);
+    } catch (unexpected) {
+      console.error("Error forwarding messages:", unexpected);
+      return res.status(500).json({ error: "Failed to forward messages" });
+    }
+  }
+});
+
 // Remove a member from a group
 router.delete("/groups/:conversationId/members/:memberId", protect, async (req, res) => {
   try {
