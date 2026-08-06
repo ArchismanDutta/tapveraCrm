@@ -3,6 +3,76 @@ const Notification = require("../models/Notification");
 const { sendNotificationToUser } = require("../utils/websocket");
 
 /**
+ * Notification types that also earn a desktop push.
+ *
+ * ─── WHY 'chat' IS DELIBERATELY ABSENT ───
+ * Chat notifications are created through this service too — see
+ * messaging.service._notifyMembers, which calls createAndSend — but they are
+ * pushed by messaging.service._maybePush, which knows the thread and can apply
+ * the three per-thread rules this generic path cannot: actively-viewing, thread
+ * mute, and burst coalescing. Adding "chat" here would push every message
+ * twice, once with the good policy and once without.
+ *
+ * The rest of the enum is left out for signal-to-noise: payslip, attendance,
+ * system, achievement and wish are all things you find in your own time. Push
+ * is for things someone is waiting on you for.
+ */
+const PUSH_TYPES = new Set(["task", "leave"]);
+
+/**
+ * Fire-and-forget desktop push for a notification that has already been saved.
+ *
+ * Never awaited and never throws. It holds a 10-second grace window before
+ * deciding (see pushPolicy.stillUnread), and no HTTP request should stay open
+ * for that — the row is already persisted, so the notification is not at risk
+ * either way. A failure here must never fail the action that triggered it:
+ * assigning a task has to succeed even if push is misconfigured.
+ */
+function _maybePushNotification(notification) {
+  if (!notification || !PUSH_TYPES.has(notification.type)) return;
+
+  // Required lazily: pushPolicy pulls in the socket layer, which is not
+  // initialised at module-load time.
+  const pushPolicy = require("./messaging/pushPolicy");
+  const pushService = require("./pushService");
+
+  (async () => {
+    const { push, reason } = await pushPolicy.shouldPushGeneral({
+      userId: notification.userId,
+      priority: notification.priority,
+    });
+    if (!push) {
+      console.debug?.(`[push] suppressed for ${notification.userId} (${reason})`);
+      return;
+    }
+
+    // If they saw it in the notification centre during the grace window, the
+    // banner is just noise about something they've already dealt with.
+    if (!(await pushPolicy.stillUnread(notification._id))) {
+      console.debug?.(`[push] suppressed for ${notification.userId} (read_during_grace)`);
+      return;
+    }
+
+    await pushService.sendToUser(notification.userId, {
+      title: notification.title,
+      body: notification.body || notification.message || "",
+      // Tagged per notification, not per type: two different task assignments
+      // are two things you need to know about, so they must not replace each
+      // other the way a burst of messages in one thread should.
+      tag: `${notification.type}-${notification._id}`,
+      // Every task and leave notification already carries relatedData.url.
+      url: notification.relatedData?.url || "/notifications",
+      data: {
+        type: notification.type,
+        notificationId: String(notification._id),
+      },
+    });
+  })().catch((err) =>
+    console.error(`[push] ${notification.type} pipeline failed: ${err.message}`)
+  );
+}
+
+/**
  * NotificationService — the single producer for every in-app notification.
  *
  * Any feature that wants to notify someone (tasks, payslips, chat, wishes...)
@@ -75,6 +145,8 @@ class NotificationService {
       // Don't throw - notification is saved even if the socket push fails.
     }
 
+    _maybePushNotification(notification);
+
     return notification;
   }
 
@@ -137,6 +209,8 @@ class NotificationService {
       } catch (error) {
         console.error(`Failed to send WebSocket notification to ${notification.userId}:`, error);
       }
+
+      _maybePushNotification(notification);
     });
 
     // Best-effort delivered flag; not worth a second round trip failing the caller.

@@ -70,6 +70,25 @@ function initSocket(httpServer) {
       if (!decoded?.id) return next(new Error('Invalid token payload'));
 
       socket.user = decoded; // { id, role, userType, regions, region, iat, exp }
+
+      // ─── WHY THIS IS MIRRORED ONTO socket.data ───
+      // `socket.data` is the only thing that survives the Redis adapter.
+      // `io.in(room).fetchSockets()` returns a RemoteSocket for every socket
+      // living on another instance, and a RemoteSocket carries just
+      // { id, handshake, rooms, data } — a custom `.user` property assigned
+      // here is NOT serialized and reads back as undefined. So any check that
+      // has to be correct cluster-wide must read from `data`.
+      socket.data.userId = String(decoded.id);
+
+      // Is this tab in the foreground? The client reports it (see
+      // WebSocketContext) and pushPolicy reads it to tell "the tab is open"
+      // apart from "the user is actually looking at it".
+      //
+      // Defaults to true so a client that never reports — an older cached
+      // bundle — behaves exactly as it did before rather than suddenly
+      // notifying someone who is staring at the conversation.
+      socket.data.active = true;
+
       next();
     } catch (err) {
       next(new Error('Invalid or expired token'));

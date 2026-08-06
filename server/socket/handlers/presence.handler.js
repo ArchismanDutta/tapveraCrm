@@ -47,6 +47,28 @@ module.exports = (io, socket) => {
     presence.touch(userId).catch(() => {});
   });
 
+  // ---- Foreground / background ---------------------------------------
+  /**
+   * The client reports whether its tab is actually in front.
+   *
+   * ─── DELIBERATELY SEPARATE FROM ONLINE/OFFLINE ───
+   * This does NOT touch presence and does NOT broadcast. Someone who alt-tabs
+   * to Photoshop is still online — showing them as offline to their colleagues
+   * because they switched windows would be wrong, and would make the green dot
+   * flicker all day.
+   *
+   * The only consumer is pushPolicy.isViewingThread, which needs to tell "this
+   * user has a tab open on the thread" apart from "this user is looking at the
+   * thread". Without it, leaving the CRM open in a background window suppresses
+   * every push for the conversation you last had selected — which is exactly
+   * when a desktop notification is most wanted.
+   */
+  socket.on('presence:active', (active) => {
+    // Coerce explicitly. A malformed payload must not park the socket in a
+    // state where it is neither true nor false and the policy has to guess.
+    socket.data.active = active !== false;
+  });
+
   // ---- Watching ------------------------------------------------------
   /**
    * Subscribe to presence for a set of users, and get their current state back

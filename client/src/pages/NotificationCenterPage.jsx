@@ -16,6 +16,7 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import Sidebar from "../components/dashboard/Sidebar";
 import NotificationItem from "../components/notifications/NotificationItem";
+import DesktopNotificationsSetting from "../components/notifications/DesktopNotificationsSetting";
 import { toast } from "react-toastify";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
@@ -630,6 +631,13 @@ const NotificationCenterPage = ({ onLogout }) => {
                 <span className="hidden lg:inline">Delete read</span>
               </button>
             </div>
+          </div>
+
+          {/* Where people come to think about notifications is where the switch
+              for them belongs — and it is the only route back for anyone who
+              dismissed the contextual prompt in chat. */}
+          <div className="mt-4">
+            <DesktopNotificationsSetting />
           </div>
 
           {/* Bulk Actions Bar */}

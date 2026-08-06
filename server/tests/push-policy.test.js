@@ -49,12 +49,24 @@ stub('models/Notification.js', {
 });
 
 // Socket.IO: report whoever VIEWING says is in the room.
+//
+// Entries may be either a bare user id — the legacy local-socket shape, which
+// exercises the `socket.user` fallback — or an explicit socket-like object, so
+// the focus and RemoteSocket cases can be described precisely.
 stub('socket/index.js', {
   getIO: () => ({
     in: () => ({
-      fetchSockets: async () => VIEWING.map((id) => ({ user: { id } })),
+      fetchSockets: async () =>
+        VIEWING.map((entry) => (typeof entry === 'string' ? { user: { id: entry } } : entry)),
     }),
   }),
+});
+
+/** A socket as it comes back from fetchSockets() for a user on ANOTHER instance. */
+const remoteSocket = (userId, active) => ({
+  // No `.user`: the Redis adapter does not serialize custom properties, so this
+  // is genuinely all a RemoteSocket carries.
+  data: active === undefined ? { userId } : { userId, active },
 });
 
 const policy = require('../services/messaging/pushPolicy');
@@ -119,6 +131,54 @@ const ask = (over = {}) =>
     const { push, reason } = await ask();
     assert.strictEqual(push, false);
     assert.strictEqual(reason, 'thread_muted');
+  });
+
+  console.log('\nforeground vs. merely connected');
+
+  // The bug this whole section exists for: leaving the CRM open in a background
+  // window suppressed every push for the thread you last had selected.
+  await it('a BACKGROUNDED tab does not count as viewing', async () => {
+    VIEWING = [remoteSocket(ME, false)];
+    const { push } = await ask();
+    assert.strictEqual(push, true);
+  });
+
+  await it('a FOREGROUND tab still counts as viewing', async () => {
+    VIEWING = [remoteSocket(ME, true)];
+    const { push, reason } = await ask();
+    assert.strictEqual(push, false);
+    assert.strictEqual(reason, 'actively_viewing');
+  });
+
+  await it('a socket that never reported focus is treated as viewing', async () => {
+    // An older cached bundle. Preserving the previous behaviour beats surprising
+    // someone mid-conversation.
+    VIEWING = [remoteSocket(ME, undefined)];
+    const { push, reason } = await ask();
+    assert.strictEqual(push, false);
+    assert.strictEqual(reason, 'actively_viewing');
+  });
+
+  await it('matches on socket.data.userId, so sockets on other instances count', async () => {
+    // Before this, `s.user?.id` read undefined for every RemoteSocket, so on a
+    // multi-instance deployment this check silently answered "not viewing" for
+    // anyone whose socket lived on a different process.
+    VIEWING = [remoteSocket(ME, true)];
+    assert.strictEqual(await policy.isViewingThread(ME, 'chat', 't1'), true);
+  });
+
+  await it('one backgrounded tab does not cancel out another that is focused', async () => {
+    // Two windows open, one visible. They are still reading it.
+    VIEWING = [remoteSocket(ME, false), remoteSocket(ME, true)];
+    const { push, reason } = await ask();
+    assert.strictEqual(push, false);
+    assert.strictEqual(reason, 'actively_viewing');
+  });
+
+  await it("someone else's foreground tab is still irrelevant", async () => {
+    VIEWING = [remoteSocket('someone-else', true)];
+    const { push } = await ask();
+    assert.strictEqual(push, true);
   });
 
   console.log('\ncoalescing');
@@ -195,6 +255,41 @@ const ask = (over = {}) =>
     // mention short-circuits the quiet-hours branch.
     const { push } = await ask({ mentioned: true });
     assert.strictEqual(push, true);
+  });
+
+  console.log('\nnon-thread notifications (tasks, leaves)');
+
+  const askGeneral = (over = {}) => policy.shouldPushGeneral({ userId: ME, ...over });
+
+  await it('pushes a task or leave notification by default', async () => {
+    assert.strictEqual((await askGeneral()).push, true);
+  });
+
+  await it('respects the master push switch', async () => {
+    PREFS = { pushEnabled: false };
+    const { push, reason } = await askGeneral();
+    assert.strictEqual(push, false);
+    assert.strictEqual(reason, 'push_disabled');
+  });
+
+  await it('is not coalesced — two task assignments both notify', async () => {
+    // Unlike chat, these are rare and each one is a distinct thing to act on.
+    assert.strictEqual((await askGeneral()).push, true);
+    assert.strictEqual((await askGeneral()).push, true);
+  });
+
+  await it('has no thread to view, so an open tab never suppresses it', async () => {
+    VIEWING = [remoteSocket(ME, true)];
+    assert.strictEqual((await askGeneral()).push, true);
+  });
+
+  await it('high priority bypasses quiet hours', async () => {
+    PREFS = { quietHours: { enabled: true, from: '00:00', to: '23:59', tz: 'Asia/Kolkata' } };
+    assert.strictEqual((await askGeneral({ priority: 'high' })).push, true);
+    assert.strictEqual((await askGeneral({ priority: 'urgent' })).push, true);
+    const normal = await askGeneral({ priority: 'normal' });
+    assert.strictEqual(normal.push, false);
+    assert.strictEqual(normal.reason, 'quiet_hours');
   });
 
   console.log('\ngrace window');

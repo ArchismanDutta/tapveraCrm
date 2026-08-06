@@ -16,9 +16,10 @@
 //    another device in those ten seconds, nothing fires. Without this, every
 //    message you read on your phone also buzzes your laptop.
 //
-// 2. ACTIVELY VIEWING. If the user has a live socket in that thread's room,
-//    they are looking at it. Note this is per-THREAD, not per-connection: being
-//    online in a different conversation should still push.
+// 2. ACTIVELY VIEWING. A live socket in the thread's room AND a tab that is
+//    actually in the foreground. Per-THREAD, not per-connection: being online
+//    in a different conversation should still push. And per-VISIBILITY, not
+//    per-connection: a minimised window is not viewing.
 //
 // 3. MUTED THREAD. Respects timed mutes without needing a sweeper.
 //
@@ -105,17 +106,47 @@ function inQuietHours(prefs, now = new Date()) {
 /* ── Active-thread check ──────────────────────────────────────────────── */
 
 /**
- * Does this user have a socket currently joined to the thread's room?
+ * Is this user actually LOOKING at the thread right now?
  *
- * Best-effort: if Socket.IO isn't up, we assume NOT viewing and let the push
- * through. Failing open here is right — a redundant notification is a minor
+ * ─── AN OPEN TAB IS NOT A PAIR OF EYES ───
+ * This used to return true for any socket joined to the thread's room, which
+ * meant leaving the CRM open in a background window suppressed every push for
+ * the conversation you last had selected. Minimise Chrome, work in another app,
+ * and the one case where you most want a desktop banner was the one case that
+ * was silenced — `reason: 'actively_viewing'` for a window nobody could see.
+ *
+ * Socket-room membership answers "is the tab open". Whether the user can see it
+ * is a separate fact only the client knows, so the client reports it
+ * (`presence:active`) and it is read back off `socket.data` here.
+ *
+ * Two subtleties worth keeping:
+ *
+ * 1. READ FROM socket.data, NOT socket.user. `fetchSockets()` returns a
+ *    RemoteSocket for every socket on another instance behind the Redis
+ *    adapter, and a RemoteSocket carries only { id, handshake, rooms, data }.
+ *    The old `s.user?.id` read as undefined for those, so on a multi-instance
+ *    deployment this check quietly answered "not viewing" for everyone not on
+ *    the local process. `socket.user` is still read as a fallback for a socket
+ *    that connected before this change shipped.
+ *
+ * 2. `active === undefined` COUNTS AS VIEWING. Only an explicit `false` — the
+ *    client telling us the tab is hidden or unfocused — releases the push. An
+ *    older cached bundle that never reports keeps the previous behaviour
+ *    instead of suddenly notifying someone mid-conversation.
+ *
+ * Best-effort overall: if Socket.IO isn't up we assume NOT viewing and let the
+ * push through. Failing open is right — a redundant notification is a minor
  * annoyance, a silently swallowed one is a missed message.
  */
 async function isViewingThread(userId, scope, threadId) {
   try {
     const { getIO } = require('../../socket');
     const sockets = await getIO().in(realtime.roomOf(scope, threadId)).fetchSockets();
-    return sockets.some((s) => String(s.user?.id ?? s.user?._id) === String(userId));
+    return sockets.some((s) => {
+      const socketUserId = s.data?.userId ?? s.user?.id ?? s.user?._id;
+      if (String(socketUserId) !== String(userId)) return false;
+      return s.data?.active !== false;
+    });
   } catch {
     return false;
   }
@@ -166,6 +197,34 @@ async function shouldPush({ userId, scope, threadId, mentioned = false }) {
 }
 
 /**
+ * Should we push a notification that isn't attached to a thread?
+ *
+ * Task assigned, leave approved, remark added — these have no room to check
+ * membership of and no conversation to coalesce against, so the thread rules
+ * simply don't apply. What does carry over is the part users actually care
+ * about: their master push switch and their quiet hours.
+ *
+ * Quiet hours are bypassed by high/urgent priority, mirroring how a direct
+ * @mention bypasses them for chat. "Your leave was rejected" at 2am can wait;
+ * an urgent task genuinely cannot.
+ *
+ * No coalescing window here on purpose. These events are naturally rare — you
+ * do not get assigned forty tasks a minute — so the burst problem coalescing
+ * exists to solve doesn't arise, and suppressing a second distinct task
+ * assignment because it landed 20 seconds after the first would be a bug.
+ */
+async function shouldPushGeneral({ userId, priority = 'normal' }) {
+  const prefs = await MessagingPrefs.forUser(userId);
+
+  if (!prefs.pushEnabled) return { push: false, reason: 'push_disabled' };
+
+  const urgent = priority === 'high' || priority === 'urgent';
+  if (!urgent && inQuietHours(prefs)) return { push: false, reason: 'quiet_hours' };
+
+  return { push: true, reason: 'ok' };
+}
+
+/**
  * Wait out the grace window, then confirm the notification is still unread.
  *
  * Returns false if the user read it in the meantime — on any device. This is
@@ -188,6 +247,7 @@ module.exports = {
   inQuietHours,
   isViewingThread,
   shouldPush,
+  shouldPushGeneral,
   stillUnread,
   _lastPushAt: lastPushAt, // exposed for tests
 };

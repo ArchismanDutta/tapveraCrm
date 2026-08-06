@@ -201,6 +201,46 @@ export const WebSocketProvider = ({ children }) => {
       if (socket.connected) socket.emit("presence:ping");
     }, 20000);
 
+    // ---- Foreground reporting -------------------------------------------
+    // Tells the server whether this tab is actually in front, which is what
+    // lets pushPolicy decide between "their tab is open" and "they can see it".
+    //
+    // Both halves matter. `visibilityState` alone misses the case that prompted
+    // this: Chrome minimised behind Photoshop reports "visible" in some
+    // configurations, and a CRM window sitting unfocused on a second monitor
+    // reports "visible" always. `hasFocus()` is what distinguishes the window
+    // you are typing into from the four behind it.
+    //
+    // Being wrong here is asymmetric, so it is worth being slightly eager:
+    // a spurious banner for a thread you were looking at is a small annoyance
+    // and the server's 10s grace re-check usually swallows it anyway (you will
+    // have read the message, so it is no longer unread). A suppressed banner is
+    // a message you never find out about.
+    const isForeground = () =>
+      document.visibilityState === "visible" && document.hasFocus();
+
+    let lastReported = null;
+    const reportForeground = () => {
+      const active = isForeground();
+      // Only on transition. focus/blur/visibilitychange can fire in bursts
+      // (clicking between windows fires several), and this is a socket write.
+      if (active === lastReported) return;
+      lastReported = active;
+      if (socket.connected) socket.emit("presence:active", active);
+    };
+
+    // Report the current state as soon as the socket is up. A reconnect that
+    // happens while minimised must not inherit the server's optimistic
+    // `active: true` default and go on suppressing pushes.
+    socket.on("connect", () => {
+      lastReported = null;
+      reportForeground();
+    });
+
+    document.addEventListener("visibilitychange", reportForeground);
+    window.addEventListener("focus", reportForeground);
+    window.addEventListener("blur", reportForeground);
+
     socket.on("connect_error", (err) => {
       console.error("[Socket] Connection error:", err.message);
     });
@@ -390,6 +430,9 @@ export const WebSocketProvider = ({ children }) => {
 
     return () => {
       clearInterval(presenceBeat);
+      document.removeEventListener("visibilitychange", reportForeground);
+      window.removeEventListener("focus", reportForeground);
+      window.removeEventListener("blur", reportForeground);
       socket.removeAllListeners();
       socket.disconnect();
       socketRef.current = null;
