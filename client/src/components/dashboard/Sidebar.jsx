@@ -43,7 +43,6 @@ import { Pin } from "@/components/animate-ui/icons/pin";
 import { Compass } from "@/components/animate-ui/icons/compass";
 import { RotateCw } from "@/components/animate-ui/icons/rotate-cw";
 import Modal from "../modal";
-import DailyEmailSender from "../DailyEmailSender";
 import AchievementsDashboard from "../achievements/AchievementsDashboard";
 import { useAchievements } from "../../contexts/AchievementContext";
 import ThemeToggle from "../common/ThemeToggle";
@@ -584,7 +583,6 @@ const Sidebar = ({
   const [isMobile, setIsMobile] = useState(() =>
     typeof window !== "undefined" ? window.matchMedia("(max-width: 639px)").matches : false
   );
-  const [showEmailModal, setShowEmailModal] = useState(false);
   const [role, setRole] = useState("employee");
   // Phase 5: unread comes from the store, not sessionStorage.
   //
@@ -1304,9 +1302,9 @@ const Sidebar = ({
         </nav>
 
         {/* Send Email (Employee only).
-            Points at the standalone mail app rather than the in-app
-            DailyEmailSender modal. Opens in a new tab so the CRM — and any
-            half-finished work in it — is still there on the way back. */}
+            Points at the standalone mail app, which replaced the in-app daily
+            email modal that used to live here. Opens in a new tab so the CRM —
+            and any half-finished work in it — is still there on the way back. */}
         {role === "employee" && !collapsed && (
           <div className="relative z-10 border-t border-white/10 px-3 py-3">
             <a
@@ -1345,13 +1343,6 @@ const Sidebar = ({
           </button>
         </div>
       </aside>
-
-      {/* Daily Email Modal */}
-      {showEmailModal && (
-        <Modal isOpen={showEmailModal} onClose={() => setShowEmailModal(false)}>
-          <DailyEmailSender onClose={() => setShowEmailModal(false)} />
-        </Modal>
-      )}
 
       {/* Achievements Dashboard Modal */}
       {showAchievementsDashboard && (
