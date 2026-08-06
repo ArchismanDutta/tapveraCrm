@@ -1,6 +1,9 @@
 import React from "react";
 import { Link } from "react-router-dom";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, Phone, ExternalLink } from "lucide-react";
+
+/** The cabin-call system. External to the CRM, hence a real <a> and not a route. */
+const CALL_ADMIN_URL = "https://tapvera.io/cabin_call/index.php";
 
 const iconStyles = {
   blue: "bg-blue-50 text-blue-600 dark:bg-blue-400/10 dark:text-blue-300",
@@ -25,7 +28,10 @@ const TaskOverviewCard = ({ summaryData = [] }) => (
       </Link>
     </div>
 
-    <div className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-slate-200 bg-slate-200 dark:border-white/10 dark:bg-white/10 md:grid-cols-5">
+    {/* Six columns, not five: the Call Admin action sits inside the same strip
+        as the stats so it reads as part of one object rather than a stray
+        button parked next to it. */}
+    <div className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-slate-200 bg-slate-200 dark:border-white/10 dark:bg-white/10 md:grid-cols-6">
       {summaryData.map((item, idx) => {
         const Icon = item.icon;
         return (
@@ -47,6 +53,32 @@ const TaskOverviewCard = ({ summaryData = [] }) => (
           </div>
         );
       })}
+
+      {/* Call Admin.
+          Deliberately an <a target="_blank">, not a Link or a location change:
+          the cabin-call system is a separate app, and navigating away would
+          throw out the dashboard's loaded state to come back to. The tag/label
+          rhythm mirrors the stat cells (icon, headline, caption) so the cell
+          lines up with them instead of looking bolted on.
+          rel="noopener" is required with target="_blank" — without it the opened
+          page gets a handle on this window via window.opener. */}
+      <a
+        href={CALL_ADMIN_URL}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="group relative min-w-0 bg-white p-4 text-left transition hover:bg-blue-50 dark:bg-[#10131c] dark:hover:bg-blue-400/[0.08]"
+      >
+        <div className="mb-3 flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50 text-blue-600 transition group-hover:bg-blue-600 group-hover:text-white dark:bg-blue-400/10 dark:text-blue-300 dark:group-hover:bg-blue-500 dark:group-hover:text-white">
+          <Phone className="h-4 w-4" />
+        </div>
+        <div className="text-base font-semibold tracking-tight text-slate-950 dark:text-white">
+          Call Admin
+        </div>
+        <div className="mt-1 flex items-center gap-1 truncate text-xs font-medium text-slate-500 dark:text-slate-400">
+          Cabin call
+          <ExternalLink className="h-3 w-3 flex-shrink-0" />
+        </div>
+      </a>
     </div>
   </section>
 );

@@ -1303,16 +1303,21 @@ const Sidebar = ({
           })}
         </nav>
 
-        {/* Daily Updates Button (Employee only) */}
+        {/* Send Email (Employee only).
+            Points at the standalone mail app rather than the in-app
+            DailyEmailSender modal. Opens in a new tab so the CRM — and any
+            half-finished work in it — is still there on the way back. */}
         {role === "employee" && !collapsed && (
           <div className="relative z-10 border-t border-white/10 px-3 py-3">
-            <button
-              onClick={() => setShowEmailModal(true)}
+            <a
+              href="https://tapvera.io/mail/"
+              target="_blank"
+              rel="noopener noreferrer"
               className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/[0.04] px-3 text-sm font-semibold text-slate-200 transition hover:bg-white/[0.07]"
             >
               <Mail className="h-4 w-4" />
-              Send Daily Updates
-            </button>
+              Send Email
+            </a>
           </div>
         )}
 
