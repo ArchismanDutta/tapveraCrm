@@ -4,7 +4,23 @@ const fetch = require("node-fetch"); // Polyfill for Node.js < 18
 const chatController = require("../controllers/chatController");
 const { protect } = require("../middlewares/authMiddleware");
 const { uploadToS3, getFileType, convertToCloudFrontUrl } = require("../config/s3Config");
-const { broadcastMessageToConversation, broadcastConversationUpdated } = require("../utils/websocket");
+// broadcastMessageToConversation is gone from this router — message delivery is
+// the service layer's job now (services/messaging/realtime.js). Group
+// membership changes still broadcast from here until group management moves
+// behind the service too.
+const { broadcastConversationUpdated } = require("../utils/websocket");
+// Every conversation-scoped route below authorizes through this one module.
+// Before it existed, `protect` (are you logged in) was the ONLY check on this
+// router — any authenticated user could read, post into, summarize or delete
+// any conversation by id. See services/messaging/access.js.
+const { assertChatAccess, sendAccessError } = require("../services/messaging/access");
+// Phase 1: thread reads/writes go through the service layer, which authorizes,
+// persists, notifies and broadcasts in one place — so this router and the
+// Socket.IO handler can no longer drift apart. Responses still send the raw
+// document shape the live client expects; `normalized` rides the new
+// `thread:*` events until the client migrates.
+const messagingService = require("../services/messaging/messaging.service");
+const { CHAT } = messagingService.SCOPES;
 
 // router.use(authMiddleware);
 
@@ -28,9 +44,8 @@ router.post("/groups", protect, async (req, res) => {
 // Get all group conversations for the logged-in user
 router.get("/groups", protect, async (req, res) => {
   try {
-    const userId = req.user._id;
-    const groups = await chatController.getGroupConversationsForUser(userId);
-    res.json(groups);
+    const { raw } = await messagingService.listThreads(req.user, CHAT);
+    res.json(raw);
   } catch (error) {
     res.status(500).json({ error: "Failed to fetch groups" });
   }
@@ -39,18 +54,22 @@ router.get("/groups", protect, async (req, res) => {
 // Get messages by conversation ID (one-to-one or group)
 router.get("/messages/:conversationId", protect, async (req, res) => {
   try {
-    const messages = await chatController.getMessagesByConversation(req.params.conversationId);
-    res.json(messages);
+    const { raw } = await messagingService.getMessages(req.user, CHAT, req.params.conversationId);
+    res.json(raw);
   } catch (error) {
-    res.status(500).json({ error: "Failed to fetch messages" });
+    try {
+      return sendAccessError(res, error);
+    } catch (unexpected) {
+      console.error("Error fetching messages:", unexpected);
+      return res.status(500).json({ error: "Failed to fetch messages" });
+    }
   }
 });
 
 // Send a message to a conversation (with optional file attachments)
 router.post("/messages", protect, uploadToS3.array("files", 5), async (req, res) => {
   try {
-    const { conversationId, message, replyTo, mentions } = req.body;
-    const senderId = req.user._id;
+    const { conversationId, message, replyTo, mentions, clientMsgId } = req.body;
 
     // Parse mentions if sent as JSON string (from FormData)
     let mentionedUserIds = [];
@@ -83,46 +102,26 @@ router.post("/messages", protect, uploadToS3.array("files", 5), async (req, res)
       }
     }
 
-    const savedMessage = await chatController.saveMessage(
-      conversationId,
-      senderId,
-      message,
+    // Authorization, persistence, notification fan-out and the real-time
+    // broadcast all happen inside the service — identical to what the
+    // Socket.IO `chat:message` path now does, because it is literally the
+    // same call.
+    const { raw } = await messagingService.sendMessage(req.user, CHAT, conversationId, {
+      body: message,
       attachments,
-      replyTo || null,
-      mentionedUserIds
-    );
+      replyTo: replyTo || null,
+      mentions: mentionedUserIds,
+      clientMsgId: clientMsgId || null,
+    });
 
-    // Populate replyTo if exists
-    if (savedMessage.replyTo) {
-      await savedMessage.populate("replyTo");
-    }
-
-    // Broadcast message to all conversation members via WebSocket
-    try {
-      const conversation = await chatController.getConversationById(conversationId);
-      if (conversation && conversation.members) {
-        const payload = {
-          _id: savedMessage._id,
-          conversationId: savedMessage.conversationId,
-          senderId: savedMessage.senderId,
-          message: savedMessage.message,
-          timestamp: savedMessage.timestamp,
-          attachments: savedMessage.attachments || [],
-          replyTo: savedMessage.replyTo || null,
-          mentions: savedMessage.mentions || [],
-        };
-
-        broadcastMessageToConversation(conversationId, conversation.members, payload);
-      }
-    } catch (broadcastError) {
-      console.error("Error broadcasting message:", broadcastError);
-      // Don't fail the request if broadcast fails
-    }
-
-    res.status(201).json(savedMessage);
+    res.status(201).json(raw);
   } catch (error) {
-    console.error("Error sending message:", error);
-    res.status(500).json({ error: "Failed to send message" });
+    try {
+      return sendAccessError(res, error);
+    } catch (unexpected) {
+      console.error("Error sending message:", unexpected);
+      return res.status(500).json({ error: "Failed to send message" });
+    }
   }
 });
 
@@ -132,11 +131,15 @@ router.post("/messages", protect, uploadToS3.array("files", 5), async (req, res)
 router.post("/:conversationId/mark-read", protect, async (req, res) => {
   try {
     const { conversationId } = req.params;
-    const count = await chatController.markConversationAsRead(conversationId, req.user._id);
+    const { count } = await messagingService.markRead(req.user, CHAT, conversationId);
     res.json({ message: "Messages marked as read", count });
   } catch (error) {
-    console.error("Error marking conversation as read:", error);
-    res.status(500).json({ error: "Failed to mark messages as read" });
+    try {
+      return sendAccessError(res, error);
+    } catch (unexpected) {
+      console.error("Error marking conversation as read:", unexpected);
+      return res.status(500).json({ error: "Failed to mark messages as read" });
+    }
   }
 });
 
@@ -157,11 +160,17 @@ router.delete("/conversations/:id", protect, async (req, res) => {
   try {
     const conversationId = req.params.id;
 
-    // Optionally: Add authorization checks if needed to allow only members or admins to delete
+    // Deleting drops every message for every member, so this is the most
+    // destructive route on the router — and until now it had no check at all.
+    // Private: either participant may delete. Group: creator or an admin.
+    const { conversation: existing } = await assertChatAccess(
+      req.user,
+      conversationId,
+      "delete"
+    );
 
-    // Read the members BEFORE deleting — afterwards there is no document left
+    // Members are read BEFORE deleting — afterwards there is no document left
     // to work out who needs telling.
-    const existing = await chatController.getConversationById(conversationId);
     const memberIds = existing?.members || [];
 
     const deletedConversation = await chatController.deleteConversation(
@@ -187,8 +196,12 @@ router.delete("/conversations/:id", protect, async (req, res) => {
 
     res.json({ message: "Conversation and its messages deleted successfully" });
   } catch (error) {
-    console.error("Delete conversation error:", error);
-    res.status(500).json({ error: "Failed to delete conversation" });
+    try {
+      return sendAccessError(res, error);
+    } catch (unexpected) {
+      console.error("Delete conversation error:", unexpected);
+      return res.status(500).json({ error: "Failed to delete conversation" });
+    }
   }
 });
 
@@ -197,6 +210,11 @@ router.post("/conversations/:conversationId/summarize", protect, async (req, res
   try {
     const { conversationId } = req.params;
     const { days = 7 } = req.body; // Default to last 7 days
+
+    // This route ships the thread's message history to a third-party AI
+    // service (OpenRouter). Without a membership check it was an exfiltration
+    // path: any authenticated user could summarize any conversation.
+    await assertChatAccess(req.user, conversationId, "read");
 
     // Calculate date range
     const startDate = new Date();
@@ -273,8 +291,12 @@ router.post("/conversations/:conversationId/summarize", protect, async (req, res
     });
 
   } catch (error) {
-    console.error("Error summarizing conversation:", error);
-    res.status(500).json({ error: "Failed to summarize conversation" });
+    try {
+      return sendAccessError(res, error);
+    } catch (unexpected) {
+      console.error("Error summarizing conversation:", unexpected);
+      return res.status(500).json({ error: "Failed to summarize conversation" });
+    }
   }
 });
 
@@ -282,11 +304,17 @@ router.post("/conversations/:conversationId/summarize", protect, async (req, res
 router.get("/groups/:conversationId/details", protect, async (req, res) => {
   try {
     const { conversationId } = req.params;
+    // Group details expose the full member roster — members only.
+    await assertChatAccess(req.user, conversationId, "read");
     const groupDetails = await chatController.getGroupDetails(conversationId);
     res.json(groupDetails);
   } catch (error) {
-    console.error("Error fetching group details:", error);
-    res.status(500).json({ error: error.message || "Failed to fetch group details" });
+    try {
+      return sendAccessError(res, error);
+    } catch (unexpected) {
+      console.error("Error fetching group details:", unexpected);
+      return res.status(500).json({ error: unexpected.message || "Failed to fetch group details" });
+    }
   }
 });
 
@@ -391,67 +419,28 @@ router.post("/messages/:messageId/react", protect, async (req, res) => {
   try {
     const { messageId } = req.params;
     const { emoji } = req.body;
-    const userId = req.user._id.toString();
 
     if (!emoji) {
       return res.status(400).json({ error: "Emoji is required" });
     }
 
-    const ChatMessage = require("../models/ChatMessage");
-    const message = await ChatMessage.findById(messageId);
+    // The service resolves the message's own conversation, authorizes against
+    // it (reacting must not become a way to confirm an arbitrary message id
+    // exists), toggles, and broadcasts.
+    const result = await messagingService.react(req.user, CHAT, messageId, emoji);
 
-    if (!message) {
+    if (!result) {
       return res.status(404).json({ error: "Message not found" });
     }
 
-    // Find if this emoji already exists
-    const emojiReaction = message.reactions.find((r) => r.emoji === emoji);
-
-    if (emojiReaction) {
-      // Check if user already reacted with this emoji
-      const userReactionIndex = emojiReaction.users.indexOf(userId);
-
-      if (userReactionIndex > -1) {
-        // Remove user's reaction
-        emojiReaction.users.splice(userReactionIndex, 1);
-
-        // If no users left, remove the emoji entirely
-        if (emojiReaction.users.length === 0) {
-          message.reactions = message.reactions.filter((r) => r.emoji !== emoji);
-        }
-      } else {
-        // Add user's reaction
-        emojiReaction.users.push(userId);
-      }
-    } else {
-      // Create new emoji reaction
-      message.reactions.push({
-        emoji: emoji,
-        users: [userId],
-      });
-    }
-
-    await message.save();
-
-    // Broadcast reaction update via WebSocket
-    try {
-      const conversation = await chatController.getConversationById(message.conversationId);
-      if (conversation && conversation.members) {
-        const payload = {
-          type: "reaction",
-          messageId: message._id,
-          reactions: message.reactions,
-        };
-        broadcastMessageToConversation(message.conversationId, conversation.members, payload);
-      }
-    } catch (broadcastError) {
-      console.error("Error broadcasting reaction:", broadcastError);
-    }
-
-    res.json(message);
+    res.json(result.raw);
   } catch (error) {
-    console.error("Error adding reaction:", error);
-    res.status(500).json({ error: "Failed to add reaction" });
+    try {
+      return sendAccessError(res, error);
+    } catch (unexpected) {
+      console.error("Error adding reaction:", unexpected);
+      return res.status(500).json({ error: "Failed to add reaction" });
+    }
   }
 });
 

@@ -1,18 +1,67 @@
 // controllers/messageController.js
+//
+// ─── AUTHORIZATION (Phase 0 security patch) ───
+// Every handler in this file used to take a messageId (and sometimes a
+// projectId) and act on it with no membership check whatsoever — the routes
+// only applied `protect`. Pin and unpin were the exceptions, guarded by
+// hasProjectManageAuthority at the route layer. Everything else — marking
+// read, changing status, starring, listing pinned/starred — was reachable for
+// any message in the system by any logged-in user.
+//
+// `guard()` below resolves the project from the message (or the route param),
+// authorizes against the shared messaging access module, and additionally
+// asserts that the message actually belongs to that project so a caller can't
+// pair a project they can see with a message they can't.
+const {
+  assertProjectChatAccess,
+  sendAccessError,
+} = require('../services/messaging/access');
+const realtime = require('../services/messaging/realtime');
+
+/**
+ * Authorize a message-scoped action.
+ *
+ * @param {object} req
+ * @param {object} [opts]
+ * @param {string} [opts.messageId]  when present, the message is loaded and
+ *                                   verified to belong to the project
+ * @param {string} [opts.projectId]  falls back to the message's own project
+ * @param {'read'|'write'|'moderate'} [opts.action]
+ * @returns {Promise<{ message, project }>}
+ * @throws  AccessError | NotFound-shaped AccessError
+ */
+async function guard(req, { messageId, projectId, action = 'read' } = {}) {
+  const Message = require('../models/Message');
+
+  let message = null;
+  if (messageId) {
+    message = await Message.findById(messageId);
+    if (!message) {
+      const { AccessError } = require('../services/messaging/access');
+      throw new AccessError('Message not found', 404, 'NOT_FOUND');
+    }
+  }
+
+  const resolvedProjectId = projectId || (message && String(message.project));
+
+  // A messageId paired with someone else's projectId must not authorize.
+  if (message && projectId && String(message.project) !== String(projectId)) {
+    const { AccessError } = require('../services/messaging/access');
+    throw new AccessError('Message not found', 404, 'NOT_FOUND');
+  }
+
+  const { project } = await assertProjectChatAccess(req.user, resolvedProjectId, action);
+  return { message, project };
+}
 
 // Mark message as read
 exports.markMessageRead = async (req, res) => {
   try {
-    const { messageId } = req.params;
+    const { messageId, id: projectId } = req.params;
     const userId = req.user._id;
     const userModel = req.user.role === 'client' ? 'Client' : 'User';
 
-    const Message = require('../models/Message');
-    const message = await Message.findById(messageId);
-
-    if (!message) {
-      return res.status(404).json({ error: 'Message not found' });
-    }
+    const { message } = await guard(req, { messageId, projectId, action: 'read' });
 
     // Check if already read by this user
     const alreadyRead = message.readBy.some(
@@ -34,32 +83,36 @@ exports.markMessageRead = async (req, res) => {
 
       await message.save();
 
-      // Emit WebSocket event (if available)
-      const { broadcastMessageRead } = require('../utils/websocket');
-      try {
-        broadcastMessageRead(message.project.toString(), {
-          messageId,
-          userId: userId.toString(),
-          readAt: Date.now()
-        });
-      } catch (wsError) {
-        console.warn('WebSocket broadcast failed:', wsError.message);
-        // Don't fail the request if WebSocket fails
-      }
+      // Through realtime.js so this reaches `thread:receipt`, which the client
+      // store applies. It previously called broadcastMessageRead directly,
+      // emitting `project:message_read` — an event nothing listens for any more.
+      realtime.emitReceipt({
+        scope: realtime.SCOPES.PROJECT,
+        threadId: message.project.toString(),
+        messageId,
+        userId: userId.toString(),
+        kind: 'read',
+      });
     }
 
     res.json(message);
   } catch (error) {
-    console.error('Error marking message as read:', error);
-    res.status(500).json({ error: error.message });
+    try {
+      return sendAccessError(res, error);
+    } catch (unexpected) {
+      console.error('Error marking message as read:', unexpected);
+      return res.status(500).json({ error: unexpected.message });
+    }
   }
 };
 
 // Update message status
 exports.updateMessageStatus = async (req, res) => {
   try {
-    const { messageId } = req.params;
+    const { messageId, id: projectId } = req.params;
     const { status } = req.body;
+
+    await guard(req, { messageId, projectId, action: 'write' });
 
     const Message = require('../models/Message');
     const message = await Message.findByIdAndUpdate(
@@ -72,23 +125,22 @@ exports.updateMessageStatus = async (req, res) => {
       return res.status(404).json({ error: 'Message not found' });
     }
 
-    // Emit WebSocket event
-    const { broadcastMessageStatusUpdate } = require('../utils/websocket');
-    try {
-      broadcastMessageStatusUpdate(message.project.toString(), {
-        messageId,
-        status,
-        timestamp: Date.now()
-      });
-    } catch (wsError) {
-      console.warn('WebSocket broadcast failed:', wsError.message);
-      // Don't fail the request if WebSocket fails
-    }
+    realtime.emitReceipt({
+      scope: realtime.SCOPES.PROJECT,
+      threadId: message.project.toString(),
+      messageId,
+      kind: 'status',
+      status,
+    });
 
     res.json(message);
   } catch (error) {
-    console.error('Error updating message status:', error);
-    res.status(500).json({ error: error.message });
+    try {
+      return sendAccessError(res, error);
+    } catch (unexpected) {
+      console.error('Error updating message status:', unexpected);
+      return res.status(500).json({ error: unexpected.message });
+    }
   }
 };
 
@@ -97,6 +149,11 @@ exports.pinMessage = async (req, res) => {
   try {
     const { messageId, projectId } = req.params;
     const userId = req.user._id;
+
+    // The route already gates on hasProjectManageAuthority; this additionally
+    // ties the message to THIS project, so manage authority over one project
+    // can't be used to pin a message belonging to another.
+    await guard(req, { messageId, projectId, action: 'moderate' });
 
     const Message = require('../models/Message');
 
@@ -126,24 +183,20 @@ exports.pinMessage = async (req, res) => {
       return res.status(404).json({ error: 'Message not found' });
     }
 
-    // Emit WebSocket event
-    const { broadcastMessagePinned } = require('../utils/websocket');
-    try {
-      broadcastMessagePinned(projectId, {
-        messageId,
-        isPinned: true,
-        pinnedBy: userId.toString(),
-        pinnedAt: Date.now()
-      });
-    } catch (wsError) {
-      console.warn('WebSocket broadcast failed:', wsError.message);
-      // Don't fail the request if WebSocket fails
-    }
+    realtime.emitUpdated({
+      scope: realtime.SCOPES.PROJECT,
+      threadId: projectId,
+      patch: { messageId, pinned: true, pinnedBy: userId.toString(), pinnedAt: Date.now() },
+    });
 
     res.json(message);
   } catch (error) {
-    console.error('Error pinning message:', error);
-    res.status(500).json({ error: error.message });
+    try {
+      return sendAccessError(res, error);
+    } catch (unexpected) {
+      console.error('Error pinning message:', unexpected);
+      return res.status(500).json({ error: unexpected.message });
+    }
   }
 };
 
@@ -151,6 +204,8 @@ exports.pinMessage = async (req, res) => {
 exports.unpinMessage = async (req, res) => {
   try {
     const { messageId, projectId } = req.params;
+
+    await guard(req, { messageId, projectId, action: 'moderate' });
 
     const Message = require('../models/Message');
     const message = await Message.findByIdAndUpdate(
@@ -167,22 +222,20 @@ exports.unpinMessage = async (req, res) => {
       return res.status(404).json({ error: 'Message not found' });
     }
 
-    // Emit WebSocket event
-    const { broadcastMessagePinned } = require('../utils/websocket');
-    try {
-      broadcastMessagePinned(projectId, {
-        messageId,
-        isPinned: false
-      });
-    } catch (wsError) {
-      console.warn('WebSocket broadcast failed:', wsError.message);
-      // Don't fail the request if WebSocket fails
-    }
+    realtime.emitUpdated({
+      scope: realtime.SCOPES.PROJECT,
+      threadId: projectId,
+      patch: { messageId, pinned: false },
+    });
 
     res.json(message);
   } catch (error) {
-    console.error('Error unpinning message:', error);
-    res.status(500).json({ error: error.message });
+    try {
+      return sendAccessError(res, error);
+    } catch (unexpected) {
+      console.error('Error unpinning message:', unexpected);
+      return res.status(500).json({ error: unexpected.message });
+    }
   }
 };
 
@@ -190,6 +243,8 @@ exports.unpinMessage = async (req, res) => {
 exports.getPinnedMessages = async (req, res) => {
   try {
     const { projectId } = req.params;
+
+    await guard(req, { projectId, action: 'read' });
 
     const Message = require('../models/Message');
     const messages = await Message.find({
@@ -202,24 +257,25 @@ exports.getPinnedMessages = async (req, res) => {
 
     res.json(messages);
   } catch (error) {
-    console.error('Error fetching pinned messages:', error);
-    res.status(500).json({ error: error.message });
+    try {
+      return sendAccessError(res, error);
+    } catch (unexpected) {
+      console.error('Error fetching pinned messages:', unexpected);
+      return res.status(500).json({ error: unexpected.message });
+    }
   }
 };
 
 // Toggle star on a message (personal bookmark)
 exports.toggleStarMessage = async (req, res) => {
   try {
-    const { messageId } = req.params;
+    const { messageId, projectId } = req.params;
     const userId = req.user._id;
     const userModel = req.user.role === 'client' ? 'Client' : 'User';
 
-    const Message = require('../models/Message');
-    const message = await Message.findById(messageId);
+    const { message } = await guard(req, { messageId, projectId, action: 'read' });
 
-    if (!message) {
-      return res.status(404).json({ error: 'Message not found' });
-    }
+    const Message = require('../models/Message');
 
     // Find if user already starred this message
     const starIndex = message.starredBy.findIndex(
@@ -249,8 +305,12 @@ exports.toggleStarMessage = async (req, res) => {
 
     res.json({ message: populatedMessage, action });
   } catch (error) {
-    console.error('Error toggling star:', error);
-    res.status(500).json({ error: error.message });
+    try {
+      return sendAccessError(res, error);
+    } catch (unexpected) {
+      console.error('Error toggling star:', unexpected);
+      return res.status(500).json({ error: unexpected.message });
+    }
   }
 };
 
@@ -259,6 +319,8 @@ exports.getStarredMessages = async (req, res) => {
   try {
     const { projectId } = req.params;
     const userId = req.user._id;
+
+    await guard(req, { projectId, action: 'read' });
 
     const Message = require('../models/Message');
     const messages = await Message.find({
@@ -270,7 +332,11 @@ exports.getStarredMessages = async (req, res) => {
 
     res.json(messages);
   } catch (error) {
-    console.error('Error fetching starred messages:', error);
-    res.status(500).json({ error: error.message });
+    try {
+      return sendAccessError(res, error);
+    } catch (unexpected) {
+      console.error('Error fetching starred messages:', unexpected);
+      return res.status(500).json({ error: unexpected.message });
+    }
   }
 };

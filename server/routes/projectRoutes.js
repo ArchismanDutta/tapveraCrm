@@ -11,6 +11,15 @@ const emailNotificationService = require("../services/emailNotificationService")
 // See docs/superpowers/plans/2026-07-03-access-management-rework.md
 const { can, scopeQuery } = require("../utils/accessControl");
 const hierarchyUtils = require("../utils/hierarchyUtils");
+// Shared messaging authorization — the same module the chat routes and the
+// Socket.IO handlers use, so a project thread answers the same question the
+// same way regardless of which transport asks.
+const { assertProjectChatAccess, sendAccessError } = require("../services/messaging/access");
+// Phase 1: project thread reads/writes go through the same service layer the
+// chat routes and the Socket.IO handler use. Responses still send the raw
+// document shape the live client expects.
+const messagingService = require("../services/messaging/messaging.service");
+const { PROJECT } = messagingService.SCOPES;
 
 // Additive expansion only: admin/super-admin keep exactly what they had
 // today (still checked first, below). A user whose Position grants
@@ -1039,48 +1048,16 @@ router.get("/client/:clientId", protect, async (req, res) => {
 // @access  Private
 router.get("/:id/messages/unread-count", protect, async (req, res) => {
   try {
-    const Message = require("../models/Message");
-    const project = await Project.findById(req.params.id);
-
-    if (!project) {
-      return res.status(404).json({ message: "Project not found" });
-    }
-
-    // Check access - employees must be assigned
-    if (req.user.role === "employee") {
-      const isAssigned = project.assignedTo.some(
-        (emp) => emp.toString() === req.user._id.toString()
-      );
-      if (!isAssigned) {
-        return res.status(403).json({ message: "Access denied" });
-      }
-    }
-
-    const userId = req.user._id.toString();
-    const userModel = req.user.role === "client" ? "Client" : "User";
-
-    // Count messages that the user hasn't read
-    const unreadCount = await Message.countDocuments({
-      project: req.params.id,
-      // Exclude messages sent by the user themselves
-      sentBy: { $ne: req.user._id },
-      // Check if user is NOT in the readBy array
-      $nor: [
-        {
-          readBy: {
-            $elemMatch: {
-              user: req.user._id,
-              userModel: userModel
-            }
-          }
-        }
-      ]
-    });
-
-    res.json({ unreadCount });
+    await messagingService.authorize(req.user, PROJECT, req.params.id, "read");
+    const counts = await messagingService.unreadCounts(req.user, PROJECT, [req.params.id]);
+    res.json({ unreadCount: counts[String(req.params.id)] || 0 });
   } catch (error) {
-    console.error("Error fetching unread count:", error);
-    res.status(500).json({ message: "Server error", error: error.message });
+    try {
+      return sendAccessError(res, error);
+    } catch (unexpected) {
+      console.error("Error fetching unread count:", unexpected);
+      return res.status(500).json({ message: "Server error", error: unexpected.message });
+    }
   }
 });
 
@@ -1089,60 +1066,17 @@ router.get("/:id/messages/unread-count", protect, async (req, res) => {
 // @access  Private
 router.patch("/:id/messages/mark-read", protect, async (req, res) => {
   try {
-    const Message = require("../models/Message");
-    const project = await Project.findById(req.params.id);
-
-    if (!project) {
-      return res.status(404).json({ message: "Project not found" });
-    }
-
-    // Check access - employees must be assigned
-    if (req.user.role === "employee") {
-      const isAssigned = project.assignedTo.some(
-        (emp) => emp.toString() === req.user._id.toString()
-      );
-      if (!isAssigned) {
-        return res.status(403).json({ message: "Access denied" });
-      }
-    }
-
-    const userModel = req.user.role === "client" ? "Client" : "User";
-
-    // Find all unread messages for this user in this project
-    const unreadMessages = await Message.find({
-      project: req.params.id,
-      sentBy: { $ne: req.user._id },
-      $nor: [
-        {
-          readBy: {
-            $elemMatch: {
-              user: req.user._id,
-              userModel: userModel
-            }
-          }
-        }
-      ]
-    });
-
-    // Mark each message as read
-    const updatePromises = unreadMessages.map(message => {
-      message.readBy.push({
-        user: req.user._id,
-        userModel: userModel,
-        readAt: new Date()
-      });
-      return message.save();
-    });
-
-    await Promise.all(updatePromises);
-
-    res.json({
-      message: "Messages marked as read",
-      count: unreadMessages.length
-    });
+    // One updateMany in the adapter, replacing the previous
+    // find-then-save-each-document loop.
+    const { count } = await messagingService.markRead(req.user, PROJECT, req.params.id);
+    res.json({ message: "Messages marked as read", count });
   } catch (error) {
-    console.error("Error marking messages as read:", error);
-    res.status(500).json({ message: "Server error", error: error.message });
+    try {
+      return sendAccessError(res, error);
+    } catch (unexpected) {
+      console.error("Error marking messages as read:", unexpected);
+      return res.status(500).json({ message: "Server error", error: unexpected.message });
+    }
   }
 });
 
@@ -1151,96 +1085,26 @@ router.patch("/:id/messages/mark-read", protect, async (req, res) => {
 // @access  Private
 router.get("/:id/messages", protect, async (req, res) => {
   try {
-    const Message = require("../models/Message");
-    const project = await Project.findById(req.params.id);
-
-    if (!project) {
-      return res.status(404).json({ message: "Project not found" });
-    }
-
-    // Check access - employees must be assigned, clients must own the project
-    if (req.user.role === "employee") {
-      const isAssigned = project.assignedTo.some(
-        (emp) => emp.toString() === req.user._id.toString()
-      );
-      if (!isAssigned) {
-        return res.status(403).json({ message: "Access denied" });
-      }
-    }
-
-    // Extract query parameters for search and pagination
+    // Access check, query building, populate chain, sender-name filter and
+    // pagination metadata all live in the project thread adapter now — the
+    // same code path the Socket.IO handler authorizes against.
     const { search, startDate, endDate, senderName, page, limit } = req.query;
 
-    // Pagination parameters
-    const pageNum = parseInt(page) || 1;
-    const limitNum = parseInt(limit) || 50; // Default 50 messages per page
-    const skip = (pageNum - 1) * limitNum;
+    const { raw, pagination } = await messagingService.getMessages(
+      req.user,
+      PROJECT,
+      req.params.id,
+      { search, startDate, endDate, senderName, page, limit }
+    );
 
-    // Build filter
-    const filter = { project: req.params.id };
-
-    // Search in message text
-    if (search) {
-      filter.message = { $regex: search, $options: "i" };
-    }
-
-    // Filter by date range
-    if (startDate || endDate) {
-      filter.createdAt = {};
-      if (startDate) {
-        filter.createdAt.$gte = new Date(startDate);
-      }
-      if (endDate) {
-        filter.createdAt.$lte = new Date(endDate);
-      }
-    }
-
-    // Count total messages for pagination metadata
-    const totalMessages = await Message.countDocuments(filter);
-
-    const messages = await Message.find(filter)
-      .populate("sentBy", "name email clientName designation")
-      .populate({
-        path: "replyTo",
-        select: "message sentBy createdAt senderType",
-        populate: {
-          path: "sentBy",
-          select: "name email clientName designation",
-        },
-      })
-      .populate({
-        path: "mentions.user",
-        select: "name email clientName",
-      })
-      .sort({ createdAt: -1 }) // Sort descending (newest first) for pagination
-      .skip(skip)
-      .limit(limitNum);
-
-    // Filter by sender name if provided
-    let filteredMessages = messages;
-    if (senderName) {
-      filteredMessages = messages.filter((msg) => {
-        const name = msg.sentBy?.name || msg.sentBy?.clientName || "";
-        return name.toLowerCase().includes(senderName.toLowerCase());
-      });
-    }
-
-    // Reverse the array to show oldest first in UI (since we sorted descending for pagination)
-    filteredMessages = filteredMessages.reverse();
-
-    res.json({
-      messages: filteredMessages,
-      pagination: {
-        page: pageNum,
-        limit: limitNum,
-        total: totalMessages,
-        totalPages: Math.ceil(totalMessages / limitNum),
-        hasMore: skip + filteredMessages.length < totalMessages,
-      },
-    });
+    res.json({ messages: raw, pagination });
   } catch (error) {
-    console.error("Error fetching messages:", error);
-    res.status(500).json({ message: "Server error", error: error.message });
+    try {
+      return sendAccessError(res, error);
+    } catch (unexpected) {
+      console.error("Error fetching messages:", unexpected);
+      return res.status(500).json({ message: "Server error", error: unexpected.message });
+    }
   }
 });
 
@@ -1286,46 +1150,21 @@ const parseMentionsFromMessage = async (messageText, projectId) => {
 
 router.post("/:id/messages", protect, uploadToS3.array("files", 5), async (req, res) => {
   try {
-    const Message = require("../models/Message");
-    const { message, sentBy, senderType, replyTo, mentions } = req.body;
+    const { message, sentBy, senderType, replyTo, mentions, clientMsgId } = req.body;
 
     if (!message || !message.trim()) {
       return res.status(400).json({ message: "Message content is required" });
-    }
-
-    const project = await Project.findById(req.params.id);
-
-    if (!project) {
-      return res.status(404).json({ message: "Project not found" });
-    }
-
-    // Check access - employees must be assigned
-    if (req.user.role === "employee") {
-      const isAssigned = project.assignedTo.some(
-        (emp) => emp.toString() === req.user._id.toString()
-      );
-      if (!isAssigned) {
-        return res.status(403).json({ message: "Access denied" });
-      }
     }
 
     // Parse mentions if sent as JSON string (from FormData)
     let mentionedUsers = [];
     if (mentions) {
       try {
-        mentionedUsers = typeof mentions === 'string' ? JSON.parse(mentions) : mentions;
+        mentionedUsers = typeof mentions === "string" ? JSON.parse(mentions) : mentions;
       } catch (e) {
-        console.warn('Failed to parse mentions:', e);
+        console.warn("Failed to parse mentions:", e);
       }
     }
-
-    // If no mentions provided, parse from message text
-    if (mentionedUsers.length === 0) {
-      mentionedUsers = await parseMentionsFromMessage(message, req.params.id);
-    }
-
-    // Determine sender model based on user type
-    const senderModel = req.user.role === "client" ? "Client" : "User";
 
     // Process attachments from S3 or local storage
     const attachments = [];
@@ -1348,105 +1187,33 @@ router.post("/:id/messages", protect, uploadToS3.array("files", 5), async (req, 
       }
     }
 
-    const newMessage = await Message.create({
-      project: req.params.id,
-      message: message.trim(),
-      sentBy: sentBy || req.user._id,
-      senderModel: senderModel,
-      senderType: senderType || req.user.role,
+    // Authorization, mention resolution (now scoped to this project's own
+    // members), persistence, the populate chain, notification fan-out and the
+    // real-time broadcast all happen inside the service.
+    const { raw } = await messagingService.sendMessage(req.user, PROJECT, req.params.id, {
+      body: message,
+      attachments,
       replyTo: replyTo || null,
-      attachments: attachments,
       mentions: mentionedUsers,
+      sentBy,
+      senderType,
+      clientMsgId: clientMsgId || null,
     });
 
-    const populatedMessage = await Message.findById(newMessage._id)
-      .populate("sentBy", "name email clientName designation")
-      .populate({
-        path: "replyTo",
-        select: "message sentBy createdAt senderType",
-        populate: {
-          path: "sentBy",
-          select: "name email clientName designation",
-        },
-      })
-      .populate({
-        path: "mentions.user",
-        select: "name email clientName",
-      });
-
-    // Send notifications to all project members
-    const notificationService = require('../services/notificationService');
-    const senderName = req.user.name || req.user.clientName || 'Someone';
-
-    // Get all project members (assigned employees + clients)
-    const recipientIds = new Set();
-
-    // Add assigned employees
-    if (project.assignedTo && project.assignedTo.length > 0) {
-      project.assignedTo.forEach(userId => recipientIds.add(String(userId)));
-    }
-
-    // Add all clients
-    if (project.clients && project.clients.length > 0) {
-      project.clients.forEach(clientId => recipientIds.add(String(clientId)));
-    }
-
-    // Send notification to all members except the sender
-    for (const recipientId of recipientIds) {
-      if (String(recipientId) !== String(req.user._id)) {
-        // Check if user was mentioned for priority
-        const wasMentioned = mentionedUsers.some(m => String(m.user) === String(recipientId));
-        const priority = wasMentioned ? 'high' : 'normal';
-        const channel = wasMentioned ? 'mention' : 'message';
-
-        try {
-          await notificationService.createAndSend({
-            userId: recipientId,
-            type: 'chat',
-            channel: channel,
-            title: wasMentioned
-              ? `${senderName} mentioned you in ${project.projectName}`
-              : `New message in ${project.projectName}`,
-            body: message.slice(0, 100) + (message.length > 100 ? '...' : ''),
-            relatedData: {
-              projectId: req.params.id,
-              messageId: newMessage._id
-            },
-            priority: priority
-          });
-        } catch (notifError) {
-          console.error('Failed to send project message notification:', notifError);
-        }
-      }
-    }
-
-    // Send email notification (non-blocking)
-    emailNotificationService.sendProjectMessageEmail(populatedMessage).catch(err => {
-      console.error('Failed to send project message email:', err);
+    // Email notification stays here: it is a project-specific channel keyed on
+    // the fully populated document, not part of the shared thread contract.
+    emailNotificationService.sendProjectMessageEmail(raw).catch((err) => {
+      console.error("Failed to send project message email:", err);
     });
 
-    // ✅ BROADCAST REAL-TIME MESSAGE TO ALL PROJECT MEMBERS VIA WEBSOCKET
-    const { broadcastProjectMessage } = require('../utils/websocket');
-
-    // Include sender as well (for multi-tab sync)
-    const allMemberIds = [...Array.from(recipientIds), String(req.user._id)];
-
-    try {
-      const broadcasted = broadcastProjectMessage(
-        req.params.id,
-        allMemberIds,
-        populatedMessage
-      );
-      console.log(`[Project Message] Real-time broadcast ${broadcasted ? 'successful' : 'failed'} for project ${req.params.id}`);
-    } catch (broadcastError) {
-      console.error('[Project Message] Failed to broadcast via WebSocket:', broadcastError);
-      // Don't fail the request if WebSocket broadcast fails
-    }
-
-    res.status(201).json(populatedMessage);
+    res.status(201).json(raw);
   } catch (error) {
-    console.error("Error sending message:", error);
-    res.status(500).json({ message: "Server error", error: error.message });
+    try {
+      return sendAccessError(res, error);
+    } catch (unexpected) {
+      console.error("Error sending message:", unexpected);
+      return res.status(500).json({ message: "Server error", error: unexpected.message });
+    }
   }
 });
 
@@ -1462,61 +1229,23 @@ router.post("/:id/messages/:messageId/react", protect, async (req, res) => {
       return res.status(400).json({ message: "Emoji is required" });
     }
 
-    const message = await Message.findById(req.params.messageId);
+    // The service authorizes against the message's own project, toggles the
+    // reaction and broadcasts. It also rejects a messageId that belongs to a
+    // different project than the one in the URL.
+    const result = await messagingService.react(req.user, PROJECT, req.params.messageId, emoji);
 
-    if (!message) {
+    if (!result) {
       return res.status(404).json({ message: "Message not found" });
     }
 
-    // Verify message belongs to the project
-    if (message.project.toString() !== req.params.id) {
+    if (String(result.threadId) !== String(req.params.id)) {
       return res.status(403).json({ message: "Message does not belong to this project" });
     }
 
-    const userId = req.user._id.toString();
-    const userModel = req.user.role === "client" ? "Client" : "User";
-
-    // Find if this emoji already exists
-    const emojiReaction = message.reactions.find((r) => r.emoji === emoji);
-
-    if (emojiReaction) {
-      // Check if user already reacted with this emoji
-      const userReactionIndex = emojiReaction.users.findIndex(
-        (u) => u.user.toString() === userId
-      );
-
-      if (userReactionIndex > -1) {
-        // Remove user's reaction
-        emojiReaction.users.splice(userReactionIndex, 1);
-
-        // If no users left, remove the emoji entirely
-        if (emojiReaction.users.length === 0) {
-          message.reactions = message.reactions.filter((r) => r.emoji !== emoji);
-        }
-      } else {
-        // Add user's reaction
-        emojiReaction.users.push({
-          user: userId,
-          userModel: userModel,
-        });
-      }
-    } else {
-      // Create new emoji reaction
-      message.reactions.push({
-        emoji: emoji,
-        users: [
-          {
-            user: userId,
-            userModel: userModel,
-          },
-        ],
-      });
-    }
-
-    await message.save();
-
-    // Populate and return updated message
-    const populatedMessage = await Message.findById(message._id)
+    // Re-populated here rather than in the adapter: this reaction-specific
+    // populate chain is the only place reactions.users.user is expanded, and
+    // the client depends on the shape.
+    const populatedMessage = await Message.findById(result.raw._id)
       .populate("sentBy", "name email clientName designation")
       .populate({
         path: "reactions.users.user",
@@ -1525,8 +1254,12 @@ router.post("/:id/messages/:messageId/react", protect, async (req, res) => {
 
     res.json(populatedMessage);
   } catch (error) {
-    console.error("Error adding reaction:", error);
-    res.status(500).json({ message: "Server error", error: error.message });
+    try {
+      return sendAccessError(res, error);
+    } catch (unexpected) {
+      console.error("Error adding reaction:", unexpected);
+      return res.status(500).json({ message: "Server error", error: unexpected.message });
+    }
   }
 });
 
@@ -1537,6 +1270,15 @@ router.patch("/:id/messages/:messageId/attachments/:attachmentId/toggle-importan
   try {
     const Message = require("../models/Message");
     const { messageId, attachmentId } = req.params;
+
+    // This route had no authorization at all — it verified the message
+    // belonged to the project, but never that the CALLER had access to that
+    // project.
+    try {
+      await assertProjectChatAccess(req.user, req.params.id, "read");
+    } catch (accessErr) {
+      return sendAccessError(res, accessErr);
+    }
 
     const message = await Message.findById(messageId);
     if (!message) {
@@ -1587,16 +1329,15 @@ router.post("/:id/messages/summarize", protect, async (req, res) => {
 
     const projectName = project.name || "Untitled Project";
 
-    // Authorization check - match the same logic as POST /messages
-    if (req.user.role === "employee") {
-      const isAssigned = project.assignedTo?.some(
-        (emp) => emp.toString() === req.user._id.toString()
-      );
-      if (!isAssigned) {
-        return res.status(403).json({ message: "Access denied" });
-      }
+    // This route ships the project's message history to a third-party AI
+    // service, so an access gap here is an exfiltration path. The comment
+    // below used to read "Super-admin and clients have access" — but nothing
+    // verified WHICH client, so any client could summarize any project.
+    try {
+      await assertProjectChatAccess(req.user, req.params.id, "read");
+    } catch (accessErr) {
+      return sendAccessError(res, accessErr);
     }
-    // Super-admin and clients have access, admins have access
 
     // Calculate date range
     const startDate = new Date();
@@ -1703,6 +1444,7 @@ router.get("/:id/messages/:messageId/attachments/:attachmentId/download", protec
     const axios = require("axios");
     const path = require("path");
     const fs = require("fs");
+    const { resolveStoredPath } = require("../config/storage");
 
     const { id: projectId, messageId, attachmentId } = req.params;
 
@@ -1712,19 +1454,25 @@ router.get("/:id/messages/:messageId/attachments/:attachmentId/download", protec
       return res.status(404).json({ message: "Project not found" });
     }
 
-    // Check access - employees must be assigned, clients must own the project
-    if (req.user.role === "employee") {
-      const isAssigned = project.assignedTo.some(
-        (emp) => emp.toString() === req.user._id.toString()
-      );
-      if (!isAssigned) {
-        return res.status(403).json({ message: "Access denied" });
-      }
+    // This route streams the actual file, so the access gap here was a data
+    // leak rather than just metadata exposure. Same shared check as the rest.
+    try {
+      await assertProjectChatAccess(req.user, projectId, "read");
+    } catch (accessErr) {
+      return sendAccessError(res, accessErr);
     }
 
     // Find the message
     const message = await Message.findById(messageId);
     if (!message) {
+      return res.status(404).json({ message: "Message not found" });
+    }
+
+    // The message must actually belong to the project we just authorized
+    // against — otherwise a user with access to ANY project could pass that
+    // project's id alongside a foreign messageId and pull down its
+    // attachment.
+    if (String(message.project) !== String(projectId)) {
       return res.status(404).json({ message: "Message not found" });
     }
 
@@ -1756,11 +1504,28 @@ router.get("/:id/messages/:messageId/attachments/:attachmentId/download", protec
         return res.status(500).json({ message: "Failed to download file from storage" });
       }
     } else {
-      // It's a local file
-      const filePath = path.join(__dirname, "..", fileUrl);
+      // It's a local file.
+      //
+      // Must resolve through resolveStoredPath — the same helper
+      // routes/fileRoutes.js uses to serve the signed <img>/<a> link this
+      // attachment already renders with — not a path hand-built from
+      // __dirname. That previous version always landed under the in-repo
+      // `server/uploads`, regardless of where UPLOAD_ROOT actually points.
+      // Since the storage migration (see DEPLOY-storage-changes.md) moved
+      // live uploads to a durable path outside the deploy directory, every
+      // attachment uploaded since then 404'd here — "File not found on
+      // server" — even though the exact same file opens fine from the inline
+      // preview, which does resolve UPLOAD_ROOT correctly. Falls back to the
+      // pre-migration in-repo directory for attachments that predate the
+      // move, same as fileRoutes.js.
+      let filePath = resolveStoredPath(fileUrl);
+      if (!filePath || !fs.existsSync(filePath)) {
+        const legacy = path.join(__dirname, "..", "uploads", fileUrl.replace(/^\/?uploads\//, ""));
+        filePath = fs.existsSync(legacy) ? legacy : null;
+      }
 
       // Check if file exists
-      if (!fs.existsSync(filePath)) {
+      if (!filePath) {
         return res.status(404).json({ message: "File not found on server" });
       }
 

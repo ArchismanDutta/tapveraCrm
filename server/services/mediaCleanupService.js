@@ -71,8 +71,20 @@ async function cleanupOldMedia() {
             await s3Client.send(new DeleteObjectCommand(deleteParams));
             console.log(`✅ Deleted from S3: ${attachment.s3Key}`);
           } else if (attachment.url && attachment.url.startsWith("/uploads/")) {
-            // Delete from local storage
-            const filePath = path.join(__dirname, "..", attachment.url);
+            // Resolve against UPLOAD_ROOT, not the repo.
+            //
+            // This was `path.join(__dirname, "..", attachment.url)`, which
+            // points at <repo>/server/uploads — where files used to live before
+            // storage moved out of the deploy directory. Every deletion then
+            // hit a path that doesn't exist, and because ENOENT is deliberately
+            // ignored below, it failed silently: the cleanup job reported
+            // success while the disk grew forever.
+            const { resolveStoredPath } = require("../config/storage");
+            const filePath = resolveStoredPath(attachment.url);
+            if (!filePath) {
+              console.warn(`⚠️  Refusing to delete outside upload root: ${attachment.url}`);
+              continue;
+            }
             try {
               await fs.unlink(filePath);
               console.log(`✅ Deleted from local: ${filePath}`);

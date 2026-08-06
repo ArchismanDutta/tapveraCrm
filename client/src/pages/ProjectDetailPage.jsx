@@ -6,6 +6,17 @@ import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
 import { BrowserNotificationManager } from "../utils/browserNotifications";
 import { useWebSocketContext } from "../contexts/WebSocketContext";
+// Phase 4b: this page carried a THIRD complete copy of project chat, alongside
+// ProjectMessagePanel (employee view) and the chat surface. Same store, same
+// API module now — so "unread" means one thing whether you are looking at a
+// project as an admin or as an assignee.
+import { useDispatch, useSelector } from "react-redux";
+import * as messagingApi from "../api/messagingApi";
+import {
+  fetchMessages as fetchThreadMessages,
+  selectMessages,
+  selectTyping,
+} from "../store/slices/threadsSlice";
 import useMessageSuggestions from "../hooks/useMessageSuggestions";
 import ProjectTaskModal from "../components/project/ProjectTaskModal";
 import ProjectTaskEditModal from "../components/project/ProjectTaskEditModal";
@@ -17,6 +28,7 @@ import MessageStatus from "../components/message/MessageStatus";
 import TypingIndicator from "../components/message/TypingIndicator";
 import MessageDateSeparator from "../components/message/MessageDateSeparator";
 import PinnedMessagesModal from "../components/message/PinnedMessagesModal";
+import ThreadSummaryModal from "../components/message/ThreadSummaryModal";
 import EmojiPickerEnhanced from "../components/chat/EmojiPickerEnhanced";
 import NewMessagesButton from "../components/chat/NewMessagesButton";
 import {
@@ -116,8 +128,16 @@ const PROJECT_TYPE_COLORS = {
 
 const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
   const location = useLocation();
+  const dispatch = useDispatch();
+
+  const SCOPE = messagingApi.SCOPES.PROJECT;
+  // Thread history from the store. Previously local state fed by a fetch, a
+  // localStorage cache, and a socket listener that appended directly — three
+  // writers to one array.
+  const messages = useSelector(selectMessages(SCOPE, projectId));
+  const typingMap = useSelector(selectTyping(SCOPE, projectId));
+
   const [project, setProject] = useState(null);
-  const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState("");
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
@@ -155,11 +175,13 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
   const fileInputRef = useRef(null);
   const textareaRef = useRef(null);
   const prevMessagesLengthRef = useRef(0);
+  // Message ids already reported as read this session — see the
+  // IntersectionObserver effect.
+  const markedReadRef = useRef(new Set());
   const {
     isConnected: wsConnected,
     joinProject,
     leaveProject,
-    sendProjectMessage,
     sendProjectTyping,
     sendProjectStopTyping,
   } = useWebSocketContext();
@@ -200,95 +222,35 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
   useEffect(() => {
     if (!projectId) return undefined;
 
+    // Joining the room is all this effect does now.
+    //
+    // All four `project-*` window listeners are gone. Message data, typing and
+    // read receipts come from the store; the browser-notification side effect
+    // moved to WebSocketContext, which is mounted app-wide — so a project
+    // message now notifies you whether or not you happen to have that project's
+    // page open, which is what a notification is for.
     joinProject(projectId);
+    return () => leaveProject(projectId);
+  }, [projectId, joinProject, leaveProject]);
 
-    const handleProjectMessage = (event) => {
-      const data = event.detail || {};
-      if (data.projectId !== projectId) return;
+  // Keep the "N messages" counter in step with what the store holds.
+  useEffect(() => {
+    setTotalMessages((prev) => Math.max(prev, messages.length));
+  }, [messages.length]);
 
-      console.log("Received real-time project message");
-      const messageData = data.messageData || data.message || {};
+  // Typing, derived from the store. Replaces a listener that leaked a 3s
+  // setTimeout for every typing event received.
+  useEffect(() => {
+    const others = Object.entries(typingMap || {})
+      .filter(([id]) => String(id) !== String(userId))
+      .map(([id, userName]) => ({ userId: id, userName }));
 
-      // Check if message already exists (prevent duplicates)
-      setMessages((prevMessages) => {
-        const exists = prevMessages.some((m) => m._id === messageData._id);
-        if (exists) return prevMessages;
+    setTypingUsers(others);
+    if (others.length === 0) return undefined;
 
-        // Invalidate cache when new message arrives
-        invalidateMessageCache();
-
-        // Append new message and increment total count
-        setTotalMessages((prev) => prev + 1);
-        return [...prevMessages, messageData];
-      });
-
-      // Show browser notification for project messages
-      const senderDesignation = messageData.senderType === "client"
-        ? "Client"
-        : (messageData.sentBy?.designation || "Team Member");
-
-      // Don't notify for own messages
-      if (messageData.sentBy?._id !== userId && messageData.sentBy !== userId) {
-        const notificationManager = BrowserNotificationManager.getInstance();
-        notificationManager.show(
-          "New Project Message",
-          `${senderDesignation}: ${messageData.message || "Sent an attachment"}`,
-          {
-            tag: `project-${data.projectId}`,
-            icon: "/icon.png",
-            requireInteraction: false,
-          }
-        );
-      }
-    };
-
-    const handleTyping = (event) => {
-      const data = event.detail || {};
-      if (data.projectId !== projectId || data.userId === userId) return;
-
-      setTypingUsers((prev) => {
-        const exists = prev.some((u) => u.userId === data.userId);
-        if (!exists) {
-          return [...prev, { userId: data.userId, userName: data.userName }];
-        }
-        return prev;
-      });
-
-      // Remove typing indicator after 3 seconds
-      setTimeout(() => {
-        setTypingUsers((prev) => prev.filter((u) => u.userId !== data.userId));
-      }, 3000);
-    };
-
-    const handleStopTyping = (event) => {
-      const data = event.detail || {};
-      if (data.projectId !== projectId) return;
-      setTypingUsers((prev) => prev.filter((u) => u.userId !== data.userId));
-    };
-
-    const handleMessageRead = (event) => {
-      const data = event.detail || {};
-      if (data.projectId !== projectId) return;
-      setMessages((prevMessages) =>
-        prevMessages.map((msg) =>
-          msg._id === data.messageId ? { ...msg, status: "read" } : msg
-        )
-      );
-    };
-
-    window.addEventListener("project-message", handleProjectMessage);
-    window.addEventListener("project-typing", handleTyping);
-    window.addEventListener("project-stop-typing", handleStopTyping);
-    window.addEventListener("project-message-read", handleMessageRead);
-
-    return () => {
-      leaveProject(projectId);
-      window.removeEventListener("project-message", handleProjectMessage);
-      window.removeEventListener("project-typing", handleTyping);
-      window.removeEventListener("project-stop-typing", handleStopTyping);
-      window.removeEventListener("project-message-read", handleMessageRead);
-    };
-  }, [projectId, joinProject, leaveProject, userId]);
+    const t = setTimeout(() => setTypingUsers([]), 4000);
+    return () => clearTimeout(t);
+  }, [typingMap, userId]);
 
   // Auto-scroll only when new messages are added (not when reactions update)
   useEffect(() => {
@@ -390,94 +352,34 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
 
   const fetchMessages = async (page = 1, append = false) => {
     try {
-      if (append) {
-        setLoadingMoreMessages(true);
+      if (append) setLoadingMoreMessages(true);
+
+      // Filters are sent to the server because this surface paginates — unlike
+      // ProjectMessagePanel, it cannot filter client-side over a partial list.
+      const params = {
+        page,
+        limit: 50,
+        ...(searchTerm ? { search: searchTerm } : {}),
+        ...(searchSender ? { senderName: searchSender } : {}),
+        ...(dateFilter.start ? { startDate: dateFilter.start } : {}),
+        ...(dateFilter.end ? { endDate: dateFilter.end } : {}),
+      };
+
+      const action = await dispatch(
+        fetchThreadMessages({ scope: SCOPE, threadId: projectId, params })
+      );
+      const pagination = action?.payload?.pagination;
+
+      // The store merges by id and keeps the list ordered, so "append" needs no
+      // special handling here — the previous version concatenated and re-sorted
+      // the whole array manually on every page.
+      if (pagination) {
+        setCurrentPage(pagination.page);
+        setHasMoreMessages(pagination.hasMore);
+        setTotalMessages(pagination.total);
       }
 
-      const token = localStorage.getItem("token");
-
-      // Try to load from cache first (only for initial load without filters)
-      if (page === 1 && !append && !searchTerm && !searchSender && !dateFilter.start && !dateFilter.end) {
-        try {
-          const cacheKey = `project_messages_${projectId}`;
-          const cached = localStorage.getItem(cacheKey);
-          if (cached) {
-            const { messages: cachedMessages, timestamp } = JSON.parse(cached);
-            // Use cache if less than 5 minutes old
-            if (Date.now() - timestamp < 5 * 60 * 1000) {
-              setMessages(cachedMessages);
-              console.log("[Cache] Loaded messages from cache");
-            }
-          }
-        } catch (cacheError) {
-          console.error("Cache read error:", cacheError);
-        }
-      }
-
-      const params = new URLSearchParams();
-      if (searchTerm) params.append("search", searchTerm);
-      if (searchSender) params.append("senderName", searchSender);
-      if (dateFilter.start) params.append("startDate", dateFilter.start);
-      if (dateFilter.end) params.append("endDate", dateFilter.end);
-      params.append("page", page);
-      params.append("limit", "50");
-
-      const queryString = params.toString();
-      const url = `${API_BASE}/api/projects/${projectId}/messages${queryString ? `?${queryString}` : ""}`;
-
-      const res = await axios.get(url, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      // Handle new pagination response format
-      const { messages: newMessages, pagination } = res.data;
-
-      if (append) {
-        // Append older messages - new messages contain older data from previous pages
-        // Ensure chronological order (oldest first)
-        setMessages((prev) => {
-          const combined = [...newMessages, ...prev];
-          // Sort by createdAt to ensure proper chronological order
-          return combined.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
-        });
-      } else {
-        // Replace all messages (initial load or filter change)
-        setMessages(newMessages);
-
-        // Cache messages (only for initial load without filters)
-        if (page === 1 && !searchTerm && !searchSender && !dateFilter.start && !dateFilter.end) {
-          try {
-            const cacheKey = `project_messages_${projectId}`;
-            localStorage.setItem(
-              cacheKey,
-              JSON.stringify({
-                messages: newMessages,
-                timestamp: Date.now(),
-              })
-            );
-            console.log("[Cache] Saved messages to cache");
-          } catch (cacheError) {
-            console.error("Cache write error:", cacheError);
-            // If localStorage is full, clear old caches
-            if (cacheError.name === "QuotaExceededError") {
-              Object.keys(localStorage).forEach((key) => {
-                if (key.startsWith("project_messages_") && key !== `project_messages_${projectId}`) {
-                  localStorage.removeItem(key);
-                }
-              });
-            }
-          }
-        }
-      }
-
-      setCurrentPage(pagination.page);
-      setHasMoreMessages(pagination.hasMore);
-      setTotalMessages(pagination.total);
-
-      // Mark messages as read when viewing them
-      if (!append) {
-        markMessagesAsRead();
-      }
+      if (!append) markMessagesAsRead();
     } catch (error) {
       console.error("Error fetching messages:", error);
     } finally {
@@ -508,28 +410,31 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
     }
   };
 
-  // Helper to invalidate message cache
-  const invalidateMessageCache = () => {
+  // The localStorage message cache this page used is gone deliberately.
+  //
+  // It was a second source of truth for message bodies (the store is the
+  // first), it had a QuotaExceededError handler that evicted OTHER projects'
+  // caches to make room, and — the actual reason — it left client conversation
+  // content sitting in localStorage after logout, unencrypted, readable by
+  // anyone with access to the machine. The store gives the same instant-render
+  // benefit within a session without persisting message bodies to disk.
+  //
+  // This effect purges anything a previously-deployed build already wrote, so
+  // upgrading doesn't leave that content behind forever.
+  useEffect(() => {
     try {
-      const cacheKey = `project_messages_${projectId}`;
-      localStorage.removeItem(cacheKey);
-      console.log("[Cache] Invalidated message cache");
-    } catch (error) {
-      console.error("Cache invalidation error:", error);
+      Object.keys(localStorage)
+        .filter((k) => k.startsWith("project_messages_"))
+        .forEach((k) => localStorage.removeItem(k));
+    } catch {
+      /* ignore */
     }
-  };
+  }, []);
 
   // Mark all messages in this project as read
   const markMessagesAsRead = async () => {
     try {
-      const token = localStorage.getItem("token");
-      await axios.patch(
-        `${API_BASE}/api/projects/${projectId}/messages/mark-read`,
-        {},
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
+      await messagingApi.markRead(SCOPE, projectId);
 
       // Dispatch event to notify UnreadMessageBadge
       window.dispatchEvent(new CustomEvent('project-messages-read', {
@@ -686,28 +591,25 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
   useEffect(() => {
     const observer = new IntersectionObserver(
       (entries) => {
-        entries.forEach(async (entry) => {
-          if (entry.isIntersecting) {
-            const messageId = entry.target.getAttribute('data-message-id');
-            const messageOwnerId = entry.target.getAttribute('data-owner-id');
+        entries.forEach((entry) => {
+          if (!entry.isIntersecting) return;
 
-            // Only mark as read if not own message
-            if (messageId && messageOwnerId !== userId) {
-              try {
-                await axios.post(
-                  `${API_BASE}/api/projects/${projectId}/messages/${messageId}/read`,
-                  {},
-                  {
-                    headers: {
-                      Authorization: `Bearer ${localStorage.getItem("token")}`,
-                    },
-                  }
-                );
-              } catch (error) {
-                console.error('Error marking message as read:', error);
-              }
-            }
-          }
+          const messageId = entry.target.getAttribute('data-message-id');
+          const messageOwnerId = entry.target.getAttribute('data-owner-id');
+          if (!messageId || messageOwnerId === userId) return;
+
+          // Marked-once guard: this effect rebuilds the observer on every
+          // `messages` change, so without it a message that stays on screen is
+          // re-POSTed on every render.
+          if (markedReadRef.current.has(messageId)) return;
+          markedReadRef.current.add(messageId);
+
+          messagingApi
+            .markMessageRead(SCOPE, projectId, messageId)
+            .catch((error) => {
+              markedReadRef.current.delete(messageId);
+              console.error('Error marking message as read:', error);
+            });
         });
       },
       { threshold: 0.5 }
@@ -725,44 +627,25 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
 
     setSending(true);
     try {
-      const token = localStorage.getItem("token");
-      const formData = new FormData();
-      formData.append("message", newMessage || "(File attachment)");
-      formData.append("sentBy", userId);
-      formData.append("senderType", userRole);
-
-      if (replyingTo) {
-        formData.append("replyTo", replyingTo._id);
-      }
-
-      if (mentionedUsers.length > 0) {
-        formData.append("mentions", JSON.stringify(mentionedUsers.map(u => ({ user: u._id, userModel: "User" }))));
-      }
-
-      // Append files
-      selectedFiles.forEach((file) => {
-        formData.append("files", file);
+      // Response unused: the server broadcasts the saved message to the project
+      // room and to each member's personal room, so it reaches this client (and
+      // every other) through the store.
+      await messagingApi.sendMessage(SCOPE, projectId, {
+        body: newMessage || "(File attachment)",
+        files: selectedFiles,
+        replyTo: replyingTo ? replyingTo._id : null,
+        mentions: mentionedUsers.map((u) => ({ user: u._id, userModel: "User" })),
+        senderType: userRole,
       });
 
-      const response = await axios.post(
-        `${API_BASE}/api/projects/${projectId}/messages`,
-        formData,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "multipart/form-data",
-          },
-        }
-      );
-
-      // Broadcast via Socket.IO for real-time updates
-      sendProjectMessage(projectId, response.data);
 
       setNewMessage("");
       setSelectedFiles([]);
       setReplyingTo(null);
       setMentionedUsers([]);
-      fetchMessages();
+      // No refetch — the thunk already put the sent message in the store, and
+      // the socket echo dedupes against it. This used to reload the whole
+      // first page of the thread after every send.
       // Scroll to bottom after sending message
       setTimeout(() => scrollToBottom(), 100);
       showNotification("Message sent successfully!", "success");
@@ -794,32 +677,9 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
 
   const handleReaction = async (messageId, emoji) => {
     try {
-      const token = localStorage.getItem("token");
-      const response = await fetch(
-        `${API_BASE}/api/projects/${projectId}/messages/${messageId}/react`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ emoji }),
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error("Failed to add reaction");
-      }
-
-      const updatedMessage = await response.json();
-
-      // Optimistically update just this message in state
-      setMessages((prevMessages) =>
-        prevMessages.map((msg) =>
-          msg._id === messageId ? updatedMessage : msg
-        )
-      );
-
+      await messagingApi.react(SCOPE, projectId, messageId, emoji);
+      // The server broadcasts `thread:updated`, which patches this one message
+      // in the store — no local mutation needed.
       setShowEmojiPicker(null);
     } catch (error) {
       console.error("Error adding reaction:", error);
@@ -829,23 +689,11 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
 
   const handleToggleImportant = async (messageId, attachmentId) => {
     try {
-      const token = localStorage.getItem("token");
-      const response = await fetch(
-        `${API_BASE}/api/projects/${projectId}/messages/${messageId}/attachments/${attachmentId}/toggle-important`,
-        {
-          method: "PATCH",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-        }
+      const data = await messagingApi.toggleAttachmentImportant(
+        projectId,
+        messageId,
+        attachmentId
       );
-
-      if (!response.ok) {
-        throw new Error("Failed to toggle importance");
-      }
-
-      const data = await response.json();
 
       // Refresh messages to show updated status
       await fetchMessages();
@@ -934,25 +782,8 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
     setSummary("");
 
     try {
-      const token = localStorage.getItem("token");
-      const response = await fetch(
-        `${API_BASE}/api/projects/${currentProjectId}/messages/summarize`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ days: summaryDays }),
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error("Failed to generate summary");
-      }
-
-      const data = await response.json();
-      setSummary(data.summary || "No summary available.");
+      const text = await messagingApi.summarize(SCOPE, currentProjectId, summaryDays);
+      setSummary(text || "No summary available.");
     } catch (error) {
       console.error("Error generating summary:", error);
       setSummary("Failed to generate summary. Please try again.");
@@ -1006,15 +837,8 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
   // Starred messages functionality
   const fetchStarredMessages = async () => {
     try {
-      const token = localStorage.getItem("token");
-      const response = await axios.get(
-        `${API_BASE}/api/projects/${projectId}/messages/starred`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
-      const starredIds = new Set(response.data.map((msg) => msg._id));
-      setStarredMessageIds(starredIds);
+      const starred = await messagingApi.listStarred(projectId);
+      setStarredMessageIds(new Set(starred.map((msg) => msg._id)));
     } catch (error) {
       console.error("Error fetching starred messages:", error);
     }
@@ -1022,33 +846,26 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
 
   const toggleStarMessage = async (messageId) => {
     try {
-      const token = localStorage.getItem("token");
-      const isStarred = starredMessageIds.has(messageId);
+      // The server exposes ONE endpoint that toggles:
+      //   POST /api/projects/:projectId/messages/:messageId/star
+      // This used to send DELETE to unstar. No such route exists, so every
+      // unstar 404'd and reported "Failed to update starred status" — the
+      // feature only ever worked in one direction. The response tells us which
+      // way it went, so local state follows the server rather than guessing.
+      const result = await messagingApi.toggleStar(projectId, messageId);
+      const nowStarred = result?.action === "star";
 
-      if (isStarred) {
-        await axios.delete(
-          `${API_BASE}/api/projects/${projectId}/messages/${messageId}/star`,
-          {
-            headers: { Authorization: `Bearer ${token}` },
-          }
-        );
-        setStarredMessageIds((prev) => {
-          const newSet = new Set(prev);
-          newSet.delete(messageId);
-          return newSet;
-        });
-        showNotification("Removed from starred messages", "success");
-      } else {
-        await axios.post(
-          `${API_BASE}/api/projects/${projectId}/messages/${messageId}/star`,
-          {},
-          {
-            headers: { Authorization: `Bearer ${token}` },
-          }
-        );
-        setStarredMessageIds((prev) => new Set(prev).add(messageId));
-        showNotification("Added to starred messages", "success");
-      }
+      setStarredMessageIds((prev) => {
+        const next = new Set(prev);
+        if (nowStarred) next.add(messageId);
+        else next.delete(messageId);
+        return next;
+      });
+
+      showNotification(
+        nowStarred ? "Added to starred messages" : "Removed from starred messages",
+        "success"
+      );
     } catch (error) {
       console.error("Error toggling star:", error);
       showNotification("Failed to update starred status", "error");
@@ -1606,7 +1423,12 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                                     strong: ({ children }) => <strong className="font-bold">{children}</strong>,
                                     em: ({ children }) => <em className="italic">{children}</em>,
                                     a: ({ href, children }) => (
-                                      <a href={href} target="_blank" rel="noopener noreferrer" className={`${isOwnMessage ? "text-blue-100 hover:text-white" : "text-blue-600 hover:text-blue-700 dark:text-blue-300 dark:hover:text-blue-200"} underline`}>{children}</a>
+                                      // Own-message links use text-white, not
+                                      // text-blue-*: src/index.css forces any
+                                      // a[class*="text-blue-"] to the brand teal
+                                      // with !important, which is the same colour
+                                      // as this bubble (teal-on-teal, invisible).
+                                      <a href={href} target="_blank" rel="noopener noreferrer" className={`${isOwnMessage ? "text-white decoration-white/60 hover:decoration-white" : "text-blue-600 hover:text-blue-700 dark:text-blue-300 dark:hover:text-blue-200"} underline decoration-1 underline-offset-2`}>{children}</a>
                                     ),
                                     br: () => <br />,
                                   }}
@@ -1696,30 +1518,17 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                                       className="rounded p-1 hover:bg-slate-100 dark:hover:bg-white/10"
                                       onClick={(e) => {
                                         e.preventDefault();
-                                        const token = localStorage.getItem("token");
-                                        fetch(`${API_BASE}/api/projects/${projectId}/messages/${msg._id}/attachments/${att._id}/download`, {
-                                          headers: {
-                                            'Authorization': `Bearer ${token}`
-                                          }
-                                        })
-                                        .then(response => {
-                                          if (!response.ok) throw new Error('Download failed');
-                                          return response.blob();
-                                        })
-                                        .then(blob => {
-                                          const url = window.URL.createObjectURL(blob);
-                                          const a = document.createElement('a');
-                                          a.href = url;
-                                          a.download = att.filename || 'download';
-                                          document.body.appendChild(a);
-                                          a.click();
-                                          window.URL.revokeObjectURL(url);
-                                          document.body.removeChild(a);
-                                        })
-                                        .catch(error => {
-                                          console.error('Download error:', error);
-                                          showNotification('Failed to download file', 'error');
-                                        });
+                                        // Shared helper — it also defers
+                                        // revokeObjectURL, which this used to
+                                        // call synchronously after click(),
+                                        // occasionally cancelling the download
+                                        // before the browser had written it.
+                                        messagingApi
+                                          .downloadAttachment(SCOPE, projectId, msg._id, att._id, att.filename)
+                                          .catch((error) => {
+                                            console.error('Download error:', error);
+                                            showNotification('Failed to download file', 'error');
+                                          });
                                       }}
                                     >
                                       <Download className={`h-4 w-4 ${isOwnMessage ? "text-teal-50/80" : "text-slate-500 dark:text-gray-300"}`} />
@@ -2499,147 +2308,17 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
         />
       )}
 
-      {/* AI Summary Modal */}
-      {showSummaryModal && (
-        <div
-          className="fixed inset-0 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm"
-          style={{ zIndex: 9999 }}
-          onClick={() => setShowSummaryModal(false)}
-        >
-          <div
-            className="flex max-h-[80vh] w-full max-w-3xl flex-col rounded-2xl border border-slate-200 bg-white shadow-2xl shadow-slate-900/20 dark:border-[#232945] dark:bg-[#0f1419] dark:shadow-black/40"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Modal Header */}
-            <div className="flex items-center justify-between border-b border-slate-200 p-4 dark:border-[#232945]">
-              <div className="flex items-center gap-3">
-                <Sparkles className="h-5 w-5 text-teal-500 dark:text-[#00a884]" />
-                <h2 className="text-xl font-semibold text-slate-950 dark:text-white">
-                  AI Project Summary
-                </h2>
-              </div>
-              <button
-                onClick={() => setShowSummaryModal(false)}
-                className="rounded-lg p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 dark:hover:bg-[#232945]"
-              >
-                <XCircle className="h-5 w-5" />
-              </button>
-            </div>
-
-            {/* Days Selector */}
-            <div className="border-b border-slate-200 bg-slate-50 px-4 py-3 dark:border-[#232945] dark:bg-[#0a0e14]">
-              <div className="flex items-center gap-3">
-                <label className="text-sm text-slate-500 dark:text-gray-400">Time period:</label>
-                <select
-                  value={summaryDays}
-                  onChange={(e) => setSummaryDays(Number(e.target.value))}
-                  className="app-control px-3 py-1.5 text-sm"
-                >
-                  <option value={1}>Last 24 hours</option>
-                  <option value={3}>Last 3 days</option>
-                  <option value={7}>Last week</option>
-                  <option value={14}>Last 2 weeks</option>
-                  <option value={30}>Last month</option>
-                </select>
-                <button
-                  onClick={handleSummarize}
-                  disabled={summaryLoading}
-                  className="flex items-center gap-2 rounded bg-teal-600 px-4 py-1.5 text-sm text-white transition hover:bg-teal-500 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <Sparkles className="w-4 h-4" />
-                  {summaryLoading ? "Generating..." : "Regenerate"}
-                </button>
-              </div>
-            </div>
-
-            {/* Modal Body */}
-            <div className="flex-1 overflow-y-auto p-6">
-              {summaryLoading ? (
-                <div className="flex flex-col items-center justify-center h-full gap-4">
-                  <div className="relative">
-                    <div className="h-16 w-16 animate-spin rounded-full border-4 border-teal-500/30 border-t-teal-500"></div>
-                    <Sparkles className="absolute left-1/2 top-1/2 h-6 w-6 -translate-x-1/2 -translate-y-1/2 text-teal-500" />
-                  </div>
-                  <p className="text-sm text-slate-500 dark:text-gray-400">Analyzing project messages with AI...</p>
-                </div>
-              ) : (
-                <div className="prose prose-slate prose-sm max-w-none dark:prose-invert">
-                  <ReactMarkdown
-                    remarkPlugins={[remarkGfm]}
-                    rehypePlugins={[rehypeRaw]}
-                    components={{
-                      p: ({ children }) => (
-                        <p className="mb-3 leading-relaxed text-slate-700 dark:text-gray-200">{children}</p>
-                      ),
-                      h1: ({ children }) => (
-                        <h1 className="mb-3 text-2xl font-bold text-slate-950 dark:text-white">{children}</h1>
-                      ),
-                      h2: ({ children }) => (
-                        <h2 className="mb-2 text-xl font-bold text-slate-950 dark:text-white">{children}</h2>
-                      ),
-                      h3: ({ children }) => (
-                        <h3 className="mb-2 text-lg font-bold text-slate-950 dark:text-white">{children}</h3>
-                      ),
-                      ul: ({ children }) => (
-                        <ul className="list-disc list-inside mb-3 space-y-1">{children}</ul>
-                      ),
-                      ol: ({ children }) => (
-                        <ol className="list-decimal list-inside mb-3 space-y-1">{children}</ol>
-                      ),
-                      li: ({ children }) => (
-                        <li className="ml-2 text-slate-700 dark:text-gray-200">{children}</li>
-                      ),
-                      strong: ({ children }) => (
-                        <strong className="font-bold text-teal-600 dark:text-[#00a884]">{children}</strong>
-                      ),
-                      code: ({ inline, children }) =>
-                        inline ? (
-                          <code className="rounded bg-slate-100 px-1.5 py-0.5 text-xs text-teal-700 dark:bg-[#0a0e14] dark:text-[#00a884]">
-                            {children}
-                          </code>
-                        ) : (
-                          <code className="block overflow-x-auto rounded bg-slate-100 p-3 text-sm text-slate-700 dark:bg-[#0a0e14] dark:text-gray-300">
-                            {children}
-                          </code>
-                        ),
-                    }}
-                  >
-                    {summary}
-                  </ReactMarkdown>
-                </div>
-              )}
-            </div>
-
-            {/* Modal Footer */}
-            <div className="flex items-center justify-between border-t border-slate-200 bg-slate-50 p-4 dark:border-[#232945] dark:bg-[#0a0e14]">
-              <div className="text-xs text-slate-500 dark:text-gray-500">
-                Powered by AI - Last {summaryDays} day{summaryDays !== 1 ? 's' : ''}
-              </div>
-              <button
-                onClick={() => {
-                  navigator.clipboard.writeText(summary);
-                  setCopiedText(summary);
-                  setTimeout(() => setCopiedText(null), 2000);
-                }}
-                disabled={!summary || summaryLoading}
-                className="flex items-center gap-2 rounded border border-slate-200 bg-white px-4 py-2 text-sm text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-[#232945] dark:bg-[#0f1419] dark:text-gray-200 dark:hover:bg-[#232945]"
-              >
-                {copiedText === summary ? (
-                  <>
-                    <Check className="w-4 h-4" />
-                    Copied!
-                  </>
-                ) : (
-                  <>
-                    <Copy className="w-4 h-4" />
-                    Copy Summary
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ThreadSummaryModal
+        open={showSummaryModal}
+        onClose={() => setShowSummaryModal(false)}
+        days={summaryDays}
+        onDaysChange={setSummaryDays}
+        loading={summaryLoading}
+        summary={summary}
+        onRegenerate={handleSummarize}
+        onCopy={copyToClipboard}
+        copied={copiedText === summary}
+      />
 
       {/* Pinned Messages Modal */}
       {showPinnedModal && (

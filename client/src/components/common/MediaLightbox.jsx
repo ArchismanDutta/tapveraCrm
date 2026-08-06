@@ -41,13 +41,43 @@ const MediaLightbox = ({ media, onClose, allMedia = [], currentIndex = 0, onNavi
     }
   };
 
-  const handleDownload = () => {
-    const link = document.createElement("a");
-    link.href = currentMedia.url;
-    link.download = currentMedia.filename || "download";
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  // currentMedia.url is the storage-relative signed path the message payload
+  // carries (e.g. "/uploads/messages/...?e=...&s=..."), not an absolute URL.
+  // It needs the API origin prepended the same way every other attachment
+  // reference in the app resolves it — this was the one spot in the codebase
+  // that hardcoded "http://localhost:5000" instead of reading VITE_API_BASE,
+  // so the full-size preview (and the download below) only ever worked when
+  // the app happened to be running on that exact host.
+  const resolveMediaUrl = (url) =>
+    url?.startsWith("http") ? url : `${import.meta.env.VITE_API_BASE || "http://localhost:5000"}${url || ""}`;
+
+  // A plain `<a download>` pointed straight at that relative path resolves
+  // against whatever origin the CHAT PAGE is served from, not the API server —
+  // so this always fetched a 404 (or the SPA shell) from the frontend host
+  // rather than the actual file. Fetching the resolved URL first and handing
+  // the browser a same-origin blob: URL both fixes the origin and makes the
+  // `download` attribute reliable cross-browser.
+  const handleDownload = async () => {
+    const absoluteUrl = resolveMediaUrl(currentMedia.url);
+    try {
+      const response = await fetch(absoluteUrl);
+      if (!response.ok) throw new Error(`Download failed (${response.status})`);
+      const blob = await response.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = objectUrl;
+      link.download = currentMedia.filename || "download";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+    } catch (err) {
+      console.error("Media download failed:", err);
+      // Worse UX (opens instead of saves) but still gets the user to their
+      // file if the fetch itself failed — e.g. an expired signed URL — rather
+      // than the button doing nothing at all.
+      window.open(absoluteUrl, "_blank", "noopener,noreferrer");
+    }
   };
 
   return (
@@ -106,14 +136,14 @@ const MediaLightbox = ({ media, onClose, allMedia = [], currentIndex = 0, onNavi
       <div className="max-w-[90vw] max-h-[90vh] flex items-center justify-center">
         {currentMedia.fileType === "image" ? (
           <img
-            src={currentMedia.url.startsWith('http') ? currentMedia.url : `http://localhost:5000${currentMedia.url}`}
+            src={resolveMediaUrl(currentMedia.url)}
             alt={currentMedia.filename || "Image"}
             className="max-w-full max-h-[90vh] object-contain rounded"
             onClick={(e) => e.stopPropagation()}
           />
         ) : currentMedia.fileType === "video" ? (
           <video
-            src={currentMedia.url.startsWith('http') ? currentMedia.url : `http://localhost:5000${currentMedia.url}`}
+            src={resolveMediaUrl(currentMedia.url)}
             controls
             autoPlay
             className="max-w-full max-h-[90vh] rounded"

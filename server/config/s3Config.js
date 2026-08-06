@@ -2,7 +2,6 @@
 const { S3Client, PutObjectCommand } = require("@aws-sdk/client-s3");
 const multer = require("multer");
 const multerS3 = require("multer-s3");
-const path = require("path");
 const { createDiskStorage } = require("./storage");
 
 // Initialize S3 Client
@@ -96,40 +95,13 @@ const uploadToS3 = isS3Configured ? multer({
   limits: {
     fileSize: 10 * 1024 * 1024, // 10MB limit
   },
-  fileFilter: (req, file, cb) => {
-    // Allow images, documents, and videos
-    const allowedMimes = [
-      "image/jpeg",
-      "image/jpg",
-      "image/png",
-      "image/gif",
-      "application/pdf",
-      "application/msword",
-      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-      "application/vnd.ms-excel",
-      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      "text/plain",
-      "video/mp4",
-      "video/avi",
-      "video/quicktime",
-    ];
-
-    const allowedExtensions = /jpeg|jpg|png|gif|pdf|doc|docx|xls|xlsx|txt|mp4|avi|mov/;
-    const extname = allowedExtensions.test(
-      path.extname(file.originalname).toLowerCase()
-    );
-    const mimetype = allowedMimes.includes(file.mimetype);
-
-    if (mimetype && extname) {
-      return cb(null, true);
-    } else {
-      cb(
-        new Error(
-          "Invalid file type. Only images, documents, and videos are allowed."
-        )
-      );
-    }
-  },
+  // Every file type is accepted. This used to whitelist a fixed set of
+  // mimetypes/extensions (jpeg/png/gif but not webp or heic, pdf/doc/xls/txt
+  // but not zip/csv/pptx, mp4/avi/mov but not webm) — anything outside that
+  // list bounced with "Invalid file type", which is exactly what was blocking
+  // webp images. People need to share whatever file they actually have; the
+  // 10MB cap above is the limit that matters, not the extension.
+  fileFilter: (req, file, cb) => cb(null, true),
 }) : multer({
   // Local storage goes through config/storage.js so writes land under
   // UPLOAD_ROOT.
@@ -152,39 +124,9 @@ const uploadToS3 = isS3Configured ? multer({
   limits: {
     fileSize: 10 * 1024 * 1024, // 10MB limit
   },
-  fileFilter: (req, file, cb) => {
-    const allowedMimes = [
-      "image/jpeg",
-      "image/jpg",
-      "image/png",
-      "image/gif",
-      "application/pdf",
-      "application/msword",
-      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-      "application/vnd.ms-excel",
-      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      "text/plain",
-      "video/mp4",
-      "video/avi",
-      "video/quicktime",
-    ];
-
-    const allowedExtensions = /jpeg|jpg|png|gif|pdf|doc|docx|xls|xlsx|txt|mp4|avi|mov/;
-    const extname = allowedExtensions.test(
-      path.extname(file.originalname).toLowerCase()
-    );
-    const mimetype = allowedMimes.includes(file.mimetype);
-
-    if (mimetype && extname) {
-      return cb(null, true);
-    } else {
-      cb(
-        new Error(
-          "Invalid file type. Only images, documents, and videos are allowed."
-        )
-      );
-    }
-  },
+  // Same as the S3 branch above — no mimetype/extension whitelist. See that
+  // comment for why (this is the one that was rejecting webp).
+  fileFilter: (req, file, cb) => cb(null, true),
 });
 
 // Log configuration status
@@ -203,7 +145,13 @@ if (!isS3Configured) {
 }
 
 // Helper function to determine file type from mime type
-const getFileType = (mimeType) => {
+const getFileType = (mimeType = "") => {
+  // Defaulted and coerced: multer normally supplies a mimetype, but a client
+  // that omits Content-Type on a multipart part leaves it undefined, and
+  // `undefined.startsWith` throws — taking down the whole upload request for
+  // one unusual file rather than just classifying it as "other".
+  mimeType = String(mimeType || "");
+
   if (mimeType.startsWith("image/")) return "image";
   if (mimeType.startsWith("video/")) return "video";
   if (mimeType.startsWith("audio/")) return "audio";

@@ -17,16 +17,28 @@ import {
   Paperclip,
   Type,
   Send,
-  Sparkles,
   Plus,
 } from "lucide-react";
 import MediaLightbox from "../common/MediaLightbox";
 import MessageDateSeparator from "./MessageDateSeparator";
 import MessageStatus from "./MessageStatus";
 import TypingIndicator from "./TypingIndicator";
+import ThreadSummaryModal from "./ThreadSummaryModal";
+import ThreadFilterBar from "./ThreadFilterBar";
 import { useWebSocketContext } from "../../contexts/WebSocketContext";
+// Phase 4: project threads now use the same store and the same API module as
+// ChatPage. Two surfaces, one definition of "a message" and one definition of
+// "unread".
+import { useDispatch, useSelector } from "react-redux";
+import * as messagingApi from "../../api/messagingApi";
+import {
+  fetchMessages as fetchThreadMessages,
+  selectMessages,
+  selectTyping,
+} from "../../store/slices/threadsSlice";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
+const SCOPE = messagingApi.SCOPES.PROJECT;
 
 const commonEmojis = ["👍", "❤️", "😂", "😮", "😢", "🙏", "🔥", "✅"];
 
@@ -37,8 +49,15 @@ const commonEmojis = ["👍", "❤️", "😂", "😮", "😢", "🙏", "🔥", 
 // admin looking at the same project conversation see the same UI, just
 // through two different page shells (EmployeePortal vs ProjectDetailPage).
 const ProjectMessagePanel = ({ projectId, currentUser }) => {
+  const dispatch = useDispatch();
+
+  // Thread history lives in the store. It used to be local state that was
+  // fully refetched on EVERY incoming socket message — a whole thread reload
+  // per message. The store applies the one message that arrived.
+  const messages = useSelector(selectMessages(SCOPE, projectId));
+  const typingMap = useSelector(selectTyping(SCOPE, projectId));
+
   // ── state ──
-  const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [replyingTo, setReplyingTo] = useState(null);
@@ -66,13 +85,15 @@ const ProjectMessagePanel = ({ projectId, currentUser }) => {
   const emojiPickerRef = useRef(null);
   const prevLengthRef = useRef(0);
   const typingTimeoutRef = useRef(null);
+  // Message ids this session has already reported as read — see the
+  // IntersectionObserver effect below.
+  const markedReadRef = useRef(new Set());
 
   // ── shared real-time connection (see WebSocketContext) ──
   const {
     isConnected: wsConnected,
     joinProject,
     leaveProject,
-    sendProjectMessage,
     sendProjectTyping,
     sendProjectStopTyping,
   } = useWebSocketContext();
@@ -176,53 +197,36 @@ const ProjectMessagePanel = ({ projectId, currentUser }) => {
   };
 
   // ── API ──
-  const fetchMessages = useCallback(async () => {
-    if (!projectId) return;
-    try {
-      const token = localStorage.getItem("token");
-      const params = new URLSearchParams();
-      if (messageSearchTerm) params.append("search", messageSearchTerm);
-      if (searchSender) params.append("senderName", searchSender);
-      if (dateFilter.start) params.append("startDate", dateFilter.start);
-      if (dateFilter.end) params.append("endDate", dateFilter.end);
-      const qs = params.toString();
-      const resp = await fetch(
-        `${API_BASE}/api/projects/${projectId}/messages${qs ? `?${qs}` : ""}`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      const data = await resp.json();
-      setMessages(data.messages || data);
-    } catch (err) {
-      console.error("fetchMessages error:", err);
-    }
-  }, [projectId, messageSearchTerm, searchSender, dateFilter]);
+  //
+  // Note there are no search/filter params here any more. This used to send
+  // `search`, `senderName`, `startDate` and `endDate` to the server AND then
+  // filter the same result set again client-side (`filteredMessages` below).
+  // Because the filter values were dependencies of the callback, every
+  // keystroke in the search box fired a server request whose result was then
+  // re-filtered locally anyway. The client-side filter is the one that decides
+  // what renders, so the round trip was pure waste — dropped.
+  const loadMessages = useCallback(() => {
+    if (!projectId) return undefined;
+    return dispatch(fetchThreadMessages({ scope: SCOPE, threadId: projectId }));
+  }, [dispatch, projectId]);
 
   const handleSend = async () => {
     if (!input.trim() && selectedFiles.length === 0) return;
     try {
-      const token = localStorage.getItem("token");
-      const formData = new FormData();
-      formData.append("message", input || "(File attachment)");
-      formData.append("sentBy", user._id);
-      formData.append("senderType", user.role || "employee");
-      if (replyingTo) formData.append("replyTo", replyingTo._id);
-      selectedFiles.forEach((f) => formData.append("files", f));
+      // The thunk puts the saved message in the store and the server broadcasts
+      // it to everyone else, so there is nothing to do with the response here.
+      await messagingApi.sendMessage(SCOPE, projectId, {
+        body: input || "(File attachment)",
+        files: selectedFiles,
+        replyTo: replyingTo ? replyingTo._id : null,
+        senderType: user.role || "employee",
+      });
 
-      const resp = await fetch(
-        `${API_BASE}/api/projects/${projectId}/messages`,
-        {
-          method: "POST",
-          headers: { Authorization: `Bearer ${token}` },
-          body: formData,
-        }
-      );
-      const messageData = await resp.json();
-
-      sendProjectMessage(projectId, messageData);
       stopTypingIndicator();
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
 
-      await fetchMessages();
+      // No refetch — the store already holds the sent message (the thunk's
+      // response) and the socket echo dedupes against it.
       setInput("");
       setSelectedFiles([]);
       setReplyingTo(null);
@@ -233,20 +237,10 @@ const ProjectMessagePanel = ({ projectId, currentUser }) => {
 
   const handleReaction = async (msgId, emoji) => {
     try {
-      const token = localStorage.getItem("token");
-      await fetch(
-        `${API_BASE}/api/projects/${projectId}/messages/${msgId}/react`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ emoji }),
-        }
-      );
+      await messagingApi.react(SCOPE, projectId, msgId, emoji);
       setShowEmojiPicker(null);
-      await fetchMessages();
+      // `thread:updated` patches the one message in the store; the previous
+      // full-thread refetch here was reloading every message to change an emoji.
     } catch (err) {
       console.error("Reaction error:", err);
     }
@@ -256,20 +250,8 @@ const ProjectMessagePanel = ({ projectId, currentUser }) => {
     setSummaryLoading(true);
     setShowSummaryModal(true);
     try {
-      const token = localStorage.getItem("token");
-      const resp = await fetch(
-        `${API_BASE}/api/projects/${projectId}/messages/summarize`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ days: summaryDays }),
-        }
-      );
-      const data = await resp.json();
-      setSummary(data.summary || "No summary available.");
+      const text = await messagingApi.summarize(SCOPE, projectId, summaryDays);
+      setSummary(text || "No summary available.");
     } catch {
       setSummary("Failed to generate summary.");
     } finally {
@@ -285,8 +267,8 @@ const ProjectMessagePanel = ({ projectId, currentUser }) => {
 
   // ── effects ──
   useEffect(() => {
-    fetchMessages();
-  }, [fetchMessages]);
+    loadMessages();
+  }, [loadMessages]);
 
   // Auto-scroll on new messages only
   useEffect(() => {
@@ -301,60 +283,30 @@ const ProjectMessagePanel = ({ projectId, currentUser }) => {
   useEffect(() => {
     if (!projectId) return undefined;
 
+    // Joining the room is all this effect does now.
+    //
+    // The four window listeners it replaced — `project-message`,
+    // `project-typing`, `project-stop-typing`, `project-message-read` — are all
+    // handled centrally by WebSocketContext dispatching into the store. The
+    // `project-message` one in particular called fetchMessages() on every
+    // single incoming message, so a busy thread reloaded itself continuously.
     joinProject(projectId);
+    return () => leaveProject(projectId);
+  }, [projectId, joinProject, leaveProject]);
 
-    const handleProjectMessage = (event) => {
-      const data = event.detail || {};
-      if (data.projectId === projectId) {
-        fetchMessages();
-      }
-    };
+  // Typing, derived from the store rather than accumulated by a listener that
+  // leaked a 3s setTimeout per keystroke received.
+  useEffect(() => {
+    const others = Object.entries(typingMap || {})
+      .filter(([userId]) => String(userId) !== String(user._id))
+      .map(([userId, userName]) => ({ userId, userName }));
 
-    const handleTyping = (event) => {
-      const data = event.detail || {};
-      if (data.projectId !== projectId || data.userId === user._id) return;
-      setTypingUsers((prev) => {
-        const exists = prev.some((u) => u.userId === data.userId);
-        if (!exists) return [...prev, { userId: data.userId, userName: data.userName }];
-        return prev;
-      });
-      setTimeout(() => {
-        setTypingUsers((prev) => prev.filter((u) => u.userId !== data.userId));
-      }, 3000);
-    };
+    setTypingUsers(others);
+    if (others.length === 0) return undefined;
 
-    const handleStopTyping = (event) => {
-      const data = event.detail || {};
-      if (data.projectId !== projectId) return;
-      setTypingUsers((prev) => prev.filter((u) => u.userId !== data.userId));
-    };
-
-    // Real-time read receipts — fired when anyone (any tab/user) marks a
-    // message read via the intersection observer below, so this message's
-    // checkmark advances to "read" without needing a refetch.
-    const handleMessageRead = (event) => {
-      const data = event.detail || {};
-      if (data.projectId !== projectId) return;
-      setMessages((prevMessages) =>
-        prevMessages.map((msg) =>
-          msg._id === data.messageId ? { ...msg, status: "read" } : msg
-        )
-      );
-    };
-
-    window.addEventListener("project-message", handleProjectMessage);
-    window.addEventListener("project-typing", handleTyping);
-    window.addEventListener("project-stop-typing", handleStopTyping);
-    window.addEventListener("project-message-read", handleMessageRead);
-    return () => {
-      leaveProject(projectId);
-      window.removeEventListener("project-message", handleProjectMessage);
-      window.removeEventListener("project-typing", handleTyping);
-      window.removeEventListener("project-stop-typing", handleStopTyping);
-      window.removeEventListener("project-message-read", handleMessageRead);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projectId, joinProject, leaveProject, fetchMessages]);
+    const t = setTimeout(() => setTypingUsers([]), 4000);
+    return () => clearTimeout(t);
+  }, [typingMap, user._id]);
 
   // Intersection Observer for read receipts — marks each non-own message as
   // read (POST .../messages/:messageId/read) once it's at least 50% visible,
@@ -362,26 +314,27 @@ const ProjectMessagePanel = ({ projectId, currentUser }) => {
   useEffect(() => {
     const observer = new IntersectionObserver(
       (entries) => {
-        entries.forEach(async (entry) => {
-          if (entry.isIntersecting) {
-            const messageId = entry.target.getAttribute("data-message-id");
-            const messageOwnerId = entry.target.getAttribute("data-owner-id");
+        entries.forEach((entry) => {
+          if (!entry.isIntersecting) return;
 
-            if (messageId && messageOwnerId !== String(user._id)) {
-              try {
-                const token = localStorage.getItem("token");
-                await fetch(
-                  `${API_BASE}/api/projects/${projectId}/messages/${messageId}/read`,
-                  {
-                    method: "POST",
-                    headers: { Authorization: `Bearer ${token}` },
-                  }
-                );
-              } catch (error) {
-                console.error("Error marking message as read:", error);
-              }
-            }
-          }
+          const messageId = entry.target.getAttribute("data-message-id");
+          const messageOwnerId = entry.target.getAttribute("data-owner-id");
+          if (!messageId || messageOwnerId === String(user._id)) return;
+
+          // Marked-once guard. This effect re-runs on every `messages` change
+          // and rebuilds the observer, so without it a message that stays on
+          // screen gets re-POSTed each time — one wasted write per re-render
+          // for every visible message.
+          if (markedReadRef.current.has(messageId)) return;
+          markedReadRef.current.add(messageId);
+
+          messagingApi
+            .markMessageRead(SCOPE, projectId, messageId)
+            .catch((error) => {
+              // Allow a retry on the next pass if it genuinely failed.
+              markedReadRef.current.delete(messageId);
+              console.error("Error marking message as read:", error);
+            });
         });
       },
       { threshold: 0.5 }
@@ -405,8 +358,29 @@ const ProjectMessagePanel = ({ projectId, currentUser }) => {
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
+  // Messages from the store may be either the RAW Message document shape
+  // (REST history — `_id`, `sentBy` populated to {_id, name, clientName},
+  // `message` as the text) or the NORMALIZED socket/echo shape from
+  // services/messaging (`id`, `sender: {id, name, kind}`, `body`) carried by
+  // `thread:message`. getSenderName/isOwn and the render loop below were all
+  // written against the raw shape, which is also the only thing a refetch
+  // ever returns — that mismatch is why a message that arrived live rendered
+  // with no text and "Unknown" as the sender until the page was refreshed.
+  // Reshaping `sender` into a `sentBy`-compatible object here, once, means
+  // nothing downstream needs to know which shape it got.
+  const displayMessages = messages.map((msg) => ({
+    ...msg,
+    _id: msg._id || msg.id,
+    sentBy:
+      msg.sentBy ??
+      (msg.sender
+        ? { _id: msg.sender.id, name: msg.sender.name, clientName: msg.sender.name }
+        : null),
+    message: msg.message ?? msg.body ?? "",
+  }));
+
   // ── local filtering (instant UI feedback) ──
-  const filteredMessages = messages.filter((msg) => {
+  const filteredMessages = displayMessages.filter((msg) => {
     if (
       messageSearchTerm &&
       !msg.message?.toLowerCase().includes(messageSearchTerm.toLowerCase())
@@ -445,70 +419,20 @@ const ProjectMessagePanel = ({ projectId, currentUser }) => {
       </div>
 
       {/* ── Search & Filter panel ── */}
-      <div className="border-b border-slate-200 bg-white dark:border-white/10 dark:bg-[#0d151c]">
-        <div className="flex items-center">
-          <button
-            onClick={() => setShowFilters(!showFilters)}
-            className="flex flex-1 items-center gap-2 px-4 py-2 text-left text-sm text-slate-600 transition hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-white/[0.06]"
-          >
-            <Filter className="h-4 w-4" />
-            <span>Search & Filters {showFilters ? "▼" : "▶"}</span>
-          </button>
-          <button
-            onClick={handleSummarize}
-            className="flex items-center gap-2 border-l border-slate-200 px-4 py-2 text-sm text-slate-600 transition hover:bg-slate-100 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/[0.06]"
-            title="AI summary of this conversation"
-          >
-            <Sparkles className="h-4 w-4 text-teal-500 dark:text-teal-400" />
-            <span>Summarize</span>
-          </button>
-        </div>
-
-        {showFilters && (
-          <div className="grid grid-cols-1 gap-3 border-t border-slate-200 bg-slate-50 p-3 dark:border-white/10 dark:bg-[#0b1218] sm:grid-cols-2">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-              <input
-                type="text"
-                placeholder="Search messages..."
-                value={messageSearchTerm}
-                onChange={(e) => setMessageSearchTerm(e.target.value)}
-                className="app-control w-full py-2 pl-10 pr-4 text-sm"
-              />
-            </div>
-            <input
-              type="text"
-              placeholder="Filter by sender name..."
-              value={searchSender}
-              onChange={(e) => setSearchSender(e.target.value)}
-              className="app-control px-4 py-2 text-sm"
-            />
-            <input
-              type="date"
-              value={dateFilter.start}
-              onChange={(e) => setDateFilter((p) => ({ ...p, start: e.target.value }))}
-              className="app-control px-4 py-2 text-sm"
-            />
-            <div className="flex gap-2">
-              <input
-                type="date"
-                value={dateFilter.end}
-                onChange={(e) => setDateFilter((p) => ({ ...p, end: e.target.value }))}
-                className="app-control flex-1 px-4 py-2 text-sm"
-              />
-              {(messageSearchTerm || searchSender || dateFilter.start || dateFilter.end) && (
-                <button
-                  onClick={clearFilters}
-                  className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-red-700 transition-colors hover:bg-red-100 dark:border-red-500/30 dark:bg-red-600/20 dark:text-red-400 dark:hover:bg-red-600/40"
-                  title="Clear filters"
-                >
-                  <XCircle className="h-4 w-4" />
-                </button>
-              )}
-            </div>
-          </div>
-        )}
-      </div>
+      <ThreadFilterBar
+        open={showFilters}
+        onToggle={() => setShowFilters(!showFilters)}
+        connected={wsConnected}
+        onSummarize={handleSummarize}
+        accent="teal"
+        search={messageSearchTerm}
+        onSearchChange={setMessageSearchTerm}
+        sender={searchSender}
+        onSenderChange={setSearchSender}
+        dateRange={dateFilter}
+        onDateRangeChange={setDateFilter}
+        onClear={clearFilters}
+      />
 
       {/* ── Message list ── */}
       <div className="flex-1 overflow-y-auto bg-slate-50 p-3 dark:bg-[#090f14] sm:px-5 sm:py-4">
@@ -630,7 +554,11 @@ const ProjectMessagePanel = ({ projectId, currentUser }) => {
                                 href={href}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className={`underline ${own ? "text-teal-50 hover:text-white" : "text-blue-600 hover:text-blue-700 dark:text-blue-300 dark:hover:text-blue-200"}`}
+                                className={`underline decoration-1 underline-offset-2 ${
+                                  own
+                                    ? "text-white decoration-white/60 hover:decoration-white"
+                                    : "text-blue-600 hover:text-blue-700 dark:text-blue-300 dark:hover:text-blue-200"
+                                }`}
                               >
                                 {children}
                               </a>
@@ -672,25 +600,19 @@ const ProjectMessagePanel = ({ projectId, currentUser }) => {
                                     </div>
                                   </div>
                                   <button
-                                    onClick={async () => {
-                                      const token = localStorage.getItem("token");
-                                      const r = await fetch(
-                                        `${API_BASE}/api/projects/${projectId}/messages/${msg._id}/attachments/${att._id}/download`,
-                                        {
-                                          headers: {
-                                            Authorization: `Bearer ${token}`,
-                                          },
-                                        }
-                                      );
-                                      const blob = await r.blob();
-                                      const url =
-                                        window.URL.createObjectURL(blob);
-                                      const a = document.createElement("a");
-                                      a.href = url;
-                                      a.download = att.filename;
-                                      a.click();
-                                      window.URL.revokeObjectURL(url);
-                                    }}
+                                    onClick={() =>
+                                      messagingApi
+                                        .downloadAttachment(
+                                          SCOPE,
+                                          projectId,
+                                          msg._id,
+                                          att._id,
+                                          att.filename
+                                        )
+                                        .catch((err) =>
+                                          console.error("Attachment download failed:", err)
+                                        )
+                                    }
                                     className="rounded p-1 hover:bg-black/10 dark:hover:bg-white/10"
                                     title="Download"
                                   >
@@ -938,12 +860,14 @@ const ProjectMessagePanel = ({ projectId, currentUser }) => {
       {/* ── Input area ── */}
       <div className="border-t border-slate-200 bg-white p-2 dark:border-white/10 dark:bg-[#0d151c] sm:px-3">
         <div className="flex items-center gap-2">
+          {/* No `accept` filter — the server takes any file type now (see
+              config/s3Config.js), so restricting the OS picker here would just
+              hide files a user is otherwise allowed to send. */}
           <input
             type="file"
             ref={fileInputRef}
             onChange={handleFileSelect}
             multiple
-            accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.txt"
             className="hidden"
           />
 
@@ -1023,101 +947,17 @@ const ProjectMessagePanel = ({ projectId, currentUser }) => {
       )}
 
       {/* ── AI Summary modal ── */}
-      {showSummaryModal && (
-        <div
-          className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm"
-          onClick={() => setShowSummaryModal(false)}
-        >
-          <div
-            className="flex max-h-[80vh] w-full max-w-3xl flex-col rounded-xl border border-slate-200 bg-white shadow-2xl dark:border-[#232945] dark:bg-[#0f1419]"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Header */}
-            <div className="flex items-center justify-between border-b border-slate-200 p-4 dark:border-[#1e2a35]">
-              <div className="flex items-center gap-3">
-                <Sparkles className="h-5 w-5 text-teal-500 dark:text-teal-400" />
-                <h2 className="text-xl font-semibold text-slate-950 dark:text-white">
-                  AI Conversation Summary
-                </h2>
-              </div>
-              <button
-                onClick={() => setShowSummaryModal(false)}
-                className="rounded-lg p-2 transition hover:bg-slate-100 dark:hover:bg-[#141a21]"
-              >
-                <XCircle className="h-5 w-5 text-slate-400" />
-              </button>
-            </div>
-
-            {/* Days selector */}
-            <div className="flex items-center gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3 dark:border-[#1e2a35] dark:bg-[#0a0e14]/50">
-              <label className="text-sm text-slate-500 dark:text-gray-400">Time period:</label>
-              <select
-                value={summaryDays}
-                onChange={(e) => setSummaryDays(Number(e.target.value))}
-                className="rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500/20 dark:border-[#2a3340] dark:bg-[#141a21] dark:text-blue-100"
-              >
-                <option value={1}>Last 24 hours</option>
-                <option value={3}>Last 3 days</option>
-                <option value={7}>Last week</option>
-                <option value={14}>Last 2 weeks</option>
-                <option value={30}>Last month</option>
-              </select>
-              <button
-                onClick={handleSummarize}
-                disabled={summaryLoading}
-                className="flex items-center gap-2 rounded bg-teal-600 px-4 py-1.5 text-sm text-white transition hover:bg-teal-500 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <Sparkles className="h-4 w-4" />
-                {summaryLoading ? "Generating..." : "Regenerate"}
-              </button>
-            </div>
-
-            {/* Body */}
-            <div className="flex-1 overflow-y-auto bg-slate-50/50 p-6 dark:bg-[#0a0e14]/30">
-              {summaryLoading ? (
-                <div className="flex h-full flex-col items-center justify-center gap-4">
-                  <div className="relative">
-                    <div className="h-16 w-16 animate-spin rounded-full border-4 border-teal-500/30 border-t-teal-500" />
-                    <Sparkles className="absolute left-1/2 top-1/2 h-6 w-6 -translate-x-1/2 -translate-y-1/2 text-teal-400" />
-                  </div>
-                  <p className="text-sm text-slate-500 dark:text-gray-400">
-                    Analysing conversation with AI...
-                  </p>
-                </div>
-              ) : (
-                <div className="prose prose-sm prose-slate max-w-none dark:prose-invert">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                    {summary}
-                  </ReactMarkdown>
-                </div>
-              )}
-            </div>
-
-            {/* Footer */}
-            <div className="flex items-center justify-between border-t border-slate-200 bg-slate-50 p-4 dark:border-[#1e2a35] dark:bg-[#0a0e14]/50">
-              <span className="text-xs text-slate-500 dark:text-gray-500">
-                Powered by AI · Last {summaryDays} day
-                {summaryDays !== 1 ? "s" : ""}
-              </span>
-              <button
-                onClick={() => copyToClipboard(summary)}
-                disabled={!summary || summaryLoading}
-                className="flex items-center gap-2 rounded border border-slate-200 bg-white px-4 py-2 text-sm text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-[#2a3340] dark:bg-[#141a21] dark:text-gray-200 dark:hover:bg-[#1e2a35]"
-              >
-                {copiedText === summary ? (
-                  <>
-                    <Check className="h-4 w-4" /> Copied!
-                  </>
-                ) : (
-                  <>
-                    <Copy className="h-4 w-4" /> Copy Summary
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ThreadSummaryModal
+        open={showSummaryModal}
+        onClose={() => setShowSummaryModal(false)}
+        days={summaryDays}
+        onDaysChange={setSummaryDays}
+        loading={summaryLoading}
+        summary={summary}
+        onRegenerate={handleSummarize}
+        onCopy={copyToClipboard}
+        copied={copiedText === summary}
+      />
     </div>
   );
 };

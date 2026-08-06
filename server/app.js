@@ -21,6 +21,8 @@ const noticeRoutes = require("./routes/noticeRoutes");
 const leaveRoutes = require("./routes/leaveRoutes");
 const todoTaskRoutes = require("./routes/todoTaskRoutes");
 const chatRoutes = require("./routes/chatRoutes");
+// Web push subscriptions + messaging preferences (S4)
+const pushRoutes = require("./routes/pushRoutes");
 // OLD SYSTEM ROUTES - DEPRECATED
 // const statusRoutes = require("./routes/statusRoutes");
 // const summaryRoutes = require("./routes/summaryRoutes");
@@ -92,33 +94,22 @@ const server = http.createServer(app);
 // See docs/biometric-attendance-integration.md
 app.use("/iclock", iclockRoutes);
 
-// =====================
-// Middleware
-// =====================
-app.use(express.json());
-app.use(morgan("dev"));
-
-// Turn stored /uploads/... paths into short-lived signed URLs on the way out.
-// Mounted before the routers so it wraps res.json for every one of them —
-// file URLs surface from eight-odd places at varying nesting depths, and
-// signing at each read site means any that's missed ships a broken image.
-// See middlewares/signFileUrls.js.
-app.use(require("./middlewares/signFileUrls"));
-
-// Serve uploaded files.
+// CORS — mounted before every other route, /uploads included.
 //
-// This was `express.static(path.join(__dirname, "uploads"))` — no auth of any
-// kind, so every chat attachment, sick-leave certificate and ID document was
-// publicly downloadable by anyone with the URL. Leave documents were named
-// `document-<Date.now()>.pdf`, so the only thing protecting one was a
-// millisecond timestamp.
-//
-// fileRoutes requires a short-lived signed URL (or a Bearer token) and refuses
-// anything resolving outside UPLOAD_ROOT. See routes/fileRoutes.js and
-// config/storage.js.
-app.use("/uploads", require("./routes/fileRoutes"));
-
-// CORS setup
+// This used to sit AFTER the /uploads mount (further down). That went
+// unnoticed for a long time because <img>/<video> tags and plain <a>
+// navigation don't require CORS headers to load or open a cross-origin file —
+// only a script-initiated fetch()/XHR does, to be allowed to read the
+// response back into JS. So attachments displayed and "download" links
+// opened fine, but the moment attachment downloads were switched to
+// fetch()-as-blob (to force an actual save instead of the browser just
+// opening the file — see chatWindow.jsx / MediaLightbox.jsx), every request
+// to /uploads/... failed outright in the browser with "TypeError: Failed to
+// fetch" and no server-side error at all, because the response never carried
+// an Access-Control-Allow-Origin header. Moved here so it applies to every
+// browser-facing route. /iclock stays excluded, on purpose (see its comment
+// above): the terminal firmware sends no Origin header and doesn't speak
+// preflight, so CORS has nothing to do there anyway.
 const frontendOrigins = [
   process.env.FRONTEND_ORIGIN,
   process.env.FRONTEND_URL,
@@ -150,6 +141,32 @@ app.use(
     credentials: true,
   })
 );
+
+// =====================
+// Middleware
+// =====================
+app.use(express.json());
+app.use(morgan("dev"));
+
+// Turn stored /uploads/... paths into short-lived signed URLs on the way out.
+// Mounted before the routers so it wraps res.json for every one of them —
+// file URLs surface from eight-odd places at varying nesting depths, and
+// signing at each read site means any that's missed ships a broken image.
+// See middlewares/signFileUrls.js.
+app.use(require("./middlewares/signFileUrls"));
+
+// Serve uploaded files.
+//
+// This was `express.static(path.join(__dirname, "uploads"))` — no auth of any
+// kind, so every chat attachment, sick-leave certificate and ID document was
+// publicly downloadable by anyone with the URL. Leave documents were named
+// `document-<Date.now()>.pdf`, so the only thing protecting one was a
+// millisecond timestamp.
+//
+// fileRoutes requires a short-lived signed URL (or a Bearer token) and refuses
+// anything resolving outside UPLOAD_ROOT. See routes/fileRoutes.js and
+// config/storage.js.
+app.use("/uploads", require("./routes/fileRoutes"));
 
 // =====================
 // Health check & Diagnostics
@@ -210,6 +227,7 @@ app.use("/api/todos", todoTaskRoutes);
 // app.use("/api/summary", summaryRoutes);
 app.use("/api/notices", noticeRoutes);
 app.use("/api/chat", chatRoutes);
+app.use("/api/push", pushRoutes);
 app.use("/api/wishes", wishRoutes);
 app.use("/api/holidays", holidayRoutes);
 app.use("/api/flexible-shifts", flexibleShiftRoutes);

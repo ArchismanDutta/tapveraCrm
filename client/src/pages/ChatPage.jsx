@@ -1,13 +1,54 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { useLocation } from "react-router-dom";
+import { useDispatch, useSelector } from "react-redux";
 import CreateGroupModal from "../components/chat/CreateGroupModal";
 import ManageGroupModal from "../components/chat/ManageGroupModal";
 import ChatWindow from "../components/chat/chatWindow";
 import { useWebSocketContext } from "../contexts/WebSocketContext";
 import Sidebar from "../components/dashboard/Sidebar";
 import { ArrowLeft, Search, Filter, X, SortAsc, Users, Settings, Trash2, MessageSquare } from "lucide-react";
+import * as messagingApi from "../api/messagingApi";
+import NotificationPermissionPrompt from "../components/notifications/NotificationPermissionPrompt";
+import {
+  fetchThreads,
+  fetchMessages as fetchThreadMessages,
+  markThreadRead,
+  setActiveThread,
+  selectMessages,
+} from "../store/slices/threadsSlice";
 
-const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
+const SCOPE = messagingApi.SCOPES.CHAT;
+
+// Module-level so the reference is stable across renders — returning a fresh
+// [] from a selector makes useSelector re-render on every store change.
+const EMPTY_MESSAGES = [];
+const selectNoMessages = () => EMPTY_MESSAGES;
+
+/**
+ * ChatPage — Phase 3.
+ *
+ * ─── WHAT CHANGED ───
+ * Conversation list, thread history and unread counts now come from
+ * `threadsSlice`. This component previously owned all three in local state,
+ * kept a `sessionStorage` mirror of the unread map, and reconciled three
+ * sources of messages by hand (`initialMessages` + `allChatMessages` +
+ * `chatMessages` merged through a Map on every render). All of that is gone —
+ * the slice dedupes and orders centrally, so a message can arrive from REST,
+ * the legacy `chat:message` event, or the new `thread:message` event and land
+ * exactly once.
+ *
+ * Composer state (draft text, attachments, reply target) stays local to
+ * ChatWindow, which is where it belongs — it is per-view UI state, not shared
+ * application state.
+ *
+ * ─── UNREAD OWNERSHIP ───
+ * Four modules used to write `chat_unread_total` / `chat_unread_map` to
+ * sessionStorage and broadcast `chat-unread-*` events: this page,
+ * WebSocketContext, Sidebar and App. Four writers, no owner — which is exactly
+ * why the badge drifted. As of Phase 5 the store is the only owner: Sidebar
+ * seeds it app-wide from the server, `thread:message` increments it, and
+ * opening a thread clears it. The sessionStorage mirror is gone.
+ */
 
 // Custom hook for debouncing
 const useDebounce = (value, delay) => {
@@ -28,17 +69,14 @@ const useDebounce = (value, delay) => {
 
 const ChatPage = ({ onLogout }) => {
   const location = useLocation();
+  const dispatch = useDispatch();
+
   const [collapsed, setCollapsed] = useState(false);
   const [userRole, setUserRole] = useState(null);
   const [jwtToken, setJwtToken] = useState(null);
-  const [conversations, setConversations] = useState([]);
   const [selectedConversation, setSelectedConversation] = useState(null);
   const [showCreateGroup, setShowCreateGroup] = useState(false);
   const [showManageGroup, setShowManageGroup] = useState(false);
-  const [initialMessages, setInitialMessages] = useState([]);
-
-  // New state for tracking unread messages
-  const [unreadMessages, setUnreadMessages] = useState({}); // { conversationId: count }
 
   // Search and filter state
   const [searchTerm, setSearchTerm] = useState("");
@@ -46,324 +84,183 @@ const ChatPage = ({ onLogout }) => {
   const [sortBy, setSortBy] = useState("recent"); // recent, alphabetical, unread
   const [showFilters, setShowFilters] = useState(false);
 
-  // Debounced search term
+  // Drives the contextual push-permission prompt. Set once the user has
+  // actually sent something — see NotificationPermissionPrompt for why the
+  // browser dialog must never be reached on page load.
+  const [hasSentMessage, setHasSentMessage] = useState(false);
+
   const debouncedSearchTerm = useDebounce(searchTerm, 300);
 
-  // Use WebSocket context
+  // Socket context is still needed for reconnect detection and for telling the
+  // server which conversation rooms this socket should be subscribed to.
+  // Sending no longer goes through it — ChatWindow queues to the outbox (S2),
+  // which survives an offline period and drains on reconnect.
   const {
-    chatMessages: liveMessages,
-    allChatMessages: allMessages,
-    sendMessage,
+    isConnected,
     setActiveConversation,
     setConversations: updateWebSocketConversations,
   } = useWebSocketContext();
 
-  const currentUserId = JSON.parse(localStorage.getItem("user"))?._id;
+  const currentUserId = JSON.parse(localStorage.getItem("user") || "{}")?._id;
 
-  const fetchConversations = useCallback(async (token) => {
-    try {
-      const res = await fetch(`${API_BASE}/api/chat/groups`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) throw new Error("Failed to fetch conversations");
-      const data = await res.json();
-      setConversations(data);
-      updateWebSocketConversations(data);
+  /* ── Store-derived state ──────────────────────────────────────────── */
 
-      // Seed the unread counts from the server rather than from sessionStorage.
-      //
-      // sessionStorage only ever held what the live socket handler had counted
-      // in this tab, this session — so anything that arrived while the user was
-      // logged out, on their phone, or in another tab simply never appeared.
-      // The server now returns unreadCount per conversation, which is the real
-      // number; from here the socket handler keeps incrementing it as before.
-      const seeded = {};
-      for (const conversation of data) {
-        if (conversation?.unreadCount > 0) {
-          seeded[String(conversation._id)] = conversation.unreadCount;
-        }
-      }
-      setUnreadMessages(seeded);
-    } catch (error) {
-      console.error("Failed to load conversations", error);
-    }
-  }, [updateWebSocketConversations]);
+  const threadsById = useSelector((s) => s.threads.threads);
+  const unreadByKey = useSelector((s) => s.threads.unreadByKey);
+
+  // The slice keys everything "chat:<id>"; the list UI wants plain documents.
+  const conversations = useMemo(
+    () =>
+      Object.entries(threadsById)
+        .filter(([key]) => key.startsWith(`${SCOPE}:`))
+        .map(([, thread]) => thread),
+    [threadsById]
+  );
+
+  const selectedId = selectedConversation?._id;
+  const combinedMessages = useSelector(
+    selectedId ? selectMessages(SCOPE, selectedId) : selectNoMessages
+  );
+
+  const getUnreadCount = useCallback(
+    (conversationId) => unreadByKey[`${SCOPE}:${conversationId}`] || 0,
+    [unreadByKey]
+  );
+
+  /* ── Loading ──────────────────────────────────────────────────────── */
+
+  const loadConversations = useCallback(
+    () => dispatch(fetchThreads(SCOPE)),
+    [dispatch]
+  );
 
   useEffect(() => {
-    const storedUser = localStorage.getItem("user");
     const storedRole = localStorage.getItem("role");
     const storedToken = localStorage.getItem("token");
+    if (storedRole) setUserRole(storedRole);
+    if (storedToken) setJwtToken(storedToken);
+    if (storedToken) loadConversations();
+  }, [loadConversations]);
 
-    if (storedUser && storedRole && storedToken) {
-      setUserRole(storedRole);
-      setJwtToken(storedToken);
-      fetchConversations(storedToken);
+  // Keep the socket subscribed to whatever conversations we know about.
+  // Without this a conversation loaded after connect never joins its room.
+  useEffect(() => {
+    if (conversations.length) updateWebSocketConversations(conversations);
+  }, [conversations, updateWebSocketConversations]);
+
+  // Reconcile after a reconnect.
+  //
+  // Sockets drop — laptop lid, wifi handoff, proxy timeout. Anything that
+  // arrived while this client was disconnected was never counted, because the
+  // only thing that increments unread live is a socket event. On every
+  // reconnect (not the first connect — that is covered by the mount fetch) we
+  // reseed from the server, which is authoritative. Without this, unread
+  // silently under-counts for the rest of the session.
+  const wasConnected = React.useRef(false);
+  useEffect(() => {
+    if (isConnected && wasConnected.current) {
+      loadConversations();
+      if (selectedId) dispatch(fetchThreadMessages({ scope: SCOPE, threadId: selectedId }));
     }
-  }, [fetchConversations]);
+    wasConnected.current = isConnected;
+  }, [isConnected, loadConversations, dispatch, selectedId]);
 
   // Refetch when a group is created, renamed, or its membership changes.
-  //
-  // The server already broadcasts "conversation:updated" to every member
-  // (routes/chatRoutes.js), and WebSocketContext bridges it to this window
-  // event — but only Sidebar was listening. So a newly created group appeared
-  // in the sidebar immediately while this page, the actual message portal,
-  // kept showing a stale list until the user reloaded.
+  // The server broadcasts `conversation:updated` to every member; this is the
+  // one legacy listener worth keeping until group management moves behind the
+  // service layer.
   useEffect(() => {
-    const token = localStorage.getItem("token");
-    if (!token) return undefined;
-
-    const onConversationUpdated = () => fetchConversations(token);
-
+    const onConversationUpdated = () => loadConversations();
     window.addEventListener("conversation-updated", onConversationUpdated);
     return () =>
       window.removeEventListener("conversation-updated", onConversationUpdated);
-  }, [fetchConversations]);
+  }, [loadConversations]);
 
+  // Thread history. REST is authoritative; the slice merges socket arrivals on
+  // top rather than being clobbered by this.
   useEffect(() => {
-    if (!selectedConversation || !jwtToken) return;
+    if (!selectedId) return;
+    dispatch(fetchThreadMessages({ scope: SCOPE, threadId: selectedId }));
+  }, [dispatch, selectedId]);
 
-    const fetchMessages = async () => {
-      try {
-        const res = await fetch(
-          `${API_BASE}/api/chat/messages/${selectedConversation._id}`,
-          {
-            headers: { Authorization: `Bearer ${jwtToken}` },
-          }
-        );
-        if (!res.ok) throw new Error("Failed to fetch messages");
-        const data = await res.json();
-        setInitialMessages(data);
-      } catch (error) {
-        console.error(error);
-      }
-    };
+  /* ── Actions ──────────────────────────────────────────────────────── */
 
-    fetchMessages();
-  }, [selectedConversation, jwtToken]);
+  const openConversation = useCallback(
+    (conv) => {
+      setSelectedConversation(conv);
+      setActiveConversation(conv._id);
+      // Zeroes the badge locally and advances the server-side read cursor.
+      dispatch(setActiveThread(SCOPE, conv._id));
+      dispatch(markThreadRead({ scope: SCOPE, threadId: conv._id }));
+    },
+    [dispatch, setActiveConversation]
+  );
 
-  // Listen for live unread map updates (from WebSocketContext's chat:message
-  // handler, and from the sidebar's own server seed).
-  //
-  // No longer seeds from sessionStorage on mount: fetchConversations above now
-  // seeds from the server, which is authoritative. Reading storage here as well
-  // just raced that fetch and briefly showed a stale count.
+  const handleSelectConversation = openConversation;
+
+  // Auto-open a conversation when arriving from a notification.
   useEffect(() => {
-    const onMap = (e) => {
-      const incoming = e.detail?.map || {};
-      setUnreadMessages(incoming);
-    };
-    window.addEventListener("chat-unread-map", onMap);
-    return () => window.removeEventListener("chat-unread-map", onMap);
-  }, []);
+    if (!location.state?.openConversationId || conversations.length === 0) return;
+    const target = conversations.find((c) => c._id === location.state.openConversationId);
+    if (!target) return;
+    openConversation(target);
+    window.history.replaceState({}, document.title);
+  }, [location.state, conversations, openConversation]);
 
-  // NOTE: Unread counts are incremented exactly once, inside
-  // WebSocketContext.jsx's chat:message socket handler (it owns
-  // sessionStorage's chat_unread_map and dispatches "chat-unread-map" /
-  // "chat-unread-total", which the listener above adopts via
-  // setUnreadMessages(incoming)). A second effect used to duplicate that
-  // same increment here by separately watching allMessages/liveMessages,
-  // which caused every incoming message to count twice against the badge.
-  // Removed — this component only needs to react to the map events plus
-  // clear counts locally when a conversation is opened/deleted (below).
-
-  // Broadcast total unread count for sidebar badge
-  useEffect(() => {
-    const total = Object.values(unreadMessages).reduce((a, b) => a + Number(b || 0), 0);
-    try {
-      sessionStorage.setItem("chat_unread_total", String(total));
-      sessionStorage.setItem("chat_unread_map", JSON.stringify(unreadMessages));
-    } catch (error) {
-      console.warn("Unable to persist unread messages", error);
-    }
-    window.dispatchEvent(
-      new CustomEvent("chat-unread-total", { detail: { total } })
-    );
-    window.dispatchEvent(
-      new CustomEvent("chat-unread-map", { detail: { map: unreadMessages } })
-    );
-  }, [unreadMessages]);
-
-  // Merge messages from initial fetch, live WS, and any optimistic ones from the hook (in allMessages)
-  const combinedMessages = React.useMemo(() => {
-    const map = new Map();
-    const put = (m) => map.set(String(m._id || m.messageId || `${m.senderId}-${m.timestamp}`), m);
-    initialMessages.forEach(put);
-    (allMessages || []).forEach(put);
-    (liveMessages || []).forEach(put);
-    return Array.from(map.values()).sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-  }, [initialMessages, allMessages, liveMessages]);
-
-  // Auto-open conversation from notification navigation
-  useEffect(() => {
-    if (location.state?.openConversationId && conversations.length > 0) {
-      const targetConversation = conversations.find(
-        conv => conv._id === location.state.openConversationId
-      );
-
-      if (targetConversation) {
-        setSelectedConversation(targetConversation);
-        setActiveConversation(targetConversation._id);
-
-        // Clear the conversation's unread count
-        setUnreadMessages(prev => {
-          const updated = { ...prev };
-          delete updated[targetConversation._id];
-          return updated;
-        });
-
-        // Mark messages as read
-        if (jwtToken) {
-          fetch(`${API_BASE}/api/chat/${targetConversation._id}/mark-read`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${jwtToken}`,
-            },
-            body: JSON.stringify({ userId: currentUserId }),
-          }).catch(err => console.error('Failed to mark messages as read:', err));
-        }
-
-        // Clear navigation state
-        window.history.replaceState({}, document.title);
-      }
-    }
-  }, [location.state, conversations, jwtToken, currentUserId, setActiveConversation]);
+  // Clear the active thread on unmount so a background message badges correctly.
+  useEffect(() => () => { dispatch(setActiveThread(null, null)); }, [dispatch]);
 
   const handleCreateGroup = async (name, memberIds) => {
     try {
-      const res = await fetch(`${API_BASE}/api/chat/groups`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${jwtToken}`,
-        },
-        body: JSON.stringify({ name, memberIds }),
-      });
-      if (!res.ok) throw new Error("Failed to create group");
-      const newGroup = await res.json();
-      const updatedConversations = [newGroup, ...conversations];
-      setConversations(updatedConversations);
-      // Update WebSocket context with new conversations
-      updateWebSocketConversations(updatedConversations);
+      await messagingApi.createGroup(name, memberIds);
+      await loadConversations();
       setShowCreateGroup(false);
     } catch (error) {
-      alert(error.message);
+      alert(error?.response?.data?.error || error.message);
     }
   };
 
   const handleDeleteConversation = async (conversationId) => {
-    if (!window.confirm("Are you sure you want to delete this conversation?"))
-      return;
+    if (!window.confirm("Are you sure you want to delete this conversation?")) return;
 
     try {
-      const res = await fetch(
-        `${API_BASE}/api/chat/conversations/${conversationId}`,
-        {
-          method: "DELETE",
-          headers: { Authorization: `Bearer ${jwtToken}` },
-        }
-      );
+      await messagingApi.deleteConversation(conversationId);
 
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.error || "Failed to delete conversation");
-      }
-
-      // Remove deleted conversation from list
-      const updatedConversations = conversations.filter((conv) => conv._id !== conversationId);
-      setConversations(updatedConversations);
-      // Update WebSocket context
-      updateWebSocketConversations(updatedConversations);
-
-      // Clear selected conversation if deleted
       if (selectedConversation?._id === conversationId) {
         setSelectedConversation(null);
         setActiveConversation(null);
-        setInitialMessages([]);
+        dispatch(setActiveThread(null, null));
       }
 
-      // Clean up unread messages tracking
-      setUnreadMessages((prev) => {
-        const updated = { ...prev };
-        delete updated[conversationId];
-        return updated;
-      });
-
+      await loadConversations();
       alert("Conversation deleted successfully");
     } catch (error) {
-      alert(error.message);
+      alert(error?.response?.data?.error || error.message);
     }
   };
 
-  // Handle conversation selection and clear unread count
-  const handleSelectConversation = (conv) => {
-    setSelectedConversation(conv);
-    // Update WebSocket context with active conversation
-    setActiveConversation(conv._id);
+  /* ── Derived list ─────────────────────────────────────────────────── */
 
-    // Clear unread count for selected conversation
-    setUnreadMessages((prev) => {
-      const updated = { ...prev };
-      delete updated[conv._id];
-      return updated;
-    });
-
-    // Notify global hook about active conversation (to avoid counting those messages)
-    window.dispatchEvent(
-      new CustomEvent("chat-active-conversation", { detail: { conversationId: conv._id } })
-    );
-
-    // Persist read status server-side too — this used to only happen on the
-    // notification-navigation path (and that call 404'd since the route
-    // didn't exist). This is the actual common case: a user opening a
-    // conversation from the list.
-    if (jwtToken) {
-      fetch(`${API_BASE}/api/chat/${conv._id}/mark-read`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${jwtToken}`,
-        },
-        body: JSON.stringify({ userId: currentUserId }),
-      }).catch((err) => console.error("Failed to mark messages as read:", err));
-    }
-  };
-
-  // Get unread count for a conversation
-  const getUnreadCount = useCallback(
-    (conversationId) => unreadMessages[conversationId] || 0,
-    [unreadMessages]
-  );
-
-  // Filter and sort conversations
   const filteredAndSortedConversations = useMemo(() => {
     let filtered = [...conversations];
 
-    // Apply search filter
     if (debouncedSearchTerm) {
       filtered = filtered.filter((conv) => {
         const searchLower = debouncedSearchTerm.toLowerCase();
-
-        // Search by conversation name
         const nameMatch = (conv.name || "").toLowerCase().includes(searchLower);
-
-        // Search by member names
         const memberMatch = conv.members?.some((member) =>
           (member.name || "").toLowerCase().includes(searchLower)
         );
-
         return nameMatch || memberMatch;
       });
     }
 
-    // Apply unread/read filter
     if (filterType === "unread") {
       filtered = filtered.filter((conv) => getUnreadCount(conv._id) > 0);
     } else if (filterType === "read") {
       filtered = filtered.filter((conv) => getUnreadCount(conv._id) === 0);
     }
 
-    // Apply sorting
     filtered.sort((a, b) => {
       switch (sortBy) {
         case "alphabetical":
@@ -372,8 +269,6 @@ const ChatPage = ({ onLogout }) => {
           return getUnreadCount(b._id) - getUnreadCount(a._id);
         case "recent":
         default:
-          // Sort by last message time (you may need to add this field)
-          // For now, keep original order
           return 0;
       }
     });
@@ -648,9 +543,10 @@ const ChatPage = ({ onLogout }) => {
 
               {/* Messages - scrollable */}
               <div className="flex-1 overflow-y-auto p-4">
+                <NotificationPermissionPrompt trigger={hasSentMessage} />
                 <ChatWindow
                   messages={combinedMessages}
-                  sendMessage={sendMessage}
+                  onSent={() => setHasSentMessage(true)}
                   conversationId={selectedConversation._id}
                   currentUserId={currentUserId}
                   conversationMembers={selectedConversation.members || []}
@@ -685,11 +581,7 @@ const ChatPage = ({ onLogout }) => {
         onClose={() => setShowManageGroup(false)}
         conversation={selectedConversation}
         jwtToken={jwtToken}
-        onGroupUpdated={() => {
-          // Refresh conversations list
-          const token = localStorage.getItem("token");
-          fetchConversations(token);
-        }}
+        onGroupUpdated={() => loadConversations()}
       />
     </div>
   );

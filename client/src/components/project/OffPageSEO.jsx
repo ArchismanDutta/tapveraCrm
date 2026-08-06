@@ -117,6 +117,12 @@ const OffPageSEO = ({ projectId, userRole, userId }) => {
   const [filterCategory, setFilterCategory] = useState("all");
   const [selectedBacklinks, setSelectedBacklinks] = useState([]);
   const [undoStack, setUndoStack] = useState([]);
+  // Guards the single add/edit submit handlers below against a double-click
+  // firing two POSTs before the first response comes back — unlike the bulk
+  // form (bulkSubmitting), neither had this, and Backlink has no idempotency
+  // key the way messages do (clientMsgId), so two clicks created two
+  // identical, genuinely separate documents. That's the "same link twice" bug.
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [formData, setFormData] = useState({
     url: "",
@@ -176,6 +182,8 @@ const OffPageSEO = ({ projectId, userRole, userId }) => {
 
   const handleAddBacklink = async (e) => {
     e.preventDefault();
+    if (isSubmitting) return;
+    setIsSubmitting(true);
     try {
       const token = localStorage.getItem("token");
       await axios.post(
@@ -195,13 +203,15 @@ const OffPageSEO = ({ projectId, userRole, userId }) => {
         error.response?.data?.message || "Error adding backlink",
         "error"
       );
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   const handleEditBacklink = async (e) => {
     e.preventDefault();
-    if (!selectedBacklink) return;
-
+    if (!selectedBacklink || isSubmitting) return;
+    setIsSubmitting(true);
     try {
       const token = localStorage.getItem("token");
       await axios.put(
@@ -222,6 +232,8 @@ const OffPageSEO = ({ projectId, userRole, userId }) => {
         error.response?.data?.message || "Error updating backlink",
         "error"
       );
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -1004,9 +1016,17 @@ const OffPageSEO = ({ projectId, userRole, userId }) => {
                   </button>
                   <button
                     type="submit"
-                    className="flex-1 px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:from-blue-700 hover:to-purple-700 transition-all font-medium"
+                    disabled={isSubmitting}
+                    className="flex-1 px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:from-blue-700 hover:to-purple-700 transition-all font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    Add Backlink
+                    {isSubmitting ? (
+                      <span className="flex items-center justify-center gap-2">
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Adding...
+                      </span>
+                    ) : (
+                      "Add Backlink"
+                    )}
                   </button>
                 </div>
               </form>
@@ -1094,9 +1114,17 @@ const OffPageSEO = ({ projectId, userRole, userId }) => {
                   </button>
                   <button
                     type="submit"
-                    className="flex-1 px-4 py-2 bg-gradient-to-r from-green-600 to-blue-600 text-white rounded-lg hover:from-green-700 hover:to-blue-700 transition-all font-medium"
+                    disabled={isSubmitting}
+                    className="flex-1 px-4 py-2 bg-gradient-to-r from-green-600 to-blue-600 text-white rounded-lg hover:from-green-700 hover:to-blue-700 transition-all font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    Update Backlink
+                    {isSubmitting ? (
+                      <span className="flex items-center justify-center gap-2">
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Updating...
+                      </span>
+                    ) : (
+                      "Update Backlink"
+                    )}
                   </button>
                 </div>
               </form>

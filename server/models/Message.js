@@ -104,7 +104,31 @@ const messageSchema = new mongoose.Schema(
         ],
       },
     ],
+    // ─── Delivery receipts (S1) ─────────────────────────────────────────
+    // Additive and optional; see the matching block in ChatMessage.js for why
+    // clientMsgId is the keystone for optimistic send / retry / offline outbox.
+    clientMsgId: { type: String, default: null },
+
+    /**
+     * Who has RECEIVED this on a device. Distinct from `readBy` — delivery is
+     * acked automatically by the recipient's socket, read requires the message
+     * to have actually been visible on screen.
+     */
+    deliveredTo: [
+      {
+        user: { type: mongoose.Schema.Types.ObjectId, refPath: 'deliveredTo.userModel' },
+        userModel: { type: String, enum: ['User', 'Client'] },
+        at: { type: Date, default: Date.now },
+        _id: false,
+      },
+    ],
+
     // Message Status Tracking
+    //
+    // Now DERIVED rather than asserted: services/messaging/receipts.js computes
+    // it from deliveredTo/readBy against the thread's membership. It was
+    // previously defaulted to 'sent' and only ever changed by an explicit
+    // status call, so it never reflected reality.
     status: {
       type: String,
       enum: ['sending', 'sent', 'delivered', 'read', 'failed'],
@@ -153,5 +177,7 @@ messageSchema.index({ project: 1, isPinned: 1 });
 messageSchema.index({ project: 1, status: 1 });
 messageSchema.index({ 'readBy.user': 1 });
 messageSchema.index({ starredBy: 1 });
+// Idempotency: at most one message per client-generated id.
+messageSchema.index({ clientMsgId: 1 }, { unique: true, sparse: true });
 
 module.exports = mongoose.model("Message", messageSchema);

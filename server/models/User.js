@@ -70,6 +70,13 @@ const userSchema = new mongoose.Schema(
     salary: { type: salarySchema, default: () => ({}) },
     ref: { type: String, trim: true },
     status: { type: String, enum: ["active", "inactive", "terminated", "absconded"], default: "active" },
+
+    // Messaging presence (S3). Written on final socket disconnect only — never
+    // per heartbeat, which would be a write per user every 25s for a field
+    // that is only ever read while someone is offline. Additive and optional:
+    // absent on every existing user until their first disconnect, and
+    // services/messaging/presence.js treats absent as "unknown", not "never".
+    lastSeenAt: { type: Date, default: null },
     totalPl: { type: Number, default: 0, min: 0 },
     password: { type: String, required: true },
     role: { type: String, enum: ["super-admin", "admin", "hr", "employee"], default: "employee" },

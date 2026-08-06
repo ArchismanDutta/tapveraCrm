@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
@@ -31,6 +31,27 @@ import MentionInput from "../common/MentionInput";
 import MentionText from "../common/MentionText";
 import { messageMentionsUser, resolveMentionedUserIds } from "../../utils/mentions";
 import { useWebSocketContext } from "../../contexts/WebSocketContext";
+import ThreadSummaryModal from "../message/ThreadSummaryModal";
+import ThreadFilterBar from "../message/ThreadFilterBar";
+import PresenceIndicator from "../message/PresenceIndicator";
+import MessageStatus from "../message/MessageStatus";
+import useReceipts from "../../hooks/useReceipts";
+import { queueAndSend } from "../../utils/sendMessage";
+import FailedMessageBar from "../message/FailedMessageBar";
+import UnreadDivider from "../message/UnreadDivider";
+import NewMessagesButton from "./NewMessagesButton";
+import useMessageListMechanics, { startsGroup } from "../../hooks/useMessageListMechanics";
+import useDraft from "../../hooks/useDraft";
+import { selectUnread } from "../../store/slices/threadsSlice";
+import { deriveStatus } from "../../store/slices/threadsSlice";
+// Phase 3: network calls go through the shared axios-backed API module instead
+// of hand-rolled fetch + `Authorization: Bearer ${localStorage.getItem(...)}`,
+// and typing indicators read from the store rather than window CustomEvents.
+// Composer state (draft, attachments, reply target) stays local — that is
+// per-view UI state, not shared application state.
+import * as messagingApi from "../../api/messagingApi";
+import { selectTyping } from "../../store/slices/threadsSlice";
+import { useSelector } from "react-redux";
 
 // ─── Main component ──────────────────────────────────────────────────────────
 // Styling here is kept in lockstep with ChatPage.jsx (its parent shell) —
@@ -39,15 +60,24 @@ import { useWebSocketContext } from "../../contexts/WebSocketContext";
 // ProjectMessagePanel was brought in line with ProjectDetailPage's teal theme.
 const ChatWindow = ({
   messages,
-  sendMessage,
+  onSent,
   conversationId,
   currentUserId,
   conversationMembers,
 }) => {
-  const [input, setInput] = useState("");
+  // Composer text is a per-thread DRAFT, not plain component state: switching
+  // conversations mid-sentence and returning to an empty box feels careless.
+  const { draft: input, setDraft: setInput, clearDraft } = useDraft({
+    scope: messagingApi.SCOPES.CHAT,
+    threadId: conversationId,
+    userId: currentUserId,
+  });
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [replyingTo, setReplyingTo] = useState(null);
-  const [mentionedUsers, setMentionedUsers] = useState([]);
+  // Only the setter is used: the mention picker records its selections here,
+  // but resolveMentionedUserIds re-derives them from the message text at send
+  // time, which also catches mentions typed without the picker.
+  const [, setMentionedUsers] = useState([]);
   const [messageSearchTerm, setMessageSearchTerm] = useState("");
   const [searchSender, setSearchSender] = useState("");
   const [dateFilter, setDateFilter] = useState({ start: "", end: "" });
@@ -68,7 +98,6 @@ const ChatWindow = ({
   const chatEndRef = useRef(null);
   const fileInputRef = useRef(null);
   const textareaRef = useRef(null);
-  const prevMessagesLengthRef = useRef(0);
   const emojiPickerRef = useRef(null);
   const typingTimeoutRef = useRef(null);
 
@@ -78,6 +107,50 @@ const ChatWindow = ({
     sendChatTyping,
     sendChatStopTyping,
   } = useWebSocketContext();
+
+  // { [userId]: userName } for this thread, kept current by the socket layer.
+  const typingMap = useSelector(selectTyping(messagingApi.SCOPES.CHAT, conversationId));
+
+  // Unread on open — fixes where the divider sits.
+  const unreadOnOpen = useSelector(selectUnread(messagingApi.SCOPES.CHAT, conversationId));
+
+  // Scroll anchoring, stick-to-bottom, jump-to-latest and the unread divider
+  // position all live in one hook (S5). `atBottom` also gates the READ receipt:
+  // scrolled up through history is not reading the latest message.
+  const {
+    containerRef,
+    bottomRef,
+    onScroll,
+    atBottom,
+    newSinceScroll,
+    scrollToBottom,
+    unreadDividerId,
+  } = useMessageListMechanics({
+    messages,
+    threadId: conversationId,
+    unreadCount: unreadOnOpen,
+    currentUserId,
+  });
+
+  // Delivery acks + the read cursor (S1). Read additionally requires
+  // document.hasFocus() — see the hook.
+  useReceipts({
+    scope: messagingApi.SCOPES.CHAT,
+    threadId: conversationId,
+    messages,
+    currentUserId,
+    atBottom,
+  });
+
+  // Ids of everyone else in the thread — what the tick aggregate is computed
+  // against.
+  const recipientIds = useMemo(
+    () =>
+      (conversationMembers || [])
+        .map((m) => String(m?._id ?? m))
+        .filter((id) => id && id !== String(currentUserId)),
+    [conversationMembers, currentUserId]
+  );
 
   // Message suggestions
   const { getSuggestions, getQuickReplies } = useMessageSuggestions(conversationId, messages);
@@ -123,73 +196,48 @@ const ChatWindow = ({
   const handleSendMessage = async () => {
     if (!input.trim() && selectedFiles.length === 0) return;
 
-    const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
-    const token = localStorage.getItem("token");
-
     stopTypingIndicator();
     if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
 
     try {
-      // If there are files, reply, or mentions, use HTTP POST (FormData required)
-      if (selectedFiles.length > 0 || replyingTo || mentionedUsers.length > 0) {
-        console.log('[ChatWindow] Sending message with files:', selectedFiles.length);
-        const formData = new FormData();
-        formData.append("conversationId", conversationId);
-        formData.append("message", input.trim() || "(File attachment)");
-        if (replyingTo) {
-          formData.append("replyTo", replyingTo._id || replyingTo.messageId);
-        }
-        // Resolve rather than mapping _id directly: @everyone is a sentinel
-        // option, not a person, so its placeholder id must never reach the
-        // server — it would be stored as a mention of a user that doesn't
-        // exist and would notify nobody. resolveMentionedUserIds expands it to
-        // the real members (minus you) and passes named mentions through.
-        const mentionIds = resolveMentionedUserIds(
-          input.trim(),
-          conversationMembers,
-          currentUserId
-        );
-        if (mentionIds.length > 0) {
-          formData.append("mentions", JSON.stringify(mentionIds));
-        }
-        selectedFiles.forEach((file) => {
-          console.log('[ChatWindow] Adding file:', file.name, file.type, file.size);
-          formData.append("files", file);
-        });
+      // Files, a reply target, or mentions need the REST path (multipart /
+      // structured body). A plain text message still goes over the socket,
+      // which is the lower-latency route — both converge on the same server
+      // service since Phase 1, so they behave identically.
+      // Resolve rather than mapping _id directly: @everyone is a sentinel
+      // option, not a person, so its placeholder id must never reach the
+      // server — it would be stored as a mention of a user that doesn't
+      // exist and would notify nobody. resolveMentionedUserIds expands it to
+      // the real members (minus you) and passes named mentions through.
+      const mentionIds = resolveMentionedUserIds(
+        input.trim(),
+        conversationMembers,
+        currentUserId
+      );
 
-        console.log('[ChatWindow] Sending to:', `${API_BASE}/api/chat/messages`);
-        const response = await fetch(`${API_BASE}/api/chat/messages`, {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-          body: formData,
-        });
+      // One path for every send now. queueAndSend persists to the outbox,
+      // renders the bubble immediately as `sending`, and attempts delivery —
+      // so a message composed offline survives a reload and goes out on
+      // reconnect instead of vanishing.
+      await queueAndSend({
+        scope: messagingApi.SCOPES.CHAT,
+        threadId: conversationId,
+        body: input.trim() || (selectedFiles.length ? "(File attachment)" : ""),
+        files: selectedFiles,
+        replyTo: replyingTo ? replyingTo._id || replyingTo.messageId : null,
+        mentions: mentionIds,
+        sender: { id: currentUserId, name: resolveMyName() },
+      });
 
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}));
-          console.error('[ChatWindow] Upload error:', response.status, errorData);
-          throw new Error(errorData.error || "Failed to send message");
-        }
-
-        const result = await response.json();
-        console.log('[ChatWindow] Upload success:', result);
-
-        // Clear input and attachments after successful send
-        setInput("");
-        setSelectedFiles([]);
-        setReplyingTo(null);
-        setMentionedUsers([]);
-
-        // The WebSocket will handle displaying the new message
-      } else {
-        // Simple text message - use WebSocket for real-time
-        sendMessage(conversationId, input.trim());
-        setInput("");
-      }
+      // Cleared as soon as the bubble is on screen, not when the network agrees.
+      clearDraft();
+      setSelectedFiles([]);
+      setReplyingTo(null);
+      setMentionedUsers([]);
+      onSent?.();
     } catch (error) {
       console.error("[ChatWindow] Error sending message:", error);
-      alert(`Failed to send message: ${error.message}`);
+      alert(`Failed to send message: ${error?.response?.data?.error || error.message}`);
     }
   };
 
@@ -212,25 +260,9 @@ const ChatWindow = ({
 
   const handleReaction = async (messageId, emoji) => {
     try {
-      const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
-      const token = localStorage.getItem("token");
-      const response = await fetch(
-        `${API_BASE}/api/chat/messages/${messageId}/react`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ emoji }),
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error("Failed to add reaction");
-      }
-
-      // The WebSocket will handle updating the message with the new reaction
+      await messagingApi.react(messagingApi.SCOPES.CHAT, conversationId, messageId, emoji);
+      // The server broadcasts `thread:updated`, which patches the message in
+      // the store — no local mutation needed here.
       setShowEmojiPicker(null);
     } catch (error) {
       console.error("Error adding reaction:", error);
@@ -269,28 +301,13 @@ const ChatWindow = ({
     setShowSummaryModal(true);
     setSummary("");
 
-    const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
-    const token = localStorage.getItem("token");
-
     try {
-      const response = await fetch(
-        `${API_BASE}/api/chat/conversations/${conversationId}/summarize`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ days: summaryDays }),
-        }
+      const text = await messagingApi.summarize(
+        messagingApi.SCOPES.CHAT,
+        conversationId,
+        summaryDays
       );
-
-      if (!response.ok) {
-        throw new Error("Failed to generate summary");
-      }
-
-      const data = await response.json();
-      setSummary(data.summary || "No summary available.");
+      setSummary(text || "No summary available.");
     } catch (error) {
       console.error("Error generating summary:", error);
       setSummary("Failed to generate summary. Please try again.");
@@ -381,15 +398,63 @@ const ChatWindow = ({
     }
   };
 
+  // att.url is the storage-relative signed path the message carries (e.g.
+  // "/uploads/messages/...?e=...&s="), not an absolute URL — it needs the API
+  // origin prepended, same as the image/video thumbnails below already do.
+  const resolveAttachmentUrl = (url) =>
+    url?.startsWith("http") ? url : `${import.meta.env.VITE_API_BASE || "http://localhost:5000"}${url || ""}`;
+
+  // A plain `<a download>` to a cross-origin URL is unreliable — browsers
+  // largely ignore the `download` attribute off-origin and just navigate to
+  // the file instead, which is why this used to just "open" the attachment
+  // rather than save it. Fetching the bytes first and downloading a
+  // same-origin blob: URL makes the save happen every time — the file itself
+  // was never the problem, only how the browser was asked to save it.
+  const handleDownloadAttachment = async (att) => {
+    const absoluteUrl = resolveAttachmentUrl(att?.url);
+    try {
+      const response = await fetch(absoluteUrl);
+      if (!response.ok) throw new Error(`Download failed (${response.status})`);
+      const blob = await response.blob();
+      const objectUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = objectUrl;
+      link.download = att?.filename || "download";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => window.URL.revokeObjectURL(objectUrl), 1000);
+    } catch (error) {
+      console.error("Attachment download failed:", error);
+      alert("Failed to download attachment. Please try again.");
+    }
+  };
+
   // Normalize messages for consistent fields while preserving all original properties
+  //
+  // Messages arrive in two shapes: the RAW ChatMessage document (REST
+  // history — `senderId` as a plain string, `message` as the text) and the
+  // NORMALIZED socket/optimistic shape from services/messaging (`sender:
+  // {id, name, kind}`, `body`) — see enqueueOptimistic in sendMessage.js and
+  // the `thread:message` handler in WebSocketContext. `sender?._id` below
+  // was looking for a key the normalized shape doesn't have (it's
+  // `sender.id`, not `sender._id`), which stringified the whole sender
+  // object into the literal text "[object Object]" and made every
+  // live-arriving message resolve to no matching conversation member — i.e.
+  // "Unknown". The "---" fallback was worse: handed to ReactMarkdown, three
+  // dashes alone on a line render as a horizontal rule, so the bubble showed
+  // no visible text at all. Both self-corrected on refresh because a refetch
+  // only ever returns the raw shape. This mirrors the same
+  // sender?.id-before-senderId-before-sentBy chain already used correctly in
+  // threadsSlice.js / useMessageListMechanics.js / useReceipts.js.
   const normalizedMessages = messages.map((msg) => ({
     ...msg, // Preserve all original properties
     messageId:
-      msg.messageId || msg._id || Math.random().toString(36).substring(2, 9),
+      msg.messageId || msg._id || msg.id || Math.random().toString(36).substring(2, 9),
     senderId: String(
-      msg.senderId || (msg.sender?._id ?? msg.sender) || "unknown"
+      msg.sender?.id ?? msg.senderId ?? msg.sentBy?._id ?? msg.sentBy ?? "unknown"
     ),
-    message: msg.message || msg.text || "---",
+    message: msg.message ?? msg.text ?? msg.body ?? "",
     timestamp: msg.timestamp || msg.createdAt || Date.now(),
     attachments: msg.attachments || [],
     replyTo: msg.replyTo || null,
@@ -423,14 +488,6 @@ const ChatWindow = ({
 
     return true;
   });
-
-  // Auto-scroll only when new messages are added (not when reactions update)
-  useEffect(() => {
-    if (filteredMessages.length > prevMessagesLengthRef.current) {
-      chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    }
-    prevMessagesLengthRef.current = filteredMessages.length;
-  }, [filteredMessages]);
 
   // Close emoji picker when clicking outside
   useEffect(() => {
@@ -479,41 +536,28 @@ const ChatWindow = ({
   }, [messages, currentUserId, getQuickReplies]);
 
   // Typing indicator — listen for other members typing in this conversation.
+  // Typing now comes from the store (fed by the `thread:typing` socket event)
+  // rather than two window listeners. The previous version also leaked a
+  // `setTimeout` per keystroke received — each one fired 3s later regardless of
+  // whether the conversation had been switched or the component unmounted.
+  // Expiry is handled once here instead.
   useEffect(() => {
-    if (!conversationId) return undefined;
-
-    const handleTyping = (event) => {
-      const data = event.detail || {};
-      if (data.conversationId !== conversationId || data.userId === currentUserId) return;
-      setTypingUsers((prev) => {
-        const exists = prev.some((u) => u.userId === data.userId);
-        if (!exists) return [...prev, { userId: data.userId, userName: data.userName }];
-        return prev;
-      });
-      setTimeout(() => {
-        setTypingUsers((prev) => prev.filter((u) => u.userId !== data.userId));
-      }, 3000);
-    };
-
-    const handleStopTyping = (event) => {
-      const data = event.detail || {};
-      if (data.conversationId !== conversationId) return;
-      setTypingUsers((prev) => prev.filter((u) => u.userId !== data.userId));
-    };
-
-    window.addEventListener("chat-typing", handleTyping);
-    window.addEventListener("chat-stop-typing", handleStopTyping);
-    return () => {
-      window.removeEventListener("chat-typing", handleTyping);
-      window.removeEventListener("chat-stop-typing", handleStopTyping);
-    };
-  }, [conversationId, currentUserId]);
-
-  // Reset typing state when switching conversations
-  useEffect(() => {
-    setTypingUsers([]);
     if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
   }, [conversationId]);
+
+  useEffect(() => {
+    const others = Object.entries(typingMap || {})
+      .filter(([userId]) => String(userId) !== String(currentUserId))
+      .map(([userId, userName]) => ({ userId, userName }));
+
+    setTypingUsers(others);
+    if (others.length === 0) return undefined;
+
+    // A `thread:stop_typing` normally clears this; the timer is the backstop
+    // for a sender who disconnects mid-keystroke.
+    const t = setTimeout(() => setTypingUsers([]), 4000);
+    return () => clearTimeout(t);
+  }, [typingMap, currentUserId]);
 
   // Handle suggestion selection
   const acceptSuggestion = (suggestion) => {
@@ -530,82 +574,36 @@ const ChatWindow = ({
 
   return (
     <div className="flex h-full flex-col bg-slate-50 text-slate-900 dark:bg-[#0b0d12] dark:text-slate-100">
-      {/* Search and Filter Panel */}
-      <div className="border-b border-slate-200 bg-white dark:border-white/10 dark:bg-[#10131c]">
-        <div className="flex items-center">
-          <button
-            onClick={() => setShowFilters(!showFilters)}
-            className="flex flex-1 items-center gap-2 px-4 py-2 text-left text-sm text-slate-600 transition hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-white/[0.06]"
-          >
-            <Filter className="h-4 w-4" />
-            <span>Search & Filters {showFilters ? "▼" : "▶"}</span>
-          </button>
-          {!wsConnected && (
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-rose-50 px-2 py-1 text-[10px] text-rose-700 dark:bg-rose-500/10 dark:text-rose-300">
-              <span className="h-1.5 w-1.5 rounded-full bg-rose-400" />
-              Reconnecting
-            </span>
-          )}
-          <button
-            onClick={handleSummarize}
-            className="flex items-center gap-2 border-l border-slate-200 px-4 py-2 text-sm text-slate-600 transition hover:bg-slate-100 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/[0.06]"
-            title="Summarize conversation"
-          >
-            <Sparkles className="h-4 w-4 text-blue-500 dark:text-blue-400" />
-            <span>Summarize</span>
-          </button>
-        </div>
-        {showFilters && (
-          <div className="grid grid-cols-1 gap-3 border-t border-slate-200 bg-slate-50 p-3 dark:border-white/10 dark:bg-[#0d1017] sm:grid-cols-2">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-              <input
-                type="text"
-                placeholder="Search messages..."
-                value={messageSearchTerm}
-                onChange={(e) => setMessageSearchTerm(e.target.value)}
-                className="app-control w-full py-2 pl-10 pr-4 text-sm"
-              />
-            </div>
-            <input
-              type="text"
-              placeholder="Filter by sender name..."
-              value={searchSender}
-              onChange={(e) => setSearchSender(e.target.value)}
-              className="app-control px-4 py-2 text-sm"
-            />
-            <div className="flex gap-2">
-              <input
-                type="date"
-                value={dateFilter.start}
-                onChange={(e) =>
-                  setDateFilter((prev) => ({ ...prev, start: e.target.value }))
-                }
-                className="app-control flex-1 px-3 py-2 text-sm"
-              />
-              <input
-                type="date"
-                value={dateFilter.end}
-                onChange={(e) =>
-                  setDateFilter((prev) => ({ ...prev, end: e.target.value }))
-                }
-                className="app-control flex-1 px-3 py-2 text-sm"
-              />
-            </div>
-            {(messageSearchTerm || searchSender || dateFilter.start || dateFilter.end) && (
-              <button
-                onClick={clearFilters}
-                className="flex items-center justify-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 transition hover:bg-red-100 dark:border-red-500/30 dark:bg-red-600/20 dark:text-red-400 dark:hover:bg-red-600/40 sm:col-span-2"
-              >
-                <XCircle className="w-4 h-4" />
-                Clear Filters
-              </button>
-            )}
-          </div>
-        )}
+      {/* Presence. Self-hiding — renders null when the other party has
+          presence turned off, or before the snapshot arrives, rather than
+          claiming they are offline. */}
+      <div className="flex items-center gap-2 border-b border-slate-200 bg-white px-4 py-1 empty:hidden dark:border-white/10 dark:bg-[#10131c]">
+        <PresenceIndicator
+          members={conversationMembers}
+          currentUserId={currentUserId}
+          isGroup={(conversationMembers || []).length > 2}
+        />
       </div>
 
-      <div className="flex-1 overflow-y-auto p-3 sm:px-5 sm:py-4">
+      <ThreadFilterBar
+        open={showFilters}
+        onToggle={() => setShowFilters(!showFilters)}
+        connected={wsConnected}
+        onSummarize={handleSummarize}
+        search={messageSearchTerm}
+        onSearchChange={setMessageSearchTerm}
+        sender={searchSender}
+        onSenderChange={setSearchSender}
+        dateRange={dateFilter}
+        onDateRangeChange={setDateFilter}
+        onClear={clearFilters}
+      />
+
+      <div
+        ref={containerRef}
+        onScroll={onScroll}
+        className="relative flex-1 overflow-y-auto p-3 sm:px-5 sm:py-4"
+      >
         {filteredMessages.length === 0 ? (
           <p className="mt-10 text-center text-sm text-slate-500 dark:text-slate-400">
             No messages found...
@@ -614,6 +612,16 @@ const ChatWindow = ({
           filteredMessages.map((msg, index) => {
             // Ensure currentUserId and senderId are compared as strings
             const isSelf = String(msg.senderId) === String(currentUserId);
+
+            // Where the user left off. Position is frozen on open by
+            // useMessageListMechanics, so it stays put while they read.
+            const msgId = String(msg.id ?? msg._id ?? "");
+            const showUnreadDivider = unreadDividerId && msgId === unreadDividerId;
+
+            // Consecutive messages from one sender within 5 minutes collapse
+            // into a single block — the difference between reading as a
+            // conversation and reading as a log file.
+            const isContinuation = !startsGroup(msg, filteredMessages[index - 1]);
 
             // Someone addressed you here (by name or via @everyone). Worth
             // marking the whole bubble, not just the name: the point is to be
@@ -637,14 +645,16 @@ const ChatWindow = ({
             return (
               <React.Fragment key={msg.messageId}>
                 {showDateDivider && <MessageDateSeparator date={msg.timestamp} />}
+                {showUnreadDivider && <UnreadDivider count={unreadOnOpen} />}
                 <div
                   id={`message-${msg.messageId || msg._id}`}
                   className={`flex w-full transition-colors duration-500 ${
                     isSelf ? "justify-end" : "justify-start"
-                  } mb-3`}
+                  } ${isContinuation ? "mb-0.5" : "mb-3"}`}
                 >
                   <div className="flex max-w-[85%] flex-col sm:max-w-[70%]">
-                    {!isSelf && (
+                    {/* Sender name only on the first message of a block. */}
+                    {!isSelf && !isContinuation && (
                       <p className="mb-1 px-1 text-xs text-slate-500 dark:text-gray-400">
                         {getSenderName(msg.senderId)}
                       </p>
@@ -754,11 +764,17 @@ const ChatWindow = ({
                                 <em className="italic">{children}</em>
                               ),
                               a: ({ href, children }) => (
+                                // See the note above the component: own-message
+                                // links use text-white, never text-blue-*.
                                 <a
                                   href={href || '#'}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className={`underline ${isSelf ? "text-blue-50 hover:text-white" : "text-blue-600 hover:text-blue-700 dark:text-blue-300 dark:hover:text-blue-200"}`}
+                                  className={`underline decoration-1 underline-offset-2 ${
+                                    isSelf
+                                      ? "text-white decoration-white/60 hover:decoration-white"
+                                      : "text-blue-600 hover:text-blue-700 dark:text-blue-300 dark:hover:text-blue-200"
+                                  }`}
                                 >
                                   {children}
                                 </a>
@@ -791,15 +807,14 @@ const ChatWindow = ({
                                         {att?.size ? `${(att.size / 1024).toFixed(1)} KB` : 'N/A'}
                                       </div>
                                     </div>
-                                    <a
-                                      href={att.url?.startsWith('http') ? att.url : `${import.meta.env.VITE_API_BASE || 'http://localhost:5000'}${att.url || ''}`}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDownloadAttachment(att)}
                                       className="rounded p-1 hover:bg-black/10 dark:hover:bg-white/10"
-                                      download
+                                      title="Download"
                                     >
                                       <Download className={`h-4 w-4 ${isSelf ? "text-blue-50/80" : "text-slate-500 dark:text-gray-300"}`} />
-                                    </a>
+                                    </button>
                                   </div>
                                 )}
 
@@ -875,6 +890,13 @@ const ChatWindow = ({
                             hour: "2-digit",
                             minute: "2-digit",
                           }) : ''}
+                          {/* Ticks, sender-side only — showing them on someone
+                              else's message would be meaningless. */}
+                          {isSelf && (
+                            <span className="ml-1.5 inline-flex align-middle">
+                              <MessageStatus status={deriveStatus(msg, recipientIds)} />
+                            </span>
+                          )}
                         </span>
                         <div className="relative flex items-center gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
                           <button
@@ -937,8 +959,14 @@ const ChatWindow = ({
             );
           })
         )}
-        <div ref={chatEndRef} />
+        <div ref={bottomRef} />
       </div>
+
+      {/* Jump-to-latest. Only once scrolled away, so it never covers the
+          composer during normal use. */}
+      {!atBottom && (
+        <NewMessagesButton count={newSinceScroll} onClick={() => scrollToBottom()} />
+      )}
 
       {/* Typing Indicator */}
       <TypingIndicator typingUsers={typingUsers} />
@@ -1091,6 +1119,8 @@ const ChatWindow = ({
         </div>
       )}
 
+      <FailedMessageBar scope={messagingApi.SCOPES.CHAT} threadId={conversationId} />
+
       {/* Input Area */}
       <div className="relative border-t border-slate-200 bg-white p-2 dark:border-white/10 dark:bg-[#10131c] sm:px-3">
         {/* Suggestions Dropdown */}
@@ -1152,12 +1182,14 @@ const ChatWindow = ({
         )}
 
         <div className="flex items-center gap-2">
+          {/* No `accept` filter — the server takes any file type now (see
+              config/s3Config.js), so restricting the OS picker here would just
+              hide files a user is otherwise allowed to send. */}
           <input
             type="file"
             ref={fileInputRef}
             onChange={handleFileSelect}
             multiple
-            accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.txt"
             className="hidden"
           />
 
@@ -1350,141 +1382,18 @@ const ChatWindow = ({
         />
       )}
 
-      {/* AI Summary Modal */}
-      {showSummaryModal && (
-        <div
-          className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm"
-          onClick={() => setShowSummaryModal(false)}
-        >
-          <div
-            className="flex max-h-[80vh] w-full max-w-3xl flex-col rounded-xl border border-slate-200 bg-white shadow-2xl dark:border-[#232945] dark:bg-[#0f1419]"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Modal Header */}
-            <div className="flex items-center justify-between border-b border-slate-200 p-4 dark:border-[#1e2a35]">
-              <div className="flex items-center gap-3">
-                <Sparkles className="h-5 w-5 text-blue-500 dark:text-blue-400" />
-                <h2 className="text-xl font-semibold text-slate-950 dark:text-white">
-                  AI Conversation Summary
-                </h2>
-              </div>
-              <button
-                onClick={() => setShowSummaryModal(false)}
-                className="rounded-lg p-2 transition hover:bg-slate-100 dark:hover:bg-[#141a21]"
-              >
-                <XCircle className="h-5 w-5 text-slate-400" />
-              </button>
-            </div>
+      <ThreadSummaryModal
+        open={showSummaryModal}
+        onClose={() => setShowSummaryModal(false)}
+        days={summaryDays}
+        onDaysChange={setSummaryDays}
+        loading={summaryLoading}
+        summary={summary}
+        onRegenerate={handleSummarize}
+        onCopy={copyToClipboard}
+        copied={copiedText === summary}
+      />
 
-            {/* Days Selector */}
-            <div className="border-b border-slate-200 bg-slate-50 px-4 py-3 dark:border-[#1e2a35] dark:bg-[#0a0e14]/50">
-              <div className="flex items-center gap-3">
-                <label className="text-sm text-slate-500 dark:text-gray-400">Time period:</label>
-                <select
-                  value={summaryDays}
-                  onChange={(e) => setSummaryDays(Number(e.target.value))}
-                  className="rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 dark:border-[#2a3340] dark:bg-[#141a21] dark:text-blue-100"
-                >
-                  <option value={1}>Last 24 hours</option>
-                  <option value={3}>Last 3 days</option>
-                  <option value={7}>Last week</option>
-                  <option value={14}>Last 2 weeks</option>
-                  <option value={30}>Last month</option>
-                </select>
-                <button
-                  onClick={handleSummarize}
-                  disabled={summaryLoading}
-                  className="flex items-center gap-2 rounded bg-blue-600 px-4 py-1.5 text-sm text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <Sparkles className="h-4 w-4" />
-                  {summaryLoading ? "Generating..." : "Regenerate"}
-                </button>
-              </div>
-            </div>
-
-            {/* Modal Body */}
-            <div className="flex-1 overflow-y-auto bg-slate-50/50 p-6 dark:bg-[#0a0e14]/30">
-              {summaryLoading ? (
-                <div className="flex h-full flex-col items-center justify-center gap-4">
-                  <div className="relative">
-                    <div className="h-16 w-16 animate-spin rounded-full border-4 border-blue-500/30 border-t-blue-500"></div>
-                    <Sparkles className="absolute left-1/2 top-1/2 h-6 w-6 -translate-x-1/2 -translate-y-1/2 text-blue-400" />
-                  </div>
-                  <p className="text-sm text-slate-500 dark:text-gray-400">Analyzing conversation with AI...</p>
-                </div>
-              ) : (
-                <div className="prose prose-sm prose-slate max-w-none dark:prose-invert">
-                  <ReactMarkdown
-                    remarkPlugins={[remarkGfm]}
-                    components={{
-                      p: ({ children }) => (
-                        <p className="mb-3 leading-relaxed text-slate-700 dark:text-gray-200">{children}</p>
-                      ),
-                      h1: ({ children }) => (
-                        <h1 className="mb-3 text-2xl font-bold text-slate-950 dark:text-gray-100">{children}</h1>
-                      ),
-                      h2: ({ children }) => (
-                        <h2 className="mb-2 text-xl font-bold text-slate-950 dark:text-gray-100">{children}</h2>
-                      ),
-                      h3: ({ children }) => (
-                        <h3 className="mb-2 text-lg font-bold text-slate-950 dark:text-gray-100">{children}</h3>
-                      ),
-                      ul: ({ children }) => (
-                        <ul className="mb-3 list-inside list-disc space-y-1">{children}</ul>
-                      ),
-                      ol: ({ children }) => (
-                        <ol className="mb-3 list-inside list-decimal space-y-1">{children}</ol>
-                      ),
-                      li: ({ children }) => (
-                        <li className="ml-2 text-slate-700 dark:text-gray-200">{children}</li>
-                      ),
-                      strong: ({ children }) => (
-                        <strong className="font-bold text-blue-700 dark:text-blue-300">{children}</strong>
-                      ),
-                      code: ({ inline, children }) =>
-                        inline ? (
-                          <code className="rounded bg-slate-100 px-1.5 py-0.5 text-xs text-blue-700 dark:bg-gray-900 dark:text-blue-300">
-                            {children}
-                          </code>
-                        ) : (
-                          <code className="block overflow-x-auto rounded bg-slate-100 p-3 text-sm text-slate-700 dark:bg-gray-900 dark:text-gray-300">
-                            {children}
-                          </code>
-                        ),
-                    }}
-                  >
-                    {summary}
-                  </ReactMarkdown>
-                </div>
-              )}
-            </div>
-
-            {/* Modal Footer */}
-            <div className="flex items-center justify-between border-t border-slate-200 bg-slate-50 p-4 dark:border-[#1e2a35] dark:bg-[#0a0e14]/50">
-              <div className="text-xs text-slate-500 dark:text-gray-500">
-                Powered by AI · Last {summaryDays} day{summaryDays !== 1 ? 's' : ''}
-              </div>
-              <button
-                onClick={() => copyToClipboard(summary)}
-                disabled={!summary || summaryLoading}
-                className="flex items-center gap-2 rounded border border-slate-200 bg-white px-4 py-2 text-sm text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-[#2a3340] dark:bg-[#141a21] dark:text-gray-200 dark:hover:bg-[#1e2a35]"
-              >
-                {copiedText === summary ? (
-                  <>
-                    <Check className="h-4 w-4" />
-                    Copied!
-                  </>
-                ) : (
-                  <>
-                    <Copy className="h-4 w-4" />
-                    Copy Summary
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

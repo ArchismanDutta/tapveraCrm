@@ -1,10 +1,14 @@
 // utils/websocket.js
 //
-// Real-time broadcast helpers, now backed by Socket.IO rooms instead of a
-// hand-rolled `userId -> ws[]` map. Kept as the same public API
-// (sendNotificationToUser, broadcastMessageRead, etc.) that controllers
-// already import, so callers didn't need to change — only the transport
-// underneath did.
+// Real-time broadcast helpers for NON-messaging features — notifications,
+// project/task remarks, leave, attendance, payments.
+//
+// Messaging no longer lives here. Every chat/project message broadcaster
+// (broadcastMessageToConversation, broadcastProjectMessage, the five
+// project:message_* helpers, the typing pair) moved behind
+// services/messaging/realtime.js, which is the single emitter for the
+// `thread:*` contract. The two `setWebSocketUsers`/`getWebSocketUsers` no-op
+// stubs left over from the pre-Socket.IO raw-ws transport are gone too.
 //
 // Every function here is best-effort: if Socket.IO hasn't initialized yet
 // (e.g. called during startup) or nobody's connected, we log and return
@@ -35,106 +39,13 @@ function sendNotificationToMultipleUsers(userIds, notification) {
   return results;
 }
 
-function broadcastMessageToConversation(conversationId, memberIds, messageData) {
-  try {
-    // Socket payloads bypass Express, so the res.json interceptor that signs
-    // /uploads/... paths never sees them. Without this the sender's own HTTP
-    // response has working image URLs while every recipient gets the raw path
-    // and a broken image until they refresh.
-    const { signPayload } = require('../middlewares/signFileUrls');
-    const payload = signPayload({ type: 'message', ...messageData });
-    const io = _io();
-    io.to(`conversation:${conversationId}`).emit('chat:message', payload);
-    (memberIds || []).forEach((userId) => io.to(`user:${userId}`).emit('chat:message', payload));
-    return true;
-  } catch (err) {
-    console.error(`Failed to broadcast message to conversation ${conversationId}:`, err.message);
-    return false;
-  }
-}
 
-/**
- * Broadcast project message to all project members in real-time.
- * Scoped to the `project:<id>` Socket.IO room (joined via the `project:join`
- * event — see socket/handlers/chat.handler.js) instead of every connected
- * socket, unlike the old raw-ws version.
- */
-function broadcastProjectMessage(projectId, memberIds, messageData) {
-  try {
-    // See broadcastMessageToConversation — socket payloads don't pass through
-    // the res.json signing interceptor.
-    const { signPayload } = require('../middlewares/signFileUrls');
-    const payload = signPayload({ projectId, messageData, timestamp: Date.now() });
-    const io = _io();
-    io.to(`project:${projectId}`).emit('project:message', payload);
-    (memberIds || []).forEach((userId) => io.to(`user:${userId}`).emit('project:message', payload));
-    console.log(`[Socket.IO] Broadcasted project message for project ${projectId}`);
-    return true;
-  } catch (err) {
-    console.error(`Failed to broadcast project message for project ${projectId}:`, err.message);
-    return false;
-  }
-}
 
-function broadcastMessageRead(projectId, readData) {
-  try {
-    _io().to(`project:${projectId}`).emit('project:message_read', { projectId, ...readData });
-    return true;
-  } catch (err) {
-    console.error(`Failed to broadcast message-read for project ${projectId}:`, err.message);
-    return false;
-  }
-}
 
-function broadcastMessageStatusUpdate(projectId, statusData) {
-  try {
-    _io().to(`project:${projectId}`).emit('project:message_status', { projectId, ...statusData });
-    return true;
-  } catch (err) {
-    console.error(`Failed to broadcast message-status-update for project ${projectId}:`, err.message);
-    return false;
-  }
-}
 
-function broadcastMessagePinned(projectId, pinData) {
-  try {
-    _io().to(`project:${projectId}`).emit('project:message_pinned', { projectId, ...pinData });
-    return true;
-  } catch (err) {
-    console.error(`Failed to broadcast message-pinned for project ${projectId}:`, err.message);
-    return false;
-  }
-}
 
-function broadcastUserTyping(projectId, typingData) {
-  try {
-    _io().to(`project:${projectId}`).emit('project:typing', { projectId, ...typingData });
-    return true;
-  } catch (err) {
-    console.error(`Failed to broadcast user-typing for project ${projectId}:`, err.message);
-    return false;
-  }
-}
 
-function broadcastUserStoppedTyping(projectId, typingData) {
-  try {
-    _io().to(`project:${projectId}`).emit('project:stop_typing', { projectId, ...typingData });
-    return true;
-  } catch (err) {
-    console.error(`Failed to broadcast user-stopped-typing for project ${projectId}:`, err.message);
-    return false;
-  }
-}
 
-function broadcastMessageDelivered(projectId, deliveryData) {
-  try {
-    _io().to(`project:${projectId}`).emit('project:message_delivered', { projectId, ...deliveryData });
-    return true;
-  } catch (err) {
-    console.error(`Failed to broadcast message-delivered for project ${projectId}:`, err.message);
-    return false;
-  }
-}
 
 /**
  * Broadcast a newly-added client remark in real-time.
@@ -308,27 +219,10 @@ function broadcastPaymentUpdated(userId, data) {
   }
 }
 
-// --- Deprecated no-ops -------------------------------------------------
-// The old raw-ws transport tracked connections in a plain object and handed
-// it around via these two functions. Nothing needs to call them anymore
-// (Socket.IO owns connection tracking via rooms), but they're kept as
-// harmless stubs in case anything still imports them.
-function setWebSocketUsers() {}
-function getWebSocketUsers() {
-  return {};
-}
 
 module.exports = {
   sendNotificationToUser,
   sendNotificationToMultipleUsers,
-  broadcastMessageToConversation,
-  broadcastProjectMessage,
-  broadcastMessageRead,
-  broadcastMessageStatusUpdate,
-  broadcastMessagePinned,
-  broadcastUserTyping,
-  broadcastUserStoppedTyping,
-  broadcastMessageDelivered,
   broadcastProjectRemark,
   broadcastProjectRemarkDeleted,
   broadcastConversationUpdated,
@@ -336,6 +230,4 @@ module.exports = {
   broadcastLeaveUpdated,
   broadcastAttendanceUpdated,
   broadcastPaymentUpdated,
-  setWebSocketUsers,
-  getWebSocketUsers,
 };

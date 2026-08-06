@@ -1,5 +1,7 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { NavLink, useLocation } from "react-router-dom";
+import { useDispatch, useSelector } from "react-redux";
+import { fetchThreads, selectTotalUnread } from "../../store/slices/threadsSlice";
 import {
   ClipboardList,
   FileText,
@@ -578,14 +580,39 @@ const Sidebar = ({
   userRole,
 }) => {
   const location = useLocation();
+  const dispatch = useDispatch();
   const [isMobile, setIsMobile] = useState(() =>
     typeof window !== "undefined" ? window.matchMedia("(max-width: 639px)").matches : false
   );
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [role, setRole] = useState("employee");
-  const [chatUnread, setChatUnread] = useState(0);
-  const [chatUnreadMap, setChatUnreadMap] = useState({});
-  const [conversations, setConversations] = useState([]);
+  // Phase 5: unread comes from the store, not sessionStorage.
+  //
+  // This component was one of FOUR independent writers of `chat_unread_total`
+  // (with ChatPage, WebSocketContext and App.jsx). Each maintained its own idea
+  // of the number and broadcast it to the others via window events, so whoever
+  // wrote last won. That is why the badge drifted.
+  const threadsById = useSelector((s) => s.threads.threads);
+  const unreadByKey = useSelector((s) => s.threads.unreadByKey);
+
+  const chatUnread = useSelector(selectTotalUnread("chat"));
+
+  // { conversationId: count } — the shape the dropdown below already expects.
+  const chatUnreadMap = useMemo(() => {
+    const map = {};
+    Object.entries(unreadByKey).forEach(([key, count]) => {
+      if (key.startsWith("chat:") && count > 0) map[key.slice(5)] = count;
+    });
+    return map;
+  }, [unreadByKey]);
+
+  const conversations = useMemo(
+    () =>
+      Object.entries(threadsById)
+        .filter(([key]) => key.startsWith("chat:"))
+        .map(([, thread]) => thread),
+    [threadsById]
+  );
   const [showUnreadTooltip, setShowUnreadTooltip] = useState(false);
   const [userDepartment, setUserDepartment] = useState("");
   const [userPosition, setUserPosition] = useState("");
@@ -709,102 +736,24 @@ const Sidebar = ({
     fetchPermissions();
   }, [userRole]);
 
-  // Listen for chat unread total to show badge on Messages item.
-  // sessionStorage is only read once on mount as the initial baseline —
-  // every update after that comes from the "chat-unread-total" window event,
-  // which is dispatched in real time by ChatPage/WebSocketContext, so a
-  // polling re-read of storage is redundant with it.
+  // Seed conversations + unread counts app-wide.
+  //
+  // The sidebar is the right place for this — it is mounted on every page,
+  // whereas ChatPage only exists while the user is in the message portal. The
+  // server returns unreadCount per conversation, which is the authoritative
+  // number; this is what makes the badge correct on a fresh login, in a second
+  // tab, or after messages arrived overnight.
+  //
+  // It used to fetch /api/chat/groups itself, write sessionStorage, and
+  // broadcast two window events for other components to adopt. Now it dispatches
+  // one thunk and everyone reads the same store.
   useEffect(() => {
-    try {
-      const stored = Number(sessionStorage.getItem("chat_unread_total") || 0);
-      setChatUnread(isNaN(stored) ? 0 : stored);
-    } catch {
-      setChatUnread(0);
-    }
-    const handler = (e) => {
-      const total = Number(e.detail?.total || 0);
-      setChatUnread(isNaN(total) ? 0 : total);
-    };
-    window.addEventListener("chat-unread-total", handler);
-    return () => window.removeEventListener("chat-unread-total", handler);
-  }, []);
-
-  // Listen for chat unread map to show which conversations have unread
-  // messages. Same reasoning as above — one initial read, then event-driven.
-  useEffect(() => {
-    try {
-      const raw = sessionStorage.getItem("chat_unread_map");
-      if (raw) setChatUnreadMap(JSON.parse(raw));
-    } catch {
-      setChatUnreadMap({});
-    }
-    const handler = (e) => {
-      const map = e.detail?.map || {};
-      setChatUnreadMap(map);
-    };
-    window.addEventListener("chat-unread-map", handler);
-    return () => window.removeEventListener("chat-unread-map", handler);
-  }, []);
-
-  // Fetch conversations to map IDs to names. One fetch on mount for the
-  // baseline, then event-driven from here: the server emits
-  // "conversation:updated" (bridged to this window event by
-  // WebSocketContext.jsx) whenever a group is created/renamed or its
-  // membership changes, so a 30s re-poll of the whole list is redundant.
-  useEffect(() => {
-    const fetchConversations = async () => {
-      try {
-        const token = localStorage.getItem("token");
-        if (!token) return;
-        const API_BASE =
-          import.meta.env.VITE_API_BASE || "http://localhost:5000";
-        const res = await fetch(`${API_BASE}/api/chat/groups`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (res.ok) {
-          const data = await res.json();
-          setConversations(data);
-
-          // Seed the unread badge from the server.
-          //
-          // This is why the badge looked "missing": the count lived only in
-          // sessionStorage and was only ever incremented by the live socket
-          // handler, so on a fresh login — or in a second tab, or after
-          // messages arrived overnight — it started at zero and stayed there
-          // until someone messaged you while you happened to be watching.
-          //
-          // The sidebar is the right place to do this: it's mounted on every
-          // page, whereas ChatPage only exists while the user is actually in
-          // the message portal. Broadcasting it means ChatPage adopts the same
-          // numbers if it's open.
-          const map = {};
-          for (const conversation of data) {
-            if (conversation?.unreadCount > 0) {
-              map[String(conversation._id)] = conversation.unreadCount;
-            }
-          }
-          const total = Object.values(map).reduce((a, b) => a + Number(b || 0), 0);
-
-          try {
-            sessionStorage.setItem("chat_unread_map", JSON.stringify(map));
-            sessionStorage.setItem("chat_unread_total", String(total));
-          } catch {
-            // Private-mode storage failure shouldn't cost us the badge.
-          }
-
-          setChatUnreadMap(map);
-          setChatUnread(total);
-          window.dispatchEvent(new CustomEvent("chat-unread-map", { detail: { map } }));
-          window.dispatchEvent(new CustomEvent("chat-unread-total", { detail: { total } }));
-        }
-      } catch (error) {
-        console.error("Failed to fetch conversations:", error);
-      }
-    };
-    fetchConversations();
-    window.addEventListener("conversation-updated", fetchConversations);
-    return () => window.removeEventListener("conversation-updated", fetchConversations);
-  }, []);
+    if (!localStorage.getItem("token")) return undefined;
+    const load = () => dispatch(fetchThreads("chat"));
+    load();
+    window.addEventListener("conversation-updated", load);
+    return () => window.removeEventListener("conversation-updated", load);
+  }, [dispatch]);
 
   // Check if user has supervisor/team lead position
   // Access-management rework (2026-07-03, Phase 5.3): prefer the

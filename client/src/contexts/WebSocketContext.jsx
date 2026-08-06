@@ -1,9 +1,28 @@
 import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from "react";
 import { io } from "socket.io-client";
 import { useDispatch } from "react-redux";
-import notificationManager from "../utils/browserNotifications";
+import notificationManager, { BrowserNotificationManager } from "../utils/browserNotifications";
 import { receiveRealtime } from "../store/slices/notificationSlice";
 import { AUTH_CHANGED_EVENT, readAuthToken } from "../utils/authEvents";
+import * as messagingApi from "../api/messagingApi";
+import { drainOutbox, startOutboxWatcher } from "../utils/outboxDrain";
+// Messaging state lives in threadsSlice. This provider owns the socket and
+// dispatches into the store; it does not hold message state of its own.
+//
+// As of Phase 5 the legacy layer is gone: the `chat:message` handler (which
+// kept two message arrays and its own sessionStorage unread tally) and the nine
+// `socket.on(...) -> window.dispatchEvent(CustomEvent)` re-broadcasts have all
+// been removed, along with the server-side emits that fed them.
+import {
+  receiveMessage as receiveThreadMessage,
+  receiveReceipt as receiveThreadReceipt,
+  receiveThreadUpdated,
+  receiveTyping as receiveThreadTyping,
+} from "../store/slices/threadsSlice";
+import {
+  receiveSnapshot as receivePresenceSnapshot,
+  receiveChange as receivePresenceChange,
+} from "../store/slices/presenceSlice";
 
 const WebSocketContext = createContext(null);
 
@@ -68,8 +87,6 @@ export const WebSocketProvider = ({ children }) => {
   const [isConnected, setIsConnected] = useState(false);
   const activeConversationIdRef = useRef(null);
   const conversationsRef = useRef([]);
-  const [chatMessages, setChatMessages] = useState([]); // Messages for active conversation
-  const [allChatMessages, setAllChatMessages] = useState([]); // All messages
   const notificationHandlersRef = useRef(new Set());
 
   // The token drives the connection — see the AUTH → SOCKET LIFETIME note above.
@@ -90,6 +107,11 @@ export const WebSocketProvider = ({ children }) => {
     };
   }, []);
 
+  // Retry the outbox on `online` / tab focus as well — a send can fail with
+  // the socket still up (a single request timing out), and those events are
+  // the cheapest signal that it is worth another go.
+  useEffect(() => startOutboxWatcher(), []);
+
   // Register notification handler
   const registerNotificationHandler = useCallback((handler) => {
     notificationHandlersRef.current.add(handler);
@@ -101,15 +123,11 @@ export const WebSocketProvider = ({ children }) => {
   // This provider used to own a second, competing sound for payslips only —
   // removed, so there is one sound for one notification.
 
-  // Update active conversation
+  // Track which conversation is on screen. The ref is still read by callers
+  // that need it; the `chat-active-conversation` CustomEvent this used to
+  // broadcast had no listeners left once ChatPage moved to `setActiveThread`.
   const setActiveConversation = useCallback((conversationId) => {
     activeConversationIdRef.current = conversationId;
-    setChatMessages([]); // Clear messages when switching conversations
-
-    // Dispatch event for other components
-    window.dispatchEvent(new CustomEvent("chat-active-conversation", {
-      detail: { conversationId }
-    }));
   }, []);
 
   // Set conversations — also refreshes which conversation rooms this socket
@@ -159,6 +177,11 @@ export const WebSocketProvider = ({ children }) => {
       console.log("[Socket] Connected:", socket.id);
       setIsConnected(true);
 
+      // Anything composed while offline goes out now (S2). A reconnected
+      // socket is a stronger signal than the browser's `online` event, which
+      // also fires behind a captive portal that can't actually reach us.
+      drainOutbox();
+
       // (Re)subscribe to whatever conversations we already know about.
       socket.emit("chat:subscribe", {
         conversationIds: conversationsRef.current.map((c) => c._id),
@@ -170,104 +193,104 @@ export const WebSocketProvider = ({ children }) => {
       setIsConnected(false);
     });
 
+    // Presence heartbeat. The server marks a user online with a 45s Redis TTL
+    // and this is what pushes it out; miss two beats and they expire, which is
+    // what makes a closed laptop go offline without a `disconnect` ever
+    // arriving. Interval is 20s against that 45s TTL — two full beats of slack.
+    const presenceBeat = setInterval(() => {
+      if (socket.connected) socket.emit("presence:ping");
+    }, 20000);
+
     socket.on("connect_error", (err) => {
       console.error("[Socket] Connection error:", err.message);
     });
 
-    // ---- Chat messages ---------------------------------------------------
-    socket.on("chat:message", (data) => {
-      console.log("[Socket] Chat message received:", data);
-
-      const currentUserId = (() => {
-        try {
-          return JSON.parse(localStorage.getItem("user") || "{}")._id;
-        } catch {
-          return null;
-        }
-      })();
-
-      const isFromSelf = String(data.senderId || "") === String(currentUserId || "");
-      const isForActiveConv = String(data.conversationId || "") === String(activeConversationIdRef.current);
-
-      // Add to all messages
-      setAllChatMessages((prev) => {
-        const ts = new Date(data.timestamp).getTime();
-        const filtered = prev.filter((m) => {
-          const mid = String(m._id || "");
-          if (!mid.startsWith("local-")) return true;
-          const sameText = m.message === data.message;
-          const sameSender = String(m.senderId || "") === String(data.senderId || "");
-          const mts = new Date(m.timestamp).getTime();
-          const close = Math.abs(mts - ts) < 5000;
-          return !(sameText && sameSender && close);
-        });
-        return [...filtered, data];
-      });
-
-      // Add to active conversation messages
-      if (isForActiveConv) {
-        setChatMessages((prev) => {
-          const ts = new Date(data.timestamp).getTime();
-          const filtered = prev.filter((m) => {
-            const mid = String(m._id || "");
-            if (!mid.startsWith("local-")) return true;
-            const sameText = m.message === data.message;
-            const sameSender = String(m.senderId || "") === String(data.senderId || "");
-            const mts = new Date(m.timestamp).getTime();
-            const close = Math.abs(mts - ts) < 5000;
-            return !(sameText && sameSender && close);
-          });
-          return [...filtered, data];
-        });
+    // ---- Unified thread events (Phase 2) ---------------------------------
+    // One handler per event for BOTH scopes, feeding the threads slice. These
+    // run in parallel with the legacy handlers further down; the slice is
+    // idempotent on message id, so the dual-emit lands once. When Phases 3-4
+    // convert ChatPage and ProjectMessagePanel to read from Redux, the legacy
+    // handlers and their CustomEvent re-broadcasts go away (Phase 5).
+    // Named to avoid shadowing the `currentUserId` the legacy chat:message
+    // handler declares inside its own callback.
+    const readCurrentUserId = () => {
+      try {
+        return JSON.parse(localStorage.getItem("user") || "{}")._id || null;
+      } catch {
+        return null;
       }
+    };
 
-      // Update unread counters if not from self and not for active conversation
-      if (!isFromSelf && !isForActiveConv) {
+    socket.on("thread:message", ({ scope, threadId, message }) => {
+      const me = readCurrentUserId();
+      dispatch(receiveThreadMessage({ scope, threadId, message, currentUserId: me }));
+
+      // Browser notification for project messages. This used to live in
+      // ProjectDetailPage, which meant it only fired if you already had that
+      // exact project open — the one situation where you least need telling.
+      // Here it fires app-wide.
+      //
+      // Chat messages are deliberately NOT notified here: every chat message
+      // also produces a persisted notification that arrives as
+      // `notification:new` and is handled below. Doing both rang the bell twice
+      // for one message.
+      if (scope === "project" && message && String(message.sender?.id) !== String(me)) {
         try {
-          const rawMap = sessionStorage.getItem("chat_unread_map");
-          const map = rawMap ? JSON.parse(rawMap) : {};
-          const convId = String(data.conversationId || "");
-          map[convId] = (map[convId] || 0) + 1;
-          sessionStorage.setItem("chat_unread_map", JSON.stringify(map));
-
-          const total = Object.values(map).reduce((a, b) => a + Number(b || 0), 0);
-          sessionStorage.setItem("chat_unread_total", String(total));
-
-          window.dispatchEvent(new CustomEvent("chat-unread-total", { detail: { total } }));
-          window.dispatchEvent(new CustomEvent("chat-unread-map", { detail: { map } }));
-
-          // Deliberately NOT raising a browser notification or dispatching
-          // "ws-notification" here.
-          //
-          // Every chat message also produces a persisted notification
-          // (chatController.saveMessage -> notificationService), which arrives
-          // separately as "notification:new" and is handled further down. Doing
-          // it in both places rang the bell twice and played the sound twice
-          // for one message.
-          //
-          // The other copy is the better one to keep: it carries a
-          // notificationId, and the server builds its title from the real
-          // conversation name — whereas `conversationsRef` here is only
-          // populated while the chat page is mounted, so everywhere else in the
-          // app this fell back to the literal string "Group Chat".
-          //
-          // Division of labour: this handler owns message data and the unread
-          // counter; "notification:new" owns telling the user about it.
+          const who =
+            message.sender?.kind === "Client" ? "Client" : message.sender?.name || "Team Member";
+          BrowserNotificationManager.getInstance().show(
+            "New Project Message",
+            `${who}: ${message.body || "Sent an attachment"}`,
+            { tag: `project-${threadId}`, icon: "/icon.png", requireInteraction: false }
+          );
         } catch (err) {
-          console.error("Failed to update unread counters:", err);
+          console.error("[Socket] project notification failed:", err.message);
         }
       }
     });
+
+    socket.on("thread:receipt", ({ scope, threadId, messageId, userId, kind, status, at }) => {
+      dispatch(receiveThreadReceipt({ scope, threadId, messageId, userId, kind, status, at }));
+    });
+
+    socket.on("thread:updated", ({ scope, threadId, patch }) => {
+      dispatch(receiveThreadUpdated({ scope, threadId, patch }));
+    });
+
+    socket.on("thread:typing", ({ scope, threadId, userId, userName }) => {
+      dispatch(receiveThreadTyping({ scope, threadId, userId, userName }));
+    });
+
+    socket.on("thread:stop_typing", ({ scope, threadId, userId }) => {
+      dispatch(receiveThreadTyping({ scope, threadId, userId, stop: true }));
+    });
+
+    // Surfaced so a rejected join/send is visible rather than a silent no-op.
+    // ---- Presence (S3) ---------------------------------------------------
+    socket.on("presence:snapshot", (payload) => {
+      dispatch(receivePresenceSnapshot(payload));
+    });
+
+    socket.on("presence:changed", (payload) => {
+      dispatch(receivePresenceChange(payload));
+    });
+
+    socket.on("thread:error", ({ scope, threadId, code, message }) => {
+      console.warn(`[Socket] thread:error (${scope}:${threadId}) ${code}: ${message}`);
+    });
+
+    // ---- Chat messages ---------------------------------------------------
+    // The legacy `chat:message` handler is gone (Phase 5).
+    //
+    // It maintained two local message arrays with a hand-written de-dup that
+    // matched optimistic rows on (same text, same sender, timestamps within
+    // 5s), and it kept its own unread tally in sessionStorage — one of four
+    // independent counts. `thread:message` above does both jobs in the store,
+    // de-duping on message id rather than guessing by text-and-time.
 
     // Typing indicators for internal team/group chat — bridged to window
     // CustomEvents the same way project:typing/project:stop_typing are,
     // so ChatWindow can pick them up without opening its own connection.
-    socket.on("chat:typing", (data) => {
-      window.dispatchEvent(new CustomEvent("chat-typing", { detail: data }));
-    });
-    socket.on("chat:stop_typing", (data) => {
-      window.dispatchEvent(new CustomEvent("chat-stop-typing", { detail: data }));
-    });
 
     // ---- Notifications -----------------------------------------------
     socket.on("notification:new", (data) => {
@@ -343,27 +366,6 @@ export const WebSocketProvider = ({ children }) => {
     // Bridged to window CustomEvents so ProjectDetailPage / ProjectMessagePanel
     // can listen without each opening their own socket connection (that
     // duplicate-connection pattern is what this replaces).
-    socket.on("project:message", (data) => {
-      window.dispatchEvent(new CustomEvent("project-message", { detail: data }));
-    });
-    socket.on("project:typing", (data) => {
-      window.dispatchEvent(new CustomEvent("project-typing", { detail: data }));
-    });
-    socket.on("project:stop_typing", (data) => {
-      window.dispatchEvent(new CustomEvent("project-stop-typing", { detail: data }));
-    });
-    socket.on("project:message_read", (data) => {
-      window.dispatchEvent(new CustomEvent("project-message-read", { detail: data }));
-    });
-    socket.on("project:message_status", (data) => {
-      window.dispatchEvent(new CustomEvent("project-message-status", { detail: data }));
-    });
-    socket.on("project:message_pinned", (data) => {
-      window.dispatchEvent(new CustomEvent("project-message-pinned", { detail: data }));
-    });
-    socket.on("project:message_delivered", (data) => {
-      window.dispatchEvent(new CustomEvent("project-message-delivered", { detail: data }));
-    });
     socket.on("project:remark", (data) => {
       window.dispatchEvent(new CustomEvent("project-remark", { detail: data }));
     });
@@ -387,6 +389,7 @@ export const WebSocketProvider = ({ children }) => {
     });
 
     return () => {
+      clearInterval(presenceBeat);
       socket.removeAllListeners();
       socket.disconnect();
       socketRef.current = null;
@@ -402,35 +405,12 @@ export const WebSocketProvider = ({ children }) => {
     } else {
       console.warn("[Socket] Cannot send message - not connected. Using REST fallback.");
 
-      // Fallback to REST API
-      const token = localStorage.getItem("token");
-      const apiBase = import.meta.env.VITE_API_BASE || "http://localhost:5000";
-
-      fetch(`${apiBase}/api/chat/messages`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ conversationId, message }),
-      })
-        .then(() => {
-          // Optimistic update
-          try {
-            const currentUserId = JSON.parse(localStorage.getItem("user") || "{}")._id;
-            const localMsg = {
-              _id: `local-${Date.now()}`,
-              conversationId,
-              senderId: String(currentUserId || ""),
-              message,
-              timestamp: new Date().toISOString(),
-            };
-            setAllChatMessages((prev) => [...prev, localMsg]);
-            setChatMessages((prev) => [...prev, localMsg]);
-          } catch (err) {
-            console.error("Failed to add optimistic message:", err);
-          }
-        })
+      // Fallback to REST. No local optimistic row is written any more: the
+      // server echoes the saved message back as `thread:message`, which the
+      // store applies. The previous version pushed a `local-<timestamp>` row
+      // into two context arrays that nothing reads since Phase 3.
+      messagingApi
+        .sendMessage(messagingApi.SCOPES.CHAT, conversationId, { body: message })
         .catch((err) => {
           console.error("Failed to send message via REST:", err);
         });
@@ -446,6 +426,35 @@ export const WebSocketProvider = ({ children }) => {
     if (conversationId) socketRef.current?.emit("chat:stop_typing", { conversationId });
   }, []);
 
+  // ---- Receipt helpers (S1) ---------------------------------------------
+  // Typed emitters rather than exposing the raw socket, matching the rest of
+  // this context — a component that could emit anything would make the socket
+  // contract impossible to reason about.
+  const ackDelivered = useCallback((scope, threadId, messageIds) => {
+    if (threadId && Array.isArray(messageIds) && messageIds.length) {
+      socketRef.current?.emit("thread:delivered", { scope, threadId, messageIds });
+    }
+  }, []);
+
+  const sendReadCursor = useCallback((scope, threadId, upToMessageId) => {
+    if (threadId && upToMessageId) {
+      socketRef.current?.emit("thread:read", { scope, threadId, upToMessageId });
+    }
+  }, []);
+
+  // ---- Presence helpers -------------------------------------------------
+  const watchPresence = useCallback((userIds) => {
+    if (Array.isArray(userIds) && userIds.length) {
+      socketRef.current?.emit("presence:subscribe", { userIds });
+    }
+  }, []);
+
+  const unwatchPresence = useCallback((userIds) => {
+    if (Array.isArray(userIds) && userIds.length) {
+      socketRef.current?.emit("presence:unsubscribe", { userIds });
+    }
+  }, []);
+
   // ---- Project room helpers --------------------------------------------
   const joinProject = useCallback((projectId) => {
     if (projectId) socketRef.current?.emit("project:join", { projectId });
@@ -455,9 +464,6 @@ export const WebSocketProvider = ({ children }) => {
     if (projectId) socketRef.current?.emit("project:leave", { projectId });
   }, []);
 
-  const sendProjectMessage = useCallback((projectId, messageData) => {
-    socketRef.current?.emit("project:message", { projectId, messageData });
-  }, []);
 
   const sendProjectTyping = useCallback((projectId, userName) => {
     socketRef.current?.emit("project:typing", { projectId, userName });
@@ -478,17 +484,18 @@ export const WebSocketProvider = ({ children }) => {
 
   const value = {
     isConnected,
-    chatMessages,
-    allChatMessages,
     sendMessage,
     setActiveConversation,
     setConversations,
+    watchPresence,
+    unwatchPresence,
+    ackDelivered,
+    sendReadCursor,
     registerNotificationHandler,
     sendChatTyping,
     sendChatStopTyping,
     joinProject,
     leaveProject,
-    sendProjectMessage,
     sendProjectTyping,
     sendProjectStopTyping,
     joinTask,

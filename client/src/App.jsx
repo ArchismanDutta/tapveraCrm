@@ -41,6 +41,9 @@ import NotificationToast from "./components/NotificationToast";
 // Redux
 import { useDispatch } from "react-redux";
 import { resetChat } from "./store/slices/chatSlice";
+import { setActiveThread, resetThreads } from "./store/slices/threadsSlice";
+import { resetPresence } from "./store/slices/presenceSlice";
+import { clearAllDrafts } from "./hooks/useDraft";
 
 // Browser Notifications
 import notificationManager from "./utils/browserNotifications";
@@ -235,6 +238,13 @@ const AppWrapper = () => {
     localStorage.removeItem("user");
     sessionStorage.removeItem("noticesDismissed");
     dispatch(resetChat());
+    // Messaging state is per-user: leaving it behind would show the previous
+    // account's threads, unread counts and presence to whoever logs in next on
+    // this machine. Drafts likewise — half-typed messages are exactly the kind
+    // of thing that must not survive a logout on a shared desktop.
+    dispatch(resetThreads());
+    dispatch(resetPresence());
+    clearAllDrafts();
     setCurrentUser(null);
     setIsAuthenticated(false);
     setRole(null);
@@ -316,14 +326,13 @@ const AppWrapper = () => {
     setNotifications((prev) => prev.filter((n) => n.id !== id));
   };
 
-  // Clear active conversation when leaving /messages
+  // Clear the active thread when leaving /messages, so a message arriving for
+  // the conversation you were just reading correctly bumps the unread badge.
+  // This used to dispatch a `chat-active-conversation` CustomEvent that, by the
+  // end of the migration, nothing listened to.
   useEffect(() => {
     if (location.pathname !== "/messages") {
-      window.dispatchEvent(
-        new CustomEvent("chat-active-conversation", {
-          detail: { conversationId: null },
-        })
-      );
+      dispatch(setActiveThread(null, null));
     }
   }, [location.pathname]);
 
@@ -419,14 +428,19 @@ const AppWrapper = () => {
             });
           }
 
-          // Update unread counter
-          const prev =
-            Number(sessionStorage.getItem("chat_unread_total") || 0) || 0;
-          const next = prev + 1;
-          sessionStorage.setItem("chat_unread_total", String(next));
-          window.dispatchEvent(
-            new CustomEvent("chat-unread-total", { detail: { total: next } })
-          );
+          // NOTE: this used to also increment `chat_unread_total` in
+          // sessionStorage and broadcast it.
+          //
+          // That was a third independent count, on top of the socket handler's
+          // and the store's — and it fired per NOTIFICATION, which the server
+          // sends to every recipient regardless of which thread they have open.
+          // So a single message could bump the badge more than once, and could
+          // bump it for a conversation the user was actively reading.
+          //
+          // Unread is owned by threadsSlice now: seeded from the server's
+          // per-conversation count and incremented by `thread:message`, which
+          // knows the active thread. This handler only does the toast and the
+          // OS notification.
 
           // Show in-app toast
           const title = n.title || "Notification";

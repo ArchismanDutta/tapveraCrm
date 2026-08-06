@@ -45,7 +45,44 @@ const ChatMessageSchema = new mongoose.Schema({
       ],
     },
   ],
+
+  // ─── Delivery receipts (S1) ───────────────────────────────────────────
+  //
+  // Both fields are additive and optional. Messages that predate this have
+  // neither, and render as "sent" (✓) forever — which is correct: the absence
+  // of a receipt genuinely means we do not know, and inventing ✓✓ for old
+  // messages would be a lie.
+
+  /**
+   * Client-generated UUID, minted BEFORE the send leaves the browser.
+   *
+   * This one field is what makes optimistic sending, retries and the offline
+   * outbox (S2) safe. The unique sparse index below means a retry after a
+   * flaky network is a no-op that returns the original message rather than
+   * creating a twin — the classic "I hit send once and it posted three times"
+   * bug. Sparse, because messages created server-side have no client id.
+   */
+  clientMsgId: { type: String, default: null },
+
+  /**
+   * Who has RECEIVED this on a device — distinct from `readBy`, which means
+   * they actually looked at it. Delivery is acked automatically by the
+   * recipient's socket; read requires genuine visibility.
+   */
+  deliveredTo: [
+    {
+      user: { type: String },
+      at: { type: Date, default: Date.now },
+      _id: false,
+    },
+  ],
 });
+
+// Idempotency: at most one message per client-generated id.
+ChatMessageSchema.index(
+  { clientMsgId: 1 },
+  { unique: true, sparse: true }
+);
 
 // =====================================================
 // PERFORMANCE INDEXES
