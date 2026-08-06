@@ -20,6 +20,8 @@ const { assertChatAccess, sendAccessError } = require("../services/messaging/acc
 // document shape the live client expects; `normalized` rides the new
 // `thread:*` events until the client migrates.
 const messagingService = require("../services/messaging/messaging.service");
+// Room eviction on membership changes — see evictFromThread / closeThreadRoom.
+const realtime = require("../services/messaging/realtime");
 const { CHAT } = messagingService.SCOPES;
 
 // router.use(authMiddleware);
@@ -203,6 +205,10 @@ router.delete("/conversations/:id", protect, async (req, res) => {
         action: "deleted",
         conversationId,
       });
+
+      // Nobody should keep receiving anything for a conversation that no longer
+      // exists, so empty the room rather than evicting member by member.
+      realtime.closeThreadRoom(realtime.SCOPES.CHAT, conversationId);
     } catch (wsError) {
       console.warn("WebSocket broadcast failed (conversation deleted):", wsError.message);
     }
@@ -384,6 +390,15 @@ router.delete("/groups/:conversationId/members/:memberId", protect, async (req, 
         action: "member_removed",
         conversationId,
       });
+
+      // Kick their socket out of the room.
+      //
+      // The broadcast above only tells their CLIENT to drop the group from the
+      // sidebar. Their socket stays joined to conversation:<id>, so until they
+      // happen to reconnect, every message the group sends is still delivered
+      // to them. It never renders, which is exactly what makes it dangerous —
+      // the leak is invisible to everyone, including them.
+      realtime.evictFromThread(realtime.SCOPES.CHAT, conversationId, [memberId]);
     } catch (wsError) {
       console.warn("WebSocket broadcast failed (member removed):", wsError.message);
     }

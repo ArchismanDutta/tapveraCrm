@@ -174,6 +174,61 @@ function emitTyping(socket, { scope, threadId, userId, userName, stop = false })
   });
 }
 
+/* ── Membership eviction ──────────────────────────────────────────────── */
+
+/**
+ * Force the given users' sockets out of a thread's room.
+ *
+ * ─── WHY THIS IS NEEDED ───
+ * Removing someone from a group updates the database and tells their client to
+ * drop it from the sidebar — but their SOCKET is still joined to
+ * `conversation:<id>`. Until they happen to reconnect, every message the group
+ * sends is still delivered to them. They can't see it in the UI, which is
+ * precisely what makes it dangerous: the leak is invisible to everyone,
+ * including the person who has it.
+ *
+ * `socketsLeave` is the server-side eviction, and it goes through the adapter —
+ * so with the Redis adapter attached it reaches that user's sockets on every
+ * instance, not just this one. Iterating `io().sockets` by hand would only ever
+ * evict them from the process that happened to serve the HTTP request.
+ *
+ * Deliberately targets `user:<id>` rather than the thread room: we want to
+ * remove one member, not empty the room.
+ *
+ * @param {String}   scope     'chat' | 'project'
+ * @param {String}   threadId
+ * @param {String[]} userIds   who to evict
+ */
+function evictFromThread(scope, threadId, userIds = []) {
+  const ids = (Array.isArray(userIds) ? userIds : [userIds])
+    .map((id) => String(id ?? '').trim())
+    .filter(Boolean);
+
+  if (ids.length === 0) return;
+
+  const room = roomOf(scope, threadId);
+
+  safely('evictFromThread', () => {
+    const server = io();
+    ids.forEach((id) => {
+      server.in(`user:${id}`).socketsLeave(room);
+    });
+    console.log(`[realtime] Evicted ${ids.length} user(s) from ${room}`);
+  });
+}
+
+/**
+ * Evict EVERY socket from a thread's room — for a deleted conversation, where
+ * nobody should keep receiving anything.
+ */
+function closeThreadRoom(scope, threadId) {
+  const room = roomOf(scope, threadId);
+  safely('closeThreadRoom', () => {
+    io().in(room).socketsLeave(room);
+    console.log(`[realtime] Closed room ${room}`);
+  });
+}
+
 module.exports = {
   SCOPES,
   roomOf,
@@ -182,4 +237,6 @@ module.exports = {
   emitUpdated,
   emitConversationChanged,
   emitTyping,
+  evictFromThread,
+  closeThreadRoom,
 };
