@@ -545,6 +545,22 @@ const ChatPage = ({ onLogout }) => {
               <div className="flex-1 overflow-y-auto p-4">
                 <NotificationPermissionPrompt trigger={hasSentMessage} />
                 <ChatWindow
+                  // Remount on conversation change.
+                  //
+                  // Without a key React reuses the same instance across
+                  // conversations, and ChatWindow holds a lot of internal state
+                  // that is only meaningful for one thread: the draft, staged
+                  // files, message search and date filters, the open lightbox,
+                  // typing users, reply target, suggestions. None of it resets
+                  // on its own, so switching threads carried the previous
+                  // conversation's UI state into the new one — and anything
+                  // derived from it rendered stale until a refresh rebuilt the
+                  // component from scratch.
+                  //
+                  // Remounting is the right call here rather than resetting
+                  // each piece by hand: a conversation switch genuinely is a
+                  // fresh view, and hand-reset lists rot as state is added.
+                  key={selectedConversation._id}
                   messages={combinedMessages}
                   onSent={() => setHasSentMessage(true)}
                   conversationId={selectedConversation._id}
