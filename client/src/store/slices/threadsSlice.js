@@ -1,4 +1,4 @@
-import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
+import { createSlice, createAsyncThunk, createSelector } from "@reduxjs/toolkit";
 import * as messagingApi from "../../api/messagingApi";
 
 /**
@@ -499,39 +499,93 @@ export const {
 
 /* ── Selectors ────────────────────────────────────────────────────────── */
 
-export const selectMessages = (scope, threadId) => (s) =>
-  s.threads.messagesByKey[threadKey(scope, threadId)] || EMPTY;
+/**
+ * Cache a per-thread selector so the same (scope, threadId) yields the SAME
+ * function identity on every render.
+ *
+ * Without this each render built a fresh selector. For the plain lookups that
+ * was merely wasteful — they return a reference straight out of state, so
+ * useSelector's identity check still worked. For anything DERIVED it was a real
+ * bug: selectPending ran .filter() and handed back a new array every call, so
+ * useSelector saw a changed value on every store action and re-rendered the
+ * composer whether or not anything it cared about had moved.
+ *
+ * The map is keyed by thread and grows with the number of distinct threads the
+ * user opens in a session — bounded by their conversation list, not by time or
+ * message volume.
+ */
+const perKey = (build) => {
+  const cache = new Map();
+  return (scope, threadId) => {
+    const key = threadKey(scope, threadId);
+    let selector = cache.get(key);
+    if (!selector) {
+      selector = build(key);
+      cache.set(key, selector);
+    }
+    return selector;
+  };
+};
 
-export const selectOlderStatus = (scope, threadId) => (s) =>
-  s.threads.olderStatusByKey?.[threadKey(scope, threadId)] || "idle";
+export const selectMessages = perKey((key) => (s) => s.threads.messagesByKey[key] || EMPTY);
 
-export const selectPagination = (scope, threadId) => (s) =>
-  s.threads.paginationByKey[threadKey(scope, threadId)] || null;
+export const selectOlderStatus = perKey(
+  (key) => (s) => s.threads.olderStatusByKey?.[key] || "idle"
+);
 
-export const selectThreadStatus = (scope, threadId) => (s) =>
-  s.threads.statusByKey[threadKey(scope, threadId)] || "idle";
+export const selectPagination = perKey((key) => (s) => s.threads.paginationByKey[key] || null);
 
-export const selectUnread = (scope, threadId) => (s) =>
-  s.threads.unreadByKey[threadKey(scope, threadId)] || 0;
+export const selectThreadStatus = perKey((key) => (s) => s.threads.statusByKey[key] || "idle");
 
-export const selectTyping = (scope, threadId) => (s) =>
-  s.threads.typingByKey[threadKey(scope, threadId)] || null;
+export const selectUnread = perKey((key) => (s) => s.threads.unreadByKey[key] || 0);
 
-export const selectThread = (scope, threadId) => (s) =>
-  s.threads.threads[threadKey(scope, threadId)] || null;
+export const selectTyping = perKey((key) => (s) => s.threads.typingByKey[key] || null);
+
+export const selectThread = perKey((key) => (s) => s.threads.threads[key] || null);
 
 export const selectActiveKey = (s) => s.threads.activeKey;
 
-/** Messages still in flight or failed — drives the composer's outbox strip. */
-export const selectPending = (scope, threadId) => (s) =>
-  (s.threads.messagesByKey[threadKey(scope, threadId)] || EMPTY).filter(
-    (m) => m.status === "sending" || m.status === "failed"
-  );
+/**
+ * Messages still in flight or failed — drives the composer's outbox strip.
+ *
+ * createSelector because the result is derived: recomputed only when that
+ * thread's message list actually changes, and the same array identity is
+ * returned otherwise. Previously this allocated a new array per call and made
+ * the composer re-render on every action in the app.
+ */
+export const selectPending = perKey((key) =>
+  createSelector(
+    (s) => s.threads.messagesByKey[key] || EMPTY,
+    (list) => {
+      const pending = list.filter((m) => m.status === "sending" || m.status === "failed");
+      // Keep the frozen shared EMPTY when there is nothing pending — the common
+      // case — so subscribers don't see a new [] each time.
+      return pending.length ? pending : EMPTY;
+    }
+  )
+);
 
-/** Total unread across every thread in a scope — drives the nav badge. */
-export const selectTotalUnread = (scope) => (s) =>
-  Object.entries(s.threads.unreadByKey)
-    .filter(([key]) => !scope || key.startsWith(`${scope}:`))
-    .reduce((sum, [, n]) => sum + (n || 0), 0);
+/**
+ * Total unread across every thread in a scope — drives the nav badge.
+ *
+ * Returns a number, so identity was never the issue, but it walked every thread
+ * on every action. Memoised on the unread map so it recomputes only when an
+ * unread count actually moves.
+ */
+const totalUnreadByScope = new Map();
+export const selectTotalUnread = (scope) => {
+  let selector = totalUnreadByScope.get(scope);
+  if (!selector) {
+    selector = createSelector(
+      (s) => s.threads.unreadByKey,
+      (unreadByKey) =>
+        Object.entries(unreadByKey)
+          .filter(([key]) => !scope || key.startsWith(`${scope}:`))
+          .reduce((sum, [, n]) => sum + (n || 0), 0)
+    );
+    totalUnreadByScope.set(scope, selector);
+  }
+  return selector;
+};
 
 export default threadsSlice.reducer;
