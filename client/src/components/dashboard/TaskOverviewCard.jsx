@@ -66,15 +66,36 @@ const TaskOverviewCard = ({ summaryData = [] }) => (
         href={CALL_ADMIN_URL}
         target="_blank"
         rel="noopener noreferrer"
-        className="group relative min-w-0 bg-white p-4 text-left transition hover:bg-blue-50 dark:bg-[#10131c] dark:hover:bg-blue-400/[0.08]"
+        className="group relative min-w-0 overflow-hidden bg-gradient-to-br from-rose-600/95 via-red-600/90 to-red-800/95 p-4 text-left ring-1 ring-inset ring-white/25 backdrop-blur-md transition duration-200 hover:from-rose-500 hover:via-red-600 hover:to-red-700 hover:ring-white/40"
       >
-        <div className="mb-3 flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50 text-blue-600 transition group-hover:bg-blue-600 group-hover:text-white dark:bg-blue-400/10 dark:text-blue-300 dark:group-hover:bg-blue-500 dark:group-hover:text-white">
+        {/* Specular sheen — a bright edge along the top falling off to nothing.
+            This is the part that actually reads as glass; translucency and blur
+            on their own just look like a tinted panel. Clipped by
+            overflow-hidden above, and pointer-events-none so it can never
+            intercept the click. */}
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-white/25 via-white/[0.07] to-transparent"
+        />
+
+        {/* ─── ON THE OPACITY ───
+            95/90/95 rather than something more obviously see-through. The tile
+            has to stay legible over BOTH backgrounds: in dark mode it sits on
+            #10131c and any amount of transparency only deepens the red, but in
+            light mode it sits on white, and dropping to ~80% washes the red out
+            to roughly 3.4:1 against white text — under the 4.5:1 minimum. Held
+            up here, the darkest stop keeps it near 5.5:1 in both themes, and the
+            ring plus the sheen carry the glass read instead. */}
+        <span className="relative z-10 mb-3 flex h-8 w-8 items-center justify-center rounded-lg bg-white/20 text-white ring-1 ring-inset ring-white/30 backdrop-blur-sm transition group-hover:bg-white/30">
           <Phone className="h-4 w-4" />
-        </div>
-        <div className="text-base font-semibold tracking-tight text-slate-950 dark:text-white">
+        </span>
+        <div className="relative z-10 text-base font-semibold tracking-tight text-white drop-shadow-sm">
           Call Admin
         </div>
-        <div className="mt-1 flex items-center gap-1 truncate text-xs font-medium text-slate-500 dark:text-slate-400">
+        {/* rose-100 rather than white/70: a flat white at low alpha dims toward
+            the background and loses contrast, while a light tint of the hue
+            stays readable and still reads as secondary. */}
+        <div className="relative z-10 mt-1 flex items-center gap-1 truncate text-xs font-medium text-rose-100/90">
           Cabin call
           <ExternalLink className="h-3 w-3 flex-shrink-0" />
         </div>
