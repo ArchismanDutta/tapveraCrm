@@ -325,9 +325,29 @@ class AttendanceAutoCloseService {
   getShiftEndUTC(attendanceDate, shift) {
     const date = new Date(attendanceDate);
 
-    const year = date.getUTCFullYear();
-    const month = date.getUTCMonth();
-    const day = date.getUTCDate();
+    // Read the IST calendar date, not the UTC one.
+    //
+    // The comment above used to claim attendanceDate is "UTC midnight standing
+    // for an IST calendar date". It isn't: getAttendanceRecord() normalises it
+    // with normalizeDate(), which is SERVER-LOCAL midnight. On an IST box a
+    // record for 5 Aug is stored as 2026-08-04T18:30:00Z — so getUTCDate()
+    // returns 4, a day early.
+    //
+    // That put the computed shift end a full day in the past, which made every
+    // employee instantly "past shift end + grace" and closed their day the
+    // morning they arrived. From the outside it looked exactly like the
+    // terminal ending someone's shift when they scanned to open the door.
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Asia/Kolkata',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).formatToParts(date);
+
+    const get = (t) => Number(parts.find((p) => p.type === t).value);
+    const year = get('year');
+    const month = get('month') - 1;
+    const day = get('day');
 
     // No usable shift config — fall back to end of the IST day.
     if (!shift?.startTime || !shift?.endTime) {
