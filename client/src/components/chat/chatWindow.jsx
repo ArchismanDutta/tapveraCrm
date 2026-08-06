@@ -772,7 +772,16 @@ const ChatWindow = ({
                       </p>
                     )}
                     <div
-                      className={`w-fit max-w-full rounded-xl border p-3 shadow-sm transition-colors duration-200 ${
+                      // `group` is what makes the per-message actions appear. The
+                        // action row below is `sm:opacity-0
+                        // sm:group-hover:opacity-100`, but nothing above it
+                        // carried the `group` class — the only one in this file
+                        // sat on an image-attachment wrapper, a sibling branch.
+                        // So on desktop the hover rule never fired and Reply,
+                        // Copy and Forward were all permanently invisible. They
+                        // appeared on mobile only because the base state there
+                        // is opacity-100.
+                        className={`group w-fit max-w-full rounded-xl border p-3 shadow-sm transition-colors duration-200 ${
                         isSelf
                           ? "border-blue-600/20 bg-blue-600 text-white dark:border-blue-400/15"
                           : mentionsMe
