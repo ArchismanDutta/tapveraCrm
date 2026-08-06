@@ -54,8 +54,21 @@ router.get("/groups", protect, async (req, res) => {
 // Get messages by conversation ID (one-to-one or group)
 router.get("/messages/:conversationId", protect, async (req, res) => {
   try {
-    const { raw } = await messagingService.getMessages(req.user, CHAT, req.params.conversationId);
-    res.json(raw);
+    // Forward pagination when the client asks for it. Without page/limit the
+    // adapter returns the whole thread, which is what every caller predating
+    // pagination expects — so this stays backward compatible.
+    const { page, limit } = req.query;
+    const { raw, pagination } = await messagingService.getMessages(
+      req.user,
+      CHAT,
+      req.params.conversationId,
+      { page, limit }
+    );
+
+    // Shape depends on the request: a paginated caller needs `hasMore` to know
+    // whether to keep loading, while an unpaginated one still receives the bare
+    // array it has always received.
+    return pagination ? res.json({ messages: raw, pagination }) : res.json(raw);
   } catch (error) {
     try {
       return sendAccessError(res, error);

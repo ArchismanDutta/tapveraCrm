@@ -112,25 +112,43 @@ async function listThreads(user) {
 }
 
 async function getMessages(user, threadId, { page, limit } = {}) {
-  // The existing chat route returns the whole thread unpaginated and the client
-  // depends on that; pagination is accepted here for interface parity with the
-  // project adapter and applied only when asked for.
-  let query = ChatMessage.find({ conversationId: String(threadId) })
-    .populate({
-      path: 'replyTo',
-      populate: { path: 'senderId', select: 'name email' },
-    })
-    .sort({ timestamp: 1 });
+  // ─── PAGE 1 IS THE NEWEST MESSAGES, NOT THE OLDEST ───
+  //
+  // Matches projectThread: query newest-first so page 1 is what the user
+  // actually wants to see on open, then reverse so the UI still renders
+  // oldest-at-top. Paging *up* through history is page 2, 3, …
+  //
+  // The naive alternative — sort ascending and skip — makes page 1 the oldest
+  // messages in the thread, so opening a conversation would show its first
+  // ever messages and the user would have to page forward to reach today.
+  //
+  // Omitting both page and limit still returns the entire thread, because
+  // callers that predate pagination rely on it.
+  const filter = { conversationId: String(threadId) };
+  const paginated = Boolean(page || limit);
+
+  const limitNum = Number(limit) || 50;
+  const pageNum = Number(page) || 1;
+  const skip = (pageNum - 1) * limitNum;
+
+  let query = ChatMessage.find(filter).populate({
+    path: 'replyTo',
+    populate: { path: 'senderId', select: 'name email' },
+  });
 
   let total;
-  if (page || limit) {
-    const limitNum = Number(limit) || 50;
-    const pageNum = Number(page) || 1;
-    total = await ChatMessage.countDocuments({ conversationId: String(threadId) });
-    query = query.skip((pageNum - 1) * limitNum).limit(limitNum);
+  if (paginated) {
+    total = await ChatMessage.countDocuments(filter);
+    query = query.sort({ timestamp: -1 }).skip(skip).limit(limitNum);
+  } else {
+    query = query.sort({ timestamp: 1 });
   }
 
-  const messages = await query;
+  let messages = await query;
+
+  // Back to oldest-first for rendering. Only when paginated — the unpaginated
+  // branch is already ascending.
+  if (paginated) messages = messages.reverse();
 
   // mentions is a flat id array, so it can't be .populate()d — resolve in one
   // batched lookup rather than the original per-message query in a loop.
@@ -152,6 +170,19 @@ async function getMessages(user, threadId, { page, limit } = {}) {
     raw: messages,
     normalized: messages.map(normalize),
     total: total ?? messages.length,
+    // Only present when paginated, so an unpaginated caller sees no pagination
+    // block and keeps its existing behaviour. Same shape as projectThread.
+    pagination: paginated
+      ? {
+          page: pageNum,
+          limit: limitNum,
+          total,
+          totalPages: Math.ceil(total / limitNum),
+          // `skip + returned < total` — i.e. are there older messages beyond
+          // this page. Since page 1 is the newest, "more" always means older.
+          hasMore: skip + messages.length < total,
+        }
+      : null,
   };
 }
 

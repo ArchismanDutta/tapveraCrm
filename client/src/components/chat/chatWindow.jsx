@@ -41,6 +41,11 @@ import FailedMessageBar from "../message/FailedMessageBar";
 import UnreadDivider from "../message/UnreadDivider";
 import NewMessagesButton from "./NewMessagesButton";
 import useMessageListMechanics, { startsGroup } from "../../hooks/useMessageListMechanics";
+import {
+  fetchOlderMessages,
+  selectOlderStatus,
+  selectPagination,
+} from "../../store/slices/threadsSlice";
 import useDraft from "../../hooks/useDraft";
 import { selectUnread } from "../../store/slices/threadsSlice";
 import { deriveStatus } from "../../store/slices/threadsSlice";
@@ -51,7 +56,7 @@ import { deriveStatus } from "../../store/slices/threadsSlice";
 // per-view UI state, not shared application state.
 import * as messagingApi from "../../api/messagingApi";
 import { selectTyping } from "../../store/slices/threadsSlice";
-import { useSelector } from "react-redux";
+import { useSelector, useDispatch } from "react-redux";
 
 // ─── Main component ──────────────────────────────────────────────────────────
 // Styling here is kept in lockstep with ChatPage.jsx (its parent shell) —
@@ -114,6 +119,22 @@ const ChatWindow = ({
   // Unread on open — fixes where the divider sits.
   const unreadOnOpen = useSelector(selectUnread(messagingApi.SCOPES.CHAT, conversationId));
 
+  const dispatch = useDispatch();
+
+  // Older-history paging. The thread loads its newest page on open; this pulls
+  // the next page back when the user scrolls near the top.
+  const pagination = useSelector(selectPagination(messagingApi.SCOPES.CHAT, conversationId));
+  const olderStatus = useSelector(selectOlderStatus(messagingApi.SCOPES.CHAT, conversationId));
+  const hasOlder = Boolean(pagination?.hasMore);
+  const loadingOlder = olderStatus === "loading";
+
+  const loadOlder = React.useCallback(() => {
+    if (!hasOlder || loadingOlder) return;
+    dispatch(
+      fetchOlderMessages({ scope: messagingApi.SCOPES.CHAT, threadId: conversationId })
+    );
+  }, [dispatch, conversationId, hasOlder, loadingOlder]);
+
   // Scroll anchoring, stick-to-bottom, jump-to-latest and the unread divider
   // position all live in one hook (S5). `atBottom` also gates the READ receipt:
   // scrolled up through history is not reading the latest message.
@@ -130,6 +151,8 @@ const ChatWindow = ({
     threadId: conversationId,
     unreadCount: unreadOnOpen,
     currentUserId,
+    hasOlder,
+    onLoadOlder: loadOlder,
   });
 
   // Delivery acks + the read cursor (S1). Read additionally requires
@@ -604,6 +627,30 @@ const ChatWindow = ({
         onScroll={onScroll}
         className="relative flex-1 overflow-y-auto p-3 sm:px-5 sm:py-4"
       >
+        {/* Older-history affordance. Rendered INSIDE the scroll container and
+            above the list, so the anchor in useMessageListMechanics measures it
+            as part of the prepended content. Placing it outside would shift the
+            view by its own height every time a page loads. */}
+        {loadingOlder && (
+          <p className="mb-2 text-center text-xs text-slate-400 dark:text-slate-500">
+            Loading earlier messages…
+          </p>
+        )}
+        {!loadingOlder && hasOlder && (
+          <button
+            type="button"
+            onClick={loadOlder}
+            className="mx-auto mb-2 block rounded-full border border-slate-200 px-3 py-1 text-xs text-slate-500 transition hover:bg-slate-50 dark:border-white/10 dark:text-slate-400 dark:hover:bg-white/[0.04]"
+          >
+            Load earlier messages
+          </button>
+        )}
+        {!hasOlder && pagination && filteredMessages.length > 0 && (
+          <p className="mb-2 text-center text-[11px] text-slate-300 dark:text-slate-600">
+            Beginning of this conversation
+          </p>
+        )}
+
         {filteredMessages.length === 0 ? (
           <p className="mt-10 text-center text-sm text-slate-500 dark:text-slate-400">
             No messages found...

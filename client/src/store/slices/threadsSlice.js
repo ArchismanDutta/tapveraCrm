@@ -33,6 +33,11 @@ import * as messagingApi from "../../api/messagingApi";
 
 export const threadKey = messagingApi.threadKey;
 
+// How many messages a page holds. Chat threads were previously loaded in full
+// on every open — a year-old group is a multi-megabyte payload and a long
+// render for messages nobody scrolls back to.
+export const PAGE_SIZE = 50;
+
 const EMPTY = Object.freeze([]);
 
 /** Ensure the per-thread buckets exist before writing to them. */
@@ -41,6 +46,8 @@ function ensure(state, key) {
   if (state.unreadByKey[key] === undefined) state.unreadByKey[key] = 0;
   if (!state.typingByKey[key]) state.typingByKey[key] = {};
   if (!state.statusByKey[key]) state.statusByKey[key] = "idle";
+  if (!state.olderStatusByKey) state.olderStatusByKey = {};
+  if (!state.olderStatusByKey[key]) state.olderStatusByKey[key] = "idle";
 }
 
 /** Milliseconds for a message's sort position. Chat uses `timestamp`, project
@@ -132,6 +139,40 @@ export const fetchMessages = createAsyncThunk(
   }
 );
 
+/**
+ * Load the next OLDER page of a thread.
+ *
+ * Page 1 is the newest messages (see the chat adapter), so paging up through
+ * history means page 2, 3, … Reads the current pagination from the store rather
+ * than taking a page number, so a caller can't accidentally re-request a page
+ * it already has or skip one.
+ *
+ * Returns null when there is nothing older, or when a load is already in
+ * flight — a scroll listener fires many times per gesture and would otherwise
+ * launch a burst of duplicate requests.
+ */
+export const fetchOlderMessages = createAsyncThunk(
+  "threads/fetchOlderMessages",
+  async ({ scope, threadId, limit = PAGE_SIZE }, { getState }) => {
+    const key = threadKey(scope, threadId);
+    const state = getState().threads;
+
+    const pagination = state.paginationByKey[key];
+    if (!pagination?.hasMore) return { key, messages: [], pagination, skipped: true };
+    if (state.olderStatusByKey[key] === "loading") {
+      return { key, messages: [], pagination, skipped: true };
+    }
+
+    const nextPage = (pagination.page || 1) + 1;
+    const { messages, pagination: next } = await messagingApi.fetchMessages(scope, threadId, {
+      page: nextPage,
+      limit,
+    });
+
+    return { key, messages, pagination: next, skipped: false };
+  }
+);
+
 export const sendMessage = createAsyncThunk(
   "threads/sendMessage",
   async ({ scope, threadId, ...payload }) => {
@@ -165,6 +206,9 @@ const initialState = {
   typingByKey: {},    // key -> { [userId]: userName }
   statusByKey: {},    // key -> idle | loading | ready | error
   paginationByKey: {},
+  // Separate from statusByKey: loading an older page must not put the thread
+  // into "loading" and blank the messages already on screen.
+  olderStatusByKey: {},
   activeKey: null,
 };
 
@@ -389,6 +433,37 @@ const threadsSlice = createSlice({
         const { scope, threadId } = action.meta.arg;
         state.statusByKey[threadKey(scope, threadId)] = "error";
       })
+
+      // ── Older pages ──
+      // Tracked in olderStatusByKey, NOT statusByKey: putting the thread into
+      // "loading" while paging up would blank the messages already on screen,
+      // which is the opposite of what the user asked for.
+      .addCase(fetchOlderMessages.pending, (state, action) => {
+        const { scope, threadId } = action.meta.arg;
+        const key = threadKey(scope, threadId);
+        ensure(state, key);
+        state.olderStatusByKey[key] = "loading";
+      })
+      .addCase(fetchOlderMessages.fulfilled, (state, action) => {
+        const { key, messages, pagination, skipped } = action.payload || {};
+        if (!key) return;
+        ensure(state, key);
+        state.olderStatusByKey[key] = "idle";
+
+        // A skipped call (nothing older, or already in flight) must not
+        // overwrite pagination — doing so could clear hasMore and permanently
+        // stop the thread from loading more.
+        if (skipped) return;
+
+        if (pagination) state.paginationByKey[key] = pagination;
+        // upsertMessage inserts by timestamp, so older rows land at the front
+        // without needing a separate prepend path.
+        messages.forEach((m) => upsertMessage(state.messagesByKey[key], m));
+      })
+      .addCase(fetchOlderMessages.rejected, (state, action) => {
+        const { scope, threadId } = action.meta.arg;
+        state.olderStatusByKey[threadKey(scope, threadId)] = "idle";
+      })
       .addCase(sendMessage.fulfilled, (state, action) => {
         const { key, message } = action.payload;
         ensure(state, key);
@@ -426,6 +501,12 @@ export const {
 
 export const selectMessages = (scope, threadId) => (s) =>
   s.threads.messagesByKey[threadKey(scope, threadId)] || EMPTY;
+
+export const selectOlderStatus = (scope, threadId) => (s) =>
+  s.threads.olderStatusByKey?.[threadKey(scope, threadId)] || "idle";
+
+export const selectPagination = (scope, threadId) => (s) =>
+  s.threads.paginationByKey[threadKey(scope, threadId)] || null;
 
 export const selectThreadStatus = (scope, threadId) => (s) =>
   s.threads.statusByKey[threadKey(scope, threadId)] || "idle";

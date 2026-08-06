@@ -31,6 +31,11 @@ export default function useMessageListMechanics({
   threadId,
   unreadCount = 0,
   currentUserId,
+  // Called when the user scrolls near the top and older history exists.
+  // Fire-and-forget: the caller is responsible for ignoring the call when a
+  // page is already in flight (fetchOlderMessages does this itself).
+  onLoadOlder,
+  hasOlder = false,
 }) {
   const containerRef = useRef(null);
   const bottomRef = useRef(null);
@@ -93,7 +98,19 @@ export default function useMessageListMechanics({
     const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
     setAtBottom(nearBottom);
     if (nearBottom) setNewSinceScroll(0);
-  }, []);
+
+    // Load older history before the user actually reaches the top, so the
+    // messages are usually already there by the time they get there. 300px is
+    // roughly a screen of scrolling at reading speed.
+    //
+    // No debounce here on purpose: scroll fires many times per gesture, but
+    // fetchOlderMessages already returns early when a page is in flight, so the
+    // duplicate calls cost nothing and a timer would add latency to the one
+    // case that matters — a fast flick to the top.
+    if (hasOlder && onLoadOlder && el.scrollTop < 300) {
+      onLoadOlder();
+    }
+  }, [hasOlder, onLoadOlder]);
 
   const scrollToBottom = useCallback((behavior = "smooth") => {
     bottomRef.current?.scrollIntoView({ behavior });

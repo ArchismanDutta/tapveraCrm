@@ -15,6 +15,7 @@ import {
   markThreadRead,
   setActiveThread,
   selectMessages,
+  PAGE_SIZE,
 } from "../store/slices/threadsSlice";
 
 const SCOPE = messagingApi.SCOPES.CHAT;
@@ -160,7 +161,15 @@ const ChatPage = ({ onLogout }) => {
   useEffect(() => {
     if (isConnected && wasConnected.current) {
       loadConversations();
-      if (selectedId) dispatch(fetchThreadMessages({ scope: SCOPE, threadId: selectedId }));
+      if (selectedId) {
+        dispatch(
+          fetchThreadMessages({
+            scope: SCOPE,
+            threadId: selectedId,
+            params: { page: 1, limit: PAGE_SIZE },
+          })
+        );
+      }
     }
     wasConnected.current = isConnected;
   }, [isConnected, loadConversations, dispatch, selectedId]);
@@ -180,7 +189,17 @@ const ChatPage = ({ onLogout }) => {
   // top rather than being clobbered by this.
   useEffect(() => {
     if (!selectedId) return;
-    dispatch(fetchThreadMessages({ scope: SCOPE, threadId: selectedId }));
+    // Newest page only. Loading the entire thread meant a long-running group
+    // shipped every message it had ever held on each open — megabytes of JSON
+    // and a correspondingly long render, for history almost nobody scrolls to.
+    // ChatWindow pulls older pages as the user scrolls up.
+    dispatch(
+      fetchThreadMessages({
+        scope: SCOPE,
+        threadId: selectedId,
+        params: { page: 1, limit: PAGE_SIZE },
+      })
+    );
   }, [dispatch, selectedId]);
 
   /* ── Actions ──────────────────────────────────────────────────────── */

@@ -83,9 +83,18 @@ export async function fetchMessages(scope, threadId, params = {}) {
     return { messages: data?.messages || [], pagination: data?.pagination || null };
   }
 
-  // Chat returns a bare array and is currently unpaginated.
-  const { data } = await API.get(`/api/chat/messages/${threadId}`);
-  return { messages: Array.isArray(data) ? data : [], pagination: null };
+  // Chat responds in one of two shapes, depending on whether pagination was
+  // requested: a bare array (the historical, whole-thread response) or
+  // { messages, pagination }. Both are handled so callers that don't paginate
+  // keep working unchanged.
+  const { data } = await API.get(`/api/chat/messages/${threadId}`, { params });
+
+  if (Array.isArray(data)) return { messages: data, pagination: null };
+
+  return {
+    messages: Array.isArray(data?.messages) ? data.messages : [],
+    pagination: data?.pagination || null,
+  };
 }
 
 /** Unread count for a single thread. */
