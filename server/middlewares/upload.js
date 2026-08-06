@@ -37,41 +37,25 @@
 'use strict';
 
 const multer = require('multer');
-const path = require('path');
 const { createDiskStorage } = require('../config/storage');
 
-// Matches the limit the chat/project uploader already enforces, so a file that
-// is acceptable in one part of the CRM is acceptable in the other.
-const MAX_BYTES = Number(process.env.UPLOAD_MAX_BYTES || 10 * 1024 * 1024);
+// Matches the chat/project uploader, so a file that is acceptable in one part
+// of the CRM is acceptable in the other.
+const MAX_BYTES = Number(process.env.UPLOAD_MAX_BYTES || 50 * 1024 * 1024);
 
-// Anchored: the extension must BE one of these, not merely contain one.
-const ALLOWED_EXTENSIONS = /^\.(pdf|jpe?g|png|docx?)$/;
-
-const ALLOWED_MIMES = new Set([
-  'application/pdf',
-  'image/jpeg',
-  'image/jpg',
-  'image/png',
-  'application/msword',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-]);
-
-function fileFilter(req, file, cb) {
-  const ext = path.extname(file.originalname || '').toLowerCase();
-
-  // Both must agree. An extension is trivially renamed; a mimetype is
-  // client-supplied and equally forgeable. Requiring both raises the bar
-  // without rejecting anything legitimate.
-  if (ALLOWED_EXTENSIONS.test(ext) && ALLOWED_MIMES.has(file.mimetype)) {
-    return cb(null, true);
-  }
-
-  return cb(new Error('Only PDF, JPG, PNG, DOC and DOCX files are allowed'));
-}
-
+// No type whitelist.
+//
+// This used to allow only pdf|jpg|png|doc|docx. Chat accepts anything, so a
+// photo of a medical certificate taken on an iPhone (.heic) was refused from a
+// leave request and accepted in a chat message — the same file, the same
+// person, two different answers. Nobody can predict that rule, and the
+// workaround is to send it in chat instead, which is worse for everyone.
+//
+// The size cap is the limit that matters. These files are never executed: they
+// are written with a random name, served with an explicit Content-Disposition,
+// and only reachable through a signed URL.
 const upload = multer({
   storage: createDiskStorage('leave'),
-  fileFilter,
   limits: {
     fileSize: MAX_BYTES,
     files: 5,

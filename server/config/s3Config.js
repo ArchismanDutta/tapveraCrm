@@ -4,6 +4,52 @@ const multer = require("multer");
 const multerS3 = require("multer-s3");
 const { createDiskStorage } = require("./storage");
 
+// ─────────────────────────────────────────────────────────────────────────────
+// SIZE LIMITS
+// ─────────────────────────────────────────────────────────────────────────────
+// One flat 10MB cap used to apply to everything, which made video effectively
+// unusable: the type filter accepted an .mp4 and the size limit then rejected
+// it, because a 30-second phone clip is 30–60MB. Accepted-then-rejected is the
+// most confusing failure available — the user is told the file is fine and then
+// that it isn't.
+//
+// Video gets its own, larger allowance. Now that files live on our own disk
+// rather than S3, the trade is disk and backup volume, not egress billing —
+// so the number is a local operational choice and belongs in the env.
+const MAX_FILE_BYTES = Number(process.env.UPLOAD_MAX_BYTES || 50 * 1024 * 1024); // 50MB
+const MAX_VIDEO_BYTES = Number(process.env.UPLOAD_MAX_VIDEO_BYTES || 200 * 1024 * 1024); // 200MB
+
+// multer applies a single `limits.fileSize` to every part, so the higher of the
+// two is enforced there and the per-type rule is applied in the filter below,
+// where the mimetype is known.
+const MULTER_LIMIT = Math.max(MAX_FILE_BYTES, MAX_VIDEO_BYTES);
+
+/**
+ * Per-type size rule. Runs before the file is written, so an oversized upload
+ * is refused rather than streamed to disk and deleted afterwards.
+ *
+ * Note multer's own limit still guards the absolute ceiling — this only refines
+ * it downward for non-video, and reports a clear reason either way.
+ */
+const sizeAwareFileFilter = (req, file, cb) => {
+  const isVideo = String(file.mimetype || "").startsWith("video/");
+  const cap = isVideo ? MAX_VIDEO_BYTES : MAX_FILE_BYTES;
+
+  // `file.size` is not populated at filter time — multer streams the part after
+  // this runs — so use the request's declared length as an early reject where
+  // it's available. Anything that slips past is still caught by MULTER_LIMIT.
+  const declared = Number(req.headers["content-length"] || 0);
+  if (declared && declared > cap + 1024 * 1024) {
+    return cb(
+      new Error(
+        `File is too large. Maximum is ${Math.round(cap / 1024 / 1024)}MB for ${isVideo ? "video" : "this file type"}.`
+      )
+    );
+  }
+
+  return cb(null, true);
+};
+
 // Initialize S3 Client
 const s3Client = new S3Client({
   region: process.env.AWS_REGION || "us-east-1",
@@ -93,7 +139,7 @@ const uploadToS3 = isS3Configured ? multer({
     },
   }),
   limits: {
-    fileSize: 10 * 1024 * 1024, // 10MB limit
+    fileSize: MULTER_LIMIT,
   },
   // Every file type is accepted. This used to whitelist a fixed set of
   // mimetypes/extensions (jpeg/png/gif but not webp or heic, pdf/doc/xls/txt
@@ -101,7 +147,7 @@ const uploadToS3 = isS3Configured ? multer({
   // list bounced with "Invalid file type", which is exactly what was blocking
   // webp images. People need to share whatever file they actually have; the
   // 10MB cap above is the limit that matters, not the extension.
-  fileFilter: (req, file, cb) => cb(null, true),
+  fileFilter: sizeAwareFileFilter,
 }) : multer({
   // Local storage goes through config/storage.js so writes land under
   // UPLOAD_ROOT.
@@ -122,11 +168,11 @@ const uploadToS3 = isS3Configured ? multer({
       : "messages"
   ),
   limits: {
-    fileSize: 10 * 1024 * 1024, // 10MB limit
+    fileSize: MULTER_LIMIT,
   },
   // Same as the S3 branch above — no mimetype/extension whitelist. See that
   // comment for why (this is the one that was rejecting webp).
-  fileFilter: (req, file, cb) => cb(null, true),
+  fileFilter: sizeAwareFileFilter,
 });
 
 // Log configuration status
