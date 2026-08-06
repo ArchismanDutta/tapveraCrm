@@ -1,8 +1,30 @@
 // Browser notification utility for task assignments and changes
 
+/**
+ * Is the Web Notifications API available at all?
+ *
+ * ─── THIS IS WHY THE APP WAS BLANK ON iOS ───
+ * The constructor read `Notification.permission` bare. iOS Safari has no
+ * `Notification` global outside an installed PWA, so that threw a
+ * ReferenceError — and because the singleton below is created at MODULE LOAD
+ * and App.jsx imports it, the throw happened before React could mount.
+ * Result: a white screen on every iPhone, while Android Chrome (which has the
+ * API) was fine.
+ *
+ * A capability check, not a browser sniff: Safari gained the API in 16.4 for
+ * installed PWAs, so "is it iOS" is the wrong question — "is it here" is the
+ * right one, and it keeps working as that support changes.
+ */
+const notificationsSupported = () =>
+  typeof window !== "undefined" && "Notification" in window;
+
 class BrowserNotificationManager {
   constructor() {
-    this.permission = Notification.permission;
+    // Never touch the global directly. "default" mirrors what an unprompted
+    // browser reports, so every downstream check (isEnabled, showNotification)
+    // behaves as though permission simply hasn't been granted — which on a
+    // platform without the API is exactly right.
+    this.permission = notificationsSupported() ? Notification.permission : "default";
     this.audioContext = null;
     this.notificationSound = null;
     this.initializeAudio();
@@ -52,7 +74,10 @@ class BrowserNotificationManager {
 
   // Request notification permission
   async requestPermission() {
-    if (!("Notification" in window)) {
+    // One definition of "supported", shared with the constructor. Re-deriving
+    // it per call site is how the constructor ended up unguarded in the first
+    // place.
+    if (!notificationsSupported()) {
       console.warn("This browser does not support notifications");
       return false;
     }
@@ -232,7 +257,7 @@ class BrowserNotificationManager {
 
   // Check if notifications are supported and enabled
   isSupported() {
-    return "Notification" in window;
+    return notificationsSupported();
   }
 
   // Check if permission is granted
