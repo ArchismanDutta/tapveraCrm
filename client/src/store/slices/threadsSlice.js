@@ -50,6 +50,27 @@ function ensure(state, key) {
   if (!state.olderStatusByKey[key]) state.olderStatusByKey[key] = "idle";
 }
 
+/**
+ * Drop every trace of a thread.
+ *
+ * The counterpart to `ensure`, and it has to clear ALL of the same buckets —
+ * `unreadByKey` above all. `selectTotalUnread` sums that map without consulting
+ * `state.threads`, so a leftover unread entry keeps feeding the nav badge for a
+ * conversation the user can no longer open. That is a badge you cannot clear by
+ * any action in the UI, which is precisely the failure this slice was written to
+ * end; leaving one bucket behind reintroduces it one layer up.
+ */
+function forget(state, key) {
+  delete state.threads[key];
+  delete state.messagesByKey[key];
+  delete state.unreadByKey[key];
+  delete state.typingByKey[key];
+  delete state.statusByKey[key];
+  delete state.paginationByKey[key];
+  if (state.olderStatusByKey) delete state.olderStatusByKey[key];
+  if (state.activeKey === key) state.activeKey = null;
+}
+
 /** Milliseconds for a message's sort position. Chat uses `timestamp`, project
  *  uses `createdAt`; the normalized shape uses `createdAt`. Accept all three. */
 const timeOf = (m) => {
@@ -406,6 +427,29 @@ const threadsSlice = createSlice({
       }
     },
 
+    /**
+     * A thread the user no longer has — deleted, or they were removed from it.
+     *
+     * Driven by the `conversation:updated` socket event, which already carries
+     * an `action` discriminator (`deleted` / `member_removed`) that nothing was
+     * reading: all three listeners just refetched the list. A refetch alone
+     * could never fix this, because `fetchThreads.fulfilled` only ever ADDED
+     * keys — so the dead conversation stayed in the sidebar, stayed clickable,
+     * and 404'd on open.
+     *
+     * Handling it here rather than only in the refetch means the thread vanishes
+     * on the event itself, without waiting for a round trip.
+     */
+    removeThread: {
+      reducer(state, action) {
+        const key = action.payload;
+        if (key) forget(state, key);
+      },
+      prepare: (scope, threadId) => ({
+        payload: scope && threadId ? threadKey(scope, threadId) : null,
+      }),
+    },
+
     /** Drop an optimistic row the user chose to discard. */
     discardOptimistic(state, action) {
       const { scope, threadId, clientMsgId } = action.payload || {};
@@ -426,12 +470,35 @@ const threadsSlice = createSlice({
     builder
       .addCase(fetchThreads.fulfilled, (state, action) => {
         const { scope, threads } = action.payload;
+
+        const seen = new Set();
         threads.forEach((t) => {
           const key = threadKey(scope, String(t._id ?? t.id));
+          seen.add(key);
           ensure(state, key);
           state.threads[key] = t;
           // The list response carries the server's authoritative unread count.
           if (typeof t.unreadCount === "number") state.unreadByKey[key] = t.unreadCount;
+        });
+
+        // ─── PRUNE WHAT THE SERVER NO LONGER LISTS ───
+        //
+        // This response is the complete set of threads the user has in this
+        // scope, so anything held locally and absent from it is gone — deleted,
+        // or they were removed from it. Without this the merge was additive
+        // only and dead conversations accumulated for the life of the session.
+        //
+        // Scoped by prefix: a `fetchThreads('chat')` must not evict project
+        // threads, which this response says nothing about.
+        //
+        // Only threads we have a RECORD for are candidates. `ensure()` creates
+        // empty buckets speculatively — a `thread:message` for a group you were
+        // just added to arrives before the list refetch that would name it — and
+        // pruning on the bucket maps would delete that message a moment before
+        // the thread it belongs to shows up.
+        const prefix = `${scope}:`;
+        Object.keys(state.threads).forEach((key) => {
+          if (key.startsWith(prefix) && !seen.has(key)) forget(state, key);
         });
       })
       .addCase(fetchMessages.pending, (state, action) => {
@@ -508,6 +575,7 @@ export const {
   markSendFailed,
   markSendRetrying,
   discardOptimistic,
+  removeThread,
   setActiveThread,
   receiveMessage,
   receiveReceipt,

@@ -121,10 +121,10 @@ const PayslipManagement = ({ onLogout }) => {
   };
 
   return (
-    <div className="flex bg-gradient-to-br from-[#141a21] via-[#191f2b] to-[#101218] font-sans text-blue-100 min-h-screen">
+    <div className="flex bg-gradient-to-br from-[#141a21] via-[#191f2b] to-[#101218] font-sans text-blue-100 min-h-[100dvh]">
       <Sidebar collapsed={collapsed} setCollapsed={setCollapsed} onLogout={onLogout} userRole="super-admin" />
 
-      <main className={`flex-1 p-8 overflow-y-auto transition-all duration-300 ${collapsed ? "ml-20" : "ml-72"}`}>
+      <main className={`flex-1 p-8 overflow-y-auto transition-all duration-300 ${collapsed ? "app-offset app-offset-collapsed" : "app-offset"}`}>
         {/* Header */}
         <div className="flex justify-between items-start mb-8">
           <div>

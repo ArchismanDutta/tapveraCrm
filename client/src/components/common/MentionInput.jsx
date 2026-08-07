@@ -287,7 +287,25 @@ const MentionInput = forwardRef(({
         placeholder={placeholder}
         rows={rows}
         disabled={disabled}
-        className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none ${className}`}
+        // ─── `block` IS LOAD-BEARING ───
+        // A textarea is `inline-block` by default, so it sits on the text
+        // baseline and leaves ~7px of descender space beneath it inside its
+        // wrapper. In the chat composers that wrapper is a flex item next to
+        // two 44px buttons: the wrapper measured 51px while the input itself
+        // was 44px, so centring the row put the input about 3.5px above the
+        // buttons. The composer looked subtly crooked and nothing in the
+        // Tailwind classes explained why. `block` removes the baseline gap and
+        // the wrapper collapses to the input's real height.
+        //
+        // ─── COLOURS ARE THE CALLER'S ───
+        // This used to hardcode `border-gray-300` and `focus:ring-blue-500`.
+        // Both callers pass their own border and focus colours, so the
+        // hardcoded ones were duplicate utilities in the same class attribute —
+        // and which one wins is decided by Tailwind's output order, not by the
+        // order they're written here. That made the project composer render a
+        // BLUE focus ring against its teal send button. Structural utilities
+        // stay; anything visual comes from `className`.
+        className={`block w-full resize-none border px-3 py-2 focus:border-transparent focus:ring-2 ${className}`}
       />
 
       {/* Mention Dropdown */}

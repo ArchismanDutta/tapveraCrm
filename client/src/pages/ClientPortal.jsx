@@ -219,7 +219,7 @@ const ClientPortal = ({ onLogout, clientId, clientEmail }) => {
   }, [projects, searchTerm, filterType, filterStatus]);
 
   return (
-    <div className="flex flex-col min-h-screen bg-gradient-to-br from-[#141a21] via-[#191f2b] to-[#101218] text-blue-100">
+    <div className="flex flex-col min-h-[100dvh] bg-gradient-to-br from-[#141a21] via-[#191f2b] to-[#101218] text-blue-100">
       {/* Mobile Header */}
       <header className="lg:hidden sticky top-0 z-40 bg-[#191f2b]/95 backdrop-blur-sm border-b border-[#232945] px-4 py-3">
         <div className="flex items-center justify-between">

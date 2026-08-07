@@ -99,29 +99,40 @@ const TeamTaskManagementPage = ({ onLogout }) => {
   };
 
   return (
-    <div className="flex h-screen overflow-hidden bg-gray-50 dark:bg-gray-900">
+    <div className="flex h-[100dvh] overflow-hidden bg-gray-50 dark:bg-gray-900">
       {/* Sidebar */}
       <Sidebar collapsed={collapsed} setCollapsed={setCollapsed} onLogout={onLogout} />
 
-      {/* Main Content */}
+      {/* Main Content
+          The offset was `ml-20`/`ml-64` — 80px and 256px — against a sidebar
+          that is 64px and 224px wide. Every other page in the app uses the
+          matching values, so this one sat 16px (collapsed) or 32px (expanded)
+          out of alignment at every screen size. Now on the shared `.app-offset`
+          class along with the rest, which also gives it the mobile drawer
+          behaviour it never had. */}
       <div
         className={`flex-1 flex flex-col transition-all duration-300 ${
-          collapsed ? "ml-20" : "ml-64"
+          collapsed ? "app-offset app-offset-collapsed" : "app-offset"
         }`}
       >
         {/* Header */}
-        <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-4">
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Team Task Management</h1>
-          <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+        <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-3 sm:px-6 sm:py-4">
+          <h1 className="text-xl font-bold text-gray-900 dark:text-white sm:text-2xl">Team Task Management</h1>
+          <p className="text-xs text-gray-600 dark:text-gray-400 mt-1 sm:text-sm">
             Monitor and manage tasks for your team members
           </p>
         </div>
 
-        {/* Split View Layout */}
-        <div className="flex-1 overflow-hidden p-6">
-          <div className="grid grid-cols-12 gap-6 h-full">
+        {/* Split View Layout
+            Was a hard `grid-cols-12` with a 4/8 split, which on a 375px screen
+            gave the member list 125px — narrower than the names it holds — and
+            the task panel 250px. Below `lg` the two panels stack instead: the
+            member list takes its natural height (capped, so it can't push the
+            tasks off-screen) and the task view fills what's left. */}
+        <div className="flex-1 overflow-y-auto p-3 sm:p-6 lg:overflow-hidden">
+          <div className="flex h-full flex-col gap-4 lg:grid lg:grid-cols-12 lg:gap-6">
             {/* Left Panel - Team Member List */}
-            <div className="col-span-4 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4 overflow-y-auto">
+            <div className="max-h-[40vh] shrink-0 overflow-y-auto rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800 lg:col-span-4 lg:max-h-none lg:shrink">
               <div className="mb-4 pb-3 border-b border-gray-200 dark:border-gray-700">
                 <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Team Members</h2>
                 <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
@@ -137,7 +148,7 @@ const TeamTaskManagementPage = ({ onLogout }) => {
             </div>
 
             {/* Right Panel - Task View */}
-            <div className="col-span-8 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 overflow-hidden">
+            <div className="min-h-0 flex-1 overflow-hidden rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800 sm:p-6 lg:col-span-8">
               <TeamMemberTaskView
                 selectedMember={selectedMember}
                 onEditTask={handleEditTask}

@@ -592,32 +592,32 @@ const OnPageSEO = ({ projectId, userRole, userId }) => {
 
       {/* Stats Cards */}
       {stats && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <div className="border border-slate-200 bg-white dark:border-[#232945] dark:bg-[#0f1419] rounded-xl p-4 relative overflow-hidden">
+        <div className="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-4">
+          <div className="relative overflow-hidden rounded-xl border border-slate-200 bg-white px-3 py-2.5 dark:border-[#232945] dark:bg-[#0f1419] sm:p-4">
             <div className="absolute top-0 left-0 right-0 h-0.5 bg-blue-500/60 rounded-t-xl" />
-            <p className="text-xs text-slate-500 dark:text-gray-500 uppercase tracking-wider">Total</p>
-            <p className="text-3xl font-bold text-slate-950 dark:text-white mt-1">{stats.totalKeywords}</p>
-            <p className="text-xs text-slate-400 dark:text-gray-600 mt-1">keywords tracked</p>
+            <p className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-gray-500 sm:text-xs">Total</p>
+            <p className="mt-0.5 text-xl font-bold text-slate-950 dark:text-white sm:mt-1 sm:text-3xl">{stats.totalKeywords}</p>
+            <p className="mt-1 hidden text-xs text-slate-400 dark:text-gray-600 sm:block">keywords tracked</p>
           </div>
-          <div className="border border-slate-200 bg-white dark:border-[#232945] dark:bg-[#0f1419] rounded-xl p-4 relative overflow-hidden">
+          <div className="relative overflow-hidden rounded-xl border border-slate-200 bg-white px-3 py-2.5 dark:border-[#232945] dark:bg-[#0f1419] sm:p-4">
             <div className="absolute top-0 left-0 right-0 h-0.5 bg-green-500/60 rounded-t-xl" />
-            <p className="text-xs text-slate-500 dark:text-gray-500 uppercase tracking-wider">Improved</p>
-            <p className="text-3xl font-bold text-green-400 mt-1">{stats.improved}</p>
-            <p className="text-xs text-slate-400 dark:text-gray-600 mt-1">ranking higher</p>
+            <p className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-gray-500 sm:text-xs">Improved</p>
+            <p className="mt-0.5 text-xl font-bold text-green-400 sm:mt-1 sm:text-3xl">{stats.improved}</p>
+            <p className="mt-1 hidden text-xs text-slate-400 dark:text-gray-600 sm:block">ranking higher</p>
           </div>
-          <div className="border border-slate-200 bg-white dark:border-[#232945] dark:bg-[#0f1419] rounded-xl p-4 relative overflow-hidden">
+          <div className="relative overflow-hidden rounded-xl border border-slate-200 bg-white px-3 py-2.5 dark:border-[#232945] dark:bg-[#0f1419] sm:p-4">
             <div className="absolute top-0 left-0 right-0 h-0.5 bg-red-500/60 rounded-t-xl" />
-            <p className="text-xs text-slate-500 dark:text-gray-500 uppercase tracking-wider">Declined</p>
-            <p className="text-3xl font-bold text-red-400 mt-1">{stats.declined}</p>
-            <p className="text-xs text-slate-400 dark:text-gray-600 mt-1">ranking lower</p>
+            <p className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-gray-500 sm:text-xs">Declined</p>
+            <p className="mt-0.5 text-xl font-bold text-red-400 sm:mt-1 sm:text-3xl">{stats.declined}</p>
+            <p className="mt-1 hidden text-xs text-slate-400 dark:text-gray-600 sm:block">ranking lower</p>
           </div>
-          <div className="border border-slate-200 bg-white dark:border-[#232945] dark:bg-[#0f1419] rounded-xl p-4 relative overflow-hidden">
+          <div className="relative overflow-hidden rounded-xl border border-slate-200 bg-white px-3 py-2.5 dark:border-[#232945] dark:bg-[#0f1419] sm:p-4">
             <div className="absolute top-0 left-0 right-0 h-0.5 bg-purple-500/60 rounded-t-xl" />
-            <p className="text-xs text-slate-500 dark:text-gray-500 uppercase tracking-wider">Avg Change</p>
-            <p className={`text-3xl font-bold mt-1 ${stats.averageRankChange > 0 ? "text-green-400" : stats.averageRankChange < 0 ? "text-red-400" : "text-slate-400 dark:text-gray-400"}`}>
+            <p className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-gray-500 sm:text-xs">Avg Change</p>
+            <p className={`mt-0.5 text-xl font-bold sm:mt-1 sm:text-3xl ${stats.averageRankChange > 0 ? "text-green-400" : stats.averageRankChange < 0 ? "text-red-400" : "text-slate-400 dark:text-gray-400"}`}>
               {stats.averageRankChange > 0 ? "+" : ""}{stats.averageRankChange}
             </p>
-            <p className="text-xs text-slate-400 dark:text-gray-600 mt-1">positions</p>
+            <p className="mt-1 hidden text-xs text-slate-400 dark:text-gray-600 sm:block">positions</p>
           </div>
         </div>
       )}
@@ -807,8 +807,8 @@ const OnPageSEO = ({ projectId, userRole, userId }) => {
             </span>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full">
+          <div className="table-scroll">
+            <table className="w-full min-w-[880px]">
               <thead className="border-b border-slate-200 bg-slate-50 dark:border-[#232945] dark:bg-[#0c1117]">
                 <tr>
                   {canEdit && (
@@ -826,11 +826,11 @@ const OnPageSEO = ({ projectId, userRole, userId }) => {
                       </button>
                     </th>
                   )}
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 dark:text-gray-500 uppercase tracking-wider">Keyword</th>
-                  <th className="px-4 py-3 text-center text-xs font-semibold text-slate-500 dark:text-gray-500 uppercase tracking-wider">Past</th>
-                  <th className="px-4 py-3 text-center text-xs font-semibold text-slate-500 dark:text-gray-500 uppercase tracking-wider">Prev</th>
-                  <th className="px-4 py-3 text-center text-xs font-semibold text-slate-500 dark:text-gray-500 uppercase tracking-wider">Current</th>
-                  <th className="px-4 py-3 text-center text-xs font-semibold text-slate-500 dark:text-gray-500 uppercase tracking-wider">Change</th>
+                  <th className="w-[260px] min-w-[260px] px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-gray-500">Keyword</th>
+                  <th className="whitespace-nowrap px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-gray-500">Past</th>
+                  <th className="whitespace-nowrap px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-gray-500">Prev</th>
+                  <th className="whitespace-nowrap px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-gray-500">Current</th>
+                  <th className="whitespace-nowrap px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-gray-500">Change</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 dark:text-gray-500 uppercase tracking-wider">Link</th>
                   <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500 dark:text-gray-500 uppercase tracking-wider pr-4">Actions</th>
                 </tr>

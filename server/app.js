@@ -61,6 +61,10 @@ const transferRoutes = require("./routes/transferRoutes");
 const callIntelligenceRoutes = require("./routes/callIntelligenceRoutes");
 const internalRoutes         = require("./routes/internalRoutes");
 const clientRequestRoutes = require("./routes/clientRequestRoutes");
+// Geofenced login (2026-08-07): Super-Admin location management + the
+// per-session location re-check. See
+// docs/superpowers/specs/2026-08-07-geofenced-login-design.md
+const geofenceRoutes = require("./routes/geofenceRoutes");
 // Biometric attendance (Identix / ZKTeco ADMS fingerprint terminals)
 // iclockRoutes speaks the device's plain-text protocol at /iclock;
 // biometricAdminRoutes is the authenticated admin API at /api/biometric.
@@ -267,6 +271,7 @@ app.use("/api/call-intelligence", callIntelligenceRoutes);
 app.use("/api/internal", internalRoutes);
 app.use("/api/client-requests", clientRequestRoutes); // Client quote & support requests
 app.use("/api/biometric", biometricAdminRoutes); // Fingerprint device admin: PIN mapping, punch log, device health
+app.use("/api/geofence", geofenceRoutes); // Geofenced login (2026-08-07)
 
 // =====================
 // Serve frontend in production

@@ -540,7 +540,7 @@ const NotificationCenterPage = ({ onLogout }) => {
       <main
         ref={scrollContainerRef}
         className={`app-main relative z-10 h-[100dvh] min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 transition-all duration-300 [overscroll-behavior-y:auto] [scrollbar-gutter:stable] sm:px-5 lg:px-6 ${
-          collapsed ? "ml-16" : "ml-16 sm:ml-56"
+          collapsed ? "app-offset app-offset-collapsed" : "app-offset"
         }`}
         style={{ WebkitOverflowScrolling: "touch" }}
       >

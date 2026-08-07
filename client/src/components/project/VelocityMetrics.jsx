@@ -39,7 +39,23 @@ const VelocityMetrics = ({ projectId }) => {
     );
   }
 
-  const { summary, fastestImprovements, rapidDeclines, stagnantKeywords } = insights;
+  // ─── DEFAULTS ARE LOAD-BEARING ───
+  // These four were destructured bare, and `rapidDeclines.length` is read
+  // immediately below. The only guard is `if (!insights)` above, which an empty
+  // array passes — `[]` is truthy — so a velocity response that isn't exactly
+  // the expected object (an error payload, a partial response, an older API
+  // shape) left all four `undefined` and threw on `.length`.
+  //
+  // That throw happens during render, so React unmounts the tree and the
+  // ErrorBoundary replaces the ENTIRE project page with "Something went wrong".
+  // One malformed sub-widget response taking out the whole page is a much worse
+  // failure than this panel rendering empty, which is what it now does.
+  const {
+    summary = null,
+    fastestImprovements = [],
+    rapidDeclines = [],
+    stagnantKeywords = [],
+  } = insights || {};
 
   const getVelocityColor = (change) => {
     if (change >= 10) return "text-green-500";
@@ -85,27 +101,32 @@ const VelocityMetrics = ({ projectId }) => {
         </div>
       )}
 
-      {/* Average Velocity Stats */}
-      <div className="bg-[#1a1f2e] border border-gray-700 rounded-xl p-4">
-        <div className="flex items-center gap-2 mb-3">
-          <Zap className="w-5 h-5 text-orange-400" />
-          <h3 className="font-semibold text-white">Average Velocity</h3>
-        </div>
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <div className="text-xs text-gray-400 mb-1">7-Day Average</div>
-            <div className={`text-xl font-bold ${getVelocityColor(summary.averageVelocity7Day)}`}>
-              {formatChange(summary.averageVelocity7Day)} positions
+      {/* Average Velocity Stats — only when the summary actually arrived.
+          `summary.averageVelocity7Day` was read unguarded, so a response
+          missing `summary` crashed here for the same reason the arrays did
+          above, just a few lines later. */}
+      {summary && (
+        <div className="rounded-xl border border-gray-700 bg-[#1a1f2e] p-3 sm:p-4">
+          <div className="mb-2 flex items-center gap-2 sm:mb-3">
+            <Zap className="h-4 w-4 text-orange-400 sm:h-5 sm:w-5" />
+            <h3 className="text-sm font-semibold text-white sm:text-base">Average Velocity</h3>
+          </div>
+          <div className="grid grid-cols-2 gap-3 sm:gap-4">
+            <div>
+              <div className="mb-0.5 text-xs text-gray-400 sm:mb-1">7-Day Average</div>
+              <div className={`text-base font-bold sm:text-xl ${getVelocityColor(summary.averageVelocity7Day)}`}>
+                {formatChange(summary.averageVelocity7Day)} positions
+              </div>
+            </div>
+            <div>
+              <div className="mb-0.5 text-xs text-gray-400 sm:mb-1">30-Day Average</div>
+              <div className={`text-base font-bold sm:text-xl ${getVelocityColor(summary.averageVelocity30Day)}`}>
+                {formatChange(summary.averageVelocity30Day)} positions
+              </div>
             </div>
           </div>
-          <div>
-            <div className="text-xs text-gray-400 mb-1">30-Day Average</div>
-            <div className={`text-xl font-bold ${getVelocityColor(summary.averageVelocity30Day)}`}>
-              {formatChange(summary.averageVelocity30Day)} positions
-            </div>
-          </div>
         </div>
-      </div>
+      )}
 
       {/* Tabs */}
       <div className="flex gap-2 border-b border-gray-700">

@@ -57,23 +57,37 @@ const ProjectStats = ({ stats }) => {
   ];
 
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5">
+    /* Five counters shouldn't cost 426px of a phone screen.
+       At 2-up with a stacked icon-above-label-above-value layout, this block
+       pushed the first actual project down to y=1010 — three full screens of
+       scrolling on a 390px device before reaching the thing the page is for.
+       Below `sm` the icon sits inline with the label and the card loses its
+       vertical padding, which drops the block to roughly a third of that. The
+       original layout returns at `sm`. */
+    <div className="grid grid-cols-2 gap-2 xs:grid-cols-3 sm:gap-3 md:grid-cols-5">
       {statItems.map((item) => {
         const Icon = item.icon;
         return (
           <div
             key={item.label}
-            className="overflow-hidden rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-[#10131c]"
+            className="overflow-hidden rounded-xl border border-slate-200 bg-white px-3 py-2.5 shadow-sm dark:border-white/10 dark:bg-[#10131c] sm:rounded-2xl sm:p-4"
           >
-            <div className="mb-3 flex items-center justify-between">
+            <div className="flex items-center gap-2 sm:mb-3 sm:justify-between">
               <div
-                className={`inline-flex h-9 w-9 items-center justify-center rounded-lg border ${item.borderColor} ${item.bgColor} ${item.textColor}`}
+                className={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border ${item.borderColor} ${item.bgColor} ${item.textColor} sm:h-9 sm:w-9`}
               >
-                <Icon className="h-4 w-4" />
+                <Icon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+              </div>
+              {/* Label rides beside the icon on a phone and returns to its own
+                  line at `sm`, where the taller card has room for it. */}
+              <div className="truncate text-xs text-slate-500 dark:text-slate-400 sm:hidden">
+                {item.label}
               </div>
             </div>
-            <div className="mb-1 text-xs text-slate-500 dark:text-slate-400">{item.label}</div>
-            <div className="text-2xl font-semibold text-slate-950 dark:text-white">
+            <div className="mb-1 hidden text-xs text-slate-500 dark:text-slate-400 sm:block">
+              {item.label}
+            </div>
+            <div className="text-xl font-semibold text-slate-950 dark:text-white sm:text-2xl">
               {item.value}
             </div>
           </div>

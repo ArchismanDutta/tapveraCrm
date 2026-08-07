@@ -326,7 +326,7 @@ const Signup = () => {
   const isLastStep = step === STEPS.length - 1;
 
   return (
-    <div className="min-h-screen bg-[#0f1117] flex flex-col items-center justify-start py-10 px-4">
+    <div className="min-h-[100dvh] bg-[#0f1117] flex flex-col items-center justify-start py-10 px-4">
       {/* Logo + Title */}
       <div className="flex items-center gap-4 mb-8">
         <img src={tapveraLogo} alt="Tapvera" className="h-12 w-auto rounded-lg bg-white/5 p-1" />

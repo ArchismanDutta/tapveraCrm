@@ -370,7 +370,7 @@ const MyProfile = ({ userType = "employee", onLogout }) => {
           setCollapsed={setCollapsed}
         />
         <main className={`app-main flex h-[100dvh] items-center justify-center px-4 transition-all duration-300 ${
-          collapsed ? "ml-16" : "ml-16 sm:ml-56"
+          collapsed ? "app-offset app-offset-collapsed" : "app-offset"
         }`}>
           <section className="app-panel w-full max-w-md p-6 text-center">
             {loading ? (
@@ -495,7 +495,7 @@ const MyProfile = ({ userType = "employee", onLogout }) => {
           setCollapsed={setCollapsed}
         />
         <main className={`app-main h-[100dvh] overflow-y-auto px-3 py-4 transition-all duration-300 sm:px-5 lg:px-6 ${
-          collapsed ? "ml-16" : "ml-16 sm:ml-56"
+          collapsed ? "app-offset app-offset-collapsed" : "app-offset"
         }`}>
         {/* Header */}
         <header className="app-header mb-5">

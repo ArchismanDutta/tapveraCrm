@@ -4,8 +4,26 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.png" />
 
-    <!-- Standard viewport meta tag -->
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <!--
+      Zoom is deliberately ALLOWED.
+
+      This used to carry `maximum-scale=1.0, user-scalable=no`, which is a
+      WCAG 2.1 SC 1.4.4 (Resize Text) failure: Android honours it and blocks
+      pinch-zoom outright, so anyone who needs to magnify simply can't. iOS has
+      ignored it since iOS 10, which is why the app appeared to work — half the
+      userbase was quietly locked out and the other half never noticed.
+
+      The reason people reach for it is real, though: iOS auto-zooms the page
+      when you focus an input whose font-size is under 16px, and it never zooms
+      back out. That is a FONT-SIZE problem, not a zoom problem, and it is
+      fixed at the source in index.css (see "iOS focus-zoom") by giving form
+      controls a 16px minimum on touch devices. Disabling zoom to hide it
+      trades an accessibility failure for a cosmetic one.
+
+      viewport-fit=cover is kept so the app can paint into the notch/home-bar
+      area; the safe-area padding that makes that survivable is in index.css.
+    -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 
     <!-- iOS-specific meta tags -->
     <meta name="apple-mobile-web-app-capable" content="yes" />

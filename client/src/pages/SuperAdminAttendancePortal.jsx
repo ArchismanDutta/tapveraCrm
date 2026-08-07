@@ -1974,7 +1974,7 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
 
         <main
           className={`app-main h-[100dvh] min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 transition-all duration-300 sm:px-5 lg:px-6 ${
-            collapsed ? "ml-16" : "ml-16 sm:ml-56"
+            collapsed ? "app-offset app-offset-collapsed" : "app-offset"
           }`}
         >
           <div className="mx-auto max-w-[1600px] space-y-4 pb-8 sm:space-y-5">
@@ -2374,7 +2374,7 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
   }
 
   return (
-    <div className="bg-[#101525] text-gray-100 min-h-screen flex">
+    <div className="bg-[#101525] text-gray-100 min-h-[100dvh] flex">
 
       <Sidebar
         collapsed={collapsed}

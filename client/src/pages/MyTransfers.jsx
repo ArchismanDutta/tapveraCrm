@@ -196,7 +196,7 @@ const MyTransfers = ({ onLogout }) => {
         userRole={userRole}
       />
 
-      <main className={`app-main h-[100dvh] overflow-y-auto px-3 py-4 transition-all duration-300 sm:px-5 lg:px-6 ${sidebarCollapsed ? "ml-16" : "ml-16 sm:ml-56"}`}>
+      <main className={`app-main h-[100dvh] overflow-y-auto px-3 py-4 transition-all duration-300 sm:px-5 lg:px-6 ${sidebarCollapsed ? "app-offset app-offset-collapsed" : "app-offset"}`}>
         {/* Header */}
         <div className="app-page pb-8">
         <div className="app-header mb-5">
@@ -313,8 +313,17 @@ const MyTransfers = ({ onLogout }) => {
               </div>
             ) : (
               <>
-                <div className="w-full">
-                  <table className="w-full table-fixed">
+                {/* Scrolls sideways rather than squashing.
+                    The columns declare 48 + 96 + 128 + 96 + 128 = 496px of
+                    fixed width plus a flexible "Client details" column, but
+                    `table-fixed w-full` inside a plain `w-full` div makes the
+                    browser ignore those widths and divide 375px six ways
+                    instead — every column ends up around 60px and none of them
+                    are readable. `min-w` lets the table keep its intended
+                    proportions and hands the overflow to a scroller, which is
+                    the honest answer for six columns on a phone. */}
+                <div className="table-scroll">
+                  <table className="w-full min-w-[820px] table-fixed">
                     <thead className="bg-slate-900/50">
                       <tr>
                         <th className="w-12 px-2 py-3 text-left text-xs font-medium text-gray-400 uppercase">

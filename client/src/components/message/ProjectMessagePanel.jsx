@@ -33,9 +33,15 @@ import { useDispatch, useSelector } from "react-redux";
 import * as messagingApi from "../../api/messagingApi";
 import {
   fetchMessages as fetchThreadMessages,
+  fetchOlderMessages,
   selectMessages,
+  selectOlderStatus,
+  selectPagination,
   selectTyping,
+  PAGE_SIZE,
 } from "../../store/slices/threadsSlice";
+import useMessageListMechanics from "../../hooks/useMessageListMechanics";
+import NewMessagesButton from "../chat/NewMessagesButton";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
 const SCOPE = messagingApi.SCOPES.PROJECT;
@@ -56,6 +62,18 @@ const ProjectMessagePanel = ({ projectId, currentUser }) => {
   // per message. The store applies the one message that arrived.
   const messages = useSelector(selectMessages(SCOPE, projectId));
   const typingMap = useSelector(selectTyping(SCOPE, projectId));
+
+  // Older-history paging.
+  //
+  // This panel used to call fetchMessages with no params at all, which the
+  // server answers with its default `page 1, limit 50`. There was no Load-More
+  // control, no scroll trigger and no use of `fetchOlderMessages` — so anything
+  // past the newest 50 messages was simply unreachable for employees, and the
+  // client-side search below silently only ever searched those 50.
+  const pagination = useSelector(selectPagination(SCOPE, projectId));
+  const olderStatus = useSelector(selectOlderStatus(SCOPE, projectId));
+  const hasOlder = Boolean(pagination?.hasMore);
+  const loadingOlder = olderStatus === "loading";
 
   // ── state ──
   const [input, setInput] = useState("");
@@ -79,11 +97,10 @@ const ProjectMessagePanel = ({ projectId, currentUser }) => {
   const [typingUsers, setTypingUsers] = useState([]);
 
   // ── refs ──
-  const chatEndRef = useRef(null);
+  // Scroll refs come from useMessageListMechanics — see below.
   const fileInputRef = useRef(null);
   const textareaRef = useRef(null);
   const emojiPickerRef = useRef(null);
-  const prevLengthRef = useRef(0);
   const typingTimeoutRef = useRef(null);
   // Message ids this session has already reported as read — see the
   // IntersectionObserver effect below.
@@ -205,10 +222,24 @@ const ProjectMessagePanel = ({ projectId, currentUser }) => {
   // keystroke in the search box fired a server request whose result was then
   // re-filtered locally anyway. The client-side filter is the one that decides
   // what renders, so the round trip was pure waste — dropped.
+  // Newest page only, explicitly. Passing no params relied on the server's
+  // default and, more importantly, came back with no `pagination` envelope to
+  // tell the UI whether anything older existed.
   const loadMessages = useCallback(() => {
     if (!projectId) return undefined;
-    return dispatch(fetchThreadMessages({ scope: SCOPE, threadId: projectId }));
+    return dispatch(
+      fetchThreadMessages({
+        scope: SCOPE,
+        threadId: projectId,
+        params: { page: 1, limit: PAGE_SIZE },
+      })
+    );
   }, [dispatch, projectId]);
+
+  const loadOlder = useCallback(() => {
+    if (!hasOlder || loadingOlder) return;
+    dispatch(fetchOlderMessages({ scope: SCOPE, threadId: projectId }));
+  }, [dispatch, projectId, hasOlder, loadingOlder]);
 
   const handleSend = async () => {
     if (!input.trim() && selectedFiles.length === 0) return;
@@ -270,13 +301,28 @@ const ProjectMessagePanel = ({ projectId, currentUser }) => {
     loadMessages();
   }, [loadMessages]);
 
-  // Auto-scroll on new messages only
-  useEffect(() => {
-    if (messages.length > prevLengthRef.current) {
-      chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    }
-    prevLengthRef.current = messages.length;
-  }, [messages]);
+  // Scroll mechanics come from the shared hook now (S5): anchoring when older
+  // pages are PREPENDED, stick-to-bottom only when already at the bottom, and
+  // jump-to-latest once scrolled away.
+  //
+  // The effect this replaces auto-scrolled on any length change, which is the
+  // wrong behaviour the moment history can load: prepending 50 older messages
+  // grows `messages.length`, so it read as "new message" and yanked the user to
+  // the bottom — the exact opposite of what scrolling up asks for.
+  const {
+    containerRef,
+    bottomRef,
+    onScroll,
+    atBottom,
+    newSinceScroll,
+    scrollToBottom,
+  } = useMessageListMechanics({
+    messages,
+    threadId: projectId,
+    currentUserId: user?._id,
+    hasOlder,
+    onLoadOlder: loadOlder,
+  });
 
   // Real-time — join this project's room on the shared socket connection
   // (see WebSocketContext) instead of opening a second connection of its own.
@@ -407,8 +453,13 @@ const ProjectMessagePanel = ({ projectId, currentUser }) => {
       {/* ── Conversation header ── */}
       <div className="flex items-center gap-2 border-b border-slate-200 bg-white px-3 py-2 dark:border-white/10 dark:bg-[#0d151c] sm:px-4">
         <h2 className="truncate text-sm font-medium text-slate-900 dark:text-slate-200">Project conversation</h2>
+        {/* Reports the thread's real size, not how much of it is in memory.
+            Now that the panel pages, `messages.length` is the loaded window —
+            showing that alone would tell someone with 400 messages that they
+            have 50. */}
         <span className="text-[11px] text-slate-500 dark:text-slate-500">
-          {messages.length} message{messages.length !== 1 ? "s" : ""}
+          {pagination?.total ?? messages.length} message
+          {(pagination?.total ?? messages.length) !== 1 ? "s" : ""}
         </span>
         {!wsConnected && (
           <span className="inline-flex items-center gap-1.5 rounded-full bg-rose-50 px-2 py-1 text-[10px] text-rose-700 dark:bg-rose-500/10 dark:text-rose-300">
@@ -435,13 +486,57 @@ const ProjectMessagePanel = ({ projectId, currentUser }) => {
       />
 
       {/* ── Message list ── */}
-      <div className="flex-1 overflow-y-auto bg-slate-50 p-3 dark:bg-[#090f14] sm:px-5 sm:py-4">
-        {filteredMessages.length === 0 && (
-          <p className="mt-10 text-center text-sm text-slate-500 dark:text-slate-400">
-            {messages.length === 0
-              ? "No messages yet — be the first!"
-              : "No messages match your filters."}
+      <div
+        ref={containerRef}
+        onScroll={onScroll}
+        className="relative flex-1 overflow-y-auto bg-slate-50 p-3 dark:bg-[#090f14] sm:px-5 sm:py-4"
+      >
+        {/* Older-history affordance. Rendered INSIDE the scroll container and
+            above the list so the anchor in useMessageListMechanics measures it
+            as part of the prepended content — outside, it would shift the view
+            by its own height on every page load. */}
+        {loadingOlder && (
+          <p className="mb-2 text-center text-xs text-slate-400 dark:text-slate-500">
+            Loading earlier messages…
           </p>
+        )}
+        {!loadingOlder && hasOlder && (
+          <button
+            type="button"
+            onClick={loadOlder}
+            className="mx-auto mb-2 block rounded-full border border-slate-200 px-3 py-1 text-xs text-slate-500 transition hover:bg-slate-100 dark:border-white/10 dark:text-slate-400 dark:hover:bg-white/[0.04]"
+          >
+            Load earlier messages
+          </button>
+        )}
+        {!hasOlder && pagination && filteredMessages.length > 0 && (
+          <p className="mb-2 text-center text-[11px] text-slate-300 dark:text-slate-600">
+            Beginning of this conversation
+          </p>
+        )}
+
+        {filteredMessages.length === 0 && (
+          <div className="mt-10 text-center">
+            <p className="text-sm text-slate-500 dark:text-slate-400">
+              {messages.length === 0
+                ? "No messages yet — be the first!"
+                : "No messages match your filters."}
+            </p>
+            {/* Filtering is client-side over what's loaded, so a thread with
+                unloaded history can legitimately have matches the user can't
+                see yet. Saying so — and offering the fix — is the difference
+                between "no results" and "no results, probably". */}
+            {messages.length > 0 && hasOlder && (
+              <button
+                type="button"
+                onClick={loadOlder}
+                disabled={loadingOlder}
+                className="mt-3 text-xs font-medium text-teal-700 underline underline-offset-2 transition hover:text-teal-800 disabled:opacity-50 dark:text-teal-300 dark:hover:text-teal-200"
+              >
+                {loadingOlder ? "Loading…" : "Load earlier messages to search further back"}
+              </button>
+            )}
+          </div>
         )}
 
         {filteredMessages.map((msg, index) => {
@@ -764,8 +859,14 @@ const ProjectMessagePanel = ({ projectId, currentUser }) => {
           );
         })}
 
-        <div ref={chatEndRef} />
+        <div ref={bottomRef} />
       </div>
+
+      {/* Jump-to-latest. Only once scrolled away, so it never covers the
+          composer during normal use. */}
+      {!atBottom && (
+        <NewMessagesButton count={newSinceScroll} onClick={() => scrollToBottom()} />
+      )}
 
       {/* ── Typing indicator ── */}
       <TypingIndicator typingUsers={typingUsers} />
@@ -857,8 +958,13 @@ const ProjectMessagePanel = ({ projectId, currentUser }) => {
         </div>
       )}
 
-      {/* ── Input area ── */}
-      <div className="border-t border-slate-200 bg-white p-2 dark:border-white/10 dark:bg-[#0d151c] sm:px-3">
+      {/* ── Input area ──
+          `safe-bottom` keeps the send button out from under the iPhone home
+          indicator, which would otherwise swallow the tap. */}
+      <div
+        style={{ "--safe-pad-b": "0.5rem" }}
+        className="safe-bottom border-t border-slate-200 bg-white p-2 dark:border-white/10 dark:bg-[#0d151c] sm:px-3"
+      >
         <div className="flex items-center gap-2">
           {/* No `accept` filter — the server takes any file type now (see
               config/s3Config.js), so restricting the OS picker here would just
@@ -875,7 +981,7 @@ const ProjectMessagePanel = ({ projectId, currentUser }) => {
             <button
               type="button"
               onClick={() => setShowComposerTools((v) => !v)}
-              className={`flex h-11 w-11 items-center justify-center rounded-lg border transition ${
+              className={`flex h-11 w-11 items-center justify-center rounded-xl border transition ${
                 showComposerTools
                   ? "border-teal-300 bg-teal-50 text-teal-700 dark:border-teal-400/30 dark:bg-teal-500/10 dark:text-teal-300"
                   : "border-slate-200 bg-slate-50 text-slate-500 hover:bg-slate-100 hover:text-slate-950 dark:border-white/10 dark:bg-white/[0.035] dark:text-slate-400 dark:hover:bg-white/[0.065] dark:hover:text-white"
@@ -918,13 +1024,13 @@ const ProjectMessagePanel = ({ projectId, currentUser }) => {
             onKeyDown={handleKeyDown}
             placeholder="Write a message..."
             rows={1}
-            className="h-11 flex-1 resize-none rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 placeholder-slate-400 outline-none transition focus:border-teal-400/50 focus:ring-2 focus:ring-teal-500/15 dark:border-white/10 dark:bg-[#101820] dark:text-white dark:placeholder-slate-500"
+            className="block h-11 flex-1 resize-none rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 placeholder-slate-400 outline-none transition focus:border-teal-400/50 focus:ring-2 focus:ring-teal-500/15 dark:border-white/10 dark:bg-[#101820] dark:text-white dark:placeholder-slate-500"
           />
 
           <button
             onClick={handleSend}
             disabled={!input.trim() && selectedFiles.length === 0}
-            className="flex h-11 flex-shrink-0 items-center gap-2 rounded-lg bg-teal-600 px-3 text-white shadow-lg shadow-teal-950/20 transition hover:bg-teal-500 disabled:cursor-not-allowed disabled:opacity-40 sm:px-4"
+            className="flex h-11 flex-shrink-0 items-center gap-2 rounded-xl bg-teal-600 px-3 text-white shadow-lg shadow-teal-950/20 transition hover:bg-teal-500 disabled:cursor-not-allowed disabled:opacity-40 sm:px-4"
           >
             <Send className="h-4 w-4" />
             <span className="hidden text-sm sm:inline">Send</span>

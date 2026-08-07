@@ -92,7 +92,7 @@ const PaymentBlockOverlay = ({ payment, onPaymentCleared }) => {
       ></div>
 
       {/* Content */}
-      <div className="relative z-10 min-h-screen flex items-center justify-center p-4">
+      <div className="relative z-10 min-h-[100dvh] flex items-center justify-center p-4">
         <div className="max-w-2xl w-full">
           {/* Lock Icon */}
           <div className="text-center mb-6">

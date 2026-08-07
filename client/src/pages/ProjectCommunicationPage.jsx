@@ -15,10 +15,44 @@ import {
   BarChart3,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
+  Filter,
   ListTodo,
 } from "lucide-react";
 import Sidebar from "../components/dashboard/Sidebar";
 import CommunicationAnalytics from "../components/analytics/CommunicationAnalytics";
+
+/**
+ * One counter in the attention strip.
+ *
+ * Extracted because the three were identical apart from colour and copy, and
+ * the responsive rules below would otherwise have to be written out three
+ * times — which is how two of them end up drifting from the third.
+ *
+ * `aria-label` carries the full wording at every size, so shortening the
+ * visible label on a phone doesn't shorten what a screen reader announces.
+ */
+const AttentionCard = ({ label, shortLabel, caption, value, icon: Icon, tone, onClick }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    aria-label={`${label}: ${value}. ${caption}`}
+    className={`communication-stat-card text-left ${tone.card}`}
+  >
+    <div className="flex items-start justify-between gap-1.5 sm:mb-2 sm:gap-3">
+      <p className={`text-[11px] font-medium leading-tight sm:text-sm ${tone.label}`}>
+        <span className="sm:hidden">{shortLabel}</span>
+        <span className="hidden sm:inline">{label}</span>
+      </p>
+      <Icon className={`h-3.5 w-3.5 shrink-0 sm:h-4 sm:w-4 ${tone.icon}`} />
+    </div>
+    <p className={`text-xl font-semibold leading-tight sm:text-3xl ${tone.value}`}>{value}</p>
+    {/* The caption explains the number; on a ~105px card it would wrap to four
+        lines and undo the point of the compact strip. The `aria-label` above
+        keeps it available to assistive tech regardless. */}
+    <p className={`mt-1 hidden text-xs sm:block ${tone.caption}`}>{caption}</p>
+  </button>
+);
 
 const ProjectCommunicationPage = ({ onLogout }) => {
   const navigate = useNavigate();
@@ -30,6 +64,9 @@ const ProjectCommunicationPage = ({ onLogout }) => {
   const [filterClient, setFilterClient] = useState("all"); // all, or specific client ID
   const [filterProjectStatus, setFilterProjectStatus] = useState("all"); // all, new, ongoing, completed
   const [filterCommunicationStatus, setFilterCommunicationStatus] = useState("all"); // all, recent, thisWeek, overdue, criticallyOverdue, noMessages
+  // Selects are folded away by default on a phone; ignored from `sm` up, where
+  // the grid is always visible.
+  const [showFiltersOnMobile, setShowFiltersOnMobile] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [userRole, setUserRole] = useState("admin");
   const [selectedProjectForAnalytics, setSelectedProjectForAnalytics] = useState(null);
@@ -239,13 +276,16 @@ const ProjectCommunicationPage = ({ onLogout }) => {
     setFilterCommunicationStatus("all");
   };
 
-  const hasActiveFilters = Boolean(
-    searchTerm ||
-    filterStatus !== "all" ||
-    filterClient !== "all" ||
-    filterProjectStatus !== "all" ||
-    filterCommunicationStatus !== "all"
-  );
+  // Counts only the SELECTS — the four controls that fold away on a phone.
+  // Search is always visible, so badging it would be telling the user about
+  // something already on screen.
+  const activeFilterCount =
+    (filterStatus !== "all" ? 1 : 0) +
+    (filterClient !== "all" ? 1 : 0) +
+    (filterProjectStatus !== "all" ? 1 : 0) +
+    (filterCommunicationStatus !== "all" ? 1 : 0);
+
+  const hasActiveFilters = Boolean(searchTerm) || activeFilterCount > 0;
 
   return (
     <div className="app-shell communication-theme h-[100dvh] overflow-hidden">
@@ -261,7 +301,7 @@ const ProjectCommunicationPage = ({ onLogout }) => {
       <main
         ref={mainRef}
         className={`app-main h-[100dvh] overflow-y-auto overflow-x-hidden px-3 py-4 transition-all duration-300 [overscroll-behavior-y:auto] [scrollbar-gutter:stable] sm:px-5 lg:px-6 ${
-          sidebarCollapsed ? "ml-16" : "ml-16 sm:ml-56"
+          sidebarCollapsed ? "app-offset app-offset-collapsed" : "app-offset"
         }`}
         style={{ WebkitOverflowScrolling: "touch" }}
       >
@@ -281,14 +321,24 @@ const ProjectCommunicationPage = ({ onLogout }) => {
             </div>
           </div>
 
+          {/* `self-start` stops this stretching to the full width of the header.
+              The parent is `flex flex-col` below `lg`, so a flex item with the
+              default `align-items: stretch` became a full-width bar containing
+              a single centred icon — it read as an empty panel rather than a
+              button.
+
+              The label is shown at every size for the same reason: it sits
+              alone on its own row here with room to spare, and `hidden
+              sm:inline` was reducing it to an unlabelled glyph on exactly the
+              screens where an unlabelled glyph is hardest to interpret. */}
           <button
             type="button"
             onClick={fetchProjects}
-            className="app-secondary-button inline-flex h-10 items-center justify-center gap-2 rounded-xl px-4 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60"
+            className="app-secondary-button inline-flex h-10 shrink-0 items-center justify-center gap-2 self-start rounded-xl px-4 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60"
             disabled={loading}
           >
             <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-            <span className="hidden sm:inline">Refresh</span>
+            <span>Refresh</span>
           </button>
           </section>
 
@@ -302,54 +352,73 @@ const ProjectCommunicationPage = ({ onLogout }) => {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-            <button
-              type="button"
-              className="communication-stat-card border-rose-200 bg-rose-50 text-left hover:bg-rose-100 dark:border-rose-400/20 dark:bg-rose-400/[0.07] dark:hover:bg-rose-400/10"
+          {/* Three-across on a phone, one-per-row from `md`.
+              Stacked at full size these ran ~380px — the whole first screen
+              given to three numbers, pushing the project list they filter out
+              of sight. As a strip they cost about 70px and still read at a
+              glance, which is all a counter needs to do.
+
+              Each card drops its caption and shortens its label below `sm`:
+              at roughly 105px wide "Urgent action required" wraps to three
+              lines and stops being scannable, which is the opposite of what a
+              summary strip is for. The full wording returns with the room. */}
+          <div className="grid grid-cols-3 gap-2 sm:gap-3">
+            <AttentionCard
+              label="Urgent action required"
+              shortLabel="Urgent"
+              caption="Clients waiting for response"
+              value={stats.needsResponse}
+              icon={AlertCircle}
+              tone={{
+                card: 'border-rose-200 bg-rose-50 hover:bg-rose-100 dark:border-rose-400/20 dark:bg-rose-400/[0.07] dark:hover:bg-rose-400/10',
+                label: 'text-rose-900 dark:text-rose-100',
+                icon: 'text-rose-600 dark:text-rose-300',
+                value: 'text-rose-700 dark:text-rose-200',
+                caption: 'text-rose-700/70 dark:text-rose-200/60',
+              }}
               onClick={() => {
                 setFilterStatus('needsResponse');
                 setFilterCommunicationStatus('all');
               }}
-            >
-              <div className="mb-2 flex items-center justify-between gap-3">
-                <p className="text-sm font-medium text-rose-900 dark:text-rose-100">Urgent action required</p>
-                <AlertCircle className="h-4 w-4 text-rose-600 dark:text-rose-300" />
-              </div>
-              <p className="text-3xl font-semibold text-rose-700 dark:text-rose-200">{stats.needsResponse}</p>
-              <p className="mt-1 text-xs text-rose-700/70 dark:text-rose-200/60">Clients waiting for response</p>
-            </button>
+            />
 
-            <button
-              type="button"
-              className="communication-stat-card border-amber-200 bg-amber-50 text-left hover:bg-amber-100 dark:border-amber-400/20 dark:bg-amber-400/[0.07] dark:hover:bg-amber-400/10"
+            <AttentionCard
+              label="Critically overdue"
+              shortLabel="Overdue"
+              caption="No communication for 14+ days"
+              value={stats.criticallyOverdue}
+              icon={Clock}
+              tone={{
+                card: 'border-amber-200 bg-amber-50 hover:bg-amber-100 dark:border-amber-400/20 dark:bg-amber-400/[0.07] dark:hover:bg-amber-400/10',
+                label: 'text-amber-900 dark:text-amber-100',
+                icon: 'text-amber-600 dark:text-amber-300',
+                value: 'text-amber-700 dark:text-amber-200',
+                caption: 'text-amber-700/70 dark:text-amber-200/60',
+              }}
               onClick={() => {
                 setFilterStatus('all');
                 setFilterCommunicationStatus('criticallyOverdue');
               }}
-            >
-              <div className="mb-2 flex items-center justify-between gap-3">
-                <p className="text-sm font-medium text-amber-900 dark:text-amber-100">Critically overdue</p>
-                <Clock className="h-4 w-4 text-amber-600 dark:text-amber-300" />
-              </div>
-              <p className="text-3xl font-semibold text-amber-700 dark:text-amber-200">{stats.criticallyOverdue}</p>
-              <p className="mt-1 text-xs text-amber-700/70 dark:text-amber-200/60">No communication for 14+ days</p>
-            </button>
+            />
 
-            <button
-              type="button"
-              className="communication-stat-card border-emerald-200 bg-emerald-50 text-left hover:bg-emerald-100 dark:border-emerald-400/20 dark:bg-emerald-400/[0.07] dark:hover:bg-emerald-400/10"
+            <AttentionCard
+              label="Active communication"
+              shortLabel="Active"
+              caption="Communicated in last 7 days"
+              value={stats.recent + stats.thisWeek}
+              icon={CheckCircle}
+              tone={{
+                card: 'border-emerald-200 bg-emerald-50 hover:bg-emerald-100 dark:border-emerald-400/20 dark:bg-emerald-400/[0.07] dark:hover:bg-emerald-400/10',
+                label: 'text-emerald-900 dark:text-emerald-100',
+                icon: 'text-emerald-600 dark:text-emerald-300',
+                value: 'text-emerald-700 dark:text-emerald-200',
+                caption: 'text-emerald-700/70 dark:text-emerald-200/60',
+              }}
               onClick={() => {
                 setFilterStatus('all');
                 setFilterCommunicationStatus('active');
               }}
-            >
-              <div className="mb-2 flex items-center justify-between gap-3">
-                <p className="text-sm font-medium text-emerald-900 dark:text-emerald-100">Active communication</p>
-                <CheckCircle className="h-4 w-4 text-emerald-600 dark:text-emerald-300" />
-              </div>
-              <p className="text-3xl font-semibold text-emerald-700 dark:text-emerald-200">{stats.recent + stats.thisWeek}</p>
-              <p className="mt-1 text-xs text-emerald-700/70 dark:text-emerald-200/60">Communicated in last 7 days</p>
-            </button>
+            />
           </div>
           </section>
 
@@ -367,20 +436,63 @@ const ProjectCommunicationPage = ({ onLogout }) => {
                   <div className="h-4 w-4 animate-spin rounded-full border-2 border-blue-500/20 border-t-blue-600"></div>
                 )}
               </div>
-              {hasActiveFilters && (
+              <div className="flex items-center gap-2">
+                {/* Disclosure for the four selects, phone only. Stacked at full
+                    width they ran ~280px on top of the search box — the project
+                    list they filter started below the fold. The count tells you
+                    filters are active while they're folded away; a hidden
+                    filter is how people conclude their data has gone missing. */}
                 <button
                   type="button"
-                  onClick={clearFilters}
-                  className="app-secondary-button inline-flex h-9 items-center justify-center rounded-lg px-3 text-xs font-semibold"
+                  onClick={() => setShowFiltersOnMobile((v) => !v)}
+                  aria-expanded={showFiltersOnMobile}
+                  aria-controls="communication-filter-fields"
+                  className="app-secondary-button inline-flex h-9 items-center justify-center gap-1.5 rounded-lg px-3 text-xs font-semibold sm:hidden"
                 >
-                  Clear filters
+                  <Filter className="h-3.5 w-3.5" />
+                  Filters
+                  {activeFilterCount > 0 && (
+                    <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-blue-600 px-1 text-[10px] font-semibold leading-none text-white">
+                      {activeFilterCount}
+                    </span>
+                  )}
+                  <ChevronDown className={`h-3.5 w-3.5 transition-transform ${showFiltersOnMobile ? 'rotate-180' : ''}`} />
                 </button>
-              )}
+
+                {hasActiveFilters && (
+                  <button
+                    type="button"
+                    onClick={clearFilters}
+                    className="app-secondary-button inline-flex h-9 shrink-0 items-center justify-center rounded-lg px-3 text-xs font-semibold"
+                  >
+                    Clear filters
+                  </button>
+                )}
+              </div>
             </div>
 
-            <div className="grid w-full gap-3 sm:grid-cols-2 xl:grid-cols-5">
-              {/* Search Bar */}
-              <div className="relative min-w-0 sm:col-span-2 xl:col-span-1">
+            {/* Search stays out of the disclosure — it's the control people
+                actually reach for, and burying it behind a tap would be a
+                regression dressed up as tidiness. */}
+            <div className="relative min-w-0 sm:hidden">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <input
+                type="search"
+                aria-label="Search projects"
+                placeholder="Search projects"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="app-control h-10 w-full rounded-xl pl-9 pr-3 text-sm outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15"
+              />
+            </div>
+
+            <div
+              id="communication-filter-fields"
+              className={`w-full gap-3 sm:grid sm:grid-cols-2 xl:grid-cols-5 ${showFiltersOnMobile ? 'grid' : 'hidden'}`}
+            >
+              {/* Search Bar — desktop copy; the always-visible one above takes
+                  over below `sm`. */}
+              <div className="relative hidden min-w-0 sm:block sm:col-span-2 xl:col-span-1">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                 <input
                   type="search"

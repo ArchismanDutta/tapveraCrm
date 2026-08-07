@@ -317,7 +317,7 @@ const EmployeeDirectory = ({ onLogout }) => {
 
       <main
         className={`h-[100dvh] min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-2 py-3 transition-all duration-300 sm:px-3 lg:px-4 ${
-          collapsed ? "ml-16" : "ml-16 sm:ml-56"
+          collapsed ? "app-offset app-offset-collapsed" : "app-offset"
         }`}
       >
         <div className="pb-6">

@@ -28,6 +28,10 @@ import {
 } from "./contexts/WebSocketContext";
 import { notifyAuthChanged } from "./utils/authEvents";
 
+// Geofenced login (2026-08-07)
+// See docs/superpowers/specs/2026-08-07-geofenced-login-design.md
+import useGeofenceWatch from "./hooks/useGeofenceWatch";
+
 // Notifications
 import NotificationToast from "./components/NotificationToast";
 
@@ -76,6 +80,7 @@ import SalaryManagement from "./pages/admin/SalaryManagement";
 import AutoPayrollManagement from "./pages/admin/AutoPayrollManagement";
 import PositionManagement from "./pages/admin/PositionManagement"; // Superseded by AccessManagementPage below - kept live for rollback safety until the access-management rework's Phase 6 (see docs/superpowers/plans/2026-07-03-access-management-rework.md)
 import AccessManagementPage from "./pages/admin/AccessManagementPage";
+import GeofenceManagementPage from "./pages/admin/GeofenceManagementPage"; // Geofenced login (2026-08-07)
 import MyTeamAccessPage from "./pages/admin/MyTeamAccessPage"; // Role & Department Hierarchy Revamp v2 (2026-07-27)
 import ClientRequestsPage from "./pages/admin/ClientRequestsPage"; // Client quote & support requests (2026-07-30)
 import PayslipManagement from "./pages/admin/PayslipManagement";
@@ -254,6 +259,24 @@ const AppWrapper = () => {
     toast.info("👋 Logged out successfully!");
     navigate("/login", { replace: true });
   };
+
+  // Geofenced login (2026-08-07): periodic location re-check.
+  //
+  // Mounted here rather than on individual pages because the gap it closes —
+  // "log in at the office, then leave" — is not page-specific, and a
+  // per-page watcher would stop the moment someone navigated somewhere that
+  // didn't have it. The hook exits immediately for anyone unfenced (which is
+  // everyone by default), so this costs nothing for accounts it doesn't
+  // apply to. See client/src/hooks/useGeofenceWatch.js.
+  //
+  // Reuses handleLogout so an ejected session tears down identically to a
+  // manual one — socket dropped, messaging state cleared, drafts discarded.
+  // Anything less would leave the previous user's threads on screen at the
+  // login page.
+  useGeofenceWatch(isAuthenticated, (reason) => {
+    toast.error(reason, { autoClose: 8000 });
+    handleLogout();
+  });
 
   // Get WebSocket context
   const { registerNotificationHandler } = useWebSocketContext();
@@ -811,6 +834,24 @@ const AppWrapper = () => {
           element={
             isAuthenticated && isSuperAdmin ? (
               <AccessManagementPage onLogout={handleLogout} />
+            ) : (
+              <Navigate
+                to={isAuthenticated ? "/dashboard" : "/login"}
+                replace
+              />
+            )
+          }
+        />
+
+        {/* Login Geofencing (2026-08-07) - restrict where employees may sign in from.
+            Super Admin ONLY, with no permission-flag alternative: whoever can edit
+            a fence can lift their own restriction, so this cannot be delegated.
+            See docs/superpowers/specs/2026-08-07-geofenced-login-design.md */}
+        <Route
+          path="/admin/geofencing"
+          element={
+            isAuthenticated && isSuperAdmin ? (
+              <GeofenceManagementPage onLogout={handleLogout} />
             ) : (
               <Navigate
                 to={isAuthenticated ? "/dashboard" : "/login"}

@@ -172,8 +172,40 @@ const userSchema = new mongoose.Schema(
       required: true
     },
 
+    // ====== GEOFENCED LOGIN (2026-08-07) ======
+    // Additive and inert by default — see
+    // docs/superpowers/specs/2026-08-07-geofenced-login-design.md
+    //
+    // Every existing user gets `enabled: false` and an empty location list,
+    // so nothing about anyone's ability to log in changes until a Super Admin
+    // explicitly turns this on for a specific person. There is deliberately no
+    // global "fence everybody" switch: a bug in this feature locks people out
+    // of their jobs, so the blast radius of any mistake is capped at whoever
+    // was individually opted in.
+    geofence: {
+      enabled: { type: Boolean, default: false },
+
+      // A union, not an intersection — the user may sign in from ANY one of
+      // these. See evaluate() in server/utils/geofence.js.
+      //
+      // Refs rather than embedded coordinates so that when an office moves,
+      // one GeofenceLocation document changes and every assigned employee
+      // follows automatically. Embedded copies would drift the first time
+      // someone edited one of them.
+      locations: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "GeofenceLocation"
+      }],
+
+      // Audit trail for the restriction itself: who imposed it and when.
+      // "Why am I fenced?" is a question someone will ask, and the answer
+      // should not require reading application logs.
+      assignedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+      assignedAt: { type: Date, default: null },
+    },
+
     // ====== SHIFT MANAGEMENT ======
-    
+
     // Primary shift type
     shiftType: { 
       type: String, 
@@ -266,6 +298,11 @@ userSchema.index({ department: 1, designation: 1 });
 userSchema.index({ status: 1 });
 userSchema.index({ departmentRef: 1 });
 userSchema.index({ positionRef: 1 });
+// Geofenced login (2026-08-07): powers the admin's "who is currently fenced?"
+// list and the referential-integrity check that stops a location being deleted
+// while users still point at it (geofenceController.deleteLocation).
+userSchema.index({ "geofence.enabled": 1 });
+userSchema.index({ "geofence.locations": 1 });
 
 // ======================
 // Pre-save hook to ensure consistent shift data

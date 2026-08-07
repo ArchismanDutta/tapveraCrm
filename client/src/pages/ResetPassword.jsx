@@ -48,7 +48,7 @@ export default function ResetPassword() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-yellow-50 p-4">
+    <div className="flex min-h-[100dvh] items-center justify-center bg-yellow-50 p-4">
       <div className="flex flex-col items-center">
         {/* Logo above the box */}
         <img

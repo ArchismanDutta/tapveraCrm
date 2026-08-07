@@ -26,7 +26,7 @@ export default function HelpCenter({ onLogout }) {
   };
 
   return (
-    <div className="flex bg-gray-50 min-h-screen">
+    <div className="flex bg-gray-50 min-h-[100dvh]">
       {/* Sidebar with real logout */}
       <Sidebar
         collapsed={collapsed}
@@ -38,8 +38,8 @@ export default function HelpCenter({ onLogout }) {
       {/* Main Body */}
       <main
         className={`flex-1 transition-all duration-300 ${
-          collapsed ? "ml-20" : "ml-64"
-        } bg-gradient-to-br from-gray-50 to-gray-100 min-h-screen flex items-start justify-center`}
+          collapsed ? "app-offset app-offset-collapsed" : "app-offset"
+        } bg-gradient-to-br from-gray-50 to-gray-100 min-h-[100dvh] flex items-start justify-center`}
       >
         <div className="w-full max-w-3xl p-6">
           <div className="bg-white rounded-xl shadow-md border p-6">

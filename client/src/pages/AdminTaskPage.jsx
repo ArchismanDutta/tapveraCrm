@@ -809,7 +809,7 @@ export default function AdminTaskPage({ onLogout }) {
   };
 
   return (
-    <div className="flex bg-[#0f1419] min-h-screen text-white relative overflow-hidden">
+    <div className="flex bg-[#0f1419] min-h-[100dvh] text-white relative overflow-hidden">
       {/* Animated Background */}
       <div className="absolute inset-0 bg-gradient-to-br from-slate-900/20 via-blue-900/10 to-purple-900/20"></div>
       <div className="absolute inset-0">
@@ -824,7 +824,7 @@ export default function AdminTaskPage({ onLogout }) {
       />
       <main
         className={`relative z-10 flex-1 transition-all duration-300 ${
-          collapsed ? "ml-24" : "ml-72"
+          collapsed ? "app-offset app-offset-collapsed" : "app-offset"
         } p-8`}
       >
         {popupMessage && (

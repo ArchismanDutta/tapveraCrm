@@ -283,7 +283,12 @@ const RecentActivityTable = ({ activities = [], onDateFilterChange, currentFilte
       {/* Table */}
       <div className="bg-slate-700/20 rounded-xl border border-slate-600/20 overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm text-gray-300 table-fixed">
+          {/* `min-w` is what makes the parent's `overflow-x-auto` actually do
+              something. `table-fixed w-full` alone sizes the table to exactly
+              its container, so the scroller never has anything to scroll and
+              the five columns just compress — at 375px each one lands around
+              70px, narrower than the timestamps they hold. */}
+          <table className="w-full min-w-[700px] text-sm text-gray-300 table-fixed">
             <thead className="bg-slate-800/50 border-b border-slate-600/30">
               <tr className="text-left">
                 <th

@@ -75,6 +75,9 @@ async function getMemberIds(threadId) {
 
 /* ── Reads ────────────────────────────────────────────────────────────── */
 
+/** Employment states that mean someone is no longer an active colleague. */
+const INACTIVE_STATUSES = ['terminated', 'absconded'];
+
 async function listThreads(user) {
   const userIdStr = String(user._id ?? user.id);
   const groups = await Conversation.find({ type: 'group', members: userIdStr });
@@ -84,29 +87,58 @@ async function listThreads(user) {
   // refetches on every group change.
   const counts = await unreadCounts(user, groups.map((g) => g._id));
 
-  const raw = await Promise.all(
-    groups.map(async (group) => {
-      const memberDetails = await User.find(
-        {
-          _id: { $in: group.members },
-          status: { $nin: ['terminated', 'absconded'] },
-        },
-        'name role status'
-      );
-      return {
-        ...group.toObject(),
-        members: memberDetails,
-        unreadCount: counts[String(group._id)] || 0,
-      };
-    })
-  );
+  // ─── ONE QUERY FOR EVERY MEMBER OF EVERY GROUP ───
+  //
+  // This used to be a `User.find` per group inside the map below — the exact
+  // N+1 the unread aggregate above exists to avoid, reintroduced two lines
+  // later. Union the member ids, fetch once, index by id, and assemble in
+  // memory: 20 groups is 1 query, not 20.
+  const allMemberIds = [...new Set(groups.flatMap((g) => (g.members || []).map(String)))];
+  const users = await User.find({ _id: { $in: allMemberIds } }, 'name role status').lean();
+  const usersById = new Map(users.map((u) => [String(u._id), u]));
+
+  const raw = groups.map((group) => {
+    // ─── FORMER COLLEAGUES ARE STILL RETURNED ───
+    //
+    // This query used to exclude terminated/absconded users outright. The
+    // client resolves every message's author against this list, so excluding
+    // them meant that the moment someone left the company, EVERY message they
+    // had ever sent re-rendered as "Unknown" — history silently losing its
+    // authors. The same list also feeds the read-receipt aggregate and mention
+    // matching, so both were being computed against incomplete membership.
+    //
+    // Whether someone is a current colleague is a presentation question, not a
+    // reason to forget who wrote something. So: return everyone, flagged, and
+    // let the UI decide. The composer's mention picker filters on `isActive`;
+    // message attribution does not.
+    const members = (group.members || []).map((id) => {
+      const found = usersById.get(String(id));
+      if (!found) {
+        // A hard-deleted account. Still needs a stable row, or the same
+        // "Unknown" problem returns through a different door.
+        return { _id: String(id), name: 'Former member', role: null, status: null, isActive: false };
+      }
+      return { ...found, isActive: !INACTIVE_STATUSES.includes(found.status) };
+    });
+
+    return {
+      ...group.toObject(),
+      members,
+      unreadCount: counts[String(group._id)] || 0,
+    };
+  });
 
   return { raw, normalized: raw.map((t) => ({
     id: String(t._id),
     scope: SCOPE,
     type: t.type,
     name: t.name || null,
-    members: (t.members || []).map((m) => ({ id: String(m._id), name: m.name, kind: 'User' })),
+    members: (t.members || []).map((m) => ({
+      id: String(m._id),
+      name: m.name,
+      kind: 'User',
+      isActive: m.isActive !== false,
+    })),
     unread: t.unreadCount || 0,
     updatedAt: t.createdAt,
   })) };

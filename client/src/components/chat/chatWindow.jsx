@@ -18,7 +18,6 @@ import {
   Type,
   Send,
   Sparkles,
-  Lightbulb,
   Clock,
   Zap,
   Plus,
@@ -196,23 +195,40 @@ const ChatWindow = ({
     atBottom,
   });
 
+  // Members who are still with the company.
+  //
+  // The server now returns FORMER colleagues too (flagged `isActive: false`) so
+  // that history keeps its authors — see the note in adapters/chatThread.js.
+  // That means anything asking "who is in this conversation right now" has to
+  // narrow the list itself, while anything asking "who wrote this" must not.
+  const activeMembers = useMemo(
+    () => (conversationMembers || []).filter((m) => m?.isActive !== false),
+    [conversationMembers]
+  );
+
   // Ids of everyone else in the thread — what the tick aggregate is computed
   // against.
+  //
+  // Active members only. A terminated account will never open the app again, so
+  // counting it as a recipient means ✓✓ can never be reached: one departure and
+  // every message in that group is permanently stuck on a single tick.
   const recipientIds = useMemo(
     () =>
-      (conversationMembers || [])
+      activeMembers
         .map((m) => String(m?._id ?? m))
         .filter((id) => id && id !== String(currentUserId)),
-    [conversationMembers, currentUserId]
+    [activeMembers, currentUserId]
   );
 
   // Message suggestions
-  const { getSuggestions, getQuickReplies } = useMessageSuggestions(conversationId, messages);
+  // Only `getSuggestions` (the composer typeahead) is consumed now — the
+  // quick-replies strip that sat above the composer has been removed. The
+  // hook's canned-phrase list is still used internally to seed typeahead
+  // matches, so it stays.
+  const { getSuggestions } = useMessageSuggestions(conversationId, messages);
   const [suggestions, setSuggestions] = useState([]);
   const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(0);
   const [showSuggestions, setShowSuggestions] = useState(false);
-  const [quickReplies, setQuickReplies] = useState([]);
-  const [showQuickReplies, setShowQuickReplies] = useState(true);
   const suggestionsRef = useRef(null);
 
   // ── typing indicator ──
@@ -263,9 +279,12 @@ const ChatWindow = ({
       // server — it would be stored as a mention of a user that doesn't
       // exist and would notify nobody. resolveMentionedUserIds expands it to
       // the real members (minus you) and passes named mentions through.
+      // Active members only: `@everyone` expands against this, and notifying an
+      // account that no longer exists produces a notification row and a push
+      // attempt nobody will ever receive.
       const mentionIds = resolveMentionedUserIds(
         input.trim(),
-        conversationMembers,
+        activeMembers,
         currentUserId
       );
 
@@ -436,8 +455,14 @@ const ChatWindow = ({
     }, 0);
   };
 
+  // Resolved against the FULL member list, including people who have since left
+  // — that is the whole point of the server returning them. Compared as strings
+  // because the normalized socket shape carries `sender.id` as a string while
+  // REST history carries an ObjectId-backed `_id`.
   const getSenderName = (senderId) => {
-    const member = Array.isArray(conversationMembers) ? conversationMembers.find((m) => m._id === senderId) : null;
+    const member = Array.isArray(conversationMembers)
+      ? conversationMembers.find((m) => String(m?._id) === String(senderId))
+      : null;
     return member?.name || "Unknown";
   };
 
@@ -576,19 +601,6 @@ const ChatWindow = ({
     }
   }, [input, getSuggestions]);
 
-  // Update quick replies based on last message
-  useEffect(() => {
-    if (Array.isArray(messages) && messages.length > 0) {
-      const lastMessage = messages[messages.length - 1];
-      if (lastMessage && String(lastMessage?.senderId || lastMessage?.sender?._id) !== String(currentUserId)) {
-        const replies = getQuickReplies(lastMessage?.message || lastMessage?.text || '');
-        setQuickReplies(replies || []);
-      } else {
-        setQuickReplies([]);
-      }
-    }
-  }, [messages, currentUserId, getQuickReplies]);
-
   // Typing indicator — listen for other members typing in this conversation.
   // Typing now comes from the store (fed by the `thread:typing` socket event)
   // rather than two window listeners. The previous version also leaked a
@@ -620,22 +632,18 @@ const ChatWindow = ({
     textareaRef.current?.focus();
   };
 
-  // Handle quick reply click
-  const handleQuickReply = (text) => {
-    setInput(text);
-    textareaRef.current?.focus();
-  };
-
   return (
     <div className="flex h-full flex-col bg-slate-50 text-slate-900 dark:bg-[#0b0d12] dark:text-slate-100">
       {/* Presence. Self-hiding — renders null when the other party has
           presence turned off, or before the snapshot arrives, rather than
           claiming they are offline. */}
       <div className="flex items-center gap-2 border-b border-slate-200 bg-white px-4 py-1 empty:hidden dark:border-white/10 dark:bg-[#10131c]">
+        {/* Active members only — a terminated account is not "offline", it is
+            not a participant, and listing it as either is misleading. */}
         <PresenceIndicator
-          members={conversationMembers}
+          members={activeMembers}
           currentUserId={currentUserId}
-          isGroup={(conversationMembers || []).length > 2}
+          isGroup={activeMembers.length > 2}
         />
       </div>
 
@@ -798,7 +806,7 @@ const ChatWindow = ({
                         >
                           <p className={`truncate font-semibold ${isSelf ? "text-blue-50" : "text-slate-700 dark:text-blue-300"}`}>
                             {msg.replyTo?.senderId?.name ||
-                             (Array.isArray(conversationMembers) ? conversationMembers.find(m => m?._id === msg.replyTo?.senderId) : null)?.name ||
+                             getSenderName(msg.replyTo?.senderId) ||
                              "Unknown"}
                           </p>
                           <p className={`overflow-hidden italic ${isSelf ? "text-blue-50/80" : "text-slate-500 dark:text-gray-400"}`} style={{
@@ -1226,41 +1234,23 @@ const ChatWindow = ({
         </div>
       )}
 
-      {/* Quick Replies */}
-      {quickReplies.length > 0 && input.length === 0 && showQuickReplies && (
-        <div className="border-t border-slate-200 bg-white px-4 py-2 dark:border-white/10 dark:bg-[#10131c]">
-          <div className="mb-2 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Zap className="h-4 w-4 text-yellow-500 dark:text-yellow-400" />
-              <span className="text-xs text-slate-500 dark:text-gray-400">Quick Replies:</span>
-            </div>
-            <button
-              onClick={() => setShowQuickReplies(false)}
-              className="rounded p-1 transition-colors hover:bg-slate-100 dark:hover:bg-gray-700"
-              title="Hide quick replies"
-            >
-              <XCircle className="h-4 w-4 text-slate-400" />
-            </button>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {quickReplies.map((reply, idx) => (
-              <button
-                key={idx}
-                onClick={() => handleQuickReply(reply)}
-                className="flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs text-slate-700 transition-all hover:scale-105 hover:bg-blue-100 dark:border-blue-400/30 dark:bg-blue-500/15 dark:text-blue-100 dark:hover:bg-blue-500/25"
-              >
-                <Lightbulb className="h-3 w-3 text-yellow-500 dark:text-yellow-400" />
-                {reply}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
+      {/* (The canned "Quick Replies" strip used to sit here, above the
+          composer. Removed — the composer typeahead already surfaces the same
+          phrases when they're relevant to what you're typing, so this was a
+          second, unprompted copy of them taking a permanent slice of the
+          thread on every screen.) */}
 
       <FailedMessageBar scope={messagingApi.SCOPES.CHAT} threadId={conversationId} />
 
-      {/* Input Area */}
-      <div className="relative border-t border-slate-200 bg-white p-2 dark:border-white/10 dark:bg-[#10131c] sm:px-3">
+      {/* Input Area
+          `safe-bottom` keeps the composer clear of the iPhone home indicator —
+          `viewport-fit=cover` lets us paint into that strip, and anything
+          interactive left underneath it is unpressable because the system
+          gesture takes the touch first. */}
+      <div
+        style={{ "--safe-pad-b": "0.5rem" }}
+        className="safe-bottom relative border-t border-slate-200 bg-white p-2 dark:border-white/10 dark:bg-[#10131c] sm:px-3"
+      >
         {/* Suggestions Dropdown */}
         {showSuggestions && suggestions.length > 0 && (
           <div
@@ -1335,7 +1325,7 @@ const ChatWindow = ({
             <button
               type="button"
               onClick={() => setShowComposerTools((v) => !v)}
-              className={`flex h-11 w-11 items-center justify-center rounded-lg border transition ${
+              className={`flex h-11 w-11 items-center justify-center rounded-xl border transition ${
                 showComposerTools
                   ? "border-blue-300 bg-blue-50 text-blue-700 dark:border-blue-400/30 dark:bg-blue-500/10 dark:text-blue-300"
                   : "border-slate-200 bg-slate-50 text-slate-500 hover:bg-slate-100 hover:text-slate-950 dark:border-white/10 dark:bg-white/[0.035] dark:text-slate-400 dark:hover:bg-white/[0.065] dark:hover:text-white"
@@ -1382,11 +1372,13 @@ const ChatWindow = ({
                 // Auto-scroll to bottom when typing
                 chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
               }}
-              users={conversationMembers || []}
+              // The picker offers people you can still reach. Rendering
+              // existing mentions is a separate concern and uses the full list.
+              users={activeMembers}
               currentUserId={currentUserId}
               placeholder="Write a message... (@ to mention someone)"
               rows={1}
-              className="h-11 w-full rounded-xl border-slate-200 bg-white py-2.5 text-slate-900 placeholder-slate-400 focus:border-blue-400/50 dark:border-white/10 dark:bg-[#101820] dark:text-white dark:placeholder-slate-500"
+              className="h-11 w-full rounded-xl border-slate-200 bg-white py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:border-blue-400/50 focus:ring-blue-500/15 dark:border-white/10 dark:bg-[#101820] dark:text-white dark:placeholder-slate-500"
               onKeyDown={(e) => {
                 // Handle suggestion navigation
                 if (showSuggestions && suggestions.length > 0) {
@@ -1498,7 +1490,7 @@ const ChatWindow = ({
           <button
             onClick={handleSendMessage}
             disabled={!input.trim() && selectedFiles.length === 0}
-            className="flex h-11 flex-shrink-0 items-center gap-2 rounded-lg bg-blue-600 px-3 text-white shadow-lg shadow-blue-950/20 transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-40 sm:px-4"
+            className="flex h-11 flex-shrink-0 items-center gap-2 rounded-xl bg-blue-600 px-3 text-white shadow-lg shadow-blue-950/20 transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-40 sm:px-4"
           >
             <Send className="h-4 w-4" />
             <span className="hidden text-sm sm:inline">Send</span>

@@ -35,7 +35,7 @@ const NotepadPage = ({ onLogout }) => {
   // Show loading while checking payment
   if (checkingPayment) {
     return (
-      <div className="app-shell min-h-screen items-center justify-center">
+      <div className="app-shell min-h-[100dvh] items-center justify-center">
         <div className="relative">
           <div className="w-16 h-16 border-4 border-cyan-300/40 rounded-full"></div>
           <div className="absolute top-0 left-0 w-16 h-16 border-4 border-cyan-600 border-t-transparent rounded-full animate-spin"></div>
@@ -65,7 +65,7 @@ const NotepadPage = ({ onLogout }) => {
 
       <main
         className={`app-main h-[100dvh] overflow-y-auto px-3 py-4 transition-all duration-300 sm:px-5 lg:px-6 ${
-          collapsed ? "ml-16" : "ml-16 sm:ml-56"
+          collapsed ? "app-offset app-offset-collapsed" : "app-offset"
         }`}
       >
         <div className="app-page space-y-5 pb-8">

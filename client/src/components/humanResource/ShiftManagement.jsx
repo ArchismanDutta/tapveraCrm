@@ -435,7 +435,7 @@ const ShiftManagement = ({ onLogout }) => {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50 dark:bg-[#0b0d12]">
+      <div className="flex min-h-[100dvh] items-center justify-center bg-slate-50 dark:bg-[#0b0d12]">
         <div className="flex flex-col items-center space-y-4">
           <div className="relative">
             <div className="h-14 w-14 animate-spin rounded-full border-4 border-blue-100 border-t-blue-600 dark:border-blue-400/15 dark:border-t-blue-400"></div>
@@ -453,7 +453,7 @@ const ShiftManagement = ({ onLogout }) => {
 
       <main
         className={`h-[100dvh] min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 transition-all duration-300 sm:px-5 lg:px-6 ${
-          collapsed ? "ml-16" : "ml-16 sm:ml-56"
+          collapsed ? "app-offset app-offset-collapsed" : "app-offset"
         }`}
       >
         <div className="mx-auto max-w-[1500px] space-y-4 pb-8 sm:space-y-5">

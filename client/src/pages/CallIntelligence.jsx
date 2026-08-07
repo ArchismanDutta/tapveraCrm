@@ -345,7 +345,7 @@ const CallIntelligence = ({ onLogout }) => {
 
       <main
         className={`app-main h-[100dvh] overflow-hidden transition-all duration-300 ${
-          sidebarCollapsed ? "ml-16" : "ml-16 sm:ml-56"
+          sidebarCollapsed ? "app-offset app-offset-collapsed" : "app-offset"
         }`}
       >
         <SimpleBar style={{ maxHeight: "100dvh" }} className="px-3 py-4 sm:px-5 lg:px-6">

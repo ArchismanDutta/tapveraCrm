@@ -103,14 +103,24 @@ const ProjectCard = ({
         }`}
       />
 
-      <div className="flex h-full flex-col p-5 sm:p-6">
-        {/* Header */}
-        <div className="mb-4 flex items-start justify-between gap-4">
+      {/* Density is deliberately tighter on a phone.
+          At the desktop spacing (p-6, mb-4/mb-5 between six stacked sections)
+          one card ran about 900px tall on a 390px screen — you could see one
+          and a bit, so scanning a project list meant scrolling past cards
+          rather than comparing them. Padding, gaps and type all step up at
+          `sm`, where the extra room is real. */}
+      <div className="flex h-full flex-col p-3.5 sm:p-6">
+        {/* Header
+            Stacks under 400px. Side-by-side, the status/priority column claims
+            a fixed ~80px of a 375px card and the project name — the one thing
+            you scan a card for — gets truncated to a few characters. Above
+            that width the original two-column layout is kept. */}
+        <div className="mb-2.5 flex flex-col gap-2 xs:flex-row xs:items-start xs:justify-between xs:gap-4 sm:mb-4">
           <div className="min-w-0 flex-1">
-            <h3 className="mb-1 truncate text-lg font-semibold text-slate-900 transition-colors group-hover:text-blue-700 dark:text-white dark:group-hover:text-blue-300">
+            <h3 className="mb-1 truncate text-base font-semibold text-slate-900 transition-colors group-hover:text-blue-700 dark:text-white dark:group-hover:text-blue-300 sm:text-lg">
               {project.projectName}
             </h3>
-            <div className="flex flex-wrap gap-2.5">
+            <div className="flex flex-wrap gap-1.5 sm:gap-2.5">
               {project.type?.slice(0, 2).map((type, idx) => {
                 const Icon = PROJECT_TYPE_ICONS[type] || FileText;
                 return (
@@ -131,8 +141,11 @@ const ProjectCard = ({
             </div>
           </div>
 
-          {/* Status & Priority Badges */}
-          <div className="flex flex-col gap-2.5">
+          {/* Status & Priority Badges.
+              Side by side on a phone (they're two short words and the row is
+              otherwise empty); stacked into a column from `xs`, where they sit
+              beside the title instead of under it. */}
+          <div className="flex flex-row gap-1.5 xs:flex-col xs:gap-2.5">
             <span
               className={`whitespace-nowrap rounded-full border px-2 py-0.5 text-xs font-medium ${getStatusColor(
                 project.status
@@ -150,25 +163,27 @@ const ProjectCard = ({
           </div>
         </div>
 
-        {/* Description */}
+        {/* Description — two lines on a phone, three where there's room. The
+            third line costs 24px on every card in the list for the tail of a
+            sentence that is already cut off. */}
         {project.description && (
-          <p className="mb-4 line-clamp-3 text-sm leading-6 text-slate-500 dark:text-slate-400">
+          <p className="mb-2.5 line-clamp-2 text-[13px] leading-5 text-slate-500 dark:text-slate-400 sm:mb-4 sm:line-clamp-3 sm:text-sm sm:leading-6">
             {project.description}
           </p>
         )}
 
         {/* Meta Information */}
-        <div className="mb-5 grid grid-cols-2 gap-5 border-t border-slate-100 pt-4 dark:border-slate-800">
+        <div className="mb-2.5 grid grid-cols-2 gap-3 border-t border-slate-100 pt-2.5 dark:border-slate-800 sm:mb-5 sm:gap-5 sm:pt-4">
           <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
-            <Calendar className="h-3.5 w-3.5" />
-            <div>
+            <Calendar className="h-3.5 w-3.5 shrink-0" />
+            <div className="min-w-0">
               <div className="text-slate-400 dark:text-slate-500">Start</div>
-              <div className="text-slate-700 dark:text-slate-300">{formatDate(project.startDate)}</div>
+              <div className="truncate text-slate-700 dark:text-slate-300">{formatDate(project.startDate)}</div>
             </div>
           </div>
           <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
-            <Clock className="h-3.5 w-3.5" />
-            <div>
+            <Clock className="h-3.5 w-3.5 shrink-0" />
+            <div className="min-w-0">
               <div className="text-slate-400 dark:text-slate-500">End</div>
               <div
                 className={
@@ -186,8 +201,8 @@ const ProjectCard = ({
         </div>
 
         {/* Task Progress */}
-        <div className="mb-5 border-t border-slate-100 pt-4 dark:border-slate-800">
-          <div className="mb-1.5 flex items-center justify-between text-xs">
+        <div className="mb-2.5 border-t border-slate-100 pt-2.5 dark:border-slate-800 sm:mb-5 sm:pt-4">
+          <div className="mb-1.5 flex items-center justify-between gap-2 text-xs">
             <span className="font-medium text-slate-500 dark:text-slate-400">Task progress</span>
             <span className="text-slate-500 dark:text-slate-400">
               {progress.total === 0
@@ -203,19 +218,22 @@ const ProjectCard = ({
           </div>
         </div>
 
-        {/* Assigned Users & Clients */}
-        <div className="mb-5 space-y-3 border-t border-slate-100 pt-4 dark:border-slate-800">
+        {/* Assigned Users & Clients — one row, not two.
+            These are two counts of three or four characters each; giving them
+            a stacked block with `space-y-3` spent ~50px of card height on
+            about 90px worth of text. */}
+        <div className="mb-2.5 flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-slate-100 pt-2.5 dark:border-slate-800 sm:mb-5 sm:pt-4">
           {project.assignedTo?.length > 0 && (
-            <div className="flex items-center gap-2">
-              <Users className="h-3.5 w-3.5 text-slate-400" />
+            <div className="flex items-center gap-1.5">
+              <Users className="h-3.5 w-3.5 shrink-0 text-slate-400" />
               <span className="truncate text-xs text-slate-500 dark:text-slate-400">
                 {project.assignedTo.length} assigned
               </span>
             </div>
           )}
           {project.clients?.length > 0 && (
-            <div className="flex items-center gap-2">
-              <User className="h-3.5 w-3.5 text-slate-400" />
+            <div className="flex items-center gap-1.5">
+              <User className="h-3.5 w-3.5 shrink-0 text-slate-400" />
               <span className="truncate text-xs text-slate-500 dark:text-slate-400">
                 {project.clients.length} client{project.clients.length !== 1 ? "s" : ""}
               </span>
@@ -237,33 +255,52 @@ const ProjectCard = ({
           </div>
         )}
 
-        {/* Actions */}
-        <div className="mt-auto flex flex-wrap gap-2.5 border-t border-slate-100 pt-4 dark:border-slate-800">
+        {/* Actions — one row, always.
+            Wrapping was the worst of it: five buttons in a `flex-wrap` put
+            View/Chat/Remarks on the first line and stranded Edit and Delete on
+            a second, adding ~56px to every card for two icons. Which buttons
+            exist depends on permissions, so the wrap point moved per-user too.
+
+            An auto-flow grid gives every button an equal share of one row
+            regardless of how many render, so the row height is fixed and the
+            layout is the same for everyone. Labels are hidden below `xs` — at
+            five-up on a 360px card there is roughly 60px per cell, which fits
+            an icon comfortably and "Remarks" not at all. Each button keeps an
+            `aria-label`, so hiding the text costs nothing to a screen reader.
+
+            Heights come from the global coarse-pointer rule in index.css, which
+            lifts every button to a 44px minimum on touch — these were 32px. */}
+        <div className="mt-auto grid auto-cols-fr grid-flow-col gap-1.5 border-t border-slate-100 pt-2.5 dark:border-slate-800 sm:gap-2.5 sm:pt-4">
           <button
             onClick={() => onView(project)}
-            className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-xs font-medium text-white transition hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+            aria-label="View project"
+            title="View project"
+            className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-2 py-2 text-xs font-medium text-white transition hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500/30 sm:px-3"
           >
-            <Eye className="h-3.5 w-3.5" />
-            View
+            <Eye className="h-3.5 w-3.5 shrink-0" />
+            <span className="hidden xs:inline">View</span>
           </button>
 
           {onCommunication && (
             <button
               onClick={() => onCommunication(project)}
-              className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-xs font-medium text-violet-700 transition hover:bg-violet-100 dark:border-violet-500/25 dark:bg-violet-500/10 dark:text-violet-300 dark:hover:bg-violet-500/20"
+              aria-label="Open project chat"
+              title="Open project chat"
+              className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-violet-200 bg-violet-50 px-2 py-2 text-xs font-medium text-violet-700 transition hover:bg-violet-100 dark:border-violet-500/25 dark:bg-violet-500/10 dark:text-violet-300 dark:hover:bg-violet-500/20 sm:px-3"
             >
-              <MessageSquare className="h-3.5 w-3.5" />
-              Chat
+              <MessageSquare className="h-3.5 w-3.5 shrink-0" />
+              <span className="hidden xs:inline">Chat</span>
             </button>
           )}
 
           <button
             onClick={() => onView(project)}
+            aria-label={remarkCount > 0 ? `Client remarks, ${remarkCount} unread` : "Client remarks"}
             title="Client remarks"
-            className="relative inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-purple-200 bg-purple-50 px-3 py-2 text-xs font-medium text-purple-700 transition hover:bg-purple-100 dark:border-purple-500/25 dark:bg-purple-500/10 dark:text-purple-300 dark:hover:bg-purple-500/20"
+            className="relative inline-flex items-center justify-center gap-1.5 rounded-lg border border-purple-200 bg-purple-50 px-2 py-2 text-xs font-medium text-purple-700 transition hover:bg-purple-100 dark:border-purple-500/25 dark:bg-purple-500/10 dark:text-purple-300 dark:hover:bg-purple-500/20 sm:px-3"
           >
-            <MessageCircle className="h-3.5 w-3.5" />
-            Remarks
+            <MessageCircle className="h-3.5 w-3.5 shrink-0" />
+            <span className="hidden xs:inline">Remarks</span>
             {remarkCount > 0 && (
               <span className="inline-flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-purple-600 px-1 text-[10px] font-semibold leading-none text-white dark:bg-purple-500">
                 {remarkCount > 99 ? "99+" : remarkCount}
@@ -274,18 +311,22 @@ const ProjectCard = ({
           {canEdit && (
             <button
               onClick={() => onEdit(project)}
-              className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-600 transition hover:bg-slate-50 hover:text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 dark:hover:text-white"
+              aria-label="Edit project"
+              title="Edit project"
+              className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2 py-2 text-xs font-medium text-slate-600 transition hover:bg-slate-50 hover:text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 dark:hover:text-white sm:px-3"
             >
-              <Edit2 className="h-3.5 w-3.5" />
+              <Edit2 className="h-3.5 w-3.5 shrink-0" />
             </button>
           )}
 
           {canDelete && (
             <button
               onClick={() => onDelete(project)}
-              className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-medium text-rose-700 transition hover:bg-rose-100 dark:border-rose-500/25 dark:bg-rose-500/10 dark:text-rose-300 dark:hover:bg-rose-500/20"
+              aria-label="Delete project"
+              title="Delete project"
+              className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-rose-200 bg-rose-50 px-2 py-2 text-xs font-medium text-rose-700 transition hover:bg-rose-100 dark:border-rose-500/25 dark:bg-rose-500/10 dark:text-rose-300 dark:hover:bg-rose-500/20 sm:px-3"
             >
-              <Trash2 className="h-3.5 w-3.5" />
+              <Trash2 className="h-3.5 w-3.5 shrink-0" />
             </button>
           )}
         </div>

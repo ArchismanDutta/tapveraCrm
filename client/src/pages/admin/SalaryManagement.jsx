@@ -468,7 +468,7 @@ const SalaryManagement = ({ onLogout }) => {
   return (
     <div className="salary-theme relative flex h-[100dvh] overflow-hidden bg-slate-50 text-slate-900 dark:bg-[#0b0d12] dark:text-slate-100">
       <Sidebar collapsed={collapsed} setCollapsed={setCollapsed} onLogout={onLogout} userRole="admin" />
-      <main className={`h-[100dvh] min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 transition-all duration-300 sm:px-5 lg:px-6 ${collapsed ? "ml-16" : "ml-16 sm:ml-56"}`}>
+      <main className={`h-[100dvh] min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 transition-all duration-300 sm:px-5 lg:px-6 ${collapsed ? "app-offset app-offset-collapsed" : "app-offset"}`}>
         <header className="mx-auto mb-4 flex w-full max-w-[1500px] flex-col gap-4 rounded-2xl border border-slate-200 bg-white px-5 py-5 shadow-sm dark:border-white/10 dark:bg-[#10131c] sm:px-6 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-start gap-3">
             <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-400/10 dark:text-blue-300"><DollarSign className="h-5 w-5" /></div>

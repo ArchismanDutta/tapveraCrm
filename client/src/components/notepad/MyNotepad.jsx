@@ -484,7 +484,7 @@ const MyNotepad = () => {
       )}
 
       {/* Stats Bar */}
-      <div className="grid grid-cols-3 gap-4 mb-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
         <div className="bg-[#0f1419] rounded-lg p-3 border border-[#232945]">
           <div className="text-xs text-gray-400 mb-1">Characters</div>
           <div className="text-lg font-bold text-white">{liveStats.characterCount.toLocaleString()}</div>
@@ -507,7 +507,7 @@ const MyNotepad = () => {
           value={content}
           onChange={handleContentChange}
           className={`w-full bg-[#0f1419] text-gray-100 rounded-lg p-4 border border-[#232945] focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-mono text-sm resize-none ${
-            isFullScreen ? 'h-[calc(100vh-300px)]' : 'h-96'
+            isFullScreen ? 'h-[calc(100dvh-300px)]' : 'h-96'
           }`}
           placeholder="Start typing your notes here...
 

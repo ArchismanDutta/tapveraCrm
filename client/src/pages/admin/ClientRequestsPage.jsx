@@ -173,12 +173,12 @@ const ClientRequestsPage = ({ onLogout }) => {
   };
 
   return (
-    <div className="flex h-screen bg-gray-50 dark:bg-[#0a0f16]">
+    <div className="flex h-[100dvh] bg-gray-50 dark:bg-[#0a0f16]">
       <Sidebar collapsed={collapsed} setCollapsed={setCollapsed} onLogout={onLogout} />
 
       <main
         className={`flex-1 overflow-y-auto transition-all duration-300 ${
-          collapsed ? "ml-20" : "ml-64"
+          collapsed ? "app-offset app-offset-collapsed" : "app-offset"
         }`}
       >
         <div className="p-6">

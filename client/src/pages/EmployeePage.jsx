@@ -408,7 +408,7 @@ const EmployeePage = () => {
     return (
       <div className="app-shell employee-detail-theme h-[100dvh] overflow-hidden">
         <Sidebar collapsed={collapsed} setCollapsed={setCollapsed} userRole="admin" />
-        <main className={`app-main flex items-center justify-center transition-all ${collapsed ? "ml-16" : "ml-16 sm:ml-56"}`}>
+        <main className={`app-main flex items-center justify-center transition-all ${collapsed ? "app-offset app-offset-collapsed" : "app-offset"}`}>
           <div className="app-panel flex items-center gap-3 rounded-2xl px-5 py-4">
             <div className="h-6 w-6 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" />
             <span className="text-sm font-medium text-slate-700 dark:text-slate-200">Loading employee details...</span>
@@ -422,7 +422,7 @@ const EmployeePage = () => {
     return (
       <div className="app-shell employee-detail-theme h-[100dvh] overflow-hidden">
         <Sidebar collapsed={collapsed} setCollapsed={setCollapsed} userRole="admin" />
-        <main className={`app-main flex items-center justify-center transition-all ${collapsed ? "ml-16" : "ml-16 sm:ml-56"}`}>
+        <main className={`app-main flex items-center justify-center transition-all ${collapsed ? "app-offset app-offset-collapsed" : "app-offset"}`}>
           <div className="app-panel max-w-md rounded-2xl border-red-200 p-8 text-center dark:border-red-500/30">
             <AlertCircle className="mx-auto mb-4 h-10 w-10 text-red-500 dark:text-red-300" />
             <h2 className="mb-2 text-xl font-bold text-slate-950 dark:text-white">Error Loading Employee</h2>
@@ -444,7 +444,7 @@ const EmployeePage = () => {
     <div className="app-shell employee-detail-theme h-[100dvh] overflow-hidden">
       <Sidebar collapsed={collapsed} setCollapsed={setCollapsed} userRole="admin" />
       <main
-        className={`app-main h-[100dvh] overflow-y-auto overflow-x-hidden px-3 py-4 transition-all duration-300 [scrollbar-gutter:stable] sm:px-5 lg:px-6 ${collapsed ? "ml-16" : "ml-16 sm:ml-56"}`}
+        className={`app-main h-[100dvh] overflow-y-auto overflow-x-hidden px-3 py-4 transition-all duration-300 [scrollbar-gutter:stable] sm:px-5 lg:px-6 ${collapsed ? "app-offset app-offset-collapsed" : "app-offset"}`}
       >
         <div className="app-page max-w-6xl space-y-5 pb-8">
           <div className="flex flex-wrap items-center justify-between gap-3">

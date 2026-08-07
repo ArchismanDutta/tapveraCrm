@@ -229,6 +229,25 @@ const ChatPage = ({ onLogout }) => {
   // Clear the active thread on unmount so a background message badges correctly.
   useEffect(() => () => { dispatch(setActiveThread(null, null)); }, [dispatch]);
 
+  // Close a conversation that disappeared out from under us.
+  //
+  // `selectedConversation` is local state holding a snapshot of the document, so
+  // it survives the thread being pruned from the store — leaving the composer
+  // and message pane rendering a conversation the user has just been removed
+  // from or that another admin deleted. Every write from that point 403s, with
+  // nothing on screen explaining why.
+  //
+  // Guarded on `conversations.length` so the first render (before the list has
+  // loaded) doesn't read as "your conversation is gone" and close it.
+  useEffect(() => {
+    if (!selectedId || conversations.length === 0) return;
+    if (conversations.some((c) => c._id === selectedId)) return;
+
+    setSelectedConversation(null);
+    setActiveConversation(null);
+    dispatch(setActiveThread(null, null));
+  }, [selectedId, conversations, dispatch, setActiveConversation]);
+
   const handleCreateGroup = async (name, memberIds) => {
     try {
       await messagingApi.createGroup(name, memberIds);
@@ -308,7 +327,7 @@ const ChatPage = ({ onLogout }) => {
       {/* Main Chat Area */}
       <main
         className={`app-main flex h-[100dvh] transition-all duration-300 ${
-          collapsed ? "ml-16" : "ml-16 sm:ml-56"
+          collapsed ? "app-offset app-offset-collapsed" : "app-offset"
         }`}
       >
         {/* Conversations Panel */}
@@ -474,15 +493,55 @@ const ChatPage = ({ onLogout }) => {
                     }`}
                     onClick={() => handleSelectConversation(conv)}
                   >
-                    <div className="flex justify-between items-center">
-                      <span className={`${hasUnread ? "font-semibold" : ""}`}>
-                        {conv.name || "Unnamed Group"}
+                    {/* A row used to be a bare name on a 50px line, so the list
+                        read as eight labels floating in empty space with no way
+                        to tell one conversation from another at a glance.
+
+                        The avatar and the member count both come from data the
+                        list response ALREADY carries — no extra request — and
+                        give the row an anchor to scan down and a second line of
+                        substance. (A last-message preview would be better still,
+                        but `listThreads` doesn't return one; that needs the
+                        server change noted in MESSAGING-FIXLIST.md #10, which is
+                        also what would make the "Most Recent" sort work.) */}
+                    <div className="flex items-center gap-2.5">
+                      <span
+                        aria-hidden="true"
+                        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${
+                          hasUnread
+                            ? "bg-blue-600 text-white"
+                            : "bg-slate-100 text-slate-600 dark:bg-white/[0.07] dark:text-slate-300"
+                        }`}
+                      >
+                        {(conv.name || "?")
+                          .split(/\s+/)
+                          .filter(Boolean)
+                          .slice(0, 2)
+                          .map((w) => w[0])
+                          .join("")
+                          .toUpperCase()}
                       </span>
-                      {hasUnread && (
-                        <span className="bg-blue-500 text-white text-xs rounded-full px-2 py-1 min-w-[20px] text-center">
-                          {unreadCount > 99 ? "99+" : unreadCount}
-                        </span>
-                      )}
+
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className={`truncate ${hasUnread ? "font-semibold" : ""}`}>
+                            {conv.name || "Unnamed Group"}
+                          </span>
+                          {hasUnread && (
+                            <span className="shrink-0 rounded-full bg-blue-500 px-2 py-0.5 text-xs text-white">
+                              {unreadCount > 99 ? "99+" : unreadCount}
+                            </span>
+                          )}
+                        </div>
+                        <p className="truncate text-xs text-slate-500 dark:text-slate-400">
+                          {(() => {
+                            const active = (conv.members || []).filter((m) => m?.isActive !== false);
+                            return active.length
+                              ? `${active.length} member${active.length === 1 ? "" : "s"}`
+                              : "No members";
+                          })()}
+                        </p>
+                      </div>
                     </div>
                     {hasUnread && (
                       <div className="absolute left-0 top-1/2 transform -translate-y-1/2 w-1 h-8 bg-blue-500 rounded-r"></div>
@@ -525,10 +584,15 @@ const ChatPage = ({ onLogout }) => {
                   </h4>
                 </div>
                 <div className="flex items-center gap-4">
+                  {/* Current members only. The list now includes people who
+                      have left the company (so their old messages keep their
+                      author — see adapters/chatThread.js); naming them here
+                      would read as "still in this group", which they are not. */}
                   {selectedConversation.members && (
                     <div className="hidden max-w-sm truncate text-sm text-slate-500 dark:text-slate-400 lg:block">
                       Members:{" "}
                       {selectedConversation.members
+                        .filter((m) => m?.isActive !== false)
                         .map((m) => m.name || m._id)
                         .join(", ")}
                     </div>

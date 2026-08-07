@@ -33,6 +33,7 @@ import reducer, {
   receiveReceipt,
   receiveThreadUpdated,
   receiveTyping,
+  removeThread,
   setUnread,
   selectMessages,
   selectUnread,
@@ -226,6 +227,105 @@ describe("server reseed (survives refresh / second tab / reconnect)", () => {
   it("stores the thread summary for the list UI", () => {
     const s = seed([{ _id: "t1", name: "Design", members: [] }]);
     expect(s.threads["chat:t1"].name).toBe("Design");
+  });
+});
+
+describe("pruning threads the user no longer has", () => {
+  // The server broadcasts `conversation:updated {action:"deleted"}` and closes
+  // the room, but the client used to merge the list additively — so a deleted
+  // conversation stayed in the sidebar, 404'd on click, and kept feeding
+  // selectTotalUnread a count no action could clear.
+  const seed = (threads) =>
+    reducer(S(), { type: fetchThreads.fulfilled.type, payload: { scope: "chat", threads } });
+
+  const refetch = (state, threads) =>
+    reducer(state, { type: fetchThreads.fulfilled.type, payload: { scope: "chat", threads } });
+
+  it("a refetch drops threads the server no longer lists", () => {
+    let s = seed([{ _id: "t1", name: "G1" }, { _id: "t2", name: "G2" }]);
+    s = refetch(s, [{ _id: "t1", name: "G1" }]);
+
+    expect(s.threads["chat:t1"]).toBeDefined();
+    expect(s.threads["chat:t2"]).toBeUndefined();
+  });
+
+  it("a dropped thread stops counting toward the nav badge", () => {
+    let s = seed([{ _id: "t1", unreadCount: 2 }, { _id: "t2", unreadCount: 5 }]);
+    expect(selectTotalUnread("chat")({ threads: s })).toBe(7);
+
+    s = refetch(s, [{ _id: "t1", unreadCount: 2 }]);
+    expect(selectTotalUnread("chat")({ threads: s })).toBe(2);
+  });
+
+  it("clears every per-thread bucket, not just the summary", () => {
+    let s = seed([{ _id: "t1" }]);
+    s = recv(s, msg("m1", 1000));
+    s = reducer(s, receiveTyping({ scope: "chat", threadId: "t1", userId: THEM, userName: "Them" }));
+
+    s = refetch(s, []);
+
+    expect(s.threads["chat:t1"]).toBeUndefined();
+    expect(s.messagesByKey["chat:t1"]).toBeUndefined();
+    expect(s.unreadByKey["chat:t1"]).toBeUndefined();
+    expect(s.typingByKey["chat:t1"]).toBeUndefined();
+    expect(s.statusByKey["chat:t1"]).toBeUndefined();
+  });
+
+  it("clears activeKey when the open thread is the one that went away", () => {
+    let s = seed([{ _id: "t1" }]);
+    s = reducer(s, setActiveThread("chat", "t1"));
+    expect(s.activeKey).toBe("chat:t1");
+
+    s = refetch(s, []);
+    expect(s.activeKey).toBeNull();
+  });
+
+  it("a chat refetch leaves project threads alone", () => {
+    // Scoped by prefix: GET /api/chat/groups says nothing about project
+    // threads, so it must not be read as "the user has no projects".
+    let s = seed([{ _id: "t1" }]);
+    s = reducer(
+      s,
+      receiveMessage({ scope: "project", threadId: "p1", message: msg("pm1", 1000), currentUserId: ME })
+    );
+    s = reducer(s, setUnread({ scope: "project", threadId: "p1", count: 3 }));
+
+    s = refetch(s, []);
+
+    expect(msgs(s, "project", "p1")).toHaveLength(1);
+    expect(unread(s, "project", "p1")).toBe(3);
+  });
+
+  it("does not evict a thread that only has speculative buckets", () => {
+    // `thread:message` for a group you were just added to arrives BEFORE the
+    // refetch that would name it. ensure() creates the buckets; there is no
+    // `threads` record yet. Pruning on the bucket maps would delete that
+    // message a moment before its thread shows up.
+    let s = seed([{ _id: "t1" }]);
+    s = reducer(
+      s,
+      receiveMessage({ scope: "chat", threadId: "brandnew", message: msg("m9", 2000), currentUserId: ME })
+    );
+
+    s = refetch(s, [{ _id: "t1" }]); // server hasn't caught up yet
+
+    expect(msgs(s, "chat", "brandnew")).toHaveLength(1);
+  });
+
+  it("removeThread drops it immediately, without waiting for a refetch", () => {
+    let s = seed([{ _id: "t1", unreadCount: 4 }, { _id: "t2", unreadCount: 1 }]);
+    s = reducer(s, removeThread("chat", "t1"));
+
+    expect(s.threads["chat:t1"]).toBeUndefined();
+    expect(s.threads["chat:t2"]).toBeDefined();
+    expect(selectTotalUnread("chat")({ threads: s })).toBe(1);
+  });
+
+  it("removeThread ignores a malformed payload rather than throwing", () => {
+    expect(() => {
+      const a = reducer(S(), removeThread(null, null));
+      expect(reducer(a, removeThread("chat", undefined))).toBeDefined();
+    }).not.toThrow();
   });
 });
 

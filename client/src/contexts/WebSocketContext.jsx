@@ -18,6 +18,7 @@ import {
   receiveReceipt as receiveThreadReceipt,
   receiveThreadUpdated,
   receiveTyping as receiveThreadTyping,
+  removeThread,
 } from "../store/slices/threadsSlice";
 import {
   receiveSnapshot as receivePresenceSnapshot,
@@ -413,6 +414,23 @@ export const WebSocketProvider = ({ children }) => {
       window.dispatchEvent(new CustomEvent("project-remark-deleted", { detail: data }));
     });
     socket.on("conversation:updated", (data) => {
+      // Drop the thread from the store the moment we learn it's gone.
+      //
+      // The `action` discriminator has always been on this payload and nothing
+      // read it — every listener just refetched. A refetch now prunes correctly
+      // too (see fetchThreads.fulfilled), so this is about latency rather than
+      // correctness: acting on the event means the conversation disappears
+      // immediately instead of one round trip later, and no message can land in
+      // a thread the user has already lost access to in the meantime.
+      const me = readCurrentUserId();
+      const mineToDrop =
+        data?.action === "deleted" ||
+        (data?.action === "member_removed" && String(data?.memberId) === String(me));
+
+      if (mineToDrop && data?.conversationId) {
+        dispatch(removeThread("chat", data.conversationId));
+      }
+
       window.dispatchEvent(new CustomEvent("conversation-updated", { detail: data }));
     });
     socket.on("task:remark", (data) => {

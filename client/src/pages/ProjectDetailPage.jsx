@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { useLocation } from "react-router-dom";
 import axios from "axios";
 import ReactMarkdown from "react-markdown";
@@ -93,11 +93,28 @@ const PROJECT_TYPE_ICONS = {
   "Invoice App": FileText,
 };
 
+// ─── WHY WEBSITE IS TEAL AND NOT BLUE ───
+// index.css carries a brand override that rewrites blue to the teal brand
+// colour. It is applied ASYMMETRICALLY, and that asymmetry is a trap:
+//
+//   * backgrounds  — `[class*="bg-blue-600"]` (~line 1179), global, !important
+//   * text         — `html.light [class*="text-blue-400"]`, LIGHT MODE ONLY
+//
+// The background rule is an attribute SUBSTRING match, so it also catches
+// `bg-blue-600/20` and replaces it with a SOLID teal — losing the hue and the
+// 20% tint in one go. The text rule never fires in dark mode. Net result in
+// dark mode: a solid teal chip with a blue-400 icon on it, which is the
+// unreadable badge in the project header. In light mode both halves convert,
+// which is why it went unnoticed.
+//
+// The override explicitly excludes `bg-teal-*` (`:not([class*="bg-teal-"])`),
+// so naming the brand colour directly is the one way to get a predictable
+// result here. Stating teal means the code now says what it renders.
 const PROJECT_TYPE_COLORS = {
   Website: {
-    bg: "bg-blue-600/20",
-    text: "text-blue-400",
-    border: "border-blue-500/50",
+    bg: "bg-teal-600/20",
+    text: "text-teal-300",
+    border: "border-teal-500/50",
   },
   SEO: {
     bg: "bg-green-600/20",
@@ -114,10 +131,13 @@ const PROJECT_TYPE_COLORS = {
     text: "text-orange-400",
     border: "border-orange-500/50",
   },
+  // Cyan is in the same rebrand net as blue (`html.light [class*="text-cyan-400"]`
+  // converts the text, nothing converts it back in dark mode), so this is
+  // moved to sky — visually close, and outside the override entirely.
   Hosting: {
-    bg: "bg-cyan-600/20",
-    text: "text-cyan-400",
-    border: "border-cyan-500/50",
+    bg: "bg-sky-600/20",
+    text: "text-sky-300",
+    border: "border-sky-500/50",
   },
   "Invoice App": {
     bg: "bg-pink-600/20",
@@ -354,16 +374,21 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
     try {
       if (append) setLoadingMoreMessages(true);
 
-      // Filters are sent to the server because this surface paginates — unlike
-      // ProjectMessagePanel, it cannot filter client-side over a partial list.
-      const params = {
-        page,
-        limit: 50,
-        ...(searchTerm ? { search: searchTerm } : {}),
-        ...(searchSender ? { senderName: searchSender } : {}),
-        ...(dateFilter.start ? { startDate: dateFilter.start } : {}),
-        ...(dateFilter.end ? { endDate: dateFilter.end } : {}),
-      };
+      // Deliberately NOT filtered.
+      //
+      // This used to forward `search` / `senderName` / `startDate` / `endDate`
+      // to the server. Two things went wrong with that. The response was merged
+      // into the shared store by `upsertMessage`, which only ever ADDS rows — so
+      // a filtered fetch quietly appended its matches to the canonical thread
+      // list instead of narrowing it, and the rendered list (which only applied
+      // the starred filter) never changed. And because the effect that drove it
+      // was keyed on the filter state with no debounce, it fired a request per
+      // keystroke for a result nobody could see.
+      //
+      // Filtering is a VIEW concern here, so it belongs in `visibleMessages`
+      // below — the same client-side approach ChatWindow and ProjectMessagePanel
+      // already use. This function now does one thing: page the thread.
+      const params = { page, limit: 50 };
 
       const action = await dispatch(
         fetchThreadMessages({ scope: SCOPE, threadId: projectId, params })
@@ -542,13 +567,13 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
     }
   };
 
-  // Re-fetch when filters change (reset to page 1)
-  useEffect(() => {
-    if (projectId) {
-      setCurrentPage(1);
-      fetchMessages(1, false);
-    }
-  }, [searchTerm, searchSender, dateFilter]);
+  // NOTE: there is deliberately no filter-change effect here any more.
+  //
+  // Filters are applied client-side in `visibleMessages`, so changing one is a
+  // pure render — no network, no pagination reset. The previous effect refetched
+  // page 1 on every keystroke and overwrote `hasMoreMessages` / `totalMessages`
+  // with the filtered query's pagination, which then made "Load More Messages
+  // (N remaining)" report a count belonging to a different query.
 
   // Fetch tasks when Tasks tab is active
   useEffect(() => {
@@ -768,6 +793,69 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
     setDateFilter({ start: "", end: "" });
   };
 
+  /**
+   * The messages actually rendered — the store's thread narrowed by the
+   * conversation filters.
+   *
+   * All four filters live here rather than being split between a server query
+   * and a local `.filter()`. Mixing the two is what broke search: a filtered
+   * fetch merged its matches into the shared thread list (upsertMessage adds,
+   * it never removes), so narrowing the query WIDENED what was on screen.
+   *
+   * Scoped to what's loaded, which is the honest behaviour for a paginated
+   * thread — hence the "searching loaded messages" hint in the filter bar. A
+   * server-side search would have to be its own result view, not a mutation of
+   * the thread everyone else is reading from.
+   */
+  const visibleMessages = useMemo(() => {
+    const term = searchTerm.trim().toLowerCase();
+    const sender = searchSender.trim().toLowerCase();
+    const { start, end } = dateFilter;
+
+    if (!term && !sender && !start && !end && !showStarredOnly) return messages;
+
+    return messages.filter((msg) => {
+      if (showStarredOnly && !starredMessageIds.has(msg._id)) return false;
+
+      if (term && !(msg.message || "").toLowerCase().includes(term)) return false;
+
+      // Matches the same fallback chain the bubble renders with, so filtering by
+      // what you can SEE works — including client-side senders, who carry
+      // `clientName`/`businessName` rather than `name`.
+      if (sender) {
+        const who = [
+          msg.sentBy?.name,
+          msg.sentBy?.clientName,
+          msg.sentBy?.businessName,
+          msg.sentBy?.designation,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+        if (!who.includes(sender)) return false;
+      }
+
+      if (start || end) {
+        // Compared as calendar days in the viewer's timezone: the inputs are
+        // <input type="date">, so an ISO/UTC comparison would silently exclude
+        // messages sent late in the day for anyone east of UTC.
+        const d = new Date(msg.createdAt);
+        if (Number.isNaN(d.getTime())) return false;
+        const day = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+          d.getDate()
+        ).padStart(2, "0")}`;
+        if (start && day < start) return false;
+        if (end && day > end) return false;
+      }
+
+      return true;
+    });
+  }, [messages, searchTerm, searchSender, dateFilter, showStarredOnly, starredMessageIds]);
+
+  const filtersActive = Boolean(
+    searchTerm || searchSender || dateFilter.start || dateFilter.end || showStarredOnly
+  );
+
   const handleSummarize = async () => {
     // Use projectId prop or project._id from state
     const currentProjectId = projectId || project?._id;
@@ -960,7 +1048,7 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50 dark:bg-gradient-to-br dark:from-[#141a21] dark:via-[#191f2b] dark:to-[#101218]">
+      <div className="flex min-h-[100dvh] items-center justify-center bg-slate-50 dark:bg-gradient-to-br dark:from-[#141a21] dark:via-[#191f2b] dark:to-[#101218]">
         <div className="text-center">
           <div className="w-12 h-12 border-4 border-blue-500/20 border-t-blue-500 rounded-full animate-spin mx-auto mb-4"></div>
           <p className="text-slate-500 dark:text-gray-400">Loading project details...</p>
@@ -971,7 +1059,7 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
 
   if (!project) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50 dark:bg-gradient-to-br dark:from-[#141a21] dark:via-[#191f2b] dark:to-[#101218]">
+      <div className="flex min-h-[100dvh] items-center justify-center bg-slate-50 dark:bg-gradient-to-br dark:from-[#141a21] dark:via-[#191f2b] dark:to-[#101218]">
         <div className="text-center">
           <AlertCircle className="w-12 h-12 text-red-400 mx-auto mb-4" />
           <p className="text-slate-500 dark:text-gray-400">Project not found</p>
@@ -1008,7 +1096,7 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
         : { label: "Waiting on client", classes: "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-400/20 dark:bg-sky-500/10 dark:text-sky-300" };
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-slate-50 text-slate-900 dark:bg-[#090f14] dark:text-blue-100">
+    <div className="flex h-[100dvh] flex-col overflow-hidden bg-slate-50 text-slate-900 dark:bg-[#090f14] dark:text-blue-100">
       {/* Notification Toast */}
       {notification && (
         <div
@@ -1028,8 +1116,12 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
       )}
 
       {/* Compact project header */}
-      <header className="relative z-30 border-b border-slate-200 bg-white/95 backdrop-blur-xl dark:border-white/10 dark:bg-[#0c1319]/95">
-        <div className="flex min-h-16 flex-wrap items-center gap-3 px-3 py-2 sm:px-5">
+      {/* `safe-top`: this page owns the full viewport and has no app top bar
+          above it, so with `viewport-fit=cover` its first row would otherwise
+          render under the iPhone status bar — the back button ends up behind
+          the clock. */}
+      <header className="safe-top relative z-30 border-b border-slate-200 bg-white/95 backdrop-blur-xl dark:border-white/10 dark:bg-[#0c1319]/95">
+        <div className="flex min-h-16 items-center gap-2 px-3 py-2 sm:gap-3 sm:px-5">
           <button
             type="button"
             onClick={onBack}
@@ -1039,31 +1131,44 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
             <ArrowLeft className="h-5 w-5" />
           </button>
 
-          <div className={`rounded-xl border p-2 ${colors.bg} ${colors.border}`}>
+          {/* The project-type icon is decoration; at phone width the ~40px it
+              costs is better spent on the project name. */}
+          <div className={`hidden rounded-xl border p-2 xs:block ${colors.bg} ${colors.border}`}>
             <Icon className={`h-5 w-5 ${colors.text}`} />
           </div>
 
-          <div className="min-w-[12rem] flex-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="max-w-xl truncate text-lg font-semibold tracking-tight text-slate-950 dark:text-white sm:text-xl">
-                {project.projectName}
-              </h1>
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-teal-200 bg-teal-50 px-2.5 py-1 text-[11px] font-medium capitalize text-teal-700 dark:border-teal-400/20 dark:bg-teal-500/10 dark:text-teal-300">
+          {/* `min-w-0` rather than the old `min-w-[12rem]`.
+              A 192px floor on a 375px screen — after a back button, an icon and
+              the details toggle — left nothing to give, so the flex row wrapped
+              and the header grew to three stacked lines on every phone.
+              `min-w-0` lets the title truncate instead, which is what `truncate`
+              was always there to do but could never trigger. */}
+          <div className="min-w-0 flex-1">
+            <h1 className="truncate text-base font-semibold tracking-tight text-slate-950 dark:text-white sm:text-xl">
+              {project.projectName}
+            </h1>
+            {/* Status pills move to their own row under `sm`. Inline beside the
+                title they consumed ~230px of a 375px viewport and pushed the
+                project name down to a couple of visible characters. */}
+            <div className="mt-1 flex flex-wrap items-center gap-1.5 sm:gap-2">
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-teal-200 bg-teal-50 px-2 py-0.5 text-[11px] font-medium capitalize text-teal-700 dark:border-teal-400/20 dark:bg-teal-500/10 dark:text-teal-300 sm:px-2.5 sm:py-1">
                 <span className="h-1.5 w-1.5 rounded-full bg-teal-400" />
                 {project.status || status}
               </span>
-              <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium ${responseState.classes}`}>
-                <Clock className="h-3 w-3" />
+              <span className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-medium sm:px-2.5 sm:py-1 ${responseState.classes}`}>
+                <Clock className="h-3 w-3 shrink-0" />
                 {responseState.label}
               </span>
+              <span className="hidden min-w-0 truncate text-xs text-slate-500 dark:text-slate-400 sm:inline">
+                {projectClientName}
+              </span>
             </div>
-            <p className="mt-1 truncate text-xs text-slate-500 dark:text-slate-400">{projectClientName}</p>
           </div>
 
           <button
             type="button"
             onClick={() => setShowSidebar((visible) => !visible)}
-            className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition ${
+            className={`flex shrink-0 items-center justify-center gap-2 rounded-lg border px-2.5 py-2 text-sm transition sm:px-3 ${
               showSidebar
                 ? "border-teal-300 bg-teal-50 text-teal-700 dark:border-teal-400/25 dark:bg-teal-500/10 dark:text-teal-300"
                 : "border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100 hover:text-slate-950 dark:border-white/10 dark:bg-white/[0.035] dark:text-slate-300 dark:hover:bg-white/[0.06] dark:hover:text-white"
@@ -1230,7 +1335,8 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
 
               {/* Search and Filters */}
               {showFilters && (
-                <div className="grid grid-cols-1 gap-3 border-b border-slate-200 bg-slate-50 p-3 dark:border-white/10 dark:bg-[#0b1218] sm:grid-cols-2 lg:grid-cols-4">
+                <div className="border-b border-slate-200 bg-slate-50 p-3 dark:border-white/10 dark:bg-[#0b1218]">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                     <input
@@ -1277,6 +1383,32 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                     )}
                   </div>
                 </div>
+
+                {/* Result count + scope. Filtering is now instant and local, so
+                    the user needs to be told two things the old server-query
+                    version never surfaced: that it worked, and that it only
+                    covers what's loaded. Without the second line a thread with
+                    unloaded history looks like it's missing messages. */}
+                {filtersActive && (
+                  <p className="mt-2.5 text-[11px] text-slate-500 dark:text-slate-400">
+                    {visibleMessages.length} of {messages.length} loaded message
+                    {messages.length === 1 ? "" : "s"}
+                    {hasMoreMessages && (
+                      <>
+                        {" · "}
+                        <button
+                          type="button"
+                          onClick={loadMoreMessages}
+                          disabled={loadingMoreMessages}
+                          className="font-medium text-teal-700 underline underline-offset-2 transition hover:text-teal-800 disabled:opacity-50 dark:text-teal-300 dark:hover:text-teal-200"
+                        >
+                          {loadingMoreMessages ? "loading…" : "load older to search further back"}
+                        </button>
+                      </>
+                    )}
+                  </p>
+                )}
+                </div>
               )}
 
             {/* Messages Container */}
@@ -1284,15 +1416,43 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
               ref={chatContainerRef}
               className="flex-1 overflow-y-auto bg-slate-50 dark:bg-[#090f14]"
             >
-              {messages.length === 0 ? (
-                <div className="flex h-full flex-col items-center justify-center text-center">
-                  <Mail className="mb-4 h-12 w-12 text-slate-400 sm:h-16 sm:w-16" />
-                  <p className="text-sm text-slate-700 dark:text-slate-300 sm:text-base">
-                    No messages yet
-                  </p>
-                  <p className="mt-2 text-xs text-slate-500 dark:text-slate-400 sm:text-sm">
-                    Start the conversation by sending a message
-                  </p>
+              {visibleMessages.length === 0 ? (
+                // Two different empty states. "No messages yet" told a user who
+                // had just filtered to zero results that the conversation was
+                // empty — which is both wrong and unrecoverable-looking, since
+                // it hides the filter bar's own Clear button behind a wall of
+                // "start the conversation".
+                <div className="flex h-full flex-col items-center justify-center px-6 text-center">
+                  {filtersActive ? (
+                    <>
+                      <Search className="mb-4 h-12 w-12 text-slate-400 sm:h-16 sm:w-16" />
+                      <p className="text-sm text-slate-700 dark:text-slate-300 sm:text-base">
+                        No messages match your filters
+                      </p>
+                      <p className="mt-2 text-xs text-slate-500 dark:text-slate-400 sm:text-sm">
+                        Searching the {messages.length} message
+                        {messages.length === 1 ? "" : "s"} loaded so far
+                        {hasMoreMessages ? " — load more to search further back" : ""}.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => { clearFilters(); setShowStarredOnly(false); }}
+                        className="mt-4 rounded-lg border border-teal-200 bg-teal-50 px-3 py-1.5 text-xs font-semibold text-teal-700 transition hover:bg-teal-100 dark:border-teal-400/25 dark:bg-teal-500/10 dark:text-teal-300 dark:hover:bg-teal-500/20"
+                      >
+                        Clear filters
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <Mail className="mb-4 h-12 w-12 text-slate-400 sm:h-16 sm:w-16" />
+                      <p className="text-sm text-slate-700 dark:text-slate-300 sm:text-base">
+                        No messages yet
+                      </p>
+                      <p className="mt-2 text-xs text-slate-500 dark:text-slate-400 sm:text-sm">
+                        Start the conversation by sending a message
+                      </p>
+                    </>
+                  )}
                 </div>
               ) : (
                 <div className="w-full space-y-3 p-3 sm:px-5 sm:py-4">
@@ -1319,7 +1479,7 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                     </div>
                   )}
 
-                  {messages.filter((msg) => !showStarredOnly || starredMessageIds.has(msg._id)).map((msg, idx) => {
+                  {visibleMessages.map((msg, idx) => {
                   const isOwnMessage =
                     msg.sentBy?._id === userId || msg.sentBy === userId;
                   const senderType = msg.senderType || "user";
@@ -1338,12 +1498,25 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                       ? senderRole
                       : `${senderName} - ${senderRole}`;
 
-                  // Check if we need to show date separator
-                  const showDateSeparator = idx === 0 ||
-                    new Date(messages[idx - 1].createdAt).toDateString() !== new Date(msg.createdAt).toDateString();
+                  // Compared against the PREVIOUS VISIBLE message, not the
+                  // previous message in the store. `idx` indexes the filtered
+                  // list, so reading `messages[idx - 1]` here compared two
+                  // unrelated rows the moment any filter was on — which put
+                  // date separators in the wrong places (and dropped them where
+                  // they belonged) as soon as you toggled "Starred".
+                  const prevVisible = visibleMessages[idx - 1];
+                  const showDateSeparator =
+                    !prevVisible ||
+                    new Date(prevVisible.createdAt).toDateString() !==
+                      new Date(msg.createdAt).toDateString();
 
                   return (
-                    <React.Fragment key={idx}>
+                    // Keyed by id, not index. Older pages are PREPENDED, so an
+                    // index key remaps every existing row to different content
+                    // on each load — React then reuses the wrong DOM nodes and
+                    // any per-row state (open emoji picker, highlight) lands on
+                    // the wrong message.
+                    <React.Fragment key={msg._id || idx}>
                       {showDateSeparator && <MessageDateSeparator date={msg.createdAt} />}
                       <div
                         id={`message-${msg._id}`}
@@ -1669,8 +1842,17 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
               />
             )}
 
-            {/* Message Input */}
-            <div className="border-t border-slate-200 bg-white p-2 dark:border-white/10 dark:bg-[#0d151c] sm:px-3">
+            {/* Message Input
+                `safe-bottom` matters here specifically: this sits flush against
+                the bottom of the viewport, and with `viewport-fit=cover` that
+                is the strip the iPhone home indicator occupies. Without the
+                inset the send button renders underneath it, where the system
+                gesture swallows the tap — the control is visible and
+                unpressable. */}
+            <div
+              style={{ "--safe-pad-b": "0.5rem" }}
+              className="safe-bottom border-t border-slate-200 bg-white p-2 dark:border-white/10 dark:bg-[#0d151c] sm:px-3"
+            >
               {/* Reply Preview */}
               {replyingTo && (
                 <div className="mb-2 flex items-start justify-between gap-2 overflow-hidden rounded-lg border border-teal-200 bg-teal-50 p-2.5 dark:border-teal-400/20 dark:bg-teal-500/10" style={{ maxWidth: '100%' }}>
@@ -1779,7 +1961,7 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                   <button
                     type="button"
                     onClick={() => setShowComposerTools((visible) => !visible)}
-                    className={`flex h-11 w-11 items-center justify-center rounded-lg border transition ${
+                    className={`flex h-11 w-11 items-center justify-center rounded-xl border transition ${
                       showComposerTools
                         ? "border-teal-300 bg-teal-50 text-teal-700 dark:border-teal-400/30 dark:bg-teal-500/10 dark:text-teal-300"
                         : "border-slate-200 bg-slate-50 text-slate-500 hover:bg-slate-100 hover:text-slate-950 dark:border-white/10 dark:bg-white/[0.035] dark:text-slate-400 dark:hover:bg-white/[0.065] dark:hover:text-white"
@@ -1906,7 +2088,7 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                     users={project?.assignedTo || []}
                     placeholder="Write a message..."
                     rows={1}
-                    className="h-11 w-full rounded-xl border-slate-200 bg-white py-2.5 text-slate-900 placeholder-slate-400 focus:border-teal-400/50 dark:border-white/10 dark:bg-[#101820] dark:text-white dark:placeholder-slate-500"
+                    className="h-11 w-full rounded-xl border-slate-200 bg-white py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:border-teal-400/50 focus:ring-teal-500/15 dark:border-white/10 dark:bg-[#101820] dark:text-white dark:placeholder-slate-500"
                     onKeyDown={(e) => {
                       // Handle suggestion navigation
                       if (showSuggestions && suggestions.length > 0) {
@@ -2020,7 +2202,7 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                 <button
                   type="submit"
                   disabled={sending || (!newMessage.trim() && selectedFiles.length === 0)}
-                  className="flex h-11 flex-shrink-0 items-center justify-center gap-2 rounded-lg bg-teal-600 px-3 text-white shadow-lg shadow-teal-950/20 transition hover:bg-teal-500 disabled:cursor-not-allowed disabled:opacity-40 sm:px-4"
+                  className="flex h-11 flex-shrink-0 items-center justify-center gap-2 rounded-xl bg-teal-600 px-3 text-white shadow-lg shadow-teal-950/20 transition hover:bg-teal-500 disabled:cursor-not-allowed disabled:opacity-40 sm:px-4"
                 >
                   {sending ? (
                     <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin"></div>
@@ -2087,22 +2269,24 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                         key={task._id}
                         className="rounded-xl border border-slate-200 bg-white p-4 transition-colors hover:border-[#00a884] dark:border-[#2a3942] dark:bg-[#202c33]"
                       >
-                        <div className="flex items-start justify-between gap-4 mb-4">
+                        <div className="flex items-start justify-between gap-3 mb-4">
                           <div className="flex-1 min-w-0">
-                            <div className="flex items-center justify-between mb-2">
-                              <h3 className="text-slate-900 dark:text-white font-semibold text-base sm:text-lg flex items-center gap-2">
+                            {/* Title row.
+                                The priority pill used to live INSIDE this <h3>
+                                as a flex child. On a title long enough to wrap —
+                                which most of them are — the pill was centred
+                                against the whole wrapped block, so it floated
+                                halfway down the text and landed beside the edit
+                                button. That is the collision: nothing was
+                                overlapping, the badge was just anchored to the
+                                wrong thing.
+
+                                Now the heading holds only the heading, clamped
+                                to two lines so every card starts the same
+                                height, and the badges get their own row below. */}
+                            <div className="flex items-start justify-between gap-2 mb-2">
+                              <h3 className="min-w-0 flex-1 text-slate-900 dark:text-white font-semibold text-sm sm:text-base line-clamp-2 break-words">
                                 {task.title}
-                                <span
-                                  className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                                    task.priority === "High"
-                                      ? "bg-red-500/20 text-red-400 border border-red-500/50"
-                                      : task.priority === "Medium"
-                                      ? "bg-yellow-500/20 text-yellow-400 border border-yellow-500/50"
-                                      : "bg-blue-500/20 text-blue-400 border border-blue-500/50"
-                                  }`}
-                                >
-                                  {task.priority}
-                                </span>
                               </h3>
                               {/* Edit Button - Only for admins */}
                               {(userRole === "super-admin" || userRole === "superadmin" || userRole === "admin") && (
@@ -2110,13 +2294,53 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                                   onClick={() => handleEditTask(task)}
                                   className="p-2 rounded-lg text-blue-400 hover:text-blue-300 hover:bg-blue-600/20 transition-all flex-shrink-0"
                                   title="Edit task"
+                                  aria-label="Edit task"
                                 >
                                   <Edit2 className="w-4 h-4" />
                                 </button>
                               )}
                             </div>
+
+                            <div className="mb-2 flex flex-wrap items-center gap-1.5">
+                              <span
+                                className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                                  task.status === "completed"
+                                    ? "bg-green-500/20 text-green-400 border border-green-500/50"
+                                    : task.status === "in-progress"
+                                    ? "bg-blue-500/20 text-blue-400 border border-blue-500/50"
+                                    : task.status === "rejected"
+                                    ? "bg-red-500/20 text-red-400 border border-red-500/50"
+                                    : "bg-slate-200 text-slate-600 border border-slate-300 dark:bg-gray-500/20 dark:text-gray-400 dark:border-gray-500/50"
+                                }`}
+                              >
+                                {task.status}
+                              </span>
+                              <span
+                                className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                                  task.priority === "High"
+                                    ? "bg-red-500/20 text-red-400 border border-red-500/50"
+                                    : task.priority === "Medium"
+                                    ? "bg-yellow-500/20 text-yellow-400 border border-yellow-500/50"
+                                    : "bg-blue-500/20 text-blue-400 border border-blue-500/50"
+                                }`}
+                              >
+                                {task.priority}
+                              </span>
+                            </div>
+
+                            {/* Clamped to three lines with `break-words`.
+                                Task descriptions here are often a pasted block
+                                of dated URLs — one ran long enough to make a
+                                single card taller than the viewport, so the
+                                list stopped being a list. Three lines fades to
+                                an ellipsis and every card stays comparable;
+                                `break-words` stops an unbroken URL widening the
+                                card past its container. Full text is on the
+                                task itself, one tap away. */}
                             {task.description && (
-                              <p className="text-slate-500 dark:text-gray-400 text-sm mb-3">{task.description}</p>
+                              <p className="text-slate-500 dark:text-gray-400 text-sm mb-3 line-clamp-3 break-words">
+                                {task.description}
+                              </p>
                             )}
 
                             <div className="space-y-3">
@@ -2169,19 +2393,6 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                             </div>
                           </div>
 
-                          <span
-                            className={`px-3 py-1 rounded-full text-xs font-medium flex-shrink-0 ${
-                              task.status === "completed"
-                                ? "bg-green-500/20 text-green-400 border border-green-500/50"
-                                : task.status === "in-progress"
-                                ? "bg-blue-500/20 text-blue-400 border border-blue-500/50"
-                                : task.status === "rejected"
-                                ? "bg-red-500/20 text-red-400 border border-red-500/50"
-                                : "bg-slate-200 text-slate-600 border border-slate-300 dark:bg-gray-500/20 dark:text-gray-400 dark:border-gray-500/50"
-                            }`}
-                          >
-                            {task.status}
-                          </span>
                         </div>
 
                         {/* Rejection info */}

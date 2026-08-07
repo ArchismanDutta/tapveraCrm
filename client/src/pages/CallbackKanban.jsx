@@ -267,7 +267,12 @@ const CallbackKanban = ({ onLogout }) => {
         case "complete":
           updateData = { status: "Completed", completedDate: new Date() };
           break;
-        case "reschedule":
+        // Braced so `newDate` is scoped to this case rather than to the whole
+        // switch. Without them the binding is hoisted into every other branch's
+        // scope in its temporal dead zone — harmless while nothing else touches
+        // the name, and a ReferenceError the moment someone adds a case that
+        // does.
+        case "reschedule": {
           // In a real app, you'd show a date picker here
           const newDate = new Date();
           newDate.setDate(newDate.getDate() + 1);
@@ -277,6 +282,7 @@ const CallbackKanban = ({ onLogout }) => {
             rescheduledCount: (selectedCallback.rescheduledCount || 0) + 1
           };
           break;
+        }
         case "cancel":
           updateData = { status: "Cancelled" };
           break;
@@ -299,7 +305,7 @@ const CallbackKanban = ({ onLogout }) => {
   };
 
   return (
-    <div className="flex h-screen bg-gradient-to-br from-[#141a21] via-[#191f2b] to-[#101218] text-gray-100">
+    <div className="flex h-[100dvh] bg-gradient-to-br from-[#141a21] via-[#191f2b] to-[#101218] text-gray-100">
       <Sidebar
         onLogout={onLogout}
         collapsed={collapsed}
@@ -309,7 +315,7 @@ const CallbackKanban = ({ onLogout }) => {
 
       <main
         className={`flex-1 overflow-hidden transition-all duration-300 ${
-          collapsed ? "ml-20" : "ml-72"
+          collapsed ? "app-offset app-offset-collapsed" : "app-offset"
         }`}
       >
         {/* Header */}
@@ -407,7 +413,15 @@ const CallbackKanban = ({ onLogout }) => {
         </div>
 
         {/* Kanban Board */}
-        <div className="h-[calc(100vh-280px)] overflow-x-auto overflow-y-hidden p-6">
+        {/* Horizontal scrolling is the right pattern for a board — the fix is
+            making it feel deliberate on a phone rather than accidental.
+            `dvh` because 100vh excludes the mobile browser chrome, so the
+            board was taller than the screen and its bottom cards sat under
+            the address bar. The 280px reserve is tuned for the desktop
+            header stack; on mobile the header wraps taller, hence the
+            larger reserve below `sm`. Scroll-snap makes a swipe land on a
+            column instead of halfway between two. */}
+        <div className="h-[calc(100dvh-340px)] snap-x snap-mandatory overflow-x-auto overflow-y-hidden p-3 sm:h-[calc(100dvh-280px)] sm:p-6">
           {loading ? (
             <div className="flex items-center justify-center h-full">
               <div className="text-center">
@@ -424,7 +438,12 @@ const CallbackKanban = ({ onLogout }) => {
                 return (
                   <div
                     key={stage.id}
-                    className="flex-shrink-0 w-80 flex flex-col"
+                    // 85vw leaves a sliver of the next column visible, which
+                    // is the only thing telling a phone user the board
+                    // continues sideways — at a flat w-80 the single visible
+                    // column exactly fills the screen and the board reads as
+                    // a list with nothing after it.
+                    className="flex w-[85vw] max-w-[20rem] flex-shrink-0 snap-start flex-col sm:w-80"
                   >
                     {/* Stage Header */}
                     <div

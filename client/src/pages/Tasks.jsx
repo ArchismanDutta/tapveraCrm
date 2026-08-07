@@ -291,7 +291,7 @@ const Tasks = ({ onLogout }) => {
   // Show loading while checking payment
   if (checkingPayment) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-[#0f1419]">
+      <div className="flex items-center justify-center min-h-[100dvh] bg-[#0f1419]">
         <div className="relative">
           <div className="w-16 h-16 border-4 border-cyan-300/40 rounded-full"></div>
           <div className="absolute top-0 left-0 w-16 h-16 border-4 border-cyan-600 border-t-transparent rounded-full animate-spin"></div>
@@ -311,7 +311,7 @@ const Tasks = ({ onLogout }) => {
   }
 
   return (
-    <div className="flex bg-gradient-to-br from-[#141a29] via-[#181d2a] to-[#1b2233] min-h-screen text-blue-100">
+    <div className="flex bg-gradient-to-br from-[#141a29] via-[#181d2a] to-[#1b2233] min-h-[100dvh] text-blue-100">
       {/* Sidebar */}
       <Sidebar
         collapsed={collapsed}
@@ -322,7 +322,7 @@ const Tasks = ({ onLogout }) => {
       {/* Main Content */}
       <div
         className={`flex-1 transition-all duration-300 ${
-          collapsed ? "ml-20" : "ml-72"
+          collapsed ? "app-offset app-offset-collapsed" : "app-offset"
         } p-6`}
       >
         <div className="space-y-6">

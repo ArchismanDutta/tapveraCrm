@@ -382,7 +382,7 @@ const SupportRequestModal = ({ clientId, onClose, onSuccess }) => {
             <label className="block text-sm font-medium text-gray-300 mb-2">
               Priority <span className="text-red-400">*</span>
             </label>
-            <div className="grid grid-cols-4 gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               {priorities.map((priority) => (
                 <button
                   key={priority.value}

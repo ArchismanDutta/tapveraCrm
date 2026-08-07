@@ -437,9 +437,16 @@ router.delete("/groups/:conversationId/members/:memberId", protect, async (req, 
       // Include the removed member — they're no longer in updatedGroup.members
       // but still need the "conversation:updated" event so the group
       // disappears from their own sidebar list.
+      // `memberId` is in the payload so the removed member's client can tell
+      // this event is about THEM. Every remaining member gets the same event
+      // (their member list changed), and without it the recipient has no way to
+      // distinguish "someone left" from "you were removed" — so the person who
+      // needs to drop the conversation immediately can't, and has to wait for a
+      // refetch to notice it's gone.
       broadcastConversationUpdated([...updatedGroup.members, memberId], {
         action: "member_removed",
         conversationId,
+        memberId: String(memberId),
       });
 
       // Kick their socket out of the room.

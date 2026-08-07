@@ -57,6 +57,15 @@ function normalize(doc) {
     body: m.message || '',
     attachments: m.attachments || [],
     replyTo: m.replyTo || null,
+    // Project threads have no forward feature — messagingApi rejects the scope
+    // outright — but the key is emitted anyway, exactly as chatThread emits
+    // `pinned: false` for a pin concept chat doesn't have. The normalized shape
+    // is a CLIENT contract: one consumer has to be able to read both scopes
+    // without asking which one it got, and a key that exists on one shape and
+    // is absent from the other breaks that. This was the sole difference
+    // between the two key sets, and the parity assertion in
+    // tests/messaging-service.test.js has been failing on it.
+    forwarded: Boolean(m.forwarded),
     mentions: (m.mentions || []).map((x) => ({
       id: String(x.user?._id ?? x.user),
       kind: x.userModel || 'User',

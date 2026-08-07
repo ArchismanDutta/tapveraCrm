@@ -7,6 +7,10 @@ const Token = require("../models/Token");
 const sendEmail = require("../utils/sendEmail");
 const crypto = require("crypto");
 const bcrypt = require("bcryptjs");
+// Geofenced login (2026-08-07) — see docs/superpowers/specs/2026-08-07-geofenced-login-design.md
+const GeofenceLocation = require("../models/GeofenceLocation");
+const GeofenceEvent = require("../models/GeofenceEvent");
+const { isSubjectToGeofence, evaluate } = require("../utils/geofence");
 
 const isPasswordHash = (value) => /^\$2[aby]\$\d{2}\$/.test(String(value || ""));
 
@@ -44,6 +48,90 @@ const generateToken = (user, userType = "User") => {
     process.env.JWT_SECRET,
     { expiresIn: "1d" }
   );
+};
+
+// ======================
+// Geofence enforcement (2026-08-07)
+// See docs/superpowers/specs/2026-08-07-geofenced-login-design.md
+// ======================
+
+// Best-effort audit write. Deliberately swallows its own errors: a failure to
+// RECORD a denial must never turn into a failure to APPLY one, nor into a 500
+// that a client could use to distinguish "denied" from "server broke".
+const recordGeofenceEvent = async (payload) => {
+  try {
+    await GeofenceEvent.create(payload);
+  } catch (err) {
+    console.error("Geofence audit write failed:", err.message);
+  }
+};
+
+const clientIp = (req) =>
+  (req.headers["x-forwarded-for"] || "").split(",")[0].trim() ||
+  req.socket?.remoteAddress ||
+  "";
+
+/**
+ * Decide whether `user` may hold a session from the coordinates in the
+ * request, and write an audit row if not.
+ *
+ * Returns null to allow, or { status, body } to refuse. Shared verbatim by
+ * login and by the periodic re-check in geofenceController, so the two can
+ * never disagree about what "inside" means.
+ */
+const enforceGeofence = async (req, user, userType) => {
+  // Clients and super-admins short-circuit here without a database round trip
+  // — see isSubjectToGeofence() for why each is excluded.
+  if (!isSubjectToGeofence(user, userType)) return null;
+
+  const locations = await GeofenceLocation.find({
+    _id: { $in: user.geofence.locations },
+  }).lean();
+
+  const result = evaluate(locations, req.body?.coordinates);
+  if (result.allowed) return null;
+
+  await recordGeofenceEvent({
+    userId: user._id,
+    email: user.email,
+    outcome: result.code === "NO_LOCATION" ? "no-location" : "login-denied",
+    coordinates: result.coordinates || { latitude: null, longitude: null, accuracy: null },
+    nearestLocation: result.nearest?.id || null,
+    distanceMeters: result.nearest?.distanceMeters ?? null,
+    reason: result.reason,
+    ipAddress: clientIp(req),
+    userAgent: req.headers["user-agent"] || "",
+  });
+
+  // 428 Precondition Required, not 403, when coordinates are simply missing.
+  //
+  // This distinction is the whole reason unfenced users never see a location
+  // permission prompt. The client does not know in advance whether the account
+  // it is signing into is fenced — only the server does, and only after the
+  // password has been verified. So the client attempts login without location
+  // first; a 428 is the server saying "this specific account needs coordinates,
+  // ask for them and retry". A 403 would be indistinguishable from a genuine
+  // refusal and would leave the client no way to tell "you're in the wrong
+  // place" (retrying is pointless) from "I need to know where you are"
+  // (retrying is the entire fix).
+  const status = result.code === "NO_LOCATION" ? 428 : 403;
+
+  return {
+    status,
+    body: {
+      message: result.reason,
+      geofence: {
+        code: result.code,
+        // Named so the user can orient themselves ("oh, it wants me at the
+        // Kolkata office"). Coordinates are NOT returned: they would let
+        // anyone with a valid password trilaterate the exact fence centre and
+        // spoof to it, which turns a mild inconvenience to spoof into a
+        // trivial one.
+        locationNames: locations.filter((l) => l.isActive !== false).map((l) => l.name),
+        distanceMeters: result.nearest?.distanceMeters ?? null,
+      },
+    },
+  };
 };
 
 // ======================
@@ -201,6 +289,19 @@ exports.login = async (req, res) => {
       return res.status(401).json({ message: "Invalid credentials." });
     }
 
+    // Geofence check — AFTER the password is verified, deliberately.
+    //
+    // Checking before would turn login into an oracle: an attacker with only
+    // an email address could learn whether that account is geofenced, and by
+    // sweeping coordinates, roughly where its office is — all without ever
+    // knowing the password. Ordering it here means a wrong password is
+    // indistinguishable from a wrong password regardless of location, and the
+    // fence only ever speaks to someone who has already proven who they are.
+    const geofenceRefusal = await enforceGeofence(req, user, userType);
+    if (geofenceRefusal) {
+      return res.status(geofenceRefusal.status).json(geofenceRefusal.body);
+    }
+
     const token = generateToken(user, userType);
     const safeUser = typeof user.toObject === "function" ? user.toObject() : { ...user };
     delete safeUser.password;
@@ -213,6 +314,12 @@ exports.login = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+
+// Exported so geofenceController's periodic re-check enforces byte-identical
+// rules to the login door, rather than a second implementation that drifts.
+exports.enforceGeofence = enforceGeofence;
+exports.recordGeofenceEvent = recordGeofenceEvent;
+exports.clientIp = clientIp;
 
 // ======================
 // Forgot Password

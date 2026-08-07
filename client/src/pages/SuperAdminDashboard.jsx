@@ -546,7 +546,7 @@ const SuperAdminDashboard = ({ onLogout }) => {
 
       <main
         className={`h-[100dvh] min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 transition-all duration-300 sm:px-5 lg:px-6 ${
-          sidebarCollapsed ? "ml-16" : "ml-16 sm:ml-56"
+          sidebarCollapsed ? "app-offset app-offset-collapsed" : "app-offset"
         }`}
       >
         <div className="mx-auto max-w-[1500px] space-y-4 pb-8 sm:space-y-5">

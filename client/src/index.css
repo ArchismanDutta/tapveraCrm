@@ -60,6 +60,17 @@
 }
 
 @theme inline {
+  /* ── Narrow-phone breakpoint ────────────────────────────────────────────
+     Tailwind's smallest built-in breakpoint is `sm` at 640px, which is wider
+     than every phone in portrait. That leaves the 320–430px band — where the
+     actual users are — with no way to express "stack this on a phone but not
+     on a tablet" other than writing the mobile case as the base and undoing it
+     at `sm`, which doesn't work when the two layouts differ structurally.
+
+     25rem/400px splits the band where it matters: iPhone SE (375) and most
+     Androids (360–393) fall below it, iPhone Pro Max (430) and up sit above. */
+  --breakpoint-xs: 25rem;
+
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -627,6 +638,18 @@ html.light #root {
   transition: background-color 160ms ease, border-color 160ms ease, transform 160ms ease;
 }
 
+/* Three of these stacked at full padding ran ~380px on a phone — most of a
+   screen spent on three numbers, before the project list they filter. Below
+   `sm` they sit three-across as a compact strip instead, so the padding has to
+   come down with them. Declared here rather than as utilities because the
+   base padding lives on this class and would win on source order. */
+@media (max-width: 639px) {
+  .communication-stat-card {
+    padding: 0.5rem 0.625rem;
+    border-radius: 0.75rem;
+  }
+}
+
 .communication-stat-card:hover {
   transform: translateY(-1px);
 }
@@ -1151,12 +1174,27 @@ html.light .Toastify__toast-theme--dark {
    EXCEPT: Sidebar navigation items (keep existing teal/green)
    ============================================ */
 
-/* Override Tailwind blue-500, blue-600, blue-700 backgrounds */
-[class*="bg-blue-500"]:not(.sidebar-nav):not([class*="bg-teal-"]):not([class*="bg-emerald-"]):not([class*="bg-green-"]),
-[class*="bg-blue-600"]:not(.sidebar-nav):not([class*="bg-teal-"]):not([class*="bg-emerald-"]):not([class*="bg-green-"]),
-[class*="bg-blue-700"]:not(.sidebar-nav):not([class*="bg-teal-"]):not([class*="bg-emerald-"]):not([class*="bg-green-"]),
-button[class*="bg-blue-"]:not(.sidebar-nav):not([class*="bg-teal-"]):not([class*="bg-emerald-"]):not([class*="bg-green-"]),
-a[class*="bg-blue-"]:not(.sidebar-nav):not([class*="bg-teal-"]):not([class*="bg-emerald-"]):not([class*="bg-green-"]) {
+/* Override Tailwind blue-500, blue-600, blue-700 backgrounds
+   ───────────────────────────────────────────────────────────────────────────
+   TRANSLUCENT VARIANTS ARE EXCLUDED — `:not([class*="bg-blue-N/"])`.
+
+   These are attribute SUBSTRING selectors, so `[class*="bg-blue-600"]` also
+   matched `bg-blue-600/20` and flattened a 20%-opacity tint into a SOLID teal
+   fill. That matters because a `/20` background is almost always a subtle chip
+   behind coloured content — an icon or a label in `text-blue-400`. The
+   companion text override is scoped `html.light` (see below), so in dark mode
+   the chip turned solid teal while its icon stayed blue: unreadable, and only
+   in dark mode, which is why it survived. It was reported on the project-type
+   badge in the project header, and the same pairing exists on ~36 elements.
+
+   A solid `bg-blue-600` is a button and still becomes teal with white text,
+   which is what this block was written for. A `/NN` variant is a tint and now
+   keeps Tailwind's own colour, so whatever sits on it stays legible. */
+[class*="bg-blue-500"]:not([class*="bg-blue-500/"]):not(.sidebar-nav):not([class*="bg-teal-"]):not([class*="bg-emerald-"]):not([class*="bg-green-"]),
+[class*="bg-blue-600"]:not([class*="bg-blue-600/"]):not(.sidebar-nav):not([class*="bg-teal-"]):not([class*="bg-emerald-"]):not([class*="bg-green-"]),
+[class*="bg-blue-700"]:not([class*="bg-blue-700/"]):not(.sidebar-nav):not([class*="bg-teal-"]):not([class*="bg-emerald-"]):not([class*="bg-green-"]),
+button[class*="bg-blue-"]:not([class*="bg-blue-500/"]):not([class*="bg-blue-600/"]):not([class*="bg-blue-700/"]):not(.sidebar-nav):not([class*="bg-teal-"]):not([class*="bg-emerald-"]):not([class*="bg-green-"]),
+a[class*="bg-blue-"]:not([class*="bg-blue-500/"]):not([class*="bg-blue-600/"]):not([class*="bg-blue-700/"]):not(.sidebar-nav):not([class*="bg-teal-"]):not([class*="bg-emerald-"]):not([class*="bg-green-"]) {
   background-color: #00a884 !important;
   color: white !important;
 }
@@ -1465,4 +1503,234 @@ a[class*="bg-blue-"],
 
 .focus\:bg-blue-700:focus {
   background-color: #007a5e !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   RESPONSIVE FOUNDATION
+   ═══════════════════════════════════════════════════════════════════════════
+   Shared rules that make every page behave on a phone. Scoped deliberately:
+   anything that could disturb a dense desktop admin table is gated behind a
+   media/pointer query so it only applies where it's needed.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── iOS focus-zoom ────────────────────────────────────────────────────────
+   iOS Safari zooms the whole page when you focus a form control whose
+   computed font-size is under 16px, and it does NOT zoom back out afterwards —
+   the user is left stranded at 1.3x with the layout overflowing. That single
+   behaviour is why so many apps reach for `user-scalable=no`, which "fixes" it
+   by breaking pinch-zoom for everyone (see the note in index.html).
+
+   Fixing it at the source instead: 16px minimum on the controls themselves.
+   Gated on `pointer: coarse` so it applies to touch devices only — desktop
+   keeps the denser text-sm/text-xs sizing the admin screens are designed
+   around, and this cannot reflow a single desktop layout.
+
+   `select` is included because iOS zooms on it too, and `text-size-adjust`
+   stops mobile Safari/Chrome reflowing body text on rotate. */
+@media (pointer: coarse) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  select,
+  textarea {
+    font-size: max(16px, 1rem);
+  }
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+/* ── Touch targets ─────────────────────────────────────────────────────────
+   Apple HIG says 44×44pt, Material says 48×48dp. A 28px icon button is a
+   coin-flip to hit while walking, and this codebase has ~73 of them.
+
+   Applied only on coarse pointers, so a mouse-driven desktop keeps its compact
+   toolbars. Uses min-height/min-width rather than height, so nothing that is
+   already larger gets shrunk and no text wraps differently.
+
+   Opt out with `.tap-dense` where a control genuinely must stay small (inline
+   text affordances, tightly packed table row actions). */
+@media (pointer: coarse) {
+  button:not(.tap-dense),
+  [role="button"]:not(.tap-dense),
+  a[href]:not(.tap-dense):not(.app-link-inline),
+  label[for],
+  summary,
+  input[type="checkbox"],
+  input[type="radio"] {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* ─── DO NOT ADD A `display` RULE HERE ───
+     There was one: `button { display: inline-flex; align-items: center;
+     justify-content: center }`, meant to re-centre icon-only buttons once the
+     box grew to meet the 44px minimum.
+
+     It broke every button in the app that wraps stacked content. A button is a
+     perfectly ordinary block container — the Communication tracking stat cards
+     are buttons holding a label, a big number and a caption in three rows —
+     and forcing `inline-flex` on the button turned those three children into
+     flex items on ONE line, so the page rendered "66No communication for 14+
+     days" with the number jammed into the caption.
+
+     The 44px minimum is achieved by min-height/min-width alone. Centring is a
+     per-button concern, and nearly every button here already declares its own
+     `inline-flex items-center justify-center` in its Tailwind classes. A
+     blanket layout override cannot know which buttons are icons and which are
+     cards, so it must not try. */
+
+  /* An inline button inside a sentence or a table cell should not become a
+     44px block and blow the row height apart. */
+  td button:not(.tap-dense),
+  th button:not(.tap-dense),
+  .tap-inline button {
+    min-height: 36px;
+    min-width: 36px;
+  }
+}
+
+/* ── Safe areas ────────────────────────────────────────────────────────────
+   `viewport-fit=cover` lets the app paint under the notch and the home
+   indicator, which looks right only if the content that would land underneath
+   is padded out of the way. Without these, a bottom-docked composer sits
+   beneath the home bar on every notched iPhone and the send button is
+   physically unreachable. */
+/* ─── THESE ADD TO THE ELEMENT'S OWN PADDING, THEY DO NOT REPLACE IT ───
+   The first version wrote `padding-bottom: env(safe-area-inset-bottom, 0px)`
+   flat. On an element that also had `p-2`, that OVERRODE the 8px bottom
+   padding — and on any device or browser without a bottom inset the env()
+   resolves to 0, so the composer ended up with 8px above its controls and
+   nothing below them. The send button sat flush against the bottom edge.
+
+   `--safe-pad-*` carries the element's intended base padding so the inset can
+   be added to it. Callers that use a padding utility on the same edge must set
+   the matching variable, which the composers do via an inline style. Default 0
+   keeps the bare utility behaving as a pure inset for elements that have no
+   padding of their own. */
+.safe-top {
+  padding-top: calc(var(--safe-pad-t, 0px) + env(safe-area-inset-top, 0px));
+}
+.safe-bottom {
+  padding-bottom: calc(var(--safe-pad-b, 0px) + env(safe-area-inset-bottom, 0px));
+}
+.safe-left {
+  padding-left: calc(var(--safe-pad-l, 0px) + env(safe-area-inset-left, 0px));
+}
+.safe-right {
+  padding-right: calc(var(--safe-pad-r, 0px) + env(safe-area-inset-right, 0px));
+}
+.safe-x {
+  padding-left: calc(var(--safe-pad-l, 0px) + env(safe-area-inset-left, 0px));
+  padding-right: calc(var(--safe-pad-r, 0px) + env(safe-area-inset-right, 0px));
+}
+
+/* ── Horizontal overflow ───────────────────────────────────────────────────
+   One over-wide child anywhere in the tree gives the whole document a
+   horizontal scrollbar, and on a phone that reads as "the app is broken" —
+   every swipe drifts sideways. `.app-shell` already sets overflow-x: hidden,
+   but pages that don't use the shell (auth screens, the client portal) had
+   nothing. Belt and braces at the root. */
+html,
+body {
+  overflow-x: hidden;
+  max-width: 100%;
+}
+
+/* Long unbroken strings — a pasted URL, an ID, an email — are the usual
+   culprit. Opt-in so it can't interfere with deliberate `white-space` work. */
+.break-anywhere {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+/* ── Tables ────────────────────────────────────────────────────────────────
+   A data table cannot honestly reflow to 375px. The two workable answers are
+   a horizontal scroller or a card list; this provides the scroller, and the
+   pages that deserve cards get them individually.
+
+   `-webkit-overflow-scrolling: touch` keeps momentum scrolling on iOS, and the
+   scroll container is marked as a focus target so it stays keyboard-reachable
+   (a scroller nobody can reach with Tab is its own accessibility bug). */
+.table-scroll {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+}
+
+/* Hints that there is more table to the right, without a scrollbar always
+   being visible. Fades out as the user reaches the end. */
+@media (max-width: 767px) {
+  .table-scroll {
+    -webkit-mask-image: linear-gradient(to right, black calc(100% - 24px), transparent);
+    mask-image: linear-gradient(to right, black calc(100% - 24px), transparent);
+  }
+  .table-scroll:not(:hover):not(:focus-within) {
+    scrollbar-width: thin;
+  }
+}
+
+/* ── Modals / dialogs ──────────────────────────────────────────────────────
+   Fixed-width dialogs are the second most common mobile break after tables:
+   `w-[600px]` on a 375px screen overflows by 60%. This caps any dialog to the
+   viewport and lets it scroll internally rather than pushing the page wide. */
+.app-dialog {
+  width: 100%;
+  max-width: min(100vw - 2rem, var(--dialog-max, 32rem));
+  max-height: min(100dvh - 2rem, var(--dialog-max-h, 90dvh));
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ── Dynamic viewport height ───────────────────────────────────────────────
+   `100vh` on mobile Safari measures the viewport WITHOUT the browser chrome,
+   so a full-height layout is taller than the screen and the bottom of it —
+   usually the composer or the primary action — sits under the address bar.
+   `100dvh` tracks the chrome as it collapses. Provided as a utility for the
+   pages still using h-screen. */
+.h-screen-safe {
+  height: 100dvh;
+  max-height: 100dvh;
+}
+
+/* ── App shell offset ──────────────────────────────────────────────────────
+   The margin that keeps page content clear of the fixed sidebar.
+
+   This was written out inline on 45 separate elements as
+   `collapsed ? "ml-16" : "ml-16 sm:ml-56"`. Two problems with that: the mobile
+   value was wrong (it reserved 64px for a rail that is now an overlay), and
+   fixing it meant editing 45 places — which is exactly why it had never been
+   revisited. One definition here instead.
+
+   Mobile: no left margin at all — the drawer overlays, so the page gets the
+   full viewport width back — plus 3.5rem of top padding to clear the fixed
+   mobile top bar that carries the hamburger.
+
+   ≥sm: the top bar is gone and the sidebar is a permanent fixture again, so
+   the padding drops and the margin returns.
+
+   Relies on border-box sizing (Tailwind's default), so a page that also sets
+   `h-[100dvh]` stays exactly one viewport tall — the padding is absorbed
+   rather than added on top. */
+.app-offset {
+  margin-left: 0;
+  /* Matches the mobile top bar, which is `min-h-14` (3.5rem) plus the notch
+     inset it pads itself with. Reserving a flat 3.5rem here would leave the
+     bar overlapping the first row of page content by the height of the status
+     bar on every notched device. */
+  padding-top: calc(3.5rem + env(safe-area-inset-top, 0px));
+}
+
+@media (min-width: 640px) {
+  .app-offset {
+    margin-left: 14rem; /* w-56 — sidebar expanded */
+    padding-top: 0;
+  }
+
+  /* Declared after `.app-offset` deliberately: both are single-class
+     selectors, so source order is what lets this win. */
+  .app-offset-collapsed {
+    margin-left: 4rem; /* w-16 — sidebar collapsed to its icon rail */
+  }
 }

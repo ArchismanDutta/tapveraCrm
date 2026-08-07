@@ -546,8 +546,8 @@ const BlogUpdates = ({ projectId, userRole, userId }) => {
         </div>
       ) : (
         <div className="bg-[#0f1419] border border-[#232945] rounded-lg overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full">
+          <div className="table-scroll">
+            <table className="w-full min-w-[820px]">
               <thead className="bg-[#141a21] border-b border-[#232945]">
                 <tr>
                   {canEdit && (

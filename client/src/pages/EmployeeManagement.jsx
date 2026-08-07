@@ -163,7 +163,7 @@ const EmployeeManagement = () => {
 
   return (
     <div
-      className="min-h-screen bg-gradient-to-tr from-[#0F141D] via-[#121923] to-[#1E2231] p-6"
+      className="min-h-[100dvh] bg-gradient-to-tr from-[#0F141D] via-[#121923] to-[#1E2231] p-6"
       style={{ fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif" }}
     >
       <div className="max-w-7xl mx-auto">

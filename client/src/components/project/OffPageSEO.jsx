@@ -787,8 +787,8 @@ const OffPageSEO = ({ projectId, userRole, userId }) => {
         </div>
       ) : (
         <div className="overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-[#232945] dark:bg-[#0f1419]">
-          <div className="overflow-x-auto">
-            <table className="w-full">
+          <div className="table-scroll">
+            <table className="w-full min-w-[780px]">
               <thead className="border-b border-slate-200 bg-slate-50 dark:border-[#232945] dark:bg-[#141a21]">
                 <tr>
                   {canEdit && (

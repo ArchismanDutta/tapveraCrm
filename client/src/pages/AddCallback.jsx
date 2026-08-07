@@ -182,7 +182,7 @@ const AddCallback = ({ onLogout }) => {
   const today = new Date().toISOString().split("T")[0];
 
   return (
-    <div className="flex min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
+    <div className="flex min-h-[100dvh] bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
       <Sidebar
         collapsed={sidebarCollapsed}
         setCollapsed={setSidebarCollapsed}
@@ -190,7 +190,7 @@ const AddCallback = ({ onLogout }) => {
         userRole={userRole}
       />
 
-      <main className={`flex-1 transition-all duration-300 ${sidebarCollapsed ? "ml-16" : "ml-56"} p-8`}>
+      <main className={`flex-1 transition-all duration-300 ${sidebarCollapsed ? "app-offset app-offset-collapsed" : "app-offset"} p-8`}>
         <div className="max-w-4xl mx-auto">
           {/* Header */}
           <div className="mb-8 relative">

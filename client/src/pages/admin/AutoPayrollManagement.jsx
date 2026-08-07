@@ -686,7 +686,7 @@ const AutoPayrollManagement = ({ onLogout }) => {
   };
 
   return (
-    <div className="flex bg-gradient-to-br from-[#141a21] via-[#191f2b] to-[#101218] font-sans text-blue-100 min-h-screen">
+    <div className="flex bg-gradient-to-br from-[#141a21] via-[#191f2b] to-[#101218] font-sans text-blue-100 min-h-[100dvh]">
       <Sidebar
         collapsed={collapsed}
         setCollapsed={setCollapsed}
@@ -696,7 +696,7 @@ const AutoPayrollManagement = ({ onLogout }) => {
 
       <main
         className={`flex-1 p-8 overflow-y-auto transition-all duration-300 ${
-          collapsed ? "ml-20" : "ml-72"
+          collapsed ? "app-offset app-offset-collapsed" : "app-offset"
         }`}
       >
         {/* Header */}
@@ -898,7 +898,7 @@ const AutoPayrollManagement = ({ onLogout }) => {
                 <FileText className="w-4 h-4" />
                 Bulk Generation Results
               </h4>
-              <div className="grid grid-cols-4 gap-4 mb-4">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
                 <div className="text-center">
                   <p className="text-2xl font-bold text-green-400">
                     {bulkResults.generated}
@@ -1619,7 +1619,7 @@ const AutoPayrollManagement = ({ onLogout }) => {
                     <h3 className="text-lg font-semibold text-red-400 mb-4">
                       Manual Deductions
                     </h3>
-                    <div className="grid grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                       <div>
                         <label className="block text-sm text-gray-400 mb-2">
                           TDS (₹)

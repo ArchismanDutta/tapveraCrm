@@ -20,7 +20,11 @@ import {
   ArrowLeftRight,
   LogOut,
   Mail,
+  MapPin,
   Shield,
+  Menu,
+  MessageSquare,
+  X,
 } from "lucide-react";
 import { Users } from "@/components/animate-ui/icons/users";
 import { Brush } from "@/components/animate-ui/icons/brush";
@@ -464,6 +468,14 @@ const menuConfig = {
           icon: <Shield size={16} />,
           label: "Access Management",
         },
+        // Geofenced login (2026-08-07). Super-admin menu only — the route
+        // itself is gated too, this just avoids showing a link that would
+        // bounce anyone else straight back to their dashboard.
+        {
+          to: "/admin/geofencing",
+          icon: <MapPin size={16} />,
+          label: "Login Geofencing",
+        },
 
 
 
@@ -627,7 +639,21 @@ const Sidebar = ({
     openAchievementsDashboard,
     closeAchievementsDashboard,
   } = useAchievements();
-  const collapsed = Boolean(requestedCollapsed || isMobile);
+  // ─── MOBILE IS A DRAWER, NOT A RAIL ───
+  //
+  // This used to be `requestedCollapsed || isMobile` — i.e. on a phone the
+  // sidebar was permanently forced into its 64px icon rail. That rail is fixed
+  // and always on screen, so it costs 64px of a 375px viewport (17%) on every
+  // single page, forever, and every page hardcoded a matching `ml-16` to sit
+  // beside it. The user paid for a navigation strip they weren't using while
+  // reading a message or filling in a form.
+  //
+  // Now: under `sm` the sidebar slides in over the content and the page gets
+  // the full width back. Because the drawer is an overlay rather than a strip,
+  // it can afford to show the real labelled navigation — a column of unlabelled
+  // icons is the worst of both worlds, taking space AND being hard to read.
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const collapsed = isMobile ? false : Boolean(requestedCollapsed);
 
   useEffect(() => {
     const mediaQuery = window.matchMedia("(max-width: 639px)");
@@ -1054,7 +1080,51 @@ const Sidebar = ({
     return icon;
   };
 
-  const sidebarWidthClass = collapsed ? "w-16" : "w-56";
+  // ── Drawer behaviour (mobile only) ──────────────────────────────────────
+
+  // Close on navigation. Without this the drawer stays open over the page the
+  // user just asked for, which reads as a broken tap.
+  useEffect(() => {
+    setDrawerOpen(false);
+  }, [location.pathname]);
+
+  // Never leave a drawer open behind a desktop layout: rotating a tablet or
+  // resizing past `sm` would otherwise strand an overlay and its scrim on a
+  // screen that has the permanent sidebar too.
+  useEffect(() => {
+    if (!isMobile) setDrawerOpen(false);
+  }, [isMobile]);
+
+  // Escape closes it — expected of anything modal, and the only keyboard route
+  // out for someone on a tablet with a keyboard attached.
+  useEffect(() => {
+    if (!drawerOpen) return undefined;
+    const onKeyDown = (e) => {
+      if (e.key === "Escape") setDrawerOpen(false);
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [drawerOpen]);
+
+  // Lock the page behind the drawer.
+  //
+  // Without this, scrolling the drawer past its end chains to the document and
+  // the page creeps around underneath — on iOS it also fights the rubber-band
+  // and can leave the body scrolled somewhere unexpected once the drawer
+  // closes. The previous overflow value is restored rather than assumed to be
+  // "visible", so this can't clobber a page that manages its own.
+  useEffect(() => {
+    if (!drawerOpen) return undefined;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, [drawerOpen]);
+
+  // (Width now lives inline on the <aside>, which needs three states — mobile
+  // drawer, desktop rail, desktop expanded — rather than the single value this
+  // held.)
   const navItemBase =
     "group relative flex min-h-10 items-center rounded-lg text-sm font-medium transition-all duration-200";
   const getNavItemClass = (isActive) =>
@@ -1080,11 +1150,98 @@ const Sidebar = ({
 
   return (
     <>
+      {/* ── Mobile top bar ───────────────────────────────────────────────────
+          Only exists under `sm`, where the sidebar is an overlay and there is
+          otherwise nothing on screen to open it from. Fixed rather than in
+          flow so it survives pages that scroll their own inner panes (the chat
+          surfaces in particular), and padded for the notch via `safe-top` —
+          `viewport-fit=cover` means the status bar area is ours to paint into,
+          and without the inset the hamburger sits under the clock.
+
+          Pages reserve its height with `pt-14 sm:pt-0` on their main element. */}
+      {/* `min-h-14`, not `h-14`: `safe-top` adds the notch inset as padding, and
+          with a fixed height that padding would eat into the 56px and squash
+          the hamburger rather than pushing the bar down past the status bar.
+          `.app-offset` reserves the same `3.5rem + inset` below, so the two
+          stay in step. */}
+      <div className="safe-top fixed inset-x-0 top-0 z-40 flex min-h-14 items-center gap-3 border-b border-white/10 bg-[#0b0d14]/95 px-2 backdrop-blur-xl sm:hidden">
+        <button
+          type="button"
+          onClick={() => setDrawerOpen(true)}
+          aria-label="Open navigation menu"
+          aria-expanded={drawerOpen}
+          aria-controls="app-sidebar"
+          className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.04] text-slate-200 transition active:bg-white/[0.09]"
+        >
+          <Menu size={20} />
+        </button>
+
+        <NavLink to="/dashboard" className="flex min-w-0 items-center gap-2">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-white/10 bg-white/[0.04]">
+            <img src={tapveraLogo} alt="Tapvera" className="h-5 w-5 object-contain" />
+          </span>
+          <span className="truncate text-sm font-semibold tracking-wide text-white">Tapvera</span>
+        </NavLink>
+
+        {/* Unread lives here too: with the sidebar hidden behind a tap, the
+            badge on it is invisible, and an unread count nobody can see is the
+            same as no unread count. */}
+        {chatUnread > 0 && (
+          <NavLink
+            to="/messages"
+            aria-label={`${chatUnread} unread messages`}
+            className="ml-auto inline-flex h-11 min-w-11 items-center justify-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.04] px-2.5 text-slate-200 transition active:bg-white/[0.09]"
+          >
+            <MessageSquare size={18} />
+            <span className="rounded-full bg-rose-500 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white">
+              {chatUnread > 99 ? "99+" : chatUnread}
+            </span>
+          </NavLink>
+        )}
+      </div>
+
+      {/* Scrim. Dismisses on tap — the gesture everyone tries first — and is
+          hidden from assistive tech since the drawer's own close button is the
+          labelled control. */}
+      {drawerOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/60 backdrop-blur-[1px] sm:hidden"
+          onClick={() => setDrawerOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+
       <aside
-        className={`fixed left-0 top-0 z-40 flex h-full flex-col overflow-hidden
+        id="app-sidebar"
+        // Three layouts in one element:
+        //   mobile closed → off-canvas (-translate-x-full), full labelled nav
+        //   mobile open   → slid in over the page at w-72
+        //   ≥sm           → the original fixed rail/expanded sidebar
+        //
+        // `translate` rather than `display:none` so it animates, and so the
+        // nav is already laid out when it arrives rather than reflowing in.
+        className={`safe-bottom fixed left-0 top-0 z-50 flex h-full flex-col overflow-hidden
           border-r border-white/10 bg-[#0b0d14]/95 text-slate-100 shadow-xl shadow-black/20
-          backdrop-blur-xl transition-all duration-300 ease-in-out ${sidebarWidthClass}`}
+          backdrop-blur-xl transition-transform duration-300 ease-in-out
+          w-72 ${drawerOpen ? "translate-x-0" : "-translate-x-full"}
+          sm:z-40 sm:translate-x-0 sm:transition-all ${collapsed ? "sm:w-16" : "sm:w-56"}`}
+        // Hidden from the tab order and the accessibility tree while it is
+        // off-canvas: a closed drawer full of focusable links is a keyboard
+        // trap that leads nowhere visible, and screen readers would announce
+        // navigation the user cannot see.
+        {...(isMobile && !drawerOpen ? { inert: "", "aria-hidden": "true" } : {})}
       >
+        {/* Close affordance — mobile only; on desktop the collapse chevron in
+            the header below plays this role. */}
+        <button
+          type="button"
+          onClick={() => setDrawerOpen(false)}
+          aria-label="Close navigation menu"
+          className="absolute right-2 top-2 z-20 inline-flex h-10 w-10 items-center justify-center rounded-lg border border-white/10 bg-white/[0.04] text-slate-300 transition active:bg-white/[0.09] sm:hidden"
+        >
+          <X size={18} />
+        </button>
+
         <div className={`relative z-10 flex items-center gap-2 border-b border-white/10 p-3 ${collapsed ? "justify-center" : "justify-between"}`}>
           <NavLink
             to="/dashboard"

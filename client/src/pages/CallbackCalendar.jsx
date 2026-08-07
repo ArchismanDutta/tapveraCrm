@@ -239,7 +239,7 @@ const CallbackCalendar = ({ onLogout }) => {
   };
 
   return (
-    <div className="flex min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 overflow-x-hidden">
+    <div className="flex min-h-[100dvh] bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 overflow-x-hidden">
       <Sidebar
         collapsed={sidebarCollapsed}
         setCollapsed={setSidebarCollapsed}
@@ -249,7 +249,7 @@ const CallbackCalendar = ({ onLogout }) => {
 
       <main
         className={`flex-1 transition-all duration-300 ${
-          sidebarCollapsed ? "ml-16" : "ml-56"
+          sidebarCollapsed ? "app-offset app-offset-collapsed" : "app-offset"
         } p-8 max-w-full overflow-x-hidden`}
       >
         {/* Header */}

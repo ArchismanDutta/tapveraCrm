@@ -57,7 +57,11 @@ const ProjectList = ({
   return (
     <div className="space-y-6">
       {/* Project Grid */}
-      <div className="grid gap-6 md:grid-cols-2 2xl:grid-cols-3">
+      {/* 24px between every card is a lot of dead space in a single-column
+          phone list — it reads as more separation than the cards need and
+          pushes the next card off screen sooner. Full gap returns at `sm`,
+          where cards sit side by side and the gutter is doing real work. */}
+      <div className="grid gap-3 sm:gap-6 md:grid-cols-2 2xl:grid-cols-3">
         {projects.map((project) => (
           <ProjectCard
             key={project._id}

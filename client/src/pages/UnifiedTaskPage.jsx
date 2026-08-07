@@ -113,10 +113,23 @@ const DateFilterPills = ({ value, onChange, customFrom, customTo, onCustomFromCh
 // Tab Bar (shared)
 // ─────────────────────────────────────────────────────────────────────────────
 const TabBar = ({ tabs, active, onChange }) => (
-  <div role="tablist" aria-label="Task views" className="mb-5 flex w-fit max-w-full items-center gap-1 overflow-x-auto rounded-xl border border-slate-200 bg-white p-1 shadow-sm dark:border-white/10 dark:bg-[#12151c]">
+  // `w-full` + `sm:w-fit`: on mobile the row needs a definite width to scroll
+  // within, or flex's default `shrink` lets the buttons compress and their
+  // (`whitespace-nowrap`) text spill past its own box instead of cleanly
+  // overflowing into a scrollable strip — that's the squashed/overlapping tab
+  // labels this replaced. `shrink-0` on each button is the other half of that
+  // fix: it guarantees the buttons keep their natural width no matter how
+  // narrow the viewport is, so the row scrolls instead of crushing them.
+  // `hide-scrollbar`: the app's global scrollbar styling (a thick cyan/blue
+  // gradient bar, meant for real scroll panes) rendered across the full width
+  // of this small pill-shaped tab strip and read as a stray bar under the
+  // active tab. The row still scrolls with a touch swipe — it just doesn't
+  // need to show a scrollbar to do it, same as the chat lists elsewhere in
+  // the app that already use this class.
+  <div role="tablist" aria-label="Task views" className="hide-scrollbar mb-5 flex w-full items-center gap-1 overflow-x-auto rounded-xl border border-slate-200 bg-white p-1 shadow-sm dark:border-white/10 dark:bg-[#12151c] sm:w-fit sm:max-w-full">
     {tabs.map((t) => (
       <button key={t.id} type="button" role="tab" aria-selected={active === t.id} onClick={() => onChange(t.id)}
-        className={`flex items-center gap-2 whitespace-nowrap rounded-lg border px-4 py-2.5 text-xs font-medium transition ${
+        className={`flex shrink-0 items-center gap-2 whitespace-nowrap rounded-lg border px-4 py-2.5 text-xs font-medium transition ${
           active === t.id
             ? "border-blue-600 bg-blue-600 text-white shadow-sm dark:border-blue-400/30 dark:bg-blue-500 dark:text-white"
             : "border-transparent text-slate-500 hover:border-slate-200 hover:bg-slate-100 hover:text-slate-800 dark:text-slate-400 dark:hover:border-white/10 dark:hover:bg-white/[0.06] dark:hover:text-slate-100"}`}>
@@ -899,7 +912,7 @@ export default function UnifiedTaskPage({ onLogout }) {
   return (
     <div className="relative flex h-[100dvh] overflow-hidden bg-slate-50 text-slate-900 dark:bg-[#0b0d12] dark:text-slate-100">
       <Sidebar collapsed={collapsed} setCollapsed={setCollapsed} userRole={adminUser ? "admin" : role} onLogout={onLogout} />
-      <main className={`min-w-0 flex-1 overflow-y-auto transition-[margin] duration-300 ${collapsed ? "ml-16" : "ml-16 sm:ml-56"}`}>
+      <main className={`min-w-0 flex-1 overflow-y-auto transition-[margin] duration-300 ${collapsed ? "app-offset app-offset-collapsed" : "app-offset"}`}>
         <div className="mx-auto w-full max-w-[1500px] px-4 py-5 sm:px-6 lg:px-8 lg:py-7">
 
         {popupMsg && (

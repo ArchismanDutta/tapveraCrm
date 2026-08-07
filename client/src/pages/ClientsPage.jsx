@@ -423,7 +423,7 @@ const ClientsPage = ({ onLogout }) => {
       {/* Main Content */}
       <main
         className={`app-main h-[100dvh] overflow-y-auto overflow-x-hidden px-3 py-4 transition-all duration-300 [scrollbar-gutter:stable] sm:px-5 lg:px-6 ${
-          sidebarCollapsed ? "ml-16" : "ml-16 sm:ml-56"
+          sidebarCollapsed ? "app-offset app-offset-collapsed" : "app-offset"
         }`}
       >
         {/* Notification Toast */}

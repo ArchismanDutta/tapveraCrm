@@ -46,7 +46,7 @@ const TaskDetailModal = ({ task, onClose }) => {
 
   return (
     <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-xl overflow-y-auto">
-      <div className="min-h-screen flex items-start justify-center p-4 pt-8">
+      <div className="min-h-[100dvh] flex items-start justify-center p-4 pt-8">
         <div
           ref={modalRef}
           className="relative bg-gradient-to-br from-slate-800/95 to-slate-900/95 backdrop-blur-xl border border-slate-600/50 rounded-3xl shadow-2xl w-full max-w-3xl overflow-hidden"

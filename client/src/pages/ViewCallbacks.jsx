@@ -483,7 +483,7 @@ const ViewCallbacks = ({ onLogout }) => {
         userRole={userRole}
       />
 
-      <main className={`app-main h-[100dvh] overflow-y-auto px-3 py-4 transition-all duration-300 sm:px-5 lg:px-6 ${sidebarCollapsed ? "ml-16" : "ml-16 sm:ml-56"}`}>
+      <main className={`app-main h-[100dvh] overflow-y-auto px-3 py-4 transition-all duration-300 sm:px-5 lg:px-6 ${sidebarCollapsed ? "app-offset app-offset-collapsed" : "app-offset"}`}>
         {/* Header */}
         <div className="app-page mx-auto max-w-[1600px] pb-8">
         <div className="app-header mb-5">
