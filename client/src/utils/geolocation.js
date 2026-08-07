@@ -15,9 +15,15 @@ export const GEO_ERRORS = {
   UNSUPPORTED: "UNSUPPORTED",
   INSECURE_CONTEXT: "INSECURE_CONTEXT",
   PERMISSION_DENIED: "PERMISSION_DENIED",
+  // The browser has the site permission but the OPERATING SYSTEM is refusing
+  // the browser itself. See the note in getCurrentCoordinates.
+  SYSTEM_DENIED: "SYSTEM_DENIED",
   UNAVAILABLE: "UNAVAILABLE",
   TIMEOUT: "TIMEOUT",
 };
+
+const isMac = () =>
+  typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent || "");
 
 const MESSAGES = {
   [GEO_ERRORS.UNSUPPORTED]:
@@ -25,12 +31,32 @@ const MESSAGES = {
   [GEO_ERRORS.INSECURE_CONTEXT]:
     "Location is only available over a secure (https) connection. Contact your administrator.",
   [GEO_ERRORS.PERMISSION_DENIED]:
-    "Location access was blocked. Allow location for this site in your browser settings, then try again.",
+    "Location access was blocked for this site. Click the icon at the left of the address bar → Location → Allow, then try again.",
+  [GEO_ERRORS.SYSTEM_DENIED]: isMac()
+    ? "This site is allowed to use location, but macOS is blocking the browser itself. Open System Settings → Privacy & Security → Location Services, turn it on, and enable your browser in the list. You may need to restart the browser afterwards."
+    : "This site is allowed to use location, but your operating system is blocking the browser. Enable location services for the browser in your system privacy settings, then try again.",
   [GEO_ERRORS.UNAVAILABLE]:
     "Your device could not determine its location. Turn on GPS / location services and try again.",
   [GEO_ERRORS.TIMEOUT]:
     "Getting your location took too long. Move somewhere with a clearer signal and try again.",
 };
+
+/**
+ * Great-circle distance in metres. Mirrors server/utils/geofence.js exactly —
+ * same formula, same Earth radius — so the admin's "test my position" readout
+ * cannot disagree with the server's actual verdict. A diagnostic that reports
+ * a different number from the thing it is diagnosing is worse than none.
+ */
+export function haversineDistanceMeters(lat1, lon1, lat2, lon2) {
+  const R = 6371008.8;
+  const toRad = (deg) => (deg * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.min(1, Math.sqrt(a)));
+}
 
 export class GeolocationError extends Error {
   constructor(code) {
@@ -88,7 +114,35 @@ export function getCurrentCoordinates({
           2: GEO_ERRORS.UNAVAILABLE,
           3: GEO_ERRORS.TIMEOUT,
         };
-        reject(new GeolocationError(codeMap[error?.code] || GEO_ERRORS.UNAVAILABLE));
+        const code = codeMap[error?.code] || GEO_ERRORS.UNAVAILABLE;
+
+        if (code !== GEO_ERRORS.PERMISSION_DENIED) {
+          reject(new GeolocationError(code));
+          return;
+        }
+
+        // ─── "BLOCKED" HAS TWO VERY DIFFERENT CAUSES ───
+        //
+        // The spec gives one code (1) for both "this site is not allowed" and
+        // "the browser itself is not allowed by the OS". On macOS the second is
+        // extremely common and invisible: Chrome can show Location as Allowed
+        // for the site while System Settings → Privacy & Security → Location
+        // Services has the browser switched off entirely. The user then follows
+        // a message telling them to fix browser settings that are already
+        // correct, and concludes the app is broken.
+        //
+        // The Permissions API disambiguates: it reports the SITE-level grant
+        // only. So "the site says granted, yet we were denied" can only mean
+        // the refusal came from below the browser.
+        getPermissionState()
+          .then((state) => {
+            reject(
+              new GeolocationError(
+                state === "granted" ? GEO_ERRORS.SYSTEM_DENIED : GEO_ERRORS.PERMISSION_DENIED
+              )
+            );
+          })
+          .catch(() => reject(new GeolocationError(GEO_ERRORS.PERMISSION_DENIED)));
       },
       {
         enableHighAccuracy: highAccuracy,

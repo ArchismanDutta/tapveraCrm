@@ -34,6 +34,22 @@
 // complexity of Vincenty would buy precision that the input data does not have.
 const EARTH_RADIUS_METERS = 6371008.8;
 
+// ─── TUNABLES ───
+// Overridable from server/.env, defaulting to the values below so the feature
+// is zero-config. Read once at module load, which keeps every function in this
+// file pure with respect to its arguments — the tests set nothing and get the
+// defaults.
+//
+// Each is CLAMPED to a safe ceiling. Config must not be able to silently
+// disable the security property it configures: without the clamp, a typo of
+// 10000 instead of 100 in the grace value would quietly widen every fence in
+// the system to cover a whole city, with nothing on screen to show for it.
+const envNumber = (name, fallback, { min, max }) => {
+  const raw = Number(process.env[name]);
+  if (!Number.isFinite(raw) || raw <= 0) return fallback;
+  return Math.min(Math.max(raw, min), max);
+};
+
 // How much of the browser's self-reported error circle we forgive.
 //
 // The browser hands us a point AND an `accuracy` value: the radius in metres
@@ -49,14 +65,23 @@ const EARTH_RADIUS_METERS = 6371008.8;
 // 50km accuracy (IP-based fallback positioning, which is what a browser
 // returns when it has no GPS and no wifi fix) would otherwise satisfy any
 // fence on the continent, which is precisely the case this must reject.
-const ACCURACY_GRACE_METERS = 100;
+//
+// Raise this (up to 500m) if real staff report being denied at their desks —
+// that is the symptom of indoor positioning error exceeding the allowance.
+const ACCURACY_GRACE_METERS = envNumber("GEOFENCE_ACCURACY_GRACE_METERS", 100, {
+  min: 0,
+  max: 500,
+});
 
 // Beyond this, the fix is not a location, it is a guess — typically the
 // browser falling back to IP geolocation. Treated as "no usable location"
 // rather than silently trusted or silently denied, so the user gets an
 // actionable message ("your device could not get a precise fix") instead of a
 // bare rejection they cannot act on.
-const MAX_USABLE_ACCURACY_METERS = 5000;
+const MAX_USABLE_ACCURACY_METERS = envNumber("GEOFENCE_MAX_ACCURACY_METERS", 5000, {
+  min: 500,
+  max: 50000,
+});
 
 /**
  * Great-circle distance between two lat/lng points, in metres.

@@ -1,8 +1,13 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import Sidebar from "../../components/dashboard/Sidebar";
 import geofenceApi from "../../api/geofenceApi";
-import { getCurrentCoordinates, GeolocationError } from "../../utils/geolocation";
+import {
+  getCurrentCoordinates,
+  GeolocationError,
+  haversineDistanceMeters,
+} from "../../utils/geolocation";
 import { readState, toggleLocation, toggleEnabled } from "../../utils/geofenceAssignment";
+import LocationMapPicker from "../../components/geofence/LocationMapPicker";
 import {
   AlertCircle,
   Check,
@@ -66,9 +71,14 @@ export default function GeofenceManagementPage({ onLogout }) {
   const [editingId, setEditingId] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [capturing, setCapturing] = useState(false);
+  const [captureResult, setCaptureResult] = useState(null);
 
   const [userSearch, setUserSearch] = useState("");
   const [savingUserId, setSavingUserId] = useState(null);
+
+  // "Would I get in from where I'm standing?" — see runPositionTest.
+  const [testingId, setTestingId] = useState(null);
+  const [testResults, setTestResults] = useState({}); // locationId -> readout
 
   const notify = useCallback((type, text) => {
     setBanner({ type, text });
@@ -123,6 +133,7 @@ export default function GeofenceManagementPage({ onLogout }) {
    */
   const captureCurrentPosition = async () => {
     setCapturing(true);
+    setCaptureResult(null);
     try {
       const coords = await getCurrentCoordinates();
       setForm((prev) => ({
@@ -130,17 +141,78 @@ export default function GeofenceManagementPage({ onLogout }) {
         latitude: coords.latitude.toFixed(6),
         longitude: coords.longitude.toFixed(6),
       }));
-      notify(
-        "success",
-        `Captured your position (±${Math.round(coords.accuracy)}m accuracy).`
+      // Reported INLINE, next to the button, not via the page-top banner.
+      // The banner sits above the tab bar; by the time an admin has scrolled
+      // past the map to reach this button it is comfortably off-screen, so a
+      // failure looked exactly like a dead button. That is what "the button
+      // isn't working" turned out to mean.
+      setCaptureResult({
+        ok: true,
+        accuracy: Math.round(coords.accuracy),
+        latitude: coords.latitude,
+        longitude: coords.longitude,
+      });
+    } catch (err) {
+      setCaptureResult({
+        ok: false,
+        message: err instanceof GeolocationError ? err.message : "Could not read your location.",
+      });
+    } finally {
+      setCapturing(false);
+    }
+  };
+
+  /**
+   * "Would someone standing here get in?"
+   *
+   * Exists because a denial like "6895m beyond Head Office" is unfalsifiable
+   * from the admin's chair — they are standing in the office, the fence says
+   * otherwise, and there is no way to tell whether the fence is wrong, the
+   * device is wrong, or the maths is wrong. Guessing between those three is
+   * how a radius ends up being widened to 10km until complaints stop.
+   *
+   * This reads the device's position and shows the raw numbers: coordinates,
+   * the device's own accuracy estimate, and the distance to this fence. It
+   * uses the same haversine as the server, so the verdict here IS the server's
+   * verdict.
+   *
+   * The accuracy figure is the diagnostic that matters. A laptop positions by
+   * Wi-Fi lookup rather than GPS, and when the office router is missing from
+   * Apple's/Google's database the answer can be kilometres out while still
+   * "succeeding" — which is exactly what a large accuracy number is telling you.
+   */
+  const runPositionTest = async (loc) => {
+    setTestingId(loc._id);
+    try {
+      const coords = await getCurrentCoordinates({ timeoutMs: 20000 });
+      const distance = haversineDistanceMeters(
+        coords.latitude,
+        coords.longitude,
+        Number(loc.latitude),
+        Number(loc.longitude)
       );
+      const overshoot = distance - Number(loc.radiusMeters);
+      // Mirrors the server's ACCURACY_GRACE_METERS cap.
+      const grace = Math.min(coords.accuracy, 100);
+
+      setTestResults((prev) => ({
+        ...prev,
+        [loc._id]: {
+          latitude: coords.latitude,
+          longitude: coords.longitude,
+          accuracy: Math.round(coords.accuracy),
+          distance: Math.round(distance),
+          inside: overshoot <= grace,
+          overshoot: Math.round(overshoot),
+        },
+      }));
     } catch (err) {
       notify(
         "error",
         err instanceof GeolocationError ? err.message : "Could not read your location."
       );
     } finally {
-      setCapturing(false);
+      setTestingId(null);
     }
   };
 
@@ -423,6 +495,17 @@ export default function GeofenceManagementPage({ onLogout }) {
                     </label>
                   </div>
 
+                  {/* The map writes into the same latitude/longitude/radius
+                      fields below, which remain the source of truth — so if it
+                      fails to load, everything still works by hand. */}
+                  <LocationMapPicker
+                    latitude={form.latitude}
+                    longitude={form.longitude}
+                    radiusMeters={form.radiusMeters}
+                    onChange={(patch) => setForm((prev) => ({ ...prev, ...patch }))}
+                    onError={(msg) => notify("error", msg)}
+                  />
+
                   <div className="grid gap-4 sm:grid-cols-3">
                     <label className="block">
                       <span className="mb-1.5 block text-xs font-medium text-slate-600 dark:text-slate-400">
@@ -475,6 +558,43 @@ export default function GeofenceManagementPage({ onLogout }) {
                     <Crosshair size={13} />
                     {capturing ? "Reading your position..." : "Use my current position"}
                   </button>
+
+                  {captureResult && (
+                    <div
+                      className={`rounded-xl border p-3 text-[11px] leading-5 ${
+                        captureResult.ok
+                          ? "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-200"
+                          : "border-rose-200 bg-rose-50 text-rose-800 dark:border-rose-400/20 dark:bg-rose-400/10 dark:text-rose-200"
+                      }`}
+                    >
+                      {captureResult.ok ? (
+                        <>
+                          <p className="font-semibold">
+                            Captured — accuracy ±{captureResult.accuracy}m
+                          </p>
+                          <p className="mt-0.5 font-mono">
+                            {captureResult.latitude.toFixed(6)},{" "}
+                            {captureResult.longitude.toFixed(6)}
+                          </p>
+                          {/* Surfaced at capture time, because this is the
+                              moment the mistake is made. A fence centred on a
+                              ±3km guess looks completely normal in the form and
+                              only reveals itself later, as staff being denied
+                              from inside the building. */}
+                          {captureResult.accuracy > 500 && (
+                            <p className="mt-1.5 font-medium">
+                              ⚠ That is far too imprecise to centre a fence on. This
+                              device is estimating your position from Wi-Fi, not GPS,
+                              and can be kilometres out. Open this page on a phone and
+                              capture there instead.
+                            </p>
+                          )}
+                        </>
+                      ) : (
+                        <p className="font-medium">{captureResult.message}</p>
+                      )}
+                    </div>
+                  )}
 
                   <p className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-[11px] leading-5 text-slate-600 dark:border-white/10 dark:bg-white/[0.03] dark:text-slate-400">
                     The minimum radius is 50m. Phone GPS is typically accurate
@@ -547,6 +667,51 @@ export default function GeofenceManagementPage({ onLogout }) {
                             {loc.assignedUserCount === 1 ? "" : "s"}
                           </span>
                         </div>
+
+                        <button
+                          type="button"
+                          onClick={() => runPositionTest(loc)}
+                          disabled={testingId === loc._id}
+                          className="mt-2.5 inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-[11px] font-medium text-slate-700 transition hover:bg-slate-100 disabled:opacity-50 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-200"
+                        >
+                          <Crosshair size={11} />
+                          {testingId === loc._id ? "Reading position..." : "Test from where I am"}
+                        </button>
+
+                        {testResults[loc._id] && (
+                          <div
+                            className={`mt-2 rounded-lg border p-2.5 text-[11px] leading-5 ${
+                              testResults[loc._id].inside
+                                ? "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-200"
+                                : "border-rose-200 bg-rose-50 text-rose-800 dark:border-rose-400/20 dark:bg-rose-400/10 dark:text-rose-200"
+                            }`}
+                          >
+                            <p className="font-semibold">
+                              {testResults[loc._id].inside
+                                ? "You would be allowed in from here."
+                                : `You would be BLOCKED — ${testResults[loc._id].overshoot}m outside.`}
+                            </p>
+                            <p className="mt-1 font-mono">
+                              {testResults[loc._id].latitude.toFixed(6)},{" "}
+                              {testResults[loc._id].longitude.toFixed(6)}
+                            </p>
+                            <p>
+                              {testResults[loc._id].distance}m from centre · your device
+                              reports ±{testResults[loc._id].accuracy}m accuracy
+                            </p>
+                            {/* The single most common explanation for a wrong
+                                answer, called out rather than left for the
+                                admin to infer from a raw number. */}
+                            {testResults[loc._id].accuracy > 500 && (
+                              <p className="mt-1.5 font-medium">
+                                That accuracy figure is very poor — this device is
+                                guessing your position from Wi-Fi, not GPS, and can be
+                                kilometres out. Re-test on a phone before changing this
+                                fence.
+                              </p>
+                            )}
+                          </div>
+                        )}
                       </div>
                       <div className="flex shrink-0 gap-1">
                         <button
@@ -611,62 +776,111 @@ export default function GeofenceManagementPage({ onLogout }) {
                     {filteredUsers.map((user) => {
                       const ids = assignedIds(user);
                       const isFenced = Boolean(user.geofence?.enabled) && ids.length > 0;
+                      // A fence with nowhere to be is unsatisfiable, and the
+                      // API rejects it — so the switch genuinely cannot do
+                      // anything until a location is picked. It must SHOW that
+                      // rather than silently refusing: an enabled-looking
+                      // control that does nothing when clicked reads as broken.
+                      const canToggle = ids.length > 0;
                       return (
                         <div key={user._id} className="p-4">
                           <div className="flex flex-wrap items-start justify-between gap-3">
                             <div className="min-w-0">
-                              <div className="flex items-center gap-2">
-                                <p className="truncate text-sm font-semibold text-slate-950 dark:text-white">
-                                  {user.name}
-                                </p>
-                                <span
-                                  className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
-                                    isFenced
-                                      ? "bg-blue-100 text-blue-700 dark:bg-blue-400/15 dark:text-blue-300"
-                                      : "bg-slate-100 text-slate-500 dark:bg-white/[0.07] dark:text-slate-400"
-                                  }`}
-                                >
-                                  {isFenced ? "Fenced" : "Unrestricted"}
-                                </span>
-                              </div>
+                              {/* The "Fenced / Unrestricted" badge that used to
+                                  sit here was removed: the switch and its label
+                                  on the right already state the same thing, in
+                                  different words, a few centimetres away. Two
+                                  vocabularies for one piece of state is how a
+                                  row starts looking cluttered and reading
+                                  ambiguously. */}
+                              <p className="truncate text-sm font-semibold text-slate-950 dark:text-white">
+                                {user.name}
+                              </p>
                               <p className="mt-0.5 truncate text-xs text-slate-500 dark:text-slate-400">
                                 {user.email}
                                 {user.employeeId ? ` · ${user.employeeId}` : ""}
                                 {user.position ? ` · ${user.position}` : ""}
                               </p>
                             </div>
-                            <div className="flex items-center gap-3">
-                              {savingUserId === user._id && (
-                                <span className="text-[11px] text-slate-400">Saving...</span>
-                              )}
-                              {/* Explicit pause switch, separate from the
-                                  location pills. Without it the only way to
-                                  lift a restriction — for someone travelling,
-                                  say — is to unassign every location and later
-                                  remember which ones they had. */}
+                            {/* Explicit pause switch, separate from the location
+                                pills. Without it the only way to lift a
+                                restriction — for someone travelling, say — is to
+                                unassign every location and later remember which
+                                ones they had.
+
+                                The status word lives beside the switch rather
+                                than in the page-top banner: by the time an admin
+                                has scrolled down this list, a banner at the top
+                                is off-screen, so a refusal looked exactly like a
+                                dead control. */}
+                            <div className="flex shrink-0 items-center gap-2.5">
+                              <span
+                                className={`text-[11px] font-medium tabular-nums ${
+                                  savingUserId === user._id
+                                    ? "text-slate-400"
+                                    : !canToggle
+                                    ? "text-slate-400 dark:text-slate-500"
+                                    : isFenced
+                                    ? "text-blue-600 dark:text-blue-300"
+                                    : "text-slate-500 dark:text-slate-400"
+                                }`}
+                              >
+                                {savingUserId === user._id
+                                  ? "Saving…"
+                                  : !canToggle
+                                  ? "No location set"
+                                  : isFenced
+                                  ? "Enforcing"
+                                  : "Paused"}
+                              </span>
+
+                              {/* Standard Tailwind switch geometry: h-6 w-11
+                                  with a transparent 2px border as the inset, and
+                                  a 20px knob travelling translate-x-5. The inner
+                                  track is then exactly 40px = 20 travel + 20
+                                  knob, so the knob lands flush at both ends
+                                  without the hand-tuned pixel offsets this
+                                  replaced (top-0.5 / translate-x-[22px]), which
+                                  only happened to line up and broke the moment
+                                  any size changed. */}
                               <button
                                 type="button"
                                 role="switch"
                                 aria-checked={isFenced}
-                                aria-label={`${isFenced ? "Disable" : "Enable"} geofencing for ${user.name}`}
-                                disabled={savingUserId === user._id}
+                                aria-label={`${isFenced ? "Pause" : "Resume"} geofencing for ${user.name}`}
+                                disabled={savingUserId === user._id || !canToggle}
+                                title={
+                                  canToggle
+                                    ? `${isFenced ? "Pause" : "Resume"} geofencing for ${user.name}`
+                                    : "Select at least one location below before enabling"
+                                }
                                 onClick={() => toggleUserEnabled(user)}
-                                className={`relative h-6 w-11 shrink-0 rounded-full transition disabled:opacity-50 ${
+                                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white disabled:cursor-not-allowed disabled:opacity-45 dark:focus-visible:ring-offset-[#12151c] ${
                                   isFenced
                                     ? "bg-blue-600 dark:bg-blue-500"
-                                    : "bg-slate-300 dark:bg-white/15"
+                                    : "bg-slate-300 dark:bg-white/20"
                                 }`}
                               >
                                 <span
-                                  className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
-                                    isFenced ? "translate-x-[22px]" : "translate-x-0.5"
+                                  aria-hidden="true"
+                                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
+                                    isFenced ? "translate-x-5" : "translate-x-0"
                                   }`}
                                 />
                               </button>
                             </div>
                           </div>
 
-                          <div className="mt-3 flex flex-wrap gap-1.5">
+                          {/* Labelled because the pills, not the switch, are
+                              where the interaction actually starts — clicking
+                              the first one turns the fence on. Without a label
+                              the switch reads as the primary control and the
+                              pills as decoration, which is backwards. */}
+                          <p className="mt-3 text-[11px] font-medium uppercase tracking-wide text-slate-400 dark:text-slate-500">
+                            {canToggle ? "Allowed locations" : "Choose where this person may sign in"}
+                          </p>
+
+                          <div className="mt-1.5 flex flex-wrap gap-1.5">
                             {activeLocations.map((loc) => {
                               const on = ids.includes(loc._id);
                               return (

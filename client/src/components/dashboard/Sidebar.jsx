@@ -144,12 +144,12 @@ const menuConfig = {
     },
     {
       to: "/call-intelligence",
-      icon: <PhoneCall size={18} animateOnHover />,
+      icon: <PhoneCall size={18} />,
       label: "My Call Summaries",
     },
     {
       to: "/my-transfers",
-      icon: <ArrowLeftRight size={18} animateOnHover />,
+      icon: <ArrowLeftRight size={18} />,
       label: "My Transfers",
     },
     {
@@ -332,7 +332,7 @@ const menuConfig = {
         },
         {
           to: "/call-intelligence",
-          icon: <PhoneCall size={16} animateOnHover />,
+          icon: <PhoneCall size={16} />,
           label: "Call Intelligence",
         },
       ],
@@ -430,7 +430,7 @@ const menuConfig = {
         },
         {
           to: "/tasks",
-          icon: <ClipboardList size={16} animateOnHover />,
+          icon: <ClipboardList size={16} />,
           label: "Task Management",
         },
         {
@@ -486,7 +486,7 @@ const menuConfig = {
         },
         {
           to: "/super-admin/notepad",
-          icon: <BookOpen size={16} animateOnHover />,
+          icon: <BookOpen size={16} />,
           label: "Employee Notepads",
         },
       ],

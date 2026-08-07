@@ -221,13 +221,33 @@ exports.updateUserGeofence = async (req, res) => {
       });
     }
 
-    user.geofence = {
-      enabled: Boolean(enabled),
-      locations: validIds,
-      assignedBy: req.user._id,
-      assignedAt: new Date(),
-    };
-    await user.save();
+    // findByIdAndUpdate on the single `geofence` path, NOT user.save().
+    //
+    // save() validates the entire document, so a legacy record that predates a
+    // now-required field — or holds a contact number that no longer matches the
+    // current regex — would refuse to save, and the admin would get a
+    // validation error about a phone number while trying to set a geofence.
+    // This is a long-lived CRM; such records exist. Scoping the write to the
+    // one path being changed means editing a geofence cannot be blocked by
+    // unrelated historical data.
+    //
+    // It also skips the User pre-save hook, which does a Shift lookup and
+    // rewrites shift fields — work that has nothing to do with this change and
+    // should not be triggered as a side effect of it.
+    await User.findByIdAndUpdate(
+      userId,
+      {
+        $set: {
+          geofence: {
+            enabled: Boolean(enabled),
+            locations: validIds,
+            assignedBy: req.user._id,
+            assignedAt: new Date(),
+          },
+        },
+      },
+      { runValidators: true }
+    );
 
     const updated = await User.findById(userId)
       .select("name email employeeId role geofence")
@@ -303,7 +323,19 @@ exports.getMyGeofenceStatus = async (req, res) => {
       locationNames: subject
         ? (user.geofence.locations || []).filter((l) => l.isActive !== false).map((l) => l.name)
         : [],
-      recheckIntervalMs: 10 * 60 * 1000,
+      // Configurable so the re-check can be tested without editing source.
+      // At the 10-minute default a single test cycle takes ten minutes, which
+      // is enough friction that the obvious workaround is to hardcode a
+      // shorter value "just for now" — and that is exactly the sort of edit
+      // that gets committed and shipped. Set GEOFENCE_RECHECK_INTERVAL_MS=30000
+      // in a dev .env instead, and production keeps the default untouched.
+      //
+      // Floored at 30s: anything tighter wakes the GPS hard enough to be felt
+      // in phone battery life, for a gap it barely narrows.
+      recheckIntervalMs: Math.max(
+        Number(process.env.GEOFENCE_RECHECK_INTERVAL_MS) || 10 * 60 * 1000,
+        30 * 1000
+      ),
     });
   } catch (err) {
     console.error("getMyGeofenceStatus error:", err);

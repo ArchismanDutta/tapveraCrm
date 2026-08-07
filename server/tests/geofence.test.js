@@ -22,6 +22,21 @@
 'use strict';
 
 const assert = require('assert');
+
+// Pin the tunables to their defaults BEFORE loading the module under test.
+//
+// geofence.js reads GEOFENCE_* from the environment once at module load, so
+// without this the suite's results depend on whoever's .env happens to be
+// exported — it would pass on CI and fail on the machine of the one developer
+// who set a wider grace to debug a false denial. A test that reports a
+// different answer per machine is worse than no test: the next person to see
+// it red assumes the environment, not the code.
+//
+// Deleting rather than assigning, so this asserts the SHIPPED defaults are
+// still what the comments and the design doc claim.
+delete process.env.GEOFENCE_ACCURACY_GRACE_METERS;
+delete process.env.GEOFENCE_MAX_ACCURACY_METERS;
+
 const geo = require('../utils/geofence');
 
 const {
@@ -299,12 +314,42 @@ test('grace is capped — a vague fix cannot satisfy a distant fence', () => {
   assert.strictEqual(r.code, 'OUTSIDE_FENCE');
 });
 
+test('the shipped default grace is 100m', () => {
+  // Guards the DEFAULT specifically — env overrides are cleared at the top of
+  // this file. If someone widens the built-in value, that should be a
+  // deliberate change to the design doc, not a quiet edit to a constant.
+  assert.strictEqual(ACCURACY_GRACE_METERS, 100);
+  assert.strictEqual(MAX_USABLE_ACCURACY_METERS, 5000);
+});
+
 test('grace never exceeds its cap', () => {
-  // 500m outside a 200m fence — beyond ACCURACY_GRACE_METERS (100m) — stays
-  // denied no matter how large the claimed accuracy is.
-  assert.ok(ACCURACY_GRACE_METERS <= 100, 'grace cap must stay conservative');
+  // 500m outside a 200m fence — beyond the 100m grace — stays denied no matter
+  // how large the claimed accuracy is.
   const r = evaluate([KOLKATA_HQ], { latitude: 22.5789, longitude: 88.3639, accuracy: 4999 });
   assert.strictEqual(r.allowed, false);
+});
+
+test('a mistyped grace override is clamped, not obeyed', () => {
+  // Config must not be able to silently disable the property it configures.
+  // 10000 instead of 100 would otherwise widen every fence in the system to
+  // cover a whole city, with nothing on screen to show for it.
+  //
+  // Loaded in a child process because geofence.js reads the environment once
+  // at module load, and this file has already loaded it with the defaults.
+  const { execFileSync } = require('child_process');
+  const read = (value) =>
+    Number(
+      execFileSync(
+        process.execPath,
+        ['-e', "process.stdout.write(String(require('../utils/geofence').ACCURACY_GRACE_METERS))"],
+        { cwd: __dirname, env: { ...process.env, GEOFENCE_ACCURACY_GRACE_METERS: value } }
+      ).toString()
+    );
+
+  assert.strictEqual(read('250'), 250, 'a sensible override should be honoured');
+  assert.strictEqual(read('10000'), 500, 'an absurd override must clamp to the 500m ceiling');
+  assert.strictEqual(read('abc'), 100, 'garbage must fall back to the default');
+  assert.strictEqual(read('-5'), 100, 'a negative value must fall back to the default');
 });
 
 /* ── Multiple fences ──────────────────────────────────────────────────── */

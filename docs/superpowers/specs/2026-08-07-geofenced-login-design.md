@@ -152,11 +152,39 @@ into a trivial one. Names and distances only.
 
 **Client**
 - `utils/geolocation.js` — promise wrapper with named failure modes
+- `utils/geofenceAssignment.js` — enable/assign state transitions, extracted so they can be tested
+- `utils/geocoding.js` — Nominatim address search
 - `api/geofenceApi.js`, `hooks/useGeofenceWatch.js` — new
+- `components/geofence/LocationMapPicker.jsx` — Leaflet map picker
 - `pages/admin/GeofenceManagementPage.jsx` — Super Admin console (Locations / Assign Users / Denial Log)
 - `pages/LoginPage.jsx` — two-attempt flow
 - `App.jsx` — route + app-wide watcher
 - `components/dashboard/Sidebar.jsx` — Super Admin menu entry
+- `__tests__/geofenceAssignment.test.js` — 16 assertions (`npx vitest run`)
+
+### Map picker
+
+Leaflet + OpenStreetMap tiles, Esri World Imagery for satellite, Nominatim for
+address search. **No API key, no billing account, no third-party account of any
+kind.**
+
+Google Maps was tried first and removed. It needs two APIs (*Maps JavaScript*
+and *Geocoding*) individually enabled against a Cloud project with a card on
+file, and when any of that is missing it fails to a grey rectangle with the
+explanation only in the browser console — a failure mode an admin would report
+as "the map is broken" with no way to self-diagnose. The free tier would have
+covered this usage comfortably; the setup surface was the problem, not the cost.
+
+Attribution rendered by Leaflet is a **licensing requirement** (OSM data is
+ODbL), not decoration. Nominatim's [usage policy](https://operations.osmfoundation.org/policies/nominatim/)
+caps requests at 1/sec and is enforced by IP ban rather than quota errors —
+`utils/geocoding.js` honours this by only firing on explicit submit and
+refusing concurrent requests. Anything higher-volume must self-host.
+
+The map is an input device for the latitude/longitude fields, which remain the
+source of truth. If tiles fail to load, coordinates can still be typed, and
+"use my current position" never touches the network — it is the browser's own
+GPS, and remains the most accurate way to centre a fence.
 
 ### Authorisation
 
