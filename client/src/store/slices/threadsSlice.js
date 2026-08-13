@@ -40,6 +40,31 @@ export const PAGE_SIZE = 50;
 
 const EMPTY = Object.freeze([]);
 
+/**
+ * Move a thread to "just active" for recency ordering.
+ *
+ * Both fields are written because the two surfaces read different ones: the
+ * chat list sorts on `updatedAt` (the normalized shape) and the DM roster on
+ * `lastMessageAt` (the raw one). Setting only one leaves the other stale, and
+ * the resulting list is sorted correctly in one tab and not the other.
+ *
+ * No-op when the thread has not been listed yet — see the call site.
+ */
+function touchThread(state, key, message) {
+  const thread = state.threads[key];
+  if (!thread) return;
+
+  const at = message?.createdAt ?? message?.timestamp ?? new Date().toISOString();
+  // Never move a thread BACKWARDS. Out-of-order delivery is normal on a flaky
+  // connection, and a late-arriving older message must not demote a
+  // conversation below one that has been quiet for longer.
+  const existing = thread.lastMessageAt ?? thread.updatedAt;
+  if (existing && new Date(existing).getTime() > new Date(at).getTime()) return;
+
+  thread.lastMessageAt = at;
+  thread.updatedAt = at;
+}
+
 /** Ensure the per-thread buckets exist before writing to them. */
 function ensure(state, key) {
   if (!state.messagesByKey[key]) state.messagesByKey[key] = [];
@@ -297,6 +322,20 @@ const threadsSlice = createSlice({
         state.unreadByKey[key] = (state.unreadByKey[key] || 0) + 1;
       }
 
+      // ─── KEEP THE THREAD'S RECENCY CURRENT ───
+      //
+      // The conversation list sorts on this. Without it the timestamp only
+      // moved when `fetchThreads` refetched, so a DM that just arrived left
+      // its sender wherever they already were in the list — and the ordering
+      // silently corrected itself on the next refresh, which reads as the
+      // list being wrong until you reload.
+      //
+      // Guarded rather than created: `ensure` deliberately does not make a
+      // `threads[key]` entry, and inventing a half-formed one here would put
+      // a nameless row in the sidebar. A thread we have never listed will
+      // arrive complete from the next fetch.
+      touchThread(state, key, message);
+
       // Someone who just sent a message is definitionally no longer typing.
       if (senderId && state.typingByKey[key]) delete state.typingByKey[key][senderId];
     },
@@ -393,6 +432,10 @@ const threadsSlice = createSlice({
       const key = threadKey(scope, threadId);
       ensure(state, key);
       upsertMessage(state.messagesByKey[key], { ...message, status: "sending" });
+      // Your own message counts as activity too. Without this, replying to
+      // someone leaves them where they were in the list until their reply
+      // arrives — the one moment you most expect them to jump to the top.
+      touchThread(state, key, message);
     },
 
     /**

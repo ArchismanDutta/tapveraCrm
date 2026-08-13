@@ -91,6 +91,11 @@ const ChatPage = ({ onLogout }) => {
   // rather than in the thread slice because these are people, not threads —
   // most of them have no conversation at all yet.
   const [directory, setDirectory] = useState([]);
+  // "Not loaded yet" and "loaded, and there is nobody" look identical in an
+  // empty array — these separate them so the tab can't claim you have no
+  // colleagues while the request is still in flight or after it failed.
+  const [directoryLoading, setDirectoryLoading] = useState(true);
+  const [directoryError, setDirectoryError] = useState(null);
   const [openingDm, setOpeningDm] = useState(null);
 
   // Search and filter state
@@ -149,13 +154,35 @@ const ChatPage = ({ onLogout }) => {
     [dispatch]
   );
 
+  /**
+   * Load the DM roster.
+   *
+   * ─── WHY THE LOADING/ERROR STATE IS NOT OPTIONAL HERE ───
+   * `directory` starts empty, and an empty roster and a roster that hasn't
+   * arrived yet render identically — as "No colleagues to message yet". So a
+   * slow first fetch flashed that message, and a FAILED one left it on screen
+   * permanently: the DM tab looked empty until the user reloaded the page,
+   * which is exactly the "it goes invisible, then a refresh brings it back"
+   * behaviour.
+   *
+   * Tracking both states separates "nothing here" from "not here yet" and
+   * from "couldn't load", and gives the last one a retry that doesn't require
+   * reloading the app.
+   */
   const loadDirectory = useCallback(async () => {
+    setDirectoryError(null);
+    setDirectoryLoading(true);
     try {
-      setDirectory(await messagingApi.listDirectory());
+      const rows = await messagingApi.listDirectory();
+      setDirectory(rows);
     } catch (error) {
-      // Non-fatal: groups still work without a roster, so this degrades to an
-      // empty DM tab rather than taking the page down.
       console.error("Failed to load chat directory:", error);
+      // The previous roster is deliberately left in place. If this was a
+      // transient blip on a refetch, blanking a list the user was reading
+      // would be a worse outcome than showing a slightly stale one.
+      setDirectoryError("Could not load the people list.");
+    } finally {
+      setDirectoryLoading(false);
     }
   }, []);
 
@@ -188,6 +215,11 @@ const ChatPage = ({ onLogout }) => {
   useEffect(() => {
     if (isConnected && wasConnected.current) {
       loadConversations();
+      // The roster is fetched once on mount, so a first attempt that failed
+      // while the network was down would otherwise stay failed for the whole
+      // session — the DM tab empty until a manual reload. A reconnect is the
+      // clearest signal that retrying is worth it.
+      loadDirectory();
       if (selectedId) {
         dispatch(
           fetchThreadMessages({
@@ -199,7 +231,7 @@ const ChatPage = ({ onLogout }) => {
       }
     }
     wasConnected.current = isConnected;
-  }, [isConnected, loadConversations, dispatch, selectedId]);
+  }, [isConnected, loadConversations, loadDirectory, dispatch, selectedId]);
 
   // Refetch when a group is created, renamed, or its membership changes.
   // The server broadcasts `conversation:updated` to every member; this is the
@@ -662,7 +694,27 @@ const ChatPage = ({ onLogout }) => {
                  messaged still gets a row, and the conversation is created on
                  first open. That is what makes "message anyone" work without
                  a separate new-chat flow to discover. */
-              directoryRows.length === 0 ? (
+              /* Three distinct states, because collapsing them is what made
+                 the tab look broken: still loading, failed to load, and
+                 genuinely empty each need a different message — and only the
+                 last one is "you have no colleagues". */
+              directoryLoading && directory.length === 0 ? (
+                <div className="flex h-full flex-col items-center justify-center px-4 text-center">
+                  <Users className="mb-3 h-12 w-12 animate-pulse text-gray-600" />
+                  <p className="text-sm text-gray-400">Loading people…</p>
+                </div>
+              ) : directoryError && directory.length === 0 ? (
+                <div className="flex h-full flex-col items-center justify-center px-4 text-center">
+                  <Users className="mb-3 h-12 w-12 text-gray-600" />
+                  <p className="mb-1 text-sm text-gray-400">{directoryError}</p>
+                  <button
+                    onClick={loadDirectory}
+                    className="mt-2 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-blue-500 transition hover:bg-blue-50 dark:border-white/10 dark:text-blue-300 dark:hover:bg-white/[0.06]"
+                  >
+                    Try again
+                  </button>
+                </div>
+              ) : directoryRows.length === 0 ? (
                 <div className="flex h-full flex-col items-center justify-center px-4 text-center">
                   <Users className="mb-3 h-12 w-12 text-gray-600" />
                   <p className="mb-1 text-sm text-gray-400">
