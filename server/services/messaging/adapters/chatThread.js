@@ -62,6 +62,7 @@ function normalize(doc) {
     // adapters produce an identical key set.
     status: 'sent',
     pinned: false, // chat threads have no pin concept today
+    editedAt: m.editedAt || null,
     createdAt: m.timestamp || m.createdAt,
   };
 }
@@ -78,26 +79,71 @@ async function getMemberIds(threadId) {
 /** Employment states that mean someone is no longer an active colleague. */
 const INACTIVE_STATUSES = ['terminated', 'absconded'];
 
+/**
+ * Newest message timestamp per conversation, for recency ordering.
+ *
+ * Returns a plain map, so a thread with no messages yet simply has no entry
+ * and the caller falls back to its creation date — which is the right answer
+ * for a DM opened from the directory but not yet spoken in.
+ */
+async function lastMessageAtFor(threadIds) {
+  const ids = (threadIds || []).map(String).filter(Boolean);
+  if (!ids.length) return {};
+
+  // conversationId is a String in this schema, so no ObjectId casting — the
+  // same trap documented on unreadCounts below. Casting silently matches
+  // nothing, which here would look like "every thread is equally old".
+  const rows = await ChatMessage.aggregate([
+    { $match: { conversationId: { $in: ids } } },
+    { $group: { _id: '$conversationId', at: { $max: '$timestamp' } } },
+  ]);
+
+  return Object.fromEntries(rows.map((r) => [String(r._id), r.at]));
+}
+
+/**
+ * Every conversation this user belongs to — groups AND direct messages.
+ *
+ * ─── WHY DMs USED TO BE INVISIBLE ───
+ * This queried `{ type: 'group' }` only. Everything else in the stack already
+ * handled private conversations: the schema has the type, access.js
+ * authorizes them by membership, `_threadTitle` resolves a DM's title to the
+ * other participant, and a get-or-create route exists. This single filter was
+ * the one place that dropped them, so a DM could be created and posted to but
+ * never appeared in anyone's list.
+ *
+ * ─── DM NAMING ───
+ * A private conversation has no `name` of its own, and can't have one: the
+ * useful label differs per viewer ("Priya" to you, "Arjun" to her). It is
+ * resolved here from the viewer's perspective so no caller needs to know that
+ * a DM is titled differently from a group.
+ */
 async function listThreads(user) {
   const userIdStr = String(user._id ?? user.id);
-  const groups = await Conversation.find({ type: 'group', members: userIdStr });
+  const conversations = await Conversation.find({ members: userIdStr });
 
-  // One aggregate for every group, rather than a count per group inside the
+  // One aggregate for every thread, rather than a count per thread inside the
   // map below — that would be N more round trips on a list the sidebar
   // refetches on every group change.
-  const counts = await unreadCounts(user, groups.map((g) => g._id));
+  const counts = await unreadCounts(user, conversations.map((c) => c._id));
 
-  // ─── ONE QUERY FOR EVERY MEMBER OF EVERY GROUP ───
+  // Last activity per thread, in one pass. Without it the client's "Most
+  // recent" sort had nothing to sort on (it was a no-op returning 0). That
+  // matters much more now: a DM list ordered by creation date puts the person
+  // you spoke to a minute ago at the bottom.
+  const lastActivity = await lastMessageAtFor(conversations.map((c) => c._id));
+
+  // ─── ONE QUERY FOR EVERY MEMBER OF EVERY THREAD ───
   //
   // This used to be a `User.find` per group inside the map below — the exact
   // N+1 the unread aggregate above exists to avoid, reintroduced two lines
   // later. Union the member ids, fetch once, index by id, and assemble in
-  // memory: 20 groups is 1 query, not 20.
-  const allMemberIds = [...new Set(groups.flatMap((g) => (g.members || []).map(String)))];
+  // memory: 20 threads is 1 query, not 20.
+  const allMemberIds = [...new Set(conversations.flatMap((c) => (c.members || []).map(String)))];
   const users = await User.find({ _id: { $in: allMemberIds } }, 'name role status').lean();
   const usersById = new Map(users.map((u) => [String(u._id), u]));
 
-  const raw = groups.map((group) => {
+  const raw = conversations.map((group) => {
     // ─── FORMER COLLEAGUES ARE STILL RETURNED ───
     //
     // This query used to exclude terminated/absconded users outright. The
@@ -121,10 +167,34 @@ async function listThreads(user) {
       return { ...found, isActive: !INACTIVE_STATUSES.includes(found.status) };
     });
 
+    const doc = group.toObject();
+
+    // For a DM the display name is the OTHER person, resolved per viewer.
+    // Falls through to "Direct message" only if the peer's account was hard
+    // deleted, so the row still renders as something rather than blank.
+    let displayName = doc.name || null;
+    let peer = null;
+    if (doc.type === 'private') {
+      peer = members.find((m) => String(m._id) !== userIdStr) || null;
+      displayName = peer?.name || doc.name || 'Direct message';
+    }
+
     return {
-      ...group.toObject(),
+      ...doc,
       members,
-      unreadCount: counts[String(group._id)] || 0,
+      name: displayName,
+      // Surfaced so the client can render presence and an avatar for the
+      // person on the other end without re-deriving who that is.
+      peer: peer
+        ? {
+            _id: String(peer._id),
+            name: peer.name,
+            role: peer.role,
+            isActive: peer.isActive !== false,
+          }
+        : null,
+      unreadCount: counts[String(doc._id)] || 0,
+      lastMessageAt: lastActivity[String(doc._id)] || doc.createdAt,
     };
   });
 
@@ -139,8 +209,9 @@ async function listThreads(user) {
       kind: 'User',
       isActive: m.isActive !== false,
     })),
+    peer: t.peer,
     unread: t.unreadCount || 0,
-    updatedAt: t.createdAt,
+    updatedAt: t.lastMessageAt,
   })) };
 }
 
@@ -345,6 +416,84 @@ async function sendMessage(user, threadId, { body, attachments = [], replyTo = n
   };
 }
 
+/**
+ * How long after sending a message stays editable.
+ *
+ * A window rather than "forever" because a conversation is a record two people
+ * rely on: silently rewriting something an hour after the other party read and
+ * acted on it changes what was agreed. Short enough to only cover "I made a
+ * typo / sent that half-finished", which is the case editing exists for.
+ */
+const EDIT_WINDOW_MS = Number(process.env.CHAT_EDIT_WINDOW_MINUTES || 7) * 60 * 1000;
+
+/** Is this message still editable by this user, and if not, why not? */
+function editability(message, userId, now = Date.now()) {
+  if (!message) return { ok: false, reason: 'NOT_FOUND', status: 404 };
+
+  // Ownership first: a non-sender should get "not yours", never a hint about
+  // whether the window happens to be open.
+  if (String(message.senderId) !== String(userId)) {
+    return { ok: false, reason: 'NOT_SENDER', status: 403 };
+  }
+
+  const sentAt = new Date(message.timestamp || message.createdAt).getTime();
+  if (!Number.isFinite(sentAt)) {
+    return { ok: false, reason: 'NO_TIMESTAMP', status: 400 };
+  }
+
+  if (now - sentAt > EDIT_WINDOW_MS) {
+    return { ok: false, reason: 'WINDOW_EXPIRED', status: 403 };
+  }
+
+  return { ok: true };
+}
+
+/**
+ * Edit a message's text.
+ *
+ * Attachments are deliberately untouched: swapping the file under a message
+ * someone has already opened is a different and much larger claim than fixing
+ * wording, and nothing in the UI offers it.
+ */
+async function editMessage(user, messageId, body) {
+  const userId = String(user._id ?? user.id);
+  const message = await ChatMessage.findById(messageId);
+
+  const check = editability(message, userId);
+  if (!check.ok) return { error: check.reason, status: check.status };
+
+  const text = String(body ?? '').trim();
+
+  // An empty edit is a delete, and deleting is a separate decision with its
+  // own rules (what recipients see, whether it is recoverable). Quietly
+  // blanking the message here would be that feature by accident.
+  if (!text) return { error: 'EMPTY', status: 400 };
+
+  // Mentions are re-resolved so a newly typed @name renders and highlights
+  // correctly. Notifications are NOT re-sent — otherwise editing becomes a way
+  // to ping someone repeatedly from one message.
+  const conversation = await Conversation.findById(message.conversationId);
+  const memberIds = (conversation?.members || []).map(String);
+  const members = await User.find({ _id: { $in: memberIds } }, '_id name').lean();
+  const mentionIds = resolveMentions(text, {
+    members: members.map((u) => ({ ...u, kind: 'User' })),
+    authorId: userId,
+  }).map((m) => m.id);
+
+  message.message = text;
+  message.mentions = mentionIds;
+  message.editedAt = new Date();
+  await message.save();
+
+  if (message.replyTo) await message.populate('replyTo');
+
+  return {
+    raw: message,
+    normalized: normalize(message),
+    threadId: String(message.conversationId),
+  };
+}
+
 async function react(user, messageId, emoji) {
   const userId = String(user._id ?? user.id);
   const message = await ChatMessage.findById(messageId);
@@ -443,6 +592,7 @@ async function forwardMessages(user, messageIds, destThreadIds) {
 
 module.exports = {
   SCOPE,
+  EDIT_WINDOW_MS,
   normalize,
   forwardMessages,
   getMemberIds,
@@ -451,5 +601,7 @@ module.exports = {
   unreadCounts,
   markRead,
   sendMessage,
+  editMessage,
+  editability,
   react,
 };

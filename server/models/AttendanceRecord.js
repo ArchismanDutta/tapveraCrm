@@ -68,6 +68,18 @@ const EmployeeAttendanceSchema = new mongoose.Schema({
     isWFH: { type: Boolean, default: false }, // ⭐ Work From Home flag
     isPaidLeave: { type: Boolean, default: false }, // ⭐ Paid Leave flag
 
+    // ─── Break-duration absence (policy) ──────────────────────────────────
+    //
+    // A day is marked absent when the total break is over 1h40m or under
+    // 15m. Recorded as its own flag rather than only flipping `isAbsent`,
+    // because "absent because they never came in" and "absent because their
+    // break was out of policy" are different facts: the second needs an
+    // explanation in the portal and is the one HR can override.
+    isBreakPolicyAbsent: { type: Boolean, default: false },
+
+    /** Human-readable cause, e.g. "Break of 2h 10m exceeds the 1h 40m limit". */
+    breakPolicyReason: { type: String, default: null },
+
     // Current status (for real-time tracking)
     currentlyWorking: { type: Boolean, default: false },
     onBreak: { type: Boolean, default: false },
@@ -107,6 +119,36 @@ const EmployeeAttendanceSchema = new mongoose.Schema({
     isHalfDayLeave: { type: Boolean, default: false }, // ⭐ Half-Day Leave flag (approved reduced hours)
     isHoliday: { type: Boolean, default: false },
     holidayName: String
+  },
+
+  // ─── HR override of the break-duration absence ──────────────────────────
+  //
+  // Every HR edit to a day runs through recalculateEmployeeData, which
+  // re-derives the status flags from the punch events. Without a persisted
+  // marker, an HR correction would be undone by the very next recalculation
+  // (auto-close, payroll run, another edit) and the day would silently flip
+  // back to absent — the kind of bug nobody notices until payroll is wrong.
+  //
+  // So the override lives on the record and the calculation reads it.
+  breakPolicyOverride: {
+    /** Set by HR/super-admin to keep this day's normal attendance. */
+    isOverridden: { type: Boolean, default: false },
+
+    /** Why. Required at the API — this changes pay, so it is attributable. */
+    reason: { type: String, default: null },
+
+    overriddenBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    overriddenByName: { type: String, default: null },
+    overriddenAt: { type: Date, default: null },
+
+    /**
+     * What the rule concluded before HR intervened.
+     *
+     * Kept so the portal can still show "this would be absent — 2h 10m break"
+     * next to the override. Discarding it would leave a day looking perfectly
+     * ordinary with no trace of why anyone touched it.
+     */
+    originalReason: { type: String, default: null }
   },
 
   // Performance metrics

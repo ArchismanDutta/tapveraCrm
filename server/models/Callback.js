@@ -108,7 +108,21 @@ const callbackSchema = new mongoose.Schema(
       default: "Medium",
     },
 
-    // Reminder settings
+    // ── Reminder / alarm state ──────────────────────────────────────────
+    //
+    // The alarm is DERIVED from these fields on every poll, never pushed as a
+    // one-off event. That distinction is the whole design: an event fired at
+    // the due moment only reaches someone who happens to be looking, and an
+    // agent who was on another call, or had the tab shut, would simply miss
+    // it. Because due-ness is recomputed from data, an alarm survives a
+    // refresh, shows up in a second tab, and is still waiting when they come
+    // back an hour later.
+    //
+    // Snooze and dismissal live HERE rather than in the browser for the same
+    // reason — localStorage snooze would evaporate on reload and re-ring
+    // something the agent already dealt with.
+
+    /** Heads-up toast (5 min before) has been shown. */
     reminderSent: {
       type: Boolean,
       default: false,
@@ -116,6 +130,29 @@ const callbackSchema = new mongoose.Schema(
 
     reminderSentDate: {
       type: Date,
+    },
+
+    /** Alarm suppressed until this moment. Null/past = eligible to ring. */
+    snoozedUntil: {
+      type: Date,
+      default: null,
+    },
+
+    /** How many times it has been snoozed — surfaced in the UI so a callback
+     *  being avoided all afternoon is visible rather than silently deferred. */
+    snoozeCount: {
+      type: Number,
+      default: 0,
+    },
+
+    /**
+     * Explicitly dismissed. Stops the alarm without touching `status` —
+     * "I've seen this" is not the same as "I completed the call", and
+     * conflating them would quietly close callbacks nobody made.
+     */
+    alarmDismissedAt: {
+      type: Date,
+      default: null,
     },
 
     // Transfer fields
@@ -173,16 +210,26 @@ callbackSchema.pre("save", async function (next) {
   next();
 });
 
-// Virtual to check if callback is overdue
+// Virtual to check if callback is overdue.
+//
+// The date+time combination is delegated to callbackAlarmService.dueAtFor
+// rather than repeated here. Two copies of "when is this due" would be free to
+// drift, and the failure would be quiet and confusing: the list badge saying
+// a callback is fine while the alarm rings for it, or the reverse.
+//
+// Required lazily — the service requires this model, so a top-level require
+// would be a cycle.
 callbackSchema.virtual("isOverdue").get(function () {
   if (this.status === "Completed" || this.status === "Cancelled") {
     return false;
   }
-  const now = new Date();
-  const callbackDateTime = new Date(this.callbackDate);
-  const [hours, minutes] = this.callbackTime.split(":").map(Number);
-  callbackDateTime.setHours(hours, minutes, 0, 0);
-  return now > callbackDateTime;
+  const { dueAtFor } = require("../services/callbackAlarmService");
+  const dueAt = dueAtFor(this);
+  // A malformed time is not overdue. Previously this produced an Invalid Date,
+  // and `now > InvalidDate` is false — same answer, but by accident rather
+  // than on purpose.
+  if (!dueAt) return false;
+  return new Date() > dueAt;
 });
 
 // Ensure virtuals are included in JSON

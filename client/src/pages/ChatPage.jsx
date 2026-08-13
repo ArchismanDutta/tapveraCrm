@@ -3,6 +3,7 @@ import { useLocation } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import CreateGroupModal from "../components/chat/CreateGroupModal";
 import ManageGroupModal from "../components/chat/ManageGroupModal";
+import GroupMembersModal from "../components/chat/GroupMembersModal";
 import ChatWindow from "../components/chat/chatWindow";
 import { useWebSocketContext } from "../contexts/WebSocketContext";
 import Sidebar from "../components/dashboard/Sidebar";
@@ -78,6 +79,19 @@ const ChatPage = ({ onLogout }) => {
   const [selectedConversation, setSelectedConversation] = useState(null);
   const [showCreateGroup, setShowCreateGroup] = useState(false);
   const [showManageGroup, setShowManageGroup] = useState(false);
+  // Read-only member roster, available to every participant — not just the
+  // admins who can reach ManageGroupModal.
+  const [showMembers, setShowMembers] = useState(false);
+
+  // Groups | DMs. Two lists that answer different questions — "which of my
+  // teams is talking" vs "who do I need to reply to" — and mixing them into
+  // one column made both harder to scan.
+  const [activeTab, setActiveTab] = useState("groups");
+  // The full active roster (see chatController.listDirectory). Held here
+  // rather than in the thread slice because these are people, not threads —
+  // most of them have no conversation at all yet.
+  const [directory, setDirectory] = useState([]);
+  const [openingDm, setOpeningDm] = useState(null);
 
   // Search and filter state
   const [searchTerm, setSearchTerm] = useState("");
@@ -135,13 +149,26 @@ const ChatPage = ({ onLogout }) => {
     [dispatch]
   );
 
+  const loadDirectory = useCallback(async () => {
+    try {
+      setDirectory(await messagingApi.listDirectory());
+    } catch (error) {
+      // Non-fatal: groups still work without a roster, so this degrades to an
+      // empty DM tab rather than taking the page down.
+      console.error("Failed to load chat directory:", error);
+    }
+  }, []);
+
   useEffect(() => {
     const storedRole = localStorage.getItem("role");
     const storedToken = localStorage.getItem("token");
     if (storedRole) setUserRole(storedRole);
     if (storedToken) setJwtToken(storedToken);
-    if (storedToken) loadConversations();
-  }, [loadConversations]);
+    if (storedToken) {
+      loadConversations();
+      loadDirectory();
+    }
+  }, [loadConversations, loadDirectory]);
 
   // Keep the socket subscribed to whatever conversations we know about.
   // Without this a conversation loaded after connect never joins its room.
@@ -217,6 +244,50 @@ const ChatPage = ({ onLogout }) => {
 
   const handleSelectConversation = openConversation;
 
+  /**
+   * Open a DM from the directory.
+   *
+   * The conversation may not exist yet — that's the normal case for a first
+   * message. The server's get-or-create is idempotent, so this is safe to call
+   * on every tap, including for threads that already exist.
+   */
+  const openDirectMessage = useCallback(
+    async (row) => {
+      // Already have the thread: skip the round trip entirely.
+      if (row.conversation) {
+        openConversation(row.conversation);
+        return;
+      }
+
+      setOpeningDm(String(row.person._id));
+      try {
+        const conversation = await messagingApi.openDirectMessage(row.person._id);
+
+        // Refresh so the new thread enters the store (and the socket
+        // subscription) rather than existing only as a local object — without
+        // this, the first incoming reply would have no thread to land in until
+        // the next reload.
+        await loadConversations();
+
+        openConversation({
+          ...conversation,
+          // The list response names a DM after its peer; mirror that here so
+          // the header reads correctly in the moment before the refetch lands.
+          name: row.person.name,
+          peer: row.person,
+        });
+      } catch (error) {
+        alert(
+          error?.response?.data?.error ||
+            "Could not open that conversation. Please try again."
+        );
+      } finally {
+        setOpeningDm(null);
+      }
+    },
+    [loadConversations, openConversation]
+  );
+
   // Auto-open a conversation when arriving from a notification.
   useEffect(() => {
     if (!location.state?.openConversationId || conversations.length === 0) return;
@@ -277,10 +348,12 @@ const ChatPage = ({ onLogout }) => {
     }
   };
 
-  /* ── Derived list ─────────────────────────────────────────────────── */
+  /* ── Derived lists ────────────────────────────────────────────────── */
 
+  // Groups only. DMs come from `directoryRows` below, which is keyed on people
+  // rather than on threads — see the comment there.
   const filteredAndSortedConversations = useMemo(() => {
-    let filtered = [...conversations];
+    let filtered = conversations.filter((c) => c.type !== "private");
 
     if (debouncedSearchTerm) {
       filtered = filtered.filter((conv) => {
@@ -307,12 +380,101 @@ const ChatPage = ({ onLogout }) => {
           return getUnreadCount(b._id) - getUnreadCount(a._id);
         case "recent":
         default:
-          return 0;
+          // `updatedAt` is the newest message's timestamp, supplied by the
+          // server. This used to `return 0` — a sort that did nothing, so
+          // "Most recent" silently left the list in creation order.
+          return new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0);
       }
     });
 
     return filtered;
   }, [conversations, debouncedSearchTerm, filterType, sortBy, getUnreadCount]);
+
+  /**
+   * The DM tab is a list of PEOPLE, not of threads.
+   *
+   * That inversion is the whole point: you must be able to message a colleague
+   * you have never messaged, so the roster is the source and any existing
+   * conversation is joined onto it. A person with no thread yet is a perfectly
+   * ordinary row — it just has no unread count and no last-activity time until
+   * someone speaks.
+   */
+  const directoryRows = useMemo(() => {
+    const dmByPeer = new Map();
+    conversations
+      .filter((c) => c.type === "private")
+      .forEach((c) => {
+        const peerId = c.peer?._id
+          || (c.members || []).map((m) => String(m._id)).find((id) => id !== String(currentUserId));
+        if (peerId) dmByPeer.set(String(peerId), c);
+      });
+
+    let rows = directory.map((person) => {
+      const conversation = dmByPeer.get(String(person._id)) || null;
+      return {
+        person,
+        conversation,
+        conversationId: conversation?._id || person.conversationId || null,
+        unread: conversation ? getUnreadCount(conversation._id) : 0,
+        lastMessageAt: conversation?.lastMessageAt || null,
+      };
+    });
+
+    if (debouncedSearchTerm) {
+      const q = debouncedSearchTerm.toLowerCase();
+      rows = rows.filter(
+        (r) =>
+          (r.person.name || "").toLowerCase().includes(q) ||
+          (r.person.email || "").toLowerCase().includes(q)
+      );
+    }
+
+    if (filterType === "unread") rows = rows.filter((r) => r.unread > 0);
+    else if (filterType === "read") rows = rows.filter((r) => r.unread === 0);
+
+    rows.sort((a, b) => {
+      switch (sortBy) {
+        case "alphabetical":
+          return (a.person.name || "").localeCompare(b.person.name || "");
+        case "unread":
+          return b.unread - a.unread;
+        case "recent":
+        default: {
+          // People you have actually spoken to float above the rest of the
+          // roster, most recent first; everyone else stays alphabetical
+          // underneath rather than in an arbitrary order.
+          const at = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : 0;
+          const bt = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : 0;
+          if (at || bt) return bt - at;
+          return (a.person.name || "").localeCompare(b.person.name || "");
+        }
+      }
+    });
+
+    return rows;
+  }, [
+    directory,
+    conversations,
+    currentUserId,
+    debouncedSearchTerm,
+    filterType,
+    sortBy,
+    getUnreadCount,
+  ]);
+
+  const totalDmUnread = useMemo(
+    () => directoryRows.reduce((sum, r) => sum + (r.unread || 0), 0),
+    [directoryRows]
+  );
+
+  const totalGroupUnread = useMemo(
+    () => filteredAndSortedConversations.reduce((sum, c) => sum + getUnreadCount(c._id), 0),
+    [filteredAndSortedConversations, getUnreadCount]
+  );
+
+  // Drives the header: a DM has no membership to manage and is already titled
+  // with the other person's name.
+  const isDirectThread = selectedConversation?.type === "private";
 
   return (
     <div className="app-shell messages-theme h-[100dvh] overflow-hidden">
@@ -357,12 +519,50 @@ const ChatPage = ({ onLogout }) => {
               </button>
             </div>
 
+            {/* Groups | DMs. Unread totals live on the tabs so a message
+                arriving in the list you're NOT looking at is still visible —
+                without them, switching tabs would be the only way to find out
+                something was waiting. */}
+            <div className="mb-3 flex gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1 dark:border-white/10 dark:bg-white/[0.04]">
+              {[
+                { key: "groups", label: "Groups", count: totalGroupUnread },
+                { key: "dms", label: "Direct", count: totalDmUnread },
+              ].map((tab) => (
+                <button
+                  key={tab.key}
+                  type="button"
+                  onClick={() => setActiveTab(tab.key)}
+                  className={`flex flex-1 items-center justify-center gap-2 rounded-lg px-3 py-1.5 text-sm font-medium transition ${
+                    activeTab === tab.key
+                      ? "bg-white text-blue-700 shadow-sm dark:bg-[#10131c] dark:text-blue-300"
+                      : "text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
+                  }`}
+                >
+                  {tab.key === "groups" ? (
+                    <Users className="h-3.5 w-3.5" />
+                  ) : (
+                    <MessageSquare className="h-3.5 w-3.5" />
+                  )}
+                  {tab.label}
+                  {tab.count > 0 && (
+                    <span className="rounded-full bg-blue-500 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white">
+                      {tab.count > 99 ? "99+" : tab.count}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+
             {/* Search Bar */}
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
               <input
                 type="text"
-                placeholder="Search conversations or members..."
+                placeholder={
+                  activeTab === "groups"
+                    ? "Search groups or members..."
+                    : "Search colleagues..."
+                }
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="app-control w-full py-2 pl-10 pr-10 text-sm placeholder-gray-500 focus:outline-none"
@@ -456,7 +656,105 @@ const ChatPage = ({ onLogout }) => {
 
           {/* Conversations List */}
           <div className="flex-1 overflow-y-auto px-4 pb-2">
-            {filteredAndSortedConversations.length === 0 ? (
+            {activeTab === "dms" ? (
+              /* ── Direct messages ──────────────────────────────────────
+                 A list of PEOPLE, not threads: a colleague you have never
+                 messaged still gets a row, and the conversation is created on
+                 first open. That is what makes "message anyone" work without
+                 a separate new-chat flow to discover. */
+              directoryRows.length === 0 ? (
+                <div className="flex h-full flex-col items-center justify-center px-4 text-center">
+                  <Users className="mb-3 h-12 w-12 text-gray-600" />
+                  <p className="mb-1 text-sm text-gray-400">
+                    {searchTerm
+                      ? "No colleagues found"
+                      : filterType === "unread"
+                      ? "No unread messages"
+                      : "No colleagues to message yet"}
+                  </p>
+                  {searchTerm && (
+                    <button
+                      onClick={() => setSearchTerm("")}
+                      className="mt-2 text-xs text-blue-400 hover:text-blue-300"
+                    >
+                      Clear search
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <ul className="mt-2 list-none space-y-2 p-0">
+                  {directoryRows.map(({ person, conversation, unread, lastMessageAt }) => {
+                    const hasUnread = unread > 0;
+                    const isSelected =
+                      conversation && selectedConversation?._id === conversation._id;
+                    const isOpening = openingDm === String(person._id);
+
+                    return (
+                      <li
+                        key={person._id}
+                        className={`relative cursor-pointer rounded-xl border px-3 py-3 transition-colors ${
+                          isSelected
+                            ? "border-blue-200 bg-blue-50 text-blue-950 dark:border-blue-400/25 dark:bg-blue-400/10 dark:text-white"
+                            : hasUnread
+                            ? "border-blue-200 bg-blue-50/70 text-slate-900 hover:bg-blue-100 dark:border-blue-400/25 dark:bg-blue-400/10 dark:text-white dark:hover:bg-blue-400/15"
+                            : "border-transparent text-slate-700 hover:border-slate-200 hover:bg-slate-50 dark:text-slate-200 dark:hover:border-white/10 dark:hover:bg-white/[0.05]"
+                        } ${isOpening ? "opacity-60" : ""}`}
+                        onClick={() =>
+                          !isOpening &&
+                          openDirectMessage({ person, conversation, lastMessageAt })
+                        }
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <span
+                            aria-hidden="true"
+                            className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${
+                              hasUnread
+                                ? "bg-blue-600 text-white"
+                                : "bg-slate-100 text-slate-600 dark:bg-white/[0.07] dark:text-slate-300"
+                            }`}
+                          >
+                            {(person.name || "?")
+                              .split(/\s+/)
+                              .filter(Boolean)
+                              .slice(0, 2)
+                              .map((w) => w[0])
+                              .join("")
+                              .toUpperCase()}
+                          </span>
+
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className={`truncate ${hasUnread ? "font-semibold" : ""}`}>
+                                {person.name}
+                              </span>
+                              {hasUnread && (
+                                <span className="shrink-0 rounded-full bg-blue-500 px-2 py-0.5 text-xs text-white">
+                                  {unread > 99 ? "99+" : unread}
+                                </span>
+                              )}
+                            </div>
+                            {/* Role/department rather than a message preview:
+                                listThreads doesn't return one, and in a company
+                                directory "who is this person" is the more useful
+                                second line anyway. */}
+                            <p className="truncate text-xs capitalize text-slate-500 dark:text-slate-400">
+                              {isOpening
+                                ? "Opening…"
+                                : [person.role, person.department]
+                                    .filter(Boolean)
+                                    .join(" · ") || "Colleague"}
+                            </p>
+                          </div>
+                        </div>
+                        {hasUnread && (
+                          <div className="absolute left-0 top-1/2 h-8 w-1 -translate-y-1/2 transform rounded-r bg-blue-500" />
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              )
+            ) : filteredAndSortedConversations.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full text-center px-4">
                 <Users className="w-12 h-12 text-gray-600 mb-3" />
                 <p className="text-sm text-gray-400 mb-1">
@@ -552,16 +850,20 @@ const ChatPage = ({ onLogout }) => {
             </ul>
             )}
           </div>
-          {(userRole === "admin" || userRole === "super-admin") && (
-            <div className="p-4 pt-0">
-              <button
-                onClick={() => setShowCreateGroup(true)}
-                className="app-primary-button w-full px-3 py-2 text-sm font-semibold"
-              >
-                + New Group
-              </button>
-            </div>
-          )}
+          {/* Groups tab only — there is no "new DM" button by design: every
+              colleague is already listed, so creating one is just tapping a
+              name. */}
+          {activeTab === "groups" &&
+            (userRole === "admin" || userRole === "super-admin") && (
+              <div className="p-4 pt-0">
+                <button
+                  onClick={() => setShowCreateGroup(true)}
+                  className="app-primary-button w-full px-3 py-2 text-sm font-semibold"
+                >
+                  + New Group
+                </button>
+              </div>
+            )}
         </section>
 
         {/* Chat Panel */}
@@ -579,26 +881,60 @@ const ChatPage = ({ onLogout }) => {
                   >
                     <ArrowLeft className="h-4 w-4" />
                   </button>
-                  <h4 className="truncate text-lg font-semibold text-slate-950 dark:text-white">
-                    {selectedConversation.name || "Group Chat"}
-                  </h4>
+                  {/* The title opens the member list on a group — the same
+                      affordance as tapping a group's name in WhatsApp, and
+                      the only one that works on mobile, where the members
+                      strip below is hidden at this breakpoint. */}
+                  {isDirectThread ? (
+                    <h4 className="truncate text-lg font-semibold text-slate-950 dark:text-white">
+                      {selectedConversation.name || "Direct message"}
+                    </h4>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setShowMembers(true)}
+                      className="truncate rounded text-left text-lg font-semibold text-slate-950 transition hover:text-blue-700 dark:text-white dark:hover:text-blue-300"
+                      title="View group members"
+                    >
+                      {selectedConversation.name || "Group Chat"}
+                    </button>
+                  )}
                 </div>
                 <div className="flex items-center gap-4">
                   {/* Current members only. The list now includes people who
                       have left the company (so their old messages keep their
                       author — see adapters/chatThread.js); naming them here
-                      would read as "still in this group", which they are not. */}
-                  {selectedConversation.members && (
-                    <div className="hidden max-w-sm truncate text-sm text-slate-500 dark:text-slate-400 lg:block">
+                      would read as "still in this group", which they are not.
+
+                      Clickable for EVERYONE, not just admins. This strip
+                      truncates after three or four names, and until now the
+                      only way to see the rest was ManageGroupModal — which is
+                      admin-gated, because it also renames the group and
+                      removes people. Seeing who is in a group you belong to
+                      is not an administrative privilege.
+
+                      Suppressed for DMs: the header already IS the other
+                      person's name, so "Members: Priya" is just it again. */}
+                  {!isDirectThread && selectedConversation.members && (
+                    <button
+                      type="button"
+                      onClick={() => setShowMembers(true)}
+                      className="hidden max-w-sm truncate rounded text-left text-sm text-slate-500 underline-offset-4 transition hover:text-blue-700 hover:underline dark:text-slate-400 dark:hover:text-blue-300 lg:block"
+                      title="View all group members"
+                    >
                       Members:{" "}
                       {selectedConversation.members
                         .filter((m) => m?.isActive !== false)
                         .map((m) => m.name || m._id)
                         .join(", ")}
-                    </div>
+                    </button>
                   )}
 
-                  {(userRole === "admin" || userRole === "super-admin") && (
+                  {/* Group management is meaningless on a DM — there is no
+                      membership to edit, and deleting the thread from under
+                      the other person is not an admin's call to make here. */}
+                  {!isDirectThread &&
+                    (userRole === "admin" || userRole === "super-admin") && (
                     <>
                       <button
                         title="Manage Group Members"
@@ -684,6 +1020,16 @@ const ChatPage = ({ onLogout }) => {
         conversation={selectedConversation}
         jwtToken={jwtToken}
         onGroupUpdated={() => loadConversations()}
+      />
+
+      {/* Read-only member roster — every participant, not just admins.
+          Renders from the members already on the conversation, so opening it
+          costs no request. */}
+      <GroupMembersModal
+        isOpen={showMembers}
+        onClose={() => setShowMembers(false)}
+        conversation={selectedConversation}
+        currentUserId={currentUserId}
       />
     </div>
   );

@@ -19,6 +19,19 @@ class AttendanceService {
       MAX_WORK_HOURS: 12,
       LATE_THRESHOLD_MINUTES: 1, // Grace period: 1 minute allowed, late after 1 minute
       BREAK_TIME_LIMIT_MINUTES: 60,
+
+      // ─── Break-duration absence policy ─────────────────────────────────
+      //
+      // A day's TOTAL break outside this band marks the day absent, whatever
+      // the hours worked. Both ends are deliberate: the upper bound catches
+      // time away from work, the lower one catches a day logged without any
+      // real break — which in practice means breaks were not being punched
+      // rather than that nobody stopped for lunch.
+      //
+      // Evaluated only once the day is over (see isWorkingDayOver) so nobody
+      // is marked absent at 9:15am purely for not having taken a break yet.
+      MAX_DAILY_BREAK_MINUTES: 100, // 1h 40m
+      MIN_DAILY_BREAK_MINUTES: 15,
       MAX_DAILY_WORK_HOURS: 20,
       MIN_SESSION_DURATION_SECONDS: 30,
       EARLY_PUNCH_IN_ALLOWED: true, // Allow early punch-in within the allowed window
@@ -677,6 +690,78 @@ class AttendanceService {
    * @param {Object} employee - The employee record
    * @param {Date} attendanceDate - The attendance date (REQUIRED for night shift duration/late calculation)
    */
+  /**
+   * Has this person's working day finished?
+   *
+   * Two independent signals, either of which is sufficient:
+   *   • the attendance date is before today (IST) — nothing more is coming;
+   *   • the employee is FINISHED — they punched out, or AttendanceAutoCloseService
+   *     closed them out.
+   *
+   * This gate is the difference between a useful policy and a broken one. The
+   * break rule looks at a whole day's total, so applying it mid-shift would
+   * mark everyone absent every morning before their first break, then quietly
+   * un-mark them at lunch.
+   */
+  isWorkingDayOver(employee, attendanceDate = null, now = new Date()) {
+    if (employee?.calculated?.currentStatus === 'FINISHED') return true;
+    if (!attendanceDate) return false;
+
+    const day = this.getISTDateComponents(new Date(attendanceDate));
+    const today = this.getISTDateComponents(now);
+    if (!day || !today) return false;
+
+    // Compare as numbers rather than Dates: the record's date is midnight UTC
+    // while `now` is a real instant, so a direct comparison is off by the
+    // timezone offset and gets the current day wrong for part of every day.
+    const asNumber = (d) => d.year * 10000 + d.month * 100 + d.day;
+    return asNumber(day) < asNumber(today);
+  }
+
+  /**
+   * Apply the break-duration policy to a finished day.
+   *
+   * @returns {{ absent: boolean, reason: string|null }}
+   */
+  evaluateBreakPolicy(employee, attendanceDate = null, now = new Date()) {
+    const none = { absent: false, reason: null };
+
+    // Never came in. Already absent for the ordinary reason — attributing it
+    // to their break instead would be misleading in the portal.
+    if (!employee?.calculated?.arrivalTime) return none;
+
+    // Exempt days. There was no ordinary working day to take a break in, and
+    // re-marking these absent would corrupt leave balances and payroll.
+    // NOTE: WFH is deliberately NOT exempt — it is a normal working day.
+    const leave = employee.leaveInfo || {};
+    if (leave.isOnLeave || leave.isHoliday || leave.isHalfDayLeave) return none;
+
+    if (!this.isWorkingDayOver(employee, attendanceDate, now)) return none;
+
+    const breakMinutes = Math.round((employee.calculated.breakDurationSeconds || 0) / 60);
+    const { MAX_DAILY_BREAK_MINUTES, MIN_DAILY_BREAK_MINUTES } = this.CONSTANTS;
+
+    if (breakMinutes > MAX_DAILY_BREAK_MINUTES) {
+      return {
+        absent: true,
+        reason:
+          `Break of ${this.formatDuration(breakMinutes * 60)} exceeds the ` +
+          `${this.formatDuration(MAX_DAILY_BREAK_MINUTES * 60)} daily limit`,
+      };
+    }
+
+    if (breakMinutes < MIN_DAILY_BREAK_MINUTES) {
+      return {
+        absent: true,
+        reason:
+          `Break of ${this.formatDuration(breakMinutes * 60)} is under the ` +
+          `${MIN_DAILY_BREAK_MINUTES}-minute daily minimum`,
+      };
+    }
+
+    return none;
+  }
+
   recalculateEmployeeData(employee, attendanceDate = null) {
     const events = employee.events.sort((a, b) =>
       new Date(a.timestamp) - new Date(b.timestamp)
@@ -831,6 +916,10 @@ class AttendanceService {
       // would mark employee as absent because workSeconds === 0
       isPresent: arrivalTime !== null,
       isAbsent: arrivalTime === null,
+      // Set immediately below, once the break policy has been evaluated
+      // against the durations computed above.
+      isBreakPolicyAbsent: false,
+      breakPolicyReason: null,
       // ⭐ isLate is true ONLY if lateMinutes > 0 (ensures consistency)
       isLate,
       lateMinutes, // ⭐ Minutes late (0 if on-time or flexible shift)
@@ -850,6 +939,42 @@ class AttendanceService {
       longestWorkSession: Math.round(longestWork),
       longestBreakSession: Math.round(longestBreak)
     };
+
+    // ─── Break-duration absence policy ────────────────────────────────────
+    //
+    // Applied AFTER the block above, because it reads the break total that
+    // block computes. It can only ever turn a present day absent — it never
+    // makes an absent day present, so the ordinary "never punched in" case is
+    // untouched.
+    //
+    // An HR override short-circuits it entirely. Without that check this
+    // method would silently undo every correction the moment anything
+    // recalculated the day — and that is not hypothetical: manual edits,
+    // auto-close, payroll and half a dozen scripts all call through here.
+    const override = employee.breakPolicyOverride;
+    const policy = this.evaluateBreakPolicy(employee, attendanceDate);
+
+    if (policy.absent && override?.isOverridden) {
+      // Keep the finding visible for the portal, but don't act on it.
+      employee.calculated.isBreakPolicyAbsent = false;
+      employee.calculated.breakPolicyReason = null;
+      override.originalReason = policy.reason;
+    } else if (policy.absent) {
+      employee.calculated.isAbsent = true;
+      employee.calculated.isPresent = false;
+      // A day that doesn't count cannot also be a half or full day — leaving
+      // these set would let downstream consumers (payroll, the dashboard
+      // counters) reach a different conclusion from isAbsent.
+      employee.calculated.isHalfDay = false;
+      employee.calculated.isFullDay = false;
+      employee.calculated.isBreakPolicyAbsent = true;
+      employee.calculated.breakPolicyReason = policy.reason;
+    } else if (override?.isOverridden) {
+      // The day no longer breaches the policy (punches were corrected, say),
+      // so the override has nothing left to suppress. Clearing the stored
+      // finding stops the portal showing a stale "would be absent" note.
+      override.originalReason = null;
+    }
 
     // Update performance metrics
     this.updatePerformanceMetrics(employee);

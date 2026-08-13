@@ -25,6 +25,8 @@ import MessageStatus from "./MessageStatus";
 import TypingIndicator from "./TypingIndicator";
 import ThreadSummaryModal from "./ThreadSummaryModal";
 import ThreadFilterBar from "./ThreadFilterBar";
+import DropOverlay from "./DropOverlay";
+import useFileAttach from "../../hooks/useFileAttach";
 import { useWebSocketContext } from "../../contexts/WebSocketContext";
 // Phase 4: project threads now use the same store and the same API module as
 // ChatPage. Two surfaces, one definition of "a message" and one definition of
@@ -45,6 +47,10 @@ import NewMessagesButton from "../chat/NewMessagesButton";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
 const SCOPE = messagingApi.SCOPES.PROJECT;
+
+// Must match the server's `uploadToS3.array("files", 5)` cap — attaching more
+// than the route accepts fails the whole send rather than the extra file.
+const MAX_ATTACHMENTS = 5;
 
 const commonEmojis = ["👍", "❤️", "😂", "😮", "😢", "🙏", "🔥", "✅"];
 
@@ -95,6 +101,25 @@ const ProjectMessagePanel = ({ projectId, currentUser }) => {
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [summaryDays, setSummaryDays] = useState(7);
   const [typingUsers, setTypingUsers] = useState([]);
+  // Transient strip above the composer for attach feedback ("only 2 of 7
+  // attached", "zip the folder first") — advisory, so it doesn't interrupt
+  // the way an alert() would.
+  const [attachNotice, setAttachNotice] = useState(null);
+
+  // Drag-and-drop onto the thread + paste from the clipboard. Same hook and
+  // same rules as ChatWindow — see hooks/useFileAttach.js.
+  const { isDragging, addFiles, dropHandlers, onPaste } = useFileAttach({
+    selectedFiles,
+    setSelectedFiles,
+    maxFiles: MAX_ATTACHMENTS,
+    onError: setAttachNotice,
+  });
+
+  useEffect(() => {
+    if (!attachNotice) return undefined;
+    const t = setTimeout(() => setAttachNotice(null), 5000);
+    return () => clearTimeout(t);
+  }, [attachNotice]);
 
   // ── refs ──
   // Scroll refs come from useMessageListMechanics — see below.
@@ -156,8 +181,11 @@ const ProjectMessagePanel = ({ projectId, currentUser }) => {
     setSelectedFiles((prev) => prev.filter((_, i) => i !== idx));
 
   const handleFileSelect = (e) => {
-    const files = Array.from(e.target.files || []);
-    setSelectedFiles((prev) => [...prev, ...files].slice(0, 5));
+    // Goes through the shared helper so the picker, drag-drop and paste all
+    // enforce the cap the same way and report the same message. The previous
+    // `.slice(0, 5)` silently discarded the overflow — the user picked seven
+    // files, five appeared, and nothing said why.
+    addFiles(e.target.files);
     e.target.value = "";
   };
 
@@ -448,7 +476,17 @@ const ProjectMessagePanel = ({ projectId, currentUser }) => {
 
   // ── render ──
   return (
-    <div className="flex h-full flex-col bg-slate-50 text-slate-900 dark:bg-[#090f14] dark:text-slate-100">
+    // Drop and paste are bound at the panel root, not just the composer, so
+    // dropping a file anywhere over the conversation works. `relative`
+    // anchors the overlay. onPaste is safe this broad because the handler
+    // ignores any clipboard payload carrying no files, leaving text pastes
+    // untouched.
+    <div
+      {...dropHandlers}
+      onPaste={onPaste}
+      className="relative flex h-full flex-col bg-slate-50 text-slate-900 dark:bg-[#090f14] dark:text-slate-100"
+    >
+      <DropOverlay active={isDragging} accent="teal" maxFiles={MAX_ATTACHMENTS} />
 
       {/* ── Conversation header ── */}
       <div className="flex items-center gap-2 border-b border-slate-200 bg-white px-3 py-2 dark:border-white/10 dark:bg-[#0d151c] sm:px-4">
@@ -903,11 +941,26 @@ const ProjectMessagePanel = ({ projectId, currentUser }) => {
         </div>
       )}
 
+      {/* Attach feedback — capacity overflow, dropped folder, etc. */}
+      {attachNotice && (
+        <div className="flex items-start gap-2 border-t border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-900 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-200">
+          <span className="flex-1">{attachNotice}</span>
+          <button
+            type="button"
+            onClick={() => setAttachNotice(null)}
+            className="shrink-0 rounded p-0.5 transition hover:bg-amber-100 dark:hover:bg-amber-400/20"
+            aria-label="Dismiss"
+          >
+            <XCircle className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
+
       {/* ── File preview chips ── */}
       {selectedFiles.length > 0 && (
         <div className="border-t border-slate-200 bg-white px-4 py-2 dark:border-white/10 dark:bg-[#0d151c]">
           <p className="mb-2 text-xs text-slate-500 dark:text-gray-400">
-            Selected files ({selectedFiles.length}/5):
+            Selected files ({selectedFiles.length}/{MAX_ATTACHMENTS}):
           </p>
           <div className="flex flex-wrap gap-2">
             {selectedFiles.map((file, idx) => (

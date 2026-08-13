@@ -21,6 +21,9 @@ import { ThemeProvider, useTheme } from "./contexts/ThemeContext";
 import { AchievementProvider } from "./contexts/AchievementContext";
 import AchievementNotificationContainer from "./components/achievements/AchievementNotificationContainer";
 
+// Callback alarms — persistent, app-wide. See components/callbacks/CallbackAlarm.jsx
+import CallbackAlarm from "./components/callbacks/CallbackAlarm";
+
 // WebSocket Context
 import {
   WebSocketProvider,
@@ -1059,6 +1062,15 @@ const AppWrapper = () => {
                   isAuthenticated
                     ? role === "client"
                       ? "/client-portal"
+                      : isHR
+                      ? // HR previously fell through to "/login" here — the
+                        // gate above excludes them, but the fallback had no
+                        // branch for them either. An authenticated user was
+                        // therefore sent to the login route, which bounced
+                        // them onward to /hrdashboard: a redundant hop, and a
+                        // visible flash of the login route on the way to a
+                        // page they were always allowed to see.
+                        "/hrdashboard"
                       : isAdmin
                       ? "/admin/tasks"
                       : "/login"
@@ -1303,6 +1315,15 @@ const AppWrapper = () => {
       </Suspense>
 
       {showStandaloneThemeToggle && <ThemeToggle floating />}
+
+      {/* Callback alarms.
+          Mounted OUTSIDE <Routes> deliberately: a callback comes due at a
+          moment of its own choosing, and the agent is almost never sitting on
+          the callbacks page when it does. Rendering it here means the alarm
+          reaches them wherever they are in the CRM.
+          Gated on callback access so it doesn't poll for staff who have no
+          callbacks — see the alarm hook for why polling is the right shape. */}
+      {isAuthenticated && canAccessLeadManagement() && <CallbackAlarm />}
 
       <ToastContainer position="top-right" autoClose={3000} theme={theme} />
       <Toaster position="top-right" />

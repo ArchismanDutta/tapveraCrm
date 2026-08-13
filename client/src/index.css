@@ -1047,7 +1047,35 @@ html.light [class*="to-slate-900"] {
   background-image: none !important;
 }
 
-html.light [class~="text-white"]:not([class*="bg-red"]):not([class*="bg-orange"]):not([class*="bg-yellow"]):not([class*="bg-green"]):not([class*="bg-blue"]):not([class*="bg-indigo"]):not([class*="bg-purple"]):not([class*="bg-pink"]):not([class*="bg-rose"]):not([class*="bg-cyan"]):not([class*="from-"]):not([class*="to-"]),
+/* ─────────────────────────────────────────────────────────────────────────
+   ONE :not() WITH A LIST, NOT TWELVE CHAINED ONES.
+
+   This is a specificity fix, not a tidy-up. Chained `:not()` clauses each add
+   a full (0,1,0), so the old form scored (0,14,1) — which quietly outranked
+   the "white text on a coloured surface stays white" exception further down
+   (`html.light [class*="bg-blue-"] [class~="text-white"]`, only (0,3,1)).
+   Both are !important, so specificity decided, and the exception never won:
+   it was dead CSS protecting nothing.
+
+   The visible symptom was chat. An own-message bubble carries `bg-blue-600`
+   so it was exempt here, but any nested element that restated `text-white`
+   was not — and got remapped to near-black text sitting on a blue bubble, in
+   light mode only. Same latent break on every coloured surface with nested
+   white text.
+
+   A single `:not(a, b, c)` takes the specificity of its most specific
+   argument — (0,1,0) — bringing this to (0,3,1). That ties the exception,
+   which is declared later in the file and therefore now wins, which is what
+   was intended all along. bg-teal is in the list because project message
+   bubbles use it and were being remapped outright.
+   ───────────────────────────────────────────────────────────────────────── */
+html.light [class~="text-white"]:not(
+    [class*="bg-red"], [class*="bg-orange"], [class*="bg-yellow"],
+    [class*="bg-green"], [class*="bg-blue"], [class*="bg-indigo"],
+    [class*="bg-purple"], [class*="bg-pink"], [class*="bg-rose"],
+    [class*="bg-cyan"], [class*="bg-teal"], [class*="bg-emerald"],
+    [class*="from-"], [class*="to-"]
+  ),
 html.light [class*="text-gray-100"],
 html.light [class*="text-gray-200"],
 html.light [class*="text-slate-100"],
@@ -1112,12 +1140,17 @@ html.light [class*="text-orange-400"] {
   color: #c2410c !important;
 }
 
+/* White text nested inside a coloured surface stays white.
+   Now actually reachable — see the specificity note on the blanket remap
+   above, which used to outrank this and made it dead CSS. `bg-teal-` added
+   for project message bubbles. */
 html.light [class*="bg-red-"] [class~="text-white"],
 html.light [class*="bg-rose-"] [class~="text-white"],
 html.light [class*="bg-green-"] [class~="text-white"],
 html.light [class*="bg-emerald-"] [class~="text-white"],
 html.light [class*="bg-blue-"] [class~="text-white"],
 html.light [class*="bg-cyan-"] [class~="text-white"],
+html.light [class*="bg-teal-"] [class~="text-white"],
 html.light [class*="bg-purple-"] [class~="text-white"],
 html.light [class*="bg-violet-"] [class~="text-white"],
 html.light [class*="bg-orange-"] [class~="text-white"],

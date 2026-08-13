@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { toast } from "react-toastify";
 import {
   Search,
@@ -32,6 +32,20 @@ const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
 
 const ViewCallbacks = ({ onLogout }) => {
   const navigate = useNavigate();
+  const location = useLocation();
+
+  /**
+   * The callback the user arrived here to deal with.
+   *
+   * CallbackAlarm's "Open callback" navigates here with the id in router
+   * state. Highlighting and scrolling to it is the difference between that
+   * button doing what it says and dumping the user on a list of fifty rows to
+   * search through — having just been interrupted precisely so they wouldn't
+   * have to go looking.
+   */
+  const [highlightedCallbackId, setHighlightedCallbackId] = useState(
+    location.state?.openCallbackId || null
+  );
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [callbacks, setCallbacks] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -442,6 +456,42 @@ const ViewCallbacks = ({ onLogout }) => {
   const currentCallbacks = filteredCallbacks.slice(indexOfFirstItem, indexOfLastItem);
   const totalPages = Math.ceil(filteredCallbacks.length / itemsPerPage);
 
+  /**
+   * Bring the alarm's callback into view, paging to it if necessary.
+   *
+   * Paging matters: the list is 10 or 20 rows a page and the callback that
+   * just rang is frequently not on the first one, so highlighting alone would
+   * scroll to nothing. Runs once the rows exist, then clears the router state
+   * so a later refresh doesn't re-highlight a row the user has moved on from.
+   */
+  useEffect(() => {
+    if (!highlightedCallbackId || filteredCallbacks.length === 0) return;
+
+    const index = filteredCallbacks.findIndex((c) => c._id === highlightedCallbackId);
+    if (index === -1) {
+      // Filtered out, or already completed and gone from this view. Drop the
+      // highlight rather than leaving it pending forever.
+      setHighlightedCallbackId(null);
+      return;
+    }
+
+    const page = Math.floor(index / itemsPerPage) + 1;
+    if (page !== currentPage) {
+      setCurrentPage(page);
+      return; // Re-runs after the page change, with the row rendered.
+    }
+
+    const el = document.getElementById(`callback-row-${highlightedCallbackId}`);
+    el?.scrollIntoView({ behavior: "smooth", block: "center" });
+
+    // Clear the router state so a back-navigation or reload doesn't resurrect
+    // a highlight for something already dealt with.
+    window.history.replaceState({}, document.title);
+
+    const t = setTimeout(() => setHighlightedCallbackId(null), 6000);
+    return () => clearTimeout(t);
+  }, [highlightedCallbackId, filteredCallbacks, currentPage, itemsPerPage]);
+
   const getStatusColor = (status) => {
     const colors = {
       Pending: "bg-yellow-500/20 text-yellow-400 border-yellow-500/50",
@@ -750,8 +800,17 @@ const ViewCallbacks = ({ onLogout }) => {
                     {currentCallbacks.map((callback, index) => (
                       <tr
                         key={callback._id}
+                        id={`callback-row-${callback._id}`}
                         className={`transition-colors hover:bg-slate-700/30 ${
                           isOverdue(callback) ? "bg-red-500/5" : ""
+                        } ${
+                          // Arrived here from a callback alarm's "Open
+                          // callback". Without this the alarm navigated to a
+                          // list of dozens of rows and left the user to find
+                          // the one it had just been shouting about.
+                          highlightedCallbackId === callback._id
+                            ? "bg-amber-500/15 ring-1 ring-inset ring-amber-400/50"
+                            : ""
                         }`}
                       >
                         <td className="px-2 py-3 text-sm text-gray-300">

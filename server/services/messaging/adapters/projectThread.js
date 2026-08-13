@@ -79,6 +79,11 @@ function normalize(doc) {
     clientMsgId: m.clientMsgId || null,
     status: m.status || 'sent',
     pinned: Boolean(m.isPinned),
+    // Always null today — project messages have no edit path yet. Emitted
+    // regardless so both adapters produce an identical key set, which is what
+    // lets the client treat a normalized message the same whichever scope it
+    // came from (and is asserted by messaging-service.test.js).
+    editedAt: m.editedAt || null,
     createdAt: m.createdAt,
   };
 }

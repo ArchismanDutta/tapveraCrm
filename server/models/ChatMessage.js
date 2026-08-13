@@ -85,6 +85,21 @@ const ChatMessageSchema = new mongoose.Schema({
       _id: false,
     },
   ],
+
+  /**
+   * When this message was last edited, or null if never.
+   *
+   * Additive and optional — every message that predates the feature has no
+   * value here and correctly renders without an "edited" marker.
+   *
+   * Only the timestamp is kept, not the previous text. Storing edit history
+   * would mean the server holds a copy of something the sender explicitly
+   * retracted, which is the opposite of what editing is for; and surfacing it
+   * would make the feature useless (nobody corrects a typo if the typo stays
+   * visible). The marker exists so recipients know the words changed — that
+   * is the honest minimum, and it is what WhatsApp shows too.
+   */
+  editedAt: { type: Date, default: null },
 });
 
 // Idempotency: at most one message per client-generated id.

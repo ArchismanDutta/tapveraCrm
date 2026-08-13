@@ -6,7 +6,8 @@ const {
   updateManualAttendance,
   deleteManualAttendance,
   getManualAttendanceRecords,
-  getAttendanceByUserAndDate
+  getAttendanceByUserAndDate,
+  setBreakPolicyOverride
 } = require("../controllers/manualAttendanceController");
 // Access-management rework (2026-07-03) - Phase 4.3.
 // See docs/superpowers/plans/2026-07-03-access-management-rework.md
@@ -74,6 +75,21 @@ router.get("/", getManualAttendanceRecords);
  * @params  userId: MongoDB ObjectId, date: YYYY-MM-DD
  */
 router.get("/user/:userId/date/:date", getAttendanceByUserAndDate);
+
+/**
+ * @route   POST /api/admin/manual-attendance/break-policy-override
+ * @desc    Restore a day that the break-duration policy marked absent
+ *          (>1h40m or <15m total break), or withdraw a previous override.
+ *          Declared before "/:id" so it isn't swallowed by that param route.
+ * @access  Admin, HR, Super-Admin
+ * @body    {
+ *            userId: String (required),
+ *            date: String (required, YYYY-MM-DD),
+ *            isOverridden: Boolean (optional, default: true),
+ *            reason: String (required when isOverridden is true)
+ *          }
+ */
+router.post("/break-policy-override", setBreakPolicyOverride);
 
 /**
  * @route   PUT /api/admin/manual-attendance/:id

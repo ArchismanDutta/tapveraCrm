@@ -94,17 +94,36 @@ const Login = ({ onLoginSuccess }) => {
       localStorage.setItem("user", JSON.stringify(data.user));
       localStorage.setItem("role", data.user.role);
 
-      const role = data.user.role?.toLowerCase();
-      // Redirect based on user role
-      if (role === "client") {
-        navigate("/client-portal");
-      } else if (role === "admin" || role === "super-admin") {
-        navigate("/admin/tasks");
-      } else {
-        navigate("/dashboard");
-      }
-
+      // ─── LAND VIA "/", NOT A ROLE MAP OF OUR OWN ──────────────────────
+      //
+      // This used to pick the destination here:
+      //     client        -> /client-portal
+      //     admin | super -> /admin/tasks
+      //     everyone else -> /dashboard
+      //
+      // That is a second, incomplete copy of a routing table App.jsx already
+      // owns, and the two had drifted apart:
+      //
+      //   • HR fell into "everyone else" and was sent to /dashboard — a route
+      //     explicitly gated `!isAdmin && !isHR`. It rejected them straight
+      //     back to /login, which then forwarded to /hrdashboard. Three route
+      //     swaps to land one page, which is the flicker HR users saw on
+      //     every sign-in.
+      //   • The role string is only lowercased here, not normalised the way
+      //     App does it, so an account stored as "superadmin" (no hyphen)
+      //     missed the super-admin branch and took the same detour.
+      //
+      // App's catch-all already maps every role to its landing page and is
+      // the one the rest of the app obeys. Sending everyone there makes it
+      // the single source of truth, so a new role or a moved dashboard is a
+      // one-place change that cannot desync from this file again.
+      //
+      // onLoginSuccess FIRST: it sets isAuthenticated/role, which the
+      // catch-all reads. React batches both into one render, but doing it in
+      // this order means "/" is never evaluated against a logged-out state
+      // even if that ever stops being true.
       if (onLoginSuccess) onLoginSuccess(data.token);
+      navigate("/", { replace: true });
     } catch {
       setError("Failed to connect to the server. Please try again.");
     } finally {

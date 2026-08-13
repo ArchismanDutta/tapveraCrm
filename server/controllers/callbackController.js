@@ -378,12 +378,30 @@ exports.updateCallback = async (req, res) => {
     }
 
     // Track rescheduling
-    if (req.body.callbackDate && req.body.callbackDate !== callback.callbackDate.toISOString()) {
+    const dateChanged =
+      req.body.callbackDate &&
+      req.body.callbackDate !== callback.callbackDate.toISOString();
+    if (dateChanged) {
       req.body.rescheduledFrom = callback.callbackDate;
       req.body.rescheduledCount = (callback.rescheduledCount || 0) + 1;
       if (callback.status !== "Rescheduled") {
         req.body.status = "Rescheduled";
       }
+    }
+
+    // Moving a callback resets its alarm.
+    //
+    // Snooze and dismissal are answers to "should this ring at THAT moment".
+    // Once the moment changes they are stale, and leaving them in place is a
+    // silent failure of the worst kind: an agent reschedules to tomorrow, the
+    // dismissal from today persists, and tomorrow's alarm never rings at all.
+    // The heads-up flag resets for the same reason — otherwise the new time
+    // gets no warning because the old one already had it.
+    if (dateChanged || (req.body.callbackTime && req.body.callbackTime !== callback.callbackTime)) {
+      req.body.snoozedUntil = null;
+      req.body.alarmDismissedAt = null;
+      req.body.reminderSent = false;
+      req.body.reminderSentDate = null;
     }
 
     // Track completion

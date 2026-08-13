@@ -22,6 +22,7 @@ import {
   Zap,
   Plus,
   Forward,
+  Pencil,
   CheckSquare,
 } from "lucide-react";
 import MediaLightbox from "../common/MediaLightbox";
@@ -43,6 +44,8 @@ import UnreadDivider from "../message/UnreadDivider";
 import NewMessagesButton from "./NewMessagesButton";
 import ForwardMessagesModal from "./ForwardMessagesModal";
 import useMessageListMechanics, { startsGroup } from "../../hooks/useMessageListMechanics";
+import useFileAttach from "../../hooks/useFileAttach";
+import DropOverlay from "../message/DropOverlay";
 import {
   fetchOlderMessages,
   selectOlderStatus,
@@ -59,6 +62,10 @@ import { deriveStatus } from "../../store/slices/threadsSlice";
 import * as messagingApi from "../../api/messagingApi";
 import { selectTyping } from "../../store/slices/threadsSlice";
 import { useSelector, useDispatch } from "react-redux";
+
+// Must match the server's `uploadToS3.array("files", 5)` cap — attaching more
+// than the route accepts fails the whole send rather than the extra file.
+const MAX_ATTACHMENTS = 5;
 
 // ─── Main component ──────────────────────────────────────────────────────────
 // Styling here is kept in lockstep with ChatPage.jsx (its parent shell) —
@@ -108,7 +115,28 @@ const ChatWindow = ({
     userId: currentUserId,
   });
   const [selectedFiles, setSelectedFiles] = useState([]);
+  // Transient strip above the composer for attach feedback ("only 2 of 7
+  // attached", "zip the folder first"). An alert() here would interrupt
+  // someone mid-compose for something advisory, and this is the same
+  // information without stealing focus.
+  const [attachNotice, setAttachNotice] = useState(null);
   const [replyingTo, setReplyingTo] = useState(null);
+
+  // Inline message editing (7-minute window — see messagingApi.canEditMessage).
+  const [editingId, setEditingId] = useState(null);
+  const [editDraft, setEditDraft] = useState("");
+  const [editSaving, setEditSaving] = useState(false);
+
+  // The edit window closes with the passage of time, not with any state
+  // change, so nothing would otherwise re-render to retire the button — it
+  // would sit there looking available until something unrelated happened to
+  // repaint, and then fail on click. This ticks often enough that the
+  // affordance disappears close to when it actually expires.
+  const [, setNow] = useState(Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 15000);
+    return () => clearInterval(id);
+  }, []);
   // Only the setter is used: the mention picker records its selections here,
   // but resolveMentionedUserIds re-derives them from the message text at send
   // time, which also catches mentions typed without the picker.
@@ -135,6 +163,22 @@ const ChatWindow = ({
   const textareaRef = useRef(null);
   const emojiPickerRef = useRef(null);
   const typingTimeoutRef = useRef(null);
+
+  // Drag-and-drop onto the thread + paste from the clipboard. Same hook, same
+  // rules, as the project panel — see hooks/useFileAttach.js.
+  const { isDragging, addFiles, dropHandlers, onPaste } = useFileAttach({
+    selectedFiles,
+    setSelectedFiles,
+    maxFiles: MAX_ATTACHMENTS,
+    onError: setAttachNotice,
+  });
+
+  // Auto-dismiss the notice; it's advisory, not something to acknowledge.
+  useEffect(() => {
+    if (!attachNotice) return undefined;
+    const t = setTimeout(() => setAttachNotice(null), 5000);
+    return () => clearTimeout(t);
+  }, [attachNotice]);
 
   // ── shared real-time connection (see WebSocketContext) ──
   const {
@@ -315,12 +359,11 @@ const ChatWindow = ({
   };
 
   const handleFileSelect = (e) => {
-    const files = Array.from(e.target.files);
-    if (files.length + selectedFiles.length > 5) {
-      alert("Maximum 5 files allowed");
-      return;
-    }
-    setSelectedFiles((prev) => [...prev, ...files]);
+    addFiles(e.target.files);
+    // Reset so picking the SAME file again still fires a change event —
+    // without this, removing an attachment and re-selecting it silently does
+    // nothing.
+    e.target.value = "";
   };
 
   const removeFile = (index) => {
@@ -329,6 +372,49 @@ const ChatWindow = ({
 
   const handleReply = (msg) => {
     setReplyingTo(msg);
+  };
+
+  /* ── Editing ──────────────────────────────────────────────────────── */
+
+  const startEdit = (msg) => {
+    setEditingId(String(msg.messageId || msg._id || msg.id));
+    setEditDraft(msg.message || msg.text || msg.body || "");
+    // Replying and editing both commandeer a text box; being in one while the
+    // other is open reads as two composers fighting over the same message.
+    setReplyingTo(null);
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditDraft("");
+  };
+
+  const saveEdit = async (messageId) => {
+    const text = editDraft.trim();
+
+    // An empty edit is a delete, which is a separate feature with its own
+    // rules. The server refuses it too; catching it here avoids a round trip
+    // to be told so.
+    if (!text) {
+      alert("An edited message cannot be empty. Use cancel to leave it unchanged.");
+      return;
+    }
+
+    setEditSaving(true);
+    try {
+      await messagingApi.editMessage(messagingApi.SCOPES.CHAT, messageId, text);
+      // No local mutation: the server broadcasts `thread:updated`, which
+      // patches the message in the store for every participant including this
+      // one — the same path a reaction already takes.
+      cancelEdit();
+    } catch (error) {
+      alert(
+        error?.response?.data?.error ||
+          "Could not edit the message. It may no longer be editable."
+      );
+    } finally {
+      setEditSaving(false);
+    }
   };
 
   const handleReaction = async (messageId, emoji) => {
@@ -633,7 +719,18 @@ const ChatWindow = ({
   };
 
   return (
-    <div className="flex h-full flex-col bg-slate-50 text-slate-900 dark:bg-[#0b0d12] dark:text-slate-100">
+    // Drop and paste are bound at the panel root, not just the composer, so
+    // dropping a file anywhere over the conversation works — aiming for the
+    // small textarea is a needless precision task. `relative` anchors the
+    // overlay. onPaste is safe this broad because the handler ignores any
+    // clipboard payload that carries no files, so pasting text into the
+    // search or composer behaves exactly as before.
+    <div
+      {...dropHandlers}
+      onPaste={onPaste}
+      className="relative flex h-full flex-col bg-slate-50 text-slate-900 dark:bg-[#0b0d12] dark:text-slate-100"
+    >
+      <DropOverlay active={isDragging} accent="blue" maxFiles={MAX_ATTACHMENTS} />
       {/* Presence. Self-hiding — renders null when the other party has
           presence turned off, or before the snapshot arrives, rather than
           claiming they are offline. */}
@@ -831,9 +928,84 @@ const ChatWindow = ({
                       </p>
                     )}
 
-                    {/* Message with Markdown rendering */}
-                      {msg.message || msg.text ? (
-                        <div className={`prose prose-sm max-w-none break-words text-sm leading-relaxed ${isSelf ? "prose-invert text-white" : "prose-slate dark:prose-invert dark:text-white"}`}>
+                    {/* Inline editor — replaces the rendered body in place, so
+                        the message stays where it is in the thread and keeps
+                        its surrounding context while being corrected. */}
+                    {editingId === String(msg.messageId) ? (
+                      <div className="space-y-2">
+                        <textarea
+                          value={editDraft}
+                          onChange={(e) => setEditDraft(e.target.value)}
+                          autoFocus
+                          rows={Math.min(6, (editDraft.match(/\n/g) || []).length + 1)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Escape") {
+                              e.preventDefault();
+                              cancelEdit();
+                            }
+                            // Enter saves, Shift+Enter adds a line — matching
+                            // the composer, so the muscle memory carries over.
+                            if (e.key === "Enter" && !e.shiftKey) {
+                              e.preventDefault();
+                              saveEdit(msg.messageId);
+                            }
+                          }}
+                          /* No colour classes: index.css forces
+                             background, border and text colour on every
+                             input/textarea inside .messages-theme with
+                             !important, so anything set here is dead code.
+                             The forced pair is legible in both themes (white
+                             box + dark text in light, dark box + light text
+                             in dark), it just won't be translucent over the
+                             bubble. */
+                          className="w-full resize-none rounded-lg border px-2 py-1.5 text-sm outline-none"
+                        />
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            disabled={editSaving}
+                            onClick={() => saveEdit(msg.messageId)}
+                            className={`rounded-md px-2.5 py-1 text-xs font-semibold transition disabled:opacity-50 ${
+                              isSelf
+                                ? "bg-white text-blue-700 hover:bg-blue-50"
+                                : "bg-blue-600 text-white hover:bg-blue-700"
+                            }`}
+                          >
+                            {editSaving ? "Saving…" : "Save"}
+                          </button>
+                          <button
+                            type="button"
+                            disabled={editSaving}
+                            onClick={cancelEdit}
+                            className={`rounded-md px-2.5 py-1 text-xs font-medium transition disabled:opacity-50 ${
+                              isSelf
+                                ? "text-blue-50/80 hover:bg-white/10 hover:text-white"
+                                : "text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-white/10"
+                            }`}
+                          >
+                            Cancel
+                          </button>
+                          <span className={`text-[10px] ${isSelf ? "text-blue-50/60" : "text-slate-400 dark:text-slate-500"}`}>
+                            Enter to save · Esc to cancel
+                          </span>
+                        </div>
+                      </div>
+                    ) : null}
+
+                    {/* Message with Markdown rendering.
+
+                        NOTE: no text colour on the wrapper below — it INHERITS
+                        from the bubble. Restating `text-white` there is what
+                        made own-messages render near-black in light mode:
+                        index.css has a blanket `html.light [class~="text-white"]`
+                        remap that turns stray white text dark, exempting only
+                        elements that carry their own `bg-*` class. The bubble
+                        carries `bg-blue-600` so it is exempt; this inner div
+                        was not, and got remapped while sitting on blue.
+                        Inheriting keeps one source of truth for the bubble's
+                        foreground colour and removes the trigger entirely. */}
+                      {editingId !== String(msg.messageId) && (msg.message || msg.text) ? (
+                        <div className="prose prose-sm max-w-none break-words text-sm leading-relaxed">
                           <ReactMarkdown
                             remarkPlugins={[remarkGfm]}
                             rehypePlugins={[rehypeRaw]}
@@ -939,7 +1111,11 @@ const ChatWindow = ({
                                   <div className="flex items-center gap-2 rounded border border-[#1e2a35]/0 bg-black/10 p-2 dark:bg-black/20">
                                     {getFileIcon(att?.fileType)}
                                     <div className="min-w-0 flex-1">
-                                      <div className={`truncate text-xs ${isSelf ? "text-white" : "text-slate-900 dark:text-white"}`}>
+                                      {/* Inherits the bubble's colour — see the
+                                          note on the markdown wrapper above for
+                                          why an explicit `text-white` here goes
+                                          dark in light mode. */}
+                                      <div className="truncate text-xs">
                                         {att?.filename || 'Unknown file'}
                                       </div>
                                       <div className={`text-xs ${isSelf ? "text-blue-50/75" : "text-slate-500 dark:text-gray-400"}`}>
@@ -1029,6 +1205,22 @@ const ChatWindow = ({
                             hour: "2-digit",
                             minute: "2-digit",
                           }) : ''}
+                          {/* Recipients are told the words changed after they
+                              may have read them. The previous text is not kept
+                              — see the note on ChatMessage.editedAt — so this
+                              marker is the whole disclosure, and leaving it off
+                              would make edits silent. */}
+                          {msg.editedAt && (
+                            <span
+                              className="ml-1.5 italic"
+                              title={`Edited ${new Date(msg.editedAt).toLocaleTimeString([], {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })}`}
+                            >
+                              (edited)
+                            </span>
+                          )}
                           {/* Ticks, sender-side only — showing them on someone
                               else's message would be meaningless. */}
                           {isSelf && (
@@ -1052,6 +1244,21 @@ const ChatWindow = ({
                         >
                           <Forward className={`h-3.5 w-3.5 ${isSelf ? "text-blue-50/80 hover:text-white" : "text-slate-400 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400"}`} />
                         </button>
+                        {/* Your own message, still inside the 7-minute window.
+                            The check is presentation only — the server
+                            re-verifies both rules on the request, because a
+                            client cannot be trusted to have hidden a button.
+                            The `now` state ticks so this retires on time
+                            rather than lingering until an unrelated repaint. */}
+                        {messagingApi.canEditMessage(msg, currentUserId) && (
+                          <button
+                            onClick={() => startEdit(msg)}
+                            className="rounded p-1 transition hover:bg-black/5 dark:hover:bg-white/10"
+                            title="Edit message (7 minutes)"
+                          >
+                            <Pencil className={`h-3.5 w-3.5 ${isSelf ? "text-blue-50/80 hover:text-white" : "text-slate-400 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400"}`} />
+                          </button>
+                        )}
                           <button
                             onClick={() => copyToClipboard(msg.message || msg.text || '')}
                             className="rounded-md p-1 transition-colors hover:bg-black/10 dark:hover:bg-white/10"
@@ -1144,11 +1351,26 @@ const ChatWindow = ({
         </div>
       )}
 
+      {/* Attach feedback — capacity overflow, dropped folder, etc. */}
+      {attachNotice && (
+        <div className="flex items-start gap-2 border-t border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-900 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-200">
+          <span className="flex-1">{attachNotice}</span>
+          <button
+            type="button"
+            onClick={() => setAttachNotice(null)}
+            className="shrink-0 rounded p-0.5 transition hover:bg-amber-100 dark:hover:bg-amber-400/20"
+            aria-label="Dismiss"
+          >
+            <XCircle className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
+
       {/* File Preview */}
       {selectedFiles.length > 0 && (
         <div className="border-t border-slate-200 bg-white px-4 py-2 dark:border-white/10 dark:bg-[#10131c]">
           <p className="mb-2 text-xs text-slate-500 dark:text-gray-400">
-            Selected files ({selectedFiles.length}/5):
+            Selected files ({selectedFiles.length}/{MAX_ATTACHMENTS}):
           </p>
           <div className="flex flex-wrap gap-2">
             {selectedFiles.map((file, idx) => (

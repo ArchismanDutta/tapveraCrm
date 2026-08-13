@@ -14,7 +14,27 @@ exports.getEmployeeList = async (req, res) => {
     const filter = {};
 
     if (department && department !== "all") filter.department = department.trim();
-    if (status && status !== "all") filter.status = status.trim().toLowerCase();
+
+    // ─── FORMER STAFF ARE EXCLUDED BY DEFAULT ────────────────────────────
+    //
+    // This used to apply NO status filter unless the caller asked for one,
+    // and no caller does — the attendance portal requests
+    // `/api/admin/employees?t=<cachebuster>` and nothing else. So every
+    // terminated and absconded account came back and sat in the employee
+    // picker and the "All employees" grid indefinitely, growing with every
+    // departure.
+    //
+    // Their attendance history is still real and sometimes genuinely needed
+    // (final payroll, a disputed month), so this hides them rather than
+    // making them unreachable: `?status=terminated` fetches exactly them, and
+    // `?status=all` returns everyone. Same posture as the chat directory —
+    // you cannot pick a former colleague from the default list, but nothing
+    // about their record is erased.
+    if (status && status !== "all") {
+      filter.status = status.trim().toLowerCase();
+    } else if (!status) {
+      filter.status = { $nin: ["terminated", "absconded"] };
+    }
 
     const employees = await User.find(
       filter,

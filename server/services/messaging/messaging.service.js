@@ -271,6 +271,50 @@ async function forwardMessages(user, scope, sourceThreadId, messageIds, destThre
   };
 }
 
+/**
+ * Edit a message's text, within the sender's edit window.
+ *
+ * The adapter owns the two rules that decide this (you sent it; it is recent),
+ * because both depend on fields only it knows how to read. What happens here
+ * is the part every write shares: verify the caller can still write to the
+ * thread at all, then broadcast.
+ *
+ * That second check matters and is not redundant — someone removed from a
+ * group after posting must not be able to keep rewriting what they left
+ * behind.
+ */
+async function editMessage(user, scope, messageId, body) {
+  const adapter = adapterFor(scope);
+  if (typeof adapter.editMessage !== 'function') {
+    throw new access.AccessError(`Editing is not supported for "${scope}" threads`, 400, 'UNSUPPORTED');
+  }
+
+  const result = await adapter.editMessage(user, messageId, body);
+  if (result?.error) return result;
+
+  await authorize(user, scope, result.threadId, 'write');
+
+  const memberIds = await adapter.getMemberIds(result.threadId);
+  realtime.emitUpdated({
+    scope,
+    threadId: result.threadId,
+    // Both keys on purpose: `message` is the raw document shape the REST
+    // responses use, `body` the normalized one carried by thread:* events.
+    // Clients read whichever they were built against, and a patch that only
+    // carried one would update some surfaces and not others.
+    patch: {
+      messageId: String(messageId),
+      message: result.normalized.body,
+      body: result.normalized.body,
+      mentions: result.normalized.mentions,
+      editedAt: result.normalized.editedAt,
+    },
+    memberIds,
+  });
+
+  return result;
+}
+
 async function react(user, scope, messageId, emoji) {
   const adapter = adapterFor(scope);
 
@@ -429,5 +473,6 @@ module.exports = {
   markReadUpTo,
   sendMessage,
   forwardMessages,
+  editMessage,
   react,
 };

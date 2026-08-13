@@ -28,16 +28,101 @@ exports.getConversationById = async (conversationId) => {
   return await Conversation.findById(conversationId);
 };
 
-// Get or create a private conversation between two users
+/**
+ * The people you can start a direct message with: every active colleague
+ * except yourself.
+ *
+ * ─── WHY THE WHOLE DIRECTORY, NOT JUST EXISTING CHATS ───
+ * A DM list built only from conversations that already exist has a
+ * chicken-and-egg problem — you cannot message someone you have never
+ * messaged. Returning the full roster and creating the conversation lazily on
+ * first send means there is no separate "new chat" step to find.
+ *
+ * `conversationId` is included where a thread already exists so the client can
+ * open it directly. A null there is not an error: it means the pair have not
+ * spoken yet, and the row is still perfectly clickable.
+ *
+ * Clients are deliberately absent — they live in the separate `Client`
+ * collection and are reached through project threads, which keep the
+ * internal/client boundary that this directory would otherwise cross.
+ */
+exports.listDirectory = async (currentUserId) => {
+  const me = String(currentUserId);
+
+  // Only "active". inactive/terminated/absconded staff are excluded from
+  // STARTING a chat — but note listThreads still returns existing threads with
+  // them, and still attributes their old messages correctly. Not being able to
+  // start a new conversation is different from erasing the ones you had.
+  const users = await User.find(
+    { _id: { $ne: me }, status: "active" },
+    "name email role department"
+  )
+    .sort({ name: 1 })
+    .lean();
+
+  // Existing DMs in one query rather than one per user — this list is the
+  // whole company, so a per-row lookup is the difference between one round
+  // trip and a hundred.
+  const existing = await Conversation.find({ type: "private", members: me })
+    .select("members")
+    .lean();
+
+  const threadByPeer = new Map();
+  existing.forEach((conversation) => {
+    const peer = (conversation.members || []).find((m) => String(m) !== me);
+    if (peer) threadByPeer.set(String(peer), String(conversation._id));
+  });
+
+  return users.map((u) => ({
+    _id: String(u._id),
+    name: u.name,
+    email: u.email,
+    role: u.role,
+    department: u.department || null,
+    conversationId: threadByPeer.get(String(u._id)) || null,
+  }));
+};
+
+/**
+ * Get or create a private conversation between two users.
+ *
+ * `$size: 2` is what keeps this a genuine one-to-one: without it, `$all`
+ * would also match a group that happens to contain both people, and a DM
+ * would silently resolve to that group's thread.
+ */
 exports.getOrCreatePrivateConversation = async (userIdA, userIdB) => {
+  const a = String(userIdA);
+  const b = String(userIdB);
+
+  // Guard rather than create: a self-conversation has no second party, so
+  // every receipt and unread rule downstream (which all read "everyone except
+  // the sender") would be computing against an empty set.
+  if (a === b) {
+    const err = new Error("You cannot start a conversation with yourself");
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const other = await User.findById(b).select("_id status").lean();
+  if (!other) {
+    const err = new Error("User not found");
+    err.statusCode = 404;
+    throw err;
+  }
+  if (other.status !== "active") {
+    const err = new Error("That person is no longer active");
+    err.statusCode = 400;
+    throw err;
+  }
+
   let conversation = await Conversation.findOne({
     type: "private",
-    members: { $all: [userIdA, userIdB], $size: 2 },
+    members: { $all: [a, b], $size: 2 },
   });
   if (!conversation) {
     conversation = new Conversation({
       type: "private",
-      members: [userIdA, userIdB],
+      members: [a, b],
     });
     await conversation.save();
   }

@@ -292,14 +292,15 @@ app.use((err, req, res, next) => {
   // 12MB scan to a leave request got "Internal Server Error" and no idea that
   // the file was simply too big. multer raises MulterError with a code; our own
   // fileFilter raises a plain Error whose message is already user-facing.
+  // One ceiling for every upload now — see config/s3Config.js for why the
+  // previous smaller-cap-for-documents/bigger-cap-for-video split was removed
+  // (its pre-check compared a whole multipart request's size against a
+  // per-file limit, which is what was blocking zip attachments).
   const mb = (b) => Math.round(Number(b) / 1024 / 1024);
-  const MAX_MB = mb(process.env.UPLOAD_MAX_BYTES || 50 * 1024 * 1024);
-  const MAX_VIDEO_MB = mb(process.env.UPLOAD_MAX_VIDEO_BYTES || 200 * 1024 * 1024);
+  const MAX_MB = mb(process.env.UPLOAD_MAX_BYTES || 200 * 1024 * 1024);
 
   const uploadMessages = {
-    // multer only knows the single highest ceiling, so name both limits rather
-    // than quoting one number that's wrong for half the cases.
-    LIMIT_FILE_SIZE: `File is too large. Maximum is ${MAX_MB}MB (${MAX_VIDEO_MB}MB for video).`,
+    LIMIT_FILE_SIZE: `File is too large. Maximum is ${MAX_MB}MB.`,
     LIMIT_FILE_COUNT: "Too many files attached.",
     LIMIT_FIELD_COUNT: "Too many form fields.",
     LIMIT_UNEXPECTED_FILE: "Unexpected file field.",

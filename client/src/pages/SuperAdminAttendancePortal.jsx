@@ -1403,6 +1403,12 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
             workingHours: workHours + "h",
             breakTime: `${breakMinutes}m`,
             efficiency: `${efficiency}%`,
+            // Break-duration policy (>1h40m or <15m marks the day absent).
+            // Carried through so the row can explain WHY a day with normal
+            // hours reads as absent — otherwise it looks like a data error.
+            isBreakPolicyAbsent: d.isBreakPolicyAbsent || false,
+            breakPolicyReason: d.breakPolicyReason || null,
+            breakPolicyOverride: d.breakPolicyOverride || null,
             // Additional metadata for debugging
             metadata: {
               rawWorkSeconds: workSeconds,
@@ -2336,7 +2342,15 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
 
                     <section className="app-panel overflow-hidden rounded-2xl">
                       {recentActivity.length > 0 ? (
-                        <RecentActivityTable activities={recentActivity} />
+                        <RecentActivityTable
+                          activities={recentActivity}
+                          userId={selectedEmployee?._id}
+                          canOverrideBreakPolicy
+                          onOverrideChanged={() =>
+                            selectedEmployee?._id &&
+                            refreshEmployeeData(selectedEmployee._id, false)
+                          }
+                        />
                       ) : (
                         <div className="p-8 text-center">
                           <Activity className="mx-auto h-6 w-6 text-slate-400" />
@@ -2800,7 +2814,15 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
                     {/* Recent Activity */}
                     <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 backdrop-blur-sm border border-slate-600/30 rounded-2xl overflow-hidden hover:border-cyan-400/40 transition-all duration-300">
                       {recentActivity.length > 0 ? (
-                        <RecentActivityTable activities={recentActivity} />
+                        <RecentActivityTable
+                          activities={recentActivity}
+                          userId={selectedEmployee?._id}
+                          canOverrideBreakPolicy
+                          onOverrideChanged={() =>
+                            selectedEmployee?._id &&
+                            refreshEmployeeData(selectedEmployee._id, false)
+                          }
+                        />
                       ) : (
                         <div className="p-8">
                           <div className="animate-pulse">

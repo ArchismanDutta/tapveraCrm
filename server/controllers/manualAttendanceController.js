@@ -734,10 +734,105 @@ const getAttendanceByUserAndDate = async (req, res) => {
   }
 };
 
+/**
+ * Restore a day marked absent purely by the break-duration policy.
+ *
+ * ─── WHY THIS IS ITS OWN ENDPOINT ───
+ * The generic manual-attendance update rewrites punch events and recalculates
+ * from them. That is the wrong tool here: the punches are not in dispute, the
+ * POLICY VERDICT on them is. Editing punches to dodge the rule would falsify
+ * the underlying record to change a derived flag — and would be undone by the
+ * next recalculation anyway.
+ *
+ * The override is stored instead, and AttendanceService.recalculateEmployeeData
+ * reads it, so the correction survives auto-close, payroll runs and any later
+ * edit.
+ *
+ * @route POST /api/admin/manual-attendance/break-policy-override
+ */
+const setBreakPolicyOverride = async (req, res) => {
+  try {
+    const { userId, date, isOverridden = true, reason } = req.body;
+
+    if (!userId || !date) {
+      return res.status(400).json({ success: false, error: "userId and date are required" });
+    }
+
+    // A reason is required when overriding — this changes whether a day counts
+    // as worked, which flows into payroll. An unexplained change to someone's
+    // pay is exactly what an audit trail exists to prevent.
+    if (isOverridden && !String(reason || "").trim()) {
+      return res.status(400).json({
+        success: false,
+        error: "A reason is required when marking this day as normal attendance",
+      });
+    }
+
+    const AttendanceRecord = require("../models/AttendanceRecord");
+    const targetDate = new Date(`${date}T00:00:00.000Z`);
+    if (Number.isNaN(targetDate.getTime())) {
+      return res.status(400).json({ success: false, error: "Invalid date. Use YYYY-MM-DD" });
+    }
+
+    const record = await AttendanceRecord.findOne({ date: targetDate });
+    if (!record) {
+      return res.status(404).json({ success: false, error: "No attendance record for that date" });
+    }
+
+    const employee = (record.employees || []).find(
+      (e) => String(e.userId) === String(userId)
+    );
+    if (!employee) {
+      return res.status(404).json({ success: false, error: "Employee not found on that date" });
+    }
+
+    employee.breakPolicyOverride = {
+      isOverridden: Boolean(isOverridden),
+      reason: isOverridden ? String(reason).trim() : null,
+      overriddenBy: isOverridden ? req.user._id : null,
+      overriddenByName: isOverridden ? req.user.name : null,
+      overriddenAt: isOverridden ? new Date() : null,
+      // Preserved so the portal can still explain what was overridden. The
+      // recalculation below refreshes it from the live verdict.
+      originalReason: employee.calculated?.breakPolicyReason || null,
+    };
+
+    // Re-derive with the override in place. Turning it OFF re-applies the
+    // policy, so an override can be withdrawn and the day goes back to absent.
+    attendanceService.recalculateEmployeeData(employee, record.date);
+
+    record.markModified("employees");
+    await record.save();
+
+    res.json({
+      success: true,
+      message: isOverridden
+        ? "Day restored to normal attendance"
+        : "Override removed — the break policy applies again",
+      data: {
+        userId,
+        date,
+        isAbsent: employee.calculated.isAbsent,
+        isBreakPolicyAbsent: employee.calculated.isBreakPolicyAbsent,
+        breakPolicyReason: employee.calculated.breakPolicyReason,
+        breakPolicyOverride: employee.breakPolicyOverride,
+      },
+    });
+  } catch (error) {
+    console.error("Error setting break policy override:", error);
+    res.status(500).json({
+      success: false,
+      error: "Internal server error",
+      details: error.message,
+    });
+  }
+};
+
 module.exports = {
   createManualAttendance,
   updateManualAttendance,
   deleteManualAttendance,
   getManualAttendanceRecords,
-  getAttendanceByUserAndDate
+  getAttendanceByUserAndDate,
+  setBreakPolicyOverride
 };

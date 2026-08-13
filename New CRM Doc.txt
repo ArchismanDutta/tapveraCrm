@@ -1,0 +1,1062 @@
+TAPVERA CRM - FULL SPECIFICATION DOCUMENT
+==========================================
+Version: 1.0
+Date: 10 August 2026
+Prepared for: Tapvera Technologies
+
+
+================================================================================
+TABLE OF CONTENTS
+================================================================================
+
+ 1. Overview
+ 2. Technology Stack
+ 3. User Roles & Permissions
+ 4. Authentication & Security
+ 5. Employee Management
+ 6. Attendance & Time Tracking
+ 7. Payroll Management
+ 8. Project Management
+ 9. Task Management
+10. CRM - Leads & Callbacks
+11. CRM - Clients & Client Portal
+12. Real-Time Messaging & Chat
+13. Notification System
+14. SEO & Digital Marketing Tracking
+15. HR Administration (Leaves, Shifts, Holidays)
+16. Biometric Integration
+17. Geofencing
+18. Google Sheets Integration
+19. AI Analytics
+20. File Storage & Media
+21. Background Jobs & Automation
+22. Deployment & Infrastructure
+23. Feature Access Matrix by Role
+
+
+================================================================================
+1. OVERVIEW
+================================================================================
+
+TapveraCRM is a full-featured, cloud-hosted Customer Relationship Management
+and Human Resource Management platform built for Tapvera Technologies. It
+consolidates CRM operations (leads, callbacks, client communication) with
+HR operations (attendance, payroll, leave, shift management) and project
+delivery (tasks, project tracking, SEO, digital marketing reporting) into a
+single unified system.
+
+The platform supports five distinct user types: Super Administrator, Admin,
+HR, Employee, and Client. Access to every feature is governed by a
+position-based permission model that allows fine-grained control over what
+each user can see and do, including per-user permission overrides for
+exceptional cases.
+
+The system is designed to scale horizontally behind a load balancer. Real-time
+features (chat, presence, notifications) are powered by Socket.IO with a Redis
+adapter, which means events emitted from one server instance are automatically
+broadcast to all other instances so every connected user receives updates
+regardless of which instance they happen to be on.
+
+
+================================================================================
+2. TECHNOLOGY STACK
+================================================================================
+
+FRONTEND
+  - Framework   : React 19 with Vite 7
+  - Styling     : Tailwind CSS 4
+  - State       : Redux Toolkit (chat, threads, presence slices)
+  - Routing     : React Router 7
+  - Charts      : Recharts, Chart.js 3
+  - PDF Client  : jsPDF
+
+BACKEND
+  - Runtime     : Node.js
+  - Framework   : Express 4
+  - Database    : MongoDB with Mongoose 8
+  - Real-time   : Socket.IO 4
+  - Cache/Bus   : Redis via ioredis (Socket.IO multi-instance adapter)
+  - Auth        : JWT (jsonwebtoken)
+  - PDF Server  : PDFKit
+  - Email       : Nodemailer (Gmail SMTP), Sendgrid fallback
+  - File Upload : Multer + AWS S3
+
+THIRD-PARTY INTEGRATIONS
+  - AWS S3 + CloudFront  : File storage and CDN delivery
+  - Google Sheets API    : Embedded spreadsheet sharing (service account auth)
+  - OpenRouter API       : AI analytics (mistral-7b-instruct model)
+  - SerpAPI              : SEO keyword rank tracking (primary)
+  - Playwright           : SEO keyword rank tracking (fallback, browser automation)
+  - ZKTeco / Identix     : Biometric fingerprint terminals (ADMS iClock protocol)
+  - WhatsApp Business API: Callback and lead reminders
+  - Web Push / VAPID     : Browser push notifications
+
+DEPLOYMENT
+  - Backend   : AWS Elastic Beanstalk (Node.js environment)
+  - Frontend  : AWS S3 + CloudFront (static SPA)
+  - Database  : MongoDB Atlas (cloud)
+  - Cache     : Redis (AWS ElastiCache or self-hosted)
+
+
+================================================================================
+3. USER ROLES & PERMISSIONS
+================================================================================
+
+The system defines five primary roles:
+
+  SUPER-ADMIN
+    Full unrestricted access to all data, all pages, and all system settings.
+    Can manage positions, departments, geofences, biometric devices, payroll,
+    and every other module. Only super-admins can view all employees' notepads
+    and perform system-level resets.
+
+  ADMIN
+    Company-wide operational access. Scope can be narrowed via Position
+    permission flags. Manages employees, projects, leads, clients, tasks,
+    attendance, and leaves. Cannot change system-level settings unless granted
+    by a super-admin.
+
+  HR
+    Focused on people operations: attendance management, leave approval, shift
+    configuration, payroll generation and publishing, transfer requests, and
+    holiday management. HR users can access all employee profiles and statutory
+    data.
+
+  EMPLOYEE
+    Access to personal data by default: own attendance, own leaves, own
+    payslips, own tasks, assigned projects, and personal chat. Elevated access
+    (e.g., managing team tasks, viewing subordinate leads) is granted by
+    assigning the relevant permission flags to the employee's Position.
+
+  CLIENT
+    A separately authenticated portal user. Clients can view their assigned
+    projects, communicate with the team via project message threads, and submit
+    quote or support requests. Clients do not see HR, payroll, or other
+    employee data.
+
+POSITION-BASED PERMISSION FLAGS (20+ flags per Position)
+
+  User Management      : canManageUsers
+  Client/CRM           : canManageClients, canManageProjects, canAssignTasks,
+                         canViewCommunicationTracking
+  HR Operations        : canApproveLeaves, canApproveShifts, canViewReports,
+                         canManageAttendance, canManageSalary
+  Hierarchical Access  : canViewSubordinateLeads, canViewSubordinateCallbacks,
+                         canViewSubordinateTasks, canViewSubordinateProjects,
+                         canEditSubordinateLeads, canEditSubordinateCallbacks,
+                         canEditSubordinateTasks, canAssignToSubordinates
+  Department Access    : canViewDepartmentLeads, canViewDepartmentCallbacks,
+                         canViewDepartmentTasks
+  Admin Functions      : canManageDepartments, canManagePositions,
+                         canManageSubordinateAccess
+
+DATA SCOPE LEVELS
+  - own        : User sees only their own records
+  - team       : User sees records belonging to direct subordinates
+  - department : User sees records for their entire department
+  - all        : User sees company-wide records
+
+PERMISSION OVERRIDES
+  Every user has a permissionOverrides map that can enable or disable specific
+  flags independently of their Position. This is used for exceptional cases
+  where a single user needs access that differs from their Position default.
+  Every permission change is recorded in the Access Audit Log.
+
+DELEGATED ACCESS
+  A manager can grant a subset of their own permissions to a subordinate
+  without involving a super-admin. The My Team Access page exposes this
+  workflow. All delegated changes are audit-logged.
+
+
+================================================================================
+4. AUTHENTICATION & SECURITY
+================================================================================
+
+LOGIN
+  Employees and admins log in with email and password. A JWT is issued on
+  success and must be presented in the Authorization header for all subsequent
+  API calls. The token is verified by the protect middleware on every protected
+  route.
+
+PASSWORD MANAGEMENT
+  - Forgot password (email reset link)
+  - Change password (authenticated user)
+  - Super-admin can set the initial password for a new CRM user
+
+GEOFENCED LOGIN
+  An optional per-user setting that restricts login to specific GPS locations
+  (office premises). When enabled, the server validates the user's submitted
+  GPS coordinates against their assigned GeofenceLocations using the Haversine
+  formula. A 50-metre buffer is applied to account for typical outdoor GPS
+  accuracy error. If the user is outside all assigned fences, login is denied.
+  This feature is opt-in (disabled by default) and is configured per-user by
+  a super-admin. Each assignment is audit-logged (who assigned, when).
+
+CLIENT AUTHENTICATION
+  Clients authenticate through a separate login endpoint and receive their own
+  JWT. Their session is completely isolated from employee sessions. Client JWTs
+  only grant access to client-facing routes.
+
+FILE SECURITY
+  All files uploaded to AWS S3 are served via signed CloudFront URLs with a
+  15-minute expiry. Direct S3 access is not exposed. File type validation is
+  enforced per upload endpoint to prevent upload of disallowed types.
+
+
+================================================================================
+5. EMPLOYEE MANAGEMENT
+================================================================================
+
+EMPLOYEE PROFILE
+  Each employee record stores over 100 fields covering:
+
+  Personal Information
+    Full name, date of birth, gender, phone, personal email, blood group,
+    emergency contact, profile photo (avatar), address.
+
+  Professional Information
+    Employee ID, joining date, department, position, job level (Intern /
+    Junior / Mid / Senior / Lead / Director / Executive), employment type
+    (Full-time / Part-time / Contract / Internship), shift assignment,
+    reporting manager, skills list, timezone.
+
+  Statutory / Payroll Information
+    PAN number, UAN number, PF account number, ESI number, bank account
+    number, IFSC code. These are used for payslip generation and compliance.
+
+  Qualification
+    School name, degree, year of passing, marks/grade.
+
+  System Fields
+    Role, position reference, department reference, biometric PIN (for
+    fingerprint terminal mapping), geofence configuration, permission overrides,
+    workload tracking (capacity status, workload percentage, active task count),
+    employment status (Active / Inactive / Terminated / Absconded), region
+    access, CRM credentials.
+
+EMPLOYEE DIRECTORY
+  Searchable and filterable list of all employees. Accessible to admins, HR,
+  and any employee with the relevant permission flag.
+
+WORKLOAD TRACKING
+  Each employee record tracks active task count, workload percentage, and a
+  capacity status. This is used when assigning tasks to see who has bandwidth.
+
+TRANSFERS
+  An employee can be transferred from one department to another. The transfer
+  workflow captures the reason and is approved by an admin. Transfer history
+  is retained on the employee record. Employees can view their own transfer
+  history on the My Transfers page.
+
+STATUS LIFECYCLE
+  Employees move through statuses: Active → Inactive → Terminated / Absconded.
+  Terminated and absconded employees are locked out of the system but their
+  records are retained for historical accuracy.
+
+
+================================================================================
+6. ATTENDANCE & TIME TRACKING
+================================================================================
+
+PUNCH IN / OUT
+  Employees punch in and out through the web interface. Each punch event is
+  stored with a precise timestamp. The system is shift-aware: it correctly
+  assigns punches to the right calendar date even for night shifts that span
+  midnight.
+
+BREAK TRACKING
+  Employees can start and end breaks during their shift. Each break is recorded
+  as a BREAK_START / BREAK_END event pair with timestamps. Total break duration
+  is calculated and stored.
+
+DAILY ATTENDANCE RECORD
+  Every employee gets one AttendanceRecord per calendar date. The record stores:
+
+  Time Data
+    All punch events (type, timestamp), calculated arrival time, calculated
+    departure time, total work duration (seconds + human-readable), total break
+    duration, number of work sessions, longest single work session.
+
+  Status Flags
+    is_present, is_late (and minutes late), is_half_day, is_full_day,
+    is_overtime, is_WFH, current_status (NOT_STARTED / WORKING / ON_BREAK /
+    FINISHED).
+
+  Performance Scores
+    punctuality_score, attendance_score (calculated from shift deviation and
+    consistency patterns).
+
+  Daily Aggregates (department-level)
+    present_count, absent_count, late_count, half_day_count, on_leave_count.
+
+MANUAL CORRECTIONS
+  HR and admins can correct attendance records. Corrections are logged with
+  the corrector's identity and timestamp for audit purposes.
+
+ATTENDANCE DASHBOARD
+  Real-time view showing:
+    - Current punch status for the logged-in user (in / on break / out)
+    - Live work duration counter
+    - Shift information and expected hours
+    - Team attendance snapshot (who is currently in or out)
+    - Department-wise presence breakdown
+    - Late arrivals list
+
+ATTENDANCE REPORTS
+  - Daily, weekly, and monthly reports per employee and per department
+  - Attendance rate percentage
+  - Late arrival frequency and average minutes late
+  - Overtime hours log
+  - Exception highlighting (unexplained absences, excessive lates)
+  - Export to PDF
+
+AI-POWERED INSIGHTS
+  Attendance data is sent to OpenRouter (mistral-7b-instruct) for pattern
+  analysis. The AI returns formatted insights covering attendance trends,
+  anomalies, and actionable recommendations. These appear in the attendance
+  analytics section.
+
+BIOMETRIC INTEGRATION
+  Fingerprint terminals (ZKTeco / Identix ADMS protocol) can push punch events
+  directly to the server. The biometric pipeline automatically maps device PINs
+  to employee accounts and creates or updates the corresponding attendance
+  records. See Section 16 for full biometric details.
+
+
+================================================================================
+7. PAYROLL MANAGEMENT
+================================================================================
+
+SALARY COMPONENTS
+  Each payslip records the following components:
+    Earnings  : Basic salary, HRA, conveyance allowance, medical allowance,
+                special allowance, any custom earning components.
+    Deductions: Provident Fund (PF), Employees State Insurance (ESI),
+                Professional Tax, TDS, loan/advance deductions, other deductions.
+    Totals    : Gross salary, total deductions, net salary (take-home), CTC.
+
+ATTENDANCE-DRIVEN CALCULATION
+  Auto-payroll calculates salary based on the attendance records for the pay
+  period. It determines paid days (total working days minus Loss of Pay days),
+  then prorates all salary components proportionally. LWP (Loss Without Pay)
+  days reduce the payable amount.
+
+EMPLOYEE SNAPSHOT
+  At the time of payslip generation, the system captures an immutable snapshot
+  of the employee's statutory fields (PAN, UAN, PF number, ESI number, bank
+  account, IFSC). This ensures historical payslips remain accurate even if
+  the employee's data is updated later.
+
+PAYSLIP LIFECYCLE
+  Draft → Generated → Published → Archived
+  HR generates the payslip, reviews it, and publishes it. Only after
+  publishing can the employee view their payslip. Payslips can be unpublished
+  for correction before re-publishing.
+
+EMPLOYEE PAYSLIP PORTAL
+  Employees can view and download their own published payslips. Payslips are
+  generated as PDFs (PDFKit on the server, jsPDF for client-side download).
+
+PAYSLIP MANAGEMENT (Admin/HR)
+  Admins and HR can generate payslips for individual employees or in bulk,
+  edit generated payslips before publishing, publish or unpublish payslips,
+  and archive old payslips.
+
+
+================================================================================
+8. PROJECT MANAGEMENT
+================================================================================
+
+PROJECT RECORD
+  Each project stores:
+    Identification : Name, type, status, priority, budget, timeline
+    Parties        : Client(s) (array, supports multiple clients per project),
+                     team members (array of assigned employees)
+    Progress       : Milestones with completion flags, status history
+    Metadata       : Notes, attachments, created/updated timestamps
+
+PROJECT TYPES
+  Website, SEO, Google Marketing, SMO, Hosting, Invoice App.
+
+STATUS PIPELINE
+  new → ongoing → completed → expired
+
+PRIORITY LEVELS
+  Low, Medium, High.
+
+PROJECT TABS
+  Each project detail page has tabs covering:
+    Summary        : Overview, milestones, budget, timeline
+    Tasks          : Task list scoped to this project
+    Communication  : Real-time project message thread
+    Keywords       : SEO keyword rank tracking
+    Blogs          : Blog post tracking
+    Backlinks      : Backlink tracking
+    Screenshots    : Website screenshot gallery
+    Remarks        : Client feedback per section
+
+TEAM ASSIGNMENT
+  Any number of employees can be assigned to a project. The team list is
+  used to gate access: employees only see projects they are assigned to
+  (unless they have a broader permission scope).
+
+CLIENT VISIBILITY
+  Clients assigned to a project can view that project's summary, tasks,
+  communication thread, and submit remarks. They cannot see internal notes,
+  budget figures, or HR data.
+
+
+================================================================================
+9. TASK MANAGEMENT
+================================================================================
+
+TASK RECORD
+  - Title, description, priority (High / Medium / Low)
+  - Assigned to (multiple employees can share a task)
+  - Project association (optional; tasks can be standalone)
+  - Due date
+  - Status: Pending → In Progress → Completed / Rejected
+  - Rejection reason (required when rejecting)
+  - Completion and rejection timestamps
+  - Status change history (who changed it, when, with note)
+  - Comments / remarks thread
+
+TASK VIEWS
+  Unified Task Page      : All tasks visible to the logged-in user in one view.
+                           Includes Kanban board and list view.
+  Team Task Management   : Manager view showing all tasks assigned to their
+                           subordinates, with the ability to create and assign.
+  Admin Task Page        : Bulk task management across the whole company.
+  Employee Task View     : Personal task list with status filters.
+
+TODO LIST
+  A lightweight personal to-do list separate from project tasks. Each item
+  has a title, optional due date, priority, and completion flag. Visible
+  only to the owning employee.
+
+WORKLOAD INTEGRATION
+  When a task is assigned to an employee, the system updates that employee's
+  workload percentage and active task count. This data is visible when choosing
+  assignees so managers can avoid overloading team members.
+
+
+================================================================================
+10. CRM - LEADS & CALLBACKS
+================================================================================
+
+LEADS
+
+  Lead Record
+    - Contact details: company, person, email, phone, address
+    - Lead source: Website, Referral, Cold Call, Social Media, Email Campaign
+    - Priority: Low, Medium, High, Urgent
+    - Status pipeline: New → Contacted → Qualified → Proposal Sent →
+                       Negotiation → Won / Lost / On Hold
+    - Expected revenue estimate
+    - Tags (free-form categorization labels)
+    - Assigned sales representative
+    - Last contacted date, next follow-up date
+    - Lost reason (required when marking as Lost)
+    - Conversion flag: converted to customer (with conversion timestamp)
+
+  Lead Views
+    - List view with search, filter by status/source/priority/assignee
+    - Kanban board: drag-and-drop cards across status columns
+    - Lead analytics: conversion rate, source efficiency, pipeline value
+
+CALLBACKS
+
+  Callback Record
+    - Associated lead
+    - Scheduled date and time
+    - Callback type: Call, Email, WhatsApp, Zoom, In-Person Meeting
+    - Status: Pending, Completed, Rescheduled, Not Reachable, Cancelled
+    - Priority: Low, Medium, High, Urgent
+    - Outcome notes (filled in after the callback is completed)
+    - Rescheduling history and reschedule count
+    - Reminder sent flag and timestamp
+    - Assigned representative
+
+  Transfer Workflow
+    A callback can be transferred to another representative. The transfer
+    goes through an acceptance step: Transferred → Accepted / Rejected →
+    Completed. If rejected, the callback returns to the original assignee.
+
+  Callback Views
+    - List view with search and filters
+    - Kanban board: drag-and-drop across status columns
+    - Calendar view: callbacks laid out by scheduled date
+
+  Reminders
+    A background job checks for upcoming callbacks and sends reminders via
+    email and WhatsApp Business API before the scheduled time.
+
+
+================================================================================
+11. CRM - CLIENTS & CLIENT PORTAL
+================================================================================
+
+CLIENT RECORD
+  Business name, email, contact person, phone, region access
+  (USA, AUS, CANADA, IND, Global). A client account is separate from employee
+  accounts and uses its own authentication flow.
+
+CLIENT PORTAL
+  Clients log in at a dedicated client-facing URL. From their portal they can:
+    - View all projects assigned to them
+    - Browse project tasks and their current statuses
+    - Participate in the project communication thread (real-time chat)
+    - Submit remarks on specific project sections (keywords, blogs, backlinks,
+      screenshots)
+    - Submit quote requests and support requests
+
+QUOTE REQUESTS
+  Clients fill a form specifying: project type, budget, currency, preferred
+  timeline. The request lands in the admin's inbox with status Pending. An
+  admin picks it up, assigns it to themselves, and engages the client via the
+  in-thread messaging within the request.
+
+SUPPORT REQUESTS
+  Support category: Technical, Billing, Project Inquiry, Account Access,
+  Feature Request. Status pipeline: Pending → In Progress → Resolved → Closed.
+  Priority: Low, Medium, High, Urgent. Each request has an in-thread conversation
+  between the client and the assigned admin. Unread counts are tracked on both
+  sides so neither party misses a reply.
+
+CLIENT REMARKS
+  Clients can leave remarks on specific sections of their projects (e.g.,
+  comment on the current keyword rankings, request changes to the backlink
+  strategy). Each remark is tagged to the relevant section.
+
+REGION-BASED ACCESS
+  Each client is assigned to one or more regions. This is used to scope which
+  admins (based on their own region access) handle client communications.
+
+
+================================================================================
+12. REAL-TIME MESSAGING & CHAT
+================================================================================
+
+TEAM CHAT
+  A real-time messaging system powered by Socket.IO. Supports:
+    - One-on-one conversations
+    - Group conversations
+    - Broadcast channels (one-to-many)
+
+PROJECT MESSAGE THREADS
+  Each project has a dedicated communication thread. All team members assigned
+  to the project, plus the client(s), can participate. The thread is the
+  primary place for project-related discussion, file sharing, and coordination.
+
+MESSAGE FEATURES
+  Text           : Plain text with mention support (@username triggers a
+                   notification to the mentioned user).
+  Attachments    : Images, documents, videos, audio files. Each attachment
+                   is stored in S3 and served via a signed CloudFront URL.
+  Replies        : Any message can be quoted and replied to, creating a
+                   lightweight thread within the thread.
+  Reactions      : Users can react to any message with an emoji. Reaction
+                   counts and the list of who reacted are stored per message.
+  Forwarding     : Messages can be forwarded to other conversations. Forwarded
+                   messages are labelled as such; the source conversation is
+                   not revealed.
+  Pinning        : Admins can pin important messages in a project thread.
+  Starring       : Individual users can star messages for personal reference.
+
+DELIVERY RECEIPTS
+  Messages go through three states:
+    Sent      : The server acknowledged receipt (single tick).
+    Delivered : The recipient's device received it (double tick).
+    Read      : The recipient opened the conversation (blue double tick).
+  Each state is tracked with per-user timestamps.
+
+CLIENT-GENERATED MESSAGE IDs
+  Every message is assigned a unique ID by the sending client before
+  transmission. The server enforces a unique index on this field, so if a
+  network glitch causes the client to retry, the duplicate is silently
+  discarded and the original is returned. This makes message delivery
+  idempotent.
+
+OFFLINE OUTBOX
+  If a user sends a message while disconnected, the client stores it locally
+  and retries automatically once the connection is restored.
+
+TYPING INDICATORS
+  When a user is composing a message, a typing indicator is emitted to all
+  other participants in real time.
+
+PRESENCE
+  The system tracks which users are currently online and when offline users
+  were last active. Presence state is maintained across reconnects. If a user
+  closes the browser, they are marked offline after a brief grace period. The
+  last-seen timestamp is persisted to the database and is visible to other
+  users in their contact list.
+
+CLIENT ISOLATION
+  Clients can only see the project thread(s) for their assigned project(s).
+  They cannot see team chat conversations or threads for other projects.
+
+
+================================================================================
+13. NOTIFICATION SYSTEM
+================================================================================
+
+IN-APP NOTIFICATIONS
+  Every significant event (task assigned, leave approved/rejected, callback
+  reminder, project update, message mention) generates an in-app notification.
+  Notifications appear in the notification bell and the Notification Center
+  page. Each notification records type, target user, read flag, and timestamp.
+
+REAL-TIME DELIVERY
+  Notifications are pushed to the recipient's browser via Socket.IO the
+  moment they are generated. The user does not need to refresh the page.
+
+BROWSER PUSH NOTIFICATIONS
+  When the browser tab is closed or not focused, the system falls back to
+  Web Push notifications (using the Web Push API with VAPID keys). The user
+  must grant browser notification permission. Push subscriptions are stored
+  per device so a user can receive pushes on multiple devices simultaneously.
+
+ADAPTIVE PUSH POLICY
+  The push service checks whether the user's tab is currently active and
+  focused before sending a browser push. If the user is already looking at
+  the app, the push is suppressed (the in-app notification is sufficient).
+  This avoids double-notifying users who are actively working.
+
+NOTIFICATION PREFERENCES
+  Users can configure per-notification-type preferences (mute certain event
+  types) and per-conversation mute/block settings. These preferences are
+  stored server-side so they apply consistently across devices.
+
+UNREAD BADGE
+  The notification bell shows a badge with the count of unread notifications.
+  The badge updates in real time via Socket.IO without a page refresh.
+
+WHATSAPP NOTIFICATIONS
+  The WhatsApp Business API is used to send reminders for upcoming callbacks
+  and lead follow-ups, and optionally to notify clients of project updates.
+
+
+================================================================================
+14. SEO & DIGITAL MARKETING TRACKING
+================================================================================
+
+KEYWORD RANK TRACKING
+
+  Each SEO project can have any number of keywords. For each keyword the
+  system tracks:
+    - Current rank, previous rank, historical rank (trend)
+    - Rank source: manual entry, auto-fetched (SerpAPI), or browser-scraped
+                   (Playwright)
+    - Device type: desktop or mobile (tracked separately)
+    - Search engine: Google, Bing, or Yahoo
+    - Target URL (the page that should rank for this keyword)
+    - City-level location targeting (for local SEO)
+    - Active / inactive toggle (inactive keywords are excluded from auto-fetch)
+    - SERP snapshot: the top-10 organic results captured at each rank check
+                     (domain, URL, title)
+
+  Rank Change Indicators
+    Improved, Declined, or Stable, calculated by comparing current vs.
+    previous rank.
+
+  Hybrid Rank Service
+    SerpAPI is the primary data source. When the SerpAPI quota is exhausted
+    or the service is unavailable, the system transparently switches to
+    Playwright (headless browser automation) to fetch rankings at no
+    additional API cost. Usage is tracked per project to stay within limits.
+
+  Automated Rank Checks
+    A cron job runs periodic rank checks for all active keywords and updates
+    the history automatically.
+
+BLOG TRACKING
+  Each project can track blog posts. Records include the post URL, publish
+  date, target keywords, and notes. HR is not involved; this is purely
+  a content delivery tracking feature.
+
+BACKLINK TRACKING
+  Backlinks are tracked per project with URL, referring page, and platform
+  auto-detection (Facebook, Twitter, LinkedIn, YouTube, etc.). Used to monitor
+  the off-page SEO strategy.
+
+WEBSITE SCREENSHOTS
+  Playwright captures scheduled screenshots of the client's website. Screenshots
+  are stored in S3 and displayed in a gallery on the project page, allowing the
+  team and client to see visual changes over time.
+
+
+================================================================================
+15. HR ADMINISTRATION
+================================================================================
+
+LEAVE MANAGEMENT
+
+  Leave Types
+    Sick Leave, Paid Leave, Unpaid Leave, Maternity Leave, Work From Home,
+    Half Day.
+
+  Workflow
+    Employee submits leave request → HR / Admin reviews → Approved / Rejected.
+    Approved leaves update the attendance record for those dates.
+
+  Employee View
+    Balance summary, leave history, status of pending requests.
+
+  Admin / HR View
+    All pending requests with approve/reject controls. Filter by department,
+    date range, and leave type.
+
+SHIFT MANAGEMENT
+
+  Predefined Shifts
+    Morning, Evening, Night. Each shift has defined start time, end time, and
+    expected work hours.
+
+  Flexible Shifts
+    Employees on flexible shifts must work a minimum of 9 hours per day but
+    can start and finish at any time within a 00:00-23:59 window.
+
+  Shift Assignment
+    Each employee is assigned a default shift. Assignments can be changed by
+    HR.
+
+  Flexible Shift Requests
+    An employee can request a temporary or permanent switch to a flexible shift.
+    The request goes through an approval workflow (HR / Admin approves or
+    rejects).
+
+  Shift Change Requests
+    Employees can request to change from one fixed shift to another. The same
+    approval workflow applies.
+
+HOLIDAY MANAGEMENT
+  HR maintains a company-wide holiday calendar. Holidays are applied
+  system-wide: attendance records for holiday dates are automatically flagged
+  as holidays so employees are not marked absent.
+
+NOTICE BOARD
+  Admins and HR can post company-wide notices and announcements. All employees
+  can view the notice board. Notices are displayed chronologically.
+
+
+================================================================================
+16. BIOMETRIC INTEGRATION
+================================================================================
+
+SUPPORTED DEVICES
+  ZKTeco / Identix ADMS iClock fingerprint terminals. These devices push
+  attendance data to the server using the ADMS plain-text protocol over HTTP.
+
+HOW IT WORKS
+  1. Each device is registered in the system with its serial number, location,
+     and configuration settings (clock offset correction, dry-run mode).
+  2. The device sends a heartbeat and punch data to the /iclock endpoint.
+     This endpoint is unauthenticated and accepts plain-text bodies, as
+     required by the ADMS protocol.
+  3. The server parses the punch payload (AdmsParser), looks up the employee
+     by their biometric PIN (User.biometricPin), and creates or updates the
+     AttendanceRecord for that date.
+  4. Duplicate punches (same user, same timestamp) are silently discarded.
+
+DEVICE HEALTH MONITORING
+  Each registered device exposes health telemetry:
+    - Last heartbeat timestamp (lastSeenAt)
+    - Last data push timestamp (lastPushAt)
+    - Last punch processed timestamp (lastPunchAt)
+    - Firmware version, IP address
+    - Clock skew (difference between device clock and server time)
+    - Cumulative punch statistics: total received, applied, duplicate, unmapped
+
+CLOCK OFFSET CORRECTION
+  Some device firmware reports timestamps that are offset from the correct
+  time (a known firmware bug in some ZKTeco models). A per-device clock offset
+  (in minutes) can be configured to correct all incoming timestamps from that
+  device before they are stored.
+
+DRY-RUN MODE
+  When a device is in dry-run mode, its punch data is parsed and logged but
+  no attendance records are created. Used to test a new device without
+  affecting live attendance data.
+
+EMPLOYEE PIN MAPPING
+  Each employee has an optional biometricPin field that matches the PIN
+  configured on the fingerprint terminal. Unmapped PINs (punches from a PIN
+  not linked to any employee) are counted and flagged in the device health
+  report so the admin can identify and map missing employees.
+
+ADMIN PAGES
+  Biometric Attendance Management page shows:
+    - Device list with health status
+    - Per-device punch log
+    - PIN-to-employee mapping management
+    - Option to reset or re-sync a device
+
+
+================================================================================
+17. GEOFENCING
+================================================================================
+
+PURPOSE
+  Restrict employee login to specific physical locations (e.g., the office)
+  to prevent buddy punching or unauthorised remote logins.
+
+HOW IT WORKS
+  A GeofenceLocation record defines a named circular area with a centre point
+  (latitude, longitude) and a radius (minimum 50 metres). Each user can be
+  assigned one or more GeofenceLocations. When geofencing is enabled for a
+  user, every login attempt from that user includes their GPS coordinates.
+  The server calculates the distance from each fence centre using the
+  Haversine formula. If the user is outside all of their assigned fences,
+  the login is denied with an informative error message.
+
+CONFIGURATION
+  Geofencing is opt-in per user (disabled by default). Super-admins manage
+  the GeofenceLocation library and assign fences to users. Each assignment
+  is recorded with who made it and when.
+
+AUDIT TRAIL
+  Every geofence assignment and every login attempt (whether inside or outside
+  the fence) is logged as a GeofenceEvent with the submitted coordinates,
+  the result (allowed / denied), and the distance to the nearest fence.
+
+
+================================================================================
+18. GOOGLE SHEETS INTEGRATION
+================================================================================
+
+PURPOSE
+  Allow admins to embed and share Google Sheets with specific employees or
+  entire roles (e.g., share a budget tracker with all managers).
+
+HOW IT WORKS
+  The system authenticates with Google using a service account
+  (GOOGLE_SHEETS_SERVICE_ACCOUNT environment variable). Admins register a
+  Sheet by providing its Google Sheets URL and configure sharing:
+
+    By User  : Select individual employees who can view or edit.
+    By Role  : Any user with a specified role automatically gets access.
+    Owner    : The admin who registered the sheet always has edit access.
+
+  Access permissions are read (view only) or edit (view + write via API).
+
+ACCESS AUDIT LOG
+  Every time a user opens a shared sheet, an entry is written to SheetAccessLog
+  recording the user, sheet, timestamp, and action. This provides a full
+  history of who accessed which sheet and when.
+
+EMPLOYEE VIEW
+  Employees see only the sheets shared with them directly or via their role.
+  Sheets are embedded in the browser using an iframe pointing to the Google
+  Sheets viewer URL.
+
+
+================================================================================
+19. AI ANALYTICS
+================================================================================
+
+ATTENDANCE ANALYTICS
+  The attendance analytics module sends aggregated attendance data for a
+  date range to the OpenRouter API (using the mistral-7b-instruct model on the
+  free tier). The model analyses the data and returns formatted insights
+  covering:
+    - Overall attendance trend (improving, declining, stable)
+    - Departments with highest / lowest attendance rates
+    - Late arrival patterns (time of day, day of week)
+    - Anomaly detection (sudden spike in absences, unusual overtime)
+    - Actionable recommendations for HR (e.g., review shift timings)
+
+  Results are displayed in the attendance analytics section alongside the
+  standard charts and tables.
+
+CALL INTELLIGENCE
+  Call recording metadata (duration, outcome notes, assigned representative)
+  can be submitted for AI analysis. The Call Intelligence page displays
+  the metadata and any AI-generated analysis of the call outcomes.
+
+
+================================================================================
+20. FILE STORAGE & MEDIA
+================================================================================
+
+UPLOAD FLOW
+  Files are uploaded via the browser to the Express server. Multer handles the
+  multipart form data. The server validates the file type against an allowlist
+  specific to each endpoint (e.g., profile pictures only accept images, chat
+  attachments accept images and documents). Valid files are then uploaded to
+  the configured AWS S3 bucket.
+
+CONTENT DELIVERY
+  S3 is fronted by a CloudFront CDN distribution. All file URLs served to the
+  browser are signed CloudFront URLs with a 15-minute expiry. After expiry,
+  the browser must request a fresh signed URL from the server. This ensures
+  files are never accessible without a valid authenticated session.
+
+FILE SIZE LIMITS
+  Configurable via environment variables:
+    UPLOAD_MAX_BYTES       : Maximum for standard files (images, documents)
+    UPLOAD_MAX_VIDEO_BYTES : Increased limit for video files
+
+MEDIA CLEANUP
+  A background service (MediaCleanupService) periodically scans for files in
+  S3 that are no longer referenced by any database record and deletes them.
+  This prevents indefinite accumulation of orphaned files.
+
+LOCAL UPLOADS DIRECTORY
+  For development environments without S3 configured, files can be stored in
+  a local /uploads directory on the server. The server signs and serves these
+  files directly. This path is not used in production.
+
+
+================================================================================
+21. BACKGROUND JOBS & AUTOMATION
+================================================================================
+
+The following recurring jobs run on the server:
+
+  KEYWORD RANK FETCH
+    Periodically fetches updated keyword rankings for all active keywords
+    across all SEO projects. Uses SerpAPI (primary) with Playwright as
+    fallback. Frequency is configurable.
+
+  CALLBACK REMINDERS
+    Scans for callbacks whose scheduled time is approaching and sends reminder
+    notifications via email and WhatsApp Business API to the assigned
+    representative.
+
+  LEAVE APPROVAL REMINDERS
+    If a leave request has been pending for longer than a configured threshold,
+    a reminder is sent to the approver.
+
+  AUTO-PAYROLL
+    Optionally configured to automatically generate payslips for all active
+    employees at the end of each pay period, based on attendance records.
+
+  ATTENDANCE AUTO-CLOSE
+    At the end of each working day, any employee who did not punch out is
+    automatically marked. The exact behaviour (mark as absent, use last punch
+    as departure) is configurable.
+
+  DAILY / WEEKLY REPORTS
+    Aggregated attendance and task completion reports are emailed to configured
+    recipients on a daily or weekly schedule.
+
+  EMAIL DIGEST
+    A periodic digest email summarising pending tasks, upcoming callbacks, and
+    unread notifications for users who prefer email over in-app notifications.
+
+  MEDIA CLEANUP
+    Scans S3 for orphaned file uploads and deletes them to control storage
+    costs.
+
+
+================================================================================
+22. DEPLOYMENT & INFRASTRUCTURE
+================================================================================
+
+PRODUCTION ENVIRONMENT
+
+  Backend API
+    Deployed on AWS Elastic Beanstalk in a Node.js environment. Multiple
+    instances can run simultaneously behind an Application Load Balancer.
+    Socket.IO uses the Redis adapter so real-time events are distributed
+    across all instances.
+
+  Frontend SPA
+    Built with Vite and deployed as a static bundle to AWS S3. CloudFront
+    serves the frontend globally with edge caching.
+
+  Database
+    MongoDB Atlas (managed cloud MongoDB). The connection string is provided
+    via the MONGODB_URI environment variable.
+
+  Redis
+    AWS ElastiCache (Redis) for the Socket.IO multi-instance pub/sub adapter.
+    In local development, a local Redis instance (or no Redis) can be used;
+    the server degrades gracefully when Redis is unavailable.
+
+  File Storage
+    AWS S3 for all uploads. CloudFront for delivery. Credentials are provided
+    via AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION,
+    AWS_S3_BUCKET, and AWS_CLOUDFRONT_DOMAIN environment variables.
+
+KEY ENVIRONMENT VARIABLES
+
+  MONGODB_URI                     : MongoDB connection string
+  JWT_SECRET                      : Secret for signing JWTs
+  FRONTEND_ORIGIN, FRONTEND_URL   : Allowed CORS origins
+  REDIS_URL                       : Redis connection (for Socket.IO adapter)
+  AWS_ACCESS_KEY_ID               : AWS credentials
+  AWS_SECRET_ACCESS_KEY           : AWS credentials
+  AWS_REGION                      : AWS region
+  AWS_S3_BUCKET                   : S3 bucket name
+  AWS_CLOUDFRONT_DOMAIN           : CloudFront distribution domain
+  GOOGLE_SHEETS_SERVICE_ACCOUNT   : Google Sheets service account JSON
+  GMAIL_USER, GMAIL_PASS          : Gmail SMTP credentials
+  SENDGRID_API_KEY                : Sendgrid fallback credentials
+  OPENROUTER_API_KEY              : AI analytics (OpenRouter)
+  SERPAPI_KEY                     : SEO rank tracking (SerpAPI)
+  BIOMETRIC_CLOCK_OFFSET_MINUTES  : Global device clock correction
+  UPLOAD_MAX_BYTES                : Max file size for standard uploads
+  UPLOAD_MAX_VIDEO_BYTES          : Max file size for video uploads
+  NODE_ENV                        : production / development
+
+
+================================================================================
+23. FEATURE ACCESS MATRIX BY ROLE
+================================================================================
+
+The table below summarises which roles have access to each major feature.
+"Delegated" means the feature is off by default for that role but can be
+unlocked via Position permission flags or per-user overrides.
+
+  FEATURE                           EMPLOYEE   HR     ADMIN   SUPER-ADMIN   CLIENT
+  ────────────────────────────────────────────────────────────────────────────────
+  Punch In / Out                      Yes       Yes    Yes     Yes           No
+  View Own Attendance                 Yes       Yes    Yes     Yes           No
+  Manage Team Attendance              Delegated Yes    Yes     Yes           No
+  Manage All Attendance               No        Yes    Yes     Yes           No
+  Manual Attendance Correction        No        Yes    Yes     Yes           No
+  Biometric Device Admin              No        No     Yes     Yes           No
+  Geofence Admin                      No        No     No      Yes           No
+  Request Leave                       Yes       Yes    Yes     Yes           No
+  Approve Leaves                      No        Yes    Yes     Yes           No
+  Manage Shifts                       No        Yes    Yes     Yes           No
+  Manage Holiday Calendar             No        Yes    Yes     Yes           No
+  View Own Payslips                   Yes       Yes    Yes     Yes           No
+  Generate / Publish Payslips         No        Yes    Yes     Yes           No
+  Manage Payroll Components           No        No     Yes     Yes           No
+  View Assigned Projects              Yes       Yes    Yes     Yes           Yes
+  Manage All Projects                 Delegated No     Yes     Yes           No
+  View Own Tasks                      Yes       Yes    Yes     Yes           Yes
+  Assign Tasks to Team                Delegated No     Yes     Yes           No
+  Manage All Tasks                    No        No     Yes     Yes           No
+  View / Manage Leads                 Delegated No     Yes     Yes           No
+  View / Manage Callbacks             Delegated No     Yes     Yes           No
+  View / Manage Clients               Delegated No     Yes     Yes           No
+  Submit Quote / Support Requests     No        No     No      No            Yes
+  View Client Requests (Admin)        No        No     Yes     Yes           No
+  Team Chat                           Yes       Yes    Yes     Yes           No
+  Project Thread Chat                 Yes       Yes    Yes     Yes           Yes (own project)
+  Notification Centre                 Yes       Yes    Yes     Yes           No
+  Employee Directory                  Yes       Yes    Yes     Yes           No
+  Manage Employee Profiles            No        Yes    Yes     Yes           No
+  Keyword Rank Tracking               Delegated No     Yes     Yes           No
+  SEO Reports                         Delegated No     Yes     Yes           Yes (own project)
+  Google Sheets (assigned)            Yes       Yes    Yes     Yes           No
+  Personal Notepad                    Yes       Yes    Yes     Yes           No
+  View All Notepads                   No        No     No      Yes           No
+  Notice Board (view)                 Yes       Yes    Yes     Yes           No
+  Post Notices                        No        Yes    Yes     Yes           No
+  Access Management                   No        No     Delegated Yes         No
+  My Team Access Management           Delegated No     Delegated Yes         No
+  AI Attendance Analytics             No        Yes    Yes     Yes           No
+  Call Intelligence                   No        No     Yes     Yes           No
+  Biometric Report                    No        No     Yes     Yes           No
+  System Configuration                No        No     No      Yes           No
+  ────────────────────────────────────────────────────────────────────────────────
+
+
+================================================================================
+END OF DOCUMENT
+================================================================================

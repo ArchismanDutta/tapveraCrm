@@ -158,14 +158,39 @@ router.post("/:conversationId/mark-read", protect, async (req, res) => {
   }
 });
 
+// Colleagues available to direct-message. Powers the DM tab's roster — see
+// chatController.listDirectory for why it returns everyone rather than only
+// people you have already spoken to.
+router.get("/directory", protect, async (req, res) => {
+  try {
+    res.json(await chatController.listDirectory(req.user._id));
+  } catch (error) {
+    console.error("Error listing chat directory:", error);
+    res.status(500).json({ error: "Failed to load directory" });
+  }
+});
+
 // Get or create private conversation between two users
 router.post("/private-conversation", protect, async (req, res) => {
   try {
     const { otherUserId } = req.body;
-    const userId = req.user._id;
-    const conversation = await chatController.getOrCreatePrivateConversation(userId, otherUserId);
+    if (!otherUserId) {
+      return res.status(400).json({ error: "otherUserId is required" });
+    }
+
+    const conversation = await chatController.getOrCreatePrivateConversation(
+      req.user._id,
+      otherUserId
+    );
     res.json(conversation);
   } catch (error) {
+    // The controller distinguishes "you can't DM yourself" and "that account
+    // is gone" from a genuine fault. Collapsing those into 500 told the user
+    // the server broke when in fact their request was simply not valid.
+    if (error?.statusCode) {
+      return res.status(error.statusCode).json({ error: error.message });
+    }
+    console.error("Error creating private conversation:", error);
     res.status(500).json({ error: "Failed to get or create private conversation" });
   }
 });
@@ -497,6 +522,47 @@ router.put("/groups/:conversationId", protect, async (req, res) => {
   } catch (error) {
     console.error("Error updating group:", error);
     res.status(403).json({ error: error.message || "Failed to update group" });
+  }
+});
+
+// Edit a message's text, within the sender's edit window.
+//
+// The rules (you sent it, and it is still recent) live in the adapter and are
+// re-checked here on every call — never trusted from the client, which cannot
+// be relied on to have hidden the button.
+router.patch("/messages/:messageId", protect, async (req, res) => {
+  try {
+    const result = await messagingService.editMessage(
+      req.user,
+      CHAT,
+      req.params.messageId,
+      req.body?.message
+    );
+
+    if (result?.error) {
+      // Distinct, honest messages per reason. A single generic 403 would
+      // leave someone staring at an edit that failed with no idea whether to
+      // retry, and "the window closed" is genuinely actionable information.
+      const messages = {
+        NOT_FOUND: "Message not found",
+        NOT_SENDER: "You can only edit your own messages",
+        WINDOW_EXPIRED: "This message can no longer be edited",
+        EMPTY: "An edited message cannot be empty",
+        NO_TIMESTAMP: "This message cannot be edited",
+      };
+      return res
+        .status(result.status || 400)
+        .json({ error: messages[result.error] || "Unable to edit message", code: result.error });
+    }
+
+    res.json(result.raw);
+  } catch (error) {
+    try {
+      return sendAccessError(res, error);
+    } catch (unexpected) {
+      console.error("Error editing message:", unexpected);
+      return res.status(500).json({ error: "Failed to edit message" });
+    }
   }
 });
 

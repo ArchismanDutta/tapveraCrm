@@ -191,6 +191,44 @@ export async function sendMessage(scope, threadId, payload = {}) {
   return data;
 }
 
+/**
+ * How long a sent message stays editable, in milliseconds.
+ *
+ * Mirrors CHAT_EDIT_WINDOW_MINUTES on the server. The server is the authority
+ * and re-checks on every request — this copy exists only so the UI can stop
+ * offering an edit it knows will be refused, which is kinder than a button
+ * that fails.
+ */
+export const EDIT_WINDOW_MS = 7 * 60 * 1000;
+
+/** Can the current user still edit this message? Presentation only. */
+export function canEditMessage(message, currentUserId, now = Date.now()) {
+  if (!message || !currentUserId) return false;
+  // An optimistic row has no server id yet — there is nothing to PATCH until
+  // the send lands.
+  if (!(message.id || message._id)) return false;
+  if (message.status === "sending" || message.status === "failed") return false;
+
+  const senderId = String(
+    message.sender?.id ?? message.senderId ?? message.sentBy?._id ?? message.sentBy ?? ""
+  );
+  if (senderId !== String(currentUserId)) return false;
+
+  const sentAt = new Date(message.createdAt ?? message.timestamp ?? 0).getTime();
+  if (!Number.isFinite(sentAt) || sentAt === 0) return false;
+
+  return now - sentAt <= EDIT_WINDOW_MS;
+}
+
+/** Edit a message's text. Chat scope only — project threads have no edit path. */
+export async function editMessage(scope, messageId, message) {
+  if (scope === SCOPES.PROJECT) {
+    throw new Error("Editing is not supported for project messages");
+  }
+  const { data } = await API.patch(`/api/chat/messages/${messageId}`, { message });
+  return data;
+}
+
 /** Mark every message in the thread read for the current user. */
 export async function markRead(scope, threadId) {
   if (scope === SCOPES.PROJECT) {
@@ -246,6 +284,29 @@ export async function summarize(scope, threadId, days = 7) {
       : `/api/chat/conversations/${threadId}/summarize`;
   const { data } = await API.post(url, { days });
   return data?.summary || "";
+}
+
+/**
+ * Colleagues you can direct-message — the whole active roster, not just
+ * people you have already spoken to.
+ *
+ * Each entry carries `conversationId` when a thread already exists, and null
+ * when it doesn't. Null is not an error state: it means "not spoken yet", and
+ * `openDirectMessage` below creates the thread on demand.
+ */
+export async function listDirectory() {
+  const { data } = await API.get("/api/chat/directory");
+  return Array.isArray(data) ? data : [];
+}
+
+/**
+ * Get (or lazily create) the one-to-one conversation with another user.
+ * Idempotent server-side, so calling it for an existing DM returns that same
+ * thread rather than a second one.
+ */
+export async function openDirectMessage(otherUserId) {
+  const { data } = await API.post("/api/chat/private-conversation", { otherUserId });
+  return data;
 }
 
 /** Create a group conversation. */
@@ -321,4 +382,9 @@ export default {
   summarize,
   createGroup,
   deleteConversation,
+  listDirectory,
+  openDirectMessage,
+  editMessage,
+  canEditMessage,
+  EDIT_WINDOW_MS,
 };

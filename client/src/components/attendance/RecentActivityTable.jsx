@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import BreakPolicyOverride from "./BreakPolicyOverride";
 import {
   Clock,
   CheckCircle,
@@ -41,7 +42,17 @@ const STATUS_ICONS = {
   default: Activity,
 };
 
-const RecentActivityTable = ({ activities = [], onDateFilterChange, currentFilter = '5days' }) => {
+const RecentActivityTable = ({
+  activities = [],
+  onDateFilterChange,
+  currentFilter = '5days',
+  // Break-policy override. All optional — the table is also rendered on
+  // surfaces with no employee context and no permission to edit, and there it
+  // simply shows nothing extra.
+  userId = null,
+  canOverrideBreakPolicy = false,
+  onOverrideChanged,
+}) => {
   const [filter, setFilter] = useState("all");
   const [sortBy, setSortBy] = useState("date");
   const [sortOrder, setSortOrder] = useState("desc");
@@ -397,6 +408,20 @@ const RecentActivityTable = ({ activities = [], onDateFilterChange, currentFilte
                         <StatusIcon className="w-3 h-3" />
                         <span>{activity.status}</span>
                       </div>
+                      {/* Renders only when the break-duration policy is what
+                          made this day absent. Without the explanation, a row
+                          showing 8 hours worked AND "Absent" reads as a data
+                          error, and the instinct is to "fix" the punch times —
+                          falsifying the record to change a derived flag.
+                          Self-hiding, so ordinary days are unaffected. */}
+                      {canOverrideBreakPolicy && (
+                        <BreakPolicyOverride
+                          userId={userId}
+                          date={activity.date}
+                          day={activity}
+                          onChanged={onOverrideChanged}
+                        />
+                      )}
                     </td>
                     <td className="py-4 px-4">
                       <div className="flex items-center gap-2">
