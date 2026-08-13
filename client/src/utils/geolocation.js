@@ -75,6 +75,16 @@ export class GeolocationError extends Error {
  * @param {number}  options.maximumAgeMs   How stale a cached fix may be.
  * @returns {Promise<{latitude, longitude, accuracy}>}
  */
+/**
+ * How long to keep listening after a CONTRADICTORY permission denial before
+ * concluding the OS is really blocking the browser.
+ *
+ * See the note in getCurrentCoordinates. Long enough for Core Location to
+ * finish waking (observed at well under a second), short enough that someone
+ * facing a genuine system block isn't left staring at a spinner.
+ */
+const CONTRADICTORY_DENIAL_GRACE_MS = 5000;
+
 export function getCurrentCoordinates({
   timeoutMs = 15000,
   highAccuracy = true,
@@ -96,62 +106,122 @@ export function getCurrentCoordinates({
       return;
     }
 
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        resolve({
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude,
-          // Forwarded verbatim and never massaged. The server subtracts a
-          // capped amount of this uncertainty when deciding, so under-reporting
-          // it here would cause false denials for people genuinely at their
-          // desks — see ACCURACY_GRACE_METERS in server/utils/geofence.js.
-          accuracy: position.coords.accuracy,
-        });
-      },
-      (error) => {
-        const codeMap = {
-          1: GEO_ERRORS.PERMISSION_DENIED,
-          2: GEO_ERRORS.UNAVAILABLE,
-          3: GEO_ERRORS.TIMEOUT,
-        };
-        const code = codeMap[error?.code] || GEO_ERRORS.UNAVAILABLE;
+    const options = {
+      enableHighAccuracy: highAccuracy,
+      timeout: timeoutMs,
+      // 0 by default: a cached fix is exactly what someone who has driven
+      // home would be served, which would defeat the check.
+      maximumAge: maximumAgeMs,
+    };
 
-        if (code !== GEO_ERRORS.PERMISSION_DENIED) {
-          reject(new GeolocationError(code));
-          return;
-        }
+    // ─── THIS PROMISE SETTLES ONCE, THE BROWSER MAY CALL BACK TWICE ───
+    //
+    // getCurrentPosition is specified to invoke exactly one callback. Chrome
+    // on macOS does not honour that: it fires the error callback with code 1
+    // ("User denied Geolocation") while Core Location is still waking, and
+    // then fires the SUCCESS callback with a real fix immediately afterwards.
+    //
+    // The previous version rejected inside the error callback, so the late
+    // position arrived at an already-settled promise and was thrown away —
+    // every affected user was told macOS was blocking their browser while
+    // their browser was, at that moment, successfully reporting its location.
+    //
+    // Hence the explicit guard: whichever callback carries usable information
+    // wins, no matter which order they arrive in.
+    let settled = false;
+    let graceTimer = null;
+    let watchId = null;
 
-        // ─── "BLOCKED" HAS TWO VERY DIFFERENT CAUSES ───
-        //
-        // The spec gives one code (1) for both "this site is not allowed" and
-        // "the browser itself is not allowed by the OS". On macOS the second is
-        // extremely common and invisible: Chrome can show Location as Allowed
-        // for the site while System Settings → Privacy & Security → Location
-        // Services has the browser switched off entirely. The user then follows
-        // a message telling them to fix browser settings that are already
-        // correct, and concludes the app is broken.
-        //
-        // The Permissions API disambiguates: it reports the SITE-level grant
-        // only. So "the site says granted, yet we were denied" can only mean
-        // the refusal came from below the browser.
-        getPermissionState()
-          .then((state) => {
-            reject(
-              new GeolocationError(
-                state === "granted" ? GEO_ERRORS.SYSTEM_DENIED : GEO_ERRORS.PERMISSION_DENIED
-              )
-            );
-          })
-          .catch(() => reject(new GeolocationError(GEO_ERRORS.PERMISSION_DENIED)));
-      },
-      {
-        enableHighAccuracy: highAccuracy,
-        timeout: timeoutMs,
-        // 0 by default: a cached fix is exactly what someone who has driven
-        // home would be served, which would defeat the check.
-        maximumAge: maximumAgeMs,
+    const cleanup = () => {
+      if (graceTimer) clearTimeout(graceTimer);
+      if (watchId != null && navigator.geolocation.clearWatch) {
+        navigator.geolocation.clearWatch(watchId);
       }
-    );
+    };
+
+    const succeed = (position) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      resolve({
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude,
+        // Forwarded verbatim and never massaged. The server subtracts a
+        // capped amount of this uncertainty when deciding, so under-reporting
+        // it here would cause false denials for people genuinely at their
+        // desks — see ACCURACY_GRACE_METERS in server/utils/geofence.js.
+        accuracy: position.coords.accuracy,
+      });
+    };
+
+    const fail = (code) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(new GeolocationError(code));
+    };
+
+    const onError = (error) => {
+      if (settled) return;
+
+      const codeMap = {
+        1: GEO_ERRORS.PERMISSION_DENIED,
+        2: GEO_ERRORS.UNAVAILABLE,
+        3: GEO_ERRORS.TIMEOUT,
+      };
+      const code = codeMap[error?.code] || GEO_ERRORS.UNAVAILABLE;
+
+      // Nothing ambiguous about "no signal" or "timed out" — report at once.
+      if (code !== GEO_ERRORS.PERMISSION_DENIED) {
+        fail(code);
+        return;
+      }
+
+      // ─── "BLOCKED" HAS THREE CAUSES, NOT TWO ───
+      //
+      // The spec gives one code (1) for what turns out to be three situations:
+      //   a) this site is not allowed        -> the user can fix it, in Chrome
+      //   b) the OS is blocking the browser  -> the user fixes it in macOS
+      //   c) nothing is wrong; Core Location just hadn't woken up yet
+      //
+      // The Permissions API separates (a) from the others: it reports the
+      // SITE-level grant only, so a state other than "granted" means the site
+      // really is blocked and there is nothing transient about it.
+      //
+      // "Granted, yet denied" is a contradiction, and it is either (b) or (c).
+      // They are indistinguishable at this instant and only time tells them
+      // apart — so instead of guessing (the old behaviour, which always
+      // guessed (b) and was usually wrong), keep listening. A fix arriving
+      // means it was (c); silence means it really was (b).
+      getPermissionState()
+        .then((state) => {
+          if (settled) return;
+
+          if (state !== "granted") {
+            fail(GEO_ERRORS.PERMISSION_DENIED);
+            return;
+          }
+
+          // watchPosition rather than another getCurrentPosition: it delivers
+          // whenever the platform is ready instead of racing a second cold
+          // start, and the original call's success callback is still live and
+          // can also settle us first.
+          try {
+            watchId = navigator.geolocation.watchPosition(succeed, () => {}, options);
+          } catch {
+            // Older/odd implementations without watchPosition — the original
+            // success callback is still the fallback.
+          }
+
+          graceTimer = setTimeout(
+            () => fail(GEO_ERRORS.SYSTEM_DENIED),
+            Math.min(CONTRADICTORY_DENIAL_GRACE_MS, timeoutMs)
+          );
+        })
+        .catch(() => fail(GEO_ERRORS.PERMISSION_DENIED));
+    };
+
+    navigator.geolocation.getCurrentPosition(succeed, onError, options);
   });
 }
 

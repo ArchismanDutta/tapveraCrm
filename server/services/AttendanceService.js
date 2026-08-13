@@ -311,6 +311,10 @@ class AttendanceService {
       events: [],
       calculated: this.getDefaultCalculatedData(),
       assignedShift: shift,
+      // Snapshot the factor in force today. Read once, here, so that changing
+      // a user's factor later never reaches back and rescales finished days —
+      // see the field comment on AttendanceRecord.controlMachineFactor.
+      controlMachineFactor: this.normalizeControlMachineFactor(user.controlMachineFactor),
       leaveInfo: leaveInfo,
       performance: this.getDefaultPerformanceData(),
       metadata: {
@@ -691,6 +695,31 @@ class AttendanceService {
    * @param {Date} attendanceDate - The attendance date (REQUIRED for night shift duration/late calculation)
    */
   /**
+   * Coerce a control-machine factor into something safe to multiply by.
+   *
+   * Every path into the calculation goes through here — the per-day snapshot,
+   * the User default, and the admin endpoint — because a bad value has
+   * unusually bad failure modes for a multiplier on attendance data:
+   *
+   *   • undefined/null (every account before this feature existed) => 1, so
+   *     nothing changes for anyone who was never configured;
+   *   • NaN would make breakDurationSeconds NaN, which propagates into the
+   *     absence rule, the dashboard and payroll as a silent corruption
+   *     rather than an error anyone would notice;
+   *   • 0 would erase break time entirely and, with the <15m rule, mark
+   *     every day absent;
+   *   • a negative would produce negative break and a total below work time.
+   *
+   * Bounds match the schema so the API, the snapshot and the model cannot
+   * disagree about what is acceptable.
+   */
+  normalizeControlMachineFactor(value) {
+    const n = Number(value);
+    if (!Number.isFinite(n) || n <= 0) return 1;
+    return Math.min(10, Math.max(0.1, n));
+  }
+
+  /**
    * Has this person's working day finished?
    *
    * Two independent signals, either of which is sufficient:
@@ -875,6 +904,26 @@ class AttendanceService {
 
     console.log(`   📊 Final calculated durations: work=${workSeconds}s, break=${breakSeconds}s`);
 
+    // ─── Break-speed factor ───────────────────────────────────────────────
+    //
+    // Applied HERE and nowhere else. Every surface in the app — employee
+    // dashboard, attendance page, admin portal, calendar, payroll, and the
+    // break-duration absence rule — reads calculated.breakDurationSeconds,
+    // which is produced from this one variable. Scaling at this single point
+    // is what makes the factor consistent everywhere without touching any of
+    // those consumers, and makes it impossible for two surfaces to disagree.
+    //
+    // Work time is deliberately untouched: at 0.75 the "missing" minutes
+    // simply don't count as break, they do not become paid work.
+    const baseBreakSeconds = breakSeconds;
+    const controlMachineFactor = this.normalizeControlMachineFactor(employee.controlMachineFactor);
+    if (controlMachineFactor !== 1) {
+      breakSeconds = breakSeconds * controlMachineFactor;
+      console.log(
+        `   ⏱️  Break speed ${controlMachineFactor}x applied: ${Math.round(baseBreakSeconds)}s -> ${Math.round(breakSeconds)}s`
+      );
+    }
+
     // Calculate all derived fields
     const totalSeconds = workSeconds + breakSeconds;
     const workHours = workSeconds / 3600;
@@ -905,6 +954,10 @@ class AttendanceService {
       departureTime,
       workDurationSeconds: Math.round(Math.max(0, workSeconds)),
       breakDurationSeconds: Math.round(Math.max(0, breakSeconds)),
+      // What actually elapsed, before scaling. Equal to the above whenever the
+      // factor is 1, which is every account by default.
+      breakDurationSecondsBase: Math.round(Math.max(0, baseBreakSeconds)),
+      controlMachineFactor,
       totalDurationSeconds: Math.round(Math.max(0, totalSeconds)),
 
       workDuration: this.formatDuration(workSeconds),

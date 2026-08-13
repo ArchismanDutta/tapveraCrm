@@ -102,6 +102,30 @@ export const attendanceUtils = {
   calculateBreakMinutes: (data, isCurrentlyOnBreak = false) => {
     let totalMinutes = 0;
 
+    // ─── CONTROL-MACHINE FACTOR ─────────────────────────────────────────────
+    //
+    // Some methods below derive minutes from RAW punch timestamps, and those
+    // must be scaled to match what the server records; others read a stored
+    // duration the server has ALREADY scaled, and must not be scaled twice.
+    // Getting this wrong is not cosmetic — the super-admin dashboard uses
+    // this function while the attendance portal reads the server value, so a
+    // mismatch means two portals quoting different break totals for the same
+    // person on the same day.
+    //
+    //   Method 1 (timeline)       -> raw       -> scale
+    //   Method 2 (breakDurationSeconds) -> already scaled -> leave alone
+    //   Method 3 (breakSessions)  -> raw       -> scale
+    //   Method 4 (totalBreakMinutes)    -> already scaled -> leave alone
+    //
+    // Absent on every account that was never configured, hence the default.
+    const rawFactor = Number(
+      data?.controlMachineFactor ?? data?.calculated?.controlMachineFactor ?? 1
+    );
+    const machineFactor =
+      Number.isFinite(rawFactor) && rawFactor > 0
+        ? Math.min(10, Math.max(0.1, rawFactor))
+        : 1;
+
     // Method 1: Calculate from timeline events for real-time accuracy
     if (data.timeline && Array.isArray(data.timeline)) {
       let timelineBreakMinutes = 0;
@@ -148,7 +172,8 @@ export const attendanceUtils = {
       }
 
       if (timelineBreakMinutes > 0) {
-        totalMinutes = Math.round(timelineBreakMinutes);
+        // Derived from raw timestamps — scale to match the server.
+        totalMinutes = Math.round(timelineBreakMinutes * machineFactor);
       }
     }
 
@@ -179,7 +204,8 @@ export const attendanceUtils = {
         }
         return sum;
       }, 0);
-      totalMinutes = Math.round(sessionBreakMs / 60000);
+      // Raw session timestamps — scale, same as the timeline method above.
+      totalMinutes = Math.round((sessionBreakMs / 60000) * machineFactor);
     }
 
     // Method 4: Use totalBreakMinutes or breakDurationMinutes as final fallback

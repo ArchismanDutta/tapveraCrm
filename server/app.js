@@ -238,6 +238,9 @@ app.use("/api/flexible-shifts", flexibleShiftRoutes);
 app.use("/api/shifts", shiftRoutes);
 app.use("/api/admin", adminAttendanceRoutes);
 app.use("/api/admin/manual-attendance", manualAttendanceRoutes);
+// Per-user break-timer speed factor. Super-admin only, enforced inside the
+// router — the hidden page's obscure URL is not the boundary.
+app.use("/api/admin/control-machine", require("./routes/controlMachineRoutes"));
 app.use("/api/attendance-new", newAttendanceRoutes); // New date-centric attendance system
 app.use("/api/super-admin", superAdminRoutes); // Super admin route added
 app.use("/api/payslips", payslipRoutes);

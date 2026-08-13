@@ -77,6 +77,38 @@ const userSchema = new mongoose.Schema(
     // absent on every existing user until their first disconnect, and
     // services/messaging/presence.js treats absent as "unknown", not "never".
     lastSeenAt: { type: Date, default: null },
+
+    // ─── Break-timer speed factor ─────────────────────────────────────────
+    //
+    // Scales how fast this user's break time accrues. 1 = real time (the
+    // default, and what every existing account has). 0.75 means a real
+    // 100-minute break is recorded as 75; 2 means it accrues twice as fast.
+    //
+    // ─── WHAT THIS DOES AND DOES NOT TOUCH ───
+    // It never alters punch events — BREAK_START/BREAK_END timestamps remain
+    // exactly as recorded, and the unscaled total is kept alongside the
+    // scaled one on every day (calculated.breakDurationSecondsBase). The
+    // factor is a stated adjustment on a derived figure, not a rewrite of
+    // what happened.
+    //
+    // It also deliberately does NOT convert the difference into work time.
+    // At 0.75 the "missing" 25 minutes simply do not count as break; hours
+    // worked are unchanged. Moving them into work would inflate paid hours,
+    // which is a much larger claim than adjusting a break allowance.
+    //
+    // Applied FORWARD ONLY: each attendance day snapshots the factor in force
+    // when it was created, so changing this never silently rewrites history
+    // (and past payroll) on the next recalculation.
+    controlMachineFactor: { type: Number, default: 1, min: 0.1, max: 10 },
+
+    /** Audit — this affects recorded attendance, so it is attributable. */
+    controlMachineMeta: {
+      reason: { type: String, default: null },
+      setBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+      setByName: { type: String, default: null },
+      setAt: { type: Date, default: null },
+    },
+
     totalPl: { type: Number, default: 0, min: 0 },
     password: { type: String, required: true },
     role: { type: String, enum: ["super-admin", "admin", "hr", "employee"], default: "employee" },

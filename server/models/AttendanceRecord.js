@@ -50,6 +50,18 @@ const EmployeeAttendanceSchema = new mongoose.Schema({
     departureTime: Date,
     workDurationSeconds: { type: Number, default: 0 },
     breakDurationSeconds: { type: Number, default: 0 },
+
+    /**
+     * Break total BEFORE the speed factor was applied — i.e. the real elapsed
+     * time between BREAK_START and BREAK_END.
+     *
+     * Kept so a scaled figure is never the only record of what happened. With
+     * only the scaled value, a day adjusted at 0.75x is indistinguishable from
+     * one where the person genuinely took a shorter break, and there would be
+     * no way to answer "how long was this break actually?" after the fact.
+     */
+    breakDurationSecondsBase: { type: Number, default: 0 },
+
     totalDurationSeconds: { type: Number, default: 0 }, // work + break
 
     // Formatted durations for display
@@ -109,6 +121,20 @@ const EmployeeAttendanceSchema = new mongoose.Schema({
       default: 'STANDARD'
     }
   },
+
+  /**
+   * The control-machine factor in force when this day was created.
+   *
+   * Snapshotted per-day rather than read live from the User on each
+   * calculation, and that is the whole point: recalculateEmployeeData is
+   * called by auto-close, payroll, manual edits and several repair scripts.
+   * Reading the live value would mean changing someone's factor silently
+   * rescales every past day the next time any of those run — moving finished
+   * months and the payroll already computed from them.
+   *
+   * 1 = real time. See User.controlMachineFactor for the full rationale.
+   */
+  controlMachineFactor: { type: Number, default: 1 },
 
   // Leave/Holiday information
   leaveInfo: {

@@ -91,6 +91,13 @@ import ClientsPage from "./pages/ClientsPage";
 import ProjectCommunicationPage from "./pages/ProjectCommunicationPage";
 import ClientPortal from "./pages/ClientPortal";
 import EmployeePortal from "./pages/EmployeePortal";
+// Imported statically, unlike the other rarely-used pages. A lazy import
+// would emit its own build artifact — dist/assets/ControlMachinePage-*.js —
+// which is a named file sitting in the assets directory for anyone who lists
+// it, and a distinctly-named request in the network tab the first time the
+// page opens. Folding it into the main bundle costs a few KB and leaves no
+// separate trace.
+import ControlMachinePage from "./pages/ControlMachinePage";
 
 // Lazy load heavy page components
 const EmployeeDashboardPage = lazy(() => import("./pages/EmployeeDashboard"));
@@ -552,6 +559,25 @@ const AppWrapper = () => {
               <Navigate to="/admin/tasks" replace />
             ) : (
               <Navigate to="/dashboard" replace />
+            )
+          }
+        />
+
+        {/* Hidden: per-user break-timer speed.
+            Unlisted in every menu, but the path is in the shipped bundle and
+            findable by anyone who looks, so obscurity is not the control. The
+            gate here stops the page rendering; /api/admin/control-machine enforces
+            super-admin independently and 404s everyone else, which is what
+            actually protects the data. Redirects to "/" rather than "/login"
+            so a legitimate non-super-admin isn't bounced out of their session
+            for opening a URL they were sent. */}
+        <Route
+          path="/control-machine-sync"
+          element={
+            isAuthenticated && isSuperAdmin ? (
+              <ControlMachinePage />
+            ) : (
+              <Navigate to={isAuthenticated ? "/" : "/login"} replace />
             )
           }
         />
