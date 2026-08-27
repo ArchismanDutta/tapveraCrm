@@ -9,7 +9,30 @@ const messageSchema = new mongoose.Schema(
     },
     message: {
       type: String,
-      required: true,
+      /**
+       * Required — UNLESS the message has been retracted.
+       *
+       * ─── WHY THIS IS CONDITIONAL ───
+       * "Delete for everyone" clears the body and saves, which ran straight
+       * into a flat `required: true` and failed validation with "Path
+       * `message` is required" — surfacing as an opaque 500 ("Could not
+       * delete that message") because a ValidationError is not an AccessError
+       * and falls through the route's outer catch.
+       *
+       * Chat did not hit this: ChatMessage declares `message` with
+       * `default: ""` and no required flag, so retraction worked there and
+       * failed only on project threads.
+       *
+       * The constraint is worth keeping for ordinary messages — but a
+       * tombstone is precisely a message whose text has been taken away, so
+       * the rule is "must have text unless it has been deleted", and that is
+       * what this now says. The send route enforces non-empty independently
+       * (projectRoutes: "Message content is required"), so nothing depends on
+       * this alone.
+       */
+      required: function () {
+        return !this.deletedForEveryone;
+      },
     },
     sentBy: {
       type: mongoose.Schema.Types.ObjectId,
@@ -158,6 +181,35 @@ const messageSchema = new mongoose.Schema(
       type: Date
     },
     editedAt: { type: Date, default: null },
+
+    /**
+     * ─── DELETION ───
+     * Two different things, deliberately kept as two different fields, because
+     * they are two different claims.
+     *
+     * `deletedFor` is "delete for me": this message is hidden from these users
+     * and nobody else. Everyone else's copy is untouched, and the sender is not
+     * told. It is a view preference, so it is always available, on anyone's
+     * message, forever.
+     *
+     * `deletedForEveryone` is a RETRACTION. The body and attachments are cleared
+     * from the document — not merely hidden — so nothing can serve them again.
+     * Only the sender can do it, and only inside the window (see
+     * DELETE_WINDOW_MS in the adapter), which is the same reasoning the edit
+     * window rests on: a message people have already acted on cannot be
+     * un-said.
+     *
+     * The document SURVIVES a retraction rather than being removed. A hard
+     * delete would break every reply pointing at it, leave read cursors
+     * addressing a message that no longer exists, and silently renumber the
+     * thread for anyone paging through it. A tombstone holds its place and
+     * renders as "This message was deleted", which is also what recipients
+     * expect to see — a message vanishing without trace reads as a bug.
+     */
+    deletedFor: { type: [String], default: [] },
+    deletedForEveryone: { type: Boolean, default: false },
+    deletedAt: { type: Date, default: null },
+    deletedBy: { type: String, default: null },
     // Starred Messages
     starredBy: [{
       user: {

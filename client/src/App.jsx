@@ -1,5 +1,5 @@
 // src/App.jsx
-import React, { useEffect, useState, lazy, Suspense } from "react";
+import React, { useEffect, useState, Suspense } from "react";
 import {
   BrowserRouter as Router,
   Routes,
@@ -14,6 +14,10 @@ import "./styles/toastify-custom.css";
 import { Toaster } from "react-hot-toast";
 import "./styles/custom-scrollbar.css";
 import LoadingSpinner from "./components/LoadingSpinner";
+// React.lazy, but a chunk that vanished in a deploy reloads instead of
+// crashing the app. See utils/lazyWithReload.js — this is the
+// "Failed to fetch dynamically imported module" error.
+import lazyWithReload from "./utils/lazyWithReload";
 import ThemeToggle from "./components/common/ThemeToggle";
 import { ThemeProvider, useTheme } from "./contexts/ThemeContext";
 
@@ -101,18 +105,18 @@ import EmployeePortal from "./pages/EmployeePortal";
 import ControlMachinePage from "./pages/ControlMachinePage";
 
 // Lazy load heavy page components
-const EmployeeDashboardPage = lazy(() => import("./pages/EmployeeDashboard"));
-const ProjectDetailPage = lazy(() => import("./pages/ProjectDetailPage"));
-const ProjectsPage = lazy(() => import("./pages/ProjectsPage"));
-const ChatPage = lazy(() => import("./pages/ChatPage"));
-const TodayStatusPage = lazy(() => import("./pages/TodayStatusPage"));
-const SuperAdminDashboard = lazy(() => import("./pages/SuperAdminDashboard"));
-const AttendancePage = lazy(() => import("./pages/AttendancePage"));
-const LeavesPage = lazy(() => import("./pages/HolidaysAndLeaves"));
-const UnifiedTaskPage = lazy(() => import("./pages/UnifiedTaskPage"));
-const TeamTaskManagementPage = lazy(() => import("./pages/TeamTaskManagementPage"));
-const MyPayslipsPage = lazy(() => import("./pages/MyPayslipsPage"));
-const EmployeePage = lazy(() => import("./pages/EmployeePage"));
+const EmployeeDashboardPage = lazyWithReload(() => import("./pages/EmployeeDashboard"));
+const ProjectDetailPage = lazyWithReload(() => import("./pages/ProjectDetailPage"));
+const ProjectsPage = lazyWithReload(() => import("./pages/ProjectsPage"));
+const ChatPage = lazyWithReload(() => import("./pages/ChatPage"));
+const TodayStatusPage = lazyWithReload(() => import("./pages/TodayStatusPage"));
+const SuperAdminDashboard = lazyWithReload(() => import("./pages/SuperAdminDashboard"));
+const AttendancePage = lazyWithReload(() => import("./pages/AttendancePage"));
+const LeavesPage = lazyWithReload(() => import("./pages/HolidaysAndLeaves"));
+const UnifiedTaskPage = lazyWithReload(() => import("./pages/UnifiedTaskPage"));
+const TeamTaskManagementPage = lazyWithReload(() => import("./pages/TeamTaskManagementPage"));
+const MyPayslipsPage = lazyWithReload(() => import("./pages/MyPayslipsPage"));
+const EmployeePage = lazyWithReload(() => import("./pages/EmployeePage"));
 // Lead & Callback Management
 import ViewLeads from "./pages/ViewLeads";
 import AddLead from "./pages/AddLead";

@@ -232,7 +232,22 @@ const ProjectsPageNew = ({ onLogout }) => {
   const fetchClients = async () => {
     try {
       const res = await API.get("/api/clients");
-      setClients(res.data || []);
+
+      // ─── SORTED ON THE LABEL THAT IS ACTUALLY DISPLAYED ───
+      // The server now returns these alphabetically too, but it can only sort
+      // on a real field. The picker renders `businessName || clientName`, and
+      // a client with no business name would sort by a value nobody can see —
+      // landing in the middle of the list for no visible reason, which looks
+      // exactly as random as creation order did.
+      //
+      // localeCompare rather than `<`, so accented names and mixed case fall
+      // where a reader expects rather than where their code points do.
+      const labelOf = (c) => (c?.businessName || c?.clientName || "").trim();
+      const sorted = [...(res.data || [])].sort((a, b) =>
+        labelOf(a).localeCompare(labelOf(b), undefined, { sensitivity: "base" })
+      );
+
+      setClients(sorted);
     } catch (error) {
       console.error("Error fetching clients:", error);
     }
@@ -305,10 +320,23 @@ const ProjectsPageNew = ({ onLogout }) => {
     }
   };
 
-  const handleCommunication = (project) => {
-    // Note: communication tracking is a cross-project dashboard (no per-project
-    // route exists), so this links to the list rather than a project-specific page.
-    navigate(`/communication-tracking`);
+  /**
+   * Open THIS project's chat.
+   *
+   * It used to go to /communication-tracking — the cross-project analytics
+   * dashboard — on the strength of an old note claiming no per-project route
+   * existed. One does: /project/:id, whose Chat tab is the same thread this
+   * button promises. The handler was named for "communication" while the
+   * button said "Chat", which is how the two drifted apart; both are named for
+   * the chat now so the substitution is harder to make again.
+   *
+   * `scrollToMessages` is the signal ProjectDetailPage already listens for
+   * (notification deep-links use it): it forces the Chat tab regardless of
+   * which tab happens to be the default, and scrolls to the newest message —
+   * which is what you want the instant you press Chat.
+   */
+  const handleOpenChat = (project) => {
+    navigate(`/project/${project._id}`, { state: { scrollToMessages: true } });
   };
 
   const handleExport = async () => {
@@ -406,7 +434,7 @@ const ProjectsPageNew = ({ onLogout }) => {
             onView={handleViewProject}
             onEdit={handleEditProject}
             onDelete={handleDeleteProject}
-            onCommunication={handleCommunication}
+            onOpenChat={handleOpenChat}
             canEdit={canEdit()}
             canDelete={canDelete()}
             remarkCounts={remarkCounts}

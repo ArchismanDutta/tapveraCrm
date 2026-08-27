@@ -242,9 +242,14 @@ exports.getGroupDetails = async (conversationId) => {
   }
 
   // Get member details
+  // Alphabetical: this is the group's member list, which people scan for a
+  // name to remove or to check who is in the room.
   const members = await User.find({
     _id: { $in: conversation.members }
-  }).select('_id name email employeeId role');
+  })
+    .collation({ locale: 'en', strength: 1 })
+    .sort({ name: 1 })
+    .select('_id name email employeeId role');
 
   // Get creator details
   const creator = await User.findById(conversation.createdBy)

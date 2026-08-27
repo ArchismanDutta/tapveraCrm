@@ -162,14 +162,25 @@ const ProjectCommunicationPage = ({ onLogout }) => {
     };
   };
 
-  // Get unique clients for filter dropdown
+  // Get unique clients for filter dropdown, sorted on the name actually shown.
+  //
+  // These are derived from the loaded projects, so without a sort they follow
+  // project order. Sorting on `name` — the same expression rendered in the
+  // option — rather than on a field, because this list uses
+  // `clientName || businessName` while the project form's picker uses the
+  // inverse precedence; sorting by either field alone would look right in one
+  // place and random in the other.
   const uniqueClients = Array.from(
     new Set(
       projects
         .flatMap((p) => p.clients || [])
         .map((c) => JSON.stringify({ _id: c._id, name: c.clientName || c.businessName }))
     )
-  ).map((str) => JSON.parse(str));
+  )
+    .map((str) => JSON.parse(str))
+    .sort((a, b) =>
+      String(a.name || "").localeCompare(String(b.name || ""), undefined, { sensitivity: "base" })
+    );
 
   // Filter projects
   const filteredProjects = projects.filter((project) => {

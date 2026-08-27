@@ -336,7 +336,21 @@ exports.getAllUsers = async (req, res) => {
       ? {}
       : { status: { $nin: ['inactive', 'terminated', 'absconded'] } };
 
+    // ─── SORTED: THIS ONE FEEDS MOST OF THE APP'S PEOPLE PICKERS ───
+    // Seventeen dropdowns across leads, callbacks, tasks, attendance, chat
+    // groups and project assignment are populated from this endpoint, and none
+    // of them sorted the array themselves — so every one of them listed people
+    // in whatever order Mongo returned. Sorting here fixes all of them at
+    // once, and matches /api/users/assignable and /api/users/directory, which
+    // already sorted by name and disagreed with this endpoint on screens that
+    // call both.
+    // Alphabetical, with the collation that makes it mean what a reader
+    // expects. Mongo's default sort is byte order, which files every
+    // capitalised name above every lowercase one — strength: 1 compares
+    // case- and accent-insensitively. Same pattern as GET /api/clients.
     const users = await User.find(filter)
+      .collation({ locale: "en", strength: 1 })
+      .sort({ name: 1 })
       .select("_id name email role department designation employeeId dob doj shift shiftType jobLevel status salary");
     res.json(users);
   } catch (err) {

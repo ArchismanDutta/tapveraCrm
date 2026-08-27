@@ -44,6 +44,8 @@ router.get("/employees-today", async (req, res) => {
       status: { $nin: ["terminated", "absconded"] }, // Exclude terminated and absconded employees
     })
     .populate('assignedShift') // Populate shift details for late/overtime calculation
+    .collation({ locale: "en", strength: 1 })
+    .sort({ name: 1 })
     .lean();
     console.log(`Found ${users.length} active users with roles: employee, admin, hr`);
 

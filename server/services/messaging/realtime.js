@@ -136,6 +136,23 @@ function emitUpdated({ scope, threadId, patch, memberIds = [] }) {
 }
 
 /**
+ * A thread patch for SPECIFIC users only — never the thread room.
+ *
+ * "Delete for me" is the case this exists for: the message is hidden from one
+ * person and nobody else, so broadcasting the patch to the room would tell
+ * everyone else to hide a message that is still perfectly visible to them.
+ * Their other tabs still need to hear it, hence personal rooms rather than the
+ * one socket that made the request.
+ */
+function emitUpdatedToUsers(userIds, { scope, threadId, patch }) {
+  safely('emitUpdatedToUsers', () => {
+    const payload = sign({ scope, threadId: String(threadId), patch });
+    const server = io();
+    (userIds || []).forEach((id) => server.to(`user:${id}`).emit('thread:updated', payload));
+  });
+}
+
+/**
  * Conversation membership/details changed (create, rename, add/remove, delete).
  * Targeted at each member's personal room rather than the thread room: a
  * brand-new group has nobody in its room yet, and a just-removed member needs
@@ -235,6 +252,7 @@ module.exports = {
   emitMessage,
   emitReceipt,
   emitUpdated,
+  emitUpdatedToUsers,
   emitConversationChanged,
   emitTyping,
   evictFromThread,

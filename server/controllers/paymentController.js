@@ -17,6 +17,12 @@ exports.getEmployeesWithTaskStats = async (req, res) => {
       status: { $nin: ['terminated', 'absconded'] }
     })
       .select("employeeId name email department designation avatar status")
+      // Alphabetical, with the collation that makes it mean what a reader
+      // expects. Mongo's default sort is byte order, which files every
+      // capitalised name above every lowercase one — strength: 1 compares
+      // case- and accent-insensitively. Same pattern as GET /api/clients.
+      .collation({ locale: "en", strength: 1 })
+      .sort({ name: 1 })
       .lean();
 
     // Calculate task statistics for each employee

@@ -94,6 +94,10 @@ const TransferManagement = ({ onLogout }) => {
     fetchAllTransfers();
   }, [fetchAllTransfers]);
 
+  // Alphabetical. A Map keeps insertion order, and the transfers feeding it
+  // arrive newest-first — so this dropdown was ordered by "who most recently
+  // had a transfer", which is not something anyone scanning for a name can
+  // use.
   const uniqueTransferUsers = useMemo(
     () =>
       Array.from(
@@ -103,6 +107,8 @@ const TransferManagement = ({ onLogout }) => {
             .filter(Boolean)
             .map((user) => [user._id, user])
         ).values()
+      ).sort((a, b) =>
+        String(a?.name || "").localeCompare(String(b?.name || ""), undefined, { sensitivity: "base" })
       ),
     [transfersByUser, transfersToUser]
   );

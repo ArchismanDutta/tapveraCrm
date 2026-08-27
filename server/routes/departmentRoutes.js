@@ -48,7 +48,12 @@ router.get("/", protect, async (req, res) => {
 // Get department statistics (member + position counts per department)
 router.get("/stats", protect, requireDeptManage, async (req, res) => {
   try {
-    const departments = await Department.find().lean();
+    // Alphabetical, matching GET /api/departments above — the two returned
+    // the same departments in different orders.
+    const departments = await Department.find()
+      .collation({ locale: "en", strength: 1 })
+      .sort({ name: 1 })
+      .lean();
 
     const stats = await Promise.all(
       departments.map(async (dept) => {

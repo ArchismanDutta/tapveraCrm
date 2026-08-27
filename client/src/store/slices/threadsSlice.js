@@ -391,11 +391,25 @@ const threadsSlice = createSlice({
       if (patch.messageId) {
         const list = state.messagesByKey[key];
         const idx = list.findIndex((m) => idOf(m) === String(patch.messageId));
-        if (idx !== -1) {
-          // messageId is the addressing key, not a field to write onto the row.
-          const { messageId: _messageId, ...fields } = patch;
-          list[idx] = { ...list[idx], ...fields };
+        if (idx === -1) return;
+
+        // "Delete for me" removes the row outright. Merging `removed: true`
+        // onto it would leave a message on screen wearing a flag nothing
+        // renders — the point is that it is gone, for this person, here and
+        // in their other tabs. Only ever sent to that user (see
+        // realtime.emitUpdatedToUsers), so this cannot hide a message from
+        // anyone else.
+        if (patch.removed) {
+          list.splice(idx, 1);
+          return;
         }
+
+        // messageId is the addressing key, not a field to write onto the row.
+        // A retraction arrives as `{ deleted: true, body: '', attachments: [] }`
+        // and merges like any other patch, so the row keeps its place in the
+        // order and anything replying to it still resolves.
+        const { messageId: _messageId, ...fields } = patch;
+        list[idx] = { ...list[idx], ...fields };
         return;
       }
 

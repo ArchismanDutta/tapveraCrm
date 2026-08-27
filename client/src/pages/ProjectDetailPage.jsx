@@ -39,6 +39,12 @@ import NewMessagesButton from "../components/chat/NewMessagesButton";
 // bug.
 import ForwardMessagesModal from "../components/chat/ForwardMessagesModal";
 import MessageSelectionBar from "../components/chat/MessageSelectionBar";
+// Real search. This page has its own filter inputs rather than
+// ThreadFilterBar, but they filter the same loaded window everything else
+// did — the entry point is added beside them below.
+import MessageSearchPanel from "../components/message/MessageSearchPanel";
+import DeleteMessageModal from "../components/message/DeleteMessageModal";
+import DeletedMessageBubble from "../components/message/DeletedMessageBubble";
 import useMessageSelection from "../hooks/useMessageSelection";
 import {
   ArrowLeft,
@@ -64,6 +70,7 @@ import {
   Video,
   Reply,
   Forward,
+  Trash2,
   Search,
   Filter,
   XCircle,
@@ -819,6 +826,9 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
    */
   // Selection mode, for forwarding into chat groups. Shared with ChatWindow and
   // ProjectMessagePanel — see hooks/useMessageSelection.
+  const [searchHistoryOpen, setSearchHistoryOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+
   const {
     selecting,
     selectedIds,
@@ -831,14 +841,65 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
     closeForward,
   } = useMessageSelection();
 
+  /**
+   * ─── TWO MESSAGE SHAPES, ONE RENDERER ───
+   * Messages reach this page two ways and they do NOT look the same:
+   *
+   *   REST history  — the raw Message document:  `message`, `sentBy`
+   *   socket / live — the normalized shape from services/messaging:
+   *                   `body`, `sender: { id, name }`
+   *
+   * Everything below reads `msg.message` and `msg.sentBy`, so a message that
+   * arrived LIVE rendered with no text at all, and with the sender falling all
+   * the way through to its placeholder — an empty bubble labelled
+   * "Team Member - Project team". It looked like a styling bug and was not:
+   * the text was never in the field being read.
+   *
+   * It also self-healed on refresh, because a refetch only ever returns the
+   * raw shape — which is exactly what made it look intermittent.
+   *
+   * chatWindow and ProjectMessagePanel each already absorb this in one place;
+   * this page was the third copy of project chat and never got the same
+   * treatment. Reshaping once, here, means nothing downstream has to know
+   * which shape it got.
+   */
+  const displayMessages = useMemo(
+    () =>
+      messages.map((msg) => ({
+        ...msg,
+        _id: msg._id || msg.id,
+        hasServerId: Boolean(msg._id || msg.id),
+        sentBy:
+          msg.sentBy ??
+          (msg.sender
+            ? { _id: msg.sender.id, name: msg.sender.name, clientName: msg.sender.name }
+            : null),
+        message: msg.message ?? msg.body ?? "",
+        // ─── BOTH SPELLINGS, ON PURPOSE ───
+        // The document field is `deletedForEveryone`; the normalized shape
+        // (sockets, and the live retraction patch) calls it `deleted`. REST
+        // history returns the RAW document — deliberately, so the wire shape
+        // stays byte-identical to what these routes always sent — so a
+        // recipient who loaded the thread fresh saw `deleted: undefined`, fell
+        // through to a body the server had already cleared, and got an empty
+        // bubble instead of "This message was deleted".
+        //
+        // It only showed up on the receiving end after a reload: the person
+        // who pressed delete, and anyone with the thread already open, got the
+        // live patch and saw the tombstone correctly.
+        deleted: Boolean(msg.deleted ?? msg.deletedForEveryone),
+      })),
+    [messages]
+  );
+
   const visibleMessages = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
     const sender = searchSender.trim().toLowerCase();
     const { start, end } = dateFilter;
 
-    if (!term && !sender && !start && !end && !showStarredOnly) return messages;
+    if (!term && !sender && !start && !end && !showStarredOnly) return displayMessages;
 
-    return messages.filter((msg) => {
+    return displayMessages.filter((msg) => {
       if (showStarredOnly && !starredMessageIds.has(msg._id)) return false;
 
       if (term && !(msg.message || "").toLowerCase().includes(term)) return false;
@@ -874,7 +935,7 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
 
       return true;
     });
-  }, [messages, searchTerm, searchSender, dateFilter, showStarredOnly, starredMessageIds]);
+  }, [displayMessages, searchTerm, searchSender, dateFilter, showStarredOnly, starredMessageIds]);
 
   const filtersActive = Boolean(
     searchTerm || searchSender || dateFilter.start || dateFilter.end || showStarredOnly
@@ -1396,6 +1457,18 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                       onChange={(e) => setDateFilter({ ...dateFilter, end: e.target.value })}
                       className="app-control flex-1 px-4 py-2 text-sm"
                     />
+                    {/* These inputs filter the loaded window; this reaches the
+                        whole history. Sitting them together is deliberate —
+                        the limitation is only confusing when it is unstated. */}
+                    <button
+                      type="button"
+                      onClick={() => setSearchHistoryOpen(true)}
+                      title="Search all message history"
+                      className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 transition hover:bg-slate-100 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/[0.06]"
+                    >
+                      <Search className="h-3.5 w-3.5" />
+                      Search all
+                    </button>
                     {(searchTerm || searchSender || dateFilter.start || dateFilter.end) && (
                       <button
                         onClick={clearFilters}
@@ -1625,10 +1698,25 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                             </div>
                           )}
 
-                          {/* Message with Markdown rendering */}
-                          {msg.message && (
+                          {/* Message with Markdown rendering, or the tombstone
+                              left behind by a retraction. */}
+                          {msg.deleted ? (
+                            <DeletedMessageBubble own={isOwnMessage} />
+                          ) : msg.message && (
                             <>
-                              <div className={`prose prose-sm max-w-none break-words text-sm leading-relaxed overflow-wrap-anywhere ${isOwnMessage ? "prose-invert text-white" : "prose-slate dark:prose-invert dark:text-white"}`}>
+                              {/* ─── NO text colour HERE ───
+                                  The bubble above already sets it, and it has a
+                                  `bg-*` class so index.css's light-mode remap of
+                                  stray `text-white` correctly skips it. Repeating
+                                  `text-white` on this inner div — which has no
+                                  background of its own — dragged it into that
+                                  remap and into the `[class*="bg-teal-"] [class~=
+                                  "text-white"]` exception instead, and the two
+                                  disagreeing is how the bubble rendered its text
+                                  the same colour as its background. Inheriting is
+                                  what chatWindow.jsx already does, and it has
+                                  never had this bug. */}
+                              <div className={`prose prose-sm max-w-none break-words text-sm leading-relaxed overflow-wrap-anywhere ${isOwnMessage ? "prose-invert" : "prose-slate dark:prose-invert"}`}>
                                 <ReactMarkdown
                                   remarkPlugins={[remarkGfm]}
                                   rehypePlugins={[rehypeRaw]}
@@ -1841,6 +1929,15 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                               >
                                 <Forward className={`h-3.5 w-3.5 ${isOwnMessage ? "text-teal-50/80 hover:text-white" : "text-slate-400 hover:text-teal-600 dark:text-gray-400 dark:hover:text-[#00a884]"}`} />
                               </button>
+                              {!msg.deleted && hasServerId && (
+                                <button
+                                  onClick={() => setDeleteTarget(msg)}
+                                  className="rounded-md p-1.5 transition-colors hover:bg-black/10 dark:hover:bg-white/10"
+                                  title="Delete message"
+                                >
+                                  <Trash2 className={`h-3.5 w-3.5 ${isOwnMessage ? "text-teal-50/80 hover:text-white" : "text-slate-400 hover:text-rose-600 dark:text-gray-400 dark:hover:text-rose-400"}`} />
+                                </button>
+                              )}
                               <button
                                 onClick={() =>
                                   setShowEmojiPicker(
@@ -2590,6 +2687,28 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
           onTaskUpdated={handleTaskUpdated}
         />
       )}
+
+      <DeleteMessageModal
+        open={Boolean(deleteTarget)}
+        onClose={() => setDeleteTarget(null)}
+        scope={SCOPE}
+        message={deleteTarget}
+        currentUserId={String(userId || "")}
+        accent="teal"
+      />
+
+      <MessageSearchPanel
+        open={searchHistoryOpen}
+        onClose={() => setSearchHistoryOpen(false)}
+        scope={SCOPE}
+        threadId={projectId}
+        threadLabel={project?.projectName || project?.name || null}
+        onJump={(id) => {
+          setSearchHistoryOpen(false);
+          handleJumpToMessage(id);
+        }}
+        accent="teal"
+      />
 
       {/* Forward to a group chat. No `conversations` prop — this page has no
           reason to load chat conversations, so the picker fetches its own and

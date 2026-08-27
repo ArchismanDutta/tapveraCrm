@@ -210,6 +210,75 @@ async function assertProjectChatAccess(user, projectId, action = 'read') {
   throw new AccessError('You do not have access to this project', 403, 'PROJECT_FORBIDDEN');
 }
 
+/* ── Which threads can this user search? ──────────────────────────────── */
+
+/**
+ * Every chat conversation this user may read.
+ *
+ * ─── WHY SEARCH RESOLVES ITS OWN SCOPE, SERVER-SIDE ───
+ * Search is the one read that is not already narrowed to a thread the caller
+ * named. If it took a thread list from the request, "search everything" would
+ * become "read anything you can guess the id of" — the single worst shape a
+ * search endpoint can have. So the set is derived here from membership and
+ * nothing else, and the query is constrained to it.
+ *
+ * Admins deliberately get no bypass, for the same reason assertChatAccess
+ * refuses them one (see the note there): a silent admin window into private
+ * DMs is a product decision with an audit trail attached, not a search
+ * convenience.
+ */
+async function accessibleConversationIds(user) {
+  const uid = userIdOf(user);
+  if (!uid) throw new AccessError('Not authenticated', 401, 'UNAUTHENTICATED');
+
+  // Conversation.members is String[] of ids — compare as strings, no casting.
+  const rows = await Conversation.find({ members: String(uid) }).select('_id').lean();
+  return rows.map((r) => String(r._id));
+}
+
+/**
+ * Every project thread this user may read.
+ *
+ * Mirrors assertProjectChatAccess branch for branch — if the two ever
+ * disagree, search either hides threads the user can open, or surfaces ones
+ * they cannot. Kept adjacent to it on purpose.
+ *
+ * @returns {Promise<string[]|null>} `null` means UNRESTRICTED — the caller
+ *          must then omit the id filter entirely rather than querying every
+ *          project id into an `$in`, which for an admin on a large tenant is
+ *          a list thousands long sent to Mongo on every keystroke.
+ */
+async function accessibleProjectIds(user) {
+  const uid = userIdOf(user);
+  if (!uid) throw new AccessError('Not authenticated', 401, 'UNAUTHENTICATED');
+
+  const actor = await hydrateForAuthority(user);
+
+  if (isAdmin(actor) || (await can(actor, 'projects:manage'))) return null;
+
+  if (actor.role === 'client' || actor.userType === 'Client') {
+    const rows = await Project.find({
+      $or: [{ clients: uid }, { client: uid }],
+    })
+      .select('_id')
+      .lean();
+    return rows.map((r) => String(r._id));
+  }
+
+  const or = [{ assignedTo: uid }];
+
+  // projects:view authority, scoped to projects staffed by people this user
+  // can see in the hierarchy — the supervisor branch of
+  // assertProjectChatAccess.
+  if (await can(actor, 'projects:view')) {
+    const accessibleIds = await hierarchyUtils.getAccessibleUserIds(actor);
+    if (accessibleIds?.length) or.push({ assignedTo: { $in: accessibleIds } });
+  }
+
+  const rows = await Project.find({ $or: or }).select('_id').lean();
+  return rows.map((r) => String(r._id));
+}
+
 /* ── Express glue ─────────────────────────────────────────────────────── */
 
 /**
@@ -228,6 +297,8 @@ module.exports = {
   AccessError,
   assertChatAccess,
   assertProjectChatAccess,
+  accessibleConversationIds,
+  accessibleProjectIds,
   sendAccessError,
   isAdmin,
 };

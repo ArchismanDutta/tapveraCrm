@@ -919,6 +919,8 @@ exports.getTeamTaskOverview = async (req, res) => {
       _id: { $in: subordinateIds },
       status: "active",
     })
+      .collation({ locale: "en", strength: 1 })
+      .sort({ name: 1 })
       .select("_id name email employeeId designation department position positionLevel")
       .lean();
 

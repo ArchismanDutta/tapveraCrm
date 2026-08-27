@@ -696,6 +696,8 @@ router.get("/users/:userId/access-overview", protect, async (req, res) => {
       accessibleUsers = await User.find({
         _id: { $in: accessibleIds, $ne: user._id },
       })
+        .collation({ locale: "en", strength: 1 })
+        .sort({ name: 1 })
         .select("name employeeId position department")
         .lean();
     }

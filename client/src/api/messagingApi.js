@@ -192,6 +192,126 @@ export async function forwardMessages(
   }
 }
 
+/**
+ * How long after sending a message can still be retracted for everyone.
+ *
+ * Mirrors CHAT_DELETE_WINDOW_MINUTES on the server, which is the authority and
+ * re-checks on every request. This copy exists only so the dialog can stop
+ * offering an option it knows will be refused — the same arrangement
+ * EDIT_WINDOW_MS has, and for the same reason.
+ */
+export const DELETE_WINDOW_MS = 7 * 60 * 1000;
+
+/** Can this message still be deleted for everyone? Presentation only. */
+export function canDeleteForEveryone(message, currentUserId, now = Date.now()) {
+  if (!message || !currentUserId) return false;
+  if (message.deleted) return false;
+  if (!(message.id || message._id || message.messageId)) return false;
+
+  const senderId = String(
+    message.sender?.id ?? message.senderId ?? message.sentBy?._id ?? message.sentBy ?? ""
+  );
+  if (senderId !== String(currentUserId)) return false;
+
+  const sentAt = new Date(message.createdAt ?? message.timestamp ?? 0).getTime();
+  if (!Number.isFinite(sentAt) || sentAt === 0) return false;
+
+  return now - sentAt <= DELETE_WINDOW_MS;
+}
+
+/**
+ * Delete a message.
+ *
+ * @param {'chat'|'project'} scope
+ * @param {'me'|'everyone'} mode  'me' hides it from you alone; 'everyone'
+ *        retracts it, which only the sender can do and only inside the window.
+ */
+export async function deleteMessage(scope, messageId, mode = "me") {
+  try {
+    const { data } = await API.delete(`/api/messages/${scope}/${messageId}`, { params: { mode } });
+    return data;
+  } catch (err) {
+    // The server writes these for the reader — "It has been too long to delete
+    // this for everyone. You can still delete it for yourself." is far more
+    // use than a status code.
+    const serverMessage = err?.response?.data?.error;
+    if (serverMessage) {
+      const e = new Error(serverMessage);
+      e.code = err?.response?.data?.code || null;
+      throw e;
+    }
+    if (!err?.response) throw new Error("Couldn't reach the server. Check your connection and try again.");
+    throw err;
+  }
+}
+
+/* ── Search ───────────────────────────────────────────────────────────── */
+
+/**
+ * Search message history.
+ *
+ * ─── THIS DOES NOT GO THROUGH THE THREAD STORE ───
+ * Results are returned to the caller and nowhere else. The previous attempt at
+ * server-side search fed a filtered fetch into the shared store via
+ * `upsertMessage`, which only ever ADDS rows — so a narrowing query quietly
+ * WIDENED the thread everyone was reading, and the rendered list never
+ * changed. Both project surfaces backed it out for exactly that reason (see
+ * the note in ProjectDetailPage's loader). Search is its own result view.
+ *
+ * @param {object} opts
+ * @param {string} opts.query
+ * @param {'chat'|'project'|'all'} [opts.scope='all']
+ * @param {string} [opts.threadId]   narrow to one thread; omit to search all
+ * @returns {{ results, total, query, pagination }}
+ */
+export async function searchMessages({
+  query,
+  scope = "all",
+  threadId = null,
+  senderId = null,
+  startDate = null,
+  endDate = null,
+  page = 1,
+  limit = 25,
+} = {}) {
+  const params = { q: query, scope, page, limit };
+  if (threadId) params.threadId = threadId;
+  if (senderId) params.senderId = senderId;
+  if (startDate) params.startDate = startDate;
+  if (endDate) params.endDate = endDate;
+
+  try {
+    const { data } = await API.get("/api/messages/search", { params });
+    return {
+      results: data?.results || [],
+      total: data?.total || 0,
+      query: data?.query || query,
+      pagination: data?.pagination || null,
+    };
+  } catch (err) {
+    // "Enter at least 2 characters" and friends are written for the user;
+    // axios's own wording is not.
+    const serverMessage = err?.response?.data?.error;
+    if (serverMessage) throw new Error(serverMessage);
+    if (!err?.response) throw new Error("Couldn't reach the server. Check your connection and try again.");
+    throw err;
+  }
+}
+
+/**
+ * The handful of messages either side of one message.
+ *
+ * Lets a result be read in context without dragging the live thread back
+ * months — see chatThread.contextAround on the server for why it is a
+ * standalone window rather than a jump.
+ */
+export async function fetchMessageContext(scope, messageId, { before = 5, after = 5 } = {}) {
+  const { data } = await API.get(`/api/messages/${scope}/${messageId}/context`, {
+    params: { before, after },
+  });
+  return { threadId: data?.threadId || null, messages: data?.messages || [] };
+}
+
 /** Unread count for a single thread. */
 export async function fetchUnreadCount(scope, threadId) {
   if (scope !== SCOPES.PROJECT) return null; // chat unread rides on listThreads
@@ -446,6 +566,11 @@ export default {
   fetchMessages,
   forwardMessages,
   newForwardToken,
+  searchMessages,
+  fetchMessageContext,
+  deleteMessage,
+  canDeleteForEveryone,
+  DELETE_WINDOW_MS,
   fetchUnreadCount,
   sendMessage,
   markRead,

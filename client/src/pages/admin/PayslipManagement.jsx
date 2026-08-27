@@ -109,8 +109,16 @@ const PayslipManagement = ({ onLogout }) => {
     });
   };
 
-  // Get unique departments
-  const departments = [...new Set(employees.map(emp => emp.department).filter(Boolean))];
+  // Get unique departments, alphabetically.
+  //
+  // A Set preserves INSERTION order, so this used to list departments in
+  // whatever order the employees happened to arrive in — which reads as
+  // random. (/api/users is sorted by employee name now, which does not help:
+  // that orders the departments by whoever happens to be alphabetically first
+  // in each.)
+  const departments = [...new Set(employees.map(emp => emp.department).filter(Boolean))].sort(
+    (a, b) => String(a).localeCompare(String(b), undefined, { sensitivity: "base" })
+  );
 
   // Calculate statistics
   const stats = {

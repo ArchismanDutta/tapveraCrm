@@ -21,6 +21,7 @@ import {
   Zap,
   Plus,
   Forward,
+  Trash2,
   Pencil,
 } from "lucide-react";
 import MediaLightbox from "../common/MediaLightbox";
@@ -42,6 +43,10 @@ import UnreadDivider from "../message/UnreadDivider";
 import NewMessagesButton from "./NewMessagesButton";
 import ForwardMessagesModal from "./ForwardMessagesModal";
 import MessageSelectionBar from "./MessageSelectionBar";
+// Real search — the filter fields above only reach the newest loaded page.
+import MessageSearchPanel from "../message/MessageSearchPanel";
+import DeleteMessageModal from "../message/DeleteMessageModal";
+import DeletedMessageBubble from "../message/DeletedMessageBubble";
 import useMessageSelection from "../../hooks/useMessageSelection";
 import useMessageListMechanics, { startsGroup } from "../../hooks/useMessageListMechanics";
 import useFileAttach from "../../hooks/useFileAttach";
@@ -90,6 +95,9 @@ const ChatWindow = ({
   // Shared with ProjectMessagePanel and the ProjectDetailPage chat tab, which
   // offer the same action against project threads — see the hook for the one
   // rule that is easy to get wrong (a message with no server id yet).
+  const [searchHistoryOpen, setSearchHistoryOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+
   const {
     selecting,
     selectedIds,
@@ -637,6 +645,10 @@ const ChatWindow = ({
       msg.sender?.id ?? msg.senderId ?? msg.sentBy?._id ?? msg.sentBy ?? "unknown"
     ),
     message: msg.message ?? msg.text ?? msg.body ?? "",
+    // Both spellings: the raw document says `deletedForEveryone`, the
+    // normalized/socket shape says `deleted`, and REST history returns raw.
+    // See the longer note in ProjectDetailPage.
+    deleted: Boolean(msg.deleted ?? msg.deletedForEveryone),
     timestamp: msg.timestamp || msg.createdAt || Date.now(),
     attachments: msg.attachments || [],
     replyTo: msg.replyTo || null,
@@ -773,6 +785,29 @@ const ChatWindow = ({
         dateRange={dateFilter}
         onDateRangeChange={setDateFilter}
         onClear={clearFilters}
+        onSearchHistory={() => setSearchHistoryOpen(true)}
+      />
+
+      <DeleteMessageModal
+        open={Boolean(deleteTarget)}
+        onClose={() => setDeleteTarget(null)}
+        scope={messagingApi.SCOPES.CHAT}
+        message={deleteTarget}
+        currentUserId={currentUserId}
+        accent="blue"
+      />
+
+      <MessageSearchPanel
+        open={searchHistoryOpen}
+        onClose={() => setSearchHistoryOpen(false)}
+        scope={messagingApi.SCOPES.CHAT}
+        threadId={conversationId}
+        // Only offered for hits in THIS thread — see the panel's note.
+        onJump={(id) => {
+          setSearchHistoryOpen(false);
+          scrollToMessage(id);
+        }}
+        accent="blue"
       />
 
       {selecting && (
@@ -1014,7 +1049,9 @@ const ChatWindow = ({
                         was not, and got remapped while sitting on blue.
                         Inheriting keeps one source of truth for the bubble's
                         foreground colour and removes the trigger entirely. */}
-                      {editingId !== String(msg.messageId) && (msg.message || msg.text) ? (
+                      {msg.deleted ? (
+                      <DeletedMessageBubble own={isSelf} />
+                    ) : editingId !== String(msg.messageId) && (msg.message || msg.text) ? (
                         <div className="prose prose-sm max-w-none break-words text-sm leading-relaxed">
                           <ReactMarkdown
                             remarkPlugins={[remarkGfm]}
@@ -1264,6 +1301,18 @@ const ChatWindow = ({
                         >
                           <Forward className={`h-3.5 w-3.5 ${isSelf ? "text-blue-50/80 hover:text-white" : "text-slate-400 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400"}`} />
                         </button>
+                        {/* Offered on anyone's message: "delete for me" always
+                            applies. The dialog decides whether "for everyone"
+                            is available. */}
+                        {!msg.deleted && msg.hasServerId && (
+                          <button
+                            onClick={() => setDeleteTarget(msg)}
+                            className="rounded p-1 transition hover:bg-black/5 dark:hover:bg-white/10"
+                            title="Delete message"
+                          >
+                            <Trash2 className={`h-3.5 w-3.5 ${isSelf ? "text-blue-50/80 hover:text-white" : "text-slate-400 hover:text-rose-600 dark:text-gray-400 dark:hover:text-rose-400"}`} />
+                          </button>
+                        )}
                         {/* Your own message, still inside the 7-minute window.
                             The check is presentation only — the server
                             re-verifies both rules on the request, because a

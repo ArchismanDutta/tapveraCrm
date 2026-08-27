@@ -36,10 +36,17 @@ exports.getEmployeeList = async (req, res) => {
       filter.status = { $nin: ["terminated", "absconded"] };
     }
 
+    // Alphabetical, with the collation that makes it mean what a reader
+    // expects. Mongo's default sort is byte order, which files every
+    // capitalised name above every lowercase one — strength: 1 compares
+    // case- and accent-insensitively. Same pattern as GET /api/clients.
     const employees = await User.find(
       filter,
       "employeeId name department role status avatar"
-    ).lean();
+    )
+      .collation({ locale: "en", strength: 1 })
+      .sort({ name: 1 })
+      .lean();
 
     return res.json({ success: true, data: employees });
   } catch (err) {

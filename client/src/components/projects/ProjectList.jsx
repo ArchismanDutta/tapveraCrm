@@ -10,7 +10,7 @@ const ProjectList = ({
   onView,
   onEdit,
   onDelete,
-  onCommunication,
+  onOpenChat,
   canEdit = false,
   canDelete = false,
   remarkCounts = {},
@@ -69,7 +69,7 @@ const ProjectList = ({
             onView={onView}
             onEdit={onEdit}
             onDelete={onDelete}
-            onCommunication={onCommunication}
+            onOpenChat={onOpenChat}
             canEdit={canEdit}
             canDelete={canDelete}
             remarkCount={remarkCounts[project._id] || 0}

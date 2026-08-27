@@ -371,10 +371,11 @@ const AutoPayrollManagement = ({ onLogout }) => {
     return matchesSearch && matchesDept;
   });
 
-  // Get unique departments
+  // Get unique departments, alphabetically — a Set keeps insertion order, so
+  // without this they follow the employee list. See PayslipManagement.
   const departments = [
     ...new Set(employees.map((emp) => emp.department).filter(Boolean)),
-  ];
+  ].sort((a, b) => String(a).localeCompare(String(b), undefined, { sensitivity: "base" }));
 
   const formatCurrency = (amount) => {
     return new Intl.NumberFormat("en-IN", {

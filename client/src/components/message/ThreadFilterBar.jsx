@@ -1,5 +1,5 @@
 import React from "react";
-import { Filter, Search, X as XCircle, Sparkles } from "lucide-react";
+import { Filter, Search, X as XCircle, Sparkles, History } from "lucide-react";
 
 /**
  * Search / filter bar shown above a message thread, shared by all three
@@ -27,6 +27,12 @@ import { Filter, Search, X as XCircle, Sparkles } from "lucide-react";
  * @param {{start: string, end: string}} dateRange
  * @param {Function} onDateRangeChange  receives the full next range
  * @param {Function} onClear
+ * @param {Function} [onSearchHistory]  omit to hide the all-history button.
+ *        The `search` field above filters only the messages already LOADED —
+ *        the newest page — which is why this is offered beside it rather than
+ *        replacing it: filtering what is on screen is instant and often what
+ *        you want; finding something from six months ago is a different job
+ *        and needs the server.
  * @param {'blue'|'teal'} [accent]  chat threads are blue, project threads teal
  *                                  — a deliberate existing distinction, not
  *                                  drift, so it stays configurable
@@ -49,6 +55,7 @@ export default function ThreadFilterBar({
   dateRange = { start: "", end: "" },
   onDateRangeChange,
   onClear,
+  onSearchHistory,
 }) {
   const hasFilters = Boolean(search || sender || dateRange.start || dateRange.end);
 
@@ -68,6 +75,17 @@ export default function ThreadFilterBar({
             <span className="h-1.5 w-1.5 rounded-full bg-rose-400" />
             Reconnecting
           </span>
+        )}
+
+        {onSearchHistory && (
+          <button
+            onClick={onSearchHistory}
+            className="flex items-center gap-2 border-l border-slate-200 px-4 py-2 text-sm text-slate-600 transition hover:bg-slate-100 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/[0.06]"
+            title="Search all message history"
+          >
+            <History className={`h-4 w-4 ${ACCENT[accent] || ACCENT.blue}`} />
+            <span className="hidden sm:inline">Search all</span>
+          </button>
         )}
 
         {onSummarize && (
@@ -93,6 +111,18 @@ export default function ThreadFilterBar({
               onChange={(e) => onSearchChange?.(e.target.value)}
               className="app-control w-full py-2 pl-10 pr-4 text-sm"
             />
+            {onSearchHistory && (
+              <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+                Filters loaded messages only.{" "}
+                <button
+                  type="button"
+                  onClick={onSearchHistory}
+                  className="font-medium underline underline-offset-2 hover:text-slate-900 dark:hover:text-white"
+                >
+                  Search all history
+                </button>
+              </p>
+            )}
           </div>
 
           <input

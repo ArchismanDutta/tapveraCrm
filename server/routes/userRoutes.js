@@ -88,7 +88,14 @@ router.get("/all", protect, requireUserManage(["admin", "hr", "super-admin"]), a
       ? {}
       : { status: { $nin: ['terminated', 'absconded'] } };
 
-    const users = await User.find(filter, "_id name email role shift status");
+    // Matches GET /api/users — see the note there.
+    // Alphabetical, with the collation that makes it mean what a reader
+    // expects. Mongo's default sort is byte order, which files every
+    // capitalised name above every lowercase one — strength: 1 compares
+    // case- and accent-insensitively. Same pattern as GET /api/clients.
+    const users = await User.find(filter, "_id name email role shift status")
+      .collation({ locale: "en", strength: 1 })
+      .sort({ name: 1 });
     res.json(users);
   } catch (err) {
     console.error("Fetch all users error:", err);

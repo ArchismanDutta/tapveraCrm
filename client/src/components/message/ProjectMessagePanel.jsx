@@ -18,6 +18,7 @@ import {
   Send,
   Plus,
   Forward,
+  Trash2,
 } from "lucide-react";
 import MediaLightbox from "../common/MediaLightbox";
 import MessageDateSeparator from "./MessageDateSeparator";
@@ -25,6 +26,10 @@ import MessageStatus from "./MessageStatus";
 import TypingIndicator from "./TypingIndicator";
 import ThreadSummaryModal from "./ThreadSummaryModal";
 import ThreadFilterBar from "./ThreadFilterBar";
+// Real search — the filter fields above only reach the newest loaded page.
+import MessageSearchPanel from "./MessageSearchPanel";
+import DeleteMessageModal from "./DeleteMessageModal";
+import DeletedMessageBubble from "./DeletedMessageBubble";
 import DropOverlay from "./DropOverlay";
 import useFileAttach from "../../hooks/useFileAttach";
 import { useWebSocketContext } from "../../contexts/WebSocketContext";
@@ -453,6 +458,9 @@ const ProjectMessagePanel = ({ projectId, currentUser }) => {
   // nothing downstream needs to know which shape it got.
   // Selection mode, for forwarding into chat groups. Shared with ChatWindow and
   // the ProjectDetailPage chat tab — see hooks/useMessageSelection.
+  const [searchHistoryOpen, setSearchHistoryOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+
   const {
     selecting,
     selectedIds,
@@ -477,6 +485,10 @@ const ProjectMessagePanel = ({ projectId, currentUser }) => {
         ? { _id: msg.sender.id, name: msg.sender.name, clientName: msg.sender.name }
         : null),
     message: msg.message ?? msg.body ?? "",
+    // Both spellings: the raw document says `deletedForEveryone`, the
+    // normalized/socket shape says `deleted`, and REST history returns raw.
+    // See the longer note in ProjectDetailPage.
+    deleted: Boolean(msg.deleted ?? msg.deletedForEveryone),
   }));
 
   // ── local filtering (instant UI feedback) ──
@@ -547,6 +559,28 @@ const ProjectMessagePanel = ({ projectId, currentUser }) => {
         dateRange={dateFilter}
         onDateRangeChange={setDateFilter}
         onClear={clearFilters}
+        onSearchHistory={() => setSearchHistoryOpen(true)}
+      />
+
+      <DeleteMessageModal
+        open={Boolean(deleteTarget)}
+        onClose={() => setDeleteTarget(null)}
+        scope={SCOPE}
+        message={deleteTarget}
+        currentUserId={String(user?._id || "")}
+        accent="teal"
+      />
+
+      <MessageSearchPanel
+        open={searchHistoryOpen}
+        onClose={() => setSearchHistoryOpen(false)}
+        scope={SCOPE}
+        threadId={projectId}
+        onJump={(id) => {
+          setSearchHistoryOpen(false);
+          scrollToMessage(id);
+        }}
+        accent="teal"
       />
 
       {selecting && (
@@ -688,9 +722,18 @@ const ProjectMessagePanel = ({ projectId, currentUser }) => {
                       </div>
                     )}
 
-                    {/* Markdown body */}
-                    {msg.message && (
-                      <div className={`prose prose-sm max-w-none break-words text-sm leading-relaxed ${own ? "prose-invert text-white" : "prose-slate dark:prose-invert dark:text-white"}`}>
+                    {/* Markdown body.
+
+                        No text colour on the inner div: the bubble sets it and
+                        carries a `bg-*` class, so index.css's light-mode remap of
+                        stray `text-white` correctly skips it. Repeating the colour
+                        on a backgroundless inner div is what made the text render
+                        the same colour as the bubble. See the longer note in
+                        ProjectDetailPage.jsx. */}
+                    {msg.deleted ? (
+                      <DeletedMessageBubble own={own} />
+                    ) : msg.message && (
+                      <div className={`prose prose-sm max-w-none break-words text-sm leading-relaxed ${own ? "prose-invert" : "prose-slate dark:prose-invert"}`}>
                         <ReactMarkdown
                           remarkPlugins={[remarkGfm]}
 
@@ -912,6 +955,15 @@ const ProjectMessagePanel = ({ projectId, currentUser }) => {
                         >
                           <Forward className={`h-3.5 w-3.5 ${own ? "text-teal-50/80 hover:text-white" : "text-slate-400 hover:text-teal-600 dark:text-gray-400 dark:hover:text-[#00a884]"}`} />
                         </button>
+                        {!msg.deleted && msg.hasServerId && (
+                          <button
+                            onClick={() => setDeleteTarget(msg)}
+                            className="rounded-md p-1 transition-colors hover:bg-black/10 dark:hover:bg-white/10"
+                            title="Delete message"
+                          >
+                            <Trash2 className={`h-3.5 w-3.5 ${own ? "text-teal-50/80 hover:text-white" : "text-slate-400 hover:text-rose-600 dark:text-gray-400 dark:hover:text-rose-400"}`} />
+                          </button>
+                        )}
                         <button
                           onClick={() => copyToClipboard(msg.message)}
                           className="rounded-md p-1 transition-colors hover:bg-black/10 dark:hover:bg-white/10"

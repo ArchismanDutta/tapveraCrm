@@ -24,11 +24,16 @@ async function hasClientManageAuthority(user) {
 router.get("/regions", protect, async (req, res) => {
   try {
     const regions = await Client.distinct("region");
-    // Always include 'Global' as an option
+    // "Global" stays pinned to the top — it is the "everywhere" option, not a
+    // place, so alphabetising it under G would bury it. Everything after it is
+    // sorted with localeCompare rather than a bare .sort(), which is byte
+    // order and would file a lowercase region below every uppercase one.
     const uniqueRegions = [
       "Global",
-      ...regions.filter((r) => r && r !== "Global"),
-    ].sort();
+      ...regions
+        .filter((r) => r && r !== "Global")
+        .sort((a, b) => String(a).localeCompare(String(b), undefined, { sensitivity: "base" })),
+    ];
     res.json(uniqueRegions);
   } catch (err) {
     console.error("Error fetching regions:", err);
@@ -153,7 +158,22 @@ router.get(
         query = {};
       }
 
-      const clients = await Client.find(query).sort({ createdAt: -1 });
+      // ─── ALPHABETICAL, NOT NEWEST-FIRST ───
+      // This is a reference list people pick from — the client filter on the
+      // projects page, the picker in the project form. Creation order is
+      // meaningless to whoever is scanning it for a name, so it reads as
+      // random and you end up hunting.
+      //
+      // The collation is the part that matters: Mongo's default sort is byte
+      // order, which puts every capitalised name above every lowercase one
+      // ("Zebra" before "apple"). strength: 1 compares case- and
+      // accent-insensitively, which is what "alphabetical" means to a reader.
+      //
+      // ClientsPage does its own sorting (and still offers newest-first as an
+      // explicit choice), so nothing depended on the old order.
+      const clients = await Client.find(query)
+        .collation({ locale: "en", strength: 1 })
+        .sort({ businessName: 1, clientName: 1 });
       console.log(
         `[Client Filtering] Found ${clients.length} clients matching filter`
       );

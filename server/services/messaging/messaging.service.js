@@ -27,6 +27,7 @@
 'use strict';
 
 const access = require('./access');
+const search = require('./search');
 const realtime = require('./realtime');
 const chatThread = require('./adapters/chatThread');
 const projectThread = require('./adapters/projectThread');
@@ -453,6 +454,212 @@ async function react(user, scope, messageId, emoji) {
   return result;
 }
 
+/* ── Deletion ─────────────────────────────────────────────────────────── */
+
+/**
+ * Delete a message, in one of two quite different senses.
+ *
+ *   'me'       — hide it from the caller. Any message they can see, no window,
+ *                nobody else affected and nobody else told.
+ *   'everyone' — retract it. Sender only, inside the window, body and
+ *                attachments cleared from the document. A tombstone stays in
+ *                place so replies, read cursors and ordering survive; the
+ *                thread renders it as "This message was deleted".
+ *
+ * ─── WHY THE AUTHORIZATION DIFFERS BY MODE ───
+ * Hiding needs only READ on the thread: you cannot hide something you were
+ * never allowed to see, and nothing about anyone else's copy changes.
+ * Retracting is a write to a message everyone holds, so it needs WRITE — which
+ * also means someone removed from the group after posting cannot reach back
+ * in and retract what they left behind, the same rule editMessage enforces.
+ *
+ * Both authorize AFTER the lookup so this cannot be used to probe whether an
+ * arbitrary message id exists — the ordering `react` and `getMessageContext`
+ * already use.
+ */
+async function deleteMessage(user, scope, messageId, mode = 'me') {
+  if (mode !== 'me' && mode !== 'everyone') {
+    throw new access.AccessError('mode must be "me" or "everyone"', 400, 'BAD_MODE');
+  }
+
+  const adapter = adapterFor(scope);
+  if (typeof adapter.deleteForMe !== 'function' || typeof adapter.deleteForEveryone !== 'function') {
+    throw new access.AccessError(`Deleting is not supported for "${scope}" threads`, 400, 'UNSUPPORTED');
+  }
+
+  if (mode === 'me') {
+    const result = await adapter.deleteForMe(user, messageId);
+    if (result?.error) return result;
+
+    await authorize(user, scope, result.threadId, 'read');
+
+    // Only this person's own sessions. See emitUpdatedToUsers.
+    realtime.emitUpdatedToUsers([String(user._id ?? user.id)], {
+      scope,
+      threadId: result.threadId,
+      patch: { messageId: result.messageId, removed: true },
+    });
+
+    return result;
+  }
+
+  const result = await adapter.deleteForEveryone(user, messageId);
+  if (result?.error) return result;
+
+  await authorize(user, scope, result.threadId, 'write');
+
+  const memberIds = await adapter.getMemberIds(result.threadId);
+  realtime.emitUpdated({
+    scope,
+    threadId: result.threadId,
+    // Both key spellings, for the same reason editMessage sends both: REST
+    // responses carry the raw document shape and thread:* events carry the
+    // normalized one, and clients read whichever they were built against.
+    patch: {
+      messageId: result.messageId,
+      deleted: true,
+      deletedAt: result.normalized.deletedAt,
+      body: '',
+      message: '',
+      attachments: [],
+    },
+    memberIds,
+  });
+
+  return result;
+}
+
+/* ── Search ───────────────────────────────────────────────────────────── */
+
+/**
+ * Search message history.
+ *
+ * ─── WHAT THIS REPLACES ───
+ * Every surface filtered its in-memory list, and only the newest 50 messages
+ * are loaded when a thread opens — so "search" meant "highlight something
+ * already on screen", and anything older than the last page was unfindable.
+ * For a CRM that is the wrong way round: the reason to keep talk on the record
+ * is to be able to find what was said about that record months later.
+ *
+ * ─── SCOPE RESOLUTION IS THE SECURITY BOUNDARY ───
+ * When no `threadId` is given this searches EVERYTHING the user can read, and
+ * that set is derived server-side from membership (access.accessible*Ids).
+ * A thread list taken from the request would turn this endpoint into "read any
+ * thread whose id you can guess".
+ *
+ * @param {object} opts
+ * @param {'chat'|'project'|'all'} opts.scope
+ * @param {string} [opts.threadId]  narrow to one thread; omit to search all
+ * @param {string} opts.query
+ * @returns {Promise<{ results, total, pagination, query }>}
+ */
+async function searchMessages(user, opts = {}) {
+  const { scope = SCOPES.CHAT, threadId, query: rawQuery, senderId, startDate, endDate, page, limit } = opts;
+
+  const parsed = search.parseQuery(rawQuery);
+  if (!parsed.ok) throw new access.AccessError(parsed.reason, 400, 'BAD_QUERY');
+
+  const paging = search.parsePaging({ page, limit });
+  const range = {
+    startDate: startDate ? new Date(startDate) : null,
+    endDate: endDate ? new Date(endDate) : null,
+  };
+
+  const common = {
+    query: parsed.query,
+    pattern: parsed.pattern,
+    senderId: senderId || null,
+    ...range,
+    ...paging,
+  };
+
+  // One named thread: authorize it directly and search only that.
+  if (threadId) {
+    if (scope === 'all') {
+      throw new access.AccessError('Pick a scope when searching one thread', 400, 'BAD_REQUEST');
+    }
+    await authorize(user, scope, threadId, 'read');
+    const adapter = adapterFor(scope);
+    const out = await adapter.searchMessages(user, { ...common, threadIds: [String(threadId)] });
+    return { ...out, query: parsed.query };
+  }
+
+  const runScope = async (s) => {
+    const adapter = adapterFor(s);
+    if (typeof adapter.searchMessages !== 'function') {
+      return { results: [], total: 0, pagination: { ...paging, total: 0, totalPages: 0, hasMore: false } };
+    }
+    const threadIds =
+      s === SCOPES.PROJECT
+        ? await access.accessibleProjectIds(user)
+        : await access.accessibleConversationIds(user);
+    return adapter.searchMessages(user, { ...common, threadIds });
+  };
+
+  if (scope !== 'all') {
+    const out = await runScope(scope);
+    return { ...out, query: parsed.query };
+  }
+
+  // ─── SEARCHING EVERYWHERE ───
+  // Two collections with no shared ordering key, so a true merged cursor would
+  // need a union view. Instead each side is asked for everything up to the
+  // requested depth, the two are merged by date and the page is cut from that.
+  // Exact for the pages anyone actually pages to, and two queries rather than
+  // a scan; it would degrade only for someone paging hundreds deep, which the
+  // limit clamp already makes impractical.
+  const deep = { ...common, skip: 0, limit: paging.skip + paging.limit };
+  const [chat, project] = await Promise.all([
+    (async () => {
+      const ids = await access.accessibleConversationIds(user);
+      return adapterFor(SCOPES.CHAT).searchMessages(user, { ...deep, threadIds: ids });
+    })(),
+    (async () => {
+      const ids = await access.accessibleProjectIds(user);
+      return adapterFor(SCOPES.PROJECT).searchMessages(user, { ...deep, threadIds: ids });
+    })(),
+  ]);
+
+  const merged = [...chat.results, ...project.results].sort(
+    (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
+  );
+  const total = chat.total + project.total;
+  const pageSlice = merged.slice(paging.skip, paging.skip + paging.limit);
+
+  return {
+    results: pageSlice,
+    total,
+    query: parsed.query,
+    pagination: {
+      page: paging.page,
+      limit: paging.limit,
+      total,
+      totalPages: Math.ceil(total / paging.limit),
+      hasMore: paging.skip + pageSlice.length < total,
+    },
+  };
+}
+
+/**
+ * The conversation around one message, for previewing a search hit.
+ *
+ * Authorizes AFTER the lookup, deliberately — the same ordering `react` uses.
+ * Checking first would need the thread id from the caller, which turns this
+ * into a way to test whether an arbitrary message id exists.
+ */
+async function getMessageContext(user, scope, messageId, { before, after } = {}) {
+  const adapter = adapterFor(scope);
+  if (typeof adapter.contextAround !== 'function') {
+    throw new access.AccessError(`Context is not available for "${scope}" threads`, 400, 'UNSUPPORTED');
+  }
+
+  const context = await adapter.contextAround(user, messageId, { before, after });
+  if (!context) throw new access.AccessError('Message not found', 404, 'NOT_FOUND');
+
+  await authorize(user, scope, context.threadId, 'read');
+  return context;
+}
+
 /* ── Notifications ────────────────────────────────────────────────────── */
 
 /**
@@ -660,4 +867,7 @@ module.exports = {
   forwardMessages,
   editMessage,
   react,
+  searchMessages,
+  getMessageContext,
+  deleteMessage,
 };

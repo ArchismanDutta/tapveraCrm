@@ -21,6 +21,7 @@ const noticeRoutes = require("./routes/noticeRoutes");
 const leaveRoutes = require("./routes/leaveRoutes");
 const todoTaskRoutes = require("./routes/todoTaskRoutes");
 const chatRoutes = require("./routes/chatRoutes");
+const messageRoutes = require("./routes/messageRoutes");
 // Web push subscriptions + messaging preferences (S4)
 const pushRoutes = require("./routes/pushRoutes");
 // OLD SYSTEM ROUTES - DEPRECATED
@@ -258,6 +259,9 @@ app.use("/api/todos", todoTaskRoutes);
 // app.use("/api/summary", summaryRoutes);
 app.use("/api/notices", noticeRoutes);
 app.use("/api/chat", chatRoutes);
+// Search, context and deletion span both scopes, so they are neither chat
+// routes nor project routes — see the header of routes/messageRoutes.js.
+app.use("/api/messages", messageRoutes);
 app.use("/api/push", pushRoutes);
 app.use("/api/wishes", wishRoutes);
 app.use("/api/holidays", holidayRoutes);

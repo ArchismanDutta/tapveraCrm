@@ -21,6 +21,7 @@ const ChatMessage = require('../../../models/ChatMessage');
 const Conversation = require('../../../models/Conversation');
 const User = require('../../../models/User');
 const { resolveMentions } = require('../mentions');
+const { buildSnippet } = require('../search');
 
 const SCOPE = 'chat';
 
@@ -41,8 +42,12 @@ function normalize(doc) {
       name: sender?.name ?? null,
       kind: 'User',
     },
-    body: m.message || '',
-    attachments: m.attachments || [],
+    // A retraction clears these on the document, so this is belt AND braces:
+    // if a stale doc ever reaches here the body still does not go out.
+    body: m.deletedForEveryone ? '' : m.message || '',
+    attachments: m.deletedForEveryone ? [] : m.attachments || [],
+    deleted: Boolean(m.deletedForEveryone),
+    deletedAt: m.deletedAt || null,
     replyTo: m.replyTo || null,
     forwarded: Boolean(m.forwarded),
     // Flat id array here; the project adapter emits the same shape from its
@@ -228,7 +233,13 @@ async function getMessages(user, threadId, { page, limit } = {}) {
   //
   // Omitting both page and limit still returns the entire thread, because
   // callers that predate pagination rely on it.
+  // Messages this viewer has deleted for themselves are simply not theirs to
+  // see any more. Filtered at the query rather than after, so pagination
+  // counts stay honest — otherwise page 1 quietly returns 47 rows and the
+  // "total" everyone pages against is wrong.
+  const viewerId = String(user?._id ?? user?.id ?? '');
   const filter = { conversationId: String(threadId) };
+  if (viewerId) filter.deletedFor = { $ne: viewerId };
   const paginated = Boolean(page || limit);
 
   const limitNum = Number(limit) || 50;
@@ -494,6 +505,101 @@ async function editMessage(user, messageId, body) {
   };
 }
 
+/**
+ * How long a message can be retracted for everyone.
+ *
+ * The same seven minutes as the edit window and for the same reason: past that
+ * point people have read it and acted on it, and un-saying it changes what was
+ * agreed rather than fixing a slip. Separate constant because they are
+ * separate decisions and one may want to move without the other.
+ */
+const DELETE_WINDOW_MS = Number(process.env.CHAT_DELETE_WINDOW_MINUTES || 7) * 60 * 1000;
+
+/**
+ * Can this user retract this message for everyone, and if not, why not?
+ *
+ * Deliberately shaped like editability, including the ordering: ownership is
+ * checked BEFORE the window, so someone else's message answers "not yours"
+ * rather than leaking whether its window happens to still be open.
+ */
+function deletability(message, userId, now = Date.now()) {
+  if (!message) return { ok: false, reason: 'NOT_FOUND', status: 404 };
+  if (message.deletedForEveryone) return { ok: false, reason: 'ALREADY_DELETED', status: 409 };
+
+  if (String(message.senderId) !== String(userId)) {
+    return { ok: false, reason: 'NOT_SENDER', status: 403 };
+  }
+
+  const sentAt = new Date(message.timestamp || message.createdAt).getTime();
+  if (!Number.isFinite(sentAt)) return { ok: false, reason: 'NO_TIMESTAMP', status: 400 };
+
+  if (now - sentAt > DELETE_WINDOW_MS) {
+    return { ok: false, reason: 'WINDOW_EXPIRED', status: 403 };
+  }
+
+  return { ok: true };
+}
+
+/**
+ * Hide a message from one person.
+ *
+ * Available on ANY message they can see, including other people's, with no
+ * window — it changes nothing for anyone else, so there is nothing to protect.
+ * `$addToSet` so a double-tap is not an error.
+ */
+async function deleteForMe(user, messageId) {
+  const userId = String(user._id ?? user.id);
+  const message = await ChatMessage.findById(messageId);
+  if (!message) return { error: 'NOT_FOUND', status: 404 };
+
+  await ChatMessage.updateOne({ _id: messageId }, { $addToSet: { deletedFor: userId } });
+
+  return { threadId: String(message.conversationId), messageId: String(messageId), mode: 'me' };
+}
+
+/**
+ * Retract a message for everyone.
+ *
+ * ─── THE CONTENT IS CLEARED, NOT FLAGGED ───
+ * Hiding it client-side would leave the text and the attachment URLs sitting
+ * in the API response for anyone who looked, which is worthless for the case
+ * this exists to serve: a message sent to the wrong thread, with a client in
+ * it. So the body, attachments and mentions come off the document.
+ *
+ * ─── WHAT IS NOT DONE, AND WHY ───
+ * The underlying FILE is not deleted from storage. A forwarded copy points at
+ * the same object (see createForwardedCopies, which shares the record and
+ * strips only s3Key), so deleting the blob would blank an unrelated message in
+ * another thread. Detaching it here means nothing serves it from this message
+ * again; reclaiming the bytes belongs with the media reaper, which currently
+ * cannot do it either — mediaCleanupService only deletes when
+ * `attachment.s3Key` is set, and nothing ever writes that field. That gap is
+ * worth closing on its own terms rather than half-closing it here.
+ */
+async function deleteForEveryone(user, messageId) {
+  const userId = String(user._id ?? user.id);
+  const message = await ChatMessage.findById(messageId);
+
+  const check = deletability(message, userId);
+  if (!check.ok) return { error: check.reason, status: check.status };
+
+  message.message = '';
+  message.attachments = [];
+  message.mentions = [];
+  message.deletedForEveryone = true;
+  message.deletedAt = new Date();
+  message.deletedBy = userId;
+  await message.save();
+
+  return {
+    raw: message,
+    normalized: normalize(message),
+    threadId: String(message.conversationId),
+    messageId: String(messageId),
+    mode: 'everyone',
+  };
+}
+
 async function react(user, messageId, emoji) {
   const userId = String(user._id ?? user.id);
   const message = await ChatMessage.findById(messageId);
@@ -695,6 +801,160 @@ function forwardDestinationGate(ctx, { fromScope } = {}) {
   return { ok: true };
 }
 
+/* ── Search ───────────────────────────────────────────────────────────── */
+
+/**
+ * Full-history search across a bounded set of conversations.
+ *
+ * ─── WHY threadIds IS REQUIRED AND COMES FROM THE CALLER ───
+ * The regex cannot use an index, so without a thread constraint this is a
+ * collection scan on every keystroke. `conversationId: { $in: [...] }` puts
+ * the compound `conversationId_1_timestamp_-1` index in front of it, so Mongo
+ * walks only the threads the user is actually in and applies the pattern to
+ * those. It is also the security boundary: the list is resolved from
+ * membership in access.js and never taken from the request.
+ *
+ * Newest-first, because a search result list is read as "most recent first"
+ * — unlike thread history, which is reversed for rendering. No reversing here.
+ *
+ * @param {object}   opts
+ * @param {string}   opts.query      already validated by search.parseQuery
+ * @param {RegExp}   opts.pattern    escaped pattern from the same
+ * @param {string[]} opts.threadIds  conversations the user may read
+ * @param {string}   [opts.senderId] narrow to one author
+ * @param {Date}     [opts.startDate]
+ * @param {Date}     [opts.endDate]
+ */
+async function searchMessages(user, { query, pattern, threadIds, senderId, startDate, endDate, page, limit, skip }) {
+  const ids = (threadIds || []).map(String).filter(Boolean);
+  if (ids.length === 0) {
+    return { results: [], total: 0, pagination: { page, limit, total: 0, totalPages: 0, hasMore: false } };
+  }
+
+  const filter = {
+    conversationId: { $in: ids },
+    message: pattern,
+    // A retracted message has an empty body so it could never match anyway;
+    // stated explicitly so the intent survives a future change to how
+    // retraction stores things.
+    deletedForEveryone: { $ne: true },
+    deletedFor: { $ne: String(user._id ?? user.id) },
+  };
+  if (senderId) filter.senderId = String(senderId);
+  if (startDate || endDate) {
+    filter.timestamp = {};
+    if (startDate) filter.timestamp.$gte = startDate;
+    if (endDate) filter.timestamp.$lte = endDate;
+  }
+
+  const [total, rows] = await Promise.all([
+    ChatMessage.countDocuments(filter),
+    ChatMessage.find(filter).sort({ timestamp: -1 }).skip(skip).limit(limit).lean(),
+  ]);
+
+  // Author names in one lookup rather than one per row — the same N+1 the
+  // unread aggregate elsewhere in this file exists to avoid.
+  const senderIds = [...new Set(rows.map((r) => String(r.senderId)).filter(Boolean))];
+  const senders = senderIds.length
+    ? await User.find({ _id: { $in: senderIds } }, 'name email').lean()
+    : [];
+  const byId = new Map(senders.map((u) => [String(u._id), u]));
+
+  const threads = await Conversation.find({ _id: { $in: ids } }).select('name type members').lean();
+  const threadById = new Map(threads.map((c) => [String(c._id), c]));
+
+  const viewerId = String(user._id ?? user.id);
+
+  const results = rows.map((row) => {
+    const conv = threadById.get(String(row.conversationId));
+    let threadName = conv?.name || 'Conversation';
+    if (conv && conv.type === 'private') {
+      // A DM's useful title is the other participant, resolved per viewer —
+      // same rule listThreads applies.
+      const otherId = (conv.members || []).find((m) => String(m) !== viewerId);
+      threadName = byId.get(String(otherId))?.name || 'Direct message';
+    }
+
+    return {
+      scope: SCOPE,
+      threadId: String(row.conversationId),
+      threadName,
+      messageId: String(row._id),
+      sender: { id: String(row.senderId), name: byId.get(String(row.senderId))?.name || 'Unknown' },
+      createdAt: row.timestamp || row.createdAt,
+      hasAttachments: Boolean(row.attachments?.length),
+      snippet: buildSnippet(row.message, query),
+    };
+  });
+
+  return {
+    results,
+    total,
+    pagination: {
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+      hasMore: skip + rows.length < total,
+    },
+  };
+}
+
+/**
+ * A few messages either side of one message, for previewing a search hit in
+ * place.
+ *
+ * ─── WHY THIS EXISTS INSTEAD OF JUMPING THE THREAD TO THAT PAGE ───
+ * Opening the thread at a six-month-old message means loading a page from the
+ * middle of history into a store that only knows how to page one direction,
+ * leaving a hole between it and the live tail that nothing reconciles. This
+ * returns a small standalone window instead — the result list expands to show
+ * the conversation around the hit, and the thread everyone else is reading
+ * from is left exactly as it was.
+ */
+async function contextAround(user, messageId, { before = 5, after = 5 } = {}) {
+  const target = await ChatMessage.findById(messageId).lean();
+  if (!target) return null;
+
+  const threadId = String(target.conversationId);
+  const at = target.timestamp || target.createdAt;
+  const viewerId = String(user?._id ?? user?.id ?? '');
+  const hidden = viewerId ? { deletedFor: { $ne: viewerId } } : {};
+
+  const [older, newer] = await Promise.all([
+    ChatMessage.find({ conversationId: threadId, timestamp: { $lt: at }, ...hidden })
+      .sort({ timestamp: -1 })
+      .limit(before)
+      .lean(),
+    ChatMessage.find({ conversationId: threadId, timestamp: { $gt: at }, ...hidden })
+      .sort({ timestamp: 1 })
+      .limit(after)
+      .lean(),
+  ]);
+
+  const window = [...older.reverse(), target, ...newer];
+
+  const senderIds = [...new Set(window.map((m) => String(m.senderId)).filter(Boolean))];
+  const senders = senderIds.length
+    ? await User.find({ _id: { $in: senderIds } }, 'name email').lean()
+    : [];
+  const byId = new Map(senders.map((u) => [String(u._id), u]));
+
+  return {
+    scope: SCOPE,
+    threadId,
+    messages: window.map((m) => ({
+      id: String(m._id),
+      body: m.deletedForEveryone ? '' : m.message || '',
+      deleted: Boolean(m.deletedForEveryone),
+      sender: { id: String(m.senderId), name: byId.get(String(m.senderId))?.name || 'Unknown' },
+      createdAt: m.timestamp || m.createdAt,
+      hasAttachments: !m.deletedForEveryone && Boolean(m.attachments?.length),
+      isMatch: String(m._id) === String(messageId),
+    })),
+  };
+}
+
 module.exports = {
   SCOPE,
   EDIT_WINDOW_MS,
@@ -702,6 +962,8 @@ module.exports = {
   readForForward,
   createForwardedCopies,
   forwardDestinationGate,
+  searchMessages,
+  contextAround,
   getMemberIds,
   listThreads,
   getMessages,
@@ -710,5 +972,9 @@ module.exports = {
   sendMessage,
   editMessage,
   editability,
+  deletability,
+  deleteForMe,
+  deleteForEveryone,
+  DELETE_WINDOW_MS,
   react,
 };

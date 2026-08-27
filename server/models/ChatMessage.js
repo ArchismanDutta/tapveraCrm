@@ -110,6 +110,35 @@ const ChatMessageSchema = new mongoose.Schema({
    * is the honest minimum, and it is what WhatsApp shows too.
    */
   editedAt: { type: Date, default: null },
+
+  /**
+   * ─── DELETION ───
+   * Two different things, deliberately kept as two different fields, because
+   * they are two different claims.
+   *
+   * `deletedFor` is "delete for me": this message is hidden from these users
+   * and nobody else. Everyone else's copy is untouched, and the sender is not
+   * told. It is a view preference, so it is always available, on anyone's
+   * message, forever.
+   *
+   * `deletedForEveryone` is a RETRACTION. The body and attachments are cleared
+   * from the document — not merely hidden — so nothing can serve them again.
+   * Only the sender can do it, and only inside the window (see
+   * DELETE_WINDOW_MS in the adapter), which is the same reasoning the edit
+   * window rests on: a message people have already acted on cannot be
+   * un-said.
+   *
+   * The document SURVIVES a retraction rather than being removed. A hard
+   * delete would break every reply pointing at it, leave read cursors
+   * addressing a message that no longer exists, and silently renumber the
+   * thread for anyone paging through it. A tombstone holds its place and
+   * renders as "This message was deleted", which is also what recipients
+   * expect to see — a message vanishing without trace reads as a bug.
+   */
+  deletedFor: { type: [String], default: [] },
+  deletedForEveryone: { type: Boolean, default: false },
+  deletedAt: { type: Date, default: null },
+  deletedBy: { type: String, default: null },
 });
 
 // Idempotency: at most one message per client-generated id.
@@ -143,5 +172,9 @@ ChatMessageSchema.index({ mentions: 1, timestamp: -1 });
 
 // Index for reply threads (finding all replies to a message)
 ChatMessageSchema.index({ replyTo: 1 });
+
+// Hidden-for-this-user lookups ride the conversation index above and filter on
+// this, so it needs no index of its own — but it IS queried on every read, so
+// it is worth knowing that `deletedFor: { $ne: id }` is a filter, not a seek.
 
 module.exports = mongoose.model("ChatMessage", ChatMessageSchema);

@@ -33,7 +33,7 @@ const ProjectCard = ({
   onView,
   onEdit,
   onDelete,
-  onCommunication,
+  onOpenChat,
   canEdit = false,
   canDelete = false,
   remarkCount = 0,
@@ -281,9 +281,9 @@ const ProjectCard = ({
             <span className="hidden xs:inline">View</span>
           </button>
 
-          {onCommunication && (
+          {onOpenChat && (
             <button
-              onClick={() => onCommunication(project)}
+              onClick={() => onOpenChat(project)}
               aria-label="Open project chat"
               title="Open project chat"
               className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-violet-200 bg-violet-50 px-2 py-2 text-xs font-medium text-violet-700 transition hover:bg-violet-100 dark:border-violet-500/25 dark:bg-violet-500/10 dark:text-violet-300 dark:hover:bg-violet-500/20 sm:px-3"
