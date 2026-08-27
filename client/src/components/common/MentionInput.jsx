@@ -253,6 +253,14 @@ const MentionInput = forwardRef(({
     }
   }, [showMentionDropdown]);
 
+  // Auto-resize the textarea to its content height, capped at ~5 lines
+  useEffect(() => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    textarea.style.height = 'auto';
+    textarea.style.height = Math.min(textarea.scrollHeight, 200) + 'px';
+  }, [value]);
+
   // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {

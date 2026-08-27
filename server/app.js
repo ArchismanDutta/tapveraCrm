@@ -150,7 +150,34 @@ app.use(
 // Middleware
 // =====================
 app.use(express.json());
-app.use(morgan("dev"));
+
+// HTTP request logging.
+//
+// "dev" emits a colourised line per request with ANSI escape codes — useful in
+// a terminal, noise in a pm2 log file that nothing strips the codes from. In
+// production we use the standard Apache "combined" format instead, and skip
+// the two endpoint families that are polled rather than used by a human:
+// health checks, and Socket.IO's transport polling. Both are high-frequency
+// and tell us nothing when they succeed.
+//
+// Set HTTP_LOG_FORMAT to override (dev|combined|common|short|tiny), or
+// HTTP_LOG=off to disable request logging entirely.
+if (process.env.HTTP_LOG !== "off") {
+  const isProd = process.env.NODE_ENV === "production";
+  const httpLogFormat = process.env.HTTP_LOG_FORMAT || (isProd ? "combined" : "dev");
+
+  app.use(
+    morgan(httpLogFormat, {
+      skip: (req, res) =>
+        isProd &&
+        res.statusCode < 400 &&
+        (req.path === "/health" ||
+          req.path === "/healthz" ||
+          req.path === "/api/health" ||
+          req.path.startsWith("/socket.io/")),
+    })
+  );
+}
 
 // Turn stored /uploads/... paths into short-lived signed URLs on the way out.
 // Mounted before the routers so it wraps res.json for every one of them —

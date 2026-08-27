@@ -312,9 +312,49 @@ async function react(user, messageId, emoji) {
   return { raw: message, normalized: normalize(message), threadId: String(message.project) };
 }
 
+/* ── Forwarding ───────────────────────────────────────────────────────── */
+
+/**
+ * Read messages so they can be copied elsewhere — the SOURCE half of a
+ * forward.
+ *
+ * Project threads are a source only. They do not RECEIVE forwards, so there is
+ * deliberately no `createForwardedCopies` here: a project thread has clients
+ * in it, and internal chat arriving there is not something a member should be
+ * able to do by accident. The service's scope table is the one place that
+ * decides this — see FORWARD_DESTINATIONS in messaging.service.js.
+ *
+ * Returns exactly the shape chatThread.readForForward does. That parity is
+ * what lets the service pair any source adapter with any destination adapter
+ * without knowing which is which; the parity assertion lives in
+ * tests/forward-messages.test.js.
+ *
+ * Ordered oldest-first on createdAt (the project schema's time field; chat
+ * uses `timestamp`), so a multi-message forward lands in the order it was
+ * originally said.
+ *
+ * @returns {Promise<Array<{ id, body, attachments }>>}
+ */
+async function readForForward(messageIds) {
+  const docs = await Message.find({ _id: { $in: messageIds } })
+    .sort({ createdAt: 1 })
+    .lean();
+
+  return docs.map((d) => ({
+    id: String(d._id),
+    body: d.message || '',
+    // Passed through whole. The destination adapter narrows these to the
+    // fields its own schema declares — see forwardableAttachment in
+    // chatThread.js, which deliberately drops `s3Key` so a copy can never
+    // authorise deleting the original's file.
+    attachments: d.attachments || [],
+  }));
+}
+
 module.exports = {
   SCOPE,
   normalize,
+  readForForward,
   getMemberIds,
   listThreads,
   getMessages,

@@ -256,7 +256,7 @@ const RequestChatModal = ({ request: initialRequest, onClose }) => {
                         className={`max-w-[70%] ${
                           isAdmin
                             ? "bg-blue-600 text-white"
-                            : "bg-white dark:bg-[#1a1f2e] text-gray-900 dark:text-white border border-gray-200 dark:border-gray-700"
+                            : "bg-slate-100 dark:bg-[#1a1f2e] text-gray-900 dark:text-white border border-gray-200 dark:border-gray-700"
                         } rounded-lg p-3 shadow-sm`}
                       >
                         <div className="flex items-center gap-2 mb-1">

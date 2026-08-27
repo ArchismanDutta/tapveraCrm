@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
+import { handleSessionExpired } from "../utils/session";
 import Sidebar from "../components/dashboard/Sidebar";
 import InfoCard from "../components/profile/InfoCard";
 import StatCard from "../components/profile/StatCard";
@@ -286,9 +287,9 @@ const MyProfile = ({ userType = "employee", onLogout }) => {
 
       // Provide specific error messages based on status code
       if (err.response?.status === 401) {
-        localStorage.removeItem("token");
+        // Shared handler — see utils/session.js.
         localStorage.removeItem("role");
-        window.location.href = "/login";
+        handleSessionExpired();
       } else if (err.response?.status === 403) {
         setError("You do not have permission to view this profile.");
       } else if (err.response?.status === 404) {

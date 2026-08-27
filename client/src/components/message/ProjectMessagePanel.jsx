@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import rehypeRaw from "rehype-raw";
 import {
   Filter,
   X as XCircle,
@@ -18,6 +17,7 @@ import {
   Type,
   Send,
   Plus,
+  Forward,
 } from "lucide-react";
 import MediaLightbox from "../common/MediaLightbox";
 import MessageDateSeparator from "./MessageDateSeparator";
@@ -44,6 +44,13 @@ import {
 } from "../../store/slices/threadsSlice";
 import useMessageListMechanics from "../../hooks/useMessageListMechanics";
 import NewMessagesButton from "../chat/NewMessagesButton";
+// Forwarding OUT of a project and into a chat group. The picker, the selection
+// bar and the selection logic are the same ones ChatWindow uses — only the
+// source scope differs, and the server's FORWARD_DESTINATIONS table is what
+// decides that project messages may go to group chats and nowhere else.
+import ForwardMessagesModal from "../chat/ForwardMessagesModal";
+import MessageSelectionBar from "../chat/MessageSelectionBar";
+import useMessageSelection from "../../hooks/useMessageSelection";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
 const SCOPE = messagingApi.SCOPES.PROJECT;
@@ -291,6 +298,8 @@ const ProjectMessagePanel = ({ projectId, currentUser }) => {
       setReplyingTo(null);
     } catch (err) {
       console.error("Send error:", err);
+      const msg = err?.response?.data?.message || err?.message || "Failed to send. Please try again.";
+      setAttachNotice(msg);
     }
   };
 
@@ -442,9 +451,26 @@ const ProjectMessagePanel = ({ projectId, currentUser }) => {
   // with no text and "Unknown" as the sender until the page was refreshed.
   // Reshaping `sender` into a `sentBy`-compatible object here, once, means
   // nothing downstream needs to know which shape it got.
+  // Selection mode, for forwarding into chat groups. Shared with ChatWindow and
+  // the ProjectDetailPage chat tab — see hooks/useMessageSelection.
+  const {
+    selecting,
+    selectedIds,
+    isSelected,
+    toggle: toggleSelected,
+    start: startForward,
+    exit: exitSelection,
+    forwardOpen,
+    openForward,
+    closeForward,
+  } = useMessageSelection();
+
   const displayMessages = messages.map((msg) => ({
     ...msg,
     _id: msg._id || msg.id,
+    // A message still in the outbox has no server id, so there is nothing to
+    // forward it BY. Rows without one are not selectable — see the hook.
+    hasServerId: Boolean(msg._id || msg.id),
     sentBy:
       msg.sentBy ??
       (msg.sender
@@ -523,6 +549,15 @@ const ProjectMessagePanel = ({ projectId, currentUser }) => {
         onClear={clearFilters}
       />
 
+      {selecting && (
+        <MessageSelectionBar
+          count={selectedIds.length}
+          onCancel={exitSelection}
+          onForward={openForward}
+          accent="teal"
+        />
+      )}
+
       {/* ── Message list ── */}
       <div
         ref={containerRef}
@@ -594,11 +629,26 @@ const ProjectMessagePanel = ({ projectId, currentUser }) => {
                 id={`pmsg-${msg._id}`}
                 data-message-id={msg._id}
                 data-owner-id={msg.sentBy?._id || msg.sentBy}
+                onClick={
+                  selecting && msg.hasServerId
+                    ? () => toggleSelected(msg._id)
+                    : undefined
+                }
                 className={`flex w-full transition-colors duration-500 ${
                   own ? "justify-end" : "justify-start"
-                } mb-3`}
+                } mb-3 ${
+                  selecting
+                    ? msg.hasServerId
+                      ? "cursor-pointer rounded-lg px-1"
+                      : "cursor-not-allowed rounded-lg px-1 opacity-50"
+                    : ""
+                } ${
+                  selecting && isSelected(msg._id)
+                    ? "bg-teal-50 dark:bg-teal-400/10"
+                    : ""
+                }`}
               >
-                <div className="flex max-w-[85%] flex-col sm:max-w-[70%]">
+                <div className="flex min-w-0 max-w-[85%] flex-col sm:max-w-[70%]">
                   {/* Sender name (other side only) */}
                   {!own && (
                     <p className="mb-1 px-1 text-xs text-slate-500 dark:text-gray-400">
@@ -609,10 +659,10 @@ const ProjectMessagePanel = ({ projectId, currentUser }) => {
                   )}
 
                   <div
-                    className={`relative group w-fit max-w-full overflow-hidden rounded-xl border p-3 shadow-sm transition-colors duration-200 ${
+                    className={`relative group w-fit max-w-full rounded-xl border p-3 shadow-sm transition-colors duration-200 ${own ? "self-end" : "self-start"} ${
                       own
                         ? "border-teal-600/20 bg-teal-600 text-white dark:border-teal-400/15 dark:bg-[#075d55]"
-                        : "border-slate-200 bg-white text-slate-900 dark:border-white/10 dark:bg-[#1a242d] dark:text-white"
+                        : "border-slate-200 bg-slate-100 text-slate-900 dark:border-white/10 dark:bg-[#1a242d] dark:text-white"
                     }`}
                   >
                     {/* Reply preview */}
@@ -643,7 +693,7 @@ const ProjectMessagePanel = ({ projectId, currentUser }) => {
                       <div className={`prose prose-sm max-w-none break-words text-sm leading-relaxed ${own ? "prose-invert text-white" : "prose-slate dark:prose-invert dark:text-white"}`}>
                         <ReactMarkdown
                           remarkPlugins={[remarkGfm]}
-                          rehypePlugins={[rehypeRaw]}
+
                           components={{
                             p: ({ children }) => (
                               <p className="mb-1 whitespace-pre-wrap last:mb-0">{children}</p>
@@ -835,13 +885,32 @@ const ProjectMessagePanel = ({ projectId, currentUser }) => {
                         </span>
                         {own && <MessageStatus status={msg.status || "sent"} />}
                       </div>
-                      <div className="relative flex items-center gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
+                      {/* Hidden while selecting: in selection mode the whole bubble is
+                          a checkbox, and a Reply or Copy click landing inside it would
+                          bubble up and tick the message instead of doing what it says. */}
+                      <div className={`relative flex items-center gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 ${selecting ? "hidden" : ""}`}>
                         <button
                           onClick={() => setReplyingTo(msg)}
                           className="rounded-md p-1 transition-colors hover:bg-black/10 dark:hover:bg-white/10"
                           title="Reply"
                         >
                           <ReplyIcon className={`h-3.5 w-3.5 ${own ? "text-teal-50/80 hover:text-white" : "text-slate-400 hover:text-teal-600 dark:text-gray-400 dark:hover:text-[#00a884]"}`} />
+                        </button>
+                        {/* Forward into a chat group. Disabled until the send
+                            has landed — there is no id to forward by before
+                            that, and sending a placeholder used to come back
+                            as an opaque 500. */}
+                        <button
+                          onClick={() => startForward(msg._id)}
+                          disabled={!msg.hasServerId}
+                          className="rounded-md p-1 transition-colors hover:bg-black/10 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent dark:hover:bg-white/10"
+                          title={
+                            msg.hasServerId
+                              ? "Forward to a group chat"
+                              : "Still sending — cannot forward yet"
+                          }
+                        >
+                          <Forward className={`h-3.5 w-3.5 ${own ? "text-teal-50/80 hover:text-white" : "text-slate-400 hover:text-teal-600 dark:text-gray-400 dark:hover:text-[#00a884]"}`} />
                         </button>
                         <button
                           onClick={() => copyToClipboard(msg.message)}
@@ -1071,13 +1140,15 @@ const ProjectMessagePanel = ({ projectId, currentUser }) => {
             value={input}
             onChange={(e) => {
               setInput(e.target.value);
+              e.target.style.height = 'auto';
+              e.target.style.height = Math.min(e.target.scrollHeight, 200) + 'px';
               if (e.target.value.length > 0) sendTypingIndicator();
               else stopTypingIndicator();
             }}
             onKeyDown={handleKeyDown}
             placeholder="Write a message..."
             rows={1}
-            className="block h-11 flex-1 resize-none rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 placeholder-slate-400 outline-none transition focus:border-teal-400/50 focus:ring-2 focus:ring-teal-500/15 dark:border-white/10 dark:bg-[#101820] dark:text-white dark:placeholder-slate-500"
+            className="block min-h-[2.75rem] max-h-[200px] flex-1 resize-none rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 placeholder-slate-400 outline-none transition focus:border-teal-400/50 focus:ring-2 focus:ring-teal-500/15 dark:border-white/10 dark:bg-[#101820] dark:text-white dark:placeholder-slate-500"
           />
 
           <button
@@ -1104,6 +1175,18 @@ const ProjectMessagePanel = ({ projectId, currentUser }) => {
           }}
         />
       )}
+
+      {/* ── Forward to a group chat ── */}
+      <ForwardMessagesModal
+        open={forwardOpen}
+        onClose={closeForward}
+        sourceScope={SCOPE}
+        sourceThreadId={projectId}
+        messageIds={selectedIds}
+        // No `conversations` prop: this panel has no reason to know about chat
+        // conversations, so the picker loads (and filters to groups) itself.
+        onDone={exitSelection}
+      />
 
       {/* ── AI Summary modal ── */}
       <ThreadSummaryModal

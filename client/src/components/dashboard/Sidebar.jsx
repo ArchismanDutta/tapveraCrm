@@ -87,6 +87,11 @@ const menuConfig = {
       label: "Team Task Management",
     },
     {
+      to: "/messages",
+      icon: <MessageSquareQuote size={18} animateOnHover />,
+      label: "Messages",
+    },
+    {
       to: "/sheets",
       icon: <FileSpreadsheet size={18} />,
       label: "Shared Sheets",
@@ -107,11 +112,7 @@ const menuConfig = {
       label: "My Payslips",
     },
     { to: "/todo", icon: <Brush size={18} animateOnHover />, label: "Todo" },
-    {
-      to: "/messages",
-      icon: <MessageSquareQuote size={18} animateOnHover />,
-      label: "Messages",
-    },
+    
     {
       to: "/notifications",
       icon: <Bell size={18} />,

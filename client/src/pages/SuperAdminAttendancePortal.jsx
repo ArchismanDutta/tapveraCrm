@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback, useMemo, useRef } from "react"
 import { createPortal } from "react-dom";
 import axios from "axios";
 import { attendanceUtils } from "../api.js";
+import { handleSessionExpired } from "../utils/session";
 import timeUtils from "../utils/timeUtils";
 import newAttendanceService from "../services/newAttendanceService";
 import AttendanceCalendar from "../components/attendance/AttendanceCalendar";
@@ -107,8 +108,9 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
     (response) => response,
     (error) => {
       if (error.response?.status === 401) {
-        localStorage.removeItem('token');
-        window.location.href = '/login';
+        // Shared handler — see utils/session.js. This page polls, so an inline
+        // redirect here was a reload loop waiting to happen.
+        handleSessionExpired();
       }
       throw error;
     }

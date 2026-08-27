@@ -241,6 +241,38 @@ function handshakeTimeZoneValue(timeZone = "Asia/Kolkata") {
 }
 
 /**
+ * How many seconds the device should wait between command polls
+ * (GET /iclock/getrequest) — the `Delay=` handshake line.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * THIS DOES NOT AFFECT HOW FAST PUNCHES ARRIVE.
+ * ─────────────────────────────────────────────────────────────────────────────
+ * Attendance delivery is governed by Realtime=1 and TransInterval below: the
+ * terminal POSTs each punch to /iclock/cdata within a second or two of the
+ * finger leaving the sensor, independently of this value. `Delay` only paces
+ * the separate "do you have any commands for me?" poll.
+ *
+ * We do not currently issue commands — /iclock/getrequest unconditionally
+ * answers "OK" — so every one of those polls is a guaranteed no-op that costs
+ * a request, a device lookup and a liveness write. At the previous hardcoded
+ * 10s that was 8,640 round-trips per device per day, and it dominated both the
+ * request log and the biometric collection's write load.
+ *
+ * 60s keeps the device visibly alive (lastSeenAt never more than a minute
+ * stale) at a sixth of the cost. Lower it if and when real commands are
+ * implemented and their latency starts to matter — that is the only thing this
+ * number trades against.
+ *
+ * Clamped to 5..3600. A 0 or negative value makes some firmware poll in a hot
+ * loop, so a typo in the env file must not be able to produce one.
+ */
+function pollDelaySeconds() {
+  const raw = Number(process.env.BIOMETRIC_POLL_DELAY_SECONDS);
+  if (!Number.isFinite(raw) || raw <= 0) return 60;
+  return Math.min(3600, Math.max(5, Math.round(raw)));
+}
+
+/**
  * Build the plain-text handshake response.
  *
  * Getting this wrong is the single most common reason an ADMS integration
@@ -260,7 +292,9 @@ function buildHandshakeResponse(serialNumber, opts = {}) {
     opLogStamp = "9999",
     attPhotoStamp = "None",
     errorDelay = 30, // seconds to wait after a failed push
-    delay = 10, // seconds between command polls
+    // Seconds between command polls. See pollDelaySeconds() above — this is
+    // NOT punch latency, which is governed by realtime/transInterval below.
+    delay = pollDelaySeconds(),
     transTimes = "00:00;14:05", // scheduled full-sync times
     transInterval = 1, // minutes between incremental pushes
     // Which record types to transmit: AttLog, OpLog, AttPhoto, EnrollUser,
@@ -315,6 +349,7 @@ module.exports = {
   timeZoneOffsetMs,
   deviceTimeToUtc,
   handshakeTimeZoneValue,
+  pollDelaySeconds,
   parseAttlog,
   buildHandshakeResponse,
   buildPushAck,

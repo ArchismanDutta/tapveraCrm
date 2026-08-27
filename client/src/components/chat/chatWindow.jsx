@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import rehypeRaw from "rehype-raw";
 import {
   Filter,
   X as XCircle,
@@ -23,7 +22,6 @@ import {
   Plus,
   Forward,
   Pencil,
-  CheckSquare,
 } from "lucide-react";
 import MediaLightbox from "../common/MediaLightbox";
 import MessageDateSeparator from "../message/MessageDateSeparator";
@@ -43,6 +41,8 @@ import FailedMessageBar from "../message/FailedMessageBar";
 import UnreadDivider from "../message/UnreadDivider";
 import NewMessagesButton from "./NewMessagesButton";
 import ForwardMessagesModal from "./ForwardMessagesModal";
+import MessageSelectionBar from "./MessageSelectionBar";
+import useMessageSelection from "../../hooks/useMessageSelection";
 import useMessageListMechanics, { startsGroup } from "../../hooks/useMessageListMechanics";
 import useFileAttach from "../../hooks/useFileAttach";
 import DropOverlay from "../message/DropOverlay";
@@ -86,27 +86,21 @@ const ChatWindow = ({
   // cancelling or sending. Holds message ids, not messages: the underlying list
   // can change under us (a page of older history loading, a live arrival), and
   // ids survive that where object references wouldn't.
-  const [selectedIds, setSelectedIds] = useState([]);
-  const [selecting, setSelecting] = useState(false);
-  const [showForward, setShowForward] = useState(false);
-
-  const toggleSelected = React.useCallback((id) => {
-    setSelectedIds((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
-    );
-  }, []);
-
-  const exitSelection = React.useCallback(() => {
-    setSelecting(false);
-    setSelectedIds([]);
-  }, []);
-
-  // Start selection from one message — the common case is forwarding the
-  // message you just right-clicked, so it begins already ticked.
-  const startForward = React.useCallback((id) => {
-    setSelecting(true);
-    setSelectedIds([id]);
-  }, []);
+  //
+  // Shared with ProjectMessagePanel and the ProjectDetailPage chat tab, which
+  // offer the same action against project threads — see the hook for the one
+  // rule that is easy to get wrong (a message with no server id yet).
+  const {
+    selecting,
+    selectedIds,
+    isSelected,
+    toggle: toggleSelected,
+    start: startForward,
+    exit: exitSelection,
+    forwardOpen,
+    openForward,
+    closeForward,
+  } = useMessageSelection();
   // Composer text is a per-thread DRAFT, not plain component state: switching
   // conversations mid-sentence and returning to an empty box feels careless.
   const { draft: input, setDraft: setInput, clearDraft } = useDraft({
@@ -612,10 +606,33 @@ const ChatWindow = ({
   // only ever returns the raw shape. This mirrors the same
   // sender?.id-before-senderId-before-sentBy chain already used correctly in
   // threadsSlice.js / useMessageListMechanics.js / useReceipts.js.
+  //
+  // ─── `messageId` IS NULL UNTIL THE SERVER HAS SEEN THE MESSAGE ───
+  // This used to fall back to `Math.random().toString(36).substring(2, 9)`.
+  // An optimistic row has `id: null` (see enqueueOptimistic) and a failed send
+  // never gets one, so both landed on a random 7-character string — and this
+  // map runs on every render, so it was a DIFFERENT string each time. Two
+  // things broke. React saw a new key each render and remounted the bubble,
+  // silently dropping any selection on it. Worse, forwarding sent that string
+  // to the server as a message id, where `find({ _id: { $in: [...] } })` threw
+  // a CastError and came back as a 500.
+  //
+  // `null` is the honest value: this message does not have a server id yet.
+  // `rowKey` below gives React something stable to key on, and `hasServerId`
+  // is what gates the actions that need a real id.
   const normalizedMessages = messages.map((msg) => ({
     ...msg, // Preserve all original properties
-    messageId:
-      msg.messageId || msg._id || msg.id || Math.random().toString(36).substring(2, 9),
+    messageId: msg.messageId || msg._id || msg.id || null,
+    rowKey: String(
+      msg.messageId ||
+        msg._id ||
+        msg.id ||
+        msg.clientMsgId ||
+        msg.createdAt ||
+        msg.timestamp ||
+        ""
+    ),
+    hasServerId: Boolean(msg.messageId || msg._id || msg.id),
     senderId: String(
       msg.sender?.id ?? msg.senderId ?? msg.sentBy?._id ?? msg.sentBy ?? "unknown"
     ),
@@ -759,30 +776,12 @@ const ChatWindow = ({
       />
 
       {selecting && (
-        <div className="flex items-center justify-between gap-3 border-b border-blue-200 bg-blue-50 px-4 py-2 dark:border-blue-400/20 dark:bg-blue-400/10">
-          <span className="inline-flex items-center gap-2 text-sm font-medium text-blue-800 dark:text-blue-200">
-            <CheckSquare className="h-4 w-4" />
-            {selectedIds.length} selected
-          </span>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={exitSelection}
-              className="rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:bg-white/60 dark:text-slate-300 dark:hover:bg-white/[0.06]"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowForward(true)}
-              disabled={selectedIds.length === 0}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <Forward className="h-3.5 w-3.5" />
-              Forward
-            </button>
-          </div>
-        </div>
+        <MessageSelectionBar
+          count={selectedIds.length}
+          onCancel={exitSelection}
+          onForward={openForward}
+          accent="blue"
+        />
       )}
 
       <div
@@ -853,23 +852,34 @@ const ChatWindow = ({
                 new Date(prevMsg.timestamp).toDateString();
 
             return (
-              <React.Fragment key={msg.messageId}>
+              <React.Fragment key={msg.rowKey}>
                 {showDateDivider && <MessageDateSeparator date={msg.timestamp} />}
                 {showUnreadDivider && <UnreadDivider count={unreadOnOpen} />}
                 <div
-                  id={`message-${msg.messageId || msg._id}`}
-                  onClick={selecting ? () => toggleSelected(msg.messageId) : undefined}
+                  id={`message-${msg.messageId || msg.rowKey}`}
+                  // A message the server has never seen cannot be forwarded —
+                  // there is no id to forward BY — so it is not selectable
+                  // either, rather than being tickable and then failing.
+                  onClick={
+                    selecting && msg.hasServerId
+                      ? () => toggleSelected(msg.messageId)
+                      : undefined
+                  }
                   className={`flex w-full transition-colors duration-500 ${
                     isSelf ? "justify-end" : "justify-start"
                   } ${isContinuation ? "mb-0.5" : "mb-3"} ${
-                    selecting ? "cursor-pointer rounded-lg px-1" : ""
+                    selecting
+                      ? msg.hasServerId
+                        ? "cursor-pointer rounded-lg px-1"
+                        : "cursor-not-allowed rounded-lg px-1 opacity-50"
+                      : ""
                   } ${
-                    selecting && selectedIds.includes(msg.messageId)
+                    selecting && isSelected(msg.messageId)
                       ? "bg-blue-50 dark:bg-blue-400/10"
                       : ""
                   }`}
                 >
-                  <div className="flex max-w-[85%] flex-col sm:max-w-[70%]">
+                  <div className="flex min-w-0 max-w-[85%] flex-col sm:max-w-[70%]">
                     {/* Sender name only on the first message of a block. */}
                     {!isSelf && !isContinuation && (
                       <p className="mb-1 px-1 text-xs text-slate-500 dark:text-gray-400">
@@ -886,12 +896,12 @@ const ChatWindow = ({
                         // Copy and Forward were all permanently invisible. They
                         // appeared on mobile only because the base state there
                         // is opacity-100.
-                        className={`group w-fit max-w-full rounded-xl border p-3 shadow-sm transition-colors duration-200 ${
+                        className={`group w-fit max-w-full rounded-xl border p-3 shadow-sm transition-colors duration-200 ${isSelf ? "self-end" : "self-start"} ${
                         isSelf
                           ? "border-blue-600/20 bg-blue-600 text-white dark:border-blue-400/15"
                           : mentionsMe
                           ? "border-amber-200 border-l-4 border-l-amber-400 bg-amber-50/70 text-slate-900 dark:border-amber-400/25 dark:border-l-amber-400 dark:bg-amber-400/[0.07] dark:text-white"
-                          : "border-slate-200 bg-white text-slate-900 dark:border-white/10 dark:bg-[#1a2433] dark:text-white"
+                          : "border-slate-200 bg-slate-100 text-slate-900 dark:border-white/10 dark:bg-[#1a2433] dark:text-white"
                       }`}
                     >
                       {/* Reply Preview */}
@@ -1008,7 +1018,7 @@ const ChatWindow = ({
                         <div className="prose prose-sm max-w-none break-words text-sm leading-relaxed">
                           <ReactMarkdown
                             remarkPlugins={[remarkGfm]}
-                            rehypePlugins={[rehypeRaw]}
+
                             components={{
                               // Custom styling for markdown elements
                               p: ({ children }) => (
@@ -1229,7 +1239,10 @@ const ChatWindow = ({
                             </span>
                           )}
                         </span>
-                        <div className="relative flex items-center gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
+                        {/* Hidden while selecting: in selection mode the whole bubble is
+                            a checkbox, and a Reply or Copy click landing inside it would
+                            bubble up and tick the message instead of doing what it says. */}
+                        <div className={`relative flex items-center gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 ${selecting ? "hidden" : ""}`}>
                           <button
                             onClick={() => handleReply(msg)}
                             className="rounded-md p-1 transition-colors hover:bg-black/10 dark:hover:bg-white/10"
@@ -1237,10 +1250,17 @@ const ChatWindow = ({
                           >
                             <ReplyIcon className={`h-3.5 w-3.5 ${isSelf ? "text-blue-50/80 hover:text-white" : "text-slate-400 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400"}`} />
                           </button>
+                        {/* Same rule as selection above: nothing to forward
+                            by until the send has landed. */}
                         <button
                           onClick={() => startForward(msg.messageId)}
-                          className="rounded p-1 transition hover:bg-black/5 dark:hover:bg-white/10"
-                          title="Forward message"
+                          disabled={!msg.hasServerId}
+                          className="rounded p-1 transition hover:bg-black/5 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent dark:hover:bg-white/10"
+                          title={
+                            msg.hasServerId
+                              ? "Forward message"
+                              : "Still sending — cannot forward yet"
+                          }
                         >
                           <Forward className={`h-3.5 w-3.5 ${isSelf ? "text-blue-50/80 hover:text-white" : "text-slate-400 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400"}`} />
                         </button>
@@ -1600,7 +1620,7 @@ const ChatWindow = ({
               currentUserId={currentUserId}
               placeholder="Write a message... (@ to mention someone)"
               rows={1}
-              className="h-11 w-full rounded-xl border-slate-200 bg-white py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:border-blue-400/50 focus:ring-blue-500/15 dark:border-white/10 dark:bg-[#101820] dark:text-white dark:placeholder-slate-500"
+              className="min-h-[2.75rem] max-h-[200px] w-full rounded-xl border-slate-200 bg-white py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:border-blue-400/50 focus:ring-blue-500/15 dark:border-white/10 dark:bg-[#101820] dark:text-white dark:placeholder-slate-500"
               onKeyDown={(e) => {
                 // Handle suggestion navigation
                 if (showSuggestions && suggestions.length > 0) {
@@ -1735,10 +1755,14 @@ const ChatWindow = ({
       )}
 
       <ForwardMessagesModal
-        open={showForward}
-        onClose={() => setShowForward(false)}
+        open={forwardOpen}
+        onClose={closeForward}
+        sourceScope={messagingApi.SCOPES.CHAT}
         sourceThreadId={conversationId}
         messageIds={selectedIds}
+        // ChatPage already loads this list for its sidebar, so it is handed
+        // down rather than refetched. The project surfaces pass nothing and
+        // the picker loads its own.
         conversations={conversations}
         onDone={exitSelection}
       />

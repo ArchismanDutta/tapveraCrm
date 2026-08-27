@@ -198,33 +198,95 @@ async function sendMessage(user, scope, threadId, payload = {}, { notify = true,
 }
 
 /**
- * Forward messages into other conversations.
+ * Which scopes may a forward travel BETWEEN.
  *
- * ─── AUTHORIZATION IS PER DESTINATION ───
- * Read access to the source is checked once; write access is checked for EVERY
- * destination independently, and a destination that fails is skipped rather
- * than failing the whole call. Forwarding to four groups where you've since
- * been removed from one should deliver to the other three and tell you about
- * the one, not silently deliver nothing.
+ * ─── THIS TABLE IS THE POLICY ───
+ * Forwarding is no longer same-scope. A project thread can hand a message to a
+ * chat group, which is how something raised with a client gets to the team who
+ * has to act on it — today that happens by screenshot, which loses the author
+ * and the timestamp.
  *
- * Each copy is broadcast and notified exactly like an ordinary send, so
- * recipients get their unread badge, their push, and the message appears live —
- * a forward is not a lesser kind of message.
+ * What is deliberately NOT here:
+ *   chat -> project    A project thread has CLIENTS in it. Internal chatter
+ *                      must not be one mis-click away from a client seeing it.
+ *   project -> project The same message reappearing in another client's thread
+ *                      is a confidentiality question, not a convenience one.
+ *
+ * Adding a route is a one-line change here plus a `createForwardedCopies` on
+ * the destination adapter. Both halves are required on purpose: a scope with
+ * no writer cannot become a destination by accident.
+ */
+const FORWARD_DESTINATIONS = {
+  [SCOPES.CHAT]: [SCOPES.CHAT],
+  [SCOPES.PROJECT]: [SCOPES.CHAT],
+};
+
+/**
+ * Forward messages into other conversations, possibly in another scope.
+ *
+ * ─── AUTHORIZATION IS PER END, AND PER DESTINATION ───
+ * Read access to the source is checked once IN THE SOURCE'S OWN SCOPE; write
+ * access is checked for EVERY destination independently in the DESTINATION's
+ * scope. Forwarding to four groups where you've since been removed from one
+ * should deliver to the other three and tell you about the one, not silently
+ * deliver nothing.
+ *
+ * On top of that, the destination adapter gets a veto (`forwardDestinationGate`)
+ * for rules that depend on where the message came FROM — which is what refuses
+ * a project message into a one-to-one chat while leaving chat -> chat alone.
+ *
+ * Each copy is broadcast live exactly like an ordinary send, so a forward is
+ * not a lesser kind of message. Notifications are batched PER DESTINATION
+ * rather than per copy — see _notifyForwardBatch for why that matters.
  *
  * @param {Object}   user
- * @param {String}   scope
+ * @param {String}   sourceScope     'chat' | 'project'
  * @param {String}   sourceThreadId  where the messages are being taken from
  * @param {String[]} messageIds
- * @param {String[]} destThreadIds
+ * @param {String[]} destThreadIds   all in the destination scope for
+ *                                   `sourceScope`, per FORWARD_DESTINATIONS
+ * @param {String}   [forwardToken]  identifies one forward ACTION, so a retry
+ *                                   after a client-side timeout returns the
+ *                                   copies already written instead of writing
+ *                                   a second set. Minted by the client; see
+ *                                   messagingApi.newForwardToken.
  * @returns {Promise<{ delivered, failed }>}
  */
-async function forwardMessages(user, scope, sourceThreadId, messageIds, destThreadIds) {
-  await authorize(user, scope, sourceThreadId, 'read');
-
-  const adapter = adapterFor(scope);
-  if (typeof adapter.forwardMessages !== 'function') {
-    throw new Error(`Forwarding is not supported for scope "${scope}"`);
+async function forwardMessages(
+  user,
+  sourceScope,
+  sourceThreadId,
+  messageIds,
+  destThreadIds,
+  forwardToken = null
+) {
+  const [destScope] = FORWARD_DESTINATIONS[sourceScope] || [];
+  if (!destScope) {
+    throw new access.AccessError(
+      `Messages in "${sourceScope}" threads cannot be forwarded`,
+      400,
+      'UNSUPPORTED'
+    );
   }
+
+  const sourceAdapter = adapterFor(sourceScope);
+  const destAdapter = adapterFor(destScope);
+
+  // Both halves, checked before anything is read or written. A scope listed in
+  // the table above but missing its writer is a programming error, not a user
+  // one — but it must still fail as a 400 rather than a bare 500.
+  if (
+    typeof sourceAdapter.readForForward !== 'function' ||
+    typeof destAdapter.createForwardedCopies !== 'function'
+  ) {
+    throw new access.AccessError(
+      `Forwarding from "${sourceScope}" to "${destScope}" is not supported`,
+      400,
+      'UNSUPPORTED'
+    );
+  }
+
+  await authorize(user, sourceScope, sourceThreadId, 'read');
 
   // Check every destination BEFORE writing anything, so a partial failure can't
   // leave messages copied into some threads and rejected by others mid-run.
@@ -232,7 +294,20 @@ async function forwardMessages(user, scope, sourceThreadId, messageIds, destThre
   const failed = [];
   for (const threadId of destThreadIds || []) {
     try {
-      await authorize(user, scope, threadId, 'write');
+      const ctx = await authorize(user, destScope, threadId, 'write');
+
+      // Costs no extra query: assertChatAccess already loaded the thread and
+      // handed it back precisely so callers don't refetch it.
+      const gate =
+        typeof destAdapter.forwardDestinationGate === 'function'
+          ? destAdapter.forwardDestinationGate(ctx, { fromScope: sourceScope })
+          : { ok: true };
+
+      if (!gate.ok) {
+        failed.push({ threadId: String(threadId), reason: gate.reason });
+        continue;
+      }
+
       allowed.push(String(threadId));
     } catch (err) {
       failed.push({ threadId: String(threadId), reason: err.message });
@@ -241,28 +316,69 @@ async function forwardMessages(user, scope, sourceThreadId, messageIds, destThre
 
   if (allowed.length === 0) return { delivered: [], failed };
 
-  const copies = await adapter.forwardMessages(user, messageIds, allowed);
+  const sources = await sourceAdapter.readForForward(messageIds);
+  if (sources.length === 0) return { delivered: [], failed };
+
+  const { copies, missing } = await destAdapter.createForwardedCopies(
+    user,
+    sources,
+    allowed,
+    forwardToken
+  );
+
+  // A destination that vanished between the authorization check and the write
+  // is reported, not swallowed. The adapter used to skip it silently, so it
+  // showed up in neither list and the user was simply never told.
+  for (const threadId of missing || []) {
+    failed.push({ threadId, reason: 'Conversation no longer exists' });
+  }
 
   // Members are resolved once per destination, not once per copied message —
   // forwarding 10 messages to 5 groups is 5 lookups, not 50.
   const membersByThread = new Map();
   for (const threadId of allowed) {
-    membersByThread.set(threadId, await adapter.getMemberIds(threadId));
+    membersByThread.set(threadId, await destAdapter.getMemberIds(threadId));
   }
 
+  // ─── WHY THIS IS GROUPED BY DESTINATION ───
+  // This used to call _notifyMembers once per COPY, and _notifyMembers awaits
+  // notificationService.createAndSend once per MEMBER — which is two round
+  // trips each (create, then save() to set delivered) — and re-resolved the
+  // thread title every time. Forwarding 10 messages to 5 groups of 12 was
+  // ~1,100 sequential writes plus 50 redundant title lookups, all inside the
+  // HTTP request, with no server-side timeout to stop it. On a slower database
+  // link that runs past the client's 30s axios timeout, the browser aborts,
+  // and the user sees a connection error for a forward that is still running
+  // and will eventually succeed.
+  //
+  // One batch per destination instead: one title lookup, one insertMany, and
+  // one notification describing the whole forward rather than N of them
+  // arriving as a burst.
+  const copiesByThread = new Map();
   for (const copy of copies) {
-    const memberIds = membersByThread.get(copy.threadId) || [];
+    if (!copiesByThread.has(copy.threadId)) copiesByThread.set(copy.threadId, []);
+    copiesByThread.get(copy.threadId).push(copy);
+  }
 
-    await _notifyMembers(user, scope, copy.threadId, copy, memberIds).catch((err) =>
+  for (const [threadId, threadCopies] of copiesByThread) {
+    const memberIds = membersByThread.get(threadId) || [];
+
+    // Everything below is in the DESTINATION's scope — that is where the copies
+    // now live, and it is the room their recipients are listening in.
+    await _notifyForwardBatch(user, destScope, threadId, threadCopies, memberIds).catch((err) =>
       console.error(`[messaging] forward notification failed: ${err.message}`)
     );
 
-    realtime.emitMessage({
-      scope,
-      threadId: copy.threadId,
-      message: copy.normalized,
-      memberIds,
-    });
+    // Still one event per message — each copy has to appear in the thread.
+    // These are cheap and synchronous; it was never the emits that were slow.
+    for (const copy of threadCopies) {
+      realtime.emitMessage({
+        scope: destScope,
+        threadId,
+        message: copy.normalized,
+        memberIds,
+      });
+    }
   }
 
   return {
@@ -398,6 +514,74 @@ async function _notifyMembers(user, scope, threadId, sent, memberIds) {
 }
 
 /**
+ * Notification fan-out for ONE destination of a forward.
+ *
+ * Differs from _notifyMembers in two ways that matter at this volume:
+ *   - one persisted row per member for the WHOLE batch, written with
+ *     notifyUsers (a single insertMany) rather than a create+save per member;
+ *   - one title lookup for the destination rather than one per copied message.
+ *
+ * Recipients get "Ana forwarded 6 messages to Design" instead of six separate
+ * notifications landing at once, which is also just better behaviour.
+ */
+async function _notifyForwardBatch(user, scope, threadId, copies, memberIds) {
+  const notificationService = require('../notificationService');
+  const senderId = String(user._id ?? user.id);
+  const senderName = user.name || user.clientName || 'Someone';
+
+  const recipients = (memberIds || []).filter((id) => String(id) !== senderId);
+  if (recipients.length === 0 || copies.length === 0) return;
+
+  const title = await _threadTitle(scope, threadId, senderId);
+
+  const first = copies[0].normalized;
+  const firstPreview = first.body
+    ? first.body.slice(0, 100) + (first.body.length > 100 ? '...' : '')
+    : '📎 Attachment';
+  const preview =
+    copies.length === 1
+      ? firstPreview
+      : `${firstPreview} — and ${copies.length - 1} more`;
+
+  const notifTitle =
+    copies.length === 1
+      ? `${senderName} forwarded a message to ${title}`
+      : `${senderName} forwarded ${copies.length} messages to ${title}`;
+
+  // Deep-link to the newest copy, which is what the thread scrolls to.
+  const lastId = String(copies[copies.length - 1].normalized.id);
+
+  await notificationService.notifyUsers(recipients, {
+    type: 'chat',
+    // Forwards are never mentions — the adapter drops the source's mention
+    // list on purpose, so nobody is @-ed by a message being passed on.
+    channel: 'chat',
+    title: notifTitle,
+    body: preview,
+    relatedData:
+      scope === SCOPES.PROJECT
+        ? { projectId: String(threadId), messageId: lastId }
+        : { conversationId: String(threadId), messageId: lastId },
+    priority: 'normal',
+  });
+
+  // Web push, one banner per recipient for the whole batch. Not awaited — see
+  // the note in _notifyMembers; pushPolicy holds a 10-second grace window and
+  // the rows above are already persisted either way.
+  for (const memberId of recipients) {
+    _maybePush({
+      userId: memberId,
+      notificationId: null,
+      scope,
+      threadId,
+      mentioned: false,
+      title: notifTitle,
+      body: preview,
+    });
+  }
+}
+
+/**
  * Fire-and-forget web push, gated by pushPolicy.
  *
  * Order matters: the cheap synchronous checks (prefs, mute, actively-viewing,
@@ -463,6 +647,7 @@ async function _threadTitle(scope, threadId, viewerId) {
 
 module.exports = {
   SCOPES,
+  FORWARD_DESTINATIONS,
   adapterFor,
   authorize,
   listThreads,

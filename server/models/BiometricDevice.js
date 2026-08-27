@@ -110,16 +110,139 @@ BiometricDeviceSchema.statics.findEnabled = function (serialNumber) {
 /**
  * Mark the device as alive. Uses an unawaited-safe atomic update so telemetry
  * can never block or fail an attendance push.
+ *
+ * ─── Throttling ──────────────────────────────────────────────────────────────
+ * A BARE touch(serial) — no patch — only writes `lastSeenAt`, and the command
+ * poll calls it on every request. At a 10s poll that was ~8,640 writes per
+ * device per day to store a timestamp whose only consumer is a
+ * "last seen N minutes ago" label in the admin UI.
+ *
+ * So bare calls are throttled: at most one write per TOUCH_THROTTLE_MS. The
+ * skipped calls still resolve, so callers that `await` them behave identically.
+ *
+ * A touch WITH a patch (the handshake, which records deviceIp / firmware /
+ * lastHandshakeRaw) is NEVER throttled — that data is not a heartbeat and
+ * dropping it would lose real information.
  */
+const TOUCH_THROTTLE_MS = (() => {
+  const raw = Number(process.env.BIOMETRIC_TOUCH_THROTTLE_SECONDS);
+  if (!Number.isFinite(raw) || raw < 0) return 5 * 60 * 1000;
+  return Math.min(3600, raw) * 1000;
+})();
+
+/** serial -> epoch ms of the last lastSeenAt write we actually issued. */
+const lastTouchAt = new Map();
+
 BiometricDeviceSchema.statics.touch = function (serialNumber, patch = {}) {
   if (!serialNumber) return Promise.resolve(null);
+
+  const serial = String(serialNumber).trim().toUpperCase();
+  const hasPatch = patch && Object.keys(patch).length > 0;
+
+  if (!hasPatch && TOUCH_THROTTLE_MS > 0) {
+    const previous = lastTouchAt.get(serial);
+    if (previous !== undefined && Date.now() - previous < TOUCH_THROTTLE_MS) {
+      return Promise.resolve(null); // heartbeat already fresh enough
+    }
+    lastTouchAt.set(serial, Date.now());
+  }
+
   return this.updateOne(
-    { serialNumber: String(serialNumber).trim().toUpperCase() },
+    { serialNumber: serial },
     { $set: { lastSeenAt: new Date(), ...patch } }
   ).catch((err) => {
+    // Let the next call retry rather than sitting out the whole throttle window
+    // on the back of a write that never landed.
+    lastTouchAt.delete(serial);
     console.warn("⚠️  BiometricDevice.touch failed:", err.message);
     return null;
   });
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// HOT-PATH LOOKUP CACHE
+// ─────────────────────────────────────────────────────────────────────────────
+// Every single ADMS request — including the command poll, which is pure
+// overhead — resolves ?SN= to a device document before it can do anything.
+// That is one findOne per request against a collection that changes when an
+// admin edits a device, i.e. roughly never.
+//
+// findEnabledCached memoises it briefly. Deliberately a SEPARATE static rather
+// than a change to findEnabled: findEnabled keeps its exact previous
+// semantics, so nothing outside the ADMS hot path is affected by any of this.
+//
+// Correctness notes, in order of how much they would hurt if wrong:
+//
+//   • The cached document carries `dryRun` and `enabled`. A stale copy would
+//     mean an admin disabling a device, or putting it back into dry-run, does
+//     not take effect until the entry expires — a device could keep writing
+//     real attendance after being told to stop. That is why every mutation
+//     path calls invalidateCache() (see routes/biometricAdminRoutes.js), which
+//     makes admin changes take effect on the very next request. The TTL is the
+//     backstop for writes made outside the app (mongosh, another process), not
+//     the primary mechanism.
+//
+//   • Only positive hits are cached. Caching "unknown serial" would make a
+//     newly registered device invisible until the entry expired.
+//
+//   • Cached per process. With multiple pm2 instances each keeps its own copy;
+//     invalidateCache only clears the instance that served the admin request,
+//     so the TTL is what bounds the others.
+//
+// The TTL MUST comfortably exceed the poll interval or the cache does nothing:
+// entries would expire in step with the requests meant to hit them. At the
+// default 60s poll, 300s means one read per five polls instead of one per one.
+// If you lower BIOMETRIC_POLL_DELAY_SECONDS, this stays fine; if you raise it
+// past ~5 min, raise this too or accept a miss on every poll.
+const DEVICE_CACHE_TTL_MS = (() => {
+  const raw = Number(process.env.BIOMETRIC_DEVICE_CACHE_SECONDS);
+  if (!Number.isFinite(raw) || raw < 0) return 5 * 60 * 1000;
+  return Math.min(3600, raw) * 1000;
+})();
+
+/** serial -> { doc, expiresAt } */
+const deviceCache = new Map();
+
+/**
+ * Cached variant of findEnabled for the ADMS request path.
+ * Set BIOMETRIC_DEVICE_CACHE_SECONDS=0 to bypass entirely.
+ * @param {String} serialNumber
+ */
+BiometricDeviceSchema.statics.findEnabledCached = async function (serialNumber) {
+  if (!serialNumber) return null;
+  const serial = String(serialNumber).trim().toUpperCase();
+
+  if (DEVICE_CACHE_TTL_MS <= 0) return this.findEnabled(serial);
+
+  const hit = deviceCache.get(serial);
+  if (hit && hit.expiresAt > Date.now()) return hit.doc;
+
+  const doc = await this.findEnabled(serial);
+  if (doc) {
+    deviceCache.set(serial, { doc, expiresAt: Date.now() + DEVICE_CACHE_TTL_MS });
+  } else {
+    // Negative results are not cached, but a previously cached positive must go
+    // — this is the "admin just disabled it" path.
+    deviceCache.delete(serial);
+  }
+  return doc;
+};
+
+/**
+ * Drop cached state for a serial (or all serials when called with no argument).
+ * Call after ANY write that changes a device's identity, enabled flag or
+ * dryRun flag.
+ * @param {String} [serialNumber]
+ */
+BiometricDeviceSchema.statics.invalidateCache = function (serialNumber) {
+  if (!serialNumber) {
+    deviceCache.clear();
+    lastTouchAt.clear();
+    return;
+  }
+  const serial = String(serialNumber).trim().toUpperCase();
+  deviceCache.delete(serial);
+  lastTouchAt.delete(serial);
 };
 
 module.exports = mongoose.model("BiometricDevice", BiometricDeviceSchema);

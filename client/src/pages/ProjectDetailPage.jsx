@@ -31,6 +31,15 @@ import PinnedMessagesModal from "../components/message/PinnedMessagesModal";
 import ThreadSummaryModal from "../components/message/ThreadSummaryModal";
 import EmojiPickerEnhanced from "../components/chat/EmojiPickerEnhanced";
 import NewMessagesButton from "../components/chat/NewMessagesButton";
+// Forwarding OUT of this project's thread and into a chat group. Identical to
+// the employee-facing ProjectMessagePanel — same picker, same selection hook,
+// same server policy (project messages may go to group chats and nowhere
+// else). Both project surfaces offer it because they are the same thread seen
+// through two page shells; having it in one and not the other would read as a
+// bug.
+import ForwardMessagesModal from "../components/chat/ForwardMessagesModal";
+import MessageSelectionBar from "../components/chat/MessageSelectionBar";
+import useMessageSelection from "../hooks/useMessageSelection";
 import {
   ArrowLeft,
   ArrowDown,
@@ -54,6 +63,7 @@ import {
   File,
   Video,
   Reply,
+  Forward,
   Search,
   Filter,
   XCircle,
@@ -807,6 +817,20 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
    * server-side search would have to be its own result view, not a mutation of
    * the thread everyone else is reading from.
    */
+  // Selection mode, for forwarding into chat groups. Shared with ChatWindow and
+  // ProjectMessagePanel — see hooks/useMessageSelection.
+  const {
+    selecting,
+    selectedIds,
+    isSelected,
+    toggle: toggleSelected,
+    start: startForward,
+    exit: exitSelection,
+    forwardOpen,
+    openForward,
+    closeForward,
+  } = useMessageSelection();
+
   const visibleMessages = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
     const sender = searchSender.trim().toLowerCase();
@@ -1411,6 +1435,15 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                 </div>
               )}
 
+            {selecting && (
+              <MessageSelectionBar
+                count={selectedIds.length}
+                onCancel={exitSelection}
+                onForward={openForward}
+                accent="teal"
+              />
+            )}
+
             {/* Messages Container */}
             <div
               ref={chatContainerRef}
@@ -1504,6 +1537,11 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                   // unrelated rows the moment any filter was on — which put
                   // date separators in the wrong places (and dropped them where
                   // they belonged) as soon as you toggled "Starred".
+                  // A message still in the outbox has no server id, so there
+                  // is nothing to forward it BY. Rows without one are not
+                  // selectable — see hooks/useMessageSelection.
+                  const hasServerId = Boolean(msg._id || msg.id);
+
                   const prevVisible = visibleMessages[idx - 1];
                   const showDateSeparator =
                     !prevVisible ||
@@ -1522,9 +1560,24 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                         id={`message-${msg._id}`}
                         data-message-id={msg._id}
                         data-owner-id={msg.sentBy?._id || msg.sentBy}
+                        onClick={
+                          selecting && hasServerId
+                            ? () => toggleSelected(msg._id)
+                            : undefined
+                        }
                         className={`flex ${
                           isOwnMessage ? "justify-end" : "justify-start"
-                        } transition-colors duration-300 animate-slideIn`}
+                        } transition-colors duration-300 animate-slideIn ${
+                          selecting
+                            ? hasServerId
+                              ? "cursor-pointer rounded-lg px-1"
+                              : "cursor-not-allowed rounded-lg px-1 opacity-50"
+                            : ""
+                        } ${
+                          selecting && isSelected(msg._id)
+                            ? "bg-teal-50 dark:bg-teal-400/10"
+                            : ""
+                        }`}
                       >
                       <div
                         className={`min-w-0 max-w-[88%] sm:max-w-[62%] xl:max-w-[56%] ${
@@ -1761,13 +1814,32 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                               )}
                             </div>
 
-                            <div className="relative flex gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
+                            {/* Hidden while selecting: in selection mode the whole
+                                bubble is a checkbox, and a Reply or Star click landing
+                                inside it would bubble up and tick the message instead
+                                of doing what it says. */}
+                            <div className={`relative flex gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 ${selecting ? "hidden" : ""}`}>
                               <button
                                 onClick={() => handleReply(msg)}
                                 className="rounded-md p-1.5 transition-colors hover:bg-black/10 dark:hover:bg-white/10"
                                 title="Reply to message"
                               >
                                 <Reply className={`h-3.5 w-3.5 ${isOwnMessage ? "text-teal-50/80 hover:text-white" : "text-slate-400 hover:text-teal-600 dark:text-gray-400 dark:hover:text-[#00a884]"}`} />
+                              </button>
+                              {/* Forward into a chat group. Disabled until the
+                                  send has landed — there is no id to forward
+                                  by before that. */}
+                              <button
+                                onClick={() => startForward(msg._id)}
+                                disabled={!hasServerId}
+                                className="rounded-md p-1.5 transition-colors hover:bg-black/10 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent dark:hover:bg-white/10"
+                                title={
+                                  hasServerId
+                                    ? "Forward to a group chat"
+                                    : "Still sending — cannot forward yet"
+                                }
+                              >
+                                <Forward className={`h-3.5 w-3.5 ${isOwnMessage ? "text-teal-50/80 hover:text-white" : "text-slate-400 hover:text-teal-600 dark:text-gray-400 dark:hover:text-[#00a884]"}`} />
                               </button>
                               <button
                                 onClick={() =>
@@ -2518,6 +2590,18 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
           onTaskUpdated={handleTaskUpdated}
         />
       )}
+
+      {/* Forward to a group chat. No `conversations` prop — this page has no
+          reason to load chat conversations, so the picker fetches its own and
+          filters them to groups. */}
+      <ForwardMessagesModal
+        open={forwardOpen}
+        onClose={closeForward}
+        sourceScope={SCOPE}
+        sourceThreadId={projectId}
+        messageIds={selectedIds}
+        onDone={exitSelection}
+      />
 
       <ThreadSummaryModal
         open={showSummaryModal}

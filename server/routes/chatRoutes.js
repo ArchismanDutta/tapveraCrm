@@ -1,4 +1,5 @@
 const express = require("express");
+const mongoose = require("mongoose");
 const router = express.Router();
 const fetch = require("node-fetch"); // Polyfill for Node.js < 18
 const chatController = require("../controllers/chatController");
@@ -399,7 +400,20 @@ router.post("/groups/:conversationId/members", protect, async (req, res) => {
  * Forward messages into other conversations.
  *
  * POST /api/chat/messages/forward
- *   { sourceConversationId, messageIds: [], destinationConversationIds: [] }
+ *   {
+ *     sourceScope?: 'chat' | 'project',   // default 'chat'
+ *     sourceThreadId,                     // alias: sourceConversationId
+ *     messageIds: [],
+ *     destinationConversationIds: [],
+ *     forwardToken?
+ *   }
+ *
+ * ─── WHY A PROJECT SOURCE LIVES ON THE CHAT ROUTER ───
+ * The DESTINATION is always a chat conversation (see FORWARD_DESTINATIONS in
+ * messaging.service.js), and this router is the one that owns writes to those.
+ * A project thread is only ever the thing being read FROM, so mounting a
+ * second copy of this under /api/projects would be the same endpoint with the
+ * same authorization, keyed on the half that doesn't decide anything.
  *
  * Partial success is a normal outcome, not an error: destinations the user can
  * no longer write to are reported in `failed` while the rest are delivered. A
@@ -407,10 +421,29 @@ router.post("/groups/:conversationId/members", protect, async (req, res) => {
  */
 router.post("/messages/forward", protect, async (req, res) => {
   try {
-    const { sourceConversationId, messageIds, destinationConversationIds } = req.body;
+    const {
+      sourceScope: rawSourceScope,
+      sourceThreadId,
+      sourceConversationId,
+      messageIds,
+      destinationConversationIds,
+      forwardToken,
+    } = req.body;
 
-    if (!sourceConversationId) {
-      return res.status(400).json({ error: "sourceConversationId is required" });
+    // `sourceConversationId` is the original field name, from when both ends
+    // were always chat. Still accepted so an older client keeps working.
+    const sourceId = sourceThreadId || sourceConversationId;
+    const sourceScope = rawSourceScope || CHAT;
+
+    if (!Object.keys(messagingService.FORWARD_DESTINATIONS).includes(sourceScope)) {
+      return res.status(400).json({
+        error: `Unknown sourceScope "${sourceScope}"`,
+        code: "INVALID_SCOPE",
+      });
+    }
+
+    if (!sourceId) {
+      return res.status(400).json({ error: "sourceThreadId is required" });
     }
     if (!Array.isArray(messageIds) || messageIds.length === 0) {
       return res.status(400).json({ error: "messageIds must be a non-empty array" });
@@ -427,12 +460,45 @@ router.post("/messages/forward", protect, async (req, res) => {
       return res.status(400).json({ error: "Cannot forward to more than 20 conversations at once" });
     }
 
+    // ─── VALIDATE THE IDS BEFORE THEY REACH MONGOOSE ───
+    // An id that isn't an ObjectId makes `find({ _id: { $in: [...] } })` throw
+    // a CastError deep in the adapter. That is not an AccessError, so
+    // sendAccessError below rethrows it and the client gets an opaque 500 for
+    // what is really a malformed request. The client used to send exactly such
+    // an id: chatWindow minted `Math.random().toString(36)` for any message
+    // that had no server id yet, and forwarding one of those 500'd every time.
+    // That is fixed on the client too, but this is the layer that should never
+    // have let it through.
+    const isObjectId = (id) => mongoose.Types.ObjectId.isValid(String(id));
+
+    if (!messageIds.every(isObjectId)) {
+      return res.status(400).json({
+        error: "One or more messages can't be forwarded yet — they haven't finished sending.",
+        code: "INVALID_MESSAGE_ID",
+      });
+    }
+    if (!destinationConversationIds.every(isObjectId)) {
+      return res.status(400).json({
+        error: "One or more destination conversation ids are not valid",
+        code: "INVALID_CONVERSATION_ID",
+      });
+    }
+    if (!isObjectId(sourceId)) {
+      return res.status(400).json({
+        error: "sourceThreadId is not a valid thread id",
+        code: "INVALID_THREAD_ID",
+      });
+    }
+
     const result = await messagingService.forwardMessages(
       req.user,
-      CHAT,
-      sourceConversationId,
+      sourceScope,
+      sourceId,
       messageIds,
-      destinationConversationIds
+      destinationConversationIds,
+      // One token per forward action. A retry after a timeout reuses it and
+      // returns the copies already written rather than duplicating them.
+      typeof forwardToken === "string" && forwardToken ? forwardToken : null
     );
 
     return res.json(result);

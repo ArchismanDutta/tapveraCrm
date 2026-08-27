@@ -8,6 +8,34 @@ const LeaveRequest = require("../models/LeaveRequest");
 const Holiday = require("../models/Holiday");
 const FlexibleShiftRequest = require("../models/FlexibleShiftRequest");
 
+// ─── Diagnostic logging ──────────────────────────────────────────────────────
+//
+// recalculateEmployeeData runs once per day-in-range on EVERY read — one
+// employee opening a 30-day attendance view triggers 30 calls — and each call
+// used to emit ~10 unconditional console.log lines. In production that worked
+// out to roughly 2,000 log lines per real punch and a multi-million-line pm2
+// log, which is both an I/O cost on the read path and an obstacle to finding
+// the lines that actually matter.
+//
+// The statements themselves are worth keeping: they are what made the
+// TimeZone/lateMinutes class of bug diagnosable. So they are gated rather than
+// deleted. Silent by default; turn back on per namespace, no code change:
+//
+//   DEBUG=attendance:*                 everything below
+//   DEBUG=attendance:calc              duration/session arithmetic
+//   DEBUG=attendance:late              lateMinutes plumbing
+//   DEBUG=attendance:shift             shift resolution
+//
+// Note: the `debug` package writes to STDERR, so when enabled these land in
+// pm2's *-error.log, not *-out.log.
+//
+// Only high-frequency, purely-informational logs moved here. Every
+// console.warn and console.error is left untouched — those are low-volume and
+// signal a genuine anomaly.
+const debugCalc = require("debug")("attendance:calc");
+const debugLate = require("debug")("attendance:late");
+const debugShift = require("debug")("attendance:shift");
+
 class AttendanceService {
 
   constructor() {
@@ -336,7 +364,7 @@ class AttendanceService {
       // Use the new integrated shift system from User model
       const effectiveShift = await user.getEffectiveShift(date);
 
-      console.log('🔍 getUserShift - effectiveShift:', effectiveShift);
+      debugShift('getUserShift - effectiveShift: %o', effectiveShift);
 
       if (effectiveShift) {
         const shiftData = {
@@ -347,7 +375,7 @@ class AttendanceService {
           isFlexible: effectiveShift.isFlexible,
           type: effectiveShift.isFlexible ? "FLEXIBLE" : "STANDARD"
         };
-        console.log('🔍 getUserShift - returning:', shiftData);
+        debugShift('getUserShift - returning: %o', shiftData);
         return shiftData;
       }
 
@@ -822,7 +850,9 @@ class AttendanceService {
         case 'BREAK_START':
           if (currentWorkStart) {
             const sessionDuration = (timestamp - currentWorkStart) / 1000;
-            console.log(`   🔢 BREAK_START work session: ${timestamp.getTime()} - ${currentWorkStart.getTime()} = ${sessionDuration}s`);
+            // printf-style: debug only formats these when the namespace is on
+            debugCalc('   BREAK_START work session: %d - %d = %ds',
+              timestamp.getTime(), currentWorkStart.getTime(), sessionDuration);
             if (sessionDuration > 0) {
               workSeconds += sessionDuration;
               longestWork = Math.max(longestWork, sessionDuration);
@@ -869,40 +899,48 @@ class AttendanceService {
     // Handle ongoing sessions (for current day)
     const now = new Date();
 
-    console.log(`⏱️ Duration Calculation Debug:`);
-    console.log(`   Current UTC time: ${now.toISOString()}`);
-    console.log(`   Arrival time: ${arrivalTime ? new Date(arrivalTime).toISOString() : 'null'}`);
-    console.log(`   Current work start: ${currentWorkStart ? new Date(currentWorkStart).toISOString() : 'null'}`);
-    console.log(`   Current break start: ${currentBreakStart ? new Date(currentBreakStart).toISOString() : 'null'}`);
-    console.log(`   Attendance date: ${attendanceDate ? new Date(attendanceDate).toISOString().split('T')[0] : 'null'}`);
-    console.log(`   Is night shift: ${this.isNightShift(employee.assignedShift)}`);
-
-    // 🔍 Debug: Check if dates match
+    // NOTE: shouldInclude is a real input to the arithmetic below — it is
+    // computed unconditionally and only its *reporting* is gated.
     const shouldInclude = this.shouldIncludeInDateCalculation(now, attendanceDate, employee.assignedShift);
-    console.log(`   shouldIncludeInDateCalculation(now, attendanceDate): ${shouldInclude}`);
-    if (!shouldInclude && attendanceDate) {
-      const nowDate = this.normalizeDate(now);
-      const attDate = this.normalizeDate(attendanceDate);
-      console.log(`   ❌ Date mismatch - Now: ${nowDate.toISOString().split('T')[0]} vs Attendance: ${attDate.toISOString().split('T')[0]}`);
+
+    // The whole diagnostic block is wrapped in .enabled so that when the
+    // namespace is off we pay nothing at all — no toISOString() calls, no
+    // isNightShift() call, no string building. This is the hottest logging
+    // site in the service.
+    if (debugCalc.enabled) {
+      debugCalc('Duration Calculation Debug:');
+      debugCalc('   Current UTC time: %s', now.toISOString());
+      debugCalc('   Arrival time: %s', arrivalTime ? new Date(arrivalTime).toISOString() : 'null');
+      debugCalc('   Current work start: %s', currentWorkStart ? new Date(currentWorkStart).toISOString() : 'null');
+      debugCalc('   Current break start: %s', currentBreakStart ? new Date(currentBreakStart).toISOString() : 'null');
+      debugCalc('   Attendance date: %s', attendanceDate ? new Date(attendanceDate).toISOString().split('T')[0] : 'null');
+      debugCalc('   Is night shift: %s', this.isNightShift(employee.assignedShift));
+      debugCalc('   shouldIncludeInDateCalculation(now, attendanceDate): %s', shouldInclude);
+      if (!shouldInclude && attendanceDate) {
+        const nowDate = this.normalizeDate(now);
+        const attDate = this.normalizeDate(attendanceDate);
+        debugCalc('   Date mismatch - Now: %s vs Attendance: %s',
+          nowDate.toISOString().split('T')[0], attDate.toISOString().split('T')[0]);
+      }
     }
 
     // Use shouldIncludeInDateCalculation for night shift support
     if (shouldInclude) {
       if (currentWorkStart) {
         const duration = (now - currentWorkStart) / 1000;
-        console.log(`   🔢 Work duration calculation: ${duration}s`);
+        debugCalc('   Work duration calculation: %ds', duration);
         workSeconds += duration;
       }
       if (currentBreakStart) {
         const duration = (now - currentBreakStart) / 1000;
-        console.log(`   🔢 Break duration calculation: ${duration}s`);
+        debugCalc('   Break duration calculation: %ds', duration);
         breakSeconds += duration;
       }
     } else {
-      console.log(`   ⏭️  Skipping duration calculation - timestamp outside attendance date`);
+      debugCalc('   Skipping duration calculation - timestamp outside attendance date');
     }
 
-    console.log(`   📊 Final calculated durations: work=${workSeconds}s, break=${breakSeconds}s`);
+    debugCalc('   Final calculated durations: work=%ds, break=%ds', workSeconds, breakSeconds);
 
     // ─── Break-speed factor ───────────────────────────────────────────────
     //
@@ -919,9 +957,8 @@ class AttendanceService {
     const controlMachineFactor = this.normalizeControlMachineFactor(employee.controlMachineFactor);
     if (controlMachineFactor !== 1) {
       breakSeconds = breakSeconds * controlMachineFactor;
-      console.log(
-        `   ⏱️  Break speed ${controlMachineFactor}x applied: ${Math.round(baseBreakSeconds)}s -> ${Math.round(breakSeconds)}s`
-      );
+      debugCalc('   Break speed %sx applied: %ds -> %ds',
+        controlMachineFactor, Math.round(baseBreakSeconds), Math.round(breakSeconds));
     }
 
     // Calculate all derived fields
@@ -1116,8 +1153,9 @@ class AttendanceService {
         const calculated = { ...employee.calculated };
 
         // 🔍 Debug: Check if lateMinutes exists in employee.calculated BEFORE formatting
-        if (employee.calculated.isLate) {
-          console.log(`🔍 BEFORE formatting - employee.calculated for ${this.formatDateKey(record.date)}:`, {
+        // .enabled guard so the object literal is never even constructed when off
+        if (debugLate.enabled && employee.calculated.isLate) {
+          debugLate(`BEFORE formatting - employee.calculated for ${this.formatDateKey(record.date)}: %o`, {
             isLate: employee.calculated.isLate,
             hasLateMinutesField: 'lateMinutes' in employee.calculated,
             lateMinutesValue: employee.calculated.lateMinutes,
@@ -1133,8 +1171,8 @@ class AttendanceService {
         }
 
         // 🔍 Debug: Check if lateMinutes exists in calculated AFTER formatting
-        if (calculated.isLate) {
-          console.log(`🔍 AFTER formatting - calculated object for ${this.formatDateKey(record.date)}:`, {
+        if (debugLate.enabled && calculated.isLate) {
+          debugLate(`AFTER formatting - calculated object for ${this.formatDateKey(record.date)}: %o`, {
             isLate: calculated.isLate,
             hasLateMinutesField: 'lateMinutes' in calculated,
             lateMinutesValue: calculated.lateMinutes,
@@ -1152,8 +1190,8 @@ class AttendanceService {
         };
 
         // 🔍 Debug: Check if lateMinutes exists in final attendanceRecord
-        if (attendanceRecord.isLate) {
-          console.log(`🔍 FINAL attendanceRecord for ${attendanceRecord.date}:`, {
+        if (debugLate.enabled && attendanceRecord.isLate) {
+          debugLate(`FINAL attendanceRecord for ${attendanceRecord.date}: %o`, {
             isLate: attendanceRecord.isLate,
             hasLateMinutesField: 'lateMinutes' in attendanceRecord,
             lateMinutesValue: attendanceRecord.lateMinutes,
@@ -1166,13 +1204,15 @@ class AttendanceService {
     }
 
     // 🔍 Debug: Summary of late days with minutes
-    const lateDaysWithMinutes = attendance.filter(a => a.isLate && a.lateMinutes > 0);
-    console.log(`📊 getEmployeeAttendance summary for user ${userId}:`, {
-      totalDays: attendance.length,
-      lateDays: attendance.filter(a => a.isLate).length,
-      lateDaysWithMinutes: lateDaysWithMinutes.length,
-      lateMinutesData: lateDaysWithMinutes.map(a => ({ date: a.date, lateMinutes: a.lateMinutes }))
-    });
+    if (debugLate.enabled) {
+      const lateDaysWithMinutes = attendance.filter(a => a.isLate && a.lateMinutes > 0);
+      debugLate(`getEmployeeAttendance summary for user ${userId}: %o`, {
+        totalDays: attendance.length,
+        lateDays: attendance.filter(a => a.isLate).length,
+        lateDaysWithMinutes: lateDaysWithMinutes.length,
+        lateMinutesData: lateDaysWithMinutes.map(a => ({ date: a.date, lateMinutes: a.lateMinutes }))
+      });
+    }
 
     return {
       userId,

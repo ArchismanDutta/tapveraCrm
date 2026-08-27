@@ -66,12 +66,22 @@ const ChatMessageSchema = new mongoose.Schema({
    * Client-generated UUID, minted BEFORE the send leaves the browser.
    *
    * This one field is what makes optimistic sending, retries and the offline
-   * outbox (S2) safe. The unique sparse index below means a retry after a
-   * flaky network is a no-op that returns the original message rather than
-   * creating a twin — the classic "I hit send once and it posted three times"
-   * bug. Sparse, because messages created server-side have no client id.
+   * outbox (S2) safe. The unique index below means a retry after a flaky
+   * network is a no-op that returns the original message rather than creating
+   * a twin — the classic "I hit send once and it posted three times" bug.
+   *
+   * ─── NO `default: null` — THIS IS LOAD-BEARING ───
+   * It used to be `default: null`, paired with a `sparse` unique index. Sparse
+   * only skips documents where the field is ABSENT; `null` is a stored value,
+   * so every such document WAS indexed, and the unique constraint therefore
+   * allowed exactly ONE message in the whole collection to have no client id.
+   * Anything else created server-side — every forwarded copy, every message
+   * from a client too old to send one — died on E11000 and surfaced as a 500.
+   * Leaving the field undefined keeps it out of the index entirely, which is
+   * what "sparse" was reaching for in the first place. The index below is now
+   * partial on string values, so it is correct either way.
    */
-  clientMsgId: { type: String, default: null },
+  clientMsgId: { type: String },
 
   /**
    * Who has RECEIVED this on a device — distinct from `readBy`, which means
@@ -103,9 +113,15 @@ const ChatMessageSchema = new mongoose.Schema({
 });
 
 // Idempotency: at most one message per client-generated id.
+//
+// PARTIAL, not sparse. See the note on the field above: a sparse unique index
+// still indexes documents whose value is literally `null`, so it capped the
+// collection at one server-created message. Restricting the index to string
+// values means only real client ids are constrained, and messages without one
+// (forwards, server-side sends) are ignored by it entirely.
 ChatMessageSchema.index(
   { clientMsgId: 1 },
-  { unique: true, sparse: true }
+  { unique: true, partialFilterExpression: { clientMsgId: { $type: "string" } } }
 );
 
 // =====================================================

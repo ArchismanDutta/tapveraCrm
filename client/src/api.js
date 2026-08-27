@@ -1,5 +1,6 @@
 import axios from "axios";
 import timeUtils from "./utils/timeUtils";
+import { handleSessionExpired } from "./utils/session";
 
 const API = axios.create({
   baseURL: import.meta.env.VITE_API_BASE || "http://localhost:5000",
@@ -27,13 +28,25 @@ API.interceptors.request.use((req) => {
   return req;
 });
 
-// Handle auth errors
+// Handle auth errors.
+//
+// This used to clear the token and set `window.location.href = "/login"`
+// inline. Two things were wrong with that, and together they could make the
+// app unusable:
+//
+//   - It fired even when the login page was ALREADY open, and assigning
+//     location.href there is a full reload. Anything that 401s on the login
+//     page therefore reloads it, re-runs the same request, and reloads again —
+//     a loop with nothing in it that decays.
+//   - Six requests failing together produced six navigations.
+//
+// handleSessionExpired owns both guards, and is the single door every 401
+// handler in the app now goes through. See utils/session.js.
 API.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      localStorage.removeItem("token");
-      window.location.href = "/login";
+      handleSessionExpired();
     }
     return Promise.reject(error);
   }

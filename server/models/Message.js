@@ -107,7 +107,10 @@ const messageSchema = new mongoose.Schema(
     // ─── Delivery receipts (S1) ─────────────────────────────────────────
     // Additive and optional; see the matching block in ChatMessage.js for why
     // clientMsgId is the keystone for optimistic send / retry / offline outbox.
-    clientMsgId: { type: String, default: null },
+    // No `default: null` — see the long note in ChatMessage.js. A null default
+    // paired with a sparse unique index capped the collection at one message
+    // without a client id and made every server-created message fail E11000.
+    clientMsgId: { type: String },
 
     /**
      * Who has RECEIVED this on a device. Distinct from `readBy` — delivery is
@@ -154,6 +157,7 @@ const messageSchema = new mongoose.Schema(
     pinnedAt: {
       type: Date
     },
+    editedAt: { type: Date, default: null },
     // Starred Messages
     starredBy: [{
       user: {
@@ -177,7 +181,11 @@ messageSchema.index({ project: 1, isPinned: 1 });
 messageSchema.index({ project: 1, status: 1 });
 messageSchema.index({ 'readBy.user': 1 });
 messageSchema.index({ starredBy: 1 });
-// Idempotency: at most one message per client-generated id.
-messageSchema.index({ clientMsgId: 1 }, { unique: true, sparse: true });
+// Idempotency: at most one message per client-generated id. Partial rather than
+// sparse — sparse still indexes an explicit `null`. See ChatMessage.js.
+messageSchema.index(
+  { clientMsgId: 1 },
+  { unique: true, partialFilterExpression: { clientMsgId: { $type: "string" } } }
+);
 
 module.exports = mongoose.model("Message", messageSchema);

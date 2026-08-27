@@ -520,65 +520,141 @@ async function react(user, messageId, emoji) {
 }
 
 /**
- * Copy messages into other conversations.
+ * Read messages so they can be copied elsewhere — the SOURCE half of a
+ * forward.
  *
- * ─── WHY COPIES AND NOT REFERENCES ───
- * A forward is a new message in the destination thread, not a pointer back to
- * the original. Pointing back would mean the destination's history depends on a
- * conversation its members may not be able to read — and would break outright
- * if the source were ever deleted.
+ * Split from the write half because forwarding is no longer same-scope: a
+ * project thread can send INTO a chat group, so the adapter that reads the
+ * originals is not necessarily the one that writes the copies. Both adapters
+ * return this same shape, which is the whole point — the service composes
+ * `<source>.readForForward` with `<destination>.createForwardedCopies` and
+ * never has to know which pair it got.
  *
- * ─── ATTACHMENTS ARE SHARED, NOT DUPLICATED ───
- * The copy carries the SAME attachment records, so both messages point at one
- * file on disk. Forwarding a 200MB video to four groups costs nothing extra.
+ * Oldest first, so a multi-message forward lands in the destination in the
+ * order it was originally said rather than the order the ids happened to
+ * arrive in.
  *
- * The consequence to know about: a stored file can now be referenced by more
- * than one message, so anything that deletes files must check for OTHER
- * references first. Deleting the source conversation must not unlink a file a
- * forward still points at. See the orphan sweep.
- *
- * ─── WHAT IS DELIBERATELY DROPPED ───
- * `mentions`, `replyTo`, `reactions` and receipts do not travel. A mention of
- * someone who isn't in the destination would notify a stranger; a reply points
- * at a message that doesn't exist there; reactions and read state belong to the
- * conversation they happened in.
- *
- * @param {Object}   user
- * @param {String[]} messageIds     source messages, any thread the user can read
- * @param {String[]} destThreadIds  conversations to copy into
- * @returns {Promise<Array>} one { threadId, raw, normalized, conversation } per copy
+ * @returns {Promise<Array<{ id, body, attachments }>>}
  */
-async function forwardMessages(user, messageIds, destThreadIds) {
-  const senderId = String(user._id ?? user.id);
-
-  // Oldest first, so a multi-message forward lands in the destination in the
-  // order it was originally said rather than the order the ids happened to
-  // arrive in.
-  const sources = await ChatMessage.find({ _id: { $in: messageIds } })
+async function readForForward(messageIds) {
+  const docs = await ChatMessage.find({ _id: { $in: messageIds } })
     .sort({ timestamp: 1 })
     .lean();
 
-  const results = [];
+  return docs.map((d) => ({
+    id: String(d._id),
+    body: d.message || '',
+    attachments: d.attachments || [],
+  }));
+}
+
+/**
+ * Only the attachment fields a ChatMessage actually declares.
+ *
+ * A project Message carries two more — `isImportant` (a project-only concept)
+ * and `s3Key` (used by media cleanup to delete the underlying object). Mongoose
+ * would drop both silently on create, but doing it here is deliberate rather
+ * than incidental: the copy points at the SAME file the original owns, so it
+ * must not carry the key that authorises deleting it.
+ */
+const CHAT_ATTACHMENT_FIELDS = [
+  'filename',
+  'url',
+  'size',
+  'mimeType',
+  'fileType',
+  'uploadedAt',
+];
+
+const forwardableAttachment = (a) => {
+  const out = {};
+  // Only keys that are actually present. Mongoose would drop an explicit
+  // `undefined` anyway, but a copied record that reads back identically to the
+  // original minus the two dropped fields is much easier to reason about when
+  // you are staring at one in the database.
+  for (const key of CHAT_ATTACHMENT_FIELDS) {
+    if (a?.[key] !== undefined) out[key] = a[key];
+  }
+  return out;
+};
+
+/**
+ * Write copies into chat conversations — the DESTINATION half of a forward.
+ *
+ * @param {object}   user
+ * @param {Array}    sources        from some adapter's readForForward
+ * @param {string[]} destThreadIds  already authorized by the caller
+ * @param {string}   [forwardToken] one client-generated token per forward
+ *                                  ACTION. See the idempotency note below.
+ * @returns {{ copies: Array, missing: string[] }}
+ *          `missing` is destinations that no longer exist — they used to be
+ *          `continue`d over, which meant they appeared in neither `delivered`
+ *          nor `failed` and the user was told nothing at all about them.
+ */
+async function createForwardedCopies(user, sources, destThreadIds, forwardToken = null) {
+  const senderId = String(user._id ?? user.id);
+
+  const copies = [];
+  const missing = [];
 
   for (const threadId of destThreadIds) {
     const conversation = await Conversation.findById(threadId);
-    if (!conversation) continue;
+    if (!conversation) {
+      missing.push(String(threadId));
+      continue;
+    }
 
     for (const source of sources) {
-      const saved = await ChatMessage.create({
-        conversationId: String(threadId),
-        senderId,
-        message: source.message || '',
-        // Same attachment records — same files on disk.
-        attachments: source.attachments || [],
-        readBy: [senderId],
-        deliveredTo: [],
-        mentions: [],
-        replyTo: null,
-        forwarded: true,
-      });
+      // ─── IDEMPOTENCY (mirrors sendMessage above) ───
+      // Forwarding used to write copies with no clientMsgId at all, so it had
+      // none of the retry safety the normal send path has. A forward that
+      // timed out client-side but completed server-side wrote a second full
+      // set the moment the user pressed the button again — which they always
+      // do, because all they saw was an error.
+      //
+      // The token identifies one forward ACTION, not one message: the same
+      // token retried reuses these ids and returns the originals, while
+      // deliberately forwarding the same message to the same thread again
+      // later carries a new token and correctly produces a new copy.
+      const clientMsgId = forwardToken
+        ? `fwd:${forwardToken}:${threadId}:${source.id}`
+        : undefined;
 
-      results.push({
+      let saved = null;
+
+      if (clientMsgId) {
+        const existing = await ChatMessage.findOne({ clientMsgId });
+        if (existing) saved = existing;
+      }
+
+      if (!saved) {
+        try {
+          saved = await ChatMessage.create({
+            conversationId: String(threadId),
+            senderId,
+            message: source.body || '',
+            // Same files on disk, minus the fields that would let the copy act
+            // on the original's storage — see forwardableAttachment.
+            attachments: (source.attachments || []).map(forwardableAttachment),
+            readBy: [senderId],
+            deliveredTo: [],
+            mentions: [],
+            replyTo: null,
+            forwarded: true,
+            ...(clientMsgId ? { clientMsgId } : {}),
+          });
+        } catch (err) {
+          // Two concurrent retries can both miss the lookup above and race to
+          // insert. The unique index is what actually guarantees uniqueness;
+          // the loser reads back the winner's document instead of 500ing.
+          if (err?.code === 11000 && clientMsgId) {
+            saved = await ChatMessage.findOne({ clientMsgId });
+          }
+          if (!saved) throw err;
+        }
+      }
+
+      copies.push({
         threadId: String(threadId),
         raw: saved,
         normalized: normalize(saved),
@@ -587,14 +663,45 @@ async function forwardMessages(user, messageIds, destThreadIds) {
     }
   }
 
-  return results;
+  return { copies, missing };
+}
+
+/**
+ * May a forward from `fromScope` land in this chat thread?
+ *
+ * Runs AFTER the ordinary write-authorization check and takes its result, so
+ * it costs no extra query — assertChatAccess already loaded the Conversation.
+ *
+ * ─── WHY PROJECT → DM IS REFUSED ───
+ * A project thread has clients in it. Passing something from there into a
+ * one-to-one chat is a private hand-off with no witnesses, and the person on
+ * the other end has no way to see what it was detached from. Group chats are
+ * at least a room with a membership. Chat → chat is unaffected: forwarding a
+ * message to a colleague you are already DMing is ordinary, and taking that
+ * away would remove something people do today.
+ *
+ * @returns {{ ok: boolean, reason?: string }}
+ */
+function forwardDestinationGate(ctx, { fromScope } = {}) {
+  const type = ctx?.conversation?.type;
+
+  if (fromScope === 'project' && type !== 'group') {
+    return {
+      ok: false,
+      reason: 'Project messages can only be forwarded to group chats',
+    };
+  }
+
+  return { ok: true };
 }
 
 module.exports = {
   SCOPE,
   EDIT_WINDOW_MS,
   normalize,
-  forwardMessages,
+  readForForward,
+  createForwardedCopies,
+  forwardDestinationGate,
   getMemberIds,
   listThreads,
   getMessages,

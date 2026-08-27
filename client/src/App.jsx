@@ -30,6 +30,7 @@ import {
   useWebSocketContext,
 } from "./contexts/WebSocketContext";
 import { notifyAuthChanged } from "./utils/authEvents";
+import { isTokenExpired } from "./utils/session";
 
 // Geofenced login (2026-08-07)
 // See docs/superpowers/specs/2026-08-07-geofenced-login-design.md
@@ -163,20 +164,57 @@ const AppWrapper = () => {
   // Load user from localStorage
   useEffect(() => {
     const userStr = localStorage.getItem("user");
-    if (userStr) setCurrentUser(JSON.parse(userStr));
+    if (!userStr) return;
+    try {
+      setCurrentUser(JSON.parse(userStr));
+    } catch {
+      // A corrupt blob threw here, during the very first effect on the very
+      // first render, which took the whole app to the ErrorBoundary before
+      // anything was on screen.
+      setCurrentUser(null);
+    }
   }, []);
 
   // Check authentication & role
+  //
+  // ─── AN EXPIRED TOKEN IS NOT A SESSION ───
+  // This used to accept any non-empty string. Tokens are issued with a 1-day
+  // expiry (server/controllers/authController.js), so opening the CRM the next
+  // morning rendered the whole authenticated app against a token the server
+  // would refuse — the startup requests then 401'd, the interceptor wiped the
+  // token and hard-reloaded, and the user watched their dashboard flash past
+  // on the way to the login page.
+  //
+  // Reading `exp` locally makes that what it always was: a logged-out visit.
+  // isTokenExpired is deliberately forgiving — it returns false for a token it
+  // cannot parse or one with no `exp` claim, so this can only ever skip a
+  // round trip whose answer is already known, never invent a logout. The
+  // server still re-decides on every request.
   useEffect(() => {
     const token = localStorage.getItem("token");
     const userStr = localStorage.getItem("user");
-    let storedRole = userStr ? JSON.parse(userStr)?.role : null;
+    let storedRole = null;
+    try {
+      storedRole = userStr ? JSON.parse(userStr)?.role : null;
+    } catch {
+      // Corrupt `user` blob. Not a reason to crash the whole app on boot.
+      storedRole = null;
+    }
     storedRole = normalizeRole(storedRole);
 
-    if (token && token.trim() !== "") {
+    if (token && token.trim() !== "" && !isTokenExpired(token)) {
       setIsAuthenticated(true);
       setRole(storedRole);
     } else {
+      // Drop a dead token rather than leaving it to be attached to the next
+      // request and bounce us right back here.
+      if (token) {
+        try {
+          localStorage.removeItem("token");
+        } catch {
+          /* private browsing */
+        }
+      }
       setIsAuthenticated(false);
       setRole(null);
     }

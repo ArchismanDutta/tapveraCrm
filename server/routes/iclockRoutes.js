@@ -121,8 +121,23 @@ function normaliseLegacyPath(req, _res, next) {
   next();
 }
 
+// The command poll is the one endpoint whose success carries no information:
+// it can only ever answer "OK", and it fires on the Delay interval forever.
+// Logging it produced tens of thousands of identical lines that buried the
+// handshakes and pushes this log exists to make findable. Everything else —
+// handshakes, data pushes, unknown paths, every failure — is still logged.
+//
+// Set BIOMETRIC_LOG_POLLS=true to log polls again while debugging a device
+// that has gone quiet (that is the case where "is it still polling at all?"
+// is the question you actually need answered).
+const LOG_POLLS = String(process.env.BIOMETRIC_LOG_POLLS || "false") === "true";
+
 /** Log every device interaction — invaluable when a punch "didn't show up". */
 function logRequest(req, _res, next) {
+  if (!LOG_POLLS && req.method === "GET" && req.path === "/getrequest") {
+    return next();
+  }
+
   const bodySize = req.body ? String(req.body).length : 0;
   console.log(
     `📟 [iclock] ${req.method} ${req.path}${req.legacyAspx ? " (.aspx)" : ""} ` +
@@ -161,54 +176,96 @@ function checkSecret(req, res, next) {
 
 /**
  * Resolve ?SN= to a registered, enabled device. This is the primary auth gate.
+ *
+ * @param {Object}  opts
+ * @param {Boolean} opts.cached  Serve the lookup from the short-lived device
+ *   cache instead of hitting Mongo on every request.
+ *
+ * ─── Why this is opt-in per route, and not simply on ──────────────────────────
+ * The obvious optimisation is to cache the lookup everywhere: it is one findOne
+ * per request against a collection that changes about once a month. But the
+ * document this returns is not inert configuration — three of its fields steer
+ * what happens to real attendance:
+ *
+ *   enabled             whether we accept anything from this device at all
+ *   dryRun              whether punches are recorded for real or only observed
+ *   clockOffsetMinutes  a correction ADDED TO EVERY PUNCH TIMESTAMP
+ *
+ * That last one has no write path in the app — it is edited directly in the
+ * database, typically mid-incident, precisely when a device clock has been
+ * found to be wrong. Serving a stale copy of it would keep shifting punches by
+ * the old correction after someone had already fixed it, which is the exact
+ * silent-drift failure this integration has been bitten by before.
+ *
+ * So: the endpoints that can WRITE attendance (the push) or RECONFIGURE THE
+ * DEVICE (the handshake) always read fresh. They fire on real events — a few
+ * thousand times in the window where the poll fired ninety thousand — so
+ * caching them buys nothing measurable anyway.
+ *
+ * Caching is used only on the endpoints that can do neither: the command poll
+ * and the no-op firmware endpoints. That is ~99% of ADMS traffic and 0% of the
+ * risk.
  */
-async function resolveDevice(req, res, next) {
-  const serial = String(req.query.SN || "").trim().toUpperCase();
+function makeResolveDevice({ cached = false } = {}) {
+  return async function resolveDevice(req, res, next) {
+    const serial = String(req.query.SN || "").trim().toUpperCase();
 
-  if (!serial) {
-    console.warn("🚫 [iclock] Request with no serial number");
-    return sendText(res, "OK");
-  }
-
-  try {
-    let device = await BiometricDevice.findEnabled(serial);
-
-    if (!device && AUTO_REGISTER) {
-      const existing = await BiometricDevice.findOne({ serialNumber: serial });
-
-      if (existing) {
-        // Registered but disabled — deliberately turned off by an admin.
-        console.warn(`🚫 [iclock] Device ${serial} is registered but disabled`);
-        return sendText(res, "OK");
-      }
-
-      // New device seen for the first time. Registered in dry-run so it can be
-      // observed before it is allowed to affect anyone's attendance.
-      device = await BiometricDevice.create({
-        serialNumber: serial,
-        name: `Auto-registered ${serial}`,
-        enabled: true,
-        dryRun: true,
-        deviceIp: clientIp(req),
-        notes:
-          "Auto-registered on first contact. Review, name it, then turn dryRun off " +
-          "to start writing real attendance.",
-      });
-      console.log(`🆕 [iclock] Auto-registered new device ${serial} (dry-run mode)`);
-    }
-
-    if (!device) {
-      console.warn(`🚫 [iclock] Unknown device serial: ${serial}`);
+    if (!serial) {
+      console.warn("🚫 [iclock] Request with no serial number");
       return sendText(res, "OK");
     }
 
-    req.biometricDevice = device;
-    return next();
-  } catch (err) {
-    console.error("❌ [iclock] Device resolution failed:", err.message);
-    return sendText(res, "OK");
-  }
+    try {
+      let device = cached
+        ? await BiometricDevice.findEnabledCached(serial)
+        : await BiometricDevice.findEnabled(serial);
+
+      if (!device && AUTO_REGISTER) {
+        const existing = await BiometricDevice.findOne({ serialNumber: serial });
+
+        if (existing) {
+          // Registered but disabled — deliberately turned off by an admin.
+          console.warn(`🚫 [iclock] Device ${serial} is registered but disabled`);
+          return sendText(res, "OK");
+        }
+
+        // New device seen for the first time. Registered in dry-run so it can be
+        // observed before it is allowed to affect anyone's attendance.
+        device = await BiometricDevice.create({
+          serialNumber: serial,
+          name: `Auto-registered ${serial}`,
+          enabled: true,
+          dryRun: true,
+          deviceIp: clientIp(req),
+          notes:
+            "Auto-registered on first contact. Review, name it, then turn dryRun off " +
+            "to start writing real attendance.",
+        });
+        // A cached negative would keep a device invisible right after it
+        // enrols; findEnabledCached never caches misses, but clear explicitly
+        // so this stays true if that ever changes.
+        BiometricDevice.invalidateCache(serial);
+        console.log(`🆕 [iclock] Auto-registered new device ${serial} (dry-run mode)`);
+      }
+
+      if (!device) {
+        console.warn(`🚫 [iclock] Unknown device serial: ${serial}`);
+        return sendText(res, "OK");
+      }
+
+      req.biometricDevice = device;
+      return next();
+    } catch (err) {
+      console.error("❌ [iclock] Device resolution failed:", err.message);
+      return sendText(res, "OK");
+    }
+  };
 }
+
+// Fresh read — anything that writes attendance or reconfigures the device.
+const resolveDevice = makeResolveDevice({ cached: false });
+// Cached read — the polls and no-op endpoints, which can do neither.
+const resolveDevicePolling = makeResolveDevice({ cached: true });
 
 // normaliseLegacyPath MUST run first — it rewrites req.url before route matching,
 // so /cdata.aspx reaches the /cdata handler instead of the catch-all.
@@ -331,7 +388,12 @@ router.post("/cdata", resolveDevice, async (req, res) => {
 //
 // Future use: return commands here to push users to the device, force a clock
 // sync, or trigger a full log re-upload.
-router.get("/getrequest", resolveDevice, async (req, res) => {
+// Cached device lookup + throttled liveness write: at ~90k polls per 10 days
+// this single endpoint was responsible for one findOne and one updateOne each,
+// i.e. the overwhelming majority of the collection's traffic, to answer a
+// question whose answer is always "OK". See makeResolveDevice above and
+// BiometricDevice.touch for the two mechanisms.
+router.get("/getrequest", resolveDevicePolling, async (req, res) => {
   await BiometricDevice.touch(req.biometricDevice.serialNumber);
   return sendText(res, "OK");
 });
@@ -356,10 +418,11 @@ router.post("/devicecmd", resolveDevice, async (req, res) => {
 router.all("/ping", (_req, res) => sendText(res, "OK"));
 router.all("/registry", (_req, res) => sendText(res, "OK"));
 router.all("/push", (_req, res) => sendText(res, "OK"));
-router.get("/fdata", resolveDevice, (_req, res) => sendText(res, "OK"));
-router.post("/fdata", resolveDevice, (_req, res) => sendText(res, "OK"));
-router.post("/querydata", resolveDevice, (_req, res) => sendText(res, "OK"));
-router.post("/edata", resolveDevice, (_req, res) => sendText(res, "OK"));
+// These do nothing but acknowledge, so a cached lookup is safe here too.
+router.get("/fdata", resolveDevicePolling, (_req, res) => sendText(res, "OK"));
+router.post("/fdata", resolveDevicePolling, (_req, res) => sendText(res, "OK"));
+router.post("/querydata", resolveDevicePolling, (_req, res) => sendText(res, "OK"));
+router.post("/edata", resolveDevicePolling, (_req, res) => sendText(res, "OK"));
 
 // Catch-all: any /iclock/* path we haven't explicitly implemented still gets a
 // clean 200 OK rather than the JSON error handler, which a device cannot parse.

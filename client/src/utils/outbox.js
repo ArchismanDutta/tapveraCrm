@@ -123,7 +123,14 @@ export async function enqueue(entry) {
   return record;
 }
 
-/** Everything pending, oldest first. */
+/**
+ * Everything pending, oldest first — INCLUDING entries marked permanent.
+ *
+ * The drain filters those out for itself. This does not, because forThread()
+ * below feeds the composer's failed-message strip, and a message the drain has
+ * given up on is precisely the one the user still needs to see, retry or copy
+ * their text out of.
+ */
 export async function all() {
   const rows = await tx("readonly", (store) => store.getAll());
   return (rows || []).sort((a, b) => a.seq - b.seq);
@@ -139,8 +146,18 @@ export async function remove(clientMsgId) {
   await tx("readwrite", (store) => store.delete(clientMsgId));
 }
 
-/** Record a failed attempt. Kept in the queue — never silently dropped. */
-export async function markAttempt(clientMsgId, error) {
+/**
+ * Record a failed attempt. Kept in the queue — never silently dropped.
+ *
+ * `permanent` marks an entry the drain must stop retrying. It is persisted
+ * rather than held in memory because the whole point of this queue is that it
+ * survives a reload: without it, a message the drain had already given up on
+ * came back as fresh work on the very next page load, forever.
+ *
+ * Once true it stays true until clearPermanent — a later transient failure
+ * must not quietly un-give-up on something already judged unsendable.
+ */
+export async function markAttempt(clientMsgId, error, { permanent = false } = {}) {
   const existing = await tx("readonly", (store) => store.get(clientMsgId));
   if (!existing) return null;
 
@@ -148,7 +165,23 @@ export async function markAttempt(clientMsgId, error) {
     ...existing,
     attempts: (existing.attempts || 0) + 1,
     lastError: error ? String(error).slice(0, 300) : null,
+    permanent: permanent || Boolean(existing.permanent),
   };
+  await tx("readwrite", (store) => store.put(updated));
+  return updated;
+}
+
+/**
+ * Un-mark a permanently failed entry so the drain will pick it up again.
+ *
+ * Only ever called from an explicit user retry. The automatic drain must not
+ * do this to itself — that would be the retry loop this flag exists to stop.
+ */
+export async function clearPermanent(clientMsgId) {
+  const existing = await tx("readonly", (store) => store.get(clientMsgId));
+  if (!existing) return null;
+
+  const updated = { ...existing, permanent: false };
   await tx("readwrite", (store) => store.put(updated));
   return updated;
 }
@@ -167,4 +200,13 @@ export async function isAvailable() {
   }
 }
 
-export default { enqueue, all, forThread, remove, markAttempt, clear, isAvailable };
+export default {
+  enqueue,
+  all,
+  forThread,
+  remove,
+  markAttempt,
+  clearPermanent,
+  clear,
+  isAvailable,
+};

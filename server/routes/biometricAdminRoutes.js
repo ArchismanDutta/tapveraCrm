@@ -312,6 +312,14 @@ router.put("/devices/:id", async (req, res) => {
       return res.status(404).json({ success: false, error: "Device not found" });
     }
 
+    // The ADMS request path caches device lookups (see findEnabledCached in
+    // models/BiometricDevice.js). `enabled` and `dryRun` are in that cached
+    // document and both are safety switches — disabling a device, or putting
+    // it back into dry-run, has to bite immediately, not whenever the entry
+    // happens to expire. Dropping the entry here makes the change take effect
+    // on the device's very next request.
+    BiometricDevice.invalidateCache(device.serialNumber);
+
     console.log(`🛠️  Admin ${req.user._id} updated device ${device.serialNumber}:`, update);
     res.json({ success: true, data: device });
   } catch (error) {
@@ -340,6 +348,12 @@ router.post("/devices", async (req, res) => {
       enabled: true,
       dryRun: dryRun !== undefined ? Boolean(dryRun) : true,
     });
+
+    // Negative lookups are not cached, so this is belt-and-braces — but it
+    // keeps the rule "every write to a device invalidates its cache entry"
+    // true without exception, which is what stops the next edit here from
+    // quietly reintroducing a stale-flag bug.
+    BiometricDevice.invalidateCache(device.serialNumber);
 
     res.status(201).json({ success: true, data: device });
   } catch (error) {

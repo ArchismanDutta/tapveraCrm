@@ -230,19 +230,26 @@ export const sendMessage = createAsyncThunk(
 /**
  * Forward messages to other conversations.
  *
+ * `sourceScope` is where the messages are being taken FROM ('chat' or
+ * 'project'); the copies always land in chat conversations, so the destination
+ * side of the store is always keyed on the chat scope.
+ *
  * No optimistic insert: the copies land in threads the user isn't necessarily
  * looking at, and the server broadcasts each one over `thread:message` anyway,
  * so the store fills in through the normal live path. Optimism here would risk
- * showing a message in a destination that then rejected it.
+ * showing a message in a destination that then rejected it. It also means
+ * forwarding OUT of a project needs no special handling here at all — the
+ * chat-scoped `thread:message` events do the work.
  */
 export const forwardMessages = createAsyncThunk(
   "threads/forwardMessages",
-  async ({ scope, sourceThreadId, messageIds, destinationThreadIds }) => {
+  async ({ sourceScope, sourceThreadId, messageIds, destinationThreadIds, forwardToken }) => {
     const result = await messagingApi.forwardMessages(
-      scope,
+      sourceScope,
       sourceThreadId,
       messageIds,
-      destinationThreadIds
+      destinationThreadIds,
+      forwardToken
     );
     return result;
   }

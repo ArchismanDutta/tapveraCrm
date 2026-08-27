@@ -98,22 +98,98 @@ export async function fetchMessages(scope, threadId, params = {}) {
 }
 
 /**
+ * A client-generated token identifying one forward ACTION.
+ *
+ * The server derives each copy's clientMsgId from it, so pressing Forward
+ * again after a failure returns the copies that already landed instead of
+ * writing a second set. Mint it once per attempt-and-its-retries — see
+ * ForwardMessagesModal, which holds it in a ref until the modal closes.
+ */
+export const newForwardToken = () => newClientMsgId();
+
+/**
+ * How long a forward may take, in milliseconds.
+ *
+ * The shared instance is pinned at 30s, which is right for an ordinary
+ * request. A forward is one request that fans out into up to 30 x 20 message
+ * writes plus a notification batch per destination, and aborting it
+ * client-side does not stop the server — it just means the user is told it
+ * failed while it goes on succeeding, and then retries. So this one call gets
+ * a longer leash, and idempotency (above) covers the retry when it doesn't.
+ */
+const FORWARD_TIMEOUT_MS = 120000;
+
+/**
  * Forward messages into other conversations.
+ *
+ * ─── THE SOURCE HAS A SCOPE; THE DESTINATION DOES NOT ───
+ * Messages can be taken from a chat conversation OR a project thread, but they
+ * always LAND in a chat conversation — that is the server's
+ * FORWARD_DESTINATIONS policy, and the reason this posts to the chat router
+ * whichever surface called it. `destinationThreadIds` are therefore always
+ * conversation ids.
+ *
+ * A project message may only go to a GROUP; the server refuses a DM
+ * destination (chatThread.forwardDestinationGate) and the picker doesn't offer
+ * one. Chat -> chat is unrestricted.
  *
  * Returns { delivered, failed } — partial success is normal, since a
  * destination the user can no longer write to is skipped rather than failing
  * the whole call.
+ *
+ * @param {'chat'|'project'} sourceScope
+ * @param {string} [forwardToken] see newForwardToken
  */
-export async function forwardMessages(scope, sourceThreadId, messageIds, destinationThreadIds) {
-  if (scope === SCOPES.PROJECT) {
-    throw new Error("Forwarding is only supported for chat threads");
+export async function forwardMessages(
+  sourceScope,
+  sourceThreadId,
+  messageIds,
+  destinationThreadIds,
+  forwardToken = null
+) {
+  if (sourceScope !== SCOPES.CHAT && sourceScope !== SCOPES.PROJECT) {
+    throw new Error(`Cannot forward from "${sourceScope}"`);
   }
-  const { data } = await API.post(`/api/chat/messages/forward`, {
-    sourceConversationId: sourceThreadId,
-    messageIds,
-    destinationConversationIds: destinationThreadIds,
-  });
-  return { delivered: data?.delivered || [], failed: data?.failed || [] };
+
+  // A message still in the outbox has no server id, and there is nothing to
+  // forward it BY. The UI already hides the action for those rows; this is the
+  // backstop, because sending one produced an opaque 500 rather than anything
+  // the user could act on.
+  const ids = (messageIds || []).map(String).filter(Boolean);
+  if (ids.length === 0) {
+    throw new Error("Those messages haven't finished sending yet.");
+  }
+
+  try {
+    const { data } = await API.post(
+      `/api/chat/messages/forward`,
+      {
+        sourceScope,
+        sourceThreadId,
+        messageIds: ids,
+        destinationConversationIds: destinationThreadIds,
+        forwardToken,
+      },
+      { timeout: FORWARD_TIMEOUT_MS }
+    );
+    return { delivered: data?.delivered || [], failed: data?.failed || [] };
+  } catch (err) {
+    // Surface what the server actually said. Without this the modal renders
+    // axios's own wording — "Request failed with status code 400" — for a
+    // response whose body explains the problem in plain language.
+    const serverMessage = err?.response?.data?.error;
+    if (serverMessage) throw new Error(serverMessage);
+
+    if (err?.code === "ECONNABORTED") {
+      throw new Error(
+        "This is taking longer than expected. The messages may still arrive — check the conversation before trying again."
+      );
+    }
+    if (!err?.response) {
+      throw new Error("Couldn't reach the server. Check your connection and try again.");
+    }
+    throw err;
+  }
 }
 
 /** Unread count for a single thread. */
@@ -369,6 +445,7 @@ export default {
   listThreads,
   fetchMessages,
   forwardMessages,
+  newForwardToken,
   fetchUnreadCount,
   sendMessage,
   markRead,

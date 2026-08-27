@@ -1,6 +1,8 @@
 // src/services/newAttendanceService.js
 // Service for the new date-centric attendance system
 
+import { handleSessionExpired } from "../utils/session";
+
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
 
 class NewAttendanceService {
@@ -30,9 +32,10 @@ class NewAttendanceService {
 
       if (!response.ok) {
         if (response.status === 401) {
-          // Handle authentication error
-          localStorage.removeItem("token");
-          window.location.href = '/login';
+          // Shared handler — see utils/session.js. Doing this inline meant a
+          // 401 here could reload the login page and re-run the request that
+          // caused it.
+          handleSessionExpired();
           throw new Error('Authentication failed');
         }
 
