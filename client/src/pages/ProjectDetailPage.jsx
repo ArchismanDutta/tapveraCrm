@@ -2197,13 +2197,18 @@ const ProjectDetailPage = ({ projectId, userRole, userId, onBack }) => {
                         </span>
                       </div>
                       {suggestions.map((suggestion, idx) => (
+                      // Light-mode remaps in index.css match class substrings and cannot see the
+                      // dark:/hover: prefix, so a bg-white/... , bg-gray-800 or bg-slate-700/30
+                      // spelling here gets repainted in light mode and this row's selected/
+                      // highlight tint is lost. The rgb()/rgba() arbitrary value is the same
+                      // colour the rule cannot match. Do not "tidy" it back.
                         <button
                           key={idx}
                           type="button"
                           onClick={() => acceptSuggestion(suggestion)}
-                          className={`w-full border-l-2 px-4 py-2 text-left transition-colors hover:bg-slate-100 dark:hover:bg-gray-800 ${
+                          className={`w-full border-l-2 px-4 py-2 text-left transition-colors hover:bg-slate-100 dark:hover:bg-[rgb(31,41,55)] ${
                             idx === selectedSuggestionIndex
-                              ? "border-blue-500 bg-blue-50 dark:bg-gray-800"
+                              ? "border-blue-500 bg-blue-50 dark:bg-[rgb(31,41,55)]"
                               : "border-transparent"
                           }`}
                         >

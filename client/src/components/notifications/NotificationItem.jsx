@@ -139,11 +139,16 @@ const NotificationItem = ({
 
   if (compact) {
     return (
+      // Light-mode remaps in index.css match class substrings and cannot see the
+      // dark:/hover: prefix, so a bg-white/... or bg-gray-800 spelling here gets
+      // repainted in light mode even though it is a dark-mode-only colour. The
+      // rgb()/rgba() arbitrary value is the same colour the rule cannot match.
+      // Do not "tidy" it back to bg-white/5 or bg-gray-800.
       <div
         onClick={handleClick}
         className={`group relative flex cursor-pointer items-start gap-3 border-l-2 p-3 transition-colors ${getPriorityColor()} ${
           notification.read ? "" : "bg-blue-50/50 dark:bg-blue-400/[0.035]"
-        } hover:bg-slate-50 dark:hover:bg-white/[0.05]`}
+        } hover:bg-slate-50 dark:hover:bg-[rgba(255,255,255,0.05)]`}
       >
         <div className={`shrink-0 rounded-lg p-2 ${getIconBgColor()}`}>
           {getIcon()}
@@ -167,7 +172,7 @@ const NotificationItem = ({
       className={`group relative flex items-start gap-3 border-l-2 p-4 transition-colors sm:gap-4 ${getPriorityColor()} ${
         notification.read ? "" : "bg-blue-50/50 dark:bg-blue-400/[0.035]"
       } ${isSelected ? "bg-violet-50 dark:bg-violet-400/[0.08]" : ""} ${
-        bulkMode ? "" : "hover:bg-slate-50 dark:hover:bg-white/[0.025]"
+        bulkMode ? "" : "hover:bg-slate-50 dark:hover:bg-[rgba(255,255,255,0.025)]"
       }`}
     >
       {/* Bulk Selection Checkbox */}

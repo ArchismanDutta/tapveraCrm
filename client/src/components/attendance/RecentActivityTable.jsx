@@ -369,7 +369,7 @@ const RecentActivityTable = ({
                 return (
                   <tr
                     key={idx}
-                    className={`border-b border-slate-600/20 last:border-none hover:bg-slate-700/30 transition-all duration-200 ${
+                    className={`border-b border-slate-600/20 last:border-none hover:bg-slate-100 dark:hover:bg-[rgba(51,65,85,0.3)] transition-all duration-200 ${
                       isToday ? 'bg-cyan-900/20 border-cyan-700/50' : ''
                     }`}
                   >

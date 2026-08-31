@@ -508,9 +508,14 @@ const SalaryManagement = ({ onLogout }) => {
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-white/[0.07]">
                     {filtered.map((p) => {
+                    // Light-mode remaps in index.css match class substrings and cannot see the
+                    // dark:/hover: prefix, so a bg-white/... , bg-gray-800 or bg-slate-700/30
+                    // spelling here gets repainted in light mode and this row's selected/
+                    // highlight tint is lost. The rgb()/rgba() arbitrary value is the same
+                    // colour the rule cannot match. Do not "tidy" it back.
                       const sn = p.employeeSnapshot||{}, em = p.employee||{};
                       return (
-                        <tr key={p._id} className={`cursor-pointer transition hover:bg-slate-50 dark:hover:bg-white/[0.025] ${activePayslip?._id===p._id?"bg-blue-50/60 dark:bg-blue-400/[0.05]":""}`}>
+                        <tr key={p._id} className={`cursor-pointer transition hover:bg-slate-50 dark:hover:bg-[rgba(255,255,255,0.025)] ${activePayslip?._id===p._id?"bg-blue-50/60 dark:bg-blue-400/[0.05]":""}`}>
                           <td className="px-4 py-3" onClick={() => { setActivePayslip(p); setPanel("view"); }}><p className="text-white font-medium">{sn.name||em.name||"—"}</p><p className="text-xs text-gray-500">{sn.employeeId||em.employeeId}</p></td>
                           <td className="px-4 py-3 text-gray-300" onClick={() => { setActivePayslip(p); setPanel("view"); }}>{monthLabel(p.payPeriod)}</td>
                           <td className="px-4 py-3 text-right font-mono text-green-400">&#8377;{fmt(p.netSalary)}</td>

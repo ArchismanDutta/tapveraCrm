@@ -1555,12 +1555,17 @@ const ChatWindow = ({
               </span>
             </div>
             {suggestions.map((suggestion, idx) => (
+              // Light-mode remaps in index.css match class substrings and cannot see the
+              // dark:/hover: prefix, so a bg-white/... or bg-gray-800 spelling here gets
+              // repainted in light mode even though it is a dark-mode-only colour. The
+              // rgb()/rgba() arbitrary value is the same colour the rule cannot match.
+              // Do not "tidy" it back to bg-white/5 or bg-gray-800.
               <button
                 key={idx}
                 onClick={() => acceptSuggestion(suggestion)}
-                className={`w-full border-l-2 px-4 py-2 text-left transition-colors hover:bg-slate-100 dark:hover:bg-gray-800 ${
+                className={`w-full border-l-2 px-4 py-2 text-left transition-colors hover:bg-slate-100 dark:hover:bg-[rgb(31,41,55)] ${
                   idx === selectedSuggestionIndex
-                    ? "border-blue-500 bg-blue-50 dark:bg-gray-800"
+                    ? "border-blue-500 bg-blue-50 dark:bg-[rgb(31,41,55)]"
                     : "border-transparent"
                 }`}
               >

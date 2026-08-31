@@ -193,6 +193,11 @@ const LeaveRequestsTable = ({
                       </td>
                       <td className="px-4 py-3.5">
                         <div className="flex items-center gap-2">
+                          {/* Light-mode remaps in index.css match class substrings and cannot see the
+                              dark:/hover: prefix, so a bg-white/... or bg-gray-800 spelling here gets
+                              repainted in light mode even though it is a dark-mode-only colour. The
+                              rgb()/rgba() arbitrary value is the same colour the rule cannot match.
+                              Do not "tidy" it back to bg-white/5 or bg-gray-800. */}
                           <button
                             type="button"
                             title="Approve"
@@ -201,7 +206,7 @@ const LeaveRequestsTable = ({
                               event.stopPropagation();
                               onApprove(id);
                             }}
-                            className="rounded-lg bg-emerald-50 p-2 text-emerald-700 transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-300 dark:bg-emerald-400/10 dark:text-emerald-300 dark:disabled:bg-white/[0.04] dark:disabled:text-slate-600"
+                            className="rounded-lg bg-emerald-50 p-2 text-emerald-700 transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-300 dark:bg-emerald-400/10 dark:text-emerald-300 dark:disabled:bg-[rgba(255,255,255,0.04)] dark:disabled:text-slate-600"
                           >
                             <Check className="h-4 w-4" />
                           </button>
@@ -213,7 +218,7 @@ const LeaveRequestsTable = ({
                               event.stopPropagation();
                               onReject(id);
                             }}
-                            className="rounded-lg bg-rose-50 p-2 text-rose-700 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-300 dark:bg-rose-400/10 dark:text-rose-300 dark:disabled:bg-white/[0.04] dark:disabled:text-slate-600"
+                            className="rounded-lg bg-rose-50 p-2 text-rose-700 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-300 dark:bg-rose-400/10 dark:text-rose-300 dark:disabled:bg-[rgba(255,255,255,0.04)] dark:disabled:text-slate-600"
                           >
                             <X className="h-4 w-4" />
                           </button>

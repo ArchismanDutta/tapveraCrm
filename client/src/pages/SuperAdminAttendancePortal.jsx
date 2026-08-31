@@ -2585,7 +2585,7 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
                               <div
                                 key={employee._id}
                                 onClick={() => handleEmployeeSelect(employee)}
-                                className={`px-4 py-3 cursor-pointer transition-all duration-200 hover:bg-slate-700/50 border-l-4 ${
+                                className={`px-4 py-3 cursor-pointer transition-all duration-200 hover:bg-slate-100 dark:hover:bg-[rgba(51,65,85,0.5)] border-l-4 ${
                                   isSelected
                                     ? 'border-cyan-400 bg-cyan-500/10'
                                     : 'border-transparent hover:border-slate-500'

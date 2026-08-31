@@ -997,9 +997,81 @@ html.light .theme-toggle {
   box-shadow: 0 14px 34px var(--app-shadow);
 }
 
-html.light [class*="bg-[#0"],
-html.light [class*="bg-[#1"],
-html.light [class*="bg-[#2"],
+/* ─────────────────────────────────────────────────────────────────────────
+   THE `dark:` PREFIX IS INVISIBLE TO A SUBSTRING SELECTOR.
+
+   `[class*="bg-[#0"]` matches the *characters* "bg-[#0" anywhere in the class
+   attribute — including inside `dark:bg-[#075d55]`, a class that by definition
+   only paints under `html.dark`. So a light-mode rule was repainting elements
+   on the strength of their dark-mode background.
+
+   The visible symptom was the project chat. An own-message bubble is
+   `bg-teal-600 text-white … dark:bg-[#075d55]`: the `dark:` arbitrary value
+   dragged it in here and forced it to `--app-surface` (#ffffff), while the
+   `text-white` exemption further down correctly kept the text white — because
+   the bubble does carry `bg-teal`. White text on a white bubble.
+
+   Fix: skip the remap when the element already declares an unprefixed
+   saturated background. That background IS its light-mode appearance; there is
+   nothing to remap. Elements that only declare a dark background have no such
+   class and are untouched, which is every other consumer of this rule —
+   `bg-teal-600` + `dark:bg-[#…]` on one element occurs only on the two chat
+   bubbles (ProjectDetailPage, ProjectMessagePanel).
+
+   The exemption is wrapped in `:where()`, which contributes ZERO specificity,
+   so this rule still scores (0,1,1) exactly as before. Purely subtractive —
+   it cannot start winning cascade fights it used to lose. Do not unwrap it.
+   Neutrals (bg-white, bg-slate-50/100) are deliberately NOT exempt: ~500 call
+   sites lean on the remap flattening them to --app-surface.
+   ───────────────────────────────────────────────────────────────────────── */
+html.light [class*="bg-[#0"]:not(:where(
+      [class^="bg-teal-"], [class*=" bg-teal-"],
+      [class^="bg-blue-"], [class*=" bg-blue-"],
+      [class^="bg-emerald-"], [class*=" bg-emerald-"],
+      [class^="bg-green-"], [class*=" bg-green-"],
+      [class^="bg-cyan-"], [class*=" bg-cyan-"],
+      [class^="bg-indigo-"], [class*=" bg-indigo-"],
+      [class^="bg-violet-"], [class*=" bg-violet-"],
+      [class^="bg-purple-"], [class*=" bg-purple-"],
+      [class^="bg-pink-"], [class*=" bg-pink-"],
+      [class^="bg-rose-"], [class*=" bg-rose-"],
+      [class^="bg-red-"], [class*=" bg-red-"],
+      [class^="bg-orange-"], [class*=" bg-orange-"],
+      [class^="bg-amber-"], [class*=" bg-amber-"],
+      [class^="bg-yellow-"], [class*=" bg-yellow-"]
+    )),
+html.light [class*="bg-[#1"]:not(:where(
+      [class^="bg-teal-"], [class*=" bg-teal-"],
+      [class^="bg-blue-"], [class*=" bg-blue-"],
+      [class^="bg-emerald-"], [class*=" bg-emerald-"],
+      [class^="bg-green-"], [class*=" bg-green-"],
+      [class^="bg-cyan-"], [class*=" bg-cyan-"],
+      [class^="bg-indigo-"], [class*=" bg-indigo-"],
+      [class^="bg-violet-"], [class*=" bg-violet-"],
+      [class^="bg-purple-"], [class*=" bg-purple-"],
+      [class^="bg-pink-"], [class*=" bg-pink-"],
+      [class^="bg-rose-"], [class*=" bg-rose-"],
+      [class^="bg-red-"], [class*=" bg-red-"],
+      [class^="bg-orange-"], [class*=" bg-orange-"],
+      [class^="bg-amber-"], [class*=" bg-amber-"],
+      [class^="bg-yellow-"], [class*=" bg-yellow-"]
+    )),
+html.light [class*="bg-[#2"]:not(:where(
+      [class^="bg-teal-"], [class*=" bg-teal-"],
+      [class^="bg-blue-"], [class*=" bg-blue-"],
+      [class^="bg-emerald-"], [class*=" bg-emerald-"],
+      [class^="bg-green-"], [class*=" bg-green-"],
+      [class^="bg-cyan-"], [class*=" bg-cyan-"],
+      [class^="bg-indigo-"], [class*=" bg-indigo-"],
+      [class^="bg-violet-"], [class*=" bg-violet-"],
+      [class^="bg-purple-"], [class*=" bg-purple-"],
+      [class^="bg-pink-"], [class*=" bg-pink-"],
+      [class^="bg-rose-"], [class*=" bg-rose-"],
+      [class^="bg-red-"], [class*=" bg-red-"],
+      [class^="bg-orange-"], [class*=" bg-orange-"],
+      [class^="bg-amber-"], [class*=" bg-amber-"],
+      [class^="bg-yellow-"], [class*=" bg-yellow-"]
+    )),
 html.light [class*="bg-slate-900"],
 html.light [class*="bg-slate-800"],
 html.light [class*="bg-gray-900"],

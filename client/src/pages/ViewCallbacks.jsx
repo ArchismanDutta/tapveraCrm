@@ -798,10 +798,15 @@ const ViewCallbacks = ({ onLogout }) => {
                   </thead>
                   <tbody className="divide-y divide-slate-700/50">
                     {currentCallbacks.map((callback, index) => (
+                      // Light-mode remaps in index.css match class substrings and cannot see the
+                      // dark:/hover: prefix, so a bg-white/... or bg-gray-800 spelling here gets
+                      // repainted in light mode even though it is a dark-mode-only colour. The
+                      // rgb()/rgba() arbitrary value is the same colour the rule cannot match.
+                      // Do not "tidy" it back to bg-white/5 or bg-gray-800.
                       <tr
                         key={callback._id}
                         id={`callback-row-${callback._id}`}
-                        className={`transition-colors hover:bg-slate-700/30 ${
+                        className={`transition-colors hover:bg-slate-100 dark:hover:bg-[rgba(51,65,85,0.3)] ${
                           isOverdue(callback) ? "bg-red-500/5" : ""
                         } ${
                           // Arrived here from a callback alarm's "Open
