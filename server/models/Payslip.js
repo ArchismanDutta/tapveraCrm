@@ -41,6 +41,7 @@ const payslipSchema = new mongoose.Schema({
   lwp:         { type: Number, default: 0 },
   lateDays:    { type: Number, default: 0 },
   halfDays:    { type: Number, default: 0 },
+  absentDays:  { type: Number, default: 0 },
 
   // Salary input
   monthlySalary: { type: Number, required: true },
@@ -79,6 +80,7 @@ const payslipSchema = new mongoose.Schema({
     advance:          { type: Number, default: 0 },
     // Auto-payroll deductions (always 0 for manually created payslips)
     lwpDeduction:     { type: Number, default: 0 },
+    absenceDeduction: { type: Number, default: 0 },
     lateDeduction:    { type: Number, default: 0 },
     halfDayDeduction: { type: Number, default: 0 },
     other:            { type: Number, default: 0 },
@@ -148,6 +150,7 @@ payslipSchema.pre("save", function (next) {
     (d.tds              || 0) +
     (d.advance          || 0) +
     (d.lwpDeduction     || 0) +
+    (d.absenceDeduction || 0) +
     (d.lateDeduction    || 0) +
     (d.halfDayDeduction || 0) +
     (d.other            || 0);

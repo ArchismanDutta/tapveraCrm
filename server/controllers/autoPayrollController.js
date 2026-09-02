@@ -119,7 +119,8 @@ exports.generateSinglePayslip = async (req, res) => {
         result.payslip.lateDays,
         result.payslip.halfDays,
         result.payslip.lwp || 0,
-        manualDeductions
+        manualDeductions,
+        result.payslip.absentDays || 0
       );
 
       // Update payslip with new calculations, mapped onto the schema shape
@@ -327,7 +328,8 @@ exports.recalculatePayslip = async (req, res) => {
         result.payslip.lateDays,
         result.payslip.halfDays,
         result.payslip.lwp || 0,
-        manualDeductions
+        manualDeductions,
+        result.payslip.absentDays || 0
       );
 
       // Update payslip with new calculations, mapped onto the schema shape

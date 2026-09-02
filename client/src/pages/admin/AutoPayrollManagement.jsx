@@ -417,6 +417,13 @@ const AutoPayrollManagement = ({ onLogout }) => {
     const attendance = previewData?.attendanceData;
     if (!attendance) return 0;
 
+    // The server counts weekend days against the calendar, so use its number.
+    // This used to infer them by subtraction — paidDays minus present, leave
+    // and WFH — which quietly attributed every other kind of paid day to the
+    // weekend. With absence and unpaid leave now credited and deducted by
+    // name, that subtraction reported 11 weekend days in a month that has 10.
+    if (typeof attendance.weekendDays === "number") return attendance.weekendDays;
+
     const paidDays = attendance.summary?.paidDays || attendance.paidDays || 0;
     const weekendDays =
       paidDays -
@@ -1164,6 +1171,12 @@ const AutoPayrollManagement = ({ onLogout }) => {
                         {previewData.attendanceData.fullDays}
                       </p>
                     </div>
+                    <div className="bg-[#0f1419] rounded-lg p-4 border border-red-500/30">
+                      <p className="text-sm text-gray-400 mb-1">Absent Days</p>
+                      <p className="text-2xl font-bold text-red-400">
+                        {previewData.attendanceData.absentDays ?? 0}
+                      </p>
+                    </div>
                     <div className="bg-[#0f1419] rounded-lg p-4 border border-[#232945]">
                       <p className="text-sm text-gray-400 mb-1">WFH Days</p>
                       <p className="text-2xl font-bold text-white">
@@ -1186,6 +1199,12 @@ const AutoPayrollManagement = ({ onLogout }) => {
                       <p className="text-sm text-gray-400 mb-1">Weekends Paid</p>
                       <p className="text-2xl font-bold text-white">
                         {getPaidWeekendDays()}
+                      </p>
+                    </div>
+                    <div className="bg-[#0f1419] rounded-lg p-4 border border-[#232945]">
+                      <p className="text-sm text-gray-400 mb-1">Holidays</p>
+                      <p className="text-2xl font-bold text-white">
+                        {previewData.attendanceData.holidayDays ?? 0}
                       </p>
                     </div>
                     <div className="bg-[#0f1419] rounded-lg p-4 border border-[#232945]">

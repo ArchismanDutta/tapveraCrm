@@ -38,10 +38,12 @@
 // days, and only a working day that was neither worked nor covered by leave
 // reduces pay.
 //
-// Unpaid leave is a deliberate exception. It is CREDITED here as a paid day and
-// then removed once by the lwpDeduction line in payroll, so the employee can
-// see on the payslip what was taken and why. Subtracting it in both places is
-// what made one day of unpaid leave cost nearly three days of pay.
+// Unpaid leave and unexcused absence are both CREDITED here as paid days and
+// then removed once each by their own deduction line in payroll — lwpDeduction
+// and absenceDeduction. Two things with the same effect on pay are shown the
+// same way, and the employee can see on the payslip exactly what was taken and
+// why, instead of a paid-day count that quietly came up short. Subtracting in
+// both places is what made one day of unpaid leave cost nearly three days.
 
 const AttendanceRecord = require("../models/AttendanceRecord");
 const LeaveRequest = require("../models/LeaveRequest");
@@ -68,10 +70,10 @@ const DAY_CREDIT = {
   [DAY_STATUS.PRESENT]: 1,
   [DAY_STATUS.WFH]: 1,
   [DAY_STATUS.PAID_LEAVE]: 1,
-  [DAY_STATUS.HALF_DAY]: 0.5,
+  [DAY_STATUS.HALF_DAY]: 0.5, // the missing half is the whole deduction
   [DAY_STATUS.UNPAID_LEAVE]: 1, // deducted once by payroll's lwpDeduction
-  [DAY_STATUS.ABSENT]: 0,
-  [DAY_STATUS.UPCOMING]: 0,
+  [DAY_STATUS.ABSENT]: 1, // deducted once by payroll's absenceDeduction
+  [DAY_STATUS.UPCOMING]: 0, // has not happened; earns nothing, deducts nothing
 };
 
 // When two approved leave requests cover the same day, the higher rank wins.
@@ -181,7 +183,16 @@ class AttendanceSummaryService {
    */
   classifyDay({ date, isUpcoming, holidayKeys, leaveByDate, attendanceByDate }) {
     const key = this.toDateKey(date);
-    const blank = { isLate: false, lateMinutes: 0, workHours: 0, breakPolicyFlagged: false };
+    const blank = {
+      isLate: false,
+      lateMinutes: 0,
+      workHours: 0,
+      breakPolicyFlagged: false,
+      isHalfDay: false,
+      isWFH: false,
+      isAbsent: false,
+      leaveType: null,
+    };
 
     if (isUpcoming) return { status: DAY_STATUS.UPCOMING, ...blank };
     if (this.isWeekend(date)) return { status: DAY_STATUS.WEEKEND, ...blank };
@@ -201,15 +212,25 @@ class AttendanceSummaryService {
     // it is a flag about how the day was logged, not evidence of not working.
     const breakPolicyFlagged = Boolean(calc.isBreakPolicyAbsent);
 
+    // These travel with every day so the payroll preview's table can show WHY
+    // a day was classified the way it was. Without leaveType in particular, an
+    // approved unpaid leave is indistinguishable from an unexplained absence
+    // on screen.
     const detail = {
       isLate: lateMinutes > 0,
       lateMinutes,
       workHours: Math.round(workHours * 100) / 100,
       breakPolicyFlagged,
+      isHalfDay: false,
+      isWFH: false,
+      isAbsent: false,
+      leaveType: leaveType || null,
     };
 
     if (worked) {
-      if (leaveType === "workFromHome") return { status: DAY_STATUS.WFH, ...detail };
+      if (leaveType === "workFromHome") {
+        return { status: DAY_STATUS.WFH, ...detail, isWFH: true };
+      }
 
       // Mirrors AttendanceService: >= 4 and < 4.5 hours is a half day.
       const c = this.attendanceService.CONSTANTS;
@@ -217,7 +238,9 @@ class AttendanceSummaryService {
         leaveType === "halfDay" ||
         (workHours >= c.MIN_HALF_DAY_HOURS && workHours < c.HALF_DAY_THRESHOLD_HOURS);
 
-      return { status: isHalfDay ? DAY_STATUS.HALF_DAY : DAY_STATUS.PRESENT, ...detail };
+      return isHalfDay
+        ? { status: DAY_STATUS.HALF_DAY, ...detail, isHalfDay: true }
+        : { status: DAY_STATUS.PRESENT, ...detail };
     }
 
     // Nobody punched. Approved leave explains the day; nothing else does.
@@ -225,17 +248,17 @@ class AttendanceSummaryService {
       case "workFromHome":
         // An approved WFH day with no punch is still an approved working
         // arrangement, so it is paid and reported separately for HR.
-        return { status: DAY_STATUS.WFH, ...detail };
+        return { status: DAY_STATUS.WFH, ...detail, isWFH: true };
       case "paid":
       case "sick":
       case "maternity":
         return { status: DAY_STATUS.PAID_LEAVE, ...detail };
       case "halfDay":
-        return { status: DAY_STATUS.HALF_DAY, ...detail };
+        return { status: DAY_STATUS.HALF_DAY, ...detail, isHalfDay: true };
       case "unpaid":
         return { status: DAY_STATUS.UNPAID_LEAVE, ...detail };
       default:
-        return { status: DAY_STATUS.ABSENT, ...detail };
+        return { status: DAY_STATUS.ABSENT, ...detail, isAbsent: true };
     }
   }
 
@@ -276,9 +299,11 @@ class AttendanceSummaryService {
     const days = [];
     let paidDays = 0;
     let lateDays = 0;
+    let fullDays = 0;
     let totalLateMinutes = 0;
     let totalWorkHours = 0;
     let breakPolicyFlaggedDays = 0;
+    const fullDayHours = this.attendanceService.CONSTANTS.MIN_FULL_DAY_HOURS;
 
     for (let dayOfMonth = 1; dayOfMonth <= daysInMonth; dayOfMonth++) {
       const date = new Date(year, month - 1, dayOfMonth);
@@ -295,6 +320,9 @@ class AttendanceSummaryService {
         totalLateMinutes += day.lateMinutes;
       }
       if (day.breakPolicyFlagged) breakPolicyFlaggedDays++;
+      // A day actually worked to full length, which is not the same as a day
+      // the employee was present for.
+      if (day.workHours >= fullDayHours) fullDays++;
 
       days.push({ date: this.toDateKey(date), credit, ...day });
     }
@@ -321,6 +349,7 @@ class AttendanceSummaryService {
 
       // Attendance
       presentDays: counts.present,
+      fullDays,
       halfDays: counts.halfDay,
       wfhDays: counts.wfh,
       paidLeaveDays: counts.paidLeave,

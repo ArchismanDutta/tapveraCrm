@@ -175,7 +175,7 @@ class AutoPayrollService {
       // Payroll-facing names. workingDays is the proration divisor, which is
       // every day of the month \u2014 see calculateSalaryBreakdown.
       workingDays: summary.daysInMonth,
-      fullDays: summary.presentDays,
+      fullDays: summary.fullDays,
       totalWorkingDaysExcludingWeekends: summary.expectedWorkingDays,
       attendanceDetails: summary.days,
 
@@ -317,7 +317,8 @@ class AutoPayrollService {
     lateDays,
     halfDays,
     unpaidLeaveDays = 0,
-    manualDeductions = {}
+    manualDeductions = {},
+    absentDays = 0
   ) {
     const safeWorkingDays = workingDays > 0 ? workingDays : 1;
 
@@ -364,9 +365,14 @@ class AutoPayrollService {
     // CRITICAL FIX (2026-07-31): Added LWP (Leave Without Pay) deduction
     // LWP deduction = (Monthly Salary / Working Days) × Unpaid Leave Days
     //
-    const lwpDeduction = unpaidLeaveDays > 0
-      ? (monthlySalary / safeWorkingDays) * unpaidLeaveDays
-      : 0;
+    const perDaySalary = monthlySalary / safeWorkingDays;
+    const lwpDeduction = unpaidLeaveDays > 0 ? perDaySalary * unpaidLeaveDays : 0;
+
+    // An unexcused absence costs exactly what a day of unpaid leave costs.
+    // Both days are credited in paidDays and removed here, so the payslip
+    // says what was taken instead of the paid-day count quietly coming up
+    // short with nothing to point at.
+    const absenceDeduction = absentDays > 0 ? perDaySalary * absentDays : 0;
 
     const deductions = {
       // Employee PF
@@ -389,6 +395,10 @@ class AutoPayrollService {
       // CRITICAL FIX (2026-07-31): This was previously always 0
       lwpDeduction: lwpDeduction,
 
+      // Unexcused absence — a working day with neither attendance nor
+      // approved leave.
+      absenceDeduction: absenceDeduction,
+
       // Manual deductions
       tds: manualDeductions.tds || 0,
       other: manualDeductions.other || 0,
@@ -399,10 +409,7 @@ class AutoPayrollService {
       // leftover late costs EXTRA_LATE_PENALTY. calculateLateDeduction had
       // been written but never called, so lateDays was shown on payslips
       // while changing no money.
-      lateDeduction: this.calculateLateDeduction(
-        lateDays,
-        monthlySalary / safeWorkingDays
-      ),
+      lateDeduction: this.calculateLateDeduction(lateDays, perDaySalary),
 
       // Half days are already paid at half rate through paidDays, so
       // charging here as well would take the same half day twice.
@@ -430,6 +437,7 @@ class AutoPayrollService {
       deductions.tds +
       deductions.ptax +
       deductions.lwpDeduction +
+      deductions.absenceDeduction +
       deductions.lateDeduction +
       deductions.other +
       deductions.advance;
@@ -460,6 +468,7 @@ class AutoPayrollService {
         // Leave-without-pay: was counted in totalDeductions but never
         // returned, so it never showed up on the payslip breakdown.
         lwpDeduction: Math.round(deductions.lwpDeduction * 100) / 100,
+        absenceDeduction: Math.round(deductions.absenceDeduction * 100) / 100,
         lateDeduction: Math.round(deductions.lateDeduction * 100) / 100,
         halfDayDeduction: Math.round(deductions.halfDayDeduction * 100) / 100,
         tds: deductions.tds,
@@ -507,6 +516,7 @@ class AutoPayrollService {
         tds: d.tds || 0,
         advance: d.advance || 0,
         lwpDeduction: d.lwpDeduction || 0,
+        absenceDeduction: d.absenceDeduction || 0,
         lateDeduction: d.lateDeduction || 0,
         halfDayDeduction: d.halfDayDeduction || 0,
         other: d.other || 0,
@@ -609,7 +619,8 @@ class AutoPayrollService {
       attendanceData.lateDays,
       attendanceData.halfDays,
       attendanceData.unpaidLeaveDays,
-      manualDeductions
+      manualDeductions,
+      attendanceData.absentDays
     );
 
     console.log(
@@ -633,6 +644,7 @@ class AutoPayrollService {
       lwp: attendanceData.unpaidLeaveDays || 0,
       lateDays: attendanceData.lateDays,
       halfDays: attendanceData.halfDays,
+      absentDays: attendanceData.absentDays,
       ...this.mapCalculationsToPayslip(calculations),
       remarks,
       createdBy,
@@ -783,7 +795,8 @@ class AutoPayrollService {
       attendanceData.lateDays,
       attendanceData.halfDays,
       attendanceData.unpaidLeaveDays,
-      manualDeductions
+      manualDeductions,
+      attendanceData.absentDays
     );
 
     return {
