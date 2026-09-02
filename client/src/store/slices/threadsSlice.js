@@ -189,33 +189,54 @@ export const fetchMessages = createAsyncThunk(
  * Load the next OLDER page of a thread.
  *
  * Page 1 is the newest messages (see the chat adapter), so paging up through
- * history means page 2, 3, … Reads the current pagination from the store rather
- * than taking a page number, so a caller can't accidentally re-request a page
- * it already has or skip one.
+ * history means page 2, 3, … Reads the current pagination from the store
+ * rather than taking a page number, so a caller can't accidentally re-request
+ * a page it already has or skip one.
  *
- * Returns null when there is nothing older, or when a load is already in
- * flight — a scroll listener fires many times per gesture and would otherwise
- * launch a burst of duplicate requests.
+ * The "nothing older" and "already in flight" guards live in `condition`
+ * below, NOT in the payload creator — see the comment there. A scroll
+ * listener fires many times per gesture, so the in-flight guard is what stops
+ * a burst of duplicate requests.
  */
 export const fetchOlderMessages = createAsyncThunk(
   "threads/fetchOlderMessages",
   async ({ scope, threadId, limit = PAGE_SIZE }, { getState }) => {
     const key = threadKey(scope, threadId);
-    const state = getState().threads;
+    const pagination = getState().threads.paginationByKey[key];
+    const nextPage = (pagination?.page || 1) + 1;
 
-    const pagination = state.paginationByKey[key];
-    if (!pagination?.hasMore) return { key, messages: [], pagination, skipped: true };
-    if (state.olderStatusByKey[key] === "loading") {
-      return { key, messages: [], pagination, skipped: true };
-    }
-
-    const nextPage = (pagination.page || 1) + 1;
-    const { messages, pagination: next } = await messagingApi.fetchMessages(scope, threadId, {
-      page: nextPage,
-      limit,
-    });
+    const { messages, pagination: next } = await messagingApi.fetchMessages(
+      scope,
+      threadId,
+      { page: nextPage, limit }
+    );
 
     return { key, messages, pagination: next, skipped: false };
+  },
+  {
+    /**
+     * These guards MUST live here rather than inside the payload creator.
+     *
+     * createAsyncThunk dispatches `pending` — whose reducer sets
+     * olderStatusByKey[key] = "loading" — BEFORE it invokes the creator. A
+     * creator that checks that flag therefore always sees its own pending
+     * action and bails. That is not a hypothetical: "Load earlier messages"
+     * issued no network request at all, in every chat, group and project
+     * thread, with no error and no spinner to show for it — the click simply
+     * did nothing.
+     *
+     * `condition` is evaluated BEFORE `pending` is dispatched, which is the
+     * whole reason it exists. Returning false here skips the thunk silently,
+     * dispatching neither pending nor rejected.
+     */
+    condition: ({ scope, threadId }, { getState }) => {
+      const key = threadKey(scope, threadId);
+      const state = getState().threads;
+
+      if (!state.paginationByKey[key]?.hasMore) return false;
+      if (state.olderStatusByKey[key] === "loading") return false;
+      return true;
+    },
   }
 );
 
@@ -575,7 +596,28 @@ const threadsSlice = createSlice({
         const { key, messages, pagination } = action.payload;
         ensure(state, key);
         state.statusByKey[key] = "ready";
-        state.paginationByKey[key] = pagination;
+
+        // A page-1 refetch must not rewind how far back the thread has been
+        // paged. Reconnects and several UI actions refetch page 1, and since
+        // messages are merged rather than replaced, the older pages stay on
+        // screen — but resetting `page` to 1 makes the next "Load earlier"
+        // re-request a page that is already there. Every row dedupes away in
+        // upsertMessage and the button appears to do nothing.
+        //
+        // hasMore is kept alongside it: it describes whether anything older
+        // than the current position remains, and page 1's answer to that
+        // question is about a position the thread has already moved past.
+        if (pagination) {
+          const previous = state.paginationByKey[key];
+          const rewound =
+            previous && (pagination.page || 1) < (previous.page || 1);
+
+          state.paginationByKey[key] = rewound
+            ? { ...pagination, page: previous.page, hasMore: previous.hasMore }
+            : pagination;
+        } else {
+          state.paginationByKey[key] = pagination;
+        }
         // REST is authoritative: merge server rows over whatever the socket
         // delivered, rather than clobbering — an optimistic message still in
         // flight must survive a concurrent refetch.
