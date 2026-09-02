@@ -23,6 +23,44 @@ const authHeaders = () => ({
   Authorization: `Bearer ${localStorage.getItem("token")}`,
 });
 
+// ── "Not looked at since these arrived" ────────────────────────────────────
+//
+// `alert` drives the blinking light on the sidebar and is deliberately NOT the
+// same thing as unreadCount. The light stays on until the user OPENS the
+// notification page — whether or not they then read every row — because that
+// is the promise a blinking light makes. Reading one notification from the
+// bell dropdown drops the count but leaves the light on; opening the page
+// clears it even with rows left unread.
+//
+// `lastSeenAt` persists that per user, so a refresh, or following a link to
+// another page, does not quietly clear a light the user never acknowledged.
+
+const seenStorageKey = () => {
+  try {
+    const raw = localStorage.getItem("user");
+    const id = raw ? JSON.parse(raw)?._id : null;
+    return id ? `notifications:lastSeenAt:${id}` : "notifications:lastSeenAt";
+  } catch {
+    return "notifications:lastSeenAt";
+  }
+};
+
+const readLastSeen = () => {
+  try {
+    return localStorage.getItem(seenStorageKey());
+  } catch {
+    return null;
+  }
+};
+
+const writeLastSeen = (iso) => {
+  try {
+    localStorage.setItem(seenStorageKey(), iso);
+  } catch {
+    // Private mode: the light just resets on reload rather than persisting.
+  }
+};
+
 export const fetchUnreadCount = createAsyncThunk(
   "notifications/fetchUnreadCount",
   async () => {
@@ -57,6 +95,9 @@ const notificationSlice = createSlice({
     items: [],
     unreadCount: 0,
     status: "idle", // idle | loading | ready | error
+    // Blink the sidebar light? See the note above seenStorageKey.
+    alert: false,
+    lastSeenAt: readLastSeen(),
   },
   reducers: {
     /**
@@ -93,6 +134,7 @@ const notificationSlice = createSlice({
         ...state.items,
       ].slice(0, 20);
       state.unreadCount += 1;
+      state.alert = true;
     },
     markReadLocal: (state, action) => {
       const id = action.payload;
@@ -105,6 +147,17 @@ const notificationSlice = createSlice({
     markAllReadLocal: (state) => {
       state.items = state.items.map((i) => ({ ...i, read: true }));
       state.unreadCount = 0;
+    },
+    /**
+     * The user opened the notification page. Stop the light, and remember
+     * when, so notifications that arrived before this moment do not start it
+     * again after a reload.
+     */
+    markNotificationsSeen: (state) => {
+      const now = new Date().toISOString();
+      state.lastSeenAt = now;
+      state.alert = false;
+      writeLastSeen(now);
     },
   },
   extraReducers: (builder) => {
@@ -119,6 +172,18 @@ const notificationSlice = createSlice({
         state.status = "ready";
         state.items = action.payload.items;
         state.unreadCount = action.payload.unreadCount;
+
+        // Something may have arrived while the user was logged out, which no
+        // socket event can tell us about. This only ever turns the light ON:
+        // a fetch that races a live notification must never clear a light
+        // only the notification page is allowed to clear.
+        if (!state.alert) {
+          const lastSeen = state.lastSeenAt ? Date.parse(state.lastSeenAt) : 0;
+          state.alert = state.items.some(
+            (item) =>
+              !item.read && Date.parse(item.createdAt || 0) > (lastSeen || 0)
+          );
+        }
       })
       .addCase(fetchLatestNotifications.rejected, (state) => {
         state.status = "error";
@@ -126,11 +191,17 @@ const notificationSlice = createSlice({
   },
 });
 
-export const { receiveRealtime, markReadLocal, markAllReadLocal } =
-  notificationSlice.actions;
+export const {
+  receiveRealtime,
+  markReadLocal,
+  markAllReadLocal,
+  markNotificationsSeen,
+} = notificationSlice.actions;
 
 export const selectNotificationItems = (s) => s.notifications.items;
 export const selectUnreadCount = (s) => s.notifications.unreadCount;
 export const selectNotificationStatus = (s) => s.notifications.status;
+/** True while the sidebar light should be blinking. */
+export const selectNotificationAlert = (s) => s.notifications.alert;
 
 export default notificationSlice.reducer;

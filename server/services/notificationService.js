@@ -28,6 +28,69 @@ const PUSH_TYPES = new Set(["task", "leave"]);
  * either way. A failure here must never fail the action that triggered it:
  * assigning a task has to succeed even if push is misconfigured.
  */
+/**
+ * The URL a push notification should open.
+ *
+ * Mirrors client/src/utils/notificationTarget.js exactly — the two are unit
+ * tested against each other, so a click on an OS banner and a click on the
+ * same notification in the notification centre land on the same screen.
+ *
+ * The stored `url` is the base path, because some notifications are
+ * role-aware (a leave request sends approvers to /admin/leaves and the
+ * employee to /leaves), and the identifier is added as a query parameter so
+ * the destination page can open the exact item. A push click cannot carry
+ * React Router state, so the URL is all there is.
+ */
+function resolveNotificationUrl(notification) {
+  const pick = (key) => {
+    if (!notification) return null;
+    const nested = notification.relatedData && notification.relatedData[key];
+    return nested ?? notification[key] ?? null;
+  };
+
+  // Repair paths emitted before the routes settled; old rows still carry them.
+  const normalizePath = (path) => {
+    if (!path || typeof path !== "string") return null;
+    if (path === "/chat") return "/messages";
+    if (path === "/payslips") return "/my-payslips";
+    return path.replace(/^\/projects\/([^/?#]+)/, "/project/$1");
+  };
+
+  const withQuery = (path, key, value) => {
+    if (!value) return path;
+    const [base, hash] = path.split("#");
+    if (new RegExp(`[?&]${key}=`).test(base)) return path;
+    const separator = base.includes("?") ? "&" : "?";
+    return `${base}${separator}${key}=${encodeURIComponent(value)}${hash ? `#${hash}` : ""}`;
+  };
+
+  const url = normalizePath(pick("url"));
+  const messageId = pick("messageId");
+
+  const conversationId = pick("conversationId");
+  if (conversationId) {
+    return withQuery(
+      withQuery(url || "/messages", "conversation", conversationId),
+      "message",
+      messageId
+    );
+  }
+
+  const projectId = pick("projectId");
+  if (projectId) return withQuery(url || `/project/${projectId}`, "message", messageId);
+
+  const taskId = pick("taskId");
+  if (taskId) return withQuery(url || "/tasks", "task", taskId);
+
+  const payslipId = pick("payslipId");
+  if (payslipId) return withQuery(url || "/my-payslips", "payslip", payslipId);
+
+  const leaveId = pick("leaveId");
+  if (leaveId) return withQuery(url || "/leaves", "leave", leaveId);
+
+  return url || "/notifications";
+}
+
 function _maybePushNotification(notification) {
   if (!notification || !PUSH_TYPES.has(notification.type)) return;
 
@@ -60,8 +123,10 @@ function _maybePushNotification(notification) {
       // are two things you need to know about, so they must not replace each
       // other the way a burst of messages in one thread should.
       tag: `${notification.type}-${notification._id}`,
-      // Every task and leave notification already carries relatedData.url.
-      url: notification.relatedData?.url || "/notifications",
+      // The identifier is appended to the url so the click lands on the thing
+      // itself. A push click cannot carry React Router state, so the deep
+      // link has to live in the URL.
+      url: resolveNotificationUrl(notification),
       data: {
         type: notification.type,
         notificationId: String(notification._id),
@@ -423,3 +488,6 @@ class NotificationService {
 }
 
 module.exports = new NotificationService();
+// Exported so it can be unit-tested and so anything else that needs a
+// notification's destination uses the same rule.
+module.exports.resolveNotificationUrl = resolveNotificationUrl;

@@ -57,13 +57,22 @@ const notificationSchema = new mongoose.Schema(
     },
 
     // Related Data (for navigation)
+    //
+    // Mixed, not a declared sub-path. As a declared path Mongoose silently
+    // dropped every key not listed here on save - messageId, wishId,
+    // keywordId and the rest - so a chat notification read back from the API
+    // had lost the message it was about, while the same notification
+    // delivered live over the socket still carried it. The two paths
+    // disagreed about the same event.
+    //
+    // Keys in use (see client/src/utils/notificationTarget.js, which decides
+    // where a notification navigates to):
+    //   taskId, conversationId, messageId, payslipId, leaveId, projectId,
+    //   wishId, and url - the destination path, with identifiers appended as
+    //   query parameters.
     relatedData: {
-      taskId: mongoose.Schema.Types.ObjectId,
-      conversationId: mongoose.Schema.Types.ObjectId,
-      payslipId: mongoose.Schema.Types.ObjectId,
-      leaveId: mongoose.Schema.Types.ObjectId,
-      projectId: mongoose.Schema.Types.ObjectId,
-      url: String, // Direct URL for navigation
+      type: mongoose.Schema.Types.Mixed,
+      default: () => ({}),
     },
 
     // Delivery Status

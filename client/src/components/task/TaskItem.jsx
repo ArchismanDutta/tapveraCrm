@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { FaClock, FaCommentDots, FaFolder, FaUserTie } from "react-icons/fa";
 import dayjs from "dayjs";
 import taskApi from "../../api/taskApi";
@@ -27,11 +27,51 @@ const statusAccent = {
 
 const badgeBase = "inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium";
 
+// Detects whether clamped text is actually being cut off, so the
+// "Show more" toggle only appears when there is something more to show.
+const useIsClamped = (text, expanded) => {
+  const ref = useRef(null);
+  const [isClamped, setIsClamped] = useState(false);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || expanded) return undefined;
+
+    let active = true;
+    const measure = () => {
+      if (active) setIsClamped(el.scrollHeight - el.clientHeight > 1);
+    };
+    measure();
+
+    // Web fonts can change the line count after the first paint.
+    if (typeof document !== "undefined" && document.fonts?.ready) {
+      document.fonts.ready.then(measure).catch(() => {});
+    }
+
+    if (typeof ResizeObserver === "undefined") {
+      return () => {
+        active = false;
+      };
+    }
+
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => {
+      active = false;
+      observer.disconnect();
+    };
+  }, [text, expanded]);
+
+  return [ref, isClamped];
+};
+
 const TaskItem = ({ task, onStatusUpdated, isKanbanCard = false }) => {
   const status = task.status || "pending";
   const [loading, setLoading] = useState(false);
   const [showRemarks, setShowRemarks] = useState(false);
   const [remarks, setRemarks] = useState(task.remarks || []);
+  const [descriptionExpanded, setDescriptionExpanded] = useState(false);
+  const [descriptionRef, descriptionClamped] = useIsClamped(task.description, descriptionExpanded);
   const { triggerAchievement } = useAchievements();
 
   const handleStatusChange = async (newStatus) => {
@@ -77,6 +117,21 @@ const TaskItem = ({ task, onStatusUpdated, isKanbanCard = false }) => {
   const statusClass = statusColors[status] || statusColors.pending;
   const statusLabel = status.replace("-", " ");
 
+  const descriptionToggle =
+    descriptionClamped || descriptionExpanded ? (
+      <button
+        type="button"
+        onClick={(event) => {
+          event.stopPropagation();
+          setDescriptionExpanded((prev) => !prev);
+        }}
+        aria-expanded={descriptionExpanded}
+        className="mt-1 rounded text-[11px] font-medium text-blue-600 transition hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 dark:text-blue-400"
+      >
+        {descriptionExpanded ? "Show less" : "Show more"}
+      </button>
+    ) : null;
+
   if (isKanbanCard) {
     return (
       <div className="cursor-move rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-slate-300 dark:border-white/10 dark:bg-[#12151c] dark:hover:border-white/20">
@@ -85,7 +140,17 @@ const TaskItem = ({ task, onStatusUpdated, isKanbanCard = false }) => {
           <span className={`${badgeBase} ${priorityClass}`}>{task.priority || "Low"}</span>
         </div>
         {task.description && (
-          <p className="mt-2 line-clamp-2 text-xs leading-5 text-slate-500 dark:text-slate-400">{task.description}</p>
+          <div className="mt-2">
+            <p
+              ref={descriptionRef}
+              className={`whitespace-pre-line break-words text-xs leading-5 text-slate-500 dark:text-slate-400 ${
+                descriptionExpanded ? "max-h-56 overflow-y-auto pr-1" : "line-clamp-2"
+              }`}
+            >
+              {task.description}
+            </p>
+            {descriptionToggle}
+          </div>
         )}
         <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-3 dark:border-white/[0.07]">
           <span className={`flex items-center gap-1.5 text-xs ${overdue ? "text-rose-600 dark:text-rose-300" : "text-slate-500 dark:text-slate-400"}`}>
@@ -123,7 +188,17 @@ const TaskItem = ({ task, onStatusUpdated, isKanbanCard = false }) => {
           </div>
 
           {task.description && (
-            <p className="mt-2 line-clamp-2 max-w-3xl text-xs leading-5 text-slate-500 dark:text-slate-400">{task.description}</p>
+            <div className="mt-2 max-w-3xl">
+              <p
+                ref={descriptionRef}
+                className={`whitespace-pre-line break-words text-xs leading-5 text-slate-500 dark:text-slate-400 ${
+                  descriptionExpanded ? "" : "line-clamp-2"
+                }`}
+              >
+                {task.description}
+              </p>
+              {descriptionToggle}
+            </div>
           )}
 
           <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-slate-500 dark:text-slate-400">

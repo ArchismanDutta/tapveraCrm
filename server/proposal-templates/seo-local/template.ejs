@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="en">
+<head>
+<%- include('partials/head', { needsMap: true }) %>
+</head>
+<body>
+<% if (isExpired) { %>
+  <%- include('partials/expired') %>
+<% } else { %>
+
+  <% if (isDraftPreview) { %><div class="draftbar">Draft preview — not published</div><% } %>
+  <%- include('partials/nav') %>
+
+  <header class="hero">
+    <div class="wrap">
+      <p class="eyebrow"><%= d.prepared_by %> &times; <%= proposal.businessName %></p>
+      <h1><%= d.headline || (proposal.businessName + ' is invisible for the searches that matter.') %></h1>
+      <% if (d.intro) { %><p style="font-size:19px;color:var(--muted);margin-top:16px"><%= d.intro %></p><% } %>
+      <%- include('partials/hero-meta') %>
+    </div>
+  </header>
+
+  <main>
+    <!-- ── Where you rank ─────────────────────────────────────────────── -->
+    <section id="position">
+      <div class="wrap">
+        <div class="sec-title"><h2>Where you rank today</h2></div>
+
+        <div class="stats">
+          <div class="stat">
+            <div class="k">Average position</div>
+            <div class="v"><%= computed.rank.summary ? computed.rank.summary.currentAvgRank : '—' %></div>
+            <div class="s">Across <%= (d.target_keywords || []).length %> tracked keywords</div>
+          </div>
+          <div class="stat">
+            <div class="k">In the top 10</div>
+            <div class="v"><%= computed.rank.summary ? computed.rank.summary.currentTop10 : 0 %><span style="font-size:18px;color:var(--faint)">/<%= (d.target_keywords || []).length %></span></div>
+            <div class="s">Where the clicks are</div>
+          </div>
+          <% if (d.current_monthly_traffic) { %>
+          <div class="stat">
+            <div class="k">Monthly organic traffic</div>
+            <div class="v"><%= number(d.current_monthly_traffic) %></div>
+            <div class="s">Visits from search</div>
+          </div>
+          <% } %>
+          <% if (d.domain_authority) { %>
+          <div class="stat">
+            <div class="k">Domain authority</div>
+            <div class="v"><%= d.domain_authority %></div>
+            <div class="s">Out of 100</div>
+          </div>
+          <% } %>
+        </div>
+
+        <%- include('partials/keyword-table') %>
+      </div>
+    </section>
+
+    <!-- ── The gap ────────────────────────────────────────────────────── -->
+    <section id="gap">
+      <div class="wrap">
+        <div class="sec-title"><h2>What your competitors are taking</h2></div>
+
+        <% if ((d.competitors || []).length) { %>
+        <div class="tablewrap" style="margin-bottom:26px">
+          <table>
+            <thead><tr><th>Business</th><th>Domain</th><th class="num">Avg position</th><th>Why they win</th></tr></thead>
+            <tbody>
+              <% d.competitors.forEach(function(c){ %>
+              <tr>
+                <td><strong><%= c.name %></strong></td>
+                <td class="mono" style="font-size:13px;color:var(--muted)"><%= c.domain || '—' %></td>
+                <td class="num"><%= rankLabel(c.avg_rank) %></td>
+                <td style="font-size:14px;color:var(--muted)"><%= c.note || '' %></td>
+              </tr>
+              <% }); %>
+            </tbody>
+          </table>
+        </div>
+        <% } %>
+
+        <% if ((d.technical_issues || []).length) { %>
+          <h3 style="margin-bottom:14px">What is holding the site back</h3>
+          <div class="cards two">
+            <% d.technical_issues.forEach(function(t){ %>
+            <div class="card">
+              <h3><%= t.issue %></h3>
+              <p><%= t.impact %></p>
+              <% if (t.evidence) { %><div class="ev"><%= t.evidence %></div><% } %>
+            </div>
+            <% }); %>
+          </div>
+        <% } %>
+      </div>
+    </section>
+
+    <!-- ── Coverage ───────────────────────────────────────────────────── -->
+    <% if ((d.target_locations || []).length) { %>
+    <section id="coverage">
+      <div class="wrap">
+        <div class="sec-title"><h2>The area we will own</h2></div>
+        <p class="narrow">Local rankings are decided suburb by suburb. These are the areas we target first, and the order we take them in.</p>
+        <%- include('partials/map', { locations: d.target_locations || [], centre: d.map_center, rings: [], zoom: 10 }) %>
+      </div>
+    </section>
+    <% } %>
+
+    <!-- ── Plan ───────────────────────────────────────────────────────── -->
+    <section id="plan">
+      <div class="wrap">
+        <div class="sec-title"><h2>How we move you up</h2></div>
+        <ol class="phases">
+          <% (d.phases || []).forEach(function(p, i){ %>
+          <li>
+            <div class="ph">
+              <span class="n">Phase <%= i + 1 %></span>
+              <h3><%= p.title %></h3>
+              <span class="w"><%= p.window %></span>
+            </div>
+            <p><%= p.focus %></p>
+            <ul>
+              <% (p.deliverables || []).forEach(function(dv){ %><li><%= dv %></li><% }); %>
+            </ul>
+          </li>
+          <% }); %>
+        </ol>
+      </div>
+    </section>
+
+    <!-- ── Projection ─────────────────────────────────────────────────── -->
+    <section id="projection">
+      <div class="wrap">
+        <div class="sec-title"><h2>Where this gets you</h2></div>
+        <%- include('partials/chart-rank') %>
+
+        <% if (computed.rank.summary) { const s = computed.rank.summary; %>
+        <div class="stats">
+          <div class="stat">
+            <div class="k">Average position</div>
+            <div class="v accent">#<%= s.projectedAvgRank %></div>
+            <div class="s">From #<%= s.currentAvgRank %> today</div>
+          </div>
+          <div class="stat">
+            <div class="k">Keywords in the top 10</div>
+            <div class="v accent"><%= s.projectedTop10 %></div>
+            <div class="s">From <%= s.currentTop10 %> today</div>
+          </div>
+          <div class="stat">
+            <div class="k">Keywords in the top 3</div>
+            <div class="v accent"><%= s.projectedTop3 %></div>
+            <div class="s">From <%= s.currentTop3 %> today</div>
+          </div>
+          <% if (s.totalVolume) { %>
+          <div class="stat">
+            <div class="k">Monthly searches in play</div>
+            <div class="v"><%= number(s.totalVolume) %></div>
+            <div class="s">Combined across all keywords</div>
+          </div>
+          <% } %>
+        </div>
+        <% } %>
+
+        <% if (d.projection_note) { %>
+        <div class="note">
+          <div class="nh">What this is and isn't</div>
+          <p><%= d.projection_note %></p>
+        </div>
+        <% } %>
+      </div>
+    </section>
+
+    <!-- ── Investment ─────────────────────────────────────────────────── -->
+    <section id="price">
+      <div class="wrap">
+        <div class="sec-title"><h2>Investment</h2></div>
+        <%- include('partials/pricing') %>
+        <%- include('partials/cta') %>
+      </div>
+    </section>
+  </main>
+
+  <%- include('partials/footer') %>
+<% } %>
+</body>
+</html>

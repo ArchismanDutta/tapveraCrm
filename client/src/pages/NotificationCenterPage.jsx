@@ -14,7 +14,9 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useDispatch } from "react-redux";
 import Sidebar from "../components/dashboard/Sidebar";
+import { markNotificationsSeen } from "../store/slices/notificationSlice";
 import NotificationItem from "../components/notifications/NotificationItem";
 import DesktopNotificationsSetting from "../components/notifications/DesktopNotificationsSetting";
 import { toast } from "react-toastify";
@@ -136,6 +138,20 @@ const NotificationCenterPage = ({ onLogout }) => {
 
   // Real-time updates
   const [lastFetchTime, setLastFetchTime] = useState(new Date());
+
+  const dispatch = useDispatch();
+
+  // Opening this page is what stops the sidebar light blinking - whether or
+  // not every row then gets read. Anything arriving while the page is open is
+  // acknowledged too, so the light never blinks at someone already looking at
+  // it; the next notification after they navigate away starts it again.
+  useEffect(() => {
+    dispatch(markNotificationsSeen());
+
+    const onNotification = () => dispatch(markNotificationsSeen());
+    window.addEventListener("ws-notification", onNotification);
+    return () => window.removeEventListener("ws-notification", onNotification);
+  }, [dispatch]);
 
   useEffect(() => {
     const role = localStorage.getItem("role");

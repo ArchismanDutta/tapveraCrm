@@ -2,6 +2,8 @@
 // controllers/AttendanceController.js
 // Complete API controller for the new date-centric attendance system
 const AttendanceService = require('../services/AttendanceService');
+// One monthly calculation, shared with payroll — see the header of that file.
+const AttendanceSummaryService = require('../services/AttendanceSummaryService');
 // Access-management rework (2026-07-03) - Phase 4.3.
 // See docs/superpowers/plans/2026-07-03-access-management-rework.md
 const { can } = require('../utils/accessControl');
@@ -310,16 +312,76 @@ class AttendanceController {
       // Add monthly insights
       const insights = this.calculateMonthlyInsights(attendance.data);
 
+      // The canonical monthly figures — the same object payroll prorates by.
+      // `summary` above is the older record-driven count, kept so existing
+      // consumers keep working; anything new should read monthlySummary.
+      const monthlySummary = await AttendanceSummaryService.getMonthlySummary(
+        userId,
+        `${year}-${String(month).padStart(2, '0')}`
+      );
+
       res.json({
         success: true,
         data: {
           ...attendance,
-          insights
+          insights,
+          monthlySummary
         }
       });
 
     } catch (error) {
       console.error('Error in getEmployeeMonthly:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message
+      });
+    }
+  }
+
+  /**
+   * Get the canonical monthly attendance summary for an employee.
+   *
+   * This is the single source of truth: the attendance screens display it and
+   * payroll prorates salary by its paidDays, so the figures an employee sees
+   * are the figures they are paid on.
+   *
+   * GET /api/attendance-new/employee/:userId/summary/:year/:month
+   */
+  async getEmployeeMonthlySummary(req, res) {
+    try {
+      const { userId, year, month } = req.params;
+
+      // Same access rule as getEmployeeMonthly: self, admin/hr, an
+      // attendance:manage holder, or hierarchical reach over this employee.
+      if (
+        userId !== req.user._id.toString() &&
+        !['admin', 'super-admin', 'hr'].includes(req.user.role) &&
+        !(await can(req.user, 'attendance:manage')) &&
+        !(await canAccessUserData(req.user, userId))
+      ) {
+        return res.status(403).json({
+          success: false,
+          error: 'Access denied'
+        });
+      }
+
+      const monthNumber = parseInt(month, 10);
+      const yearNumber = parseInt(year, 10);
+      if (!yearNumber || !monthNumber || monthNumber < 1 || monthNumber > 12) {
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid year or month'
+        });
+      }
+
+      const summary = await AttendanceSummaryService.getMonthlySummary(
+        userId,
+        `${yearNumber}-${String(monthNumber).padStart(2, '0')}`
+      );
+
+      res.json({ success: true, data: summary });
+    } catch (error) {
+      console.error('Error in getEmployeeMonthlySummary:', error);
       res.status(500).json({
         success: false,
         error: error.message

@@ -114,6 +114,8 @@ const AttendancePage = ({ onLogout }) => {
   const [todayStatus, setTodayStatus] = useState(null);
   const [monthRecords, setMonthRecords] = useState([]);
   const [monthSummary, setMonthSummary] = useState(null);
+  // The canonical figures payroll prorates salary by.
+  const [monthlySummary, setMonthlySummary] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
@@ -138,6 +140,7 @@ const AttendancePage = ({ onLogout }) => {
       setLoading(true);
       setMonthRecords([]);
       setMonthSummary(null);
+      setMonthlySummary(null);
     }
 
     setError(null);
@@ -159,6 +162,7 @@ const AttendancePage = ({ onLogout }) => {
       setTodayStatus(todayResponse.data?.attendance || null);
       setMonthRecords(monthResponse.data?.data || []);
       setMonthSummary(monthResponse.data?.summary || null);
+      setMonthlySummary(monthResponse.data?.monthlySummary || null);
     } catch (err) {
       setError(err.message || "Failed to load attendance.");
     } finally {
@@ -231,6 +235,33 @@ const AttendancePage = ({ onLogout }) => {
   }, [monthRecords]);
 
   const computedSummary = useMemo(() => {
+    // Prefer the canonical summary: it walks the calendar (so it can see a
+    // day with no record at all), resolves leave from the approved requests
+    // rather than what happened to be stamped on a record, and is the exact
+    // object payroll prorates by. The block below it counts attendance rows,
+    // which cannot represent an absence, and is only a fallback for an older
+    // server.
+    if (monthlySummary) {
+      const round1 = (value) => Math.round((value || 0) * 10) / 10;
+      return {
+        totalDays: monthlySummary.daysInMonth,
+        presentDays: monthlySummary.presentDays,
+        lateDays: monthlySummary.lateDays,
+        absentDays: monthlySummary.absentDays,
+        halfDays: monthlySummary.halfDays,
+        wfhDays: monthlySummary.wfhDays,
+        paidLeaveDays: monthlySummary.paidLeaveDays,
+        unpaidLeaveDays: monthlySummary.unpaidLeaveDays,
+        paidDays: monthlySummary.paidDays,
+        expectedWorkingDays: monthlySummary.expectedWorkingDays,
+        holidayDays: monthlySummary.holidayDays,
+        totalHours: round1(monthlySummary.totalWorkHours),
+        averageHours: round1(monthlySummary.averageWorkHours),
+        attendanceRate: monthlySummary.attendanceRate,
+        punctualityRate: monthlySummary.punctualityRate,
+      };
+    }
+
     const totalDays = monthSummary?.totalDays ?? monthRecords.length;
     const presentDays =
       monthSummary?.presentDays ?? monthRecords.filter((record) => record.isPresent).length;
@@ -256,7 +287,7 @@ const AttendancePage = ({ onLogout }) => {
       attendanceRate,
       punctualityRate,
     };
-  }, [monthRecords, monthSummary]);
+  }, [monthRecords, monthSummary, monthlySummary]);
 
   const activeStyle = todayStatus?.onBreak
     ? statusStyles.break
@@ -448,11 +479,41 @@ const AttendancePage = ({ onLogout }) => {
               />
               <MetricCard
                 icon={TrendingUp}
-                label="Records"
-                value={computedSummary.totalDays}
+                label={monthlySummary ? "Paid days" : "Records"}
+                value={monthlySummary ? computedSummary.paidDays : computedSummary.totalDays}
+                hint={monthlySummary ? `of ${computedSummary.totalDays} — salary is prorated on this` : undefined}
                 tone="violet"
               />
             </div>
+
+            {monthlySummary && (
+              <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                <MetricCard icon={Home} label="Work from home" value={computedSummary.wfhDays} tone="blue" />
+                <MetricCard icon={CalendarDays} label="Paid leave" value={computedSummary.paidLeaveDays} tone="emerald" />
+                <MetricCard
+                  icon={TimerReset}
+                  label="Unpaid leave"
+                  value={computedSummary.unpaidLeaveDays}
+                  hint={computedSummary.unpaidLeaveDays > 0 ? "deducted on the payslip" : undefined}
+                  tone="rose"
+                />
+                <MetricCard
+                  icon={Hourglass}
+                  label="Half days"
+                  value={computedSummary.halfDays}
+                  hint={computedSummary.halfDays > 0 ? "counted as half a paid day" : undefined}
+                  tone="amber"
+                />
+              </div>
+            )}
+
+            {monthlySummary && (
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                {computedSummary.expectedWorkingDays} working days this month
+                {computedSummary.holidayDays > 0 && `, ${computedSummary.holidayDays} company holiday${computedSummary.holidayDays > 1 ? "s" : ""}`}
+                . Weekends and holidays are paid, so full attendance earns the full month.
+              </p>
+            )}
 
             <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_400px]">
               <div
@@ -629,12 +690,13 @@ const AttendancePage = ({ onLogout }) => {
   );
 };
 
-const MetricCard = ({ icon, label, value, tone }) => {
+const MetricCard = ({ icon, label, value, tone, hint }) => {
   const toneClass = {
     emerald: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-200",
     amber: "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-200",
     rose: "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-400/20 dark:bg-rose-400/10 dark:text-rose-200",
     violet: "border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-400/20 dark:bg-violet-400/10 dark:text-violet-200",
+    blue: "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-400/20 dark:bg-blue-400/10 dark:text-blue-200",
   }[tone];
 
   return (
@@ -644,6 +706,7 @@ const MetricCard = ({ icon, label, value, tone }) => {
       </div>
       <p className="text-xs text-slate-500 dark:text-slate-400">{label}</p>
       <p className="mt-1 text-2xl font-semibold text-slate-950 dark:text-white">{value}</p>
+      {hint && <p className="mt-1 text-[11px] leading-4 text-slate-400 dark:text-slate-500">{hint}</p>}
     </div>
   );
 };

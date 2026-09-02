@@ -468,7 +468,7 @@ const PayslipModal = ({ isOpen, onClose, employeeId = null }) => {
                     </tr>
                     <tr>
                       <td>ESI (Employee)</td>
-                      <td>${formatCurrency(payslipData.deductions?.esi)}</td>
+                      <td>${formatCurrency(payslipData.deductions?.employeeESI ?? payslipData.deductions?.esi)}</td>
                     </tr>
                     <tr>
                       <td>Professional Tax</td>
@@ -827,7 +827,7 @@ const PayslipModal = ({ isOpen, onClose, employeeId = null }) => {
                           </tr>
                           <tr>
                             <td className="py-2 text-gray-300">ESI (Employee)</td>
-                            <td className="py-2 text-right text-white font-medium">{formatCurrency(payslipData.deductions?.esi)}</td>
+                            <td className="py-2 text-right text-white font-medium">{formatCurrency(payslipData.deductions?.employeeESI ?? payslipData.deductions?.esi)}</td>
                           </tr>
                           <tr>
                             <td className="py-2 text-gray-300">Professional Tax</td>

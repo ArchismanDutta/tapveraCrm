@@ -1,0 +1,240 @@
+{
+  "business_name": "EZ Shower Repair and Tiling",
+  "website_url": "https://ezshowerrepair.com.au",
+  "contact_name": "Dave Whitmore",
+  "city": "Brisbane",
+  "state": "QLD",
+  "country": "Australia",
+  "industry": "Leaking shower repairs and regrouting",
+  "prepared_by": "Tapvera Technologies",
+  "prepared_by_email": "hello@tapvera.io",
+  "prepared_by_phone": "+61 7 3040 1122",
+  "valid_until": "2026-09-30",
+  "agent_brief": "Site is live and indexed but thin on service pages. No suburb pages at all. Competitors have 40+ location pages each.",
+  "tone": "Direct and consultative",
+  "currency": "AUD",
+  "headline": "You rank on page four for the searches that pay, and page one belongs to three competitors.",
+  "intro": "Across the fourteen searches that actually generate shower repair enquiries in Brisbane, your average position is 60 and not one of them sits in the top ten. Meanwhile Brisbane Shower Repairs holds an average of 4. Your site is indexed and healthy \u2014 it is simply not built to answer the searches people are making.",
+  "current_monthly_traffic": 210,
+  "domain_authority": 12,
+  "indexed_pages": 18,
+  "target_keywords": [
+    {
+      "keyword": "leaking shower repair brisbane",
+      "current_rank": 34,
+      "target_rank": 3,
+      "monthly_volume": 880,
+      "difficulty": "Medium",
+      "intent": "Commercial"
+    },
+    {
+      "keyword": "shower regrouting brisbane",
+      "current_rank": 101,
+      "target_rank": 6,
+      "monthly_volume": 320,
+      "difficulty": "Low",
+      "intent": "Commercial"
+    },
+    {
+      "keyword": "bathroom waterproofing brisbane",
+      "current_rank": 62,
+      "target_rank": 5,
+      "monthly_volume": 590,
+      "difficulty": "High",
+      "intent": "Commercial"
+    },
+    {
+      "keyword": "shower sealing near me",
+      "current_rank": 18,
+      "target_rank": 2,
+      "monthly_volume": 210,
+      "difficulty": "Low",
+      "intent": "Transactional"
+    },
+    {
+      "keyword": "leaking shower repair no tile removal",
+      "current_rank": 47,
+      "target_rank": 4,
+      "monthly_volume": 140,
+      "difficulty": "Low",
+      "intent": "Commercial"
+    },
+    {
+      "keyword": "shower repair gold coast",
+      "current_rank": 101,
+      "target_rank": 8,
+      "monthly_volume": 480,
+      "difficulty": "High",
+      "intent": "Commercial"
+    }
+  ],
+  "competitors": [
+    {
+      "name": "Brisbane Shower Repairs",
+      "domain": "brisbaneshowerrepairs.com.au",
+      "avg_rank": 4,
+      "note": "62 suburb landing pages"
+    },
+    {
+      "name": "Leak Doctor QLD",
+      "domain": "leakdoctorqld.com.au",
+      "avg_rank": 9,
+      "note": "Strong review volume and GBP posts"
+    },
+    {
+      "name": "SealRite Bathrooms",
+      "domain": "sealrite.com.au",
+      "avg_rank": 14,
+      "note": "Weekly blog since 2023"
+    }
+  ],
+  "technical_issues": [
+    {
+      "issue": "No suburb landing pages",
+      "impact": "Every 'near me' and suburb-qualified search resolves to your homepage, which cannot rank for thirty different places at once.",
+      "evidence": "18 indexed pages, none targeting a Brisbane suburb"
+    },
+    {
+      "issue": "Service pages have no unique copy",
+      "impact": "Three of your service pages share the same 90 words with the category name swapped, so Google treats them as one page and ranks none of them.",
+      "evidence": "/regrouting, /resealing and /shower-repairs are 94% identical"
+    },
+    {
+      "issue": "No structured data",
+      "impact": "Your business hours, service area and reviews are invisible to Google's rich results, which is where the local pack draws from.",
+      "evidence": "No LocalBusiness schema found on any page"
+    },
+    {
+      "issue": "Mobile page weight",
+      "impact": "The gallery loads eleven full-size photos before any text renders, and most of your traffic is on a phone standing in a wet bathroom.",
+      "evidence": "4.2 MB homepage, largest image 1.8 MB"
+    }
+  ],
+  "map_center": {
+    "lat": -27.4698,
+    "lng": 153.0251
+  },
+  "target_locations": [
+    {
+      "name": "Brisbane CBD",
+      "lat": -27.4698,
+      "lng": 153.0251,
+      "radiusKm": 8,
+      "priority": "Primary"
+    },
+    {
+      "name": "Chermside",
+      "lat": -27.3856,
+      "lng": 153.03,
+      "radiusKm": 6,
+      "priority": "Primary"
+    },
+    {
+      "name": "Mount Gravatt",
+      "lat": -27.5386,
+      "lng": 153.08,
+      "radiusKm": 6,
+      "priority": "Primary"
+    },
+    {
+      "name": "Indooroopilly",
+      "lat": -27.4989,
+      "lng": 152.9733,
+      "radiusKm": 5,
+      "priority": "Primary"
+    },
+    {
+      "name": "Redcliffe",
+      "lat": -27.23,
+      "lng": 153.11,
+      "radiusKm": 7,
+      "priority": "Secondary"
+    },
+    {
+      "name": "Ipswich",
+      "lat": -27.6171,
+      "lng": 152.76,
+      "radiusKm": 8,
+      "priority": "Secondary"
+    },
+    {
+      "name": "Logan Central",
+      "lat": -27.6392,
+      "lng": 153.1086,
+      "radiusKm": 7,
+      "priority": "Secondary"
+    }
+  ],
+  "engagement_months": 6,
+  "projection_note": "This trajectory is a projection built from the difficulty and competition of the six keywords above, not a guarantee. Search results are ranked by Google and no agency controls that. What we commit to is the work in each phase, delivered on the dates given.",
+  "phases": [
+    {
+      "title": "Foundations and cleanup",
+      "window": "Months 1\u20132",
+      "focus": "Fix what is actively blocking the site from ranking before adding anything new to it.",
+      "deliverables": [
+        "Rewrite the three duplicate service pages as distinct, useful pages",
+        "Add LocalBusiness and Service structured data across the site",
+        "Compress and lazy-load the gallery, cutting homepage weight to under 900 KB",
+        "Fix internal linking so service pages are reachable in one click"
+      ]
+    },
+    {
+      "title": "Suburb coverage",
+      "window": "Months 2\u20134",
+      "focus": "Build the pages that answer suburb-qualified searches your homepage currently absorbs.",
+      "deliverables": [
+        "12 suburb landing pages for the primary areas, each with local job photos",
+        "Suburb-specific FAQ blocks answering real enquiry questions",
+        "Internal linking hub connecting suburbs to services"
+      ]
+    },
+    {
+      "title": "Authority and reviews",
+      "window": "Months 4\u20136",
+      "focus": "Give Google the trust signals that separate position 6 from position 2.",
+      "deliverables": [
+        "Directory and trade association citations, consistent NAP across all",
+        "Review generation flow sending customers to Google after each job",
+        "Two long-form guides targeting the informational searches that precede a booking"
+      ]
+    }
+  ],
+  "pricing_tiers": [
+    {
+      "name": "Foundation",
+      "tagline": "Fix the site and cover the core suburbs",
+      "price": 890,
+      "billing": "Per month, 6-month term",
+      "duration": "6 months \u00b7 12 suburb pages",
+      "features": [
+        "Technical fixes and structured data",
+        "12 suburb landing pages",
+        "6 keywords tracked weekly",
+        "Monthly ranking report"
+      ],
+      "highlighted": false
+    },
+    {
+      "name": "Growth",
+      "tagline": "Full coverage plus authority building",
+      "price": 1450,
+      "billing": "Per month, 12-month term",
+      "duration": "12 months \u00b7 30 suburb pages",
+      "features": [
+        "Everything in Foundation",
+        "30 suburb landing pages",
+        "Citation building and NAP cleanup",
+        "Review generation flow",
+        "Two long-form guides a month",
+        "20 keywords tracked weekly",
+        "Fortnightly reporting call"
+      ],
+      "highlighted": true
+    }
+  ],
+  "payment_terms": "Monthly in advance. Thirty days notice to cancel, no exit fee.",
+  "cta_label": "Start with Growth",
+  "closing_note": "The six keywords above represent about 2,600 searches a month in Brisbane, and you currently appear in the top ten for none of them. The work in phase one takes eight weeks and is what everything else depends on.",
+  "disclaimer": "Findings are based on publicly available information at the time of writing. Search engine rankings are determined by Google and cannot be guaranteed by any third party. Traffic and position projections are estimates based on keyword difficulty and current competition."
+}

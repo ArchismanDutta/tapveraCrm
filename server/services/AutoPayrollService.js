@@ -1,11 +1,11 @@
 // services/AutoPayrollService.js
 // Automatic Payroll Service - Fetches attendance data and calculates salary automatically
 
-const AttendanceRecord = require("../models/AttendanceRecord");
-const LeaveRequest = require("../models/LeaveRequest");
 const User = require("../models/User");
 const Payslip = require("../models/Payslip");
-const AttendanceService = require("./AttendanceService");
+// Attendance counting lives in one place now; this service only turns the
+// resulting figures into money.
+const AttendanceSummaryService = require("./AttendanceSummaryService");
 
 class AutoPayrollService {
   constructor() {
@@ -123,230 +123,71 @@ class AutoPayrollService {
   }
 
   /**
-   * Fetch attendance data for an employee for a specific month
+   * Fetch attendance data for an employee for a specific month.
+   *
+   * The counting itself lives in AttendanceSummaryService, which the
+   * attendance screens read too. Payroll and the attendance page have to
+   * agree about what a month looked like, and the only way to guarantee that
+   * is for there to be a single calculation. This method adapts the canonical
+   * summary to the field names the rest of the payroll pipeline and the admin
+   * payroll screen already use.
+   *
    * @param {string} userId - Employee ID
    * @param {string} payPeriod - Format: "YYYY-MM"
    * @returns {Object} Attendance summary
    */
   async fetchAttendanceForMonth(userId, payPeriod) {
-    const [year, month] = payPeriod.split("-").map(Number);
+    const summary = await AttendanceSummaryService.getMonthlySummary(userId, payPeriod);
 
-    // Get start and end dates for the month
-    const startDate = new Date(year, month - 1, 1);
-    startDate.setHours(0, 0, 0, 0);
-
-    const endDate = new Date(year, month, 0);
-    endDate.setHours(23, 59, 59, 999);
-
+    console.log(`\u2705 Attendance summary for ${userId} \u2014 ${payPeriod}:`);
     console.log(
-      `📅 Fetching attendance for ${userId} from ${startDate.toISOString()} to ${endDate.toISOString()}`
+      `   ${summary.daysInMonth} days in month (${summary.weekendDays} weekend, ${summary.holidayDays} holiday \u2014 all paid)`
     );
-
-    // Fetch all attendance records for the month
-    const attendanceRecords = await AttendanceRecord.find({
-      date: { $gte: startDate, $lte: endDate },
-    }).lean();
-
+    console.log(`   Expected working days: ${summary.expectedWorkingDays}`);
     console.log(
-      `📊 Found ${attendanceRecords.length} total attendance records for the period`
+      `   Present ${summary.presentDays} | Half days ${summary.halfDays} | WFH ${summary.wfhDays}`
     );
-
-    let presentDays = 0;
-    let lateDays = 0;
-    let halfDays = 0;
-    let fullDays = 0;
-    let wfhDays = 0;
-    let paidLeaveDays = 0;
-    let unpaidLeaveDays = 0;
-    let totalWorkHours = 0;
-    const attendanceDetails = [];
-    let recordsWithEmployee = 0;
-
-    // Process each attendance record
-    for (const record of attendanceRecords) {
-      const employeeData = record.employees?.find(
-        (emp) => emp.userId && emp.userId.toString() === userId.toString()
-      );
-
-      if (employeeData) {
-        recordsWithEmployee++;
-
-        // ⭐ IMPORTANT: Recalculate employee data to ensure isLate and lateMinutes are consistent
-        // This ensures we use the latest calculation logic, not cached data
-        const attendanceService = new AttendanceService();
-        attendanceService.recalculateEmployeeData(employeeData, record.date);
-
-        const calc = employeeData.calculated || {};
-        const leaveInfo = employeeData.leaveInfo || {};
-
-        // Debug logging for tracking issues
-        if (calc.isLate || calc.isHalfDay) {
-          console.log(`   📅 ${record.date.toISOString().split('T')[0]}: isLate=${calc.isLate}, lateMinutes=${calc.lateMinutes}, isHalfDay=${calc.isHalfDay}, workHours=${(calc.workDurationSeconds / 3600).toFixed(2)}`);
-        }
-
-        // Track attendance details
-        attendanceDetails.push({
-          date: record.date,
-          status: calc.isPresent
-            ? "present"
-            : calc.isAbsent
-            ? "absent"
-            : "unknown",
-          isLate: calc.isLate || false,
-          lateMinutes: calc.lateMinutes || 0,
-          isHalfDay: calc.isHalfDay || false,
-          isFullDay: calc.isFullDay || false,
-          workHours: calc.workDurationSeconds
-            ? calc.workDurationSeconds / 3600
-            : 0,
-          isWFH: leaveInfo.isWFH || false,
-          isPaidLeave: leaveInfo.isPaidLeave || false,
-          leaveType: leaveInfo.leaveType || null,
-          arrivalTime: calc.arrivalTime,
-          departureTime: calc.departureTime,
-        });
-
-        // Determine day type (priority order: WFH > Paid Leave > Unpaid Leave > Present/Absent)
-        const isWFH = leaveInfo.isWFH || false;
-        const isPaidLeave = leaveInfo.isPaidLeave || false;
-        const isUnpaidLeave =
-          leaveInfo.isOnLeave && leaveInfo.leaveType === "unpaid";
-
-        // Count WFH days (full payment, counts as paid day)
-        if (isWFH) {
-          wfhDays++;
-          console.log(`   🏠 ${record.date.toISOString().split('T')[0]}: WFH Day`);
-        }
-        // Count paid leave days (full payment, counts as paid day)
-        else if (isPaidLeave) {
-          paidLeaveDays++;
-          console.log(`   🌴 ${record.date.toISOString().split('T')[0]}: Paid Leave (${leaveInfo.leaveType})`);
-        }
-        // Count unpaid leave days (no payment)
-        else if (isUnpaidLeave) {
-          unpaidLeaveDays++;
-          console.log(`   ❌ ${record.date.toISOString().split('T')[0]}: Unpaid Leave`);
-        }
-        // Count present days (attendance-based payment)
-        else if (calc.isPresent) {
-          presentDays++;
-
-          // Count late days (isLate is now guaranteed to be consistent with lateMinutes > 0)
-          if (calc.isLate) {
-            lateDays++;
-            console.log(`   ⏰ ${record.date.toISOString().split('T')[0]}: Late Day (${calc.lateMinutes} min)`);
-          }
-
-          if (calc.isHalfDay) {
-            halfDays++;
-            console.log(`   🕐 ${record.date.toISOString().split('T')[0]}: Half Day (${(calc.workDurationSeconds / 3600).toFixed(2)} hrs)`);
-          } else if (calc.isFullDay) {
-            fullDays++;
-          }
-
-          // Add work hours
-          totalWorkHours += calc.workDurationSeconds
-            ? calc.workDurationSeconds / 3600
-            : 0;
-        } else {
-          console.log(`   ❌ ${record.date.toISOString().split('T')[0]}: Absent or Not Processed - isPresent=${calc.isPresent}, isWFH=${isWFH}, isPaidLeave=${isPaidLeave}`);
-        }
-      }
-    }
-
     console.log(
-      `👤 Found ${recordsWithEmployee} attendance records for employee ${userId}`
+      `   Paid leave ${summary.paidLeaveDays} | Unpaid leave ${summary.unpaidLeaveDays}`
     );
+    console.log(`   Absent (unexcused) ${summary.absentDays} | Late ${summary.lateDays}`);
+    console.log(
+      `   Break-policy flagged ${summary.breakPolicyFlaggedDays} (not deducted)`
+    );
+    console.log(`   => Paid days ${summary.paidDays} of ${summary.daysInMonth}`);
 
-    const workingDays = this.getWorkingDaysInMonth(year, month);
-
-    // Calculate weekend days (Saturdays and Sundays) in the month
-    const weekendDays = this.getWeekendDaysInMonth(year, month);
-
-    // Calculate paid days
-    // CRITICAL FIX (2026-07-31): Remove automatic weekend payment
-    //
-    // Paid days = Present days + Paid leave days + WFH days - Unpaid leave days
-    //
-    // Note:
-    // - WFH days receive full payment (no deduction)
-    // - Paid leave days receive full payment (no deduction)
-    // - Present days receive payment based on attendance (with half-day deductions if applicable)
-    // - Weekend days are NOT automatically paid (employees only paid for days worked)
-    // - Unpaid leave days receive NO payment
-    //
-    // REMOVED: Weekend days auto-payment (Bug #1 fix)
-    // Previously, all weekend days were added to paidDays, causing 26-40% overpayment.
-    // Now, employees are only paid for actual working days + approved leaves.
-    //
-    // If weekend work is required, it should be marked as:
-    // - Present day (with punch in/out records)
-    // - Paid leave day (if company policy pays weekends)
-    // - WFH day (if working from home on weekend)
-    const paidDays = presentDays + paidLeaveDays + wfhDays - unpaidLeaveDays;
-
-    // Log final summary
-    console.log(`✅ Attendance Summary for ${userId}:`);
-    console.log(`   Working Days (Total days in month): ${workingDays}`);
-    console.log(`   Present Days: ${presentDays}`);
-    console.log(`   Paid Leave Days: ${paidLeaveDays}`);
-    console.log(`   WFH Days (Full Payment): ${wfhDays}`);
-    console.log(`   Weekend Days (Sat & Sun - NOT Auto-Paid): ${weekendDays}`);
-    console.log(`   Unpaid Leave Days: ${unpaidLeaveDays}`);
-    console.log(`   Total Paid Days: ${paidDays}`);
-    console.log(`   Late Days: ${lateDays}`);
-    console.log(`   Half Days: ${halfDays}`);
-
-    // Warning if paid days are very low
-    if (recordsWithEmployee === 0) {
+    if (summary.upcomingDays > 0) {
       console.warn(
-        `⚠️  WARNING: No attendance records found for employee ${userId} in ${payPeriod}`
-      );
-      console.warn(
-        `⚠️  This will result in 0 paid days and minimal salary calculation!`
-      );
-      console.warn(
-        `⚠️  Please ensure attendance records are properly maintained for this employee.`
-      );
-    } else if (paidDays < workingDays * 0.5) {
-      console.warn(
-        `⚠️  WARNING: Low paid days (${paidDays}/${workingDays}) for employee ${userId}`
-      );
-      console.warn(
-        `⚠️  This will result in significantly reduced salary. Please verify attendance data.`
+        `\u26a0\ufe0f  ${payPeriod} has not finished \u2014 ${summary.upcomingDays} day(s) have not happened yet and earn nothing.`
       );
     }
-
-    // Check for perfect attendance (present all working days excluding weekends)
-    const totalWorkingDaysExcludingWeekends =
-      this.getWorkingDaysExcludingWeekends(year, month);
-    const hasPerfectAttendance =
-      presentDays + wfhDays + paidLeaveDays >=
-        totalWorkingDaysExcludingWeekends &&
-      unpaidLeaveDays === 0 &&
-      halfDays === 0;
+    if (summary.absentDays > summary.expectedWorkingDays * 0.5) {
+      console.warn(
+        `\u26a0\ufe0f  ${summary.absentDays} of ${summary.expectedWorkingDays} working days have neither attendance nor approved leave for ${userId}. Verify the attendance data before issuing this payslip.`
+      );
+    }
 
     return {
-      workingDays,
-      presentDays,
-      lateDays,
-      halfDays,
-      fullDays,
-      wfhDays,
-      paidLeaveDays,
-      unpaidLeaveDays,
-      paidDays,
-      totalWorkHours,
-      attendanceDetails,
-      hasPerfectAttendance, // New field for perfect attendance check
-      totalWorkingDaysExcludingWeekends, // Working days excluding Sat & Sun
+      // The canonical summary, for anything that wants the full picture
+      // (including the per-day breakdown in `days`).
+      ...summary,
+
+      // Payroll-facing names. workingDays is the proration divisor, which is
+      // every day of the month \u2014 see calculateSalaryBreakdown.
+      workingDays: summary.daysInMonth,
+      fullDays: summary.presentDays,
+      totalWorkingDaysExcludingWeekends: summary.expectedWorkingDays,
+      attendanceDetails: summary.days,
+
       summary: {
-        totalDays: workingDays,
-        paidDays: paidDays,
-        unpaidDays: workingDays - paidDays,
-        lateCount: lateDays,
-        halfDayCount: halfDays,
-        effectivePaidDays: paidDays - halfDays * 0.5, // Half-days count as 0.5 for some calculations
+        totalDays: summary.daysInMonth,
+        paidDays: summary.paidDays,
+        unpaidDays: Math.round((summary.daysInMonth - summary.paidDays) * 100) / 100,
+        absentDays: summary.absentDays,
+        lateCount: summary.lateDays,
+        halfDayCount: summary.halfDays,
+        // Half days are already counted at 0.5 in paidDays.
+        effectivePaidDays: summary.paidDays,
       },
     };
   }
@@ -553,8 +394,18 @@ class AutoPayrollService {
       other: manualDeductions.other || 0,
       advance: manualDeductions.advance || 0,
 
-      // Kept for schema/UI compatibility; excluded from the new formula.
-      lateDeduction: 0,
+      // Late policy (DEDUCTION_CONSTANTS): the first LATE_FREE_DAYS lates
+      // cost nothing, then every LATE_CYCLE lates costs a day's pay and each
+      // leftover late costs EXTRA_LATE_PENALTY. calculateLateDeduction had
+      // been written but never called, so lateDays was shown on payslips
+      // while changing no money.
+      lateDeduction: this.calculateLateDeduction(
+        lateDays,
+        monthlySalary / safeWorkingDays
+      ),
+
+      // Half days are already paid at half rate through paidDays, so
+      // charging here as well would take the same half day twice.
       halfDayDeduction: 0,
     };
 
@@ -579,6 +430,7 @@ class AutoPayrollService {
       deductions.tds +
       deductions.ptax +
       deductions.lwpDeduction +
+      deductions.lateDeduction +
       deductions.other +
       deductions.advance;
     const netPayment = netTotal - totalDeductions;
@@ -605,6 +457,9 @@ class AutoPayrollService {
         employeePF: Math.round(deductions.employeePF * 100) / 100,
         esi: Math.round(deductions.esi * 100) / 100,
         ptax: deductions.ptax,
+        // Leave-without-pay: was counted in totalDeductions but never
+        // returned, so it never showed up on the payslip breakdown.
+        lwpDeduction: Math.round(deductions.lwpDeduction * 100) / 100,
         lateDeduction: Math.round(deductions.lateDeduction * 100) / 100,
         halfDayDeduction: Math.round(deductions.halfDayDeduction * 100) / 100,
         tds: deductions.tds,
@@ -618,6 +473,73 @@ class AutoPayrollService {
       },
       netPayment: Math.round(netPayment * 100) / 100,
       ctc: Math.round(ctc * 100) / 100,
+    };
+  }
+
+  /**
+   * Map a calculateSalaryBreakdown() result onto the Payslip schema shape.
+   *
+   * The calculation object keeps the names the payroll preview UI expects
+   * (netPayment / grossComponents / eligibility / deductions.esi); the
+   * stored document uses the schema's names (netSalary / paidComponents /
+   * pfEligible / esiEligible / deductions.employeeESI). Without this map,
+   * Mongoose strips the unknown keys and rejects the save because the
+   * required netSalary is missing.
+   *
+   * @param {Object} calculations - Output of calculateSalaryBreakdown()
+   * @returns {Object} Payslip-schema-shaped fields
+   */
+  mapCalculationsToPayslip(calculations = {}) {
+    const d = calculations.deductions || {};
+    const eligibility = calculations.eligibility || {};
+
+    return {
+      salaryComponents: calculations.salaryComponents,
+      paidComponents: calculations.paidComponents || calculations.grossComponents,
+      grossTotal: calculations.grossTotal,
+      netTotal: calculations.netTotal,
+      pfEligible: Boolean(eligibility.pf),
+      esiEligible: Boolean(eligibility.esi),
+      deductions: {
+        employeePF: d.employeePF || 0,
+        employeeESI: d.employeeESI != null ? d.employeeESI : (d.esi || 0),
+        ptax: d.ptax || 0,
+        tds: d.tds || 0,
+        advance: d.advance || 0,
+        lwpDeduction: d.lwpDeduction || 0,
+        lateDeduction: d.lateDeduction || 0,
+        halfDayDeduction: d.halfDayDeduction || 0,
+        other: d.other || 0,
+        otherLabel: d.otherLabel || "",
+      },
+      totalDeductions: calculations.totalDeductions,
+      employerContributions: calculations.employerContributions,
+      netSalary: calculations.netSalary != null ? calculations.netSalary : calculations.netPayment,
+      ctc: calculations.ctc,
+    };
+  }
+
+  /**
+   * Snapshot the employee's statutory details at generation time, so a
+   * later profile edit never rewrites an already-issued payslip.
+   * @param {Object} employee - User document
+   * @returns {Object} employeeSnapshot
+   */
+  buildEmployeeSnapshot(employee = {}) {
+    return {
+      name: employee.name || "",
+      employeeId: employee.employeeId || "",
+      designation: employee.designation || "",
+      department: employee.department || "",
+      location: employee.location || "",
+      doj: employee.doj,
+      pan: employee.pan || "",
+      uan: employee.uan || "",
+      pfNumber: employee.pfNumber || "",
+      esiNumber: employee.esiNumber || "",
+      bankAccountNumber: employee.bankAccountNumber || "",
+      bankName: employee.bankName || "",
+      ifscCode: employee.ifscCode || "",
     };
   }
 
@@ -700,22 +622,18 @@ class AutoPayrollService {
     const payslip = new Payslip({
       employee: userId,
       payPeriod,
+      employeeSnapshot: this.buildEmployeeSnapshot(employee),
       monthlySalary,
+      // fetchAttendanceForMonth() returns the calendar days of the month as
+      // workingDays, and that is the divisor the proration above used, so
+      // both schema fields are set from it to keep the payslip self-consistent.
+      totalDays: attendanceData.workingDays,
       workingDays: attendanceData.workingDays,
       paidDays: attendanceData.paidDays,
+      lwp: attendanceData.unpaidLeaveDays || 0,
       lateDays: attendanceData.lateDays,
       halfDays: attendanceData.halfDays,
-      bonuses: calculations.bonuses,
-      salaryComponents: calculations.salaryComponents,
-      grossComponents: calculations.grossComponents,
-      grossTotal: calculations.grossTotal,
-      netTotal: calculations.netTotal,
-      eligibility: calculations.eligibility,
-      deductions: calculations.deductions,
-      totalDeductions: calculations.totalDeductions,
-      employerContributions: calculations.employerContributions,
-      netPayment: calculations.netPayment,
-      ctc: calculations.ctc,
+      ...this.mapCalculationsToPayslip(calculations),
       remarks,
       createdBy,
     });

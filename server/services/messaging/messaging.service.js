@@ -818,9 +818,11 @@ function _maybePush({ userId, notificationId, scope, threadId, mentioned, title,
       // One banner per thread: the OS replaces rather than stacks, so a burst
       // reads as one conversation needing attention instead of five alerts.
       tag: `thread-${scope}-${threadId}`,
+      // Both are real routes and both are read on arrival: the project
+       // detail route is singular, and ChatPage opens ?conversation= on load.
       url:
         scope === SCOPES.PROJECT
-          ? `/projects/${threadId}`
+          ? `/project/${threadId}`
           : `/messages?conversation=${threadId}`,
       data: { scope, threadId, notificationId: String(notificationId || '') },
     });

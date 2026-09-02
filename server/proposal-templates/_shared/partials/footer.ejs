@@ -1,0 +1,95 @@
+<%
+/**
+ * partials/footer — attribution, disclaimer, and the read-receipt beacon.
+ *
+ * ───────────────────────────────────────────────────────────────────────────
+ * WHY A BEACON RATHER THAN COUNTING REQUESTS
+ * ───────────────────────────────────────────────────────────────────────────
+ * The HTML is cached at the Cloudflare edge, so a second read never reaches
+ * the origin and would never be counted. The beacon runs in the reader's
+ * browser, so it survives the cache — and it is the only thing that can report
+ * the two numbers a salesperson actually wants: how far they scrolled and how
+ * long they stayed.
+ *
+ * `sendBeacon` on unload rather than fetch, because a normal request is
+ * cancelled when the tab closes, which is exactly the moment the dwell time
+ * becomes known.
+ */
+%>
+<footer class="doc">
+  <div class="wrap">
+    <% if (d.disclaimer) { %><p class="caveat" style="margin-bottom:18px"><%= d.disclaimer %></p><% } %>
+    <div class="fl">
+      <span><%= d.prepared_by %><% if (d.prepared_by_email) { %> · <%= d.prepared_by_email %><% } %></span>
+      <span><%= template.name %> · <%= longDate(proposal.publishedAt || new Date()) %></span>
+    </div>
+  </div>
+</footer>
+
+<% if (mode === 'web' && proposal.id && proposal.id !== 'sample') { %>
+<script>
+(function(){
+  var endpoint = '<%= apiBase %>/api/proposal-views';
+  var id = '<%= proposal.id %>';
+  var session = (Math.random().toString(36).slice(2) + Date.now().toString(36));
+  var started = Date.now();
+  var maxScroll = 0;
+  var seen = [];
+
+  function depth(){
+    var h = document.documentElement;
+    var scrollable = h.scrollHeight - h.clientHeight;
+    if (scrollable <= 0) return 100;
+    return Math.min(100, Math.round(((h.scrollTop || document.body.scrollTop) / scrollable) * 100));
+  }
+
+  var ticking = false;
+  window.addEventListener('scroll', function(){
+    if (ticking) return;
+    ticking = true;
+    requestAnimationFrame(function(){
+      maxScroll = Math.max(maxScroll, depth());
+      ticking = false;
+    });
+  }, { passive: true });
+
+  // Which named sections actually came into view, in the order they did.
+  if ('IntersectionObserver' in window) {
+    var io = new IntersectionObserver(function(entries){
+      entries.forEach(function(e){
+        if (e.isIntersecting && e.target.id && seen.indexOf(e.target.id) === -1) seen.push(e.target.id);
+      });
+    }, { threshold: 0.4 });
+    document.querySelectorAll('section[id]').forEach(function(s){ io.observe(s); });
+  }
+
+  function payload(final){
+    return JSON.stringify({
+      proposalId: id,
+      sessionId: session,
+      scrollDepth: maxScroll,
+      dwellMs: final ? Date.now() - started : 0,
+      sectionsSeen: seen,
+      referrer: document.referrer || ''
+    });
+  }
+
+  // The open, sent immediately — a reader who closes the tab in two seconds
+  // still counts as having opened it.
+  try {
+    fetch(endpoint, {
+      method: 'POST', keepalive: true,
+      headers: { 'Content-Type': 'application/json' },
+      body: payload(false)
+    }).catch(function(){});
+  } catch (e) {}
+
+  // The close, with the numbers that only exist at the end.
+  function finish(){
+    try { navigator.sendBeacon(endpoint, new Blob([payload(true)], { type: 'application/json' })); } catch (e) {}
+  }
+  document.addEventListener('visibilitychange', function(){ if (document.visibilityState === 'hidden') finish(); });
+  window.addEventListener('pagehide', finish);
+})();
+</script>
+<% } %>

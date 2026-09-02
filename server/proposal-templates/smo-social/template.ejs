@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head><%- include('partials/head') %></head>
+<body>
+<% if (isExpired) { %><%- include('partials/expired') %><% } else { %>
+  <% if (isDraftPreview) { %><div class="draftbar">Draft preview — not published</div><% } %>
+  <%- include('partials/nav') %>
+
+  <header class="hero"><div class="wrap">
+    <p class="eyebrow"><%= d.prepared_by %> &times; <%= proposal.businessName %></p>
+    <h1><%= d.headline %></h1>
+    <% if (d.intro) { %><p style="font-size:19px;color:var(--muted);margin-top:16px"><%= d.intro %></p><% } %>
+    <%- include('partials/hero-meta') %>
+  </div></header>
+
+  <main>
+    <section id="current"><div class="wrap">
+      <div class="sec-title"><h2>Where your channels stand</h2></div>
+      <div class="tablewrap"><table>
+        <thead><tr><th>Platform</th><th>Handle</th><th class="num">Followers</th><th class="num">Engagement</th><th>We manage</th></tr></thead>
+        <tbody><% (d.platforms || []).forEach(function(p){ %>
+          <tr>
+            <td><strong><%= p.name %></strong></td>
+            <td class="mono" style="font-size:13px;color:var(--muted)"><%= p.handle || '—' %></td>
+            <td class="num"><%= number(p.followers) %></td>
+            <td class="num"><%= p.engagement ? p.engagement + '%' : '—' %></td>
+            <td><%= p.managed === false ? '<span class="pill">Not included</span>' : '<span class="pill new">Yes</span>' %></td>
+          </tr>
+        <% }); %></tbody>
+      </table></div>
+    </div></section>
+
+    <section id="strategy"><div class="wrap">
+      <div class="sec-title"><h2>What we will post, and why</h2></div>
+      <% if ((d.content_pillars || []).length) { %>
+        <div class="pillars">
+          <% d.content_pillars.forEach(function(p){ %>
+          <div class="pillar">
+            <div class="pbar"><span style="width:<%= p.share %>%"></span></div>
+            <div class="phead"><h3><%= p.name %></h3><span class="pshare"><%= p.share %>%</span></div>
+            <p><%= p.description %></p>
+          </div>
+          <% }); %>
+        </div>
+        <style>
+        .pillars{display:grid;gap:12px;margin-top:8px}
+        .pillar{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:18px 20px;box-shadow:var(--shadow)}
+        .pbar{height:5px;background:var(--surface-2);border-radius:100px;overflow:hidden;margin-bottom:13px}
+        .pbar span{display:block;height:100%;background:var(--accent);border-radius:100px}
+        .phead{display:flex;align-items:baseline;gap:12px;margin-bottom:5px}
+        .phead h3{margin:0}
+        .pshare{margin-left:auto;font-family:"JetBrains Mono",monospace;font-size:13px;font-weight:700;color:var(--accent-ink)}
+        .pillar p{font-size:15px;margin:0}
+        </style>
+      <% } %>
+    </div></section>
+
+    <section id="cadence"><div class="wrap">
+      <div class="sec-title"><h2>How often, and where</h2></div>
+      <div class="tablewrap" style="margin-bottom:24px"><table>
+        <thead><tr><th>Platform</th><th class="num">Posts / week</th><th>Formats</th></tr></thead>
+        <tbody><% (d.posting_schedule || []).forEach(function(s){ %>
+          <tr>
+            <td><strong><%= s.platform %></strong></td>
+            <td class="num"><%= s.posts_per_week %></td>
+            <td><% (s.formats || []).forEach(function(f){ %><span class="pill" style="margin-right:5px"><%= f %></span><% }); %></td>
+          </tr>
+        <% }); %></tbody>
+      </table></div>
+
+      <% if ((d.monthly_deliverables || []).length) { %>
+        <h3 style="margin-bottom:6px">What you get each month</h3>
+        <ul class="marks tick">
+          <% d.monthly_deliverables.forEach(function(m){ %><li><%= m %></li><% }); %>
+        </ul>
+      <% } %>
+    </div></section>
+
+    <section id="growth"><div class="wrap">
+      <div class="sec-title"><h2>Where this gets you</h2></div>
+      <%- include('partials/chart-growth') %>
+      <% if (computed.followers && computed.followers.summary) { const s = computed.followers.summary; %>
+      <div class="stats">
+        <div class="stat"><div class="k">Combined audience today</div><div class="v"><%= number(s.startTotal) %></div><div class="s">Across managed channels</div></div>
+        <div class="stat"><div class="k">Projected at month <%= s.months %></div><div class="v accent"><%= number(s.endTotal) %></div><div class="s">+<%= number(s.gained) %> followers</div></div>
+        <div class="stat"><div class="k">Growth</div><div class="v accent"><%= s.growthPct %>%</div><div class="s">Over the engagement</div></div>
+      </div>
+      <% } %>
+      <% if (d.projection_note) { %>
+      <div class="note"><div class="nh">What this is and isn't</div><p><%= d.projection_note %></p></div>
+      <% } %>
+    </div></section>
+
+    <section id="price"><div class="wrap">
+      <div class="sec-title"><h2>Investment</h2></div>
+      <%- include('partials/pricing') %>
+      <%- include('partials/cta') %>
+    </div></section>
+  </main>
+  <%- include('partials/footer') %>
+<% } %>
+</body></html>

@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head><%- include('partials/head') %></head>
+<body>
+<% if (isExpired) { %><%- include('partials/expired') %><% } else { %>
+  <% if (isDraftPreview) { %><div class="draftbar">Draft preview — not published</div><% } %>
+  <%- include('partials/nav') %>
+
+  <header class="hero"><div class="wrap">
+    <p class="eyebrow"><%= d.prepared_by %> &times; <%= proposal.businessName %></p>
+    <h1><%= d.headline %></h1>
+    <% if (d.intro) { %><p style="font-size:19px;color:var(--muted);margin-top:16px"><%= d.intro %></p><% } %>
+    <%- include('partials/hero-meta') %>
+  </div></header>
+
+  <main>
+    <section id="audit"><div class="wrap">
+      <div class="sec-title"><h2>What your site is doing right now</h2></div>
+      <% if (computed.performance) { %>
+        <p class="narrow">Google scores every page out of 100. Below 50 is slow enough that people leave before it loads — and on a phone, that is most of your visitors.</p>
+        <%- include('partials/scorebar') %>
+      <% } else if (d.has_current_site && d.current_url) { %>
+        <%
+        /* The measurement did not run or did not succeed. Say so rather than
+           quietly dropping the section: an agent reading their own published
+           proposal needs to know the speed argument is missing, and inventing
+           a score to fill the gap is the exact thing this template stopped
+           doing. */
+        %>
+        <p class="narrow">We could not complete an automated performance measurement of
+        <%= d.current_url %> before this proposal was prepared. The findings below come from
+        reading the site directly.</p>
+      <% } %>
+
+      <div class="stats">
+        <div class="stat"><div class="k">Mobile friendly</div>
+          <div class="v" style="font-size:22px;color:<%= d.is_mobile_friendly ? 'var(--good)' : 'var(--bad)' %>"><%= d.is_mobile_friendly ? 'Yes' : 'No' %></div>
+          <div class="s">Most of your traffic</div></div>
+        <div class="stat"><div class="k">Secure (SSL)</div>
+          <div class="v" style="font-size:22px;color:<%= d.has_ssl ? 'var(--good)' : 'var(--bad)' %>"><%= d.has_ssl ? 'Yes' : 'No' %></div>
+          <div class="s">Browsers warn without it</div></div>
+        <div class="stat"><div class="k">Building on</div>
+          <div class="v" style="font-size:20px"><%= d.platform %></div>
+          <div class="s"><%= (d.page_list || []).length %> pages in scope</div></div>
+      </div>
+
+      <% if ((d.audit_issues || []).length) { %>
+        <h3 style="margin-top:30px;margin-bottom:14px">What we found</h3>
+        <div class="cards two">
+          <% d.audit_issues.forEach(function(a){ %>
+          <div class="card">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:7px">
+              <h3 style="margin:0"><%= a.issue %></h3>
+              <span class="sev <%= a.severity %>" style="margin-left:auto"><%= a.severity %></span>
+            </div>
+            <p><%= a.impact %></p>
+          </div>
+          <% }); %>
+        </div>
+      <% } %>
+    </div></section>
+
+    <section id="scope"><div class="wrap">
+      <div class="sec-title"><h2>What we build</h2></div>
+      <% if ((d.page_list || []).length) { %>
+        <h3 style="margin-bottom:12px">Pages</h3>
+        <div class="tablewrap" style="margin-bottom:26px"><table>
+          <thead><tr><th>Page</th><th>Purpose</th></tr></thead>
+          <tbody><% d.page_list.forEach(function(p){ %>
+            <tr><td><strong><%= p.name %></strong></td><td style="color:var(--muted)"><%= p.purpose || '' %></td></tr>
+          <% }); %></tbody>
+        </table></div>
+      <% } %>
+
+      <% if ((d.features || []).length) { %>
+        <h3 style="margin-bottom:12px">What's included — and what isn't</h3>
+        <div class="tablewrap"><table>
+          <thead><tr><th>Feature</th><th style="width:90px">Included</th><th>Note</th></tr></thead>
+          <tbody><% d.features.forEach(function(f){ %>
+            <tr>
+              <td><%= f.name %></td>
+              <td style="color:<%= f.included ? 'var(--good)' : 'var(--faint)' %>;font-weight:700"><%= f.included ? '✓' : '—' %></td>
+              <td style="color:var(--muted);font-size:14px"><%= f.note || '' %></td>
+            </tr>
+          <% }); %></tbody>
+        </table></div>
+      <% } %>
+
+      <% if ((d.integrations || []).length) { %>
+        <h3 style="margin-top:26px;margin-bottom:10px">Integrations</h3>
+        <div style="display:flex;flex-wrap:wrap;gap:6px">
+          <% d.integrations.forEach(function(i){ %><span class="pill"><%= i %></span><% }); %>
+        </div>
+      <% } %>
+    </div></section>
+
+    <section id="design"><div class="wrap">
+      <div class="sec-title"><h2>Look and feel</h2></div>
+      <% if (d.style_direction) { %><p class="narrow"><%= d.style_direction %></p><% } %>
+      <% if ((d.reference_sites || []).length) { %>
+        <h3 style="margin-top:20px;margin-bottom:10px">References we're working from</h3>
+        <ul class="marks tick">
+          <% d.reference_sites.forEach(function(r){ %><li><%= r %></li><% }); %>
+        </ul>
+      <% } %>
+    </div></section>
+
+    <section id="timeline"><div class="wrap">
+      <div class="sec-title"><h2>How it runs</h2></div>
+      <ol class="phases">
+        <% (d.milestones || []).forEach(function(m, i){ %>
+        <li>
+          <div class="ph"><span class="n">Step <%= i+1 %></span><h3><%= m.phase %></h3><span class="w"><%= m.window %></span></div>
+          <p><%= m.deliverable %></p>
+        </li>
+        <% }); %>
+      </ol>
+    </div></section>
+
+    <section id="price"><div class="wrap">
+      <div class="sec-title"><h2>Investment</h2></div>
+      <%- include('partials/pricing') %>
+      <%- include('partials/cta') %>
+    </div></section>
+  </main>
+  <%- include('partials/footer') %>
+<% } %>
+</body></html>

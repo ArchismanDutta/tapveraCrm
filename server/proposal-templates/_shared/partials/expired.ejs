@@ -1,0 +1,17 @@
+<%
+/**
+ * partials/expired — what a client sees past the valid-until date.
+ *
+ * Deliberately not a 404. A dead link reads as incompetence on the sender's
+ * part; a dated page reads as a deadline the reader missed, and gives them a
+ * button to ask for a new one. Same fact, opposite impression.
+ */
+%>
+<div class="expired">
+  <p class="eyebrow">Proposal expired</p>
+  <h1>This proposal has passed its date</h1>
+  <p>The pricing prepared for <strong><%= proposal.businessName %></strong> was valid until <%= longDate(proposal.expiresAt) %>. Costs and availability have likely moved since.</p>
+  <p style="margin-top:22px">
+    <a class="btn" href="mailto:<%= d.prepared_by_email %>?subject=<%= encodeURIComponent('Refreshed proposal — ' + proposal.businessName) %>">Request an updated proposal</a>
+  </p>
+</div>

@@ -1,6 +1,7 @@
 import React from "react";
 import { Bell, CheckCircle, MessageCircle, DollarSign, Calendar, Briefcase, AlertCircle, X } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { resolveNotificationTarget } from "../../utils/notificationTarget";
 
 const NotificationItem = ({
   notification,
@@ -87,31 +88,11 @@ const NotificationItem = ({
     // Small delay to ensure state updates
     await new Promise(resolve => setTimeout(resolve, 100));
 
-    // Navigate based on notification type with proper context
+    // Where this notification points is decided in one place, shared with the
+    // toast and with OS notifications, so all three land on the same screen.
     try {
-      if (notification.relatedData?.url) {
-        navigate(notification.relatedData.url);
-      } else if (notification.relatedData?.taskId) {
-        navigate(`/tasks`, { state: { highlightTaskId: notification.relatedData.taskId } });
-      } else if (notification.relatedData?.conversationId) {
-        // Navigate to chat with the specific conversation ID
-        navigate(`/messages`, {
-          state: {
-            openConversationId: notification.relatedData.conversationId,
-            messageId: notification.relatedData.messageId
-          }
-        });
-      } else if (notification.relatedData?.projectId) {
-        // Navigate to project details page
-        navigate(`/project/${notification.relatedData.projectId}`, {
-          state: {
-            scrollToMessages: true,
-            messageId: notification.relatedData.messageId
-          }
-        });
-      } else if (notification.relatedData?.payslipId) {
-        navigate(`/payslips`, { state: { highlightPayslipId: notification.relatedData.payslipId } });
-      }
+      const target = resolveNotificationTarget(notification);
+      if (target) navigate(target.path, { state: target.state });
     } catch (error) {
       console.error('Navigation error:', error);
       // If navigation fails (e.g., access denied), show a message

@@ -122,18 +122,11 @@ exports.generateSinglePayslip = async (req, res) => {
         manualDeductions
       );
 
-      // Update payslip with new calculations
-      result.payslip.bonuses = calculations.bonuses;
-      result.payslip.salaryComponents = calculations.salaryComponents;
-      result.payslip.grossComponents = calculations.grossComponents;
-      result.payslip.grossTotal = calculations.grossTotal;
-      result.payslip.netTotal = calculations.netTotal;
-      result.payslip.eligibility = calculations.eligibility;
-      result.payslip.deductions = calculations.deductions;
-      result.payslip.totalDeductions = calculations.totalDeductions;
-      result.payslip.employerContributions = calculations.employerContributions;
-      result.payslip.netPayment = calculations.netPayment;
-      result.payslip.ctc = calculations.ctc;
+      // Update payslip with new calculations, mapped onto the schema shape
+      Object.assign(
+        result.payslip,
+        AutoPayrollService.mapCalculationsToPayslip(calculations)
+      );
     }
 
     // Update remarks if provided
@@ -337,18 +330,11 @@ exports.recalculatePayslip = async (req, res) => {
         manualDeductions
       );
 
-      // Update payslip with new calculations
-      result.payslip.bonuses = calculations.bonuses;
-      result.payslip.salaryComponents = calculations.salaryComponents;
-      result.payslip.grossComponents = calculations.grossComponents;
-      result.payslip.grossTotal = calculations.grossTotal;
-      result.payslip.netTotal = calculations.netTotal;
-      result.payslip.eligibility = calculations.eligibility;
-      result.payslip.deductions = calculations.deductions;
-      result.payslip.totalDeductions = calculations.totalDeductions;
-      result.payslip.employerContributions = calculations.employerContributions;
-      result.payslip.netPayment = calculations.netPayment;
-      result.payslip.ctc = calculations.ctc;
+      // Update payslip with new calculations, mapped onto the schema shape
+      Object.assign(
+        result.payslip,
+        AutoPayrollService.mapCalculationsToPayslip(calculations)
+      );
     }
 
     // Update remarks if provided
@@ -529,9 +515,10 @@ exports.compareCalculations = async (req, res) => {
           difference: autoPreview.attendanceData.halfDays - (manualPayslip.halfDays || 0)
         },
         netPayment: {
-          manual: manualPayslip.netPayment,
+          // .lean() skips virtuals, so read the stored field directly
+          manual: manualPayslip.netSalary || 0,
           automatic: autoPreview.calculations.netPayment,
-          difference: autoPreview.calculations.netPayment - manualPayslip.netPayment
+          difference: autoPreview.calculations.netPayment - (manualPayslip.netSalary || 0)
         }
       };
     }

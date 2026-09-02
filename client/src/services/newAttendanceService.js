@@ -124,6 +124,15 @@ class NewAttendanceService {
     return await this.apiCall(`/employee/${userId}/monthly/${year}/${month}`);
   }
 
+  /**
+   * Canonical monthly attendance summary — the same figures payroll pays on.
+   * The monthly endpoint above already embeds this as `monthlySummary`; use
+   * this when the summary is all you need.
+   */
+  async getEmployeeMonthlySummary(userId, year, month) {
+    return await this.apiCall(`/employee/${userId}/summary/${year}/${month}`);
+  }
+
   // ================================
   // Admin Functions (require admin/hr role)
   // ================================

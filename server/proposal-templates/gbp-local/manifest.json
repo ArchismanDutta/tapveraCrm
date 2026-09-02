@@ -1,0 +1,356 @@
+{
+  "name": "Google Business Profile",
+  "version": "1.0.0",
+  "serviceType": "Google Marketing",
+  "description": "Suspension recovery and local pack visibility. Cost-of-suspension calculator, service radius map, diagnosis from a real profile audit.",
+  "accent": "#B4471F",
+  "extends": [
+    "identity",
+    "prepared_by",
+    "brief",
+    "pricing",
+    "closing"
+  ],
+  "sections": [
+    {
+      "id": "cost",
+      "nav": "What it's costing",
+      "title": "What every week is costing you"
+    },
+    {
+      "id": "why",
+      "nav": "Why it happened",
+      "title": "Why the profile went down"
+    },
+    {
+      "id": "reach",
+      "nav": "Your coverage",
+      "title": "The area you should be showing in"
+    },
+    {
+      "id": "how",
+      "nav": "How we fix it",
+      "title": "How we get it back"
+    },
+    {
+      "id": "price",
+      "nav": "Investment",
+      "title": "Investment"
+    }
+  ],
+  "liveData": [
+    "keywordRanks"
+  ],
+  "fields": [
+    {
+      "key": "profile_state",
+      "label": "Profile status",
+      "kind": "select",
+      "source": "agent",
+      "group": "cost",
+      "required": true,
+      "default": "Suspended",
+      "options": [
+        "Suspended",
+        "Live but not ranking",
+        "Not yet claimed",
+        "Duplicate listings"
+      ],
+      "help": "Switches the framing of the whole page. 'Suspended' is the urgent version."
+    },
+    {
+      "key": "gbp_name",
+      "label": "Profile name on Google",
+      "kind": "text",
+      "source": "agent",
+      "group": "cost",
+      "required": true,
+      "maxLength": 90
+    },
+    {
+      "key": "gbp_categories",
+      "label": "Profile categories",
+      "kind": "list",
+      "source": "agent",
+      "group": "cost",
+      "required": false,
+      "max": 10
+    },
+    {
+      "key": "suspension_date",
+      "label": "Date it went down",
+      "kind": "date",
+      "source": "agent",
+      "group": "cost",
+      "required": false
+    },
+    {
+      "key": "weeks_down",
+      "label": "Weeks down so far",
+      "kind": "number",
+      "source": "agent",
+      "group": "cost",
+      "required": true,
+      "default": 1,
+      "min": 0,
+      "max": 260
+    },
+    {
+      "key": "headline",
+      "label": "Headline",
+      "kind": "text",
+      "source": "ai",
+      "group": "cost",
+      "maxLength": 110,
+      "aiHint": "One blunt sentence naming the situation in the client's own terms. For a suspension: state that they are absent from Maps, not that they rank poorly. Name their trade and city. Under 110 characters."
+    },
+    {
+      "key": "intro",
+      "label": "Opening paragraph",
+      "kind": "textarea",
+      "source": "ai",
+      "group": "cost",
+      "maxLength": 520,
+      "aiHint": "Three sentences. What a suspension actually removes, why it matters more for an emergency trade than a considered purchase, and one honest note on what still works in their favour. Do not use the words 'unlock', 'leverage' or 'journey'."
+    },
+    {
+      "key": "loss_bullets",
+      "label": "What the suspension removes",
+      "kind": "list",
+      "source": "ai",
+      "group": "cost",
+      "min": 1,
+      "max": 6,
+      "aiHint": "Between four and six items, each under 100 characters, each naming one concrete thing the client has lost: local pack position, review visibility, direction requests, click-to-call, and so on. Written as losses, not features."
+    },
+    {
+      "key": "enquiries_per_week",
+      "label": "Enquiries a week from Google",
+      "kind": "number",
+      "source": "agent",
+      "group": "cost",
+      "required": true,
+      "default": 12,
+      "help": "Seeds the cost calculator on the page. The reader can change it themselves."
+    },
+    {
+      "key": "conversion_rate",
+      "label": "Enquiry to job conversion (%)",
+      "kind": "percent",
+      "source": "agent",
+      "group": "cost",
+      "required": true,
+      "default": 40
+    },
+    {
+      "key": "avg_job_value",
+      "label": "Average job value",
+      "kind": "money",
+      "source": "agent",
+      "group": "cost",
+      "required": true,
+      "default": 325
+    },
+    {
+      "key": "suspension_causes",
+      "label": "What we found",
+      "kind": "repeat",
+      "source": "ai",
+      "group": "why",
+      "max": 6,
+      "itemLabel": "Finding",
+      "aiHint": "Three to six findings drawn ONLY from the audit facts and agent brief. Never invent one. `issue` is a short noun phrase under 60 chars. `evidence` quotes the specific thing found \u2014 a conflicting service area, a missing street address, a mismatched phone number. `fix` is one sentence on what will be done about it. If fewer than three real findings exist, return fewer.",
+      "fields": [
+        {
+          "key": "issue",
+          "label": "Issue",
+          "kind": "text",
+          "required": true,
+          "maxLength": 60
+        },
+        {
+          "key": "evidence",
+          "label": "Evidence",
+          "kind": "text",
+          "required": true,
+          "maxLength": 180
+        },
+        {
+          "key": "fix",
+          "label": "The fix",
+          "kind": "textarea",
+          "required": true,
+          "maxLength": 200
+        }
+      ]
+    },
+    {
+      "key": "existing_strengths",
+      "label": "What already works for them",
+      "kind": "list",
+      "source": "ai",
+      "group": "why",
+      "min": 1,
+      "max": 6,
+      "aiHint": "Two to five genuine assets found in the audit \u2014 a live website, service pages, a photo gallery, trade licences, existing reviews. Each under 90 characters. This section exists so the proposal is not purely negative; only list things actually observed."
+    },
+    {
+      "key": "service_center",
+      "label": "Business location",
+      "kind": "geopoint",
+      "source": "agent",
+      "group": "reach",
+      "required": false,
+      "help": "Optional. Left blank, the map centres itself on the average of the locations below \u2014 which is usually what you wanted anyway."
+    },
+    {
+      "key": "radius_options",
+      "label": "Coverage options",
+      "kind": "repeat",
+      "source": "agent",
+      "group": "reach",
+      "required": true,
+      "min": 1,
+      "max": 3,
+      "itemLabel": "Radius option",
+      "help": "Each option draws a ring on the map and ties to a pricing tier.",
+      "fields": [
+        {
+          "key": "label",
+          "label": "Label",
+          "kind": "text",
+          "required": true,
+          "maxLength": 40
+        },
+        {
+          "key": "radiusKm",
+          "label": "Radius (km)",
+          "kind": "number",
+          "required": true,
+          "min": 1,
+          "max": 200
+        },
+        {
+          "key": "suburbs",
+          "label": "Example suburbs",
+          "kind": "list",
+          "required": true,
+          "min": 3,
+          "max": 20
+        },
+        {
+          "key": "tier",
+          "label": "Matches tier",
+          "kind": "text",
+          "required": false,
+          "maxLength": 40
+        }
+      ]
+    },
+    {
+      "key": "target_locations",
+      "label": "Suburbs to pin",
+      "kind": "locations",
+      "source": "agent",
+      "group": "reach",
+      "required": false,
+      "max": 30,
+      "fields": [
+        {
+          "key": "name",
+          "label": "Suburb",
+          "kind": "text",
+          "required": true,
+          "maxLength": 60
+        },
+        {
+          "key": "lat",
+          "label": "Latitude",
+          "kind": "number",
+          "required": true
+        },
+        {
+          "key": "lng",
+          "label": "Longitude",
+          "kind": "number",
+          "required": true
+        },
+        {
+          "key": "radiusKm",
+          "label": "Radius",
+          "kind": "number",
+          "required": false,
+          "default": 0
+        },
+        {
+          "key": "priority",
+          "label": "Priority",
+          "kind": "select",
+          "required": false,
+          "default": "Primary",
+          "options": [
+            "Primary",
+            "Secondary"
+          ]
+        }
+      ]
+    },
+    {
+      "key": "phases",
+      "label": "The recovery plan",
+      "kind": "repeat",
+      "source": "ai",
+      "group": "how",
+      "max": 3,
+      "itemLabel": "Phase",
+      "aiHint": "Two or three phases. Phase one is always reinstatement; later phases are ranking expansion. `title` under 40 chars, `window` a plain timeframe, `focus` one sentence, `steps` three to six concrete numbered actions grounded in the findings above.",
+      "fields": [
+        {
+          "key": "title",
+          "label": "Phase title",
+          "kind": "text",
+          "required": true,
+          "maxLength": 40
+        },
+        {
+          "key": "window",
+          "label": "Timeframe",
+          "kind": "text",
+          "required": true,
+          "maxLength": 30
+        },
+        {
+          "key": "focus",
+          "label": "Focus",
+          "kind": "textarea",
+          "required": true,
+          "maxLength": 260
+        },
+        {
+          "key": "steps",
+          "label": "Steps",
+          "kind": "list",
+          "required": true,
+          "min": 2,
+          "max": 6
+        }
+      ]
+    },
+    {
+      "key": "guarantees",
+      "label": "What we do and don't guarantee",
+      "kind": "list",
+      "source": "agent",
+      "group": "how",
+      "required": true,
+      "min": 1,
+      "max": 6,
+      "help": "Fixed wording. Never model-written \u2014 this is the paragraph that protects you if reinstatement is refused.",
+      "default": [
+        "We guarantee the reinstatement request is prepared correctly, submitted, and appealed as many times as Google permits.",
+        "We cannot guarantee Google reinstates a profile. That decision is theirs alone and no agency can commit to it.",
+        "If the profile is not reinstated within the term, the ranking work on your website continues at no additional cost."
+      ]
+    }
+  ]
+}

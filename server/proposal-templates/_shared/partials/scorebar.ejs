@@ -1,0 +1,122 @@
+<%
+/**
+ * partials/scorebar — measured performance, with its source attached.
+ *
+ * ───────────────────────────────────────────────────────────────────────────
+ * WHY THE PROVENANCE LINE IS NOT OPTIONAL
+ * ───────────────────────────────────────────────────────────────────────────
+ * This section makes the one claim in the whole proposal that a reader can
+ * check for themselves, for free, in thirty seconds. That is a strength — but
+ * only if the number is real and the reader is told where it came from. An
+ * unattributed "24/100" reads as the agency's opinion of their site; "24/100,
+ * measured by Google PageSpeed Insights on 31 August, run it yourself" reads as
+ * a fact they can act on.
+ *
+ * It renders only when computed.performance exists, and that exists only when
+ * an actual PageSpeed reading succeeded. There is no path here that prints a
+ * score from a typed value.
+ *
+ * Bands are Google's own thresholds (90 / 50), so the colour a client sees here
+ * matches the colour they see when they re-run it.
+ */
+const p = computed.performance;
+if (p) {
+  const rows = [['Mobile', p.mobile], ['Desktop', p.desktop]].filter((r) => r[1]);
+  const cat = p.categories;
+%>
+<div class="scores">
+  <% rows.forEach(function(r){ const label = r[0], v = r[1]; %>
+  <div class="scorerow">
+    <div class="sl"><%= label %></div>
+    <div class="track">
+      <div class="fill <%= v.band === 'needs-work' ? 'warn' : v.band === 'good' ? 'good' : 'bad' %>" style="width:<%= Math.max(2, v.now) %>%"></div>
+      <div class="target" style="left:<%= v.after %>%" title="Target <%= v.after %>"></div>
+    </div>
+    <div class="sv">
+      <span class="<%= v.band === 'needs-work' ? 'warn' : v.band === 'good' ? 'good' : 'bad' %>"><%= v.now %></span>
+      <i>&rarr;</i><span class="good"><%= v.after %></span>
+    </div>
+  </div>
+  <% }); %>
+
+  <% if (p.mobile && p.mobile.vitals) { const vt = p.mobile.vitals; %>
+    <div class="vitals">
+      <% [['Largest paint', vt.lcp], ['Layout shift', vt.cls], ['Blocking time', vt.tbt]].forEach(function(m){
+           if (!m[1]) return; %>
+        <div class="vt">
+          <div class="vk"><%= m[0] %></div>
+          <div class="vv"><%= m[1].display || m[1].ms + 'ms' %></div>
+        </div>
+      <% }); %>
+    </div>
+  <% } %>
+
+  <% if (cat) { %>
+    <div class="cats">
+      <% [['SEO','seo'],['Accessibility','accessibility'],['Best practices','best-practices']].forEach(function(c){
+           var val = cat[c[1]]; if (typeof val !== 'number') return; %>
+        <div class="ct">
+          <span class="cn"><%= c[0] %></span>
+          <span class="cv <%= val >= 90 ? 'good' : val >= 50 ? 'warn' : 'bad' %>"><%= val %></span>
+        </div>
+      <% }); %>
+    </div>
+  <% } %>
+
+  <p class="prov">
+    Measured by <%= p.source %><% if (p.measuredAt) { %> on <%= longDate(p.measuredAt) %><% } %>.
+    <% if (mode !== 'pdf' && p.sourceUrl) { %>
+      <a href="<%= p.sourceUrl %>" target="_blank" rel="noreferrer noopener">Run it yourself</a>.
+    <% } else if (p.sourceUrl) { %>
+      Verify at pagespeed.web.dev.
+    <% } %>
+  </p>
+</div>
+
+<% if (p.mobile && p.mobile.opportunities && p.mobile.opportunities.length) { %>
+  <h3 style="margin-top:28px;margin-bottom:12px">What Google says would help most</h3>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Fix</th><th class="num">Time saved</th></tr></thead>
+      <tbody>
+        <% p.mobile.opportunities.forEach(function(o){ %>
+        <tr>
+          <td><%= o.title %></td>
+          <td class="num"><%= (o.savingsMs / 1000).toFixed(1) %>s</td>
+        </tr>
+        <% }); %>
+      </tbody>
+    </table>
+  </div>
+  <p class="caveat" style="margin-top:10px">
+    Lighthouse's own list, in its own words — not our interpretation of it.
+  </p>
+<% } %>
+
+<style>
+.scores{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:20px 22px;box-shadow:var(--shadow);margin:20px 0;display:grid;gap:16px}
+.scorerow{display:grid;grid-template-columns:80px 1fr 96px;gap:14px;align-items:center}
+.scorerow .sl{font-family:"Archivo",sans-serif;font-weight:600;font-size:14px;color:var(--ink)}
+.track{position:relative;height:9px;background:var(--surface-2);border-radius:100px;overflow:visible}
+.track .fill{height:100%;border-radius:100px}
+.track .fill.good{background:var(--good)} .track .fill.warn{background:var(--warn)} .track .fill.bad{background:var(--bad)}
+.track .target{position:absolute;top:-4px;width:2px;height:17px;background:var(--ink);opacity:.5;border-radius:2px}
+.scorerow .sv{font-family:"JetBrains Mono",monospace;font-size:14px;font-weight:700;text-align:right;font-variant-numeric:tabular-nums}
+.scorerow .sv i{font-style:normal;color:var(--faint);margin:0 6px;font-weight:400}
+.sv .good{color:var(--good)} .sv .warn{color:var(--warn)} .sv .bad{color:var(--bad)}
+
+.vitals{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;padding-top:14px;border-top:1px solid var(--line-soft)}
+.vt .vk{font-family:"JetBrains Mono",monospace;font-size:9.5px;letter-spacing:.11em;text-transform:uppercase;color:var(--faint);margin-bottom:4px}
+.vt .vv{font-family:"Archivo",sans-serif;font-weight:600;font-size:17px;color:var(--ink);font-variant-numeric:tabular-nums}
+
+.cats{display:flex;flex-wrap:wrap;gap:18px;padding-top:14px;border-top:1px solid var(--line-soft)}
+.ct{display:flex;align-items:baseline;gap:7px}
+.ct .cn{font-size:13px;color:var(--muted)}
+.ct .cv{font-family:"JetBrains Mono",monospace;font-size:14px;font-weight:700}
+.cv.good{color:var(--good)} .cv.warn{color:var(--warn)} .cv.bad{color:var(--bad)}
+
+.prov{font-size:12.5px;color:var(--faint);margin:0;padding-top:12px;border-top:1px solid var(--line-soft);max-width:none}
+.prov a{color:var(--accent-ink)}
+@media(max-width:560px){.scorerow{grid-template-columns:64px 1fr 84px;gap:10px}}
+</style>
+<% } %>

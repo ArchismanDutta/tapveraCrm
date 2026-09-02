@@ -1,0 +1,102 @@
+<%
+/**
+ * partials/calculator — what a week of being invisible costs.
+ *
+ * The reader can change every input. That is the point: a number the prospect
+ * typed themselves is a number they believe, and one they will repeat to their
+ * business partner. A figure the agency asserts is one they discount.
+ *
+ * The server-computed value is rendered into the markup first, so the section
+ * reads correctly before any JavaScript runs, in the PDF, and for anyone whose
+ * connection dropped the script.
+ */
+const c = computed.cost || {};
+%>
+<div class="calc">
+  <div class="calcgrid">
+    <label>
+      <span>Enquiries a week from Google</span>
+      <input type="number" id="c-enq" value="<%= d.enquiries_per_week || 0 %>" min="0" max="999" inputmode="numeric">
+    </label>
+    <label>
+      <span>Enquiry to job conversion</span>
+      <input type="number" id="c-conv" value="<%= d.conversion_rate || 0 %>" min="0" max="100" inputmode="numeric">
+      <i>%</i>
+    </label>
+    <label>
+      <span>Average job value</span>
+      <input type="number" id="c-val" value="<%= d.avg_job_value || 0 %>" min="0" inputmode="numeric">
+    </label>
+    <label>
+      <span>Weeks down so far</span>
+      <input type="number" id="c-weeks" value="<%= d.weeks_down || 0 %>" min="0" max="260" inputmode="numeric">
+    </label>
+  </div>
+
+  <div class="calcout">
+    <div class="co">
+      <div class="k">Every week it stays down</div>
+      <div class="v accent" id="c-weekly"><%= money(c.weeklyLoss, d.currency) %></div>
+      <div class="s"><span id="c-jobs"><%= c.jobsLostPerWeek %></span> jobs a week going to someone else</div>
+    </div>
+    <div class="co">
+      <div class="k">Lost so far</div>
+      <div class="v" id="c-total"><%= money(c.totalLoss, d.currency) %></div>
+      <div class="s">Across <span id="c-wk"><%= c.weeksDown %></span> weeks</div>
+    </div>
+  </div>
+</div>
+
+<% if (mode !== 'pdf') { %>
+<script>
+(function(){
+  var sym = <%- JSON.stringify((money(0, d.currency) || '').replace(/0$/, '')) %>;
+  var ids = ['c-enq','c-conv','c-val','c-weeks'];
+  var el = {};
+  ids.concat(['c-weekly','c-total','c-jobs','c-wk']).forEach(function(i){ el[i] = document.getElementById(i); });
+  if (!el['c-enq']) return;
+
+  function fmt(n){ return sym + Math.round(n).toLocaleString('en-AU'); }
+
+  function recalc(){
+    var enq   = Math.max(0, Number(el['c-enq'].value)   || 0);
+    var conv  = Math.min(100, Math.max(0, Number(el['c-conv'].value) || 0)) / 100;
+    var val   = Math.max(0, Number(el['c-val'].value)   || 0);
+    var weeks = Math.max(0, Number(el['c-weeks'].value) || 0);
+
+    var weekly = enq * conv * val;
+    el['c-weekly'].textContent = fmt(weekly);
+    el['c-total'].textContent  = fmt(weekly * weeks);
+    el['c-jobs'].textContent   = Math.round(enq * conv * 10) / 10;
+    el['c-wk'].textContent     = weeks;
+  }
+  ids.forEach(function(i){ el[i].addEventListener('input', recalc); });
+  recalc();
+})();
+</script>
+<% } %>
+
+<style>
+.calc{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);overflow:hidden;margin:22px 0}
+.calcgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:0}
+.calcgrid label{display:block;position:relative;padding:15px 18px;border-right:1px solid var(--line);border-bottom:1px solid var(--line)}
+.calcgrid label:last-child{border-right:0}
+/* min-height reserves two lines for every label, so a long one ("Enquiries a
+   week from Google") does not push its own input down and leave the four
+   number fields sitting at different heights across the row. */
+.calcgrid span{display:block;font-family:"JetBrains Mono",monospace;font-size:10px;letter-spacing:.11em;text-transform:uppercase;color:var(--faint);margin-bottom:8px;line-height:1.4;min-height:28px}
+.calcgrid input{
+  width:100%;border:0;background:transparent;font-family:"Archivo",sans-serif;font-weight:700;
+  font-size:26px;color:var(--ink);padding:0;font-variant-numeric:tabular-nums;
+  border-bottom:2px solid var(--line);outline-offset:3px;
+}
+.calcgrid input:focus{border-bottom-color:var(--accent);outline:2px solid var(--accent-line)}
+.calcgrid i{position:absolute;right:18px;bottom:17px;font-style:normal;color:var(--faint);font-family:"JetBrains Mono",monospace;font-size:14px}
+.calcout{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));background:var(--accent-soft)}
+.calcout .co{padding:18px 20px;border-right:1px solid var(--accent-line)}
+.calcout .co:last-child{border-right:0}
+.calcout .k{font-family:"JetBrains Mono",monospace;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--accent-ink);margin-bottom:7px}
+.calcout .v{font-family:"Archivo",sans-serif;font-weight:700;font-size:34px;line-height:1;letter-spacing:-.025em;color:var(--ink);font-variant-numeric:tabular-nums}
+.calcout .v.accent{color:var(--accent-ink)}
+.calcout .s{font-size:13px;color:var(--muted);margin-top:7px}
+</style>

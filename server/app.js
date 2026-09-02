@@ -62,6 +62,12 @@ const transferRoutes = require("./routes/transferRoutes");
 const callIntelligenceRoutes = require("./routes/callIntelligenceRoutes");
 const internalRoutes         = require("./routes/internalRoutes");
 const clientRequestRoutes = require("./routes/clientRequestRoutes");
+// Client-facing proposal pages (super-admin only for now).
+// proposalRoutes is the authenticated API; proposalPublicRoutes serves the
+// page a prospect loads at /proposal/<slug> plus its read-receipt beacon, and
+// is deliberately a separate router with no auth guard on it.
+const proposalRoutes = require("./routes/proposalRoutes");
+const proposalPublicRoutes = require("./routes/proposalPublicRoutes");
 // Geofenced login (2026-08-07): Super-Admin location management + the
 // per-session location re-check. See
 // docs/superpowers/specs/2026-08-07-geofenced-login-design.md
@@ -304,6 +310,8 @@ app.use("/api/hierarchy-setup", hierarchySetupRoutes); // Role & Department Hier
 app.use("/api/call-intelligence", callIntelligenceRoutes);
 app.use("/api/internal", internalRoutes);
 app.use("/api/client-requests", clientRequestRoutes); // Client quote & support requests
+app.use("/api/proposals", proposalRoutes);   // super-admin API
+app.use("/", proposalPublicRoutes);          // GET /proposal/:slug + POST /api/proposal-views
 app.use("/api/biometric", biometricAdminRoutes); // Fingerprint device admin: PIN mapping, punch log, device health
 app.use("/api/geofence", geofenceRoutes); // Geofenced login (2026-08-07)
 

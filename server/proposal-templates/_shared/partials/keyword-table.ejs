@@ -1,0 +1,43 @@
+<%
+/**
+ * partials/keyword-table — every tracked keyword, now versus projected.
+ *
+ * The chart above shows the average; a client always wants to know about
+ * THEIR keyword. This is that list, and it deliberately shows the ones
+ * currently not ranking rather than hiding them — a proposal that only lists
+ * the flattering rows is one the client catches out the moment they check.
+ */
+const paths = (computed.rank && computed.rank.keywordPaths) || [];
+if (paths.length) {
+%>
+<div class="tablewrap" style="margin-top:18px">
+  <table>
+    <thead>
+      <tr>
+        <th>Keyword</th>
+        <th class="num">Searches</th>
+        <th class="num">Today</th>
+        <th class="num">Target</th>
+        <th>Movement</th>
+      </tr>
+    </thead>
+    <tbody>
+      <% paths.forEach(function(k){ %>
+      <tr>
+        <td><%= k.keyword %></td>
+        <td class="num"><%= k.volume ? number(k.volume) : '—' %></td>
+        <td class="num"><%= rankLabel(k.from) %></td>
+        <td class="num"><%= rankLabel(k.to) %></td>
+        <td>
+          <% if (k.entersRankings) { %>
+            <span class="pill new">Enters top 100</span>
+          <% } else { %>
+            <span class="pill up">&uarr; <%= k.positionsGained %> positions</span>
+          <% } %>
+        </td>
+      </tr>
+      <% }); %>
+    </tbody>
+  </table>
+</div>
+<% } %>

@@ -1,0 +1,9 @@
+<% /* partials/cta — one action, one address. */ %>
+<div class="cta">
+  <h2>Ready to start?</h2>
+  <p><%= d.closing_note || 'Reply to this proposal and we will get the first phase underway.' %></p>
+  <a class="btn" href="mailto:<%= d.prepared_by_email %>?subject=<%= encodeURIComponent('Proposal — ' + proposal.businessName) %>"><%= d.cta_label || 'Accept this proposal' %></a>
+  <% if (d.prepared_by_phone) { %>
+    <p style="margin-top:16px;font-size:14px">or call <a href="tel:<%= d.prepared_by_phone.replace(/[^0-9+]/g,'') %>" style="color:#fff"><%= d.prepared_by_phone %></a></p>
+  <% } %>
+</div>

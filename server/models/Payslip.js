@@ -39,6 +39,8 @@ const payslipSchema = new mongoose.Schema({
   workingDays: { type: Number, required: true },
   paidDays:    { type: Number, required: true },
   lwp:         { type: Number, default: 0 },
+  lateDays:    { type: Number, default: 0 },
+  halfDays:    { type: Number, default: 0 },
 
   // Salary input
   monthlySalary: { type: Number, required: true },
@@ -70,13 +72,17 @@ const payslipSchema = new mongoose.Schema({
 
   // Deductions
   deductions: {
-    employeePF:  { type: Number, default: 0 },
-    employeeESI: { type: Number, default: 0 },
-    ptax:        { type: Number, default: 0 },
-    tds:         { type: Number, default: 0 },
-    advance:     { type: Number, default: 0 },
-    other:       { type: Number, default: 0 },
-    otherLabel:  { type: String, default: "" },
+    employeePF:       { type: Number, default: 0 },
+    employeeESI:      { type: Number, default: 0 },
+    ptax:             { type: Number, default: 0 },
+    tds:              { type: Number, default: 0 },
+    advance:          { type: Number, default: 0 },
+    // Auto-payroll deductions (always 0 for manually created payslips)
+    lwpDeduction:     { type: Number, default: 0 },
+    lateDeduction:    { type: Number, default: 0 },
+    halfDayDeduction: { type: Number, default: 0 },
+    other:            { type: Number, default: 0 },
+    otherLabel:       { type: String, default: "" },
   },
 
   totalDeductions: { type: Number, default: 0 },
@@ -105,7 +111,29 @@ const payslipSchema = new mongoose.Schema({
   },
 }, {
   timestamps: true,
+  toJSON:   { virtuals: true },
+  toObject: { virtuals: true },
 });
+
+// ── Backwards-compatible aliases ────────────────────────────────────────
+// The auto-payroll service and the admin payroll screens were written
+// against an earlier field naming. These virtuals keep both spellings
+// readable and writable so neither side has to be rewritten.
+payslipSchema.virtual("netPayment")
+  .get(function () { return this.netSalary; })
+  .set(function (value) { this.netSalary = value; });
+
+payslipSchema.virtual("grossComponents")
+  .get(function () { return this.paidComponents; })
+  .set(function (value) { this.paidComponents = value; });
+
+payslipSchema.virtual("eligibility")
+  .get(function () { return { pf: this.pfEligible, esi: this.esiEligible }; })
+  .set(function (value) {
+    if (!value) return;
+    this.pfEligible  = Boolean(value.pf);
+    this.esiEligible = Boolean(value.esi);
+  });
 
 // Unique per employee-period
 payslipSchema.index({ employee: 1, payPeriod: 1 }, { unique: true });
@@ -114,12 +142,15 @@ payslipSchema.index({ employee: 1, payPeriod: 1 }, { unique: true });
 payslipSchema.pre("save", function (next) {
   const d = this.deductions || {};
   this.totalDeductions =
-    (d.employeePF  || 0) +
-    (d.employeeESI || 0) +
-    (d.ptax        || 0) +
-    (d.tds         || 0) +
-    (d.advance     || 0) +
-    (d.other       || 0);
+    (d.employeePF       || 0) +
+    (d.employeeESI      || 0) +
+    (d.ptax             || 0) +
+    (d.tds              || 0) +
+    (d.advance          || 0) +
+    (d.lwpDeduction     || 0) +
+    (d.lateDeduction    || 0) +
+    (d.halfDayDeduction || 0) +
+    (d.other            || 0);
   next();
 });
 

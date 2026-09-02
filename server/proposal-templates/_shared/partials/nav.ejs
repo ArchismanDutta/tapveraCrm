@@ -1,0 +1,11 @@
+<% /* partials/nav — sticky anchor bar built from the manifest's sections. */ %>
+<div class="topbar">
+  <div class="wrap">
+    <div class="brand"><span class="dot"></span><%= d.prepared_by || 'Tapvera' %></div>
+    <nav class="navlinks">
+      <% template.sections.forEach(function(s){ %>
+        <a href="#<%= s.id %>"><%= s.nav %></a>
+      <% }); %>
+    </nav>
+  </div>
+</div>

@@ -1,0 +1,55 @@
+<%
+/**
+ * partials/chart-growth — follower projection, one line per channel.
+ *
+ * Unlike the rank chart this axis is the right way up, because followers count
+ * upward the way people expect. Lines are per-platform rather than a single
+ * total: a client with 3,400 on Facebook and 1,200 on Instagram is being sold
+ * two different jobs, and one merged line hides which is which.
+ */
+const series = (computed.followers && computed.followers.series) || [];
+const byPlat = (computed.followers && computed.followers.byPlatform) || [];
+const sum = computed.followers && computed.followers.summary;
+if (series.length > 1 && byPlat.length) {
+  const W = 760, H = 300;
+  const PAD = { t: 20, r: 76, b: 34, l: 52 };
+  const iw = W - PAD.l - PAD.r, ih = H - PAD.t - PAD.b;
+  const maxV = Math.max.apply(null, series.map(s => Math.max.apply(null, byPlat.map(p => s[p.platform] || 0)))) || 1;
+  const x = (m) => PAD.l + (m / (series.length - 1)) * iw;
+  const y = (v) => PAD.t + ih - (v / maxV) * ih;
+  // Distinct enough to tell apart, all legible on white.
+  const palette = ['#7A3EA1', '#2C7DA0', '#B4471F', '#2C6E52', '#9A6B14', '#5C5C8A', '#A03E6E'];
+%>
+<figure class="chartbox">
+  <figcaption>
+    <span class="ct">Projected follower growth</span>
+    <span class="cs"><%= sum.growthPct %>% over <%= sum.months %> months, assuming the cadence below is maintained.</span>
+  </figcaption>
+  <div class="chartscroll">
+  <svg viewBox="0 0 <%= W %> <%= H %>" width="100%" role="img" aria-label="Follower growth projection by platform">
+    <% [0, 0.25, 0.5, 0.75, 1].forEach(function(f){ %>
+      <line x1="<%= PAD.l %>" y1="<%= y(maxV*f).toFixed(1) %>" x2="<%= PAD.l+iw %>" y2="<%= y(maxV*f).toFixed(1) %>" class="grid"/>
+      <text x="<%= PAD.l-9 %>" y="<%= (y(maxV*f)+3.5).toFixed(1) %>" class="ylab"><%= Math.round(maxV*f).toLocaleString('en-AU') %></text>
+    <% }); %>
+    <% series.forEach(function(s){ %>
+      <text x="<%= x(s.month).toFixed(1) %>" y="<%= PAD.t+ih+21 %>" class="xlab"><%= s.month === 0 ? 'Now' : 'M'+s.month %></text>
+    <% }); %>
+    <% byPlat.forEach(function(p, i){
+         const col = palette[i % palette.length];
+         const pts = series.map(s => [x(s.month), y(s[p.platform] || 0)]);
+         const line = pts.map((pt, j) => (j ? 'L' : 'M') + pt[0].toFixed(1) + ',' + pt[1].toFixed(1)).join(' ');
+         const end = pts[pts.length-1];
+    %>
+      <path d="<%= line %>" fill="none" stroke="<%= col %>" stroke-width="2.2" stroke-linejoin="round"/>
+      <circle cx="<%= end[0].toFixed(1) %>" cy="<%= end[1].toFixed(1) %>" r="4.5" fill="<%= col %>" stroke="#fff" stroke-width="2"/>
+      <text x="<%= (end[0]+9).toFixed(1) %>" y="<%= (end[1]+4).toFixed(1) %>" class="serieslab" fill="<%= col %>"><%= number(p.to) %></text>
+      <text x="<%= (end[0]+9).toFixed(1) %>" y="<%= (end[1]+16).toFixed(1) %>" class="serieslab2"><%= p.platform %></text>
+    <% }); %>
+  </svg>
+  </div>
+</figure>
+<style>
+.serieslab{font-family:"JetBrains Mono",monospace;font-size:11.5px;font-weight:700}
+.serieslab2{font-family:"JetBrains Mono",monospace;font-size:9.5px;fill:var(--faint)}
+</style>
+<% } %>

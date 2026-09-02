@@ -1,0 +1,147 @@
+<%
+/**
+ * partials/map — coverage map.
+ *
+ * Leaflet with OpenStreetMap tiles, no API key and no billing account, which
+ * matters for a page that may be viewed a handful of times and then never
+ * again.
+ *
+ * In `pdf` mode the map is replaced by the suburb list it would have shown.
+ * Playwright can be made to wait for tiles, but a print pass that depends on a
+ * third-party tile server is a PDF that silently exports half-grey when that
+ * server is slow — and the information a client needs from this section is
+ * "are you covering my area", which the list answers on its own.
+ *
+ * Expects: locations [{name, lat, lng, radiusKm, priority}], centre {lat,lng},
+ *          optional rings [{label, radiusKm}] drawn around the centre.
+ */
+const locs = (locals.locations || []).filter(function(l){
+  return Number.isFinite(Number(l.lat)) && Number.isFinite(Number(l.lng));
+});
+
+/* The centre is optional input.
+ *
+ * Asking an agent for a latitude and longitude before they can save a proposal
+ * is asking them to go and look something up mid-form, and the answer they
+ * would look up is almost always "the middle of the suburbs I just listed".
+ * So: use the supplied centre if there is one, otherwise take the centroid of
+ * the pins. Only when there are no pins either is there genuinely nothing to
+ * draw, and then the section renders nothing at all rather than an empty box.
+ *
+ * A centroid, not the first pin: with seven suburbs listed, opening the map on
+ * whichever happened to be typed first pushes the rest off the edge. */
+var centre = locals.centre;
+if ((!centre || !Number.isFinite(Number(centre.lat))) && locs.length) {
+  centre = {
+    lat: locs.reduce(function(a, l){ return a + Number(l.lat); }, 0) / locs.length,
+    lng: locs.reduce(function(a, l){ return a + Number(l.lng); }, 0) / locs.length
+  };
+}
+const rings = locals.rings || [];
+const mapId = 'map-' + Math.random().toString(36).slice(2, 8);
+if (centre) {
+%>
+<% if (mode === 'pdf') { %>
+  <div class="maplist">
+    <% rings.forEach(function(r){ %>
+      <div class="ringrow">
+        <span class="rk"><%= r.label %></span>
+        <span class="rv"><%= r.radiusKm %> km radius</span>
+      </div>
+    <% }); %>
+    <div class="suburbs">
+      <% locs.forEach(function(l){ %><span class="pill"><%= l.name %></span><% }); %>
+    </div>
+  </div>
+<% } else { %>
+  <div class="mapwrap">
+    <div id="<%= mapId %>" class="leafmap" role="img" aria-label="Coverage map showing <%= locs.length %> service areas">
+      <%
+      /* Fallback content, removed by the script below once Leaflet is running.
+         Without it, a blocked CDN, an offline reader or a tile server having a
+         bad afternoon leaves a 380px grey rectangle where the coverage answer
+         should be — and "are you covering my suburb" is the one question this
+         section exists to answer. The list is the answer; the map is the nicer
+         way to show it. */
+      %>
+      <div class="mapfallback" data-map-fallback>
+        <div class="mfh">Areas covered</div>
+        <div class="suburbs">
+          <% locs.forEach(function(l){ %><span class="pill"><%= l.name %></span><% }); %>
+        </div>
+      </div>
+    </div>
+    <% if (rings.length) { %>
+    <div class="maplegend">
+      <% rings.forEach(function(r, i){ %>
+        <span class="lg"><i style="opacity:<%= 1 - i * 0.4 %>"></i><%= r.label %> · <%= r.radiusKm %> km</span>
+      <% }); %>
+    </div>
+    <% } %>
+  </div>
+  <script>
+  (function(){
+    var start = function(){
+      // Leaflet blocked or still loading: leave the fallback list in place.
+      if (typeof L === 'undefined') return;
+      var host = document.getElementById('<%= mapId %>');
+      var fallback = host && host.querySelector('[data-map-fallback]');
+      if (fallback) fallback.parentNode.removeChild(fallback);
+
+      var map = L.map('<%= mapId %>', {
+        scrollWheelZoom: false,   // a map that hijacks the scroll on a long
+        zoomControl: true,        // sales page is a map that loses the reader
+        attributionControl: true
+      }).setView([<%= centre.lat %>, <%= centre.lng %>], <%= locals.zoom || 10 %>);
+
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 17,
+        attribution: '&copy; OpenStreetMap'
+      }).addTo(map);
+
+      var accent = '<%= template.accent %>';
+      var bounds = [];
+
+      <% rings.forEach(function(r, i){ %>
+        L.circle([<%= centre.lat %>, <%= centre.lng %>], {
+          radius: <%= Number(r.radiusKm) * 1000 %>,
+          color: accent, weight: 1.5, opacity: <%= 0.9 - i * 0.3 %>,
+          fillColor: accent, fillOpacity: <%= 0.07 - i * 0.025 %>
+        }).addTo(map);
+      <% }); %>
+
+      <% locs.forEach(function(l){ %>
+        (function(){
+          var m = L.circleMarker([<%= l.lat %>, <%= l.lng %>], {
+            radius: <%= l.priority === 'Secondary' ? 4 : 6 %>,
+            color: '#fff', weight: 2,
+            fillColor: accent,
+            fillOpacity: <%= l.priority === 'Secondary' ? 0.55 : 1 %>
+          }).addTo(map);
+          m.bindTooltip(<%- JSON.stringify(l.name) %>, { direction: 'top', offset: [0, -6] });
+          bounds.push([<%= l.lat %>, <%= l.lng %>]);
+        })();
+      <% }); %>
+
+      if (bounds.length > 1) map.fitBounds(bounds, { padding: [36, 36], maxZoom: 12 });
+    };
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
+    else start();
+  })();
+  </script>
+<% } %>
+<style>
+.mapwrap{margin:20px 0 6px;border:1px solid var(--line);border-radius:var(--r);overflow:hidden;background:var(--surface);box-shadow:var(--shadow)}
+.leafmap{height:380px;width:100%;background:var(--surface-2);position:relative}
+.mapfallback{position:absolute;inset:0;padding:22px;display:flex;flex-direction:column;justify-content:center;gap:12px;overflow:auto}
+.mapfallback .mfh{font-family:"JetBrains Mono",monospace;font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:var(--faint)}
+.maplegend{display:flex;gap:16px;flex-wrap:wrap;padding:11px 16px;border-top:1px solid var(--line);font-family:"JetBrains Mono",monospace;font-size:11.5px;color:var(--muted)}
+.maplegend .lg{display:inline-flex;align-items:center;gap:7px}
+.maplegend i{width:11px;height:11px;border-radius:50%;background:var(--accent);display:inline-block}
+.maplist{margin:20px 0;border:1px solid var(--line);border-radius:var(--r);padding:18px 20px;background:var(--surface)}
+.ringrow{display:flex;justify-content:space-between;gap:14px;padding:7px 0;border-bottom:1px solid var(--line-soft);font-size:14.5px}
+.ringrow .rk{font-weight:600;color:var(--ink)}
+.ringrow .rv{font-family:"JetBrains Mono",monospace;font-size:12.5px;color:var(--muted)}
+.suburbs{display:flex;flex-wrap:wrap;gap:6px;margin-top:14px}
+</style>
+<% } %>

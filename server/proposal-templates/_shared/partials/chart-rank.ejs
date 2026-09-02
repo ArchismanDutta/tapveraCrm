@@ -1,0 +1,118 @@
+<%
+/**
+ * partials/chart-rank — the rank trajectory.
+ *
+ * ───────────────────────────────────────────────────────────────────────────
+ * WHY THE Y AXIS IS UPSIDE DOWN
+ * ───────────────────────────────────────────────────────────────────────────
+ * Search positions count the wrong way: 1 is the best result and 100 is the
+ * worst, so plotting rank directly draws a line that falls as the campaign
+ * succeeds. A client glances at that and reads failure before they read the
+ * axis label. Position 1 therefore sits at the TOP of this chart and the line
+ * climbs — the picture agrees with the sentence next to it.
+ *
+ * ───────────────────────────────────────────────────────────────────────────
+ * WHY THE SCALE IS LOGARITHMIC
+ * ───────────────────────────────────────────────────────────────────────────
+ * The distance from 40 to 30 is worth almost nothing — both are on page three
+ * and neither gets a click. The distance from 4 to 3 is worth real money. A
+ * linear axis gives those two moves the same amount of ink and flatters the
+ * early, meaningless part of the climb. A log axis spends the page where the
+ * value is, and makes the top-10 band visible as a place the line has to
+ * reach rather than a number in a table.
+ *
+ * ───────────────────────────────────────────────────────────────────────────
+ * WHY SERVER-RENDERED SVG
+ * ───────────────────────────────────────────────────────────────────────────
+ * No charting library, no canvas, no hydration: the chart is in the first byte
+ * of HTML. It therefore also survives the PDF export, which runs the same
+ * markup through Playwright's print pass, and it still draws on a phone that
+ * gave up on JavaScript.
+ */
+
+const series = (computed.rank && computed.rank.series) || [];
+const summary = (computed.rank && computed.rank.summary) || null;
+
+if (series.length > 1 && summary) {
+  const W = 760, H = 320;
+  const PAD = { t: 22, r: 20, b: 34, l: 46 };
+  const iw = W - PAD.l - PAD.r;
+  const ih = H - PAD.t - PAD.b;
+
+  // Log scale, position 1 at the top.
+  const LOG_MAX = Math.log(101);
+  const y = (rank) => PAD.t + (Math.log(Math.max(1, Math.min(101, rank))) / LOG_MAX) * ih;
+  const x = (month) => PAD.l + (month / (series.length - 1)) * iw;
+
+  const pts = series.map((s) => [x(s.month), y(s.avg_rank)]);
+  const line = pts.map((p, i) => `${i ? 'L' : 'M'}${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(' ');
+  const area = `${line} L${pts[pts.length - 1][0].toFixed(1)},${(PAD.t + ih).toFixed(1)} L${pts[0][0].toFixed(1)},${(PAD.t + ih).toFixed(1)} Z`;
+
+  const gridRanks = [1, 3, 10, 20, 50, 100];
+  const last = pts[pts.length - 1];
+  const first = pts[0];
+%>
+<figure class="chartbox">
+  <figcaption>
+    <span class="ct">Projected average position</span>
+    <span class="cs">Across <%= summary.totalKeywords %> tracked keyword<%= summary.totalKeywords === 1 ? '' : 's' %> over <%= summary.months %> months. Higher is better.</span>
+  </figcaption>
+
+  <div class="chartscroll">
+  <svg viewBox="0 0 <%= W %> <%= H %>" width="100%" role="img"
+       aria-label="Average search position improving from <%= summary.currentAvgRank %> to <%= summary.projectedAvgRank %> over <%= summary.months %> months">
+    <defs>
+      <linearGradient id="rankfill" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%"   stop-color="<%= template.accent %>" stop-opacity=".22"/>
+        <stop offset="100%" stop-color="<%= template.accent %>" stop-opacity="0"/>
+      </linearGradient>
+    </defs>
+
+    <!-- The two bands that actually earn clicks. -->
+    <rect x="<%= PAD.l %>" y="<%= y(1) %>"  width="<%= iw %>" height="<%= (y(3) - y(1)).toFixed(1) %>"  fill="<%= template.accent %>" opacity=".10"/>
+    <rect x="<%= PAD.l %>" y="<%= y(3) %>"  width="<%= iw %>" height="<%= (y(10) - y(3)).toFixed(1) %>" fill="<%= template.accent %>" opacity=".05"/>
+    <text x="<%= PAD.l + 7 %>" y="<%= (y(1) + 12).toFixed(1) %>" class="band">Top 3</text>
+    <text x="<%= PAD.l + 7 %>" y="<%= (y(3) + 13).toFixed(1) %>" class="band">Top 10</text>
+
+    <% gridRanks.forEach(function(r){ %>
+      <line x1="<%= PAD.l %>" y1="<%= y(r).toFixed(1) %>" x2="<%= PAD.l + iw %>" y2="<%= y(r).toFixed(1) %>" class="grid"/>
+      <text x="<%= PAD.l - 9 %>" y="<%= (y(r) + 3.5).toFixed(1) %>" class="ylab"><%= r === 100 ? '100+' : r %></text>
+    <% }); %>
+
+    <path d="<%= area %>" fill="url(#rankfill)"/>
+    <path d="<%= line %>" fill="none" stroke="<%= template.accent %>" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+
+    <% series.forEach(function(s, i){ %>
+      <line x1="<%= x(s.month).toFixed(1) %>" y1="<%= PAD.t + ih %>" x2="<%= x(s.month).toFixed(1) %>" y2="<%= (PAD.t + ih + 5) %>" class="tick"/>
+      <text x="<%= x(s.month).toFixed(1) %>" y="<%= PAD.t + ih + 21 %>" class="xlab"><%= s.month === 0 ? 'Now' : 'M' + s.month %></text>
+      <% if (i > 0 && i < series.length - 1) { %>
+        <circle cx="<%= x(s.month).toFixed(1) %>" cy="<%= y(s.avg_rank).toFixed(1) %>" r="3" fill="#fff" stroke="<%= template.accent %>" stroke-width="1.8"/>
+      <% } %>
+    <% }); %>
+
+    <!-- Start and end carry the story, so they get the weight. -->
+    <circle cx="<%= first[0].toFixed(1) %>" cy="<%= first[1].toFixed(1) %>" r="4.5" fill="#fff" stroke="#98A2AC" stroke-width="2"/>
+    <circle cx="<%= last[0].toFixed(1) %>"  cy="<%= last[1].toFixed(1) %>"  r="6"   fill="<%= template.accent %>" stroke="#fff" stroke-width="2.5"/>
+    <text x="<%= (last[0] - 8).toFixed(1) %>" y="<%= (last[1] - 14).toFixed(1) %>" class="endlab" text-anchor="end">avg #<%= summary.projectedAvgRank %></text>
+    <text x="<%= (first[0] + 10).toFixed(1) %>" y="<%= (first[1] + 18).toFixed(1) %>" class="startlab">avg #<%= summary.currentAvgRank %> today</text>
+  </svg>
+  </div>
+</figure>
+
+<style>
+.chartbox{margin:22px 0 8px;padding:0;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);overflow:hidden}
+.chartbox figcaption{padding:16px 20px 4px;display:flex;flex-direction:column;gap:3px}
+.chartbox .ct{font-family:"Archivo",sans-serif;font-weight:600;font-size:15px;color:var(--ink)}
+.chartbox .cs{font-size:13px;color:var(--muted)}
+.chartscroll{overflow-x:auto;padding:4px 12px 14px}
+.chartscroll svg{min-width:520px;display:block}
+.grid{stroke:var(--line-soft);stroke-width:1}
+.tick{stroke:var(--line);stroke-width:1}
+.ylab,.xlab,.band,.endlab,.startlab{font-family:"JetBrains Mono",monospace;fill:var(--faint)}
+.ylab{font-size:10px;text-anchor:end}
+.xlab{font-size:10px;text-anchor:middle}
+.band{font-size:9px;fill:var(--accent-ink);opacity:.75;letter-spacing:.08em;text-transform:uppercase}
+.endlab{font-size:12px;font-weight:700;fill:var(--accent-ink)}
+.startlab{font-size:10.5px;fill:var(--muted)}
+</style>
+<% } %>

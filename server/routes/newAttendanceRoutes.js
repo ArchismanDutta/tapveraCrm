@@ -60,6 +60,13 @@ router.get('/employee/:userId/range', protect, attendanceController.getEmployeeA
  */
 router.get('/employee/:userId/monthly/:year/:month', protect, attendanceController.getEmployeeMonthly.bind(attendanceController));
 
+/**
+ * Canonical monthly attendance summary — the figures payroll pays on
+ * @route GET /api/attendance-new/employee/:userId/summary/:year/:month
+ * @access Private (self, admin/hr, attendance:manage, or hierarchical reach)
+ */
+router.get('/employee/:userId/summary/:year/:month', protect, attendanceController.getEmployeeMonthlySummary.bind(attendanceController));
+
 // ======================
 // Admin Routes - Require admin, hr, or super-admin privileges
 // ======================

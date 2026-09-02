@@ -1,0 +1,82 @@
+{
+  "business_name": "EZ Shower Repair and Tiling",
+  "website_url": "https://ezshowerrepair.com.au",
+  "city": "Brisbane",
+  "state": "QLD",
+  "country": "Australia",
+  "industry": "Leaking shower repairs and regrouting",
+  "prepared_by": "Tapvera Technologies",
+  "prepared_by_email": "hello@tapvera.io",
+  "valid_until": "2026-09-30",
+  "agent_brief": "GBP suspended about 4 weeks ago. Service areas conflict between Gold Coast, Brisbane and Tweed Coast. No street address anywhere on the site. Phone number on GBP does not match the website footer. Several footer links 404.",
+  "tone": "Urgent and corrective",
+  "currency": "AUD",
+
+  "profile_state": "Suspended",
+  "gbp_name": "EZ Shower Repair and Tiling",
+  "gbp_categories": ["Bathroom remodeler", "Tile contractor"],
+  "suspension_date": "2026-08-01",
+  "weeks_down": 4,
+
+  "headline": "Your Google listing is suspended. Right now you don't exist on Maps.",
+  "intro": "Not ranking badly. Not ranking low. Gone. Every \"leaking shower repair near me\" search in Brisbane is being answered by someone else, and it stays that way until the profile is reinstated. Your website is still live and still ranking, which means the recovery has something to build on.",
+  "loss_bullets": [
+    "Your listing in the Google Maps local pack — the three results above everything else",
+    "Every review you have earned, hidden from public view",
+    "Your business on Google Maps when someone searches your name",
+    "Direction requests, click-to-call and message buttons",
+    "Local pack visibility for all eight of your services"
+  ],
+
+  "enquiries_per_week": 12,
+  "conversion_rate": 40,
+  "avg_job_value": 325,
+
+  "suspension_causes": [
+    { "issue": "Conflicting service areas", "evidence": "Site lists 'Gold Coast / Brisbane / Brisbane South' on the homepage and 'Tweed Coast' on the contact page", "fix": "Settle on one service area that matches the profile exactly, and make every page on the site agree with it." },
+    { "issue": "No street address anywhere", "evidence": "No physical address on the site, in the footer, or on the contact page", "fix": "Publish a verifiable address in the footer of every page — this is the single most common trigger for a service-area business suspension." },
+    { "issue": "Phone number mismatch", "evidence": "GBP shows 0407 xxx xxx, website footer shows 07 5xxx xxxx", "fix": "Standardise one number across the profile, the website and every directory listing." },
+    { "issue": "Broken footer links", "evidence": "Four links in the site footer return 404, including 'Our Guarantee'", "fix": "Repair or remove them before the reinstatement request is filed." }
+  ],
+  "existing_strengths": [
+    "A live WordPress site that is indexed and ranking organically",
+    "Individual service pages for all eight services",
+    "A photo gallery of completed jobs with genuine before and after shots",
+    "Current QBCC licence documentation available for verification"
+  ],
+
+  "service_center": { "lat": -27.4698, "lng": 153.0251 },
+  "radius_options": [
+    { "label": "Core recovery", "radiusKm": 15, "tier": "Recovery", "suburbs": ["Brisbane CBD", "Chermside", "Mount Gravatt", "Indooroopilly", "Carindale", "Ashgrove"] },
+    { "label": "Extended reach", "radiusKm": 40, "tier": "Recovery & Reach", "suburbs": ["Redcliffe", "Ipswich", "Logan Central", "Cleveland", "Caboolture", "Beenleigh", "Springfield"] }
+  ],
+  "target_locations": [
+    { "name": "Brisbane CBD",  "lat": -27.4698, "lng": 153.0251, "radiusKm": 0, "priority": "Primary" },
+    { "name": "Chermside",     "lat": -27.3856, "lng": 153.0300, "radiusKm": 0, "priority": "Primary" },
+    { "name": "Mount Gravatt", "lat": -27.5386, "lng": 153.0800, "radiusKm": 0, "priority": "Primary" },
+    { "name": "Indooroopilly", "lat": -27.4989, "lng": 152.9733, "radiusKm": 0, "priority": "Primary" },
+    { "name": "Redcliffe",     "lat": -27.2300, "lng": 153.1100, "radiusKm": 0, "priority": "Secondary" },
+    { "name": "Ipswich",       "lat": -27.6171, "lng": 152.7600, "radiusKm": 0, "priority": "Secondary" },
+    { "name": "Logan Central", "lat": -27.6392, "lng": 153.1086, "radiusKm": 0, "priority": "Secondary" }
+  ],
+
+  "phases": [
+    { "title": "Reinstatement", "window": "Weeks 1–3", "focus": "Remove every reason Google had to suspend the profile, then file the appeal with the evidence it asks for.", "steps": ["Publish a verifiable street address across the site", "Reconcile service areas so the site and the profile state the same thing", "Standardise the phone number everywhere it appears", "Repair the four broken footer links", "Compile licence and premises evidence, then file the reinstatement request"] },
+    { "title": "Ranking expansion", "window": "Months 2–6", "focus": "Once the profile is back, build the signals that decide whether you sit at position one or position seven in the local pack.", "steps": ["Weekly Google Posts covering each service", "Review generation flow after every completed job", "Photo uploads geotagged to the service area", "Citation building across trade directories with consistent details"] }
+  ],
+  "guarantees": [
+    "We guarantee the reinstatement request is prepared correctly, submitted, and appealed as many times as Google permits.",
+    "We cannot guarantee Google reinstates a profile. That decision is theirs alone and no agency can commit to it.",
+    "If the profile is not reinstated within the term, the ranking work on your website continues at no additional cost."
+  ],
+
+  "pricing_tiers": [
+    { "name": "Recovery", "tagline": "Get the profile back and hold the core area", "price": 550, "billing": "One-time", "duration": "6 months · 15 km radius", "features": ["Full profile audit and evidence pack", "Reinstatement request and appeals", "Site corrections that caused the suspension", "Weekly Google Posts for 6 months", "Monthly reporting"], "highlighted": false },
+    { "name": "Recovery & Reach", "tagline": "Reinstatement plus the wider Brisbane radius", "price": 1100, "billing": "One-time", "duration": "12 months · 40 km radius", "features": ["Everything in Recovery", "12 months of profile management", "40 km service area optimisation", "Review generation flow", "Citation building across trade directories", "Fortnightly reporting call"], "highlighted": true }
+  ],
+  "payment_terms": "One-time payment. Nothing recurring, no lock-in contract.",
+
+  "cta_label": "Start the reinstatement",
+  "closing_note": "Every week the profile stays down is roughly A$1,560 of work going to the three businesses currently sitting where you used to. The reinstatement request takes about a week to prepare properly, and it can only be filed once the site corrections are live.",
+  "disclaimer": "Findings are based on publicly available information at the time of writing. Reinstatement decisions are made solely by Google and cannot be guaranteed by any third party. Suspension causes are assessed from observable evidence; Google does not disclose its reasons."
+}

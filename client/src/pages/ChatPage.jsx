@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useSearchParams } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import CreateGroupModal from "../components/chat/CreateGroupModal";
 import ManageGroupModal from "../components/chat/ManageGroupModal";
@@ -71,6 +71,7 @@ const useDebounce = (value, delay) => {
 
 const ChatPage = ({ onLogout }) => {
   const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
   const dispatch = useDispatch();
 
   const [collapsed, setCollapsed] = useState(false);
@@ -321,13 +322,30 @@ const ChatPage = ({ onLogout }) => {
   );
 
   // Auto-open a conversation when arriving from a notification.
+  //
+  // Router state covers an in-app click. ?conversation= covers everything
+  // that cannot carry state: a desktop notification click, a push
+  // notification opening the tab, a pasted or bookmarked link.
   useEffect(() => {
-    if (!location.state?.openConversationId || conversations.length === 0) return;
-    const target = conversations.find((c) => c._id === location.state.openConversationId);
+    const requestedId =
+      location.state?.openConversationId || searchParams.get("conversation");
+    if (!requestedId || conversations.length === 0) return;
+
+    const target = conversations.find((c) => c._id === requestedId);
     if (!target) return;
+
     openConversation(target);
-    window.history.replaceState({}, document.title);
-  }, [location.state, conversations, openConversation]);
+
+    // Clear the deep link so a later refresh does not reopen it.
+    if (searchParams.get("conversation")) {
+      const next = new URLSearchParams(searchParams);
+      next.delete("conversation");
+      next.delete("message");
+      setSearchParams(next, { replace: true });
+    } else {
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.state, searchParams, setSearchParams, conversations, openConversation]);
 
   // Clear the active thread on unmount so a background message badges correctly.
   useEffect(() => () => { dispatch(setActiveThread(null, null)); }, [dispatch]);

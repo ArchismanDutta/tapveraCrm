@@ -3,6 +3,15 @@ import { NavLink, useLocation } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import { fetchThreads, selectTotalUnread } from "../../store/slices/threadsSlice";
 import {
+  fetchLatestNotifications,
+  selectNotificationAlert,
+  selectNotificationStatus,
+} from "../../store/slices/notificationSlice";
+import {
+  playNotificationSound,
+  unlockNotificationSound,
+} from "../../utils/notificationSound";
+import {
   ClipboardList,
   FileText,
   Flag,
@@ -509,6 +518,11 @@ const menuConfig = {
           label: "Client Requests",
         },
         {
+          to: "/super-admin/proposals",
+          icon: <FileText size={16} />,
+          label: "Proposals",
+        },
+        {
           to: "/projects",
           icon: <FolderKanban size={16} />,
           label: "Project Management",
@@ -607,6 +621,44 @@ const Sidebar = ({
   const unreadByKey = useSelector((s) => s.threads.unreadByKey);
 
   const chatUnread = useSelector(selectTotalUnread("chat"));
+
+  // Blinks until the user opens the notification page. The sidebar owns this
+  // rather than the bell because the bell lives in DashboardHeader, which one
+  // page renders, while the sidebar is on every page behind the login.
+  const notificationAlert = useSelector(selectNotificationAlert);
+  const notificationStatus = useSelector(selectNotificationStatus);
+
+  // Restore the light after a reload, and catch anything that arrived while
+  // the user was logged out — no socket event can report those. Gated on
+  // "idle" so this is one request per page load rather than one per
+  // navigation, since every page mounts its own sidebar.
+  useEffect(() => {
+    if (notificationStatus === "idle") {
+      dispatch(fetchLatestNotifications(10));
+    }
+  }, [notificationStatus, dispatch]);
+
+  // Chime on arrival. The store flag above is set from the same socket event
+  // in WebSocketContext, so the light and the sound always agree; the id
+  // dedupes against the bell, when a page happens to render both.
+  useEffect(() => {
+    const onNotification = (event) => {
+      const data = event.detail || {};
+      playNotificationSound(data.notificationId || data._id);
+    };
+
+    // Browsers block audio until the page has been interacted with.
+    const unlock = () => unlockNotificationSound();
+    document.addEventListener("click", unlock);
+    document.addEventListener("keydown", unlock);
+    window.addEventListener("ws-notification", onNotification);
+
+    return () => {
+      document.removeEventListener("click", unlock);
+      document.removeEventListener("keydown", unlock);
+      window.removeEventListener("ws-notification", onNotification);
+    };
+  }, []);
 
   // { conversationId: count } — the shape the dropdown below already expects.
   const chatUnreadMap = useMemo(() => {
@@ -1404,6 +1456,15 @@ const Sidebar = ({
                         {chatUnread > 99 ? "99+" : chatUnread}
                       </span>
                     )}
+                    {item.to === "/notifications" && notificationAlert && (
+                      <span
+                        className="absolute -right-1 -top-1 flex h-2.5 w-2.5"
+                        aria-hidden="true"
+                      >
+                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-rose-500 opacity-75" />
+                        <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-rose-500 shadow-[0_0_6px_2px_rgba(244,63,94,0.65)]" />
+                      </span>
+                    )}
                   </span>
                   {!collapsed && (
                     <span className="flex min-w-0 flex-1 items-center justify-between gap-2">
@@ -1411,6 +1472,12 @@ const Sidebar = ({
                       {item.to === "/messages" && chatUnread > 0 && (
                         <span className="min-w-[18px] rounded-full border border-rose-300/20 bg-rose-400/15 px-1.5 py-[1px] text-center text-[10px] font-semibold text-rose-100">
                           {chatUnread > 99 ? "99+" : chatUnread}
+                        </span>
+                      )}
+                      {item.to === "/notifications" && notificationAlert && (
+                        <span className="flex shrink-0 items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-rose-300">
+                          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-rose-500" />
+                          New
                         </span>
                       )}
                     </span>

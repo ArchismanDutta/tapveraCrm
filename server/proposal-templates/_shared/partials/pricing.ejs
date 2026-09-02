@@ -1,0 +1,31 @@
+<%
+/**
+ * partials/pricing — the tier cards.
+ *
+ * Every value here came from a human through an `agent` field. Nothing on this
+ * page was written by a language model, by construction rather than by
+ * instruction: services/proposals/generate.js builds its response schema from
+ * `ai` fields only, and there are none in the pricing group.
+ */
+const tiers = d.pricing_tiers || [];
+if (tiers.length) {
+%>
+<div class="tiers">
+  <% tiers.forEach(function(t){ %>
+    <div class="tier<%= t.highlighted ? ' best' : '' %>">
+      <% if (t.highlighted) { %><span class="rec">Recommended</span><% } %>
+      <div class="tname"><%= t.name %></div>
+      <div class="ttag"><%= t.tagline || '' %></div>
+      <div class="price"><%= money(t.price, d.currency) %></div>
+      <div class="billing"><%= t.billing %></div>
+      <% if (t.duration) { %><div class="dur"><%= t.duration %></div><% } %>
+      <ul>
+        <% (t.features || []).forEach(function(f){ %><li><%= f %></li><% }); %>
+      </ul>
+    </div>
+  <% }); %>
+</div>
+<% if (d.payment_terms) { %>
+  <p class="caveat" style="margin-top:16px"><%= d.payment_terms %></p>
+<% } %>
+<% } %>

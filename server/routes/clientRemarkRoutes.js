@@ -141,7 +141,8 @@ router.post("/:projectId/client-remarks", protect, async (req, res) => {
           title: `${authorName} commented on ${project.projectName}`,
           body: `${section}: ${newRemark.remark.slice(0, 200)}`,
           priority: "normal",
-          relatedData: { projectId, url: `/projects/${projectId}` },
+          // The project detail route is singular: /project/:projectId
+          relatedData: { projectId, url: `/project/${projectId}` },
         })
         .catch((err) => console.error("Project-remark notification failed:", err));
     }

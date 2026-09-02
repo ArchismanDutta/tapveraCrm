@@ -1,3 +1,4 @@
+import { notificationTargetUrl, navigateFromNotification } from "./notificationTarget";
 // Browser notification utility for task assignments and changes
 
 /**
@@ -129,19 +130,22 @@ class BrowserNotificationManager {
         this.vibrateDevice();
       }
 
-      // Add click handler to focus the browser window
+      // Focus the window AND go to whatever the notification is about.
+      // This used to only focus: clicking a desktop notification for a chat
+      // message brought the tab forward and left the user wherever they were.
       notification.addEventListener('click', () => {
         window.focus();
-        notification.close();
-
-        // Try to bring browser window to front
         if (window.parent) {
           window.parent.focus();
         }
+        notification.close();
+
+        const target = notificationTargetUrl(defaultOptions.data);
+        if (target) navigateFromNotification(target);
       });
 
       // Show system toast notification (if available)
-      this.showSystemToast(title, defaultOptions.body);
+      this.showSystemToast(title, defaultOptions.body, defaultOptions.data);
 
       // Auto-close after 8 seconds (longer for better visibility)
       setTimeout(() => {
@@ -156,21 +160,28 @@ class BrowserNotificationManager {
   }
 
   // Show system-level toast notification (experimental)
-  showSystemToast(title, message) {
+  //
+  // `data` is threaded through so the service worker's notificationclick
+  // handler has a url to open. Without it this copy of the notification
+  // opened the app at "/" while the one above went to the right screen.
+  showSystemToast(title, message, data = null) {
     try {
       // For Windows systems with Chrome, attempt to use the native notification API
       if ('serviceWorker' in navigator && 'showNotification' in ServiceWorkerRegistration.prototype) {
         navigator.serviceWorker.ready.then(registration => {
+          const url = notificationTargetUrl(data);
           registration.showNotification(title, {
             body: message,
             icon: '/favicon.ico',
             badge: '/favicon.ico',
             vibrate: [200, 100, 200],
             requireInteraction: false,
+            data: url ? { url } : undefined,
             actions: [
               {
                 action: 'view',
-                title: 'View Task',
+                // Generic: this path shows chat and leave notifications too.
+                title: 'View',
                 icon: '/favicon.ico'
               }
             ]

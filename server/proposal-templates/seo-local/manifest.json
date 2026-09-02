@@ -1,0 +1,394 @@
+{
+  "name": "Local SEO",
+  "version": "1.0.0",
+  "serviceType": "SEO",
+  "description": "Rank recovery and growth for a local business. Rank trajectory chart, keyword movement table, competitor gap and a coverage map.",
+  "accent": "#1F6F5C",
+  "extends": [
+    "identity",
+    "prepared_by",
+    "brief",
+    "pricing",
+    "closing"
+  ],
+  "sections": [
+    {
+      "id": "position",
+      "nav": "Where you rank",
+      "title": "Where you rank today"
+    },
+    {
+      "id": "gap",
+      "nav": "The gap",
+      "title": "What your competitors are taking"
+    },
+    {
+      "id": "coverage",
+      "nav": "Your area",
+      "title": "The area we will own"
+    },
+    {
+      "id": "plan",
+      "nav": "The work",
+      "title": "How we move you up"
+    },
+    {
+      "id": "projection",
+      "nav": "What to expect",
+      "title": "Where this gets you"
+    },
+    {
+      "id": "price",
+      "nav": "Investment",
+      "title": "Investment"
+    }
+  ],
+  "liveData": [
+    "keywordRanks",
+    "backlinks",
+    "blogUpdates"
+  ],
+  "fields": [
+    {
+      "key": "headline",
+      "label": "Headline",
+      "kind": "text",
+      "source": "ai",
+      "group": "position",
+      "maxLength": 110,
+      "aiHint": "One sentence naming where they currently stand in search and what it is costing them. Concrete and specific to their trade and city. No marketing abstractions, no 'unlock' or 'leverage'. Under 110 characters."
+    },
+    {
+      "key": "intro",
+      "label": "Opening paragraph",
+      "kind": "textarea",
+      "source": "ai",
+      "group": "position",
+      "maxLength": 520,
+      "aiHint": "Two or three sentences setting up the problem using the real numbers supplied: their current average position, how many keywords sit outside the top 10, and who is ranking instead. State facts, do not sell yet."
+    },
+    {
+      "key": "current_monthly_traffic",
+      "label": "Monthly organic traffic",
+      "kind": "number",
+      "source": "agent",
+      "group": "position",
+      "required": false
+    },
+    {
+      "key": "domain_authority",
+      "label": "Domain authority",
+      "kind": "number",
+      "source": "agent",
+      "group": "position",
+      "required": false,
+      "min": 0,
+      "max": 100
+    },
+    {
+      "key": "indexed_pages",
+      "label": "Indexed pages",
+      "kind": "number",
+      "source": "agent",
+      "group": "position",
+      "required": false
+    },
+    {
+      "key": "target_keywords",
+      "label": "Keywords to move",
+      "kind": "keywords",
+      "source": "agent",
+      "group": "position",
+      "required": true,
+      "min": 1,
+      "max": 40,
+      "help": "The heart of this template. Drives the rank table AND the trajectory chart. Auto-filled from KeywordRank when a project is linked.",
+      "fields": [
+        {
+          "key": "keyword",
+          "label": "Keyword",
+          "kind": "text",
+          "required": true,
+          "maxLength": 90
+        },
+        {
+          "key": "current_rank",
+          "label": "Now",
+          "kind": "number",
+          "required": true,
+          "min": 1,
+          "max": 101,
+          "help": "101 = not in top 100"
+        },
+        {
+          "key": "target_rank",
+          "label": "Target",
+          "kind": "number",
+          "required": true,
+          "min": 1,
+          "max": 100
+        },
+        {
+          "key": "monthly_volume",
+          "label": "Searches / month",
+          "kind": "number",
+          "required": false
+        },
+        {
+          "key": "difficulty",
+          "label": "Difficulty",
+          "kind": "select",
+          "required": false,
+          "default": "Medium",
+          "options": [
+            "Low",
+            "Medium",
+            "High"
+          ]
+        },
+        {
+          "key": "intent",
+          "label": "Intent",
+          "kind": "select",
+          "required": false,
+          "default": "Commercial",
+          "options": [
+            "Commercial",
+            "Transactional",
+            "Informational",
+            "Navigational"
+          ]
+        }
+      ]
+    },
+    {
+      "key": "competitors",
+      "label": "Who is outranking them",
+      "kind": "repeat",
+      "source": "agent",
+      "group": "gap",
+      "required": false,
+      "max": 5,
+      "itemLabel": "Competitor",
+      "fields": [
+        {
+          "key": "name",
+          "label": "Business name",
+          "kind": "text",
+          "required": true,
+          "maxLength": 60
+        },
+        {
+          "key": "domain",
+          "label": "Domain",
+          "kind": "text",
+          "required": false,
+          "maxLength": 80
+        },
+        {
+          "key": "avg_rank",
+          "label": "Their avg position",
+          "kind": "number",
+          "required": false,
+          "min": 1,
+          "max": 101
+        },
+        {
+          "key": "note",
+          "label": "Why they win",
+          "kind": "text",
+          "required": false,
+          "maxLength": 120
+        }
+      ]
+    },
+    {
+      "key": "technical_issues",
+      "label": "What is holding the site back",
+      "kind": "repeat",
+      "source": "ai",
+      "group": "gap",
+      "max": 6,
+      "itemLabel": "Issue",
+      "aiHint": "Between three and six findings, drawn ONLY from the audit facts and the agent brief supplied. Never invent an issue. Each `issue` is a short noun phrase (under 60 chars), `impact` is one plain sentence on what it costs them in rankings, `evidence` quotes the specific thing found on their site. If the audit found fewer than three real issues, return fewer.",
+      "fields": [
+        {
+          "key": "issue",
+          "label": "Issue",
+          "kind": "text",
+          "required": true,
+          "maxLength": 60
+        },
+        {
+          "key": "impact",
+          "label": "Impact",
+          "kind": "textarea",
+          "required": true,
+          "maxLength": 220
+        },
+        {
+          "key": "evidence",
+          "label": "Evidence",
+          "kind": "text",
+          "required": false,
+          "maxLength": 160
+        }
+      ]
+    },
+    {
+      "key": "map_center",
+      "label": "Map centre",
+      "kind": "geopoint",
+      "source": "agent",
+      "group": "coverage",
+      "required": false,
+      "help": "Optional. Left blank, the map centres itself on the average of the locations below \u2014 which is usually what you wanted anyway."
+    },
+    {
+      "key": "target_locations",
+      "label": "Suburbs and towns to rank in",
+      "kind": "locations",
+      "source": "agent",
+      "group": "coverage",
+      "required": false,
+      "min": 0,
+      "max": 30,
+      "help": "Rendered as pins with a service radius on the map.",
+      "fields": [
+        {
+          "key": "name",
+          "label": "Suburb / town",
+          "kind": "text",
+          "required": true,
+          "maxLength": 60
+        },
+        {
+          "key": "lat",
+          "label": "Latitude",
+          "kind": "number",
+          "required": true
+        },
+        {
+          "key": "lng",
+          "label": "Longitude",
+          "kind": "number",
+          "required": true
+        },
+        {
+          "key": "radiusKm",
+          "label": "Radius (km)",
+          "kind": "number",
+          "required": false,
+          "default": 10
+        },
+        {
+          "key": "priority",
+          "label": "Priority",
+          "kind": "select",
+          "required": false,
+          "default": "Primary",
+          "options": [
+            "Primary",
+            "Secondary"
+          ]
+        }
+      ]
+    },
+    {
+      "key": "phases",
+      "label": "The plan, month by month",
+      "kind": "repeat",
+      "source": "ai",
+      "group": "plan",
+      "max": 4,
+      "itemLabel": "Phase",
+      "aiHint": "Three or four phases covering the engagement length given. Each `title` is under 40 chars, `window` is a month range like 'Months 1\u20132', `focus` is one sentence, and `deliverables` is three to five concrete items a client could tick off. Ground every phase in the issues found \u2014 do not describe generic SEO process.",
+      "fields": [
+        {
+          "key": "title",
+          "label": "Phase title",
+          "kind": "text",
+          "required": true,
+          "maxLength": 40
+        },
+        {
+          "key": "window",
+          "label": "Timeframe",
+          "kind": "text",
+          "required": true,
+          "maxLength": 30
+        },
+        {
+          "key": "focus",
+          "label": "Focus",
+          "kind": "textarea",
+          "required": true,
+          "maxLength": 260
+        },
+        {
+          "key": "deliverables",
+          "label": "Deliverables",
+          "kind": "list",
+          "required": true,
+          "min": 2,
+          "max": 6
+        }
+      ]
+    },
+    {
+      "key": "engagement_months",
+      "label": "Engagement length (months)",
+      "kind": "number",
+      "source": "agent",
+      "group": "projection",
+      "required": true,
+      "default": 6,
+      "min": 3,
+      "max": 24,
+      "help": "Sets the x-axis of the trajectory chart."
+    },
+    {
+      "key": "rank_projection",
+      "label": "Projected trajectory",
+      "kind": "repeat",
+      "source": "computed",
+      "group": "projection",
+      "help": "Computed from the keyword table and engagement length. Not editable \u2014 it is the arithmetic of the targets you set above.",
+      "fields": [
+        {
+          "key": "month",
+          "label": "Month",
+          "kind": "number"
+        },
+        {
+          "key": "avg_rank",
+          "label": "Projected avg rank",
+          "kind": "number"
+        },
+        {
+          "key": "in_top_10",
+          "label": "Keywords in top 10",
+          "kind": "number"
+        },
+        {
+          "key": "in_top_3",
+          "label": "Keywords in top 3",
+          "kind": "number"
+        }
+      ]
+    },
+    {
+      "key": "projection_note",
+      "label": "Projection caveat",
+      "kind": "textarea",
+      "source": "ai",
+      "group": "projection",
+      "maxLength": 340,
+      "aiHint": "Two sentences explaining that the trajectory is a projection based on the keyword difficulty and competition given, not a guarantee. Honest and plain \u2014 this paragraph protects the company. Do not add optimism."
+    }
+  ],
+  "_comment_avg_rank": "current_avg_rank was deliberately REMOVED as an input. It is derivable from target_keywords, and having both meant the headline stat tile and the chart beneath it could disagree \u2014 the agent typed 54 while the keyword table averaged 60.5. A proposal that contradicts itself in two adjacent numbers is one the client stops trusting. The figure now comes only from computed.rank.summary.currentAvgRank.",
+  "measures": [
+    "pagespeed"
+  ]
+}

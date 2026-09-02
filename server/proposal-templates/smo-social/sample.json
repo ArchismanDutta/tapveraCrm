@@ -1,0 +1,55 @@
+{
+  "business_name": "Harper & Vine Interiors",
+  "website_url": "https://harperandvine.com.au",
+  "city": "Gold Coast", "state": "QLD", "country": "Australia",
+  "industry": "Residential interior design and styling",
+  "prepared_by": "Tapvera Technologies",
+  "prepared_by_email": "hello@tapvera.io",
+  "valid_until": "2026-10-31",
+  "agent_brief": "Beautiful portfolio, almost no posting. Instagram is the obvious channel for interiors. LinkedIn is dead weight for them. They have hundreds of unpublished project photos.",
+  "tone": "Warm and reassuring",
+  "currency": "AUD",
+
+  "headline": "You have three years of finished projects and almost none of it has been posted.",
+  "intro": "Interiors is one of the few industries where the work sells itself on sight, and Instagram is where people look. You have 1,240 followers and post roughly twice a month; the two studios you named as competitors post four times a week and have eleven times the audience. LinkedIn is not worth your money here and we would not charge you to manage it.",
+
+  "platforms": [
+    { "name": "Instagram", "handle": "@harperandvine", "followers": 1240, "engagement": 3.1, "managed": true },
+    { "name": "Facebook",  "handle": "harperandvineinteriors", "followers": 890, "engagement": 1.2, "managed": true },
+    { "name": "Pinterest", "handle": "harperandvine", "followers": 310, "engagement": 4.4, "managed": true },
+    { "name": "LinkedIn",  "handle": "harper-vine", "followers": 140, "engagement": 0.3, "managed": false }
+  ],
+
+  "content_pillars": [
+    { "name": "Finished rooms", "description": "One completed space per post, shot properly, with the brief and the budget band named. This is what gets saved and shared.", "share": 40 },
+    { "name": "Before and after", "description": "The single highest-performing format in interiors. Split-frame reels from your existing project archive.", "share": 25 },
+    { "name": "Sourcing and detail", "description": "Close-ups of materials, why a fabric or finish was chosen. Builds the taste-authority that justifies your fee.", "share": 20 },
+    { "name": "Studio and process", "description": "The team, site visits, the messy middle. Makes an expensive service feel like people rather than a quote.", "share": 15 }
+  ],
+
+  "posting_schedule": [
+    { "platform": "Instagram", "posts_per_week": 5, "formats": ["Carousel", "Reel", "Story"] },
+    { "platform": "Pinterest", "posts_per_week": 8, "formats": ["Pin", "Idea Pin"] },
+    { "platform": "Facebook",  "posts_per_week": 2, "formats": ["Album", "Reel repost"] }
+  ],
+  "monthly_deliverables": [
+    "20 Instagram posts including 8 reels, written and scheduled",
+    "32 Pinterest pins linked back to project pages",
+    "Monthly content shoot direction for your photographer",
+    "Community management — comments and DMs answered within 4 hours on weekdays",
+    "Monthly performance report with the three posts worth repeating"
+  ],
+
+  "engagement_months": 6,
+  "growth_target_pct": 85,
+  "projection_note": "This projection assumes the posting cadence above is maintained and that we get access to the project archive in month one. It is based on typical results for design studios at this audience size, not a promise — social platforms change what they show and nobody controls that.",
+
+  "pricing_tiers": [
+    { "name": "Instagram focus", "tagline": "One channel, done properly", "price": 1650, "billing": "Per month", "duration": "Instagram only · 20 posts a month", "features": ["20 Instagram posts including 8 reels", "Community management", "Monthly reporting", "Content calendar you can see and approve"], "highlighted": false },
+    { "name": "Full studio", "tagline": "Instagram, Pinterest and Facebook", "price": 2450, "billing": "Per month", "duration": "Three channels · 50+ posts a month", "features": ["Everything in Instagram focus", "32 Pinterest pins a month", "Facebook album and reel reposting", "Shoot direction for your photographer", "Quarterly strategy review", "Paid promotion management if you choose to run it"], "highlighted": true }
+  ],
+  "payment_terms": "Monthly in advance. Three-month minimum, then thirty days notice.",
+  "cta_label": "Start with Full studio",
+  "closing_note": "The archive is the reason this works. Most studios we take on need six weeks of shooting before there is anything to post — you already have three years of it sitting unused.",
+  "disclaimer": "Follower and engagement projections are estimates based on current account performance and comparable accounts in this sector. Social platforms control distribution and results cannot be guaranteed."
+}

@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+<head>
+<%- include('partials/head', { needsMap: true }) %>
+</head>
+<body>
+<% if (isExpired) { %>
+  <%- include('partials/expired') %>
+<% } else { %>
+
+  <% if (isDraftPreview) { %><div class="draftbar">Draft preview — not published</div><% } %>
+  <%- include('partials/nav') %>
+
+  <header class="hero">
+    <div class="wrap">
+      <p class="eyebrow"><%= d.prepared_by %> &times; <%= proposal.businessName %></p>
+      <h1><%= d.headline %></h1>
+      <% if (d.intro) { %><p style="font-size:19px;color:var(--muted);margin-top:16px"><%= d.intro %></p><% } %>
+      <%- include('partials/hero-meta') %>
+    </div>
+  </header>
+
+  <main>
+    <!-- ── What it's costing ──────────────────────────────────────────── -->
+    <section id="cost">
+      <div class="wrap">
+        <div class="sec-title"><h2>What every week is costing you</h2></div>
+
+        <% if ((d.loss_bullets || []).length) { %>
+          <p class="narrow"><strong>What a <%= d.profile_state === 'Suspended' ? 'suspension' : 'weak profile' %> actually removes:</strong></p>
+          <ul class="marks loss">
+            <% d.loss_bullets.forEach(function(b){ %><li><%= b %></li><% }); %>
+          </ul>
+        <% } %>
+
+        <h3 style="margin-top:32px">Work out what it is costing you</h3>
+        <p class="narrow" style="font-size:15px;color:var(--muted)">These are our estimates. Change any of them — the numbers update as you type.</p>
+        <%- include('partials/calculator') %>
+      </div>
+    </section>
+
+    <!-- ── Why it happened ────────────────────────────────────────────── -->
+    <section id="why">
+      <div class="wrap">
+        <div class="sec-title"><h2>Why the profile went down</h2></div>
+
+        <div class="stats" style="margin-bottom:26px">
+          <div class="stat">
+            <div class="k">Profile status</div>
+            <div class="v" style="font-size:22px"><%= d.profile_state %></div>
+            <div class="s"><%= d.gbp_name %></div>
+          </div>
+          <div class="stat">
+            <div class="k">Down for</div>
+            <div class="v accent"><%= d.weeks_down %></div>
+            <div class="s"><%= d.weeks_down === 1 ? 'week' : 'weeks' %><% if (d.suspension_date) { %> · since <%= longDate(d.suspension_date) %><% } %></div>
+          </div>
+          <% if ((d.gbp_categories || []).length) { %>
+          <div class="stat">
+            <div class="k">Categories</div>
+            <div class="v" style="font-size:20px"><%= d.gbp_categories.length %></div>
+            <div class="s"><%= d.gbp_categories.join(' · ') %></div>
+          </div>
+          <% } %>
+        </div>
+
+        <% if ((d.suspension_causes || []).length) { %>
+          <h3 style="margin-bottom:14px">What we found</h3>
+          <div class="cards two">
+            <% d.suspension_causes.forEach(function(c){ %>
+            <div class="card">
+              <h3><%= c.issue %></h3>
+              <div class="ev"><%= c.evidence %></div>
+              <p style="margin-top:12px"><strong>The fix.</strong> <%= c.fix %></p>
+            </div>
+            <% }); %>
+          </div>
+        <% } %>
+
+        <% if ((d.existing_strengths || []).length) { %>
+          <h3 style="margin-top:32px;margin-bottom:6px">What already works in your favour</h3>
+          <ul class="marks gain">
+            <% d.existing_strengths.forEach(function(s){ %><li><%= s %></li><% }); %>
+          </ul>
+        <% } %>
+      </div>
+    </section>
+
+    <!-- ── Coverage ───────────────────────────────────────────────────── -->
+    <section id="reach">
+      <div class="wrap">
+        <div class="sec-title"><h2>The area you should be showing in</h2></div>
+        <p class="narrow">A Google Business Profile ranks in a radius around where you are. How wide that radius goes is what separates the two options below.</p>
+
+        <%- include('partials/map', {
+              locations: d.target_locations || [],
+              centre: d.service_center,
+              rings: (d.radius_options || []).map(function(r){ return { label: r.label, radiusKm: r.radiusKm }; }),
+              zoom: 9
+            }) %>
+
+        <div class="cards two" style="margin-top:18px">
+          <% (d.radius_options || []).forEach(function(r){ %>
+          <div class="card">
+            <h3><%= r.label %></h3>
+            <p style="font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--muted);margin-bottom:10px"><%= r.radiusKm %> km radius<% if (r.tier) { %> · <%= r.tier %><% } %></p>
+            <div class="suburbs" style="display:flex;flex-wrap:wrap;gap:6px">
+              <% (r.suburbs || []).forEach(function(s){ %><span class="pill"><%= s %></span><% }); %>
+            </div>
+          </div>
+          <% }); %>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── How we fix it ──────────────────────────────────────────────── -->
+    <section id="how">
+      <div class="wrap">
+        <div class="sec-title"><h2>How we get it back</h2></div>
+        <ol class="phases">
+          <% (d.phases || []).forEach(function(p, i){ %>
+          <li>
+            <div class="ph">
+              <span class="n">Phase <%= i + 1 %></span>
+              <h3><%= p.title %></h3>
+              <span class="w"><%= p.window %></span>
+            </div>
+            <p><%= p.focus %></p>
+            <ul>
+              <% (p.steps || []).forEach(function(s){ %><li><%= s %></li><% }); %>
+            </ul>
+          </li>
+          <% }); %>
+        </ol>
+
+        <% if ((d.guarantees || []).length) { %>
+        <div class="note" style="margin-top:26px">
+          <div class="nh">What we guarantee, and what nobody can</div>
+          <ul class="marks tick" style="margin:0">
+            <% d.guarantees.forEach(function(g){ %><li style="font-size:15px"><%= g %></li><% }); %>
+          </ul>
+        </div>
+        <% } %>
+      </div>
+    </section>
+
+    <!-- ── Investment ─────────────────────────────────────────────────── -->
+    <section id="price">
+      <div class="wrap">
+        <div class="sec-title"><h2>Investment</h2></div>
+        <%- include('partials/pricing') %>
+        <%- include('partials/cta') %>
+      </div>
+    </section>
+  </main>
+
+  <%- include('partials/footer') %>
+<% } %>
+</body>
+</html>

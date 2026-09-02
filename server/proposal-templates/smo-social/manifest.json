@@ -1,0 +1,257 @@
+{
+  "name": "Social Media Management",
+  "version": "1.0.0",
+  "serviceType": "SMO",
+  "description": "Platform mix, content pillars, posting cadence and a growth projection chart built from their real follower counts.",
+  "accent": "#7A3EA1",
+  "extends": [
+    "identity",
+    "prepared_by",
+    "brief",
+    "pricing",
+    "closing"
+  ],
+  "sections": [
+    {
+      "id": "current",
+      "nav": "Where you are",
+      "title": "Where your channels stand"
+    },
+    {
+      "id": "strategy",
+      "nav": "The strategy",
+      "title": "What we will post, and why"
+    },
+    {
+      "id": "cadence",
+      "nav": "The cadence",
+      "title": "How often, and where"
+    },
+    {
+      "id": "growth",
+      "nav": "The projection",
+      "title": "Where this gets you"
+    },
+    {
+      "id": "price",
+      "nav": "Investment",
+      "title": "Investment"
+    }
+  ],
+  "liveData": [],
+  "fields": [
+    {
+      "key": "headline",
+      "label": "Headline",
+      "kind": "text",
+      "source": "ai",
+      "group": "current",
+      "maxLength": 110,
+      "aiHint": "One sentence about the gap between their current social presence and what their competitors are doing in the same trade and city. Concrete. No 'engagement' jargon."
+    },
+    {
+      "key": "intro",
+      "label": "Opening paragraph",
+      "kind": "textarea",
+      "source": "ai",
+      "group": "current",
+      "maxLength": 520,
+      "aiHint": "Three sentences using the real follower and engagement numbers supplied. Name which platform matters most for their specific trade and why the others matter less. Be willing to say a platform is not worth their money."
+    },
+    {
+      "key": "platforms",
+      "label": "Their channels today",
+      "kind": "repeat",
+      "source": "agent",
+      "group": "current",
+      "required": true,
+      "min": 1,
+      "max": 7,
+      "itemLabel": "Platform",
+      "fields": [
+        {
+          "key": "name",
+          "label": "Platform",
+          "kind": "select",
+          "required": true,
+          "options": [
+            "Instagram",
+            "Facebook",
+            "LinkedIn",
+            "TikTok",
+            "YouTube",
+            "X",
+            "Pinterest"
+          ]
+        },
+        {
+          "key": "handle",
+          "label": "Handle",
+          "kind": "text",
+          "required": false,
+          "maxLength": 40
+        },
+        {
+          "key": "followers",
+          "label": "Followers",
+          "kind": "number",
+          "required": true,
+          "min": 0
+        },
+        {
+          "key": "engagement",
+          "label": "Avg engagement %",
+          "kind": "percent",
+          "required": false
+        },
+        {
+          "key": "managed",
+          "label": "We will manage",
+          "kind": "toggle",
+          "default": true
+        }
+      ]
+    },
+    {
+      "key": "content_pillars",
+      "label": "Content pillars",
+      "kind": "repeat",
+      "source": "ai",
+      "group": "strategy",
+      "max": 5,
+      "itemLabel": "Pillar",
+      "aiHint": "Three to five pillars specific to this trade \u2014 for a shower repair business that might be 'Before and after', 'Common causes of leaks', 'Meet the team'. `name` under 34 chars, `description` one sentence, `share` a whole-number percentage. The shares must total exactly 100.",
+      "fields": [
+        {
+          "key": "name",
+          "label": "Pillar",
+          "kind": "text",
+          "required": true,
+          "maxLength": 34
+        },
+        {
+          "key": "description",
+          "label": "What it is",
+          "kind": "textarea",
+          "required": true,
+          "maxLength": 180
+        },
+        {
+          "key": "share",
+          "label": "Share of feed (%)",
+          "kind": "percent",
+          "required": true
+        }
+      ]
+    },
+    {
+      "key": "posting_schedule",
+      "label": "Posting cadence",
+      "kind": "repeat",
+      "source": "agent",
+      "group": "cadence",
+      "required": true,
+      "min": 1,
+      "max": 7,
+      "itemLabel": "Channel",
+      "fields": [
+        {
+          "key": "platform",
+          "label": "Platform",
+          "kind": "select",
+          "required": true,
+          "options": [
+            "Instagram",
+            "Facebook",
+            "LinkedIn",
+            "TikTok",
+            "YouTube",
+            "X",
+            "Pinterest"
+          ]
+        },
+        {
+          "key": "posts_per_week",
+          "label": "Posts / week",
+          "kind": "number",
+          "required": true,
+          "min": 0,
+          "max": 50
+        },
+        {
+          "key": "formats",
+          "label": "Formats",
+          "kind": "list",
+          "required": true,
+          "min": 1,
+          "max": 6
+        }
+      ]
+    },
+    {
+      "key": "monthly_deliverables",
+      "label": "What they get each month",
+      "kind": "list",
+      "source": "agent",
+      "group": "cadence",
+      "required": true,
+      "min": 1,
+      "max": 12
+    },
+    {
+      "key": "engagement_months",
+      "label": "Engagement length (months)",
+      "kind": "number",
+      "source": "agent",
+      "group": "growth",
+      "required": true,
+      "default": 6,
+      "min": 3,
+      "max": 24
+    },
+    {
+      "key": "growth_target_pct",
+      "label": "Target follower growth (%)",
+      "kind": "percent",
+      "source": "agent",
+      "group": "growth",
+      "required": true,
+      "default": 60,
+      "help": "Over the full engagement. Drives the projection chart."
+    },
+    {
+      "key": "follower_projection",
+      "label": "Projected growth",
+      "kind": "repeat",
+      "source": "computed",
+      "group": "growth",
+      "help": "Computed from current followers, target growth and engagement length.",
+      "fields": [
+        {
+          "key": "month",
+          "label": "Month",
+          "kind": "number"
+        },
+        {
+          "key": "platform",
+          "label": "Platform",
+          "kind": "text"
+        },
+        {
+          "key": "followers",
+          "label": "Followers",
+          "kind": "number"
+        }
+      ]
+    },
+    {
+      "key": "projection_note",
+      "label": "Projection caveat",
+      "kind": "textarea",
+      "source": "ai",
+      "group": "growth",
+      "maxLength": 340,
+      "aiHint": "Two honest sentences: the projection assumes the posting cadence is maintained and is based on typical results for this kind of account, not a promise. Do not soften it into a guarantee."
+    }
+  ]
+}

@@ -1,0 +1,295 @@
+{
+  "name": "Website Design & Build",
+  "version": "1.0.0",
+  "serviceType": "Website",
+  "description": "New site or rebuild. Live performance audit with before/after scores, page-by-page scope, feature matrix and a milestone timeline.",
+  "accent": "#2C5AA8",
+  "extends": [
+    "identity",
+    "prepared_by",
+    "brief",
+    "pricing",
+    "closing"
+  ],
+  "sections": [
+    {
+      "id": "audit",
+      "nav": "Your site today",
+      "title": "What your site is doing right now"
+    },
+    {
+      "id": "scope",
+      "nav": "What we build",
+      "title": "What we build"
+    },
+    {
+      "id": "design",
+      "nav": "Look and feel",
+      "title": "Look and feel"
+    },
+    {
+      "id": "timeline",
+      "nav": "Timeline",
+      "title": "How it runs"
+    },
+    {
+      "id": "price",
+      "nav": "Investment",
+      "title": "Investment"
+    }
+  ],
+  "liveData": [],
+  "fields": [
+    {
+      "key": "headline",
+      "label": "Headline",
+      "kind": "text",
+      "source": "ai",
+      "group": "audit",
+      "maxLength": 110,
+      "aiHint": "One sentence naming the single biggest thing wrong with their current site, or \u2014 if they have no site \u2014 what not having one is costing a business in their trade. Specific, no adjectives like 'stunning' or 'modern'."
+    },
+    {
+      "key": "intro",
+      "label": "Opening paragraph",
+      "kind": "textarea",
+      "source": "ai",
+      "group": "audit",
+      "maxLength": 520,
+      "aiHint": "Three sentences using the real audit scores supplied. Lead with the mobile speed score if it is poor, since most of their traffic is mobile. State the business consequence, not the technical one."
+    },
+    {
+      "key": "has_current_site",
+      "label": "They have a site today",
+      "kind": "toggle",
+      "source": "agent",
+      "group": "audit",
+      "default": true
+    },
+    {
+      "key": "current_url",
+      "label": "Current site URL",
+      "kind": "url",
+      "source": "agent",
+      "group": "audit",
+      "required": false
+    },
+    {
+      "key": "site_performance",
+      "label": "Measured performance",
+      "kind": "text",
+      "source": "measured",
+      "group": "audit",
+      "help": "Taken from Google PageSpeed Insights when you generate the draft. Not typeable \u2014 a score the client can re-run in thirty seconds has to be a real reading. If the measurement fails, the section is left out rather than guessed."
+    },
+    {
+      "key": "target_pagespeed",
+      "label": "Target score",
+      "kind": "number",
+      "source": "agent",
+      "group": "audit",
+      "required": false,
+      "default": 90,
+      "min": 0,
+      "max": 100,
+      "help": "Renders as the 'after' bar next to their current score."
+    },
+    {
+      "key": "is_mobile_friendly",
+      "label": "Mobile friendly",
+      "kind": "toggle",
+      "source": "agent",
+      "group": "audit",
+      "default": false
+    },
+    {
+      "key": "has_ssl",
+      "label": "Has SSL",
+      "kind": "toggle",
+      "source": "agent",
+      "group": "audit",
+      "default": true
+    },
+    {
+      "key": "audit_issues",
+      "label": "What we found",
+      "kind": "repeat",
+      "source": "ai",
+      "group": "audit",
+      "max": 6,
+      "itemLabel": "Finding",
+      "aiHint": "Three to six findings from the audit facts only. `issue` under 60 chars. `impact` is one sentence in business terms \u2014 lost enquiries, not 'suboptimal Largest Contentful Paint'. `severity` is one of High, Medium, Low.",
+      "fields": [
+        {
+          "key": "issue",
+          "label": "Issue",
+          "kind": "text",
+          "required": true,
+          "maxLength": 60
+        },
+        {
+          "key": "impact",
+          "label": "Impact",
+          "kind": "textarea",
+          "required": true,
+          "maxLength": 220
+        },
+        {
+          "key": "severity",
+          "label": "Severity",
+          "kind": "select",
+          "required": true,
+          "default": "Medium",
+          "options": [
+            "High",
+            "Medium",
+            "Low"
+          ]
+        }
+      ]
+    },
+    {
+      "key": "platform",
+      "label": "Build on",
+      "kind": "select",
+      "source": "agent",
+      "group": "scope",
+      "required": true,
+      "default": "WordPress",
+      "options": [
+        "WordPress",
+        "Shopify",
+        "Webflow",
+        "Next.js (custom)",
+        "React (custom)",
+        "Laravel",
+        "Wix"
+      ]
+    },
+    {
+      "key": "page_list",
+      "label": "Pages",
+      "kind": "repeat",
+      "source": "agent",
+      "group": "scope",
+      "required": true,
+      "min": 1,
+      "max": 40,
+      "itemLabel": "Page",
+      "fields": [
+        {
+          "key": "name",
+          "label": "Page name",
+          "kind": "text",
+          "required": true,
+          "maxLength": 50
+        },
+        {
+          "key": "purpose",
+          "label": "Purpose",
+          "kind": "text",
+          "required": false,
+          "maxLength": 110
+        }
+      ]
+    },
+    {
+      "key": "features",
+      "label": "Feature matrix",
+      "kind": "repeat",
+      "source": "agent",
+      "group": "scope",
+      "required": true,
+      "min": 1,
+      "max": 25,
+      "itemLabel": "Feature",
+      "help": "Rendered as a tick/cross table. Listing what is NOT included prevents the scope argument later.",
+      "fields": [
+        {
+          "key": "name",
+          "label": "Feature",
+          "kind": "text",
+          "required": true,
+          "maxLength": 60
+        },
+        {
+          "key": "included",
+          "label": "Included",
+          "kind": "toggle",
+          "default": true
+        },
+        {
+          "key": "note",
+          "label": "Note",
+          "kind": "text",
+          "required": false,
+          "maxLength": 90
+        }
+      ]
+    },
+    {
+      "key": "integrations",
+      "label": "Integrations",
+      "kind": "list",
+      "source": "agent",
+      "group": "scope",
+      "required": false,
+      "max": 12
+    },
+    {
+      "key": "style_direction",
+      "label": "Design direction",
+      "kind": "textarea",
+      "source": "agent",
+      "group": "design",
+      "required": false,
+      "maxLength": 400
+    },
+    {
+      "key": "reference_sites",
+      "label": "Reference sites",
+      "kind": "list",
+      "source": "agent",
+      "group": "design",
+      "required": false,
+      "max": 6
+    },
+    {
+      "key": "milestones",
+      "label": "Milestones",
+      "kind": "repeat",
+      "source": "ai",
+      "group": "timeline",
+      "max": 6,
+      "itemLabel": "Milestone",
+      "aiHint": "Four to six milestones matching the page count and platform given. `phase` under 34 chars, `window` a week range like 'Week 1\u20132', `deliverable` one sentence naming the artefact the client receives and signs off. Realistic for the scope, not compressed to look fast.",
+      "fields": [
+        {
+          "key": "phase",
+          "label": "Phase",
+          "kind": "text",
+          "required": true,
+          "maxLength": 34
+        },
+        {
+          "key": "window",
+          "label": "Timeframe",
+          "kind": "text",
+          "required": true,
+          "maxLength": 26
+        },
+        {
+          "key": "deliverable",
+          "label": "Deliverable",
+          "kind": "textarea",
+          "required": true,
+          "maxLength": 200
+        }
+      ]
+    }
+  ],
+  "measures": [
+    "pagespeed"
+  ],
+  "_comment_pagespeed": "pagespeed_mobile and pagespeed_desktop were REMOVED as agent inputs. They asked a human to type a Lighthouse score, so the proposal asserted 'your site scores 24/100' on the authority of whoever keyed it in \u2014 and a client who ran the test themselves and saw 61 would stop believing the rest of the document. The scores now come from services/proposals/pagespeed.js and live on proposal.measurements, outside `data`, where nothing can type them."
+}

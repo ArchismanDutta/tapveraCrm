@@ -1,0 +1,289 @@
+{
+  "_comment": [
+    "Field groups every proposal template can pull in via its manifest's",
+    "\"extends\" array. Defined once here so that adding a field to, say, the",
+    "prepared-by block reaches all four templates instead of three of them.",
+    "",
+    "The `source` on each field is the guardrail from the design, expressed as",
+    "data rather than as prompt wording:",
+    "",
+    "  crm      prefilled from the linked Client/Project, agent may override",
+    "  agent    a human types it \u2014 the generator is never allowed to write here",
+    "  ai       the model drafts it, within the stated limits",
+    "  computed derived from live CRM data or from other fields; read-only",
+    "",
+    "services/proposals/generate.js builds the model's response schema from",
+    "the fields marked `ai` and no others, so a price can never be invented",
+    "by a language model no matter what the prompt says."
+  ],
+  "groups": {
+    "identity": {
+      "label": "Client & proposal details",
+      "fields": [
+        {
+          "key": "business_name",
+          "label": "Business name",
+          "kind": "text",
+          "source": "crm",
+          "required": true,
+          "maxLength": 80
+        },
+        {
+          "key": "website_url",
+          "label": "Website",
+          "kind": "url",
+          "source": "crm",
+          "required": false,
+          "help": "Used by the audit stage. Leave blank if they have no site."
+        },
+        {
+          "key": "contact_name",
+          "label": "Contact person",
+          "kind": "text",
+          "source": "crm",
+          "required": false,
+          "maxLength": 60
+        },
+        {
+          "key": "city",
+          "label": "City",
+          "kind": "text",
+          "source": "crm",
+          "required": true,
+          "maxLength": 60
+        },
+        {
+          "key": "state",
+          "label": "State / region",
+          "kind": "text",
+          "source": "crm",
+          "required": false,
+          "maxLength": 60
+        },
+        {
+          "key": "country",
+          "label": "Country",
+          "kind": "select",
+          "source": "crm",
+          "required": true,
+          "default": "Australia",
+          "options": [
+            "Australia",
+            "United States",
+            "Canada",
+            "India",
+            "United Kingdom",
+            "New Zealand",
+            "Singapore",
+            "UAE"
+          ]
+        },
+        {
+          "key": "industry",
+          "label": "Industry / trade",
+          "kind": "text",
+          "source": "agent",
+          "required": true,
+          "maxLength": 60,
+          "help": "Drives the tone of the generated copy. \"Leaking shower repairs\" beats \"home services\"."
+        }
+      ]
+    },
+    "prepared_by": {
+      "label": "Prepared by",
+      "fields": [
+        {
+          "key": "prepared_by",
+          "label": "Your name",
+          "kind": "text",
+          "source": "agent",
+          "required": true,
+          "default": "Tapvera Technologies",
+          "maxLength": 60
+        },
+        {
+          "key": "prepared_by_email",
+          "label": "Reply-to email",
+          "kind": "email",
+          "source": "agent",
+          "required": true,
+          "help": "The address on the call-to-action button."
+        },
+        {
+          "key": "prepared_by_phone",
+          "label": "Phone",
+          "kind": "text",
+          "source": "agent",
+          "required": false,
+          "maxLength": 30
+        },
+        {
+          "key": "valid_until",
+          "label": "Valid until",
+          "kind": "date",
+          "source": "agent",
+          "required": true,
+          "help": "Enforced, not decorative \u2014 the page flips to an expired state after this date."
+        }
+      ]
+    },
+    "brief": {
+      "label": "Your brief to the generator",
+      "fields": [
+        {
+          "key": "agent_brief",
+          "label": "What you know about this client",
+          "kind": "textarea",
+          "source": "agent",
+          "required": true,
+          "maxLength": 2000,
+          "help": "Plain notes. \"GBP suspended 3 weeks, no street address on site, service areas conflict between Gold Coast and Tweed.\" The more specific this is, the less generic the copy."
+        },
+        {
+          "key": "tone",
+          "label": "Tone",
+          "kind": "select",
+          "source": "agent",
+          "default": "Direct and consultative",
+          "options": [
+            "Direct and consultative",
+            "Warm and reassuring",
+            "Urgent and corrective",
+            "Formal and corporate"
+          ]
+        }
+      ]
+    },
+    "pricing": {
+      "label": "Investment",
+      "_comment": "Every field here is `agent`. A model must never originate a number the company can be held to.",
+      "fields": [
+        {
+          "key": "currency",
+          "label": "Currency",
+          "kind": "select",
+          "source": "agent",
+          "required": true,
+          "default": "AUD",
+          "options": [
+            "AUD",
+            "USD",
+            "CAD",
+            "INR",
+            "GBP",
+            "NZD",
+            "SGD",
+            "AED"
+          ]
+        },
+        {
+          "key": "pricing_tiers",
+          "label": "Pricing tiers",
+          "kind": "repeat",
+          "source": "agent",
+          "required": true,
+          "min": 1,
+          "max": 3,
+          "itemLabel": "Tier",
+          "fields": [
+            {
+              "key": "name",
+              "label": "Tier name",
+              "kind": "text",
+              "required": true,
+              "maxLength": 40
+            },
+            {
+              "key": "tagline",
+              "label": "One-line summary",
+              "kind": "text",
+              "required": false,
+              "maxLength": 90
+            },
+            {
+              "key": "price",
+              "label": "Price",
+              "kind": "money",
+              "required": true
+            },
+            {
+              "key": "billing",
+              "label": "Billing",
+              "kind": "select",
+              "required": true,
+              "default": "One-time",
+              "options": [
+                "One-time",
+                "Per month",
+                "Per month, 6-month term",
+                "Per month, 12-month term",
+                "Per year"
+              ]
+            },
+            {
+              "key": "duration",
+              "label": "Duration label",
+              "kind": "text",
+              "required": false,
+              "maxLength": 40,
+              "help": "e.g. \"6 months \u00b7 15 km radius\""
+            },
+            {
+              "key": "features",
+              "label": "What's included",
+              "kind": "list",
+              "required": true,
+              "min": 1,
+              "max": 12
+            },
+            {
+              "key": "highlighted",
+              "label": "Recommended tier",
+              "kind": "toggle",
+              "default": false
+            }
+          ]
+        },
+        {
+          "key": "payment_terms",
+          "label": "Payment terms",
+          "kind": "text",
+          "source": "agent",
+          "required": false,
+          "maxLength": 140,
+          "default": "50% to commence, 50% on completion."
+        }
+      ]
+    },
+    "closing": {
+      "label": "Closing",
+      "fields": [
+        {
+          "key": "cta_label",
+          "label": "Button label",
+          "kind": "text",
+          "source": "agent",
+          "default": "Accept this proposal",
+          "maxLength": 40
+        },
+        {
+          "key": "closing_note",
+          "label": "Closing paragraph",
+          "kind": "textarea",
+          "source": "ai",
+          "maxLength": 400,
+          "aiHint": "Two sentences. Restate the single strongest reason to move now, then make the next step obvious. No new claims, no new numbers."
+        },
+        {
+          "key": "disclaimer",
+          "label": "Disclaimer",
+          "kind": "textarea",
+          "source": "agent",
+          "maxLength": 600,
+          "_comment": "Legal exposure. Fixed boilerplate the agent edits deliberately \u2014 never model-written.",
+          "default": "Findings are based on publicly available information at the time of writing. Search engine rankings and profile reinstatements are determined by the platform and cannot be guaranteed by any third party."
+        }
+      ]
+    }
+  }
+}

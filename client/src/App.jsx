@@ -1,5 +1,5 @@
 // src/App.jsx
-import React, { useEffect, useState, Suspense } from "react";
+import React, { useCallback, useEffect, useState, Suspense } from "react";
 import {
   BrowserRouter as Router,
   Routes,
@@ -111,6 +111,7 @@ const ProjectsPage = lazyWithReload(() => import("./pages/ProjectsPage"));
 const ChatPage = lazyWithReload(() => import("./pages/ChatPage"));
 const TodayStatusPage = lazyWithReload(() => import("./pages/TodayStatusPage"));
 const SuperAdminDashboard = lazyWithReload(() => import("./pages/SuperAdminDashboard"));
+const ProposalsPage = lazyWithReload(() => import("./pages/ProposalsPage"));
 const AttendancePage = lazyWithReload(() => import("./pages/AttendancePage"));
 const LeavesPage = lazyWithReload(() => import("./pages/HolidaysAndLeaves"));
 const UnifiedTaskPage = lazyWithReload(() => import("./pages/UnifiedTaskPage"));
@@ -137,6 +138,7 @@ import NotificationCenterPage from "./pages/NotificationCenterPage";
 
 // Sheet Management
 import SheetManagerPage from "./pages/SheetManagerPage";
+import { resolveNotificationTarget } from "./utils/notificationTarget";
 
 // ------------------- Utility Functions -------------------
 const normalizeRole = (role) => {
@@ -164,6 +166,36 @@ const AppWrapper = () => {
   // falls back to the old role/department logic until then (or if the fetch
   // fails), so nothing regresses.
   const [permissions, setPermissions] = useState(null);
+
+  // react-toastify toasts are plain strings; without this they are the one
+  // notification surface you cannot click through to anything.
+  const toastNavigation = useCallback(
+    (notification) => {
+      const target = resolveNotificationTarget(notification);
+      if (!target || target.path === "/notifications") return {};
+      return {
+        onClick: () => navigate(target.path, { state: target.state }),
+        style: { cursor: "pointer" },
+      };
+    },
+    [navigate]
+  );
+
+  // Desktop notification clicks are raised from a plain module with no router
+  // access. Answering here keeps it an in-app navigation instead of a full
+  // page reload; marking the event handled tells the caller not to fall back.
+  useEffect(() => {
+    const onNotificationNavigate = (event) => {
+      const url = event.detail?.url;
+      if (!url) return;
+      event.detail.handled = true;
+      navigate(url);
+    };
+
+    window.addEventListener("notification-navigate", onNotificationNavigate);
+    return () =>
+      window.removeEventListener("notification-navigate", onNotificationNavigate);
+  }, [navigate]);
 
   // Load user from localStorage
   useEffect(() => {
@@ -487,7 +519,10 @@ const AppWrapper = () => {
           // Also show in-app toast
           const title = n.title || "Notification";
           const body = n.body || n.message || "";
-          toast.info(`${title}: ${body}`, { toastId: `task-${Date.now()}` });
+          toast.info(`${title}: ${body}`, {
+            toastId: `task-${Date.now()}`,
+            ...toastNavigation(n),
+          });
           return; // Don't show the generic toast below
         }
 
@@ -523,7 +558,7 @@ const AppWrapper = () => {
           const tid = `chat-${Date.now()}-${Math.random()
             .toString(36)
             .slice(2)}`;
-          toast.info(`${title}: ${body}`, { toastId: tid });
+          toast.info(`${title}: ${body}`, { toastId: tid, ...toastNavigation(n) });
           return; // Don't show the generic toast below
         }
 
@@ -534,7 +569,10 @@ const AppWrapper = () => {
         const tid = `notif-${Date.now()}-${Math.random()
           .toString(36)
           .slice(2)}`;
-        toast.info(`${title}${channel}: ${body}`, { toastId: tid });
+        toast.info(`${title}${channel}: ${body}`, {
+          toastId: tid,
+          ...toastNavigation(n),
+        });
       } catch (error) {
         console.error("Failed to process WebSocket notification", error);
       }
@@ -543,7 +581,7 @@ const AppWrapper = () => {
     window.addEventListener("ws-notification", onWsNotification);
     return () =>
       window.removeEventListener("ws-notification", onWsNotification);
-  }, []);
+  }, [toastNavigation]);
 
   if (loading) {
     return (
@@ -640,6 +678,19 @@ const AppWrapper = () => {
           element={
             isAuthenticated && (isHR || isSuperAdmin || hasPermission("canManageAttendance")) ? (
               <SuperAdminAttendancePortal onLogout={handleLogout} />
+            ) : (
+              <Navigate to="/login" replace />
+            )
+          }
+        />
+        {/* Client proposal builder. Super-admin only for now — the public
+            page it publishes is served by the server at /proposal/:slug and
+            needs no session at all. */}
+        <Route
+          path="/super-admin/proposals"
+          element={
+            isAuthenticated && isSuperAdmin ? (
+              <ProposalsPage onLogout={handleLogout} />
             ) : (
               <Navigate to="/login" replace />
             )

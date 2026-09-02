@@ -1,7 +1,12 @@
-import React, { useEffect, useRef, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { Bell, Volume2, VolumeX } from "lucide-react";
-import notiSound from "../../assets/notisound.wav";
+import {
+  isNotificationSoundMuted,
+  playNotificationSound,
+  setNotificationSoundMuted,
+  unlockNotificationSound,
+} from "../../utils/notificationSound";
 import NotificationDropdown from "../notifications/NotificationDropdown";
 import { fetchUnreadCount, selectUnreadCount } from "../../store/slices/notificationSlice";
 
@@ -10,10 +15,11 @@ const NotificationBell = () => {
   const unreadCount = useSelector(selectUnreadCount);
   const [open, setOpen] = useState(false);
   const [isRinging, setIsRinging] = useState(false);
-  const [soundEnabled, setSoundEnabled] = useState(true);
-  const [audioUnlocked, setAudioUnlocked] = useState(false);
-  const audioRef = useRef(null);
-  const prevUnreadCount = useRef(0);
+  // The chime itself lives in utils/notificationSound so the sidebar — which
+  // is on every page, unlike this header — can play it too without the same
+  // notification sounding twice. This toggle just flips the shared mute flag,
+  // which now persists instead of resetting on every navigation.
+  const [soundEnabled, setSoundEnabled] = useState(() => !isNotificationSoundMuted());
 
   // Initial load — the Redux store (fed by WebSocketContext's
   // `notification:new` handler in real time) is the single source of truth
@@ -41,34 +47,19 @@ const NotificationBell = () => {
       const data = e.detail;
       if (data && data.type === "notification") {
         setIsRinging(true);
-        if (soundEnabled && audioUnlocked && audioRef.current) {
-          audioRef.current.currentTime = 0;
-          audioRef.current.play().catch((err) => console.warn("Audio blocked:", err));
-        }
+        playNotificationSound(data.notificationId || data._id);
         setTimeout(() => setIsRinging(false), 1000);
       }
     };
 
     window.addEventListener("ws-notification", handleWsNotification);
     return () => window.removeEventListener("ws-notification", handleWsNotification);
-  }, [soundEnabled, audioUnlocked]);
+  }, []);
 
   // Unlock audio on first user interaction
   const attemptAudioUnlock = useCallback(() => {
-    if (audioUnlocked) return;
-    if (audioRef.current) {
-      audioRef.current
-        .play()
-        .then(() => {
-          audioRef.current.pause();
-          audioRef.current.currentTime = 0;
-          setAudioUnlocked(true);
-        })
-        .catch(() => {
-          console.log("Audio unlock blocked, waiting for user interaction...");
-        });
-    }
-  }, [audioUnlocked]);
+    unlockNotificationSound();
+  }, []);
 
   useEffect(() => {
     document.addEventListener("click", attemptAudioUnlock, { once: true });
@@ -81,13 +72,14 @@ const NotificationBell = () => {
 
   const toggleSound = (e) => {
     e.stopPropagation();
-    setSoundEnabled((prev) => !prev);
+    setSoundEnabled((prev) => {
+      setNotificationSoundMuted(prev);
+      return !prev;
+    });
   };
 
   return (
     <div className="relative notification-bell-container">
-      <audio ref={audioRef} src={notiSound} preload="auto" />
-
       <div className="flex items-center gap-2">
         {/* Sound Toggle */}
         <button

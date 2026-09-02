@@ -1,0 +1,23 @@
+<%
+/**
+ * partials/hero-meta — prepared for / by / valid until.
+ *
+ * "Valid until" is the one that matters: it is a real date the page enforces,
+ * not a persuasion tactic. A proposal with no expiry is one that gets rediscovered
+ * eighteen months later with stale pricing on it.
+ */
+%>
+<dl class="metaline">
+  <div>
+    <dt>Prepared for</dt>
+    <dd><%= proposal.businessName %><% if (d.city) { %> · <%= d.city %><% } %><% if (d.state) { %>, <%= d.state %><% } %></dd>
+  </div>
+  <div>
+    <dt>Prepared by</dt>
+    <dd><%= d.prepared_by %></dd>
+  </div>
+  <div>
+    <dt>Valid until</dt>
+    <dd><%= longDate(d.valid_until) %></dd>
+  </div>
+</dl>

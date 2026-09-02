@@ -1,0 +1,46 @@
+<%
+/**
+ * partials/head — document head for every proposal.
+ *
+ * The og: block is the fix from the design review. A proposal exists to be
+ * SENT: pasted into WhatsApp, forwarded in an email, dropped in a group chat.
+ * Without these tags every one of those renders as a bare grey link, which is
+ * the first impression the prospect gets of the company quoting them.
+ *
+ * The robots line is the other half. A proposal carries a client's name and
+ * the price quoted to them; it must never be indexable, and `noarchive`
+ * additionally keeps it out of search engine caches after it expires.
+ */
+%>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title><%= d.headline ? d.headline.slice(0, 60) : template.name %> — <%= proposal.businessName %></title>
+
+<meta name="robots" content="noindex, nofollow, noarchive, noimageindex">
+<meta name="description" content="<%= template.name %> proposal prepared for <%= proposal.businessName %> by <%= d.prepared_by || 'Tapvera Technologies' %>.">
+
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="<%= d.prepared_by || 'Tapvera Technologies' %>">
+<meta property="og:title" content="<%= template.name %> proposal — <%= proposal.businessName %>">
+<meta property="og:description" content="<%= d.headline || (template.name + ' proposal prepared for ' + proposal.businessName) %>">
+<meta property="og:url" content="<%= baseUrl %>/proposal/<%= proposal.slug %>">
+<meta property="og:image" content="<%= baseUrl %>/proposal/<%= proposal.slug %>/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="<%= template.name %> proposal — <%= proposal.businessName %>">
+<meta name="twitter:description" content="<%= d.headline || ('Prepared for ' + proposal.businessName) %>">
+<meta name="twitter:image" content="<%= baseUrl %>/proposal/<%= proposal.slug %>/og.png">
+
+<meta name="theme-color" content="<%= template.accent %>">
+<link rel="icon" href="<%= baseUrl %>/favicon.ico">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=JetBrains+Mono:wght@400;500;700&display=swap">
+
+<% if (mode !== 'pdf' && locals.needsMap) { %>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" integrity="sha512-h9FcoyWjHcOcmEVkxOfTLnmZFWIH0iZhZT1H2TbOq55xssQGEJHEaIm+PgoUaZbRvQTNTluNOEfb1ZRy6D3BOw==" crossorigin="anonymous" referrerpolicy="no-referrer">
+<% } %>
+
+<%- include('styles') %>

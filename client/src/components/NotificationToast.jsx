@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { X, FileText, Bell, MessageSquare, CheckSquare, AtSign } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { resolveNotificationTarget } from "../utils/notificationTarget";
 
 const NotificationToast = ({ notification, onClose }) => {
   const [isVisible, setIsVisible] = useState(false);
@@ -40,23 +41,24 @@ const NotificationToast = ({ notification, onClose }) => {
     return "from-slate-900/90 to-slate-800/90 border-slate-500/50";
   };
 
-  // Click-to-navigate for actionable notification types
-  const handleActionClick = () => {
-    if (channel === "payslip") {
-      window.location.hash = "#payslip";
-    } else if (channel === "chat" && notification.conversationId) {
-      navigate("/chat");
-    } else if (channel === "task") {
-      navigate("/tasks");
-    }
+  // Click-to-navigate. The destination comes from the shared resolver rather
+  // than from the channel name, so the toast lands exactly where the
+  // notification list and the desktop notification for the same event do.
+  const target = resolveNotificationTarget(notification);
+
+  const handleActionClick = (event) => {
+    if (event) event.stopPropagation();
+    if (target) navigate(target.path, { state: target.state });
     handleClose();
   };
 
-  const hasAction = ["payslip", "chat", "task"].includes(channel);
+  const hasAction = Boolean(target) && target.path !== "/notifications";
   const actionLabel =
     channel === "payslip" ? "View Payslip" :
     channel === "chat"    ? "Open Chat" :
-    channel === "task"    ? "View Tasks" : null;
+    channel === "mention" ? "Open Chat" :
+    channel === "task"    ? "View Tasks" :
+    channel === "leave"   ? "View Leave" : "Open";
 
   // Server sends `body`; fall back to `message` for older payloads
   const bodyText = notification.body || notification.message || "";
@@ -69,7 +71,22 @@ const NotificationToast = ({ notification, onClose }) => {
       style={{ width: "360px" }}
     >
       <div
-        className={`bg-gradient-to-r ${getBgColor()} border-2 rounded-xl shadow-2xl p-4 backdrop-blur-sm`}
+        className={`bg-gradient-to-r ${getBgColor()} border-2 rounded-xl shadow-2xl p-4 backdrop-blur-sm ${
+          hasAction ? "cursor-pointer" : ""
+        }`}
+        role={hasAction ? "button" : undefined}
+        tabIndex={hasAction ? 0 : undefined}
+        onClick={hasAction ? handleActionClick : undefined}
+        onKeyDown={
+          hasAction
+            ? (event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  handleActionClick(event);
+                }
+              }
+            : undefined
+        }
       >
         <div className="flex items-start gap-3">
           {/* Icon */}
@@ -82,7 +99,10 @@ const NotificationToast = ({ notification, onClose }) => {
                 {notification.title}
               </h4>
               <button
-                onClick={handleClose}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  handleClose();
+                }}
                 className="flex-shrink-0 p-1 hover:bg-white/10 rounded transition-colors"
               >
                 <X className="w-4 h-4 text-gray-300" />

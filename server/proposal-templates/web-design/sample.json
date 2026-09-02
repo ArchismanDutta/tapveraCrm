@@ -1,0 +1,318 @@
+{
+  "business_name": "Northside Plumbing Co",
+  "website_url": "https://northsideplumbing.com.au",
+  "city": "Brisbane",
+  "state": "QLD",
+  "country": "Australia",
+  "industry": "Emergency plumbing and hot water",
+  "prepared_by": "Tapvera Technologies",
+  "prepared_by_email": "hello@tapvera.io",
+  "valid_until": "2026-10-15",
+  "agent_brief": "Site is a 2016 WordPress build on an abandoned theme. Six seconds to first paint on 4G. No booking form, enquiries go to a Gmail address.",
+  "tone": "Direct and consultative",
+  "currency": "AUD",
+  "headline": "Your site takes six seconds to load on a phone. Most callers are gone by second three.",
+  "intro": "The current site scores 24 out of 100 on mobile in Google's own test, which puts it in their slowest band. For an emergency trade that is the whole problem: someone with a burst pipe is not waiting. The content and the photos are fine \u2014 the thing carrying them is nine years old.",
+  "has_current_site": true,
+  "current_url": "https://northsideplumbing.com.au",
+  "target_pagespeed": 92,
+  "is_mobile_friendly": false,
+  "has_ssl": true,
+  "audit_issues": [
+    {
+      "issue": "Six second mobile load",
+      "impact": "Over half of mobile visitors abandon a page that takes more than three seconds. For emergency callouts that is the majority of your traffic leaving before they see a phone number.",
+      "severity": "High"
+    },
+    {
+      "issue": "No booking or enquiry form",
+      "impact": "Every enquiry depends on someone tapping a phone number. Anyone browsing at 11pm with a leak has no way to reach you until morning.",
+      "severity": "High"
+    },
+    {
+      "issue": "Theme no longer maintained",
+      "impact": "The theme has had no security update since 2021, which is both a breach risk and the reason the site cannot be made fast without replacing it.",
+      "severity": "Medium"
+    },
+    {
+      "issue": "No suburb pages",
+      "impact": "You rank for 'plumber Brisbane' and nothing else, while competitors hold the top spot in eleven separate suburbs.",
+      "severity": "Medium"
+    }
+  ],
+  "platform": "WordPress",
+  "page_list": [
+    {
+      "name": "Home",
+      "purpose": "Emergency callout, trust signals, immediate phone and booking"
+    },
+    {
+      "name": "Emergency plumbing",
+      "purpose": "The highest-intent service page"
+    },
+    {
+      "name": "Hot water systems",
+      "purpose": "Repair and replacement, brand coverage"
+    },
+    {
+      "name": "Blocked drains",
+      "purpose": "Service page with CCTV and jetting"
+    },
+    {
+      "name": "Gas fitting",
+      "purpose": "Licensed gas work, compliance certificates"
+    },
+    {
+      "name": "About",
+      "purpose": "Licences, insurance, the team"
+    },
+    {
+      "name": "Contact",
+      "purpose": "Booking form, service area map, hours"
+    },
+    {
+      "name": "Suburb template",
+      "purpose": "One reusable layout driving 12 suburb pages"
+    }
+  ],
+  "features": [
+    {
+      "name": "Mobile-first responsive build",
+      "included": true
+    },
+    {
+      "name": "Online booking form with SMS alert",
+      "included": true,
+      "note": "Sends to your phone, not an inbox"
+    },
+    {
+      "name": "Click-to-call sticky bar on mobile",
+      "included": true
+    },
+    {
+      "name": "12 suburb landing pages",
+      "included": true
+    },
+    {
+      "name": "Google Reviews feed",
+      "included": true
+    },
+    {
+      "name": "Before/after gallery",
+      "included": true
+    },
+    {
+      "name": "Live job tracking portal",
+      "included": false,
+      "note": "Available as a later phase"
+    },
+    {
+      "name": "Online payments",
+      "included": false,
+      "note": "Quoted separately if wanted"
+    },
+    {
+      "name": "Content writing",
+      "included": true,
+      "note": "All eight pages written for you"
+    },
+    {
+      "name": "12 months hosting and updates",
+      "included": true
+    }
+  ],
+  "integrations": [
+    "Google Business Profile",
+    "Twilio SMS",
+    "Google Analytics 4",
+    "Mailchimp"
+  ],
+  "style_direction": "Clean and high-contrast, built to be read one-handed in bad light. Large tap targets, phone number visible at every scroll position, and photographs of actual jobs rather than stock imagery \u2014 for a trade, proof of work outperforms polish every time.",
+  "reference_sites": [
+    "fantasticservices.com.au \u2014 booking flow",
+    "hipages.com.au \u2014 trust and review presentation"
+  ],
+  "milestones": [
+    {
+      "phase": "Discovery and content",
+      "window": "Week 1\u20132",
+      "deliverable": "Sitemap signed off, all eight pages written and approved, photography brief agreed."
+    },
+    {
+      "phase": "Design",
+      "window": "Week 3\u20134",
+      "deliverable": "Homepage and one interior page designed for mobile and desktop, presented for sign-off before any code is written."
+    },
+    {
+      "phase": "Build",
+      "window": "Week 5\u20137",
+      "deliverable": "Full site built on a maintained theme, booking form wired to SMS, suburb template driving all 12 location pages."
+    },
+    {
+      "phase": "Testing and launch",
+      "window": "Week 8",
+      "deliverable": "Cross-device testing, PageSpeed above 90 on mobile verified, redirects mapped from the old site, go live."
+    },
+    {
+      "phase": "Aftercare",
+      "window": "Weeks 9\u201312",
+      "deliverable": "Four weeks of monitoring and fixes, plus a walkthrough so your team can update content."
+    }
+  ],
+  "pricing_tiers": [
+    {
+      "name": "Rebuild",
+      "tagline": "The eight core pages, fast and bookable",
+      "price": 6400,
+      "billing": "One-time",
+      "duration": "8 weeks \u00b7 8 pages",
+      "features": [
+        "Eight pages designed and built",
+        "Content written for every page",
+        "Booking form with SMS alerts",
+        "PageSpeed above 90 on mobile",
+        "12 months hosting and updates"
+      ],
+      "highlighted": false
+    },
+    {
+      "name": "Rebuild + Local",
+      "tagline": "Everything above plus suburb coverage",
+      "price": 9200,
+      "billing": "One-time",
+      "duration": "10 weeks \u00b7 20 pages",
+      "features": [
+        "Everything in Rebuild",
+        "12 suburb landing pages",
+        "Google Reviews feed",
+        "Before/after gallery",
+        "Local schema markup",
+        "Three months of post-launch support"
+      ],
+      "highlighted": true
+    }
+  ],
+  "payment_terms": "40% to commence, 30% at design sign-off, 30% on launch.",
+  "cta_label": "Approve and book the kickoff",
+  "closing_note": "The mobile speed problem cannot be fixed on the current theme \u2014 it is the theme. Everything else in this proposal follows from replacing it, which is why the rebuild is quoted as one piece rather than a list of patches.",
+  "disclaimer": "Performance scores are measured at the time of writing and vary with network conditions and third-party scripts. Timeline assumes content and feedback are returned within three business days at each stage.",
+  "_measurements": {
+    "ok": true,
+    "url": "https://northsideplumbing.com.au",
+    "source": "Google PageSpeed Insights",
+    "sourceUrl": "https://pagespeed.web.dev/analysis?url=https%3A%2F%2Fnorthsideplumbing.com.au",
+    "measuredAt": "2026-08-30T04:12:07.000Z",
+    "engine": "11.7.1",
+    "mobile": {
+      "strategy": "mobile",
+      "scores": {
+        "performance": 24,
+        "seo": 71,
+        "accessibility": 68,
+        "best-practices": 75
+      },
+      "bands": {
+        "performance": "poor",
+        "seo": "needs-work",
+        "accessibility": "needs-work",
+        "best-practices": "needs-work"
+      },
+      "vitals": {
+        "lcp": {
+          "ms": 6120,
+          "display": "6.1 s",
+          "score": 5
+        },
+        "fcp": {
+          "ms": 3400,
+          "display": "3.4 s",
+          "score": 22
+        },
+        "cls": {
+          "ms": 0,
+          "display": "0.21",
+          "score": 41
+        },
+        "tbt": {
+          "ms": 890,
+          "display": "890 ms",
+          "score": 18
+        },
+        "si": {
+          "ms": 7300,
+          "display": "7.3 s",
+          "score": 9
+        }
+      },
+      "opportunities": [
+        {
+          "id": "uses-optimized-images",
+          "title": "Efficiently encode images",
+          "savingsMs": 3200,
+          "description": "Optimised images load faster and consume less mobile data."
+        },
+        {
+          "id": "unused-javascript",
+          "title": "Reduce unused JavaScript",
+          "savingsMs": 1450,
+          "description": "Remove unused JavaScript to reduce bytes consumed by network activity."
+        },
+        {
+          "id": "render-blocking-resources",
+          "title": "Eliminate render-blocking resources",
+          "savingsMs": 980,
+          "description": "Resources are blocking the first paint of your page."
+        },
+        {
+          "id": "uses-responsive-images",
+          "title": "Properly size images",
+          "savingsMs": 760,
+          "description": "Serve images that are appropriately-sized to save mobile data."
+        }
+      ],
+      "fieldData": {
+        "overall": "SLOW",
+        "lcp": {
+          "value": 5800,
+          "category": "SLOW"
+        },
+        "cls": {
+          "value": 19,
+          "category": "AVERAGE"
+        },
+        "inp": null,
+        "fcp": {
+          "value": 3100,
+          "category": "SLOW"
+        }
+      },
+      "finalUrl": "https://northsideplumbing.com.au/",
+      "lighthouseVersion": "11.7.1",
+      "fetchTime": "2026-08-30T04:12:07.000Z"
+    },
+    "desktop": {
+      "strategy": "desktop",
+      "scores": {
+        "performance": 61,
+        "seo": 74,
+        "accessibility": 68,
+        "best-practices": 75
+      },
+      "bands": {
+        "performance": "needs-work"
+      },
+      "vitals": {
+        "lcp": {
+          "ms": 2400,
+          "display": "2.4 s",
+          "score": 62
+        }
+      },
+      "opportunities": [],
+      "fieldData": null,
+      "finalUrl": "https://northsideplumbing.com.au/",
+      "lighthouseVersion": "11.7.1",
+      "fetchTime": "2026-08-30T04:12:07.000Z"
+    }
+  }
+}
