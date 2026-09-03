@@ -3,6 +3,21 @@
 
 const AttendanceService = require('../services/AttendanceService');
 
+// Compare an attendance date to a calendar day using LOCAL parts, never
+// toISOString().
+//
+// getAttendanceDateForPunch returns the same instant AttendanceRecord.date is
+// keyed by: midnight in the server's timezone. On an IST server that is
+// 2024-10-09T18:30:00Z for the 10th, so toISOString() reports the day before
+// and these assertions failed for a date that was in fact correct — they were
+// testing the storage convention, not the day the punch was assigned to.
+function sameDay(date, expectedKey) {
+  const d = new Date(date);
+  const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  return key === expectedKey;
+}
+
+
 // ANSI color codes for better output
 const colors = {
   reset: '\x1b[0m',
@@ -90,7 +105,7 @@ async function runAllTests() {
   totalTests++;
   const dayOnTime = new Date('2024-10-10T03:30:00Z'); // 09:00 IST
   if (assert(
-    service.getAttendanceDateForPunch(dayOnTime, dayShift).toISOString().split('T')[0] === '2024-10-10',
+    sameDay(service.getAttendanceDateForPunch(dayOnTime, dayShift), '2024-10-10'),
     'Day shift - on-time punch assigned to correct date',
     `Punch: 09:00 IST → Oct 10`
   )) passedTests++;
@@ -143,7 +158,7 @@ async function runAllTests() {
   totalTests++;
   const eveningOnTime = new Date('2024-10-10T07:30:00Z'); // 13:00 IST
   if (assert(
-    service.getAttendanceDateForPunch(eveningOnTime, eveningShift).toISOString().split('T')[0] === '2024-10-10',
+    sameDay(service.getAttendanceDateForPunch(eveningOnTime, eveningShift), '2024-10-10'),
     'Evening shift - on-time punch assigned correctly',
     'Punch: 13:00 IST → Oct 10'
   )) passedTests++;
@@ -157,7 +172,7 @@ async function runAllTests() {
   totalTests++;
   const eveningNight = new Date('2024-10-10T16:30:00Z'); // 22:00 IST
   if (assert(
-    service.getAttendanceDateForPunch(eveningNight, eveningShift).toISOString().split('T')[0] === '2024-10-10',
+    sameDay(service.getAttendanceDateForPunch(eveningNight, eveningShift), '2024-10-10'),
     'Evening shift - end of shift stays same day',
     '22:00 IST → Still Oct 10'
   )) passedTests++;
@@ -197,7 +212,7 @@ async function runAllTests() {
   totalTests++;
   const nightStart = new Date('2024-10-10T14:30:00Z'); // Oct 10, 20:00 IST
   if (assert(
-    service.getAttendanceDateForPunch(nightStart, nightShift).toISOString().split('T')[0] === '2024-10-10',
+    sameDay(service.getAttendanceDateForPunch(nightStart, nightShift), '2024-10-10'),
     'Night shift - punch in at start → correct date',
     'Oct 10 20:00 IST → Assigned to Oct 10'
   )) passedTests++;
@@ -206,7 +221,7 @@ async function runAllTests() {
   totalTests++;
   const nightAfterMidnight = new Date('2024-10-10T20:30:00Z'); // Oct 11, 02:00 IST
   if (assert(
-    service.getAttendanceDateForPunch(nightAfterMidnight, nightShift).toISOString().split('T')[0] === '2024-10-10',
+    sameDay(service.getAttendanceDateForPunch(nightAfterMidnight, nightShift), '2024-10-10'),
     'Night shift - punch after midnight → PREVIOUS day',
     'Oct 11 02:00 IST → Assigned to Oct 10 (shift start date)'
   )) passedTests++;
@@ -215,7 +230,7 @@ async function runAllTests() {
   totalTests++;
   const nightEnd = new Date('2024-10-10T23:30:00Z'); // Oct 11, 05:00 IST
   if (assert(
-    service.getAttendanceDateForPunch(nightEnd, nightShift).toISOString().split('T')[0] === '2024-10-10',
+    sameDay(service.getAttendanceDateForPunch(nightEnd, nightShift), '2024-10-10'),
     'Night shift - punch out at end → same attendance date',
     'Oct 11 05:00 IST → Still Oct 10'
   )) passedTests++;

@@ -1,6 +1,25 @@
 // File: server/app.js
 require("dotenv").config();
 
+// ─── PIN THE TIMEZONE ────────────────────────────────────────────────────────
+//
+// Set before anything else runs, because it changes what `new Date()` means for
+// the rest of the process.
+//
+// Attendance dates are stored at midnight in the SERVER'S timezone
+// (AttendanceService.normalizeDate), so the timezone is not a display setting
+// here — it is part of how every attendance record is keyed. Nothing in this
+// repository pinned it: no TZ in the environment file, no Dockerfile, no
+// process-manager config, and `npm start` is a bare `node app.js`, so the
+// server inherited whatever the host happened to be set to. A host rebuilt or
+// migrated with a different default would silently stop matching every
+// attendance record already written.
+//
+// Overridable by the environment for anyone who needs it; the default is the
+// timezone this deployment actually runs in.
+process.env.TZ = process.env.TZ || "Asia/Kolkata";
+console.log(`🕒 Timezone: ${process.env.TZ} (now: ${new Date().toString()})`);
+
 const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");

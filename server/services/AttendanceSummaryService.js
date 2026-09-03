@@ -22,13 +22,19 @@
 //    record-driven counter in this codebase structurally cannot report an
 //    absence.
 //
-// 2. Leave is resolved from LeaveRequest, not from record.leaveInfo.
-//    leaveInfo is stamped onto an employee's row at the moment that row is
-//    created — i.e. on their first punch of the day. Someone on approved leave
-//    does not punch, so no row exists and no leaveInfo is ever written; a leave
-//    approved after the day has passed is never stamped either. Reading
-//    leaveInfo means approved paid leave looks identical to an unexplained
-//    absence. This service asks LeaveRequest directly.
+// 2. Leave is resolved from BOTH LeaveRequest and record.leaveInfo.
+//    LeaveRequest is authoritative: leaveInfo is stamped onto an employee's row
+//    only when that row is created — i.e. on their first punch of the day — so
+//    someone on approved leave never gets one, and a leave approved after the
+//    day has passed is never stamped. Reading leaveInfo alone makes approved
+//    paid leave look identical to an unexplained absence.
+//
+//    But leaveInfo cannot be ignored either, because it is the ONLY trace a
+//    manual attendance edit leaves. manualAttendanceController writes these
+//    flags and never creates a LeaveRequest, so an HR correction — "mark this
+//    day paid leave", "mark it WFH", "mark it a holiday" — is invisible to
+//    anything that reads requests alone, and the day is reported as an
+//    unexplained absence and docked. Requests win where both exist.
 //
 // ─────────────────────────────────────────────────────────────────────────────
 // PAY BASIS (must stay in step with AutoPayrollService.calculateSalaryBreakdown)
@@ -178,6 +184,30 @@ class AttendanceSummaryService {
   }
 
   /**
+   * The leave stamped on an attendance record, mapped back to the
+   * LeaveRequest vocabulary.
+   *
+   * This is the only trace a manual attendance edit leaves:
+   * manualAttendanceController sets these flags directly on the day's record
+   * and never creates a LeaveRequest, so without this a day HR marked as
+   * leave reads as an unexplained absence everywhere downstream — including
+   * on the payslip.
+   *
+   * @param {Object} leaveInfo - record.employees[].leaveInfo
+   * @returns {string|null} a LeaveRequest.type value, or null
+   */
+  leaveTypeFromRecord(leaveInfo) {
+    if (!leaveInfo) return null;
+    if (leaveInfo.isWFH) return "workFromHome";
+    if (leaveInfo.isHalfDayLeave) return "halfDay";
+    if (leaveInfo.isPaidLeave) return "paid";
+    // isOnLeave without the paid flag is unpaid — including leaveType
+    // "manual", which is what the admin panel writes for a plain leave day.
+    if (leaveInfo.isOnLeave) return "unpaid";
+    return null;
+  }
+
+  /**
    * Classify one calendar day.
    * @returns {{status: string, isLate: boolean, lateMinutes: number, workHours: number, breakPolicyFlagged: boolean}}
    */
@@ -196,10 +226,20 @@ class AttendanceSummaryService {
 
     if (isUpcoming) return { status: DAY_STATUS.UPCOMING, ...blank };
     if (this.isWeekend(date)) return { status: DAY_STATUS.WEEKEND, ...blank };
-    if (holidayKeys.has(key)) return { status: DAY_STATUS.HOLIDAY, ...blank };
 
-    const leaveType = leaveByDate.get(key) || null;
     const employee = attendanceByDate.get(key);
+    const recordLeave = (employee && employee.leaveInfo) || {};
+
+    // A holiday is either on the company calendar or stamped on the day by HR
+    // through manual attendance.
+    if (holidayKeys.has(key) || recordLeave.isHoliday) {
+      return { status: DAY_STATUS.HOLIDAY, ...blank };
+    }
+
+    // An approved request wins; the record's own stamp is the fallback, and
+    // is what carries a manual HR edit (see the note at the top of this file).
+    const leaveType =
+      leaveByDate.get(key) || this.leaveTypeFromRecord(recordLeave) || null;
     const calc = (employee && employee.calculated) || {};
 
     // arrivalTime is the honest record of whether somebody turned up: unlike

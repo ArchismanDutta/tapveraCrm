@@ -356,7 +356,34 @@ const updateManualAttendance = async (req, res) => {
       });
     }
 
-    // Clear existing events
+    // Clear existing events.
+    //
+    // This is a replace, not a patch: the day becomes exactly the times in the
+    // request. That is the intended contract of the screen, but it means an
+    // edit to a punch-out time also discards every punch-in and break event the
+    // fingerprint terminal recorded for that day. The raw BiometricPunch rows
+    // survive as an audit trail, so nothing is unrecoverable — but the loss
+    // used to be completely silent. It is now counted, logged, and reported
+    // back in the response so the caller can say so.
+    const discardedEvents = (employee.events || []).map((e) => ({
+      type: e.type,
+      timestamp: e.timestamp,
+      device: e.device || null,
+      manual: Boolean(e.manual),
+    }));
+    const discardedBiometricCount = discardedEvents.filter((e) =>
+      String(e.device || "").startsWith("BIOMETRIC:")
+    ).length;
+
+    if (discardedEvents.length) {
+      console.warn(
+        `⚠️  Manual edit is replacing ${discardedEvents.length} existing event(s) ` +
+        `for user ${id} on ${date}` +
+        (discardedBiometricCount ? ` — ${discardedBiometricCount} of them from the fingerprint terminal` : "") +
+        `: ${discardedEvents.map((e) => `${e.type}@${new Date(e.timestamp).toISOString()}`).join(", ")}`
+      );
+    }
+
     employee.events = [];
 
     // OPTION C: Parse times directly as UTC ISO strings (no conversion needed)
@@ -454,15 +481,23 @@ const updateManualAttendance = async (req, res) => {
     // Update employee events
     employee.events = events;
 
-    // Update leave info
-    if (isOnLeave) {
-      employee.leaveInfo.isOnLeave = true;
-      employee.leaveInfo.leaveType = 'manual';
-    }
-
-    if (isHoliday) {
-      employee.leaveInfo.isHoliday = true;
-    }
+    // Update leave info.
+    //
+    // Set from the request, not set-only. These used to be written under
+    // `if (isOnLeave)` with no else, so sending isOnLeave: false did nothing
+    // and a day wrongly marked as leave could never be un-marked through this
+    // endpoint — it stayed classified as leave in payroll with no way back.
+    // This handler already replaces the day's events wholesale, so the flags
+    // follow the same rule: what arrives in the request is what the day is.
+    //
+    // sourceRequestId is cleared because after a manual edit these flags are
+    // HR's, not an approved request's — see the field's note on
+    // AttendanceRecord. Un-approving that request must not silently undo what
+    // a person typed here.
+    employee.leaveInfo.isOnLeave = Boolean(isOnLeave);
+    employee.leaveInfo.leaveType = isOnLeave ? 'manual' : null;
+    employee.leaveInfo.isHoliday = Boolean(isHoliday);
+    employee.leaveInfo.sourceRequestId = null;
 
     // Recalculate (pass targetDate for night shift late detection)
     attendanceService.recalculateEmployeeData(employee, targetDate);
@@ -478,6 +513,13 @@ const updateManualAttendance = async (req, res) => {
     res.status(200).json({
       success: true,
       message: "Manual attendance record updated successfully",
+      // What this edit overwrote. Surfaced so the UI can warn before or after
+      // the fact rather than the replacement being invisible.
+      replacedEvents: {
+        count: discardedEvents.length,
+        fromBiometricDevice: discardedBiometricCount,
+        events: discardedEvents,
+      },
       data: {
         dailyWork: employee.calculated,
         employee: employee,
@@ -529,8 +571,16 @@ const deleteManualAttendance = async (req, res) => {
     }
     targetDate.setHours(0, 0, 0, 0);
 
-    // Get attendance record
-    const attendanceRecord = await attendanceService.getAttendanceRecord(targetDate);
+    // Get attendance record. Read-only: creating an empty day here would be an
+    // odd side effect of a delete, and the 404 below is the right answer.
+    const attendanceRecord = await attendanceService.findAttendanceRecord(targetDate);
+
+    if (!attendanceRecord) {
+      return res.status(404).json({
+        success: false,
+        error: "Attendance record not found for this employee on this date"
+      });
+    }
 
     // Remove employee from record
     const initialLength = attendanceRecord.employees.length;
@@ -617,7 +667,9 @@ const getManualAttendanceRecords = async (req, res) => {
           }
 
           manualRecords.push({
-            _id: `${employee.userId}_${record.date.toISOString().split('T')[0]}`, // Composite ID
+            // Local parts: record.date is local midnight, so toISOString() named
+            // the previous day on this IST server.
+            _id: `${employee.userId}_${attendanceService.formatDateKey(record.date)}`, // Composite ID
             userId: employee.userId,
             user: user,
             date: record.date,
@@ -689,11 +741,15 @@ const getAttendanceByUserAndDate = async (req, res) => {
     }
     targetDate.setHours(0, 0, 0, 0);
 
-    // Get attendance record
-    const attendanceRecord = await attendanceService.getAttendanceRecord(targetDate);
+    // Get attendance record. Read-only — this is a GET.
+    //
+    // It used to go through getAttendanceRecord(), which saves a new empty
+    // document on a miss, so simply asking about an arbitrary or future date
+    // created a permanent record for it.
+    const attendanceRecord = await attendanceService.findAttendanceRecord(targetDate);
 
     // Find employee
-    const employee = attendanceRecord.getEmployee(userId);
+    const employee = attendanceRecord ? attendanceRecord.getEmployee(userId) : null;
 
     if (!employee) {
       return res.status(404).json({
@@ -710,7 +766,7 @@ const getAttendanceByUserAndDate = async (req, res) => {
       success: true,
       data: {
         attendanceRecord: {
-          _id: `${userId}_${targetDate.toISOString().split('T')[0]}`,
+          _id: `${userId}_${attendanceService.formatDateKey(targetDate)}`,
           userId,
           user,
           date: targetDate,
@@ -774,7 +830,14 @@ const setBreakPolicyOverride = async (req, res) => {
       return res.status(400).json({ success: false, error: "Invalid date. Use YYYY-MM-DD" });
     }
 
-    const record = await AttendanceRecord.findOne({ date: targetDate });
+    // Match the day, not the instant. `${date}T00:00:00.000Z` is UTC midnight
+    // while AttendanceRecord.date is written at server-local midnight — 5h30m
+    // apart on this IST deployment, so an equality lookup found nothing and
+    // this endpoint answered 404 for every day that actually existed. Every
+    // other handler in this file uses setHours(0,0,0,0); the day window is
+    // correct whichever convention the stored row happens to use.
+    const { start: dayStart, end: dayEnd } = attendanceService.getDayWindow(targetDate);
+    const record = await AttendanceRecord.findOne({ date: { $gte: dayStart, $lt: dayEnd } });
     if (!record) {
       return res.status(404).json({ success: false, error: "No attendance record for that date" });
     }

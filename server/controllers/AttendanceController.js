@@ -663,9 +663,11 @@ class AttendanceController {
       }
 
       const targetDate = this.service.normalizeDate(new Date(date));
-      const record = await this.service.getAttendanceRecord(targetDate);
+      // Read-only: recalculating a day that does not exist should report that,
+      // not bring an empty one into being.
+      const record = await this.service.findAttendanceRecord(targetDate);
 
-      const employee = record.getEmployee(userId);
+      const employee = record ? record.getEmployee(userId) : null;
       if (!employee) {
         return res.status(404).json({
           success: false,

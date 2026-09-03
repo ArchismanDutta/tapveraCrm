@@ -218,13 +218,25 @@ exports.updateLeaveStatus = async (req, res) => {
     if (!updatedLeave)
       return res.status(404).json({ message: "Leave request not found" });
 
-    // WFH Integration: Mark the dates as WFH-approved, but don't mark attendance
-    // Employee still needs to punch in to be counted as present
-    if (status === "Approved" && updatedLeave.type === "workFromHome") {
-      // Store WFH approval info - this will be checked when employee punches in
-      // The attendance system will reference approved WFH requests when validating punch-ins
-      console.log(`WFH request approved for user ${updatedLeave.employee._id} from ${updatedLeave.period.start} to ${updatedLeave.period.end}`);
-      console.log(`Employee must still punch in to be marked present - WFH status will be applied on punch-in`);
+    // Put the decision onto the attendance days it covers.
+    //
+    // This is the only place a leave becomes Approved, and until now it was
+    // also the place where the decision stopped. Nothing here touched an
+    // attendance record, so a day covered by approved leave read as an
+    // unexplained absence on every screen that reads the day directly — and a
+    // leave approved after the fact, which is the normal case for sick leave,
+    // was never stamped at all. See services/LeaveAttendanceSync.js.
+    //
+    // Awaited, but it cannot throw: the decision itself is already saved and
+    // must not be undone by an attendance row that would not write.
+    const { syncLeaveToAttendance } = require("../services/LeaveAttendanceSync");
+    const leaveSync = await syncLeaveToAttendance(updatedLeave);
+    if (leaveSync.synced || leaveSync.cleared || leaveSync.failed) {
+      console.log(
+        `Leave ${updatedLeave._id} (${updatedLeave.type}, ${status}) -> attendance: ` +
+        `${leaveSync.synced} stamped, ${leaveSync.cleared} cleared, ${leaveSync.failed} failed` +
+        (leaveSync.capped ? " (day cap reached — the monthly summary still reads the request directly)" : "")
+      );
     }
 
     try {

@@ -128,7 +128,12 @@ const MyProfile = ({ userType = "employee", onLogout }) => {
       // Check if API call succeeded and has data
       if (attendanceRes && attendanceRes.success && attendanceRes.data) {
         console.log("Attendance data structure:", attendanceRes.data);
-        monthlyData = attendanceRes.data.summary || {};
+        // Prefer monthlySummary: it is the server-computed figure the
+        // attendance page and payroll use. `summary` is the older count over
+        // attendance rows only — it cannot see a day with no record, so its
+        // attendance rate sat near 100% while the attendance page showed
+        // something quite different for the same month.
+        monthlyData = attendanceRes.data.monthlySummary || attendanceRes.data.summary || {};
       } else {
         console.warn("No monthly attendance data available:", attendanceRes);
       }
@@ -136,9 +141,11 @@ const MyProfile = ({ userType = "employee", onLogout }) => {
       // Safely create attendance object with fallbacks
       const attendance = {
         presentDays: Number(monthlyData.presentDays) || 0,
-        totalWorkHours: monthlyData.totalHours && typeof monthlyData.totalHours === 'number'
-          ? monthlyData.totalHours.toFixed(1)
-          : "0.0",
+        totalWorkHours: typeof monthlyData.totalWorkHours === 'number'
+          ? monthlyData.totalWorkHours.toFixed(1)
+          : typeof monthlyData.totalHours === 'number'
+            ? monthlyData.totalHours.toFixed(1)
+            : "0.0",
         attendanceRate: Number(monthlyData.attendanceRate) || 0,
         onTimeRate: monthlyData.punctualityRate && typeof monthlyData.punctualityRate === 'number'
           ? `${Math.round(monthlyData.punctualityRate)}%`

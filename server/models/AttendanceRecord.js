@@ -115,6 +115,17 @@ const EmployeeAttendanceSchema = new mongoose.Schema({
     endTime: String,   // "18:00"
     durationHours: { type: Number, default: 9 },
     isFlexible: { type: Boolean, default: false },
+
+    /**
+     * True when this shift is a guess, not the employee's real one — the
+     * lookup failed or the user could not be read. Persisted so that the
+     * verdict survives: recalculateEmployeeData runs again on every read,
+     * auto-close and payroll run, and without this the day would be re-stamped
+     * late against a 09:00 shift nobody assigned. See
+     * AttendanceService.getFallbackShift.
+     */
+    isFallback: { type: Boolean, default: false },
+
     type: {
       type: String,
       enum: ['STANDARD', 'FLEXIBLE', 'NIGHT', 'SPLIT'],
@@ -144,7 +155,19 @@ const EmployeeAttendanceSchema = new mongoose.Schema({
     isPaidLeave: { type: Boolean, default: false }, // Paid Leave flag
     isHalfDayLeave: { type: Boolean, default: false }, // ⭐ Half-Day Leave flag (approved reduced hours)
     isHoliday: { type: Boolean, default: false },
-    holidayName: String
+    holidayName: String,
+
+    /**
+     * The approved LeaveRequest this stamp came from, when it came from one.
+     *
+     * Leave reaches a day two ways: an approved request, or an HR edit in the
+     * manual attendance screen, which writes the same flags and creates no
+     * request. Without knowing which, un-approving a leave would have to
+     * either leave a stale stamp behind or blank a day HR had marked by hand.
+     * Null means a human set these flags; only a stamp carrying the request's
+     * id is cleared when that request stops being approved.
+     */
+    sourceRequestId: { type: mongoose.Schema.Types.ObjectId, ref: 'LeaveRequest', default: null }
   },
 
   // ─── HR override of the break-duration absence ──────────────────────────
@@ -287,13 +310,55 @@ AttendanceRecordSchema.pre('save', function(next) {
 
 // Virtual for formatted date
 AttendanceRecordSchema.virtual('dateFormatted').get(function() {
-  return this.date.toISOString().split('T')[0]; // YYYY-MM-DD
+  // Local parts, not toISOString().
+  //
+  // `date` is written at midnight in the server's timezone, so on this IST
+  // deployment the 5th of the month is stored as 2026-08-04T18:30:00.000Z and
+  // toISOString() reported it as the 4th. Every response carries this virtual
+  // (toJSON has virtuals: true), so the day was off by one wherever it was
+  // read.
+  const d = this.date;
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${d.getFullYear()}-${month}-${day}`; // YYYY-MM-DD
 });
 
 // Method to get employee by userId
 AttendanceRecordSchema.methods.getEmployee = function(userId) {
   return this.employees.find(emp => emp.userId.toString() === userId.toString());
 };
+
+/**
+ * Values that must be assigned whole rather than merged into: dates, ObjectIds
+ * and arrays are single values as far as an update is concerned, not bags of
+ * fields. Arrays in particular — merging `events` index by index would leave
+ * fragments of the old list behind.
+ */
+function isMergeableObject(value) {
+  if (value === null || typeof value !== 'object') return false;
+  if (Array.isArray(value)) return false;
+  if (value instanceof Date) return false;
+  if (value._bsontype) return false;                        // ObjectId, Decimal128, ...
+  if (typeof value.toHexString === 'function') return false; // ObjectId, older drivers
+  return true;
+}
+
+/** Merge `source` into `target` one level at a time, returning a new object. */
+function deepMerge(target, source) {
+  const merged = { ...target };
+
+  for (const key of Object.keys(source)) {
+    const value = source[key];
+    // An absent key is not an instruction to blank the stored one.
+    if (value === undefined) continue;
+
+    merged[key] = isMergeableObject(value) && isMergeableObject(merged[key])
+      ? deepMerge(merged[key], value)
+      : value;
+  }
+
+  return merged;
+}
 
 // Method to add or update employee
 AttendanceRecordSchema.methods.upsertEmployee = function(employeeData) {
@@ -302,8 +367,17 @@ AttendanceRecordSchema.methods.upsertEmployee = function(employeeData) {
   );
 
   if (existingIndex >= 0) {
-    // Update existing employee
-    this.employees[existingIndex] = { ...this.employees[existingIndex].toObject(), ...employeeData };
+    // Update existing employee.
+    //
+    // Merged field by field, not spread. A top-level spread replaces every
+    // nested object wholesale, so a partial write to `calculated` — say
+    // { isPresent: false } — silently discarded workDurationSeconds,
+    // arrivalTime, lateMinutes and everything else it did not mention. An
+    // eight-hour day could be erased by an update that never mentioned hours.
+    this.employees[existingIndex] = deepMerge(
+      this.employees[existingIndex].toObject(),
+      employeeData
+    );
   } else {
     // Add new employee
     this.employees.push(employeeData);

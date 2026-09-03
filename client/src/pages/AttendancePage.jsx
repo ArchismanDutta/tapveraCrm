@@ -48,6 +48,8 @@ const dayStatusStyles = {
   "half-day": "border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-400/20 dark:bg-violet-400/10 dark:text-violet-200",
   wfh: "border-purple-200 bg-purple-50 text-purple-700 dark:border-purple-400/20 dark:bg-purple-400/10 dark:text-purple-200",
   absent: "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-400/20 dark:bg-rose-400/10 dark:text-rose-200",
+  leave: "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-400/20 dark:bg-sky-400/10 dark:text-sky-200",
+  holiday: "border-teal-200 bg-teal-50 text-teal-700 dark:border-teal-400/20 dark:bg-teal-400/10 dark:text-teal-200",
   default: "border-slate-200 bg-slate-50 text-slate-400 dark:border-white/10 dark:bg-white/[0.035] dark:text-slate-500",
 };
 
@@ -91,6 +93,19 @@ const getEventTime = (events = [], type) => {
   if (!matches.length) return null;
   const event = type === "PUNCH_OUT" ? matches[matches.length - 1] : matches[0];
   return event.timestamp || event.time || null;
+};
+
+// AttendanceSummaryService day status -> the tile styles this page already
+// knows about. Anything unmapped (weekend, upcoming) renders as an ordinary
+// day, which is what it was doing before.
+const CANONICAL_TILE_STATUS = {
+  present: "present",
+  halfDay: "half-day",
+  wfh: "wfh",
+  paidLeave: "leave",
+  unpaidLeave: "leave",
+  absent: "absent",
+  holiday: "holiday",
 };
 
 const getDayStatus = (record) => {
@@ -209,9 +224,21 @@ const AttendancePage = ({ onLogout }) => {
       blank: true,
     }));
 
+    // The canonical classification for each day, keyed "YYYY-MM-DD". Without
+    // this the tiles were derived from attendance rows alone, so a day the
+    // employee was on approved (or manually marked) leave rendered blank
+    // while the cards above counted it as leave.
+    const canonicalByDate = new Map(
+      (monthlySummary?.days || []).map((entry) => [entry.date, entry])
+    );
+    const pad = (value) => String(value).padStart(2, "0");
+
     const days = Array.from({ length: daysInMonth }, (_, index) => {
       const day = index + 1;
       const record = recordsByDay.get(day);
+      const canonicalDay = canonicalByDate.get(
+        `${selectedYear}-${pad(selectedMonth + 1)}-${pad(day)}`
+      );
       const isToday =
         new Date(selectedYear, selectedMonth, day).toDateString() ===
         new Date().toDateString();
@@ -220,13 +247,19 @@ const AttendancePage = ({ onLogout }) => {
         key: day,
         day,
         record,
-        status: getDayStatus(record),
+        // A late day is a present day that happened to be late, so the
+        // canonical status alone would lose the amber tile.
+        status: canonicalDay
+          ? (canonicalDay.isLate
+              ? "late"
+              : CANONICAL_TILE_STATUS[canonicalDay.status] || "default")
+          : getDayStatus(record),
         isToday,
       };
     });
 
     return [...blanks, ...days];
-  }, [recordsByDay, selectedMonth, selectedYear]);
+  }, [recordsByDay, selectedMonth, selectedYear, monthlySummary]);
 
   const recentRecords = useMemo(() => {
     return [...monthRecords]

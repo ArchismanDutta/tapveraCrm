@@ -457,7 +457,14 @@ userSchema.methods.getEffectiveShift = async function(date) {
         start: assignedShift.start,
         end: assignedShift.end,
         durationHours: assignedShift.durationHours,
-        isFlexible: false,
+        // The Shift document's own flag. This was hardcoded false, so a shift
+        // saved with isFlexible: true was loaded from the database and had the
+        // answer thrown away — leaving the lateness checks to fall back on a
+        // substring test for "flexible" in the shift's NAME. Whether an
+        // employee could be late therefore depended on what their shift was
+        // called: "Anytime 9h" marked everyone late every morning, and
+        // renaming it "Anytime Flexible 9h" made the lateness disappear.
+        isFlexible: Boolean(assignedShift.isFlexible),
         source: "assigned",
         name: assignedShift.name
       };

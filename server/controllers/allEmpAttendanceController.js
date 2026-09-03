@@ -77,13 +77,45 @@ exports.getEmployeeSummary = async (req, res) => {
     const end = new Date(endDate);
     end.setHours(23, 59, 59, 999);
 
-    // Fetch AttendanceRecord records
-    const dailyData = await AttendanceRecord.find({
-      userId: employeeId,
+    // Fetch this employee's rows.
+    //
+    // AttendanceRecord holds ONE document per calendar date containing every
+    // employee; there is no top-level userId on it. The old query filtered on
+    // `userId` at the root, matched nothing, every time, and every total below
+    // came back as zero for everybody. The employee lives at
+    // employees[].userId, and their day is flattened out of the record here so
+    // the shape the rest of this handler reads (`r.isLate`, `r.isAbsent`,
+    // `r.workDurationSeconds`) is actually populated.
+    const records = await AttendanceRecord.find({
       date: { $gte: start, $lte: end },
+      "employees.userId": employeeId,
     })
       .sort({ date: 1 })
       .lean();
+
+    const dailyData = records
+      .map((record) => {
+        const employee = (record.employees || []).find(
+          (e) => e.userId && e.userId.toString() === employeeId.toString()
+        );
+        if (!employee) return null;
+
+        const calc = employee.calculated || {};
+        return {
+          date: record.date,
+          workDurationSeconds: calc.workDurationSeconds || 0,
+          breakDurationSeconds: calc.breakDurationSeconds || 0,
+          arrivalTime: calc.arrivalTime || null,
+          departureTime: calc.departureTime || null,
+          isLate: Boolean(calc.isLate),
+          isAbsent: Boolean(calc.isAbsent),
+          isHalfDay: Boolean(calc.isHalfDay),
+          lateMinutes: calc.lateMinutes || 0,
+          shift: employee.assignedShift || null,
+          leave: employee.leaveInfo || null,
+        };
+      })
+      .filter(Boolean);
 
     // Fetch approved leave requests
     const leaves = await LeaveRequest.find({
@@ -115,13 +147,28 @@ exports.getEmployeeSummary = async (req, res) => {
     const lateDays = dailyData.filter((r) => r.isLate).length;
     const absentDays = dailyData.filter((r) => r.isAbsent).length;
 
+    // Days of leave inside the range, not the number of requests. One ten-day
+    // leave is ten days off, and counting it as 1 made a fortnight's absence
+    // read the same as an afternoon's.
+    const leaveDays = new Set();
+    for (const leave of leaves) {
+      const from = new Date(Math.max(new Date(leave.period.start), start));
+      const to = new Date(Math.min(new Date(leave.period.end), end));
+      for (let d = new Date(from); d <= to; d.setDate(d.getDate() + 1)) {
+        leaveDays.add(
+          `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
+        );
+      }
+    }
+
     const summary = {
       totalWorkHours: (totalWorkSeconds / 3600).toFixed(2),
       totalBreakHours: (totalBreakSeconds / 3600).toFixed(2),
       totalDays,
       lateDays,
       absentDays,
-      leavesTaken: leaves.length,
+      leavesTaken: leaveDays.size,
+      leaveRequests: leaves.length,
       holidays: holidays.length,
     };
 

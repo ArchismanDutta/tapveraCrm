@@ -27,6 +27,64 @@ import {
   Users,
 } from "lucide-react";
 
+/**
+ * The leave type recorded on a day, from whichever field carries it.
+ *
+ * This page used to read `leaveInfo.type`. That field does not exist — the
+ * schema calls it `leaveType` (server/models/AttendanceRecord.js) — so the
+ * entire leave branch below was unreachable and every leave day, including
+ * one an admin had just set by hand through Manual Attendance, fell through
+ * to "absent". The boolean flags are checked too because manual attendance
+ * writes those directly.
+ */
+const leaveInfoType = (leaveInfo) => {
+  if (!leaveInfo) return null;
+  if (leaveInfo.leaveType) return leaveInfo.leaveType;
+  if (leaveInfo.type) return leaveInfo.type; // legacy rows
+  if (leaveInfo.isWFH) return "workFromHome";
+  if (leaveInfo.isHalfDayLeave) return "halfDay";
+  if (leaveInfo.isPaidLeave) return "paid";
+  if (leaveInfo.isOnLeave) return "unpaid";
+  return null;
+};
+
+/** LeaveRequest.type -> the calendar's day status. */
+const LEAVE_DAY_STATUS = {
+  workFromHome: "wfh",
+  paid: "paid-leave",
+  sick: "sick-leave",
+  maternity: "maternity-leave",
+  halfDay: "half-day-leave",
+  unpaid: "unpaid-leave",
+  manual: "unpaid-leave",
+};
+
+/**
+ * The approved leave covering a date, if any.
+ *
+ * A leave day normally has NO attendance record — nobody punches when they
+ * are off — so for those days the leave list is the only thing that can
+ * explain the day. This used to consider `workFromHome` and nothing else,
+ * which is why approved sick, paid and unpaid leave all rendered as absent.
+ */
+const findApprovedLeaveType = (approvedLeaves, date) => {
+  if (!Array.isArray(approvedLeaves)) return null;
+
+  const noon = new Date(date);
+  noon.setHours(12, 0, 0, 0);
+
+  const match = approvedLeaves.find((leave) => {
+    const start = new Date(leave.period?.start || leave.startDate);
+    const end = new Date(leave.period?.end || leave.endDate);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return false;
+    start.setHours(0, 0, 0, 0);
+    end.setHours(23, 59, 59, 999);
+    return noon >= start && noon <= end;
+  });
+
+  return match ? match.type : null;
+};
+
 const SuperAdminAttendancePortal = ({ onLogout }) => {
   // CRITICAL: Always use new attendance system for accurate data
   const USE_NEW_ATTENDANCE_SYSTEM = true;
@@ -34,6 +92,12 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
   const [collapsed, setCollapsed] = useState(false);
   const [employees, setEmployees] = useState([]);
   const [selectedEmployee, setSelectedEmployee] = useState(null);
+
+  // The server-computed monthly summary for the selected employee — the same
+  // object the employee's own attendance page and payroll read. Held in a ref
+  // because the counting blocks below run in the same pass as the fetch and
+  // would not see a state update in time.
+  const canonicalSummaryRef = useRef(null);
   const [stats, setStats] = useState(null);
   const [calendarData, setCalendarData] = useState(null);
   const [weeklyHours, setWeeklyHours] = useState([]);
@@ -348,6 +412,36 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
         startDate: dataStart.toISOString(),
         endDate: dataEnd.toISOString()
       });
+
+      // For a whole-month view, pull the canonical monthly summary. Every
+      // count below this point is derived in the browser from the raw record
+      // array, which cannot see a day that has no record and applies its own
+      // rules for WFH, half days and leave — which is why this page and the
+      // employee's own attendance page disagreed about the same person. When
+      // the summary is available it wins; the local counting stays as the
+      // fallback for a partial range or an older server.
+      canonicalSummaryRef.current = null;
+      const isWholeMonth =
+        dataStart.getDate() === 1 &&
+        dataEnd.getDate() === new Date(selectedYear, selectedMonth + 1, 0).getDate();
+
+      if (isWholeMonth) {
+        try {
+          const summaryRes = await newAttendanceService.getEmployeeMonthlySummary(
+            employeeId,
+            selectedYear,
+            selectedMonth + 1
+          );
+          if (summaryRes?.success && summaryRes.data) {
+            canonicalSummaryRef.current = summaryRes.data;
+          }
+        } catch (summaryErr) {
+          console.warn(
+            "Canonical monthly summary unavailable, counting locally instead:",
+            summaryErr?.message
+          );
+        }
+      }
 
       let weeklyRes;
       if (USE_NEW_ATTENDANCE_SYSTEM) {
@@ -698,6 +792,34 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
         }
       };
 
+      // Same numbers as the employee sees on their own page, and the same
+      // numbers payroll pays on.
+      const canonical = canonicalSummaryRef.current;
+      if (canonical) {
+        Object.assign(enhancedStats, {
+          attendanceRate: Math.round(canonical.attendanceRate),
+          presentDays: canonical.presentDays,
+          totalDays: canonical.expectedWorkingDays,
+          workingHours: Number(canonical.totalWorkHours || 0).toFixed(1),
+          onTimeRate: Math.round(canonical.punctualityRate),
+          averageHoursPerDay: Number(canonical.averageWorkHours || 0).toFixed(1),
+          lateDays: canonical.lateDays,
+          halfDays: canonical.halfDays,
+          absentDays: canonical.absentDays,
+          wfhDays: canonical.wfhDays,
+          paidLeaveDays: canonical.paidLeaveDays,
+          unpaidLeaveDays: canonical.unpaidLeaveDays,
+          paidDays: canonical.paidDays,
+          breakdown: {
+            onTime: Math.max(0, canonical.presentDays - canonical.lateDays),
+            late: canonical.lateDays,
+            halfDay: canonical.halfDays,
+            wfh: canonical.wfhDays,
+            absent: canonical.absentDays,
+          },
+        });
+      }
+
       console.log('📊 Enhanced stats for SuperAdmin portal:', enhancedStats);
       setStats(enhancedStats);
 
@@ -839,18 +961,46 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
                                      selectedEmployee?.shift?.name?.toLowerCase().includes('flexible') ||
                                      false;
 
-          // Priority-based status determination:
-          // Holiday > Absent > Leave (NOT WFH) > WFH (DOMINATES ALL) > Half-day > Late > Present
-          // ⭐ WFH DOMINATES: If employee has WFH and worked, show WFH regardless of late/early/half-day
-          if (attendanceData.isAbsent && !attendanceData.isPresent) {
-            // PRIORITY 2: Absent (no work done)
-            status = "absent";
-          } else if (attendanceData.leaveInfo && attendanceData.leaveInfo.type && attendanceData.leaveInfo.type !== 'workFromHome') {
-            // PRIORITY 3: Leave types (on approved leave) - EXCLUDING WFH
-            // WFH is NOT a leave type, it's a normal working day
-            switch (attendanceData.leaveInfo.type) {
+          const dayLeaveType = leaveInfoType(attendanceData.leaveInfo);
+          const isWfhDay =
+            attendanceData.isWFH || dayLeaveType === 'workFromHome';
+          const workedThisDay =
+            attendanceData.isPresent ||
+            (attendanceData.workDurationSeconds || 0) > 0;
+
+          // Priority: Holiday > WFH > worked (half-day/late/present) > Leave > Absent
+          //
+          // This deliberately mirrors AttendanceSummaryService.classifyDay, so
+          // the calendar tiles agree with the counts above them, with the
+          // employee's own page and with payroll.
+          //
+          // Leave and WFH are resolved BEFORE falling through to absent, which
+          // is the point: a day marked as leave, WFH or a holiday through
+          // Manual Attendance has no punch, so isAbsent is true — and an
+          // absent-first chain rendered every one of those as an unexplained
+          // absence, including the corrections an admin had just made by hand.
+          if (attendanceData.leaveInfo?.isHoliday) {
+            status = "holiday";
+            metadata = { isHoliday: true };
+          } else if (isWfhDay) {
+            // An approved or manually marked WFH day counts as WFH whether or
+            // not they remembered to punch — same as payroll treats it.
+            status = "wfh";
+          } else if (workedThisDay) {
+            // They turned up, so attendance describes the day even if a stale
+            // leave flag is still stamped on it.
+            if (attendanceData.isHalfDay) {
+              status = "half-day";
+            } else if (attendanceData.isLate && !isFlexibleEmployee) {
+              // Flexible permanent employees are NEVER marked as late
+              status = "late";
+            } else {
+              status = "present";
+            }
+          } else if (dayLeaveType) {
+            // No punch, but leave explains the day.
+            switch (dayLeaveType) {
               case 'paid':
-                // ⭐ Paid leave: Distinct status with different color
                 status = "paid-leave";
                 break;
               case 'sick':
@@ -866,6 +1016,7 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
                 status = "half-day-leave";
                 break;
               case 'unpaid':
+              case 'manual':
                 status = "unpaid-leave";
                 break;
               case 'maternity':
@@ -874,24 +1025,6 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
               default:
                 status = "approved-leave";
             }
-          } else if ((attendanceData.isWFH || attendanceData.leaveInfo?.type === 'workFromHome') &&
-                     (attendanceData.isPresent || attendanceData.workDurationSeconds > 0)) {
-            // ⭐ PRIORITY 4: Work From Home - DOMINATES OVER LATE/HALF-DAY/EARLY
-            // If employee has WFH and worked ANY amount, show as WFH (magenta)
-            // This overrides late, half-day, and early statuses
-            status = "wfh";
-          } else if (attendanceData.isHalfDay && attendanceData.isPresent) {
-            // PRIORITY 5: Half Day (< 4.5 hours worked)
-            // Half-day takes priority over Late and Present
-            status = "half-day";
-          } else if (attendanceData.isLate && attendanceData.isPresent && !isFlexibleEmployee) {
-            // PRIORITY 6: Late (only for standard shift employees, NOT flexible)
-            // Flexible permanent employees are NEVER marked as late
-            status = "late";
-          } else if (attendanceData.isPresent || (attendanceData.workDurationSeconds && attendanceData.workDurationSeconds > 0)) {
-            // PRIORITY 7: Present (>= 4.5 hours worked)
-            // Regular office attendance
-            status = "present";
           } else {
             status = "absent";
           }
@@ -1134,47 +1267,30 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
           status = "weekend";
           metadata = { isWeekend: true };
         } else {
-          // Check if this day has an approved WFH request (even without attendance data)
-          const hasApprovedWFH = approvedLeaves && approvedLeaves.some(leave => {
-            if (leave.type !== 'workFromHome') return false;
-            const leaveStart = new Date(leave.period?.start || leave.startDate);
-            const leaveEnd = new Date(leave.period?.end || leave.endDate);
-            leaveStart.setHours(0, 0, 0, 0);
-            leaveEnd.setHours(23, 59, 59, 999);
-            dateObj.setHours(12, 0, 0, 0); // Set to noon to avoid timezone issues
-            return dateObj >= leaveStart && dateObj <= leaveEnd;
-          });
+          // No attendance record for this day, which is the normal shape of a
+          // leave day: nobody punches when they are off. So the approved leave
+          // list decides here, not the absence of a record.
+          //
+          // Only workFromHome was consulted before, and a PAST WFH day with no
+          // punch was then flipped to absent — so approved sick, paid and
+          // unpaid leave all rendered as absent on this calendar while the
+          // employee's own page and the payslip counted them as leave.
+          const approvedLeaveType = findApprovedLeaveType(approvedLeaves, dateObj);
 
-          if (hasApprovedWFH) {
-            // Day has approved WFH but no attendance data (employee hasn't punched in)
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-            const checkDate = new Date(year, monthIndex, dayNum);
-            checkDate.setHours(0, 0, 0, 0);
-            const isPast = checkDate < today;
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          const checkDate = new Date(year, monthIndex, dayNum);
+          checkDate.setHours(0, 0, 0, 0);
 
-            if (isPast) {
-              // Past WFH day with no work → mark as absent
-              status = "absent";
-              metadata = { isWFH: true, noData: true, wfhNotUtilized: true };
-            } else {
-              // Future/Today WFH day → show as WFH (magenta)
-              status = "wfh";
-              metadata = { isWFH: true, isFuture: checkDate > today, wfhApproved: true };
-            }
+          if (approvedLeaveType) {
+            status = LEAVE_DAY_STATUS[approvedLeaveType] || "approved-leave";
+            metadata = { leaveType: approvedLeaveType, noData: true };
+          } else if (checkDate > today) {
+            status = "default"; // Future date
+            metadata = { isFuture: true };
           } else {
-            // No WFH, check if future or past
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-            dateObj.setHours(0, 0, 0, 0);
-
-            if (dateObj > today) {
-              status = "default"; // Future date
-              metadata = { isFuture: true };
-            } else {
-              status = "absent"; // Past date with no data
-              metadata = { noData: true };
-            }
+            status = "absent"; // Past date with no data and nothing to explain it
+            metadata = { noData: true };
           }
         }
 
@@ -1210,6 +1326,26 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
         totalWorkHours: days.reduce((sum, d) => sum + parseFloat(d.workingHours || 0), 0).toFixed(1)
       };
 
+      // Keep the calendar panel's totals on the same figures as the cards
+      // above it — this page used to show two different "present" counts on
+      // one screen, from two different counting rules.
+      const canonicalForCalendar = canonicalSummaryRef.current;
+      if (canonicalForCalendar) {
+        Object.assign(monthlyStats, {
+          totalPresent: canonicalForCalendar.presentDays,
+          totalLate: canonicalForCalendar.lateDays,
+          totalHalfDay: canonicalForCalendar.halfDays,
+          totalAbsent: canonicalForCalendar.absentDays,
+          totalWeekend: canonicalForCalendar.weekendDays,
+          totalPaidLeave: canonicalForCalendar.paidLeaveDays,
+          totalLeave: canonicalForCalendar.unpaidLeaveDays,
+          totalHolidays: canonicalForCalendar.holidayDays,
+          totalWFH: canonicalForCalendar.wfhDays,
+          totalWorkingDays: canonicalForCalendar.expectedWorkingDays,
+          totalWorkHours: Number(canonicalForCalendar.totalWorkHours || 0).toFixed(1),
+        });
+      }
+
       console.log('Calendar monthly stats:', monthlyStats);
 
       // Set calendar data with enhanced information
@@ -1222,15 +1358,23 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
       });
 
       // Update stats with correct absent days from calendar (not from dailyData)
-      // dailyData only contains days with attendance records, so it can't count truly absent days
-      setStats(prevStats => ({
-        ...prevStats,
-        absentDays: monthlyStats.totalAbsent,
-        breakdown: {
-          ...prevStats.breakdown,
-          absent: monthlyStats.totalAbsent
-        }
-      }));
+      // dailyData only contains days with attendance records, so it can't count truly absent days.
+      //
+      // Skipped when the server summary is in play: it already walks the
+      // calendar and, unlike this block, knows which of those empty days were
+      // approved leave. Letting this overwrite it put a present count from one
+      // rule next to an absent count from another, so the two could never add
+      // up to the total.
+      if (!canonicalForCalendar) {
+        setStats(prevStats => ({
+          ...prevStats,
+          absentDays: monthlyStats.totalAbsent,
+          breakdown: {
+            ...prevStats.breakdown,
+            absent: monthlyStats.totalAbsent
+          }
+        }));
+      }
 
       // Enhanced weekly hours processing with accurate calculations
       const weekDays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -1329,8 +1473,8 @@ const SuperAdminAttendancePortal = ({ onLogout }) => {
             status = 'Work From Home';
             statusColor = 'fuchsia'; // Magenta to match calendar
           } else if (d.isAbsent) {
-            if (d.leaveInfo && d.leaveInfo.type !== 'workFromHome') {
-              status = d.leaveInfo.type === 'halfDay' ? 'Half Day Leave' : 'On Leave';
+            if (leaveInfoType(d.leaveInfo) && leaveInfoType(d.leaveInfo) !== 'workFromHome') {
+              status = leaveInfoType(d.leaveInfo) === 'halfDay' ? 'Half Day Leave' : 'On Leave';
               statusColor = 'purple';
             } else {
               status = 'Absent';

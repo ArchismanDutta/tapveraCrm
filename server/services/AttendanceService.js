@@ -130,12 +130,28 @@ class AttendanceService {
   }
 
   /**
+   * Find the attendance record for a date, or null. Creates nothing.
+   *
+   * getAttendanceRecord() below SAVES a new empty document whenever it misses,
+   * which is right for the punch path and wrong for every read: a GET for an
+   * arbitrary or future date used to materialise a permanent empty record,
+   * polluting daily-stats aggregates and date-range scans. Read paths use this.
+   *
+   * Matched on the day window rather than the exact instant so a row written
+   * under a different date convention is still found — see getDayWindow().
+   */
+  async findAttendanceRecord(date) {
+    const { start, end } = this.getDayWindow(date);
+    return AttendanceRecord.findOne({ date: { $gte: start, $lt: end } });
+  }
+
+  /**
    * Get or create attendance record for a specific date
    */
   async getAttendanceRecord(date) {
     const targetDate = this.normalizeDate(date);
 
-    let record = await AttendanceRecord.findOne({ date: targetDate });
+    let record = await this.findAttendanceRecord(targetDate);
 
     if (!record) {
       record = new AttendanceRecord({
@@ -166,8 +182,10 @@ class AttendanceService {
   async getAttendanceRecordWithSession(date, session) {
     const targetDate = this.normalizeDate(date);
 
-    // Use session for the query to ensure transaction isolation
-    let record = await AttendanceRecord.findOne({ date: targetDate }).session(session);
+    // Use session for the query to ensure transaction isolation.
+    // Day window, not instant equality — see findAttendanceRecord().
+    const { start: dayStart, end: dayEnd } = this.getDayWindow(targetDate);
+    let record = await AttendanceRecord.findOne({ date: { $gte: dayStart, $lt: dayEnd } }).session(session);
 
     if (!record) {
       record = new AttendanceRecord({
@@ -177,8 +195,21 @@ class AttendanceService {
         departmentStats: [],
         specialDay: await this.getSpecialDayInfo(targetDate)
       });
-      // Save with session to include in transaction
-      await record.save({ session });
+
+      try {
+        // Save with session to include in transaction
+        await record.save({ session });
+      } catch (error) {
+        // `date` is unique, so the first two people to punch on a brand-new day
+        // race to create it and one of them loses on the index. That is not an
+        // error — the day now exists, which is all this method wanted. The
+        // biometric path used to file this as FAILED, recoverable only by a
+        // manual replay.
+        if (error?.code !== 11000) throw error;
+
+        record = await AttendanceRecord.findOne({ date: { $gte: dayStart, $lt: dayEnd } }).session(session);
+        if (!record) throw error;   // lost the race to something else entirely
+      }
     }
 
     return record;
@@ -247,57 +278,71 @@ class AttendanceService {
     const today = this.getAttendanceDateForPunch(now, userShift);
 
     console.log(`   User shift: ${userShift?.startTime}-${userShift?.endTime} (isNight: ${this.isNightShift(userShift)})`);
-    console.log(`   Assigned to attendance date: ${today.toISOString().split('T')[0]}`);
-    console.log(`   Expected date (simple): ${now.toISOString().split('T')[0]}`);
+    console.log(`   Assigned to attendance date: ${this.formatDateKey(today)}`);
+    console.log(`   Punch's own calendar date (IST): ${this.formatDateKey(now)}`);
 
-    // 🔒 TRANSACTION START: Prevent race conditions
+    // 🔒 TRANSACTION: Prevent race conditions
+    //
+    // withTransaction, not startTransaction/commitTransaction by hand. The
+    // schema keeps ONE document per calendar date holding every employee, so
+    // at 09:00 the entire office contends on a single row. The manual API has
+    // no retry: the losing writer got a WriteConflict straight back, surfaced
+    // to the employee as an HTTP 400 carrying a raw driver message, and their
+    // punch simply did not happen. withTransaction re-runs the body on a
+    // transient conflict, which is exactly the case this is.
+    //
+    // The body must therefore be safe to run more than once — it is: every
+    // retry re-reads the record inside the new transaction and rebuilds its
+    // decision from that read, so a punch that landed on the winning attempt
+    // is visible to the next one and validatePunchEvent judges it correctly.
     const session = await mongoose.startSession();
-    session.startTransaction();
+
+    // Built once so the returned object is the same on every attempt.
+    const punchEvent = {
+      type: eventType,
+      timestamp: now,  // Store actual UTC timestamp
+      location: options.location,
+      ipAddress: options.ipAddress,
+      device: options.device,
+      manual: options.manual || false,
+      approvedBy: options.approvedBy,
+      notes: options.notes
+    };
 
     try {
-      // Get attendance record for the determined date (with session lock)
-      const record = await this.getAttendanceRecordWithSession(today, session);
+      let employee;
 
-      // Find or create employee record
-      let employee = record.getEmployee(userId);
+      await session.withTransaction(async () => {
+        // Get attendance record for the determined date (with session lock)
+        const record = await this.getAttendanceRecordWithSession(today, session);
 
-      if (!employee) {
-        const employeeData = await this.createEmployeeRecord(userId, today);
-        employee = record.upsertEmployee(employeeData);
-      }
+        // Find or create employee record
+        employee = record.getEmployee(userId);
 
-      // Validate punch event
-      // `options` is forwarded so trusted sources (biometric hardware, admin
-      // corrections) can relax rules that only make sense for live in-app
-      // punches. Omitting it — as every existing caller does — behaves exactly
-      // as before.
-      this.validatePunchEvent(employee, eventType, now, options);
+        if (!employee) {
+          const employeeData = await this.createEmployeeRecord(userId, today);
+          employee = record.upsertEmployee(employeeData);
+        }
 
-      // Add punch event with actual UTC timestamp
-      const punchEvent = {
-        type: eventType,
-        timestamp: now,  // Store actual UTC timestamp
-        location: options.location,
-        ipAddress: options.ipAddress,
-        device: options.device,
-        manual: options.manual || false,
-        approvedBy: options.approvedBy,
-        notes: options.notes
-      };
+        // Validate punch event
+        // `options` is forwarded so trusted sources (biometric hardware, admin
+        // corrections) can relax rules that only make sense for live in-app
+        // punches. Omitting it — as every existing caller does — behaves exactly
+        // as before.
+        this.validatePunchEvent(employee, eventType, now, options);
 
-      employee.events.push(punchEvent);
+        employee.events.push(punchEvent);
 
-      // Recalculate all derived data
-      this.recalculateEmployeeData(employee, today);
+        // Recalculate all derived data
+        this.recalculateEmployeeData(employee, today);
 
-      // Update daily statistics
-      this.updateDailyStats(record);
+        // Update daily statistics
+        this.updateDailyStats(record);
 
-      // Save the record within the transaction
-      await record.save({ session });
+        // Save the record within the transaction
+        await record.save({ session });
+      });
 
-      // 🔒 COMMIT: All operations succeeded
-      await session.commitTransaction();
       console.log(`   ✅ Transaction committed successfully`);
 
       return {
@@ -313,8 +358,7 @@ class AttendanceService {
       };
 
     } catch (error) {
-      // 🔒 ROLLBACK: Operation failed, undo all changes
-      await session.abortTransaction();
+      // withTransaction has already aborted by the time it throws.
       console.error(`   ❌ Transaction aborted:`, error.message);
       throw error;
 
@@ -359,7 +403,7 @@ class AttendanceService {
   async getUserShift(userId, date) {
     try {
       const user = await User.findById(userId).populate('assignedShift');
-      if (!user) return this.STANDARD_SHIFTS.MORNING;
+      if (!user) return this.getFallbackShift('user not found');
 
       // Use the new integrated shift system from User model
       const effectiveShift = await user.getEffectiveShift(date);
@@ -425,13 +469,40 @@ class AttendanceService {
         };
       }
 
-      // Ultimate fallback to morning shift
+      // Ultimate fallback to morning shift.
+      //
+      // Deliberately NOT flagged as a fallback: an employee with no shift
+      // configured is held to 09:00, which is the existing policy and what
+      // payroll has been computed against. It is logged because it is a
+      // configuration gap, not a normal state — a new hire nobody assigned a
+      // shift to is being judged against a shift they were never given.
+      console.warn(`⚠️  No shift configured for user ${userId} — defaulting to 09:00-18:00 and assessing lateness against it.`);
       return this.STANDARD_SHIFTS.MORNING;
 
     } catch (error) {
+      // A shift we could not read is not a 09:00 shift.
+      //
+      // This used to return the standard morning shift, so a transient
+      // database hiccup during the lookup produced a permanent late stamp
+      // against 09:00 and a docked punctuality score — indistinguishable
+      // afterwards from actually arriving late. The fallback still has times
+      // so the rest of the day's arithmetic works; it is flagged so that
+      // lateness, which is the part that cannot be guessed, is not asserted
+      // from it.
       console.error('Error getting user shift:', error);
-      return this.STANDARD_SHIFTS.MORNING;
+      return this.getFallbackShift(`lookup failed: ${error.message}`);
     }
+  }
+
+  /**
+   * The shift used when the real one could not be determined.
+   *
+   * Carries isFallback so lateness is skipped: see recalculateEmployeeData.
+   * Everything else (duration, working-day-over checks) is unaffected.
+   */
+  getFallbackShift(reason) {
+    console.warn(`⚠️  Falling back to default shift — ${reason}. Lateness will not be assessed for this record.`);
+    return { ...this.STANDARD_SHIFTS.MORNING, isFallback: true };
   }
 
   /**
@@ -443,19 +514,22 @@ class AttendanceService {
    */
   async getLeaveInfo(userId, date) {
     try {
-      const normalizedDate = this.normalizeDate(date);
+      // Overlap the whole day, never one instant — see getDayWindow().
+      const { start: dayStart, end: dayEnd } = this.getDayWindow(date);
 
       // Check for approved leave requests (including WFH)
+      // A leave covers this day if it starts before the day ends and ends on
+      // or after the day begins.
       const leaveRequest = await LeaveRequest.findOne({
         'employee._id': userId,
-        'period.start': { $lte: normalizedDate },
-        'period.end': { $gte: normalizedDate },
+        'period.start': { $lt: dayEnd },
+        'period.end': { $gte: dayStart },
         status: 'Approved' // Note: Status is capitalized in LeaveRequest model
       });
 
       // Check for holidays
       const holiday = await Holiday.findOne({
-        date: normalizedDate
+        date: { $gte: dayStart, $lt: dayEnd }
       });
 
       // Determine leave type
@@ -534,6 +608,18 @@ class AttendanceService {
         }
         if (currentStatus === 'ON_BREAK') {
           throw new Error('Employee is on break. Use BREAK_END first');
+        }
+        // A finished day must not silently reopen.
+        //
+        // WORKING and ON_BREAK were guarded but FINISHED was not, so a punch-in
+        // after the employee had punched out was accepted: the day flipped back
+        // to WORKING while departureTime still held the original punch-out, and
+        // hours kept accruing on every read until the auto-close job shut it
+        // again. Reopening a closed day is a correction, not something that
+        // should happen by accident, so it now needs to be asked for
+        // explicitly.
+        if (currentStatus === 'FINISHED' && !options.allowReopen) {
+          throw new Error('Employee has already finished for the day');
         }
 
         // Validate early punch-in for standard shifts (not for flexible shifts)
@@ -841,6 +927,33 @@ class AttendanceService {
 
       switch (event.type) {
         case 'PUNCH_IN':
+          // Close whatever is still open before starting a new session.
+          //
+          // This branch used to just overwrite currentWorkStart. Two punch-ins
+          // with no punch-out between them therefore threw away every second
+          // between them — while arrivalTime went on reporting the earlier one,
+          // so the record contradicted itself and the missing time was unpaid.
+          // The elapsed time is real: the employee was here from the arrival the
+          // record already claims, so it is counted.
+          if (currentWorkStart) {
+            const sessionDuration = (timestamp - currentWorkStart) / 1000;
+            if (sessionDuration > 0) {
+              workSeconds += sessionDuration;
+              longestWork = Math.max(longestWork, sessionDuration);
+            }
+          }
+          // A punch-in while on break is a BREAK_END that never arrived.
+          if (currentBreakStart) {
+            const sessionDuration = (timestamp - currentBreakStart) / 1000;
+            if (sessionDuration > 0) {
+              breakSeconds += sessionDuration;
+              longestBreak = Math.max(longestBreak, sessionDuration);
+            }
+            currentBreakStart = null;
+          }
+          // Reopening clears the departure. Otherwise a reopened day reports a
+          // punch-out that is now in the past of an open session.
+          departureTime = null;
           if (!arrivalTime) arrivalTime = timestamp;
           currentWorkStart = timestamp;
           currentStatus = 'WORKING';
@@ -978,7 +1091,11 @@ class AttendanceService {
     const isPaidLeave = employee.leaveInfo?.isPaidLeave || false;
 
     // Calculate late minutes first
-    const lateMinutes = (arrivalTime && employee.assignedShift?.startTime && !isFlexibleShift)
+    // A shift we had to guess cannot support a lateness verdict — see
+    // AttendanceService.getFallbackShift.
+    const isFallbackShift = employee.assignedShift?.isFallback === true;
+
+    const lateMinutes = (arrivalTime && employee.assignedShift?.startTime && !isFlexibleShift && !isFallbackShift)
       ? this.calculateLateMinutes(arrivalTime, employee.assignedShift.startTime)
       : 0;
 
@@ -1226,7 +1343,20 @@ class AttendanceService {
    * Get daily attendance report
    */
   async getDailyReport(date) {
-    const record = await this.getAttendanceRecord(date);
+    // A report is a read. It must not bring the day it is reporting on into
+    // existence.
+    const record = await this.findAttendanceRecord(date);
+
+    if (!record) {
+      return {
+        date: this.normalizeDate(date),
+        stats: this.getDefaultDailyStats(),
+        departmentStats: [],
+        specialDay: await this.getSpecialDayInfo(date),
+        employees: []
+      };
+    }
+
     await record.populate('employees.userId', 'name email department profileImage');
 
     return {
@@ -1323,8 +1453,11 @@ class AttendanceService {
       const normalizedDate = this.normalizeDate(date);
       const dayOfWeek = normalizedDate.getDay();
 
-      // Check if it's a holiday
-      const holiday = await Holiday.findOne({ date: normalizedDate });
+      // Check if it's a holiday. Day window, not equality — see getDayWindow():
+      // holidays are stored at UTC midnight and this server runs IST, so an
+      // exact match never fired and isHoliday was permanently false.
+      const { start: dayStart, end: dayEnd } = this.getDayWindow(date);
+      const holiday = await Holiday.findOne({ date: { $gte: dayStart, $lt: dayEnd } });
 
       return {
         isHoliday: !!holiday,
@@ -1354,6 +1487,56 @@ class AttendanceService {
   }
 
   /**
+   * The half-open instant range [start, end) covering one calendar day.
+   *
+   * ─── WHY THIS EXISTS ───
+   * Two date conventions live in this database and they are NOT the same
+   * instant:
+   *
+   *   attendance records  normalizeDate()  -> local midnight
+   *   leave periods       new Date("2026-08-05") -> UTC midnight, by spec
+   *   holidays            same as leave
+   *
+   * On a server running UTC the two collapse together and everything matches.
+   * This deployment runs Asia/Kolkata, where they are 5h30m apart, so any
+   * query that compared them as instants was silently wrong: single-day leave
+   * never matched, the first day of every multi-day leave was dropped, and
+   * every holiday lookup returned nothing.
+   *
+   * Matching against the whole day instead of one instant is correct for BOTH
+   * conventions, because in a timezone east of UTC the day's UTC midnight
+   * always falls inside that day's local window. Use this anywhere a stored
+   * date is compared to a calendar day.
+   */
+  getDayWindow(date) {
+    const start = this.normalizeDate(date);
+    const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
+    return { start, end };
+  }
+
+  /**
+   * Turn IST calendar parts into the instant an AttendanceRecord is keyed by.
+   *
+   * ─── WHY NOT Date.UTC ───
+   * This used to return UTC midnight of the IST date while AttendanceRecord.date
+   * is written by normalizeDate(), i.e. server-local midnight. On this IST
+   * deployment those are 5h30m apart, so anything that took the returned date
+   * and looked a record up by it matched NOTHING, silently and always:
+   * BiometricAttendanceService.getDayState read every scan as the first of the
+   * day, which is how a finished day could be reopened by walking past the
+   * terminal. Two places already worked around the gap with +/-1 day ranges
+   * (see AttendanceAutoCloseService.resolveDepartureTime and
+   * scripts/backfillClockOffset.js); those stay correct either way.
+   *
+   * Building the date from local parts produces exactly what normalizeDate
+   * would store for the same calendar day, so the value can be used as a key
+   * directly. The calendar day chosen is unchanged — only how it is expressed.
+   */
+  attendanceDateFromIST(istDate, dayOffset = 0) {
+    return new Date(istDate.year, istDate.month - 1, istDate.day + dayOffset, 0, 0, 0, 0);
+  }
+
+  /**
    * Get the correct attendance date for a punch event
    * For night shifts, punches after midnight belong to the PREVIOUS day's shift
    * Uses IST timezone regardless of server timezone
@@ -1374,7 +1557,7 @@ class AttendanceService {
     // If no shift or not a night shift, use the punch date in IST
     if (!shift || !shift.startTime || !shift.endTime) {
       // Return normalized IST date
-      return new Date(Date.UTC(istDate.year, istDate.month - 1, istDate.day, 0, 0, 0, 0));
+      return this.attendanceDateFromIST(istDate, 0);
     }
 
     const [startHour] = shift.startTime.split(':').map(Number);
@@ -1400,7 +1583,7 @@ class AttendanceService {
         console.log(`   Assigning to previous day: ${istDate.year}-${String(istDate.month).padStart(2, '0')}-${String(istDate.day - 1).padStart(2, '0')}`);
 
         // Return previous day's date in IST
-        return new Date(Date.UTC(istDate.year, istDate.month - 1, istDate.day - 1, 0, 0, 0, 0));
+        return this.attendanceDateFromIST(istDate, -1);
       } else if (punchHour >= startHour) {
         // Punch is in the evening (after shift start) IST
         // This belongs to TODAY's night shift
@@ -1408,7 +1591,7 @@ class AttendanceService {
         console.log(`   Assigning to current day: ${istDate.year}-${String(istDate.month).padStart(2, '0')}-${String(istDate.day).padStart(2, '0')}`);
 
         // Return current day's date in IST
-        return new Date(Date.UTC(istDate.year, istDate.month - 1, istDate.day, 0, 0, 0, 0));
+        return this.attendanceDateFromIST(istDate, 0);
       } else {
         // Punch is between endHour and startHour (the "off" hours) IST
         // For example, punching at 10:00 AM IST for a 20:00-05:00 shift
@@ -1418,12 +1601,12 @@ class AttendanceService {
         console.log(`   Assigning to current day: ${istDate.year}-${String(istDate.month).padStart(2, '0')}-${String(istDate.day).padStart(2, '0')}`);
 
         // Return current day's date in IST
-        return new Date(Date.UTC(istDate.year, istDate.month - 1, istDate.day, 0, 0, 0, 0));
+        return this.attendanceDateFromIST(istDate, 0);
       }
     }
 
     // Not a night shift, use the punch date in IST
-    return new Date(Date.UTC(istDate.year, istDate.month - 1, istDate.day, 0, 0, 0, 0));
+    return this.attendanceDateFromIST(istDate, 0);
   }
 
   formatDateKey(date) {
