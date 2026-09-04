@@ -10,6 +10,7 @@ import {
   ChevronDown,
   FileText,
   Check,
+  Send,
   Loader2,
   X,
 } from "lucide-react";
@@ -86,6 +87,10 @@ const PayrollRegister = ({ payPeriod, onClose, onPayPeriodChange }) => {
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState(null);
   const [generating, setGenerating] = useState(false);
+  const [publishing, setPublishing] = useState(false);
+  // A bulk run waiting for the admin to say what to do about rows that already
+  // have a payslip, or that would pay nothing.
+  const [pendingBulk, setPendingBulk] = useState(null);
   const [result, setResult] = useState(null);
 
   const [search, setSearch] = useState("");
@@ -155,6 +160,22 @@ const PayrollRegister = ({ payPeriod, onClose, onPayPeriodChange }) => {
   useEffect(() => {
     if (MONTH_RE.test(payPeriod || "")) setPeriod(payPeriod);
   }, [payPeriod]);
+
+  // Escape closes the register — but only when it is not the answer to
+  // something else on screen. While a cell is being edited Escape cancels the
+  // edit, and while a confirmation is up it dismisses that; closing the whole
+  // screen out from under either would lose work.
+  useEffect(() => {
+    const onKeyDown = (event) => {
+      if (event.key !== "Escape") return;
+      if (editing) return;
+      if (pendingBulk) { setPendingBulk(null); return; }
+      if (confirmReplace) { setConfirmReplace(null); return; }
+      onClose();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [editing, pendingBulk, confirmReplace, onClose]);
 
   useEffect(() => {
     if (editing && inputRef.current) inputRef.current.focus();
@@ -323,6 +344,15 @@ const PayrollRegister = ({ payPeriod, onClose, onPayPeriodChange }) => {
     [rows]
   );
 
+  // Drafts are the ones the employee cannot see yet. Their own Payslips page
+  // only ever returns published payslips, so a draft is invisible to the
+  // person it belongs to — which is why a payslip issued here appeared
+  // nowhere.
+  const draftRows = useMemo(
+    () => visible.filter((r) => r.payslip?.exists && !r.payslip.isPublished),
+    [visible]
+  );
+
   const totals = useMemo(
     () =>
       visible.reduce(
@@ -362,7 +392,48 @@ const PayrollRegister = ({ payPeriod, onClose, onPayPeriodChange }) => {
   );
 
   /**
-   * Issue a payslip for ONE employee.
+   * Make payslips visible to the employees they belong to, by employee id.
+   *
+   * Declared before the generate paths because both of them finish by calling
+   * it: a payslip that stops at "draft" is one the employee cannot see, and a
+   * payroll run that leaves everyone unable to see their payslip has not
+   * really run. Publishing also sends each of them the notification.
+   *
+   * Returns the server's answer so the caller can report it; never throws.
+   */
+  const publishIds = useCallback(
+    async (ids, publish = true) => {
+      if (!ids.length) return { published: 0, unchanged: 0, details: [] };
+
+      const res = await fetch(`${API_BASE}/api/auto-payroll/register/publish`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ payPeriod: period, employeeIds: ids, publish }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error || "Could not publish");
+
+      const changed = new Set(
+        (data.details || [])
+          .filter((d) => d.status === "published" || d.status === "unpublished")
+          .map((d) => String(d.employeeId))
+      );
+
+      setRows((prev) =>
+        prev.map((row) =>
+          changed.has(String(row.employee._id)) && row.payslip?.exists
+            ? { ...row, payslip: { ...row.payslip, isPublished: publish } }
+            : row
+        )
+      );
+
+      return data;
+    },
+    [period, token]
+  );
+
+  /**
+   * Issue a payslip for ONE employee, and publish it.
    *
    * The same endpoint the bulk run uses, with a single row — so a payslip
    * issued from here and one issued from the bulk button come out of the same
@@ -415,11 +486,27 @@ const PayrollRegister = ({ payPeriod, onClose, onPayPeriodChange }) => {
           });
         }
 
+        // Generated is not delivered. Publish it in the same breath, or the
+        // employee still cannot see the payslip that was just issued for them.
+        let publishedNow = false;
+        if (detail.status === "generated") {
+          try {
+            const published = await publishIds([id], true);
+            publishedNow = (published.published || 0) > 0;
+          } catch (publishError) {
+            setResult({
+              error: `${row.employee.name}: payslip written, but publishing it failed — ${publishError.message}. Use the Publish button on the row.`,
+            });
+            return;
+          }
+        }
+
         setResult({
           single: true,
           message:
             detail.status === "generated"
-              ? `${row.employee.name}: payslip ${replace ? "replaced" : "generated"} for ${monthLabel(period)}.`
+              ? `${row.employee.name}: payslip ${replace ? "replaced" : "generated"} for ${monthLabel(period)}` +
+                (publishedNow ? " and published — they have been notified." : ".")
               : `${row.employee.name}: ${detail.reason || "nothing to do"}.`,
         });
       } catch (err) {
@@ -432,32 +519,184 @@ const PayrollRegister = ({ payPeriod, onClose, onPayPeriodChange }) => {
         });
       }
     },
-    [period, token]
+    [period, token, publishIds]
   );
 
-  const generate = async () => {
+  /**
+   * Make issued payslips visible to the employees they belong to.
+   *
+   * Generating creates a DRAFT, which is right — a payslip should be looked at
+   * before the person is told about it — but nothing here could publish one,
+   * so every payslip issued from the register stayed invisible on the
+   * employee's own page. Publishing also sends them the notification.
+   *
+   * Sets the state rather than toggling it, so publishing twice is harmless.
+   */
+  const publishRows = useCallback(
+    async (targets, publish = true) => {
+      if (!targets.length) return;
+      const ids = targets.map((r) => String(r.employee._id));
+
+      setPublishing(true);
+      setResult(null);
+      try {
+        const data = await publishIds(ids, publish);
+
+        setResult({
+          single: true,
+          message: publish
+            ? `${data.published} payslip${data.published === 1 ? "" : "s"} published for ${monthLabel(period)}` +
+              (data.unchanged ? `, ${data.unchanged} already were` : "") +
+              (data.published ? " — the employees have been notified." : ".")
+            : `${data.published} payslip${data.published === 1 ? "" : "s"} hidden from employees again.`,
+        });
+      } catch (err) {
+        setResult({ error: err.message });
+      } finally {
+        setPublishing(false);
+      }
+    },
+    [publishIds, period]
+  );
+
+  /**
+   * Issue payslips for every row currently on screen.
+   *
+   * ─── WHAT THIS USED TO GET WRONG ───
+   *
+   * 1. It always sent skipExisting: true. An admin who corrected five people's
+   *    paid days and pressed Generate got those five SKIPPED, because they
+   *    already had a payslip — so the corrections never reached a payslip and
+   *    nothing said so. Whether to replace is now asked, not assumed.
+   *
+   * 2. It never touched the table afterwards. Every row still showed a
+   *    Generate button, the unpublished count stayed at zero, and pressing the
+   *    button again re-posted the lot. The register described a state it was
+   *    no longer in.
+   *
+   * 3. Failures were a number. "failed 1" out of forty rows, with no way to
+   *    find out which one or why.
+   */
+  const runGenerate = useCallback(
+    async (targets, { replace }) => {
+      if (!targets.length) return;
+      setPendingBulk(null);
+      setGenerating(true);
+      setResult(null);
+
+      try {
+        const res = await fetch(`${API_BASE}/api/auto-payroll/register/generate`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({
+            payPeriod: period,
+            skipExisting: !replace,
+            rows: targets.map((r) => ({ employeeId: r.employee._id, inputs: r.inputs })),
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok || !data.success) throw new Error(data.error || "Generation failed");
+
+        // Put the outcome back on the table. A row that now has a payslip has
+        // to say so, or the next click generates it all over again.
+        const byId = new Map((data.details || []).map((d) => [String(d.employeeId), d]));
+        setRows((prev) =>
+          prev.map((row) => {
+            const detail = byId.get(String(row.employee._id));
+            if (!detail || detail.status !== "generated") return row;
+            return {
+              ...row,
+              payslip: {
+                exists: true,
+                id: detail.payslipId,
+                netSalary: detail.netSalary,
+                isPublished: false,
+              },
+            };
+          })
+        );
+
+        // Corrections that made it onto a payslip are no longer pending.
+        setEdited((prev) => {
+          const next = { ...prev };
+          for (const [id, detail] of byId) if (detail.status === "generated") delete next[id];
+          return next;
+        });
+
+        const nameOf = (employeeId) => {
+          const row = targets.find((r) => String(r.employee._id) === String(employeeId));
+          return row ? row.employee.name : employeeId;
+        };
+
+        const failures = (data.details || []).filter((d) => d.status === "failed");
+        const skipped = (data.details || []).filter((d) => d.status === "skipped");
+        const generatedIds = (data.details || [])
+          .filter((d) => d.status === "generated")
+          .map((d) => String(d.employeeId));
+
+        // Publish what was just written.
+        //
+        // A payroll run that stops at "draft" has delivered nothing: the
+        // employee's own Payslips page returns published payslips only, so
+        // every person it was run for would still see an empty page. The
+        // payslips are already correct and already saved by this point, so a
+        // publishing failure is reported without pretending the generation
+        // failed too — the Publish button is still there to finish the job.
+        let publishedCount = 0;
+        let publishError = "";
+        if (generatedIds.length) {
+          try {
+            const published = await publishIds(generatedIds, true);
+            publishedCount = published.published || 0;
+          } catch (err) {
+            publishError = `Payslips were written but publishing them failed — ${err.message}. Use “Publish drafts” to finish.`;
+          }
+        }
+
+        setResult({
+          generated: data.generated,
+          skipped: data.skipped,
+          failed: data.failed,
+          published: publishedCount,
+          publishError,
+          // Named, not counted — a bulk run that half worked is useless if you
+          // cannot tell who it missed.
+          failureText: failures.length
+            ? `Failed: ${failures.map((d) => `${nameOf(d.employeeId)} (${d.error})`).join("; ")}`
+            : "",
+          skippedText: skipped.length
+            ? `Left alone because they already have a payslip: ${skipped.map((d) => nameOf(d.employeeId)).join(", ")}`
+            : "",
+        });
+      } catch (err) {
+        setResult({ error: err.message });
+      } finally {
+        setGenerating(false);
+      }
+    },
+    [period, token, publishIds]
+  );
+
+  /**
+   * Look before leaping. Anything an admin would want to know BEFORE forty
+   * payslips are written is worked out here and put in front of them.
+   */
+  const generate = useCallback(() => {
     if (!visible.length) return;
-    setGenerating(true);
-    setResult(null);
-    try {
-      const res = await fetch(`${API_BASE}/api/auto-payroll/register/generate`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
-          payPeriod: period,
-          skipExisting: true,
-          rows: visible.map((r) => ({ employeeId: r.employee._id, inputs: r.inputs })),
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok || !data.success) throw new Error(data.error || "Generation failed");
-      setResult(data);
-    } catch (err) {
-      setResult({ error: err.message });
-    } finally {
-      setGenerating(false);
+
+    const existing = visible.filter((r) => r.payslip?.exists);
+    const corrected = existing.filter((r) => edited[String(r.employee._id)]);
+    // A payslip that pays nothing is almost always an attendance problem, not
+    // a payroll decision.
+    const zeroPay = visible.filter((r) => (r.netPayment ?? 0) <= 0);
+
+    if (!existing.length && !zeroPay.length) {
+      runGenerate(visible, { replace: false });
+      return;
     }
-  };
+
+    setPendingBulk({ targets: visible, existing, corrected, zeroPay });
+  }, [visible, edited, runGenerate]);
 
   // ── cells ───────────────────────────────────────────────────────────
   //
@@ -502,8 +741,8 @@ const PayrollRegister = ({ payPeriod, onClose, onPayPeriodChange }) => {
             }. Every figure that depends on it is recalculated.`}
             className={`w-7 h-6 rounded font-semibold text-[11px] leading-none transition-colors ${
               value
-                ? "bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/35"
-                : "bg-[#232945] text-gray-400 hover:bg-[#2c3450] hover:text-gray-200"
+                ? "bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/35"
+                : "bg-slate-200 dark:bg-[#232945] text-slate-500 dark:text-gray-400 hover:bg-slate-200 dark:hover:bg-[#2c3450] hover:text-gray-200"
             } ${isChanged ? "ring-1 ring-amber-400/60" : ""}`}
           >
             {value ? "Y" : "N"}
@@ -519,7 +758,7 @@ const PayrollRegister = ({ payPeriod, onClose, onPayPeriodChange }) => {
             ref={inputRef}
             type="number"
             step={spec.step || 1}
-            className="w-24 bg-[#0b0f18] text-white text-right px-1 py-0.5 rounded outline-none ring-1 ring-blue-400"
+            className="w-24 bg-white dark:bg-[#0b0f18] text-slate-900 dark:text-white text-right px-1 py-0.5 rounded outline-none ring-1 ring-blue-400"
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             onBlur={() => {
@@ -542,7 +781,7 @@ const PayrollRegister = ({ payPeriod, onClose, onPayPeriodChange }) => {
     return (
       <td
         className={`px-2 py-1.5 text-right whitespace-nowrap tabular-nums cursor-cell ${
-          isChanged ? "bg-amber-500/15 text-amber-200" : "text-blue-200"
+          isChanged ? "bg-amber-500/15 text-amber-700 dark:text-amber-200" : "text-blue-700 dark:text-blue-200"
         }`}
         onDoubleClick={() => {
           // Two decimals, not the raw float: a cell showing 986.67 must open
@@ -559,21 +798,39 @@ const PayrollRegister = ({ payPeriod, onClose, onPayPeriodChange }) => {
   };
 
   const th = "px-2 py-2 text-xs font-semibold whitespace-nowrap";
-  const group = "px-2 py-1 text-[10px] uppercase tracking-wider text-center border-l border-[#2a3346]";
+  const group = "px-2 py-1 text-[10px] uppercase tracking-wider text-center border-l border-slate-200 dark:border-[#2a3346]";
 
   return (
-    <div className="fixed inset-0 z-50 bg-[#070a12]/95 backdrop-blur-sm flex flex-col">
+    <div className="fixed inset-0 z-50 bg-slate-100 dark:bg-[#070a12]/95 backdrop-blur-sm flex flex-col">
       {/* Toolbar */}
-      <div className="flex flex-wrap items-center gap-3 px-4 py-3 border-b border-[#232945] bg-[#0d1220]">
+      <div className="flex flex-wrap items-center gap-3 px-4 py-3 border-b border-slate-200 dark:border-[#232945] bg-white dark:bg-[#0d1220]">
+        {/*
+          Closing is the one control that must be findable without reading
+          anything, so it sits in the corner every window puts it in rather
+          than at the end of a row of payroll actions — where the button next
+          to it issues payslips for the whole company.
+        */}
+        <button
+          onClick={onClose}
+          aria-label="Close the payroll register"
+          title="Close (Esc)"
+          className="shrink-0 p-2 -ml-1 rounded-lg text-slate-500 dark:text-gray-400 hover:bg-slate-100 dark:hover:bg-[#1a2032] hover:text-slate-900 dark:hover:text-white transition-colors"
+        >
+          <X className="w-5 h-5" />
+        </button>
+
         <div>
-          <h2 className="text-lg font-semibold text-white">Payroll Register</h2>
-          <p className="text-xs text-gray-400">
+          <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Payroll Register</h2>
+          <p className="text-xs text-slate-500 dark:text-gray-400">
             {visible.length} of {rows.length} employees
             {issuedCount > 0 && (
-              <span className="text-emerald-300"> · {issuedCount} already issued</span>
+              <span className="text-emerald-700 dark:text-emerald-300"> · {issuedCount} issued</span>
+            )}
+            {draftRows.length > 0 && (
+              <span className="text-indigo-600 dark:text-indigo-300"> · {draftRows.length} unpublished</span>
             )}
             {Object.keys(edited).length > 0 && (
-              <span className="text-amber-300"> · {Object.keys(edited).length} edited</span>
+              <span className="text-amber-600 dark:text-amber-300"> · {Object.keys(edited).length} edited</span>
             )}
           </p>
         </div>
@@ -584,7 +841,7 @@ const PayrollRegister = ({ payPeriod, onClose, onPayPeriodChange }) => {
             onClick={() => changePeriod(shiftMonth(period, -1))}
             disabled={loading}
             title="Previous month"
-            className="p-1.5 rounded-lg bg-[#1a2032] text-gray-300 hover:bg-[#232945] disabled:opacity-40"
+            className="p-1.5 rounded-lg bg-slate-100 dark:bg-[#1a2032] text-slate-600 dark:text-gray-300 hover:bg-slate-200 dark:hover:bg-[#232945] disabled:opacity-40"
           >
             <ChevronLeft className="w-4 h-4" />
           </button>
@@ -595,23 +852,23 @@ const PayrollRegister = ({ payPeriod, onClose, onPayPeriodChange }) => {
             onChange={(e) => changePeriod(e.target.value)}
             disabled={loading}
             title={monthLabel(period)}
-            className="bg-[#0f1419] border border-[#232945] rounded-lg px-2 py-1.5 text-sm text-white outline-none focus:border-blue-500 disabled:opacity-50"
+            className="bg-white dark:bg-[#0f1419] border border-slate-200 dark:border-[#232945] rounded-lg px-2 py-1.5 text-sm text-slate-900 dark:text-white outline-none focus:border-blue-500 disabled:opacity-50"
           />
 
           <button
             onClick={() => changePeriod(shiftMonth(period, 1))}
             disabled={loading}
             title="Next month"
-            className="p-1.5 rounded-lg bg-[#1a2032] text-gray-300 hover:bg-[#232945] disabled:opacity-40"
+            className="p-1.5 rounded-lg bg-slate-100 dark:bg-[#1a2032] text-slate-600 dark:text-gray-300 hover:bg-slate-200 dark:hover:bg-[#232945] disabled:opacity-40"
           >
             <ChevronRight className="w-4 h-4" />
           </button>
         </div>
 
         <div className="relative ml-2">
-          <Search className="w-4 h-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500" />
+          <Search className="w-4 h-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-gray-500" />
           <input
-            className="w-64 bg-[#0f1419] border border-[#232945] rounded-lg pl-8 pr-3 py-1.5 text-sm text-white placeholder-gray-500 outline-none focus:border-blue-500"
+            className="w-64 bg-white dark:bg-[#0f1419] border border-slate-200 dark:border-[#232945] rounded-lg pl-8 pr-3 py-1.5 text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-gray-500 outline-none focus:border-blue-500"
             placeholder="Search name, ID, designation…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -619,7 +876,7 @@ const PayrollRegister = ({ payPeriod, onClose, onPayPeriodChange }) => {
         </div>
 
         <select
-          className="bg-[#0f1419] border border-[#232945] rounded-lg px-2 py-1.5 text-sm text-white"
+          className="bg-white dark:bg-[#0f1419] border border-slate-200 dark:border-[#232945] rounded-lg px-2 py-1.5 text-sm text-slate-900 dark:text-white"
           value={department}
           onChange={(e) => setDepartment(e.target.value)}
         >
@@ -628,7 +885,7 @@ const PayrollRegister = ({ payPeriod, onClose, onPayPeriodChange }) => {
         </select>
 
         <select
-          className="bg-[#0f1419] border border-[#232945] rounded-lg px-2 py-1.5 text-sm text-white"
+          className="bg-white dark:bg-[#0f1419] border border-slate-200 dark:border-[#232945] rounded-lg px-2 py-1.5 text-sm text-slate-900 dark:text-white"
           value={pfFilter}
           onChange={(e) => setPfFilter(e.target.value)}
         >
@@ -638,7 +895,7 @@ const PayrollRegister = ({ payPeriod, onClose, onPayPeriodChange }) => {
         </select>
 
         <select
-          className="bg-[#0f1419] border border-[#232945] rounded-lg px-2 py-1.5 text-sm text-white"
+          className="bg-white dark:bg-[#0f1419] border border-slate-200 dark:border-[#232945] rounded-lg px-2 py-1.5 text-sm text-slate-900 dark:text-white"
           value={esiFilter}
           onChange={(e) => setEsiFilter(e.target.value)}
         >
@@ -647,7 +904,7 @@ const PayrollRegister = ({ payPeriod, onClose, onPayPeriodChange }) => {
           <option value="N">ESI: N</option>
         </select>
 
-        <label className="flex items-center gap-1.5 text-sm text-gray-300">
+        <label className="flex items-center gap-1.5 text-sm text-slate-600 dark:text-gray-300">
           <input type="checkbox" checked={editedOnly} onChange={(e) => setEditedOnly(e.target.checked)} />
           Edited only
         </label>
@@ -656,63 +913,194 @@ const PayrollRegister = ({ payPeriod, onClose, onPayPeriodChange }) => {
           <button
             onClick={load}
             disabled={loading}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#1a2032] text-gray-200 text-sm hover:bg-[#232945] disabled:opacity-50"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-[#1a2032] text-slate-700 dark:text-gray-200 text-sm hover:bg-slate-200 dark:hover:bg-[#232945] disabled:opacity-50"
           >
             <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} /> Reload
           </button>
+          {draftRows.length > 0 && (
+            <button
+              onClick={() => publishRows(draftRows, true)}
+              disabled={publishing}
+              title="Drafts are invisible on the employee's own Payslips page until they are published"
+              className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-gradient-to-r from-indigo-600 to-violet-600 text-white text-sm font-medium hover:from-indigo-700 disabled:opacity-50"
+            >
+              {publishing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+              Publish {draftRows.length} draft{draftRows.length === 1 ? "" : "s"}
+            </button>
+          )}
           <button
             onClick={generate}
             disabled={generating || !visible.length}
             className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-gradient-to-r from-green-600 to-emerald-600 text-white text-sm font-medium hover:from-green-700 disabled:opacity-50"
           >
-            <Play className="w-4 h-4" /> Generate {visible.length} payslip{visible.length === 1 ? "" : "s"}
-          </button>
-          <button onClick={onClose} className="px-3 py-1.5 rounded-lg bg-[#1a2032] text-gray-300 text-sm hover:bg-[#232945]">
-            Close
+            <Play className="w-4 h-4" /> Generate &amp; publish {visible.length} payslip{visible.length === 1 ? "" : "s"}
           </button>
         </div>
       </div>
 
       {/* Messages */}
       {loadError && (
-        <div className="px-4 py-2 bg-red-500/10 text-red-300 text-sm flex items-center gap-2">
+        <div className="px-4 py-2 bg-red-500/10 text-red-600 dark:text-red-300 text-sm flex items-center gap-2">
           <AlertTriangle className="w-4 h-4" /> {loadError}
         </div>
       )}
       {errors.length > 0 && (
-        <div className="px-4 py-2 bg-amber-500/10 text-amber-200 text-sm">
+        <div className="px-4 py-2 bg-amber-500/10 text-amber-700 dark:text-amber-200 text-sm">
           {errors.length} employee(s) could not be calculated: {errors.map((e) => `${e.name} (${e.error})`).join("; ")}
         </div>
       )}
       {discarded && (
-        <div className="px-4 py-2 bg-amber-500/10 text-amber-200 text-sm flex items-center gap-2">
+        <div className="px-4 py-2 bg-amber-500/10 text-amber-700 dark:text-amber-200 text-sm flex items-center gap-2">
           <AlertTriangle className="w-4 h-4" /> {discarded}
           <button
             onClick={() => setDiscarded(null)}
-            className="ml-auto text-amber-300/70 hover:text-amber-100"
+            className="ml-auto text-amber-600 dark:text-amber-300/70 hover:text-amber-100"
             title="Dismiss"
           >
             <X className="w-3.5 h-3.5" />
           </button>
         </div>
       )}
+      {/*
+        Everything worth knowing BEFORE a bulk run writes payslips. Shown
+        instead of a browser confirm() so the actual numbers are on screen
+        while the decision is made.
+      */}
+      {pendingBulk && (
+        <div className="px-4 py-3 bg-slate-50 dark:bg-[#131a2c] border-b border-slate-200 dark:border-[#232945] text-sm">
+          <p className="text-slate-700 dark:text-gray-200 font-medium">
+            About to issue and publish payslips for {pendingBulk.targets.length} employee
+            {pendingBulk.targets.length === 1 ? "" : "s"} for {monthLabel(period)}.
+          </p>
+          <p className="text-[13px] text-slate-500 dark:text-gray-400">
+            Publishing makes each payslip visible on that employee&rsquo;s own Payslips page and notifies them.
+          </p>
+
+          <ul className="mt-1.5 space-y-1 text-[13px]">
+            {pendingBulk.existing.length > 0 && (
+              <li className="text-amber-700 dark:text-amber-200">
+                {pendingBulk.existing.length} already {pendingBulk.existing.length === 1 ? "has" : "have"} a payslip
+                {pendingBulk.corrected.length > 0 && (
+                  <span className="text-amber-600 dark:text-amber-300">
+                    {" "}— and {pendingBulk.corrected.length} of those{" "}
+                    {pendingBulk.corrected.length === 1 ? "has" : "have"} unsaved corrections
+                    ({pendingBulk.corrected.map((r) => r.employee.name).join(", ")}).
+                    Skipping them leaves the old figures in place.
+                  </span>
+                )}
+              </li>
+            )}
+            {pendingBulk.zeroPay.length > 0 && (
+              <li className="text-rose-600 dark:text-rose-300">
+                {pendingBulk.zeroPay.length} would pay nothing or less:{" "}
+                {pendingBulk.zeroPay.slice(0, 6).map((r) => r.employee.name).join(", ")}
+                {pendingBulk.zeroPay.length > 6 ? ` and ${pendingBulk.zeroPay.length - 6} more` : ""}.
+                Usually an attendance problem rather than a payroll decision — worth checking their paid days first.
+              </li>
+            )}
+          </ul>
+
+          <div className="mt-2.5 flex flex-wrap items-center gap-2">
+            {pendingBulk.existing.length > 0 ? (
+              <>
+                <button
+                  onClick={() => runGenerate(pendingBulk.targets, { replace: true })}
+                  className="px-3 py-1.5 rounded-lg bg-amber-500/20 text-amber-800 dark:text-amber-100 hover:bg-amber-500/30 text-sm font-medium"
+                >
+                  Replace all {pendingBulk.targets.length}
+                </button>
+                <button
+                  onClick={() => runGenerate(pendingBulk.targets, { replace: false })}
+                  className="px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-[#1a2032] text-slate-700 dark:text-gray-200 hover:bg-slate-200 dark:hover:bg-[#232945] text-sm"
+                >
+                  Only the {pendingBulk.targets.length - pendingBulk.existing.length} without one
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={() => runGenerate(pendingBulk.targets, { replace: false })}
+                className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-green-600 to-emerald-600 text-white text-sm font-medium hover:from-green-700"
+              >
+                Generate &amp; publish all {pendingBulk.targets.length}
+              </button>
+            )}
+            <button
+              onClick={() => setPendingBulk(null)}
+              className="px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-[#1a2032] text-slate-500 dark:text-gray-400 hover:bg-slate-200 dark:hover:bg-[#232945] text-sm"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
       {result && (
-        <div className={`px-4 py-2 text-sm ${result.error ? "bg-red-500/10 text-red-300" : "bg-emerald-500/10 text-emerald-200"}`}>
-          {result.error
-            ? result.error
-            : result.single
-            ? result.message
-            : `Generated ${result.generated}, skipped ${result.skipped}, failed ${result.failed}.`}
+        <div className={`px-4 py-2 text-sm ${result.error ? "bg-red-500/10 text-red-600 dark:text-red-300" : "bg-emerald-500/10 text-emerald-700 dark:text-emerald-200"}`}>
+          {result.error ? (
+            result.error
+          ) : result.single ? (
+            result.message
+          ) : (
+            <>
+              <span>
+                {result.generated} payslip{result.generated === 1 ? "" : "s"} generated
+                {result.published ? ` and published` : ""}
+                {result.skipped ? `, ${result.skipped} left alone` : ""}
+                {result.failed ? `, ${result.failed} failed` : ""}.
+                {result.published ? " The employees have been notified." : ""}
+              </span>
+              {result.skippedText && (
+                <span className="block mt-0.5 text-[13px] text-emerald-700 dark:text-emerald-200/70">{result.skippedText}</span>
+              )}
+              {result.failureText && (
+                <span className="block mt-0.5 text-[13px] text-red-600 dark:text-red-300">{result.failureText}</span>
+              )}
+              {result.publishError && (
+                <span className="block mt-0.5 text-[13px] text-amber-700 dark:text-amber-200">{result.publishError}</span>
+              )}
+            </>
+          )}
         </div>
       )}
 
       {/* Register */}
       <div className="flex-1 overflow-auto">
         {loading ? (
-          <div className="p-8 text-center text-gray-400">Building the register…</div>
+          <div className="p-10 text-center">
+            <RefreshCw className="w-5 h-5 mx-auto animate-spin text-slate-400 dark:text-gray-500" />
+            <p className="mt-3 text-sm text-slate-500 dark:text-gray-400">
+              Building the register for {monthLabel(period)} — reading everyone&rsquo;s attendance for the month.
+            </p>
+          </div>
+        ) : !rows.length ? (
+          <div className="p-10 text-center">
+            <p className="text-sm font-medium text-slate-700 dark:text-gray-200">
+              Nobody to pay for {monthLabel(period)}.
+            </p>
+            <p className="mt-1 text-sm text-slate-500 dark:text-gray-400">
+              The register lists every active employee. If this looks wrong, check that people are marked active
+              on the employee page.
+            </p>
+          </div>
+        ) : !visible.length ? (
+          <div className="p-10 text-center">
+            <p className="text-sm font-medium text-slate-700 dark:text-gray-200">
+              No employee matches these filters.
+            </p>
+            <p className="mt-1 text-sm text-slate-500 dark:text-gray-400">
+              {rows.length} {rows.length === 1 ? "employee is" : "employees are"} on the register for{" "}
+              {monthLabel(period)}.
+            </p>
+            <button
+              onClick={() => { setSearch(""); setDepartment("all"); setPfFilter("all"); setEsiFilter("all"); setEditedOnly(false); }}
+              className="mt-3 px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-[#1a2032] text-slate-700 dark:text-gray-200 text-sm hover:bg-slate-200 dark:hover:bg-[#232945]"
+            >
+              Clear filters
+            </button>
+          </div>
         ) : (
-          <table className="text-xs text-gray-200 border-collapse">
-            <thead className="sticky top-0 z-10 bg-[#0d1220] text-gray-300">
+          <table className="text-xs text-slate-700 dark:text-gray-200 border-collapse">
+            <thead className="sticky top-0 z-10 bg-white dark:bg-[#0d1220] text-slate-600 dark:text-gray-300">
               {/*
                 The banded row of the payroll sheet. Every colSpan below is
                 counted against the body row — 35 columns — because a band that
@@ -732,21 +1120,21 @@ const PayrollRegister = ({ payPeriod, onClose, onPayPeriodChange }) => {
                   1  CTC
                   1  row actions
               */}
-              <tr className="border-b border-[#232945]">
+              <tr className="border-b border-slate-200 dark:border-[#232945]">
                 <th className={group} colSpan={8}></th>
-                <th className={`${group} bg-[#11162a]`} colSpan={1}></th>
-                <th className={`${group} bg-[#151b2e] text-gray-200`} colSpan={6}>Salary Component</th>
-                <th className={`${group} bg-[#122019] text-emerald-200`} colSpan={6}>Gross Earnings</th>
+                <th className={`${group} bg-slate-100 dark:bg-[#11162a]`} colSpan={1}></th>
+                <th className={`${group} bg-slate-100 dark:bg-[#151b2e] text-slate-700 dark:text-gray-200`} colSpan={6}>Salary Component</th>
+                <th className={`${group} bg-emerald-50 dark:bg-[#122019] text-emerald-700 dark:text-emerald-200`} colSpan={6}>Gross Earnings</th>
                 <th className={group} colSpan={2}></th>
-                <th className={`${group} bg-[#201812] text-amber-200`} colSpan={7}>Deductions from Salary</th>
+                <th className={`${group} bg-amber-50 dark:bg-[#201812] text-amber-700 dark:text-amber-200`} colSpan={7}>Deductions from Salary</th>
                 <th className={group} colSpan={1}></th>
-                <th className={`${group} bg-[#122019] text-emerald-200`} colSpan={1}>Net Payment</th>
-                <th className={`${group} bg-[#151b2e] text-gray-200`} colSpan={2}>Employer&rsquo;s Contribution</th>
+                <th className={`${group} bg-emerald-50 dark:bg-[#122019] text-emerald-700 dark:text-emerald-200`} colSpan={1}>Net Payment</th>
+                <th className={`${group} bg-slate-100 dark:bg-[#151b2e] text-slate-700 dark:text-gray-200`} colSpan={2}>Employer&rsquo;s Contribution</th>
                 <th className={group} colSpan={1}></th>
                 <th className={group} colSpan={1}></th>
               </tr>
-              <tr className="border-b border-[#232945]">
-                <th className={`${th} text-left sticky left-0 bg-[#0d1220]`}>Sl. No</th>
+              <tr className="border-b border-slate-200 dark:border-[#232945]">
+                <th className={`${th} text-left sticky left-0 bg-white dark:bg-[#0d1220]`}>Sl. No</th>
                 <th className={`${th} text-left`}>Employee ID</th>
                 <th className={`${th} text-left`}>Name</th>
                 <th className={`${th} text-left`}>Designation</th>
@@ -789,17 +1177,33 @@ const PayrollRegister = ({ payPeriod, onClose, onPayPeriodChange }) => {
                 const id = String(row.employee._id);
                 const isEdited = Boolean(edited[id]);
                 const why = row.explanation;
+
+                // The row's background, named once because the frozen Sl. No
+                // cell has to repeat it. `bg-inherit` there looked right until
+                // the table scrolled sideways — a <tr> has no background of its
+                // own, so the frozen column was transparent and thirty columns
+                // of figures slid underneath it.
+                //
+                // Zebra striping earns its place at this width: without it the
+                // eye loses the row somewhere around Ptax.
+                const rowBg = isEdited
+                  ? "bg-amber-50 dark:bg-amber-500/[0.07] hover:bg-amber-100 dark:hover:bg-amber-500/[0.12]"
+                  : index % 2
+                  ? "bg-slate-50/70 dark:bg-white/[0.015] hover:bg-slate-100 dark:hover:bg-[#111726]"
+                  : "bg-white dark:bg-transparent hover:bg-slate-100 dark:hover:bg-[#111726]";
                 return (
                   <React.Fragment key={id}>
                   <tr
-                    className={`border-b border-[#1a2032] hover:bg-[#111726] ${
-                      isEdited ? "bg-amber-500/[0.04]" : ""
-                    } ${pricing[id] ? "opacity-60" : ""}`}
+                    className={`border-b border-slate-200 dark:border-[#1a2032] ${rowBg} ${
+                      pricing[id] ? "opacity-60" : ""
+                    }`}
                   >
-                    <td className="px-2 py-1.5 text-gray-500 sticky left-0 bg-inherit">{index + 1}</td>
-                    <td className="px-2 py-1.5 whitespace-nowrap font-mono text-gray-300">{row.employee.employeeId}</td>
-                    <td className="px-2 py-1.5 whitespace-nowrap text-white">{row.employee.name}</td>
-                    <td className="px-2 py-1.5 whitespace-nowrap text-gray-400">{row.employee.designation}</td>
+                    <td className={`px-2 py-1.5 text-slate-400 dark:text-gray-500 sticky left-0 z-[1] ${rowBg}`}>
+                      {index + 1}
+                    </td>
+                    <td className="px-2 py-1.5 whitespace-nowrap font-mono text-slate-600 dark:text-gray-300">{row.employee.employeeId}</td>
+                    <td className="px-2 py-1.5 whitespace-nowrap text-slate-900 dark:text-white">{row.employee.name}</td>
+                    <td className="px-2 py-1.5 whitespace-nowrap text-slate-500 dark:text-gray-400">{row.employee.designation}</td>
 
                     {cell(row, "days", row.inputs.days)}
                     {cell(row, "paidDays", row.inputs.paidDays)}
@@ -811,12 +1215,12 @@ const PayrollRegister = ({ payPeriod, onClose, onPayPeriodChange }) => {
                       cannot be made. Read-only: they are employee master data,
                       edited on the employee's own page, not per month.
                     */}
-                    <td className="px-2 py-1.5 whitespace-nowrap font-mono text-gray-300">
+                    <td className="px-2 py-1.5 whitespace-nowrap font-mono text-slate-600 dark:text-gray-300">
                       {row.employee.bankAccountNumber || (
                         <span className="text-amber-400/70 italic font-sans">missing</span>
                       )}
                     </td>
-                    <td className="px-2 py-1.5 whitespace-nowrap font-mono text-gray-300">
+                    <td className="px-2 py-1.5 whitespace-nowrap font-mono text-slate-600 dark:text-gray-300">
                       {row.employee.ifscCode || (
                         <span className="text-amber-400/70 italic font-sans">missing</span>
                       )}
@@ -871,13 +1275,13 @@ const PayrollRegister = ({ payPeriod, onClose, onPayPeriodChange }) => {
                     <td
                       onClick={() => setExpanded(expanded === id ? null : id)}
                       title="Show how this total was worked out"
-                      className={`px-2 py-1.5 text-right whitespace-nowrap tabular-nums cursor-pointer select-none border-b border-dotted border-gray-600 hover:bg-[#1a2032] ${
-                        expanded === id ? "bg-[#1a2032] text-white" : ""
+                      className={`px-2 py-1.5 text-right whitespace-nowrap tabular-nums cursor-pointer select-none border-b border-dotted border-gray-600 hover:bg-slate-100 dark:hover:bg-[#1a2032] ${
+                        expanded === id ? "bg-slate-100 dark:bg-[#1a2032] text-slate-900 dark:text-white" : ""
                       }`}
                     >
                       <span className="inline-flex items-center gap-1">
                         <ChevronDown
-                          className={`w-3 h-3 text-gray-500 transition-transform ${
+                          className={`w-3 h-3 text-slate-400 dark:text-gray-500 transition-transform ${
                             expanded === id ? "" : "-rotate-90"
                           }`}
                         />
@@ -885,7 +1289,7 @@ const PayrollRegister = ({ payPeriod, onClose, onPayPeriodChange }) => {
                       </span>
                     </td>
 
-                    <td className="px-2 py-1.5 text-right whitespace-nowrap tabular-nums font-semibold text-emerald-300">
+                    <td className="px-2 py-1.5 text-right whitespace-nowrap tabular-nums font-semibold text-emerald-700 dark:text-emerald-300">
                       {money(row.netPayment)}
                     </td>
 
@@ -916,40 +1320,64 @@ const PayrollRegister = ({ payPeriod, onClose, onPayPeriodChange }) => {
                                   } — ${row.override.fields.join(", ")}. Click to put the calculated figures back.`
                                 : "Undo edits to this row"
                             }
-                            className="text-amber-300 hover:text-amber-100"
+                            className="text-amber-600 dark:text-amber-300 hover:text-amber-100"
                           >
                             <Undo2 className="w-3.5 h-3.5" />
                           </button>
                         )}
 
                         {rowBusy[id] ? (
-                          <Loader2 className="w-3.5 h-3.5 animate-spin text-gray-400" />
+                          <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-500 dark:text-gray-400" />
                         ) : row.payslip?.exists ? (
                           confirmReplace === id ? (
                             <button
                               onClick={() => generateRow(row, { replace: true })}
                               title="This deletes the existing payslip and issues a new one"
-                              className="px-2 py-0.5 rounded bg-amber-500/20 text-amber-200 hover:bg-amber-500/30 text-[11px] font-medium"
+                              className="px-2 py-0.5 rounded bg-amber-500/20 text-amber-700 dark:text-amber-200 hover:bg-amber-500/30 text-[11px] font-medium"
                             >
                               Replace?
                             </button>
                           ) : (
-                            <button
-                              onClick={() => setConfirmReplace(id)}
-                              title={`Payslip already issued${
-                                row.payslip.isPublished ? " and published" : ""
-                              } — click to re-issue it from this row`}
-                              className="flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20 text-[11px]"
-                            >
-                              <Check className="w-3 h-3" />
-                              {row.payslip.isPublished ? "Published" : "Issued"}
-                            </button>
+                            <>
+                              {/*
+                                A draft is not a delivered payslip. The
+                                employee's own page returns published payslips
+                                only, so until this button is pressed the
+                                person it belongs to sees nothing at all.
+                              */}
+                              {!row.payslip.isPublished && (
+                                <button
+                                  onClick={() => publishRows([row], true)}
+                                  disabled={publishing}
+                                  title={`${row.employee.name} cannot see this payslip yet — publish it and they are notified`}
+                                  className="flex items-center gap-1 px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-700 dark:text-indigo-200 hover:bg-indigo-500/30 text-[11px] font-medium disabled:opacity-50"
+                                >
+                                  <Send className="w-3 h-3" /> Publish
+                                </button>
+                              )}
+                              <button
+                                onClick={() => setConfirmReplace(id)}
+                                title={
+                                  row.payslip.isPublished
+                                    ? `Published — ${row.employee.name} can see it. Click to re-issue it from this row.`
+                                    : `Draft — not visible to ${row.employee.name} yet. Click to re-issue it from this row.`
+                                }
+                                className={`flex items-center gap-1 px-2 py-0.5 rounded text-[11px] ${
+                                  row.payslip.isPublished
+                                    ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/20"
+                                    : "bg-slate-200 dark:bg-[#232945] text-slate-500 dark:text-gray-400 hover:bg-slate-200 dark:hover:bg-[#2c3450]"
+                                }`}
+                              >
+                                <Check className="w-3 h-3" />
+                                {row.payslip.isPublished ? "Published" : "Draft"}
+                              </button>
+                            </>
                           )
                         ) : (
                           <button
                             onClick={() => generateRow(row)}
                             title="Generate this employee's payslip for this month"
-                            className="flex items-center gap-1 px-2 py-0.5 rounded bg-blue-500/15 text-blue-200 hover:bg-blue-500/25 text-[11px] font-medium"
+                            className="flex items-center gap-1 px-2 py-0.5 rounded bg-blue-500/15 text-blue-700 dark:text-blue-200 hover:bg-blue-500/25 text-[11px] font-medium"
                           >
                             <FileText className="w-3 h-3" /> Generate
                           </button>
@@ -960,7 +1388,7 @@ const PayrollRegister = ({ payPeriod, onClose, onPayPeriodChange }) => {
 
                   {/* The breakdown, for the row whose total was clicked. */}
                   {expanded === id && why && (
-                    <tr className="border-b border-[#232945] bg-[#0b0f1a]">
+                    <tr className="border-b border-slate-200 dark:border-[#232945] bg-slate-50 dark:bg-[#0b0f1a]">
                       <td colSpan={36} className="px-6 py-4">
                         <div className="flex flex-wrap gap-10 text-[12px]">
                           {/* What attendance did to the pay, BEFORE deductions.
@@ -969,34 +1397,34 @@ const PayrollRegister = ({ payPeriod, onClose, onPayPeriodChange }) => {
                               so without this the money is missing with nothing
                               to point at. */}
                           <div className="min-w-[280px]">
-                            <div className="text-[10px] uppercase tracking-wider text-gray-500 mb-2">
+                            <div className="text-[10px] uppercase tracking-wider text-slate-400 dark:text-gray-500 mb-2">
                               How the month was earned
                             </div>
                             <table className="w-full">
-                              <tbody className="text-gray-300">
+                              <tbody className="text-slate-600 dark:text-gray-300">
                                 <tr>
                                   <td className="py-0.5 pr-6">Salary for {plain(why.attendance.workingDays)} days</td>
                                   <td className="py-0.5 text-right tabular-nums">{money(row.components.total)}</td>
                                 </tr>
                                 <tr>
-                                  <td className="py-0.5 pr-6 text-gray-500">A day's pay</td>
-                                  <td className="py-0.5 text-right tabular-nums text-gray-500">{money(why.perDaySalary)}</td>
+                                  <td className="py-0.5 pr-6 text-slate-400 dark:text-gray-500">A day's pay</td>
+                                  <td className="py-0.5 text-right tabular-nums text-slate-400 dark:text-gray-500">{money(why.perDaySalary)}</td>
                                 </tr>
-                                <tr className="border-t border-[#1a2032]">
+                                <tr className="border-t border-slate-200 dark:border-[#1a2032]">
                                   <td className="py-0.5 pr-6">
                                     Paid days {plain(why.attendance.paidDays)}
                                     {(why.attendance.halfDays > 0) && (
-                                      <span className="text-gray-500"> · {plain(why.attendance.halfDays)} half day{why.attendance.halfDays === 1 ? "" : "s"}</span>
+                                      <span className="text-slate-400 dark:text-gray-500"> · {plain(why.attendance.halfDays)} half day{why.attendance.halfDays === 1 ? "" : "s"}</span>
                                     )}
                                   </td>
-                                  <td className="py-0.5 text-right tabular-nums text-emerald-300">{money(row.earnings.netTotal)}</td>
+                                  <td className="py-0.5 text-right tabular-nums text-emerald-700 dark:text-emerald-300">{money(row.earnings.netTotal)}</td>
                                 </tr>
                                 {why.unpaidDays > 0 && (
                                   <tr>
-                                    <td className="py-0.5 pr-6 text-amber-200/80">
+                                    <td className="py-0.5 pr-6 text-amber-700 dark:text-amber-200/80">
                                       Not paid for {plain(why.unpaidDays)} day{why.unpaidDays === 1 ? "" : "s"}
                                       {(why.attendance.absentDays > 0 || why.attendance.unpaidLeaveDays > 0) && (
-                                        <span className="text-gray-500">
+                                        <span className="text-slate-400 dark:text-gray-500">
                                           {" "}(
                                           {[
                                             why.attendance.absentDays > 0 ? `${plain(why.attendance.absentDays)} absent` : null,
@@ -1006,7 +1434,7 @@ const PayrollRegister = ({ payPeriod, onClose, onPayPeriodChange }) => {
                                         </span>
                                       )}
                                     </td>
-                                    <td className="py-0.5 text-right tabular-nums text-amber-200/80">−{money(why.notEarned)}</td>
+                                    <td className="py-0.5 text-right tabular-nums text-amber-700 dark:text-amber-200/80">−{money(why.notEarned)}</td>
                                   </tr>
                                 )}
                               </tbody>
@@ -1015,36 +1443,36 @@ const PayrollRegister = ({ payPeriod, onClose, onPayPeriodChange }) => {
 
                           {/* Every deduction column, with the rule that produced it. */}
                           <div className="min-w-[440px] flex-1">
-                            <div className="text-[10px] uppercase tracking-wider text-gray-500 mb-2">
+                            <div className="text-[10px] uppercase tracking-wider text-slate-400 dark:text-gray-500 mb-2">
                               Then deducted from {money(row.earnings.netTotal)}
                             </div>
                             <table className="w-full">
                               <tbody>
                                 {why.deductions.map((line) => (
-                                  <tr key={line.key} className={line.amount ? "text-gray-200" : "text-gray-600"}>
+                                  <tr key={line.key} className={line.amount ? "text-slate-700 dark:text-gray-200" : "text-slate-400 dark:text-gray-600"}>
                                     <td className="py-0.5 pr-4 whitespace-nowrap font-medium">{line.label}</td>
                                     <td className="py-0.5 pr-6 text-right tabular-nums whitespace-nowrap">
                                       {line.amount ? money(line.amount) : "—"}
                                     </td>
-                                    <td className="py-0.5 text-gray-500">{line.note}</td>
+                                    <td className="py-0.5 text-slate-400 dark:text-gray-500">{line.note}</td>
                                   </tr>
                                 ))}
-                                <tr className="border-t border-[#232945] font-semibold text-gray-100">
+                                <tr className="border-t border-slate-200 dark:border-[#232945] font-semibold text-slate-900 dark:text-gray-100">
                                   <td className="py-1 pr-4">Total Deduction</td>
                                   <td className="py-1 pr-6 text-right tabular-nums">{money(row.deductions.total)}</td>
                                   <td />
                                 </tr>
-                                <tr className="font-semibold text-emerald-300">
+                                <tr className="font-semibold text-emerald-700 dark:text-emerald-300">
                                   <td className="py-1 pr-4">Net Payment</td>
                                   <td className="py-1 pr-6 text-right tabular-nums">{money(row.netPayment)}</td>
-                                  <td className="py-1 text-gray-500 font-normal">
+                                  <td className="py-1 text-slate-400 dark:text-gray-500 font-normal">
                                     {money(row.earnings.netTotal)} earned − {money(row.deductions.total)} deducted
                                   </td>
                                 </tr>
-                                <tr className="text-gray-400">
+                                <tr className="text-slate-500 dark:text-gray-400">
                                   <td className="py-0.5 pr-4">CTC</td>
                                   <td className="py-0.5 pr-6 text-right tabular-nums">{money(row.ctc)}</td>
-                                  <td className="py-0.5 text-gray-500">
+                                  <td className="py-0.5 text-slate-400 dark:text-gray-500">
                                     what the employee is paid plus the employer&rsquo;s own PF and ESI — not taken from them
                                   </td>
                                 </tr>
@@ -1059,14 +1487,14 @@ const PayrollRegister = ({ payPeriod, onClose, onPayPeriodChange }) => {
                 );
               })}
             </tbody>
-            <tfoot className="sticky bottom-0 bg-[#0d1220] border-t border-[#232945]">
-              <tr className="font-semibold text-gray-200">
+            <tfoot className="sticky bottom-0 bg-white dark:bg-[#0d1220] border-t border-slate-200 dark:border-[#232945]">
+              <tr className="font-semibold text-slate-700 dark:text-gray-200">
                 {/* Everything up to and including Advance: 30 of the 36 columns. */}
-                <td className="px-2 py-2 sticky left-0 bg-[#0d1220]" colSpan={30}>
+                <td className="px-2 py-2 sticky left-0 bg-white dark:bg-[#0d1220]" colSpan={30}>
                   {visible.length} employees
                 </td>
                 <td className="px-2 py-2 text-right tabular-nums">{money(totals.deductions)}</td>
-                <td className="px-2 py-2 text-right tabular-nums text-emerald-300">{money(totals.net)}</td>
+                <td className="px-2 py-2 text-right tabular-nums text-emerald-700 dark:text-emerald-300">{money(totals.net)}</td>
                 <td colSpan={2}></td>
                 <td className="px-2 py-2 text-right tabular-nums">{money(totals.ctc)}</td>
                 <td></td>
@@ -1076,12 +1504,14 @@ const PayrollRegister = ({ payPeriod, onClose, onPayPeriodChange }) => {
         )}
       </div>
 
-      <div className="px-4 py-2 border-t border-[#232945] bg-[#0d1220] text-[11px] text-gray-500">
-        Click a <span className="text-emerald-300 font-semibold">Y</span>/<span className="text-gray-300 font-semibold">N</span> button to switch PF or ESI — the whole row re-prices.
-        Click <span className="text-gray-300">Total Deduction</span> to see exactly what was taken and why.
+      <div className="px-4 py-2 border-t border-slate-200 dark:border-[#232945] bg-white dark:bg-[#0d1220] text-[11px] text-slate-400 dark:text-gray-500">
+        Click a <span className="text-emerald-700 dark:text-emerald-300 font-semibold">Y</span>/<span className="text-slate-600 dark:text-gray-300 font-semibold">N</span> button to switch PF or ESI — the whole row re-prices.
+        Click <span className="text-slate-600 dark:text-gray-300">Total Deduction</span> to see exactly what was taken and why.
         Double-click a blue cell to edit Days, Paid Days, Salary, TDS, Late, Other / Penalty or Advance.
         Everything else is calculated on the server by the same formula that issues the payslip.
         Use the Payslip column to issue one employee at a time; re-issuing replaces the existing payslip and asks first.
+        Generating publishes too: the payslip appears on that employee&rsquo;s own Payslips page and they are notified.
+        Anything left as a <span className="text-slate-600 dark:text-gray-300">Draft</span> — from an older run, or a publish that failed — is invisible to them until the Publish button is used.
       </div>
     </div>
   );

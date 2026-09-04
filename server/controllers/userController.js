@@ -51,6 +51,13 @@ exports.createEmployee = async (req, res) => {
       skills, jobLevel,
       standardShiftType,
       location, employmentType, outlookEmail, outlookAppPassword,
+      // Statutory and bank details. All optional — an employee can be created
+      // before their PF number comes through or their bank details are
+      // collected, and the payroll register simply shows those cells as
+      // missing until they are.
+      pan, uan, pfNumber, esiNumber,
+      bankAccountNumber, bankName, ifscCode,
+      pfEligible, esiEligible,
     } = req.body;
 
     // Required fields
@@ -118,6 +125,24 @@ exports.createEmployee = async (req, res) => {
       employmentType: employmentType?.toLowerCase() || "full-time",
       outlookEmail: outlookEmail?.trim() || "",
       outlookAppPassword: outlookAppPassword?.trim() || "",
+
+      // ── Statutory / payroll ──
+      // Stored as typed, uppercased where the format is uppercase, and blank
+      // when not supplied. The payroll register and the payslip snapshot read
+      // these; a blank one shows as missing rather than blocking anything.
+      pan: pan?.trim().toUpperCase() || "",
+      uan: uan?.trim() || "",
+      pfNumber: pfNumber?.trim() || "",
+      esiNumber: esiNumber?.trim() || "",
+      bankAccountNumber: bankAccountNumber?.trim() || "",
+      bankName: bankName?.trim() || "",
+      ifscCode: ifscCode?.trim().toUpperCase() || "",
+
+      // Tri-state on purpose: null means "apply the statutory rule", true and
+      // false are an HR decision that overrides it. Boolean() here would turn
+      // "not answered" into "excluded" and silently stop someone's PF.
+      pfEligible: typeof pfEligible === "boolean" ? pfEligible : null,
+      esiEligible: typeof esiEligible === "boolean" ? esiEligible : null,
     };
 
     // Dynamic shift handling based on shiftType
@@ -593,7 +618,30 @@ exports.updateEmployee = async (req, res) => {
       "avatar",
       "timeZone",
       "regions",       // <- Added for multi-region access control
-      "region"         // <- Keep for backwards compatibility
+      "region",        // <- Keep for backwards compatibility
+
+      // ── Statutory / payroll / bank ──
+      //
+      // These were missing from the whitelist, so the employee form collected
+      // PAN, UAN, PF and ESI numbers and the whole bank block, posted them,
+      // and the server dropped every one without a word. That is why the
+      // payroll register showed Bank A/c and IFSC as missing for everybody:
+      // the fields could be typed but never saved.
+      //
+      // "doj" was missing too — the joining date could be set when an
+      // employee was created and never corrected afterwards, and the
+      // attendance summary uses it to decide which days someone was actually
+      // employed for.
+      "doj",
+      "pan",
+      "uan",
+      "pfNumber",
+      "esiNumber",
+      "bankAccountNumber",
+      "bankName",
+      "ifscCode",
+      "pfEligible",
+      "esiEligible"
     ];
 
     const updateData = {};
@@ -601,6 +649,29 @@ exports.updateEmployee = async (req, res) => {
       if (req.body[field] !== undefined) {
         updateData[field] = req.body[field];
       }
+    }
+
+    // ── Statutory fields ──
+    //
+    // PAN and IFSC are uppercase by convention and the schema uppercases them
+    // anyway; doing it here too means the value that comes back in the
+    // response matches what was stored.
+    if (typeof updateData.pan === "string") updateData.pan = updateData.pan.trim().toUpperCase();
+    if (typeof updateData.ifscCode === "string") updateData.ifscCode = updateData.ifscCode.trim().toUpperCase();
+    for (const field of ["uan", "pfNumber", "esiNumber", "bankAccountNumber", "bankName"]) {
+      if (typeof updateData[field] === "string") updateData[field] = updateData[field].trim();
+    }
+
+    // PF-Y/N and ESI-Y/N are THREE states, not two: true, false, and null
+    // meaning "apply the statutory rule". The form sends "" for the last one,
+    // and Boolean("") is false — which would quietly mark the employee as
+    // excluded from PF and stop their contribution.
+    for (const field of ["pfEligible", "esiEligible"]) {
+      if (!(field in updateData)) continue;
+      const value = updateData[field];
+      if (value === "" || value === null || value === "auto") updateData[field] = null;
+      else if (typeof value === "string") updateData[field] = value === "true" || value === "Y";
+      else updateData[field] = Boolean(value);
     }
 
     // Normalize arrays

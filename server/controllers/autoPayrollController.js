@@ -730,3 +730,94 @@ exports.clearRegisterOverride = async (req, res) => {
     res.status(500).json({ success: false, error: error.message });
   }
 };
+
+/**
+ * Publish (or unpublish) the payslips issued for a month.
+ * POST /api/auto-payroll/register/publish
+ *
+ * Body: { payPeriod, employeeIds?, publish? }
+ *
+ * ─── WHY THIS EXISTS ───
+ * Generating from the register creates a payslip as a DRAFT, which is right —
+ * a payslip should be looked at before the employee is told about it. But the
+ * employee-facing page only ever returns published payslips
+ * (payslipController.getMyPayslipHistory), and the register had no way to
+ * publish, so every payslip issued from it was stranded: visible to admins,
+ * invisible to the person it belonged to, and the register called it "Issued"
+ * as though the job were done.
+ *
+ * ─── WHY NOT REUSE PATCH /payslips/:id/publish ───
+ * That endpoint TOGGLES. Toggling is fine for one row and a human hand; for a
+ * whole month it is a footgun — a second click, a double submit or a retry
+ * would unpublish everyone. This sets the state explicitly and skips payslips
+ * already in it, so running it twice does nothing the second time.
+ */
+exports.publishFromRegister = async (req, res) => {
+  try {
+    const { payPeriod, employeeIds = null, publish = true } = req.body;
+
+    if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(payPeriod || '')) {
+      return res.status(400).json({ success: false, error: 'Invalid pay period format. Use YYYY-MM' });
+    }
+
+    const filter = { payPeriod };
+    if (Array.isArray(employeeIds) && employeeIds.length) {
+      filter.employee = { $in: employeeIds };
+    }
+
+    const payslips = await Payslip.find(filter).populate('employee', 'name email');
+
+    const results = { payPeriod, published: 0, unchanged: 0, failed: 0, details: [] };
+
+    for (const payslip of payslips) {
+      const employeeId = payslip.employee?._id || payslip.employee;
+
+      if (Boolean(payslip.isPublished) === Boolean(publish)) {
+        results.unchanged++;
+        results.details.push({ employeeId: String(employeeId), payslipId: String(payslip._id), status: 'unchanged' });
+        continue;
+      }
+
+      try {
+        payslip.isPublished = Boolean(publish);
+        payslip.publishedAt = publish ? new Date() : undefined;
+        await payslip.save();
+
+        results.published++;
+        results.details.push({
+          employeeId: String(employeeId),
+          payslipId: String(payslip._id),
+          status: publish ? 'published' : 'unpublished',
+        });
+
+        // Telling the employee is the point of publishing. Never allowed to
+        // fail the publish itself — the payslip is already visible to them.
+        if (publish && employeeId) {
+          notificationService
+            .notifyUser({
+              userId: String(employeeId),
+              type: 'payslip',
+              channel: 'payslip',
+              title: 'Payslip Published',
+              body: `Your payslip for ${payslip.payPeriod} is now available.`,
+              relatedData: { payslipId: payslip._id, url: '/my-payslips' },
+            })
+            .catch((err) => console.error('Payslip-published notification failed:', err.message));
+        }
+      } catch (error) {
+        results.failed++;
+        results.details.push({
+          employeeId: String(employeeId),
+          payslipId: String(payslip._id),
+          status: 'failed',
+          error: error.message,
+        });
+      }
+    }
+
+    res.json({ success: true, ...results });
+  } catch (error) {
+    console.error('Error publishing from register:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};

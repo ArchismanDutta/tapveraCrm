@@ -87,6 +87,16 @@ router.post(
   autoPayrollController.generateFromRegister
 );
 
+// Publishing. A payslip issued from the register is a draft until this runs,
+// and a draft is invisible on the employee's own Payslips page.
+
+router.post(
+  '/register/publish',
+  protect,
+  requireSalaryManage,
+  autoPayrollController.publishFromRegister
+);
+
 // Corrections made on the register, stored so they survive a reload.
 // A change to paid days is a change to somebody's pay, so it is written down
 // and attributed rather than kept in the browser.

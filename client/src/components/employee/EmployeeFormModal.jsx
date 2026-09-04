@@ -40,6 +40,9 @@ const initialFormData = {
   uan: "",
   pfNumber: "",
   esiNumber: "",
+  // "" means "apply the statutory rule" — see the PF/ESI fields below.
+  pfEligible: "",
+  esiEligible: "",
   // Bank
   bankAccountNumber: "",
   bankName: "",
@@ -76,6 +79,11 @@ const EmployeeFormModal = ({ isEditing, employee, onClose, onSubmit, existingIds
         salaryBasic: employee.salary?.basic ?? employee.salary ?? "",
         salaryTotal: employee.salary?.total ?? "",
         paymentMode: employee.salary?.paymentMode ?? "bank",
+        // Stored as true / false / null. Null is "apply the rule", and the
+        // select shows that as Automatic — not as No, which would read as
+        // "this person is excluded from PF".
+        pfEligible: employee.pfEligible === true ? "true" : employee.pfEligible === false ? "false" : "",
+        esiEligible: employee.esiEligible === true ? "true" : employee.esiEligible === false ? "false" : "",
       });
     } else {
       setFormData(initialFormData);
@@ -125,6 +133,11 @@ const EmployeeFormModal = ({ isEditing, employee, onClose, onSubmit, existingIds
         total: Number(formData.salaryTotal) || 0,
         paymentMode: formData.paymentMode,
       },
+      // Sent as true / false / null, never as the select's string. null is
+      // "apply the statutory rule"; sending "" would be read as false and
+      // silently stop somebody's PF.
+      pfEligible: formData.pfEligible === "" ? null : formData.pfEligible === "true",
+      esiEligible: formData.esiEligible === "" ? null : formData.esiEligible === "true",
       attendance: Number(formData.attendance) || 0,
     });
     if (!isEditing) setFormData(initialFormData);
@@ -533,6 +546,41 @@ const EmployeeFormModal = ({ isEditing, employee, onClose, onSubmit, existingIds
                     className={inputClass}
                   />
                 </Field>
+
+                {/*
+                  The PF-Y/N and ESI-Y/N columns on the payroll register.
+                  Three states, not two. Automatic applies the statutory rule —
+                  PF by the wage ceiling, ESI by the ceiling plus the
+                  contribution-period lock — and is right for almost everyone.
+                  An explicit Yes or No is an HR decision that overrides it: an
+                  existing EPF member whose basic has risen past the ceiling and
+                  must stay enrolled, voluntary coverage, a genuinely excluded
+                  employee, or the higher ESI ceiling for an employee with a
+                  disability.
+                */}
+                <Field label="PF Deduction">
+                  <select name="pfEligible" value={formData.pfEligible} onChange={handleChange} className={selectClass}>
+                    <option value="">Automatic (apply the rule)</option>
+                    <option value="true">Yes — always deduct PF</option>
+                    <option value="false">No — never deduct PF</option>
+                  </select>
+                </Field>
+
+                <Field label="ESI Deduction">
+                  <select name="esiEligible" value={formData.esiEligible} onChange={handleChange} className={selectClass}>
+                    <option value="">Automatic (apply the rule)</option>
+                    <option value="true">Yes — always deduct ESI</option>
+                    <option value="false">No — never deduct ESI</option>
+                  </select>
+                </Field>
+
+                <div className="col-span-2">
+                  <p className="text-xs text-slate-400">
+                    None of these are required. Leave anything blank and payroll simply shows it as
+                    missing until it is filled in — the payroll register and the payslip read these
+                    fields directly.
+                  </p>
+                </div>
               </div>
             )}
 
