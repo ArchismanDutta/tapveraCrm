@@ -295,10 +295,44 @@ AttendanceRecordSchema.index({
   "departmentStats.departmentName": 1
 });
 
+// The IST day boundary, as a fixed offset. India has no daylight saving, so
+// this is exact — and unlike setHours() it does not depend on what timezone
+// the host happens to be running in.
+const IST_OFFSET_MS = 330 * 60 * 1000;
+
+/**
+ * The canonical instant for the IST calendar day an attendance date belongs to:
+ * UTC midnight of that date. Must agree exactly with
+ * AttendanceService.normalizeDate — the service decides where to look, this
+ * decides where it lands.
+ */
+function canonicalAttendanceDate(value) {
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return d;
+  const ist = new Date(d.getTime() + IST_OFFSET_MS);
+  return new Date(Date.UTC(ist.getUTCFullYear(), ist.getUTCMonth(), ist.getUTCDate()));
+}
+
 // Pre-save middleware to ensure data integrity
 AttendanceRecordSchema.pre('save', function(next) {
-  // Ensure date is normalized to start of day
-  this.date.setHours(0, 0, 0, 0);
+  // Normalise the date the SAME way the service resolves it.
+  //
+  // This used to be `this.date.setHours(0, 0, 0, 0)`, which reads the process
+  // timezone. app.js pins that to Asia/Kolkata, so every save rewrote the date
+  // to 18:30Z of the previous day — while normalizeDate() had moved on to UTC
+  // midnight of the IST date. The two disagreed by 5h30m on every single write.
+  //
+  // The effect was not a wrong date so much as an unfindable one: the service
+  // wrote a record at the canonical instant, this hook moved it, and the next
+  // lookup for that same day found nothing. Today's-status and the dashboard
+  // read one exact date and so showed zeros for people who were at their desk;
+  // the attendance page reads a month range, spanned both conventions, and
+  // looked fine — which is what made it look like a display bug.
+  //
+  // It also quietly reverted the migration written to fix all this: the script
+  // set the canonical date, this hook put it back, and the run reported success
+  // having changed nothing.
+  this.date = canonicalAttendanceDate(this.date);
 
   // Update timestamps for all employees
   this.employees.forEach(employee => {
