@@ -185,6 +185,17 @@ const userSchema = new mongoose.Schema(
 
     // ====== STATUTORY / PAYROLL FIELDS ======
     pan:              { type: String, trim: true, uppercase: true, default: "" },
+    // The PF-Y/N and ESI-Y/N columns on the payroll sheet.
+    //
+    // null means "apply the statutory rule" (PF by the wage ceiling, ESI by
+    // the wage ceiling plus the contribution-period lock). An explicit true or
+    // false is an HR decision that overrides it — needed for an existing EPF
+    // member whose basic has risen past ₹15,000 and who must stay enrolled,
+    // for voluntary coverage, for genuinely excluded employees, and for the
+    // higher ESI ceiling that applies to an employee with a disability.
+    pfEligible:       { type: Boolean, default: null },
+    esiEligible:      { type: Boolean, default: null },
+
     uan:              { type: String, trim: true, default: "" },
     pfNumber:         { type: String, trim: true, default: "" },
     esiNumber:        { type: String, trim: true, default: "" },

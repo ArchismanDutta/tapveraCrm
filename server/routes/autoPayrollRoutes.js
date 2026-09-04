@@ -63,4 +63,46 @@ router.put(
   autoPayrollController.recalculatePayslip
 );
 
+// ── Payroll register ──────────────────────────────────────────────────
+// The spreadsheet view: every employee for a month as one editable row.
+
+router.get(
+  '/register/:payPeriod',
+  protect,
+  requireSalaryManage,
+  autoPayrollController.previewPayrollRegister
+);
+
+router.post(
+  '/register/price',
+  protect,
+  requireSalaryManage,
+  autoPayrollController.priceRegisterRows
+);
+
+router.post(
+  '/register/generate',
+  protect,
+  requireSalaryManage,
+  autoPayrollController.generateFromRegister
+);
+
+// Corrections made on the register, stored so they survive a reload.
+// A change to paid days is a change to somebody's pay, so it is written down
+// and attributed rather than kept in the browser.
+
+router.put(
+  '/register/override',
+  protect,
+  requireSalaryManage,
+  autoPayrollController.saveRegisterOverride
+);
+
+router.delete(
+  '/register/override',
+  protect,
+  requireSalaryManage,
+  autoPayrollController.clearRegisterOverride
+);
+
 module.exports = router;

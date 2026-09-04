@@ -8,6 +8,11 @@ const LeaveRequest = require("../models/LeaveRequest");
 const Holiday = require("../models/Holiday");
 const FlexibleShiftRequest = require("../models/FlexibleShiftRequest");
 
+// India Standard Time is UTC+05:30 with no daylight saving, so a fixed offset
+// is exact. Used to derive the IST calendar date of an instant without
+// depending on what timezone this process happens to be running in.
+const IST_OFFSET_MS = 330 * 60 * 1000;
+
 // ─── Diagnostic logging ──────────────────────────────────────────────────────
 //
 // recalculateEmployeeData runs once per day-in-range on EVERY read — one
@@ -1478,12 +1483,44 @@ class AttendanceService {
   }
 
   // Helper methods
+
+  /**
+   * The business day an instant belongs to, as UTC midnight of its IST date.
+   *
+   * ─── WHY THIS IS NOT setHours(0, 0, 0, 0) ───
+   *
+   * An attendance date, a LeaveRequest period and a Holiday date are all
+   * date-only values, and several queries compare them by exact equality — so
+   * all three have to agree on one representation. Leave and holidays get
+   * theirs from `new Date("2026-08-05")`, which the language spec parses as
+   * UTC midnight. That makes UTC midnight the convention, and this method has
+   * to produce the same thing.
+   *
+   * It used to call setHours(0, 0, 0, 0), which reads the PROCESS timezone.
+   * app.js pins that to Asia/Kolkata, so it was returning 18:30Z of the
+   * previous day — 330 minutes away from every leave and holiday it was
+   * compared against. Live consequences: `isHoliday` was permanently false,
+   * a single-day leave (every half-day, most WFH) matched no date at all,
+   * and the first day of every multi-day leave was dropped.
+   *
+   * Deriving the IST date from a fixed offset instead makes the result
+   * identical whatever TZ the process runs under, so this can never drift
+   * again if a host is rebuilt or migrated. IST is UTC+05:30 year round, with
+   * no daylight saving, so the offset is exact rather than an approximation.
+   *
+   * Idempotent: normalizing an already-normalized date returns it unchanged.
+   *
+   * @param {Date|string|number} date - an instant, or a date-only value
+   * @returns {Date} UTC midnight of the IST calendar date
+   */
   normalizeDate(date) {
-    // Keep using local timezone for backward compatibility with existing records
-    // The date represents midnight in the server's local timezone
     const d = new Date(date);
-    d.setHours(0, 0, 0, 0);
-    return d;
+    if (Number.isNaN(d.getTime())) return d;
+
+    const ist = new Date(d.getTime() + IST_OFFSET_MS);
+    return new Date(
+      Date.UTC(ist.getUTCFullYear(), ist.getUTCMonth(), ist.getUTCDate())
+    );
   }
 
   /**
@@ -1528,12 +1565,19 @@ class AttendanceService {
    * (see AttendanceAutoCloseService.resolveDepartureTime and
    * scripts/backfillClockOffset.js); those stay correct either way.
    *
-   * Building the date from local parts produces exactly what normalizeDate
-   * would store for the same calendar day, so the value can be used as a key
-   * directly. The calendar day chosen is unchanged — only how it is expressed.
+   * Date.UTC produces exactly what normalizeDate() stores for the same
+   * calendar day, so the value can be used as a record key directly. The
+   * calendar day chosen is unchanged — only how it is expressed.
+   *
+   * This must stay in step with normalizeDate(). It previously built from
+   * LOCAL parts to match a normalizeDate() that used setHours(); both now
+   * express a business day as UTC midnight of its IST date, so both are
+   * independent of the process timezone.
    */
   attendanceDateFromIST(istDate, dayOffset = 0) {
-    return new Date(istDate.year, istDate.month - 1, istDate.day + dayOffset, 0, 0, 0, 0);
+    return new Date(
+      Date.UTC(istDate.year, istDate.month - 1, istDate.day + dayOffset)
+    );
   }
 
   /**

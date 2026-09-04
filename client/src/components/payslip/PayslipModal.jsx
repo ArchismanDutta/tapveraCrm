@@ -463,24 +463,16 @@ const PayslipModal = ({ isOpen, onClose, employeeId = null }) => {
                   </thead>
                   <tbody>
                     <tr>
-                      <td>Provident Fund (Employee)</td>
+                      <td>EE-PF</td>
                       <td>${formatCurrency(payslipData.deductions?.employeePF)}</td>
                     </tr>
                     <tr>
-                      <td>ESI (Employee)</td>
+                      <td>ESI</td>
                       <td>${formatCurrency(payslipData.deductions?.employeeESI ?? payslipData.deductions?.esi)}</td>
                     </tr>
                     <tr>
                       <td>Professional Tax</td>
                       <td>${formatCurrency(payslipData.deductions?.ptax)}</td>
-                    </tr>
-                    <tr>
-                      <td>Late Attendance Deduction</td>
-                      <td>${formatCurrency(payslipData.deductions?.lateDeduction)}</td>
-                    </tr>
-                    <tr>
-                      <td>Half-Day Deduction</td>
-                      <td>${formatCurrency(payslipData.deductions?.halfDayDeduction)}</td>
                     </tr>
                     ${payslipData.deductions?.tds > 0 ? `
                     <tr>
@@ -490,13 +482,13 @@ const PayslipModal = ({ isOpen, onClose, employeeId = null }) => {
                     ` : ''}
                     ${payslipData.deductions?.other > 0 ? `
                     <tr>
-                      <td>Other Deductions</td>
+                      <td>Other / Penalty</td>
                       <td>${formatCurrency(payslipData.deductions?.other)}</td>
                     </tr>
                     ` : ''}
                     ${payslipData.deductions?.advance > 0 ? `
                     <tr>
-                      <td>Advance Deduction</td>
+                      <td>Advance</td>
                       <td>${formatCurrency(payslipData.deductions?.advance)}</td>
                     </tr>
                     ` : ''}
@@ -822,24 +814,16 @@ const PayslipModal = ({ isOpen, onClose, employeeId = null }) => {
                         </thead>
                         <tbody className="divide-y divide-slate-600/20">
                           <tr>
-                            <td className="py-2 text-gray-300">Provident Fund (Employee)</td>
+                            <td className="py-2 text-gray-300">EE-PF</td>
                             <td className="py-2 text-right text-white font-medium">{formatCurrency(payslipData.deductions?.employeePF)}</td>
                           </tr>
                           <tr>
-                            <td className="py-2 text-gray-300">ESI (Employee)</td>
+                            <td className="py-2 text-gray-300">ESI</td>
                             <td className="py-2 text-right text-white font-medium">{formatCurrency(payslipData.deductions?.employeeESI ?? payslipData.deductions?.esi)}</td>
                           </tr>
                           <tr>
                             <td className="py-2 text-gray-300">Professional Tax</td>
                             <td className="py-2 text-right text-white font-medium">{formatCurrency(payslipData.deductions?.ptax)}</td>
-                          </tr>
-                          <tr>
-                            <td className="py-2 text-gray-300">Late Attendance Deduction</td>
-                            <td className="py-2 text-right text-white font-medium">{formatCurrency(payslipData.deductions?.lateDeduction)}</td>
-                          </tr>
-                          <tr>
-                            <td className="py-2 text-gray-300">Half-Day Deduction</td>
-                            <td className="py-2 text-right text-white font-medium">{formatCurrency(payslipData.deductions?.halfDayDeduction)}</td>
                           </tr>
                           {payslipData.deductions?.tds > 0 && (
                             <tr>
@@ -855,7 +839,7 @@ const PayslipModal = ({ isOpen, onClose, employeeId = null }) => {
                           )}
                           {payslipData.deductions?.advance > 0 && (
                             <tr>
-                              <td className="py-2 text-gray-300">Advance Deduction</td>
+                              <td className="py-2 text-gray-300">Advance</td>
                               <td className="py-2 text-right text-white font-medium">{formatCurrency(payslipData.deductions?.advance)}</td>
                             </tr>
                           )}

@@ -44,14 +44,18 @@
 // days, and only a working day that was neither worked nor covered by leave
 // reduces pay.
 //
-// Unpaid leave and unexcused absence are both CREDITED here as paid days and
-// then removed once each by their own deduction line in payroll — lwpDeduction
-// and absenceDeduction. Two things with the same effect on pay are shown the
-// same way, and the employee can see on the payslip exactly what was taken and
-// why, instead of a paid-day count that quietly came up short. Subtracting in
-// both places is what made one day of unpaid leave cost nearly three days.
+// paidDays is the SINGLE mechanism for every attendance-based reduction. The
+// payroll sheet has no absence, leave or late column — its deduction columns
+// are statutory and manual only — so a day not worked simply is not credited,
+// and nothing is subtracted a second time downstream.
+//
+// Weekends are NOT credited: the sheet pays 22 days out of 30 for a full
+// month of attendance, so pay is earned per working day and the monthly figure
+// is a 30-day notional rate. Company holidays ARE credited — a declared
+// holiday is a paid day off, not a day the employee failed to turn up.
 
 const AttendanceRecord = require("../models/AttendanceRecord");
+const User = require("../models/User");
 const LeaveRequest = require("../models/LeaveRequest");
 const Holiday = require("../models/Holiday");
 const AttendanceService = require("./AttendanceService");
@@ -67,19 +71,21 @@ const DAY_STATUS = {
   UNPAID_LEAVE: "unpaidLeave",
   ABSENT: "absent",
   UPCOMING: "upcoming", // in a month still running: not yet happened
+  NOT_EMPLOYED: "notEmployed", // before joining, or after leaving
 };
 
 // Share of a day's pay each classification earns.
 const DAY_CREDIT = {
-  [DAY_STATUS.WEEKEND]: 1,
-  [DAY_STATUS.HOLIDAY]: 1,
+  [DAY_STATUS.WEEKEND]: 0, // not a working day, and not paid
+  [DAY_STATUS.HOLIDAY]: 1, // a declared holiday is a paid day off
   [DAY_STATUS.PRESENT]: 1,
   [DAY_STATUS.WFH]: 1,
   [DAY_STATUS.PAID_LEAVE]: 1,
   [DAY_STATUS.HALF_DAY]: 0.5, // the missing half is the whole deduction
-  [DAY_STATUS.UNPAID_LEAVE]: 1, // deducted once by payroll's lwpDeduction
-  [DAY_STATUS.ABSENT]: 1, // deducted once by payroll's absenceDeduction
+  [DAY_STATUS.UNPAID_LEAVE]: 0, // by definition
+  [DAY_STATUS.ABSENT]: 0, // not worked, not covered by leave
   [DAY_STATUS.UPCOMING]: 0, // has not happened; earns nothing, deducts nothing
+  [DAY_STATUS.NOT_EMPLOYED]: 0, // outside employment; not a day they could work
 };
 
 // When two approved leave requests cover the same day, the higher rank wins.
@@ -109,6 +115,37 @@ class AttendanceSummaryService {
   isWeekend(date) {
     const day = date.getDay();
     return day === 0 || day === 6;
+  }
+
+  /**
+   * The dates between which this person is employed.
+   *
+   * Days outside it are not attendance events of any kind — nobody can be
+   * absent from a job they have not started. Read here rather than passed in
+   * so every consumer of the summary gets it right without having to know.
+   *
+   * @param {string} userId
+   * @returns {Promise<{from: Date|null, until: Date|null}>}
+   */
+  async fetchEmploymentWindow(userId) {
+    try {
+      const user = await User.findById(userId)
+        .select("doj dateOfLeaving relievingDate")
+        .lean();
+
+      if (!user) return { from: null, until: null };
+
+      const until = user.dateOfLeaving || user.relievingDate || null;
+      return {
+        from: user.doj ? this.toDateKey(user.doj) : null,
+        until: until ? this.toDateKey(until) : null,
+      };
+    } catch (err) {
+      // Never fabricate an employment window on error — treating the whole
+      // month as employed is the old behaviour, and safe.
+      console.error("⚠️  Employment window lookup failed:", err.message);
+      return { from: null, until: null };
+    }
   }
 
   /**
@@ -211,7 +248,14 @@ class AttendanceSummaryService {
    * Classify one calendar day.
    * @returns {{status: string, isLate: boolean, lateMinutes: number, workHours: number, breakPolicyFlagged: boolean}}
    */
-  classifyDay({ date, isUpcoming, holidayKeys, leaveByDate, attendanceByDate }) {
+  classifyDay({
+    date,
+    isUpcoming,
+    isEmployed,
+    holidayKeys,
+    leaveByDate,
+    attendanceByDate,
+  }) {
     const key = this.toDateKey(date);
     const blank = {
       isLate: false,
@@ -223,6 +267,11 @@ class AttendanceSummaryService {
       isAbsent: false,
       leaveType: null,
     };
+
+    // Outside employment first: a day before someone joined is not a day they
+    // failed to turn up for. Counting it as an absence gave a mid-month joiner
+    // a month of phantom absences and an attendance rate around 50%.
+    if (!isEmployed) return { status: DAY_STATUS.NOT_EMPLOYED, ...blank };
 
     if (isUpcoming) return { status: DAY_STATUS.UPCOMING, ...blank };
     if (this.isWeekend(date)) return { status: DAY_STATUS.WEEKEND, ...blank };
@@ -325,15 +374,17 @@ class AttendanceSummaryService {
     const monthEnd = new Date(year, month, 0);
     monthEnd.setHours(23, 59, 59, 999);
 
-    const [attendanceByDate, leaveByDate, holidayKeys] = await Promise.all([
-      this.fetchAttendanceByDate(userId, monthStart, monthEnd),
-      this.fetchLeaveByDate(userId, monthStart, monthEnd),
-      this.fetchHolidayKeys(monthStart, monthEnd),
-    ]);
+    const [attendanceByDate, leaveByDate, holidayKeys, employment] =
+      await Promise.all([
+        this.fetchAttendanceByDate(userId, monthStart, monthEnd),
+        this.fetchLeaveByDate(userId, monthStart, monthEnd),
+        this.fetchHolidayKeys(monthStart, monthEnd),
+        this.fetchEmploymentWindow(userId),
+      ]);
 
     const counts = {
-      present: 0, halfDay: 0, wfh: 0, paidLeave: 0,
-      unpaidLeave: 0, absent: 0, weekend: 0, holiday: 0, upcoming: 0,
+      present: 0, halfDay: 0, wfh: 0, paidLeave: 0, unpaidLeave: 0,
+      absent: 0, weekend: 0, holiday: 0, upcoming: 0, notEmployed: 0,
     };
 
     const days = [];
@@ -349,7 +400,20 @@ class AttendanceSummaryService {
       const date = new Date(year, month - 1, dayOfMonth);
       const isUpcoming = date > referenceDate && this.toDateKey(date) !== this.toDateKey(referenceDate);
 
-      const day = this.classifyDay({ date, isUpcoming, holidayKeys, leaveByDate, attendanceByDate });
+      // Date keys compare correctly as strings in YYYY-MM-DD form.
+      const dateKey = this.toDateKey(date);
+      const isEmployed =
+        (!employment.from || dateKey >= employment.from) &&
+        (!employment.until || dateKey <= employment.until);
+
+      const day = this.classifyDay({
+        date,
+        isUpcoming,
+        isEmployed,
+        holidayKeys,
+        leaveByDate,
+        attendanceByDate,
+      });
       const credit = DAY_CREDIT[day.status] ?? 0;
 
       counts[day.status] = (counts[day.status] || 0) + 1;
@@ -369,8 +433,14 @@ class AttendanceSummaryService {
 
     // Days the employee was expected to work: the month, less weekends,
     // holidays and anything that has not happened yet.
+    // Days this person could actually have worked: the month, less weekends,
+    // holidays, days not yet happened, and days outside their employment.
     const expectedWorkingDays =
-      daysInMonth - counts.weekend - counts.holiday - counts.upcoming;
+      daysInMonth -
+      counts.weekend -
+      counts.holiday -
+      counts.upcoming -
+      counts.notEmployed;
     const attendedDays = counts.present + counts.wfh + counts.halfDay * 0.5;
 
     const round = (n) => Math.round(n * 100) / 100;
@@ -385,6 +455,9 @@ class AttendanceSummaryService {
       weekendDays: counts.weekend,
       holidayDays: counts.holiday,
       upcomingDays: counts.upcoming,
+      notEmployedDays: counts.notEmployed,
+      employedFrom: employment.from,
+      employedUntil: employment.until,
       expectedWorkingDays,
 
       // Attendance

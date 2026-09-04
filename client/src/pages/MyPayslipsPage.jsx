@@ -60,16 +60,18 @@ function PayslipDocument({ payslip }) {
     ["Medical Allowance",    pc.medical],
     ["Special Allowance",    pc.specialAllowance],
   ];
+  // The six deduction columns on the payroll sheet, always shown so the
+  // payslip has the same shape every month. Absence, unpaid leave and half
+  // days are NOT here: they reduce Paid Days instead, which is the sheet's
+  // single mechanism for attendance. The late penalty is folded into
+  // Other / Penalty, which is the column the sheet gives it.
   const deductionRows = [
-    ["Provident Fund",   d.employeePF],
-    ["ESI",              d.employeeESI],
-    ["Professional Tax", d.ptax],
-    ...(d.absenceDeduction ? [["Absence",            d.absenceDeduction]] : []),
-    ...(d.lwpDeduction     ? [["Leave Without Pay",   d.lwpDeduction]]     : []),
-    ...(d.lateDeduction    ? [["Late Arrivals",       d.lateDeduction]]    : []),
-    ...(d.tds    ? [["TDS",                          d.tds]]    : []),
-    ...(d.advance? [["Advance",                      d.advance]] : []),
-    ...(d.other  ? [[d.otherLabel || "Other Deduction", d.other]]  : []),
+    ["EE-PF",            d.employeePF || 0],
+    ["ESI",              d.employeeESI || 0],
+    ["TDS",              d.tds || 0],
+    ["Professional Tax", d.ptax || 0],
+    ["Other / Penalty",  d.other || 0],
+    ["Advance",          d.advance || 0],
   ];
   const maxRows = Math.max(earningsRows.length, deductionRows.length);
   const padRows = Math.max(0, 6 - maxRows);
@@ -200,16 +202,18 @@ function printPayslip(payslip) {
     ["Medical Allowance",    pc.medical],
     ["Special Allowance",    pc.specialAllowance],
   ];
+  // The six deduction columns on the payroll sheet, always shown so the
+  // payslip has the same shape every month. Absence, unpaid leave and half
+  // days are NOT here: they reduce Paid Days instead, which is the sheet's
+  // single mechanism for attendance. The late penalty is folded into
+  // Other / Penalty, which is the column the sheet gives it.
   const deductionRows = [
-    ["Provident Fund",   d.employeePF],
-    ["ESI",              d.employeeESI],
-    ["Professional Tax", d.ptax],
-    ...(d.absenceDeduction ? [["Absence",                 d.absenceDeduction]] : []),
-    ...(d.lwpDeduction     ? [["Leave Without Pay",        d.lwpDeduction]]     : []),
-    ...(d.lateDeduction    ? [["Late Arrivals",            d.lateDeduction]]    : []),
-    ...(d.tds     ? [["TDS",                              d.tds]]     : []),
-    ...(d.advance ? [["Advance",                          d.advance]] : []),
-    ...(d.other   ? [[d.otherLabel || "Other Deduction",  d.other]]   : []),
+    ["EE-PF",            d.employeePF || 0],
+    ["ESI",              d.employeeESI || 0],
+    ["TDS",              d.tds || 0],
+    ["Professional Tax", d.ptax || 0],
+    ["Other / Penalty",  d.other || 0],
+    ["Advance",          d.advance || 0],
   ];
   const maxRows = Math.max(earningsRows.length, deductionRows.length);
   const padRows = Math.max(0, 6 - maxRows);

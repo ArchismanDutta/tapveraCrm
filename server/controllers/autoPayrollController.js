@@ -3,6 +3,7 @@
 
 const AutoPayrollService = require('../services/AutoPayrollService');
 const Payslip = require('../models/Payslip');
+const PayrollOverride = require('../models/PayrollOverride');
 const notificationService = require('../services/notificationService');
 
 /**
@@ -383,6 +384,109 @@ exports.recalculatePayslip = async (req, res) => {
  * Get payroll calculation rules and constants
  * GET /api/auto-payroll/calculation-rules
  */
+/**
+ * The payroll register for a month — every employee as one row.
+ * GET /api/auto-payroll/register/:payPeriod
+ */
+exports.previewPayrollRegister = async (req, res) => {
+  try {
+    const { payPeriod } = req.params;
+    if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(payPeriod)) {
+      return res.status(400).json({ success: false, error: 'Invalid pay period format. Use YYYY-MM' });
+    }
+
+    const employeeIds = req.query.employeeIds
+      ? String(req.query.employeeIds).split(',').filter(Boolean)
+      : null;
+
+    const register = await AutoPayrollService.previewPayrollRegister(payPeriod, { employeeIds });
+    res.json({ success: true, ...register });
+  } catch (error) {
+    console.error('Error building payroll register:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+/**
+ * Re-price edited register rows.
+ *
+ * Pure calculation, no database access — the same formula the register was
+ * built with and the same one that will generate the payslips, so an edited
+ * cell can never show a figure that generation would not produce.
+ *
+ * POST /api/auto-payroll/register/price
+ */
+exports.priceRegisterRows = async (req, res) => {
+  try {
+    const { rows } = req.body;
+    if (!Array.isArray(rows) || rows.length === 0) {
+      return res.status(400).json({ success: false, error: 'rows must be a non-empty array' });
+    }
+    if (rows.length > 500) {
+      return res.status(400).json({ success: false, error: 'Too many rows in one request (max 500)' });
+    }
+
+    const priced = rows.map((row) => ({
+      employeeId: row.employeeId,
+      ...AutoPayrollService.priceRegisterRow(row.inputs || {}),
+    }));
+
+    res.json({ success: true, rows: priced });
+  } catch (error) {
+    console.error('Error pricing register rows:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+/**
+ * Issue payslips from the edited register.
+ * POST /api/auto-payroll/register/generate
+ */
+exports.generateFromRegister = async (req, res) => {
+  try {
+    const { payPeriod, rows, skipExisting = true } = req.body;
+    if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(payPeriod || '')) {
+      return res.status(400).json({ success: false, error: 'Invalid pay period format. Use YYYY-MM' });
+    }
+    if (!Array.isArray(rows) || rows.length === 0) {
+      return res.status(400).json({ success: false, error: 'rows must be a non-empty array' });
+    }
+
+    const results = { generated: 0, skipped: 0, failed: 0, details: [] };
+
+    for (const row of rows) {
+      const employeeId = row.employeeId;
+      try {
+        const existing = await Payslip.findOne({ employee: employeeId, payPeriod });
+        if (existing && skipExisting) {
+          results.skipped++;
+          results.details.push({ employeeId, status: 'skipped', reason: 'Payslip already exists' });
+          continue;
+        }
+        if (existing) await Payslip.deleteOne({ _id: existing._id });
+
+        const payslip = await AutoPayrollService.generatePayslipFromRegisterRow(
+          employeeId,
+          payPeriod,
+          row.inputs || {},
+          req.user._id
+        );
+
+        results.generated++;
+        results.details.push({ employeeId, status: 'generated', payslipId: payslip._id, netSalary: payslip.netSalary });
+      } catch (error) {
+        results.failed++;
+        results.details.push({ employeeId, status: 'failed', error: error.message });
+      }
+    }
+
+    res.status(201).json({ success: true, payPeriod, ...results });
+  } catch (error) {
+    console.error('Error generating from register:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
 exports.getCalculationRules = async (req, res) => {
   try {
     const rules = {
@@ -535,5 +639,94 @@ exports.compareCalculations = async (req, res) => {
       success: false,
       error: error.message
     });
+  }
+};
+
+/**
+ * Save a correction made on the payroll register.
+ * PUT /api/auto-payroll/register/override
+ *
+ * Body: { payPeriod, employeeId, inputs: { paidDays: 21, ... }, note? }
+ *
+ * Merges the given fields into whatever is already stored, so the register can
+ * send one field at a time as cells are edited. A field sent as null or "" is
+ * cleared and goes back to being derived from attendance; when the last field
+ * is cleared the whole document is removed rather than left as an empty
+ * override that looks like a correction but changes nothing.
+ */
+exports.saveRegisterOverride = async (req, res) => {
+  try {
+    const { payPeriod, employeeId, inputs = {}, note } = req.body;
+
+    if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(payPeriod || '')) {
+      return res.status(400).json({ success: false, error: 'Invalid pay period format. Use YYYY-MM' });
+    }
+    if (!employeeId) {
+      return res.status(400).json({ success: false, error: 'employeeId is required' });
+    }
+
+    const { inputs: clean, cleared } = PayrollOverride.sanitiseInputs(inputs);
+    if (!Object.keys(clean).length && !cleared.length) {
+      return res.status(400).json({ success: false, error: 'No recognised fields to override' });
+    }
+
+    const existing = await PayrollOverride.findOne({ employee: employeeId, payPeriod });
+    const merged = { ...((existing && existing.inputs) || {}), ...clean };
+    for (const field of cleared) delete merged[field];
+
+    // Nothing left to override — remove it rather than storing an empty one.
+    if (!Object.keys(merged).length) {
+      if (existing) await PayrollOverride.deleteOne({ _id: existing._id });
+      return res.json({ success: true, payPeriod, employeeId, inputs: {}, cleared: true });
+    }
+
+    const saved = await PayrollOverride.findOneAndUpdate(
+      { employee: employeeId, payPeriod },
+      {
+        $set: {
+          inputs: merged,
+          updatedBy: req.user._id,
+          updatedByName: req.user.name || '',
+          ...(note !== undefined ? { note: String(note || '') } : {}),
+        },
+      },
+      { new: true, upsert: true, setDefaultsOnInsert: true }
+    ).lean();
+
+    res.json({
+      success: true,
+      payPeriod,
+      employeeId,
+      inputs: saved.inputs,
+      updatedByName: saved.updatedByName,
+      updatedAt: saved.updatedAt,
+    });
+  } catch (error) {
+    console.error('Error saving register override:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+/**
+ * Drop every correction for one employee and month, so the row goes back to
+ * being derived from attendance.
+ * DELETE /api/auto-payroll/register/override
+ */
+exports.clearRegisterOverride = async (req, res) => {
+  try {
+    const { payPeriod, employeeId } = { ...req.body, ...req.query };
+
+    if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(payPeriod || '')) {
+      return res.status(400).json({ success: false, error: 'Invalid pay period format. Use YYYY-MM' });
+    }
+    if (!employeeId) {
+      return res.status(400).json({ success: false, error: 'employeeId is required' });
+    }
+
+    const result = await PayrollOverride.deleteOne({ employee: employeeId, payPeriod });
+    res.json({ success: true, payPeriod, employeeId, removed: result.deletedCount > 0 });
+  } catch (error) {
+    console.error('Error clearing register override:', error);
+    res.status(500).json({ success: false, error: error.message });
   }
 };

@@ -20,6 +20,7 @@ import {
   FileText,
   Play,
   PlayCircle,
+  Table2,
   Edit,
   Save,
 } from "lucide-react";
@@ -27,6 +28,7 @@ import { toast } from "react-toastify";
 import Sidebar from "../../components/dashboard/Sidebar";
 import PayslipModal from "../../components/payslip/PayslipModal";
 import { formatDepartment } from "../../utils/formatters";
+import PayrollRegister from "../../components/payroll/PayrollRegister";
 
 const AutoPayrollManagement = ({ onLogout }) => {
   const [collapsed, setCollapsed] = useState(false);
@@ -39,6 +41,9 @@ const AutoPayrollManagement = ({ onLogout }) => {
   const [selectedEmployee, setSelectedEmployee] = useState(null);
   const [showPayslipModal, setShowPayslipModal] = useState(false);
   const [bulkGenerating, setBulkGenerating] = useState(false);
+  // The spreadsheet view of the whole month — every employee as one editable
+  // row, priced by the server so the register and the payslip cannot differ.
+  const [registerOpen, setRegisterOpen] = useState(false);
   const [bulkResults, setBulkResults] = useState(null);
   const [showCalculationRules, setShowCalculationRules] = useState(false);
   const [calculationRules, setCalculationRules] = useState(null);
@@ -881,6 +886,14 @@ const AutoPayrollManagement = ({ onLogout }) => {
             </div>
 
             <button
+              onClick={() => setRegisterOpen(true)}
+              className="px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-lg transition-all flex items-center gap-2 shadow-lg hover:shadow-xl"
+            >
+              <Table2 className="w-5 h-5" />
+              Open Payroll Register
+            </button>
+
+            <button
               onClick={generateBulkPayslips}
               disabled={bulkGenerating || filteredEmployees.length === 0}
               className="px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white rounded-lg transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl"
@@ -1105,6 +1118,17 @@ const AutoPayrollManagement = ({ onLogout }) => {
         </div>
 
         {/* Preview Panel */}
+        {registerOpen && (
+          <PayrollRegister
+            payPeriod={selectedMonth}
+            // The register covers the whole screen, so it carries its own month
+            // picker. Reporting the change back keeps this page on the same
+            // month once the register closes.
+            onPayPeriodChange={setSelectedMonth}
+            onClose={() => setRegisterOpen(false)}
+          />
+        )}
+
         {previewData && !showEditModal && (
           <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
             <div className="bg-[#191f2b] rounded-xl border border-[#232945] max-w-6xl w-full max-h-[90vh] overflow-y-auto">

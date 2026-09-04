@@ -143,17 +143,17 @@ payslipSchema.index({ employee: 1, payPeriod: 1 }, { unique: true });
 // Auto-compute totalDeductions on save
 payslipSchema.pre("save", function (next) {
   const d = this.deductions || {};
+  // The six deduction columns on the payroll sheet. Attendance-based amounts
+  // are deliberately absent: absence, unpaid leave and half days reduce
+  // paidDays instead, and the late penalty is folded into Other/Penalty, so
+  // adding them here would take the same money twice.
   this.totalDeductions =
-    (d.employeePF       || 0) +
-    (d.employeeESI      || 0) +
-    (d.ptax             || 0) +
-    (d.tds              || 0) +
-    (d.advance          || 0) +
-    (d.lwpDeduction     || 0) +
-    (d.absenceDeduction || 0) +
-    (d.lateDeduction    || 0) +
-    (d.halfDayDeduction || 0) +
-    (d.other            || 0);
+    (d.employeePF  || 0) +
+    (d.employeeESI || 0) +
+    (d.ptax        || 0) +
+    (d.tds         || 0) +
+    (d.other       || 0) +
+    (d.advance     || 0);
   next();
 });
 
