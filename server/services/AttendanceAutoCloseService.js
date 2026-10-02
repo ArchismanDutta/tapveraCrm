@@ -97,6 +97,7 @@ class AttendanceAutoCloseService {
       closedFromScan: 0,
       closedFromShiftEnd: 0,
       stillWithinGrace: 0,
+      flagged: 0,
       failed: 0,
       dryRun,
       details: [],
@@ -109,7 +110,10 @@ class AttendanceAutoCloseService {
       date: { $gte: this.attendanceService.normalizeDate(since) },
       "employees.calculated.currentStatus": { $in: ["WORKING", "ON_BREAK"] },
     })
-      .select("date employees.userId employees.assignedShift employees.calculated")
+      // events included so we can refuse to book a departure earlier than the
+      // last known in-app event — that would re-open the day on the next
+      // recalculation and the hourly job would keep closing it in a loop.
+      .select("date employees.userId employees.assignedShift employees.calculated employees.events")
       .lean();
 
     summary.scannedRecords = records.length;
@@ -137,6 +141,8 @@ class AttendanceAutoCloseService {
             else summary.closedFromShiftEnd += 1;
           } else if (outcome.result === "WITHIN_GRACE") {
             summary.stillWithinGrace += 1;
+          } else if (outcome.result === "FLAGGED") {
+            summary.flagged += 1;
           } else if (outcome.result === "FAILED") {
             summary.failed += 1;
           }
@@ -185,7 +191,28 @@ class AttendanceAutoCloseService {
       };
     }
 
-    const departure = await this.resolveDepartureTime(employee, attendanceDate, shiftEnd);
+    const departure = await this.resolveDepartureTime(employee, attendanceDate, shiftEnd, closableAfter);
+
+    // Guard against the auto-close loop: if the chosen departure is earlier
+    // than the last event already on the record (e.g., a BREAK_START after the
+    // last fingerprint scan), booking it would place a punch-out before an
+    // existing event. The recalculation then re-opens the day, the next hourly
+    // run closes it again, and so on — in the 2026-09-04 backup two days
+    // accumulated 175 and 119 auto-closes each. Flag once, let HR correct.
+    const lastEventTs = this.getLatestEventTimestamp(employee);
+    if (lastEventTs && departure.at <= lastEventTs) {
+      return {
+        userId: String(userId),
+        date: attendanceDate,
+        result: "FLAGGED",
+        source: departure.source,
+        departureAt: departure.at,
+        message:
+          `Refusing to auto-close: computed departure (${departure.at.toISOString()}) ` +
+          `is not after the last recorded event (${lastEventTs.toISOString()}). ` +
+          `Needs HR review.`,
+      };
+    }
 
     if (dryRun) {
       return {
@@ -254,7 +281,7 @@ class AttendanceAutoCloseService {
    *      zero-hour day for someone who demonstrably worked, which is worse than
    *      assuming they worked their scheduled shift. Flagged for review.
    */
-  async resolveDepartureTime(employee, attendanceDate, shiftEnd) {
+  async resolveDepartureTime(employee, attendanceDate, shiftEnd, closableAfter) {
     const arrival = employee?.calculated?.arrivalTime
       ? new Date(employee.calculated.arrivalTime)
       : null;
@@ -273,10 +300,19 @@ class AttendanceAutoCloseService {
     // nothing — and because "no scan found" is a legitimate outcome, this
     // failed silently by always falling through to the shift-end guess.
     //
-    // The window runs from the record's date to +36h, which covers a night
-    // shift crossing midnight regardless of which convention either side used.
+    // Ceiling the window at `closableAfter` (= shiftEnd + grace) is what stops
+    // the next-morning arrival of a different attendance day being treated as
+    // yesterday's departure: a day shift that ended 18:00 yesterday closes with
+    // its scan window ending 22:00 yesterday, not 12:00 noon today. Without
+    // this, a staff member who forgot to punch out and walked in at 07:08 the
+    // next morning had THAT scan booked as yesterday's departure — and because
+    // recordPunchEvent re-derives the attendance date from the timestamp, the
+    // PUNCH_OUT landed on TODAY's record and immediately ended today's shift
+    // at the moment of arrival. See ATTENDANCE-SYSTEM-SCAN.md §9.
     const windowStart = new Date(new Date(attendanceDate).getTime() - 6 * HOUR_MS);
-    const windowEnd = new Date(new Date(attendanceDate).getTime() + 36 * HOUR_MS);
+    const windowEnd = closableAfter
+      ? new Date(closableAfter)
+      : new Date(new Date(attendanceDate).getTime() + 36 * HOUR_MS);
 
     const lastScan = await BiometricPunch.findOne({
       userId: employee.userId,
@@ -305,6 +341,25 @@ class AttendanceAutoCloseService {
       source: "SHIFT_END",
       note: "Auto punch-out — no fingerprint scan after arrival and no CRM punch-out; departure assumed at shift end. Please verify.",
     };
+  }
+
+  /**
+   * Latest event timestamp recorded against this employee, across every event
+   * type. Used to refuse an auto-close that would place the departure before
+   * an existing event (otherwise the recalculation re-opens the day and the
+   * hourly job keeps looping).
+   */
+  getLatestEventTimestamp(employee) {
+    const events = employee?.events;
+    if (!Array.isArray(events) || events.length === 0) return null;
+    let latest = null;
+    for (const e of events) {
+      const ts = e?.timestamp ? new Date(e.timestamp) : null;
+      if (ts && !Number.isNaN(ts.getTime()) && (!latest || ts > latest)) {
+        latest = ts;
+      }
+    }
+    return latest;
   }
 
   // ───────────────────────────────────────────────────────────────────────────
@@ -391,8 +446,14 @@ class AttendanceAutoCloseService {
       `🌙 Attendance auto-close${summary.dryRun ? " (dry run)" : ""}: ` +
         `${summary.openEmployees} open, ${summary.closed} closed ` +
         `(${summary.closedFromScan} from last scan, ${summary.closedFromShiftEnd} from shift end), ` +
-        `${summary.stillWithinGrace} still within grace, ${summary.failed} failed`
+        `${summary.stillWithinGrace} still within grace, ${summary.flagged} flagged for HR, ${summary.failed} failed`
     );
+
+    if (summary.flagged > 0) {
+      console.warn(
+        `⚠️  ${summary.flagged} day(s) left open because the computed departure was earlier than an existing event — HR must correct these manually`
+      );
+    }
 
     if (summary.closedFromShiftEnd > 0) {
       console.warn(
